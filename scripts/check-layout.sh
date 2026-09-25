@@ -5,8 +5,8 @@
 #                     (+ the documented planning exception `plans`)
 #   root files      = allow-list below (required files must exist, the rest may exist)
 #   dot entries     = explicit allow-list of top-level dot files/dirs
-#   Evidgate.slnx   = exactly the 8 M0 projects, and every *.csproj on disk
-#                     must be listed in the slnx (and vice versa)
+#   Evidgate.slnx   = exactly the M0 projects (8 src + tests/Architecture.Tests,
+#                     01.2.1-T1.2), and every *.csproj on disk
 # Compares git ls-files (tracked + untracked-not-ignored), so ignored build output
 # (bin/, obj/, node_modules/, dist/, .DS_Store) and ignored local tool dirs
 # (e.g. .omp, .vscode/*) never count. Exit 1 prints the diff.
@@ -81,12 +81,16 @@ tsconfig.base.json
 EOF
 cat > "$TMP/allowed-extra-files" <<'EOF'
 .editorconfig
+.prettierignore
+.prettierrc.json
+.spectral.yaml
 AGENTS.md
 DECISIONS.md
 README.md
 RECOMMENDATIONS.md
 SESSION-SUMMARY.md
 tsconfig.json
+eslint.config.js
 EOF
 cat "$TMP/required-files" "$TMP/allowed-extra-files" | sort -u > "$TMP/allowed-files"
 
@@ -109,6 +113,7 @@ if [ -s "$TMP/missing-files" ]; then
 fi
 
 # ---- solution project list ----
+# 01.2.1-T1.2: tests/Architecture.Tests is part of the expected project list.
 cat > "$TMP/expected-proj" <<'EOF'
 src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csproj
 src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj
@@ -118,6 +123,7 @@ src/BuildingBlocks/SharedKernel/Evidgate.BuildingBlocks.SharedKernel.csproj
 src/Evidgate.Api/Evidgate.Api.csproj
 src/Evidgate.Migrator/Evidgate.Migrator.csproj
 src/Evidgate.Worker/Evidgate.Worker.csproj
+tests/Architecture.Tests/Architecture.Tests.csproj
 EOF
 
 grep -oE 'Path="[^"]+\.csproj"' Evidgate.slnx \

@@ -19,3 +19,8 @@
 |---|---|---|---|
 | [0000-template.md](0000-template.md) | Template | n/a | n/a |
 | [0002-compatibility-and-licence-matrix.md](0002-compatibility-and-licence-matrix.md) | Compatibility and licence matrix | accepted | 2026-09-25 |
+| [0001-modular-monolith-two-processes.md](0001-modular-monolith-two-processes.md) | One modular monolith, two processes | accepted | 2026-09-25 |
+| [0003-migrator-and-db-role-split.md](0003-migrator-and-db-role-split.md) | Migrator process and database role split | accepted | 2026-09-25 |
+| [0004-s3-emulator-local-dev.md](0004-s3-emulator-local-dev.md) | S3 emulator for local development | accepted | 2026-09-25 |
+| [0005-licence-allow-deny-policy.md](0005-licence-allow-deny-policy.md) | Licence allow/deny policy for NuGet and npm | accepted | 2026-09-25 |
+| [0006-cqrs-pipeline-and-data-access.md](0006-cqrs-pipeline-and-data-access.md) | CQRS pipeline and data access | accepted | 2026-09-25 |

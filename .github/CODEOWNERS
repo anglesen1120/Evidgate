@@ -1,0 +1,24 @@
+# CODEOWNERS — draft (01.2.1-T5). One owner for now; replace with real teams
+# when area owners exist. Order matters: the last matching pattern wins.
+
+# Everything
+* @anglesen1120
+
+# Plans and decisions are authoritative — every change is a contract change
+/plans/ @anglesen1120
+/DECISIONS.md @anglesen1120
+/docs/adr/ @anglesen1120
+
+# Area plans → owning owner (placeholder mapping, all @anglesen1120 for now)
+/contracts/ @anglesen1120
+/migrations/ @anglesen1120
+/infra/ @anglesen1120
+/fixtures/ @anglesen1120
+/src/BuildingBlocks/ @anglesen1120
+/src/Evidgate.Api/ @anglesen1120
+/src/Evidgate.Worker/ @anglesen1120
+/src/Evidgate.Migrator/ @anglesen1120
+/tests/ @anglesen1120
+/apps/web/ @anglesen1120
+/packages/ @anglesen1120
+/scripts/ @anglesen1120

@@ -13,6 +13,12 @@
         "requested": "[3.0.2, )",
         "resolved": "3.0.2",
         "contentHash": "yGQzb8Or3nGsQJnVUQIQHr/04LeThd3qMZV0gvgMtXdgH35Rw2xJ2XyQ87v6HhNYOUZ2iirRjUWceebyNKMF7Q=="
+      },
+      "Microsoft.VisualStudio.Threading.Analyzers": {
+        "type": "Direct",
+        "requested": "[18.7.23, )",
+        "resolved": "18.7.23",
+        "contentHash": "dyj6z8m+LFjpeH69hdnciCcRCmD0YgMlvuQEywiEshjqj/blgQ+PuWX8Vd5gkWQFoBN4e+TFxx6DvGNSv/gIKg=="
       }
     }
   }

@@ -30,4 +30,8 @@
     <PackageVersion Include="Testcontainers.PostgreSQL" Version="4.15.0" />
     <PackageVersion Include="Respawn" Version="7.0.0" />
   </ItemGroup>
+  <!-- 01.2.1-T1: VSTHRD async analyzers on every project (severities in .editorconfig). MIT, registered in ADR-0002. -->
+  <ItemGroup>
+    <GlobalPackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" Version="18.7.23" PrivateAssets="all" />
+  </ItemGroup>
 </Project>

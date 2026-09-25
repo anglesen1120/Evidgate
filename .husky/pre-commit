@@ -1,0 +1,4 @@
+# 01.2.1-T4: run the same linters in check mode on staged files only.
+# lint-staged never writes — prettier --check, eslint --max-warnings 0 and
+# dotnet format --verify-no-changes all fail the commit instead of fixing.
+npx lint-staged --relative

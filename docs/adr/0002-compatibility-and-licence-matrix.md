@@ -51,12 +51,22 @@ NuGet packages (Central Package Management, `Directory.Packages.props`):
 | NSubstitute | 6.2.0 | nuspec dep groups net8.0, netstandard2.0 | BSD-3-Clause | https://api.nuget.org/v3-flatcontainer/nsubstitute/6.2.0/nsubstitute.nuspec |
 | Testcontainers.PostgreSQL | 4.15.0 | nuspec dep groups incl. net10.0 | MIT | https://api.nuget.org/v3-flatcontainer/testcontainers.postgresql/4.15.0/testcontainers.postgresql.nuspec |
 | Respawn | 7.0.0 | nuspec dep group netstandard2.1 | Apache-2.0 | https://api.nuget.org/v3-flatcontainer/respawn/7.0.0/respawn.nuspec |
+| Microsoft.VisualStudio.Threading.Analyzers | 18.7.23 | analyzer package (no runtime dep groups); build-time only via `GlobalPackageReference` | MIT | https://api.nuget.org/v3-flatcontainer/microsoft.visualstudio.threading.analyzers/18.7.23/microsoft.visualstudio.threading.analyzers.nuspec — VSTHRD async rules (01.2.1-T1) |
 
 npm packages (direct dependencies/devDependencies, root + workspaces):
 
 | Package | Version | Engines evidence | Licence | Evidence |
 |---|---|---|---|---|
 | typescript | 6.0.3 | `engines.node >=14.17`; pinned exact for `>=26 <27` repo engines | Apache-2.0 | https://registry.npmjs.org/typescript/6.0.3 |
+| eslint | 10.11.0 | `engines.node ^20.19.0 \|\| ^22.13.0 \|\| >=24` | MIT | https://registry.npmjs.org/eslint/10.11.0 — web/package lint (01.2.1-T1, DECISIONS §4.2) |
+| @eslint/js | 10.0.1 | `engines.node ^20.19.0 \|\| ^22.13.0 \|\| >=24`; peer `eslint ^10.0.0` | MIT | https://registry.npmjs.org/@eslint/js/10.0.1 |
+| typescript-eslint | 8.70.1 | peer `typescript >=4.8.4 <6.1.0` (covers 6.0.3), `eslint ^10.0.0` | MIT | https://registry.npmjs.org/typescript-eslint/8.70.1 — `no-floating-promises` (01.2.1 AC3) |
+| prettier | 3.9.9 | `engines.node >=14` | MIT | https://registry.npmjs.org/prettier/3.9.9 — TS/JSON/YAML format gate (01.2.1-T2) |
+| husky | 9.1.7 | `engines.node >=18` | MIT | https://registry.npmjs.org/husky/9.1.7 — pre-commit hook (01.2.1-T4) |
+| lint-staged | 17.5.1 | `engines.node >=22.22.1` | MIT | https://registry.npmjs.org/lint-staged/17.5.1 — staged-file linters (01.2.1-T4) |
+| @stoplight/spectral-cli | 6.16.3 | `engines.node ^16.20 \|\| ^18.18 \|\| >= 20.17` | Apache-2.0 | https://registry.npmjs.org/@stoplight%2fspectral-cli/6.16.3 — OpenAPI lint (01.3.1 AC1); transitive `@scarf/scarf` postinstall telemetry is disabled by `scarfSettings.enabled=false` in the root package.json (honoured by @scarf/scarf's report.js), and `SCARF_ANALYTICS=false` is set by the lint script as belt-and-braces |
+| ajv | 8.20.0 | no `engines` field | MIT | https://registry.npmjs.org/ajv/8.20.0 — JSON Schema 2020-12 checks in `scripts/` (01.3.1 AC4/AC6) |
+| ajv-formats | 3.0.1 | no `engines` field | MIT | https://registry.npmjs.org/ajv-formats/3.0.1 |
 
 Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project file references yet; rows here also count as registered:
 

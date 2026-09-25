@@ -10,4 +10,5 @@
   <Project Path="src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csproj" />
   <Project Path="src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
   <Project Path="src/BuildingBlocks/Observability/Evidgate.BuildingBlocks.Observability.csproj" />
+  <Project Path="tests/Architecture.Tests/Architecture.Tests.csproj" />
 </Solution>

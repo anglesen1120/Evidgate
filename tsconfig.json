@@ -4,6 +4,7 @@
     { "path": "packages/sdk" },
     { "path": "packages/cli" },
     { "path": "packages/adapter-playwright" },
-    { "path": "packages/adapter-junit" }
+    { "path": "packages/adapter-junit" },
+    { "path": "apps/web" }
   ]
 }
