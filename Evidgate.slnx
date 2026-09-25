@@ -1,0 +1,13 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+  </Configurations>
+  <Project Path="src/Evidgate.Api/Evidgate.Api.csproj" />
+  <Project Path="src/Evidgate.Worker/Evidgate.Worker.csproj" />
+  <Project Path="src/Evidgate.Migrator/Evidgate.Migrator.csproj" />
+  <Project Path="src/BuildingBlocks/SharedKernel/Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  <Project Path="src/BuildingBlocks/Persistence/Evidgate.BuildingBlocks.Persistence.csproj" />
+  <Project Path="src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csproj" />
+  <Project Path="src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+  <Project Path="src/BuildingBlocks/Observability/Evidgate.BuildingBlocks.Observability.csproj" />
+</Solution>
