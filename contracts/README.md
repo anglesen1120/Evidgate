@@ -10,7 +10,10 @@ client and the server-side JSON Schema validation (01.3.2).
   V2-tagged) is a stub operation; `/internal/*` routes never appear here
   (00 §9.1). Servers mount under `/v1`.
 - `schemas/*.vN.json` — versioned JSON Schema 2020-12 documents
-  (`event-envelope.v1.json` per 00 §9.4, `capability.v1.json` per 00 §10).
+  (`event-envelope.v1.json` per 00 §9.4).
+- `adapter/*.vN.json` — adapter protocol v1 schemas (00 §10, 04 D6):
+  `capability.v1.json` now; operation and configuration schemas follow in
+  04.7.1-T1.
 - `examples/` — documents used by the conventions gate.
 - `.spectral.yaml` (repo root) — lint ruleset; custom rules live in
   `scripts/spectral/`. Enforced by `scripts/check-contract-conventions.sh`.

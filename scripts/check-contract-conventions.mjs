@@ -190,7 +190,8 @@ for (const { path, method, op } of ops) {
 const ajv = new Ajv2020({ strict: false, allErrors: true });
 addFormats(ajv);
 
-const loadSchema = (f) => JSON.parse(readFileSync(join(ROOT, 'contracts/schemas', f), 'utf8'));
+const SCHEMA_DIRS = ['contracts/schemas', 'contracts/adapter'];
+const loadSchema = (dir, f) => JSON.parse(readFileSync(join(ROOT, dir, f), 'utf8'));
 const ex = (f) => JSON.parse(readFileSync(join(ROOT, 'contracts/examples', f), 'utf8'));
 const compile = (schema, label) => {
   try {
@@ -201,7 +202,7 @@ const compile = (schema, label) => {
   }
 };
 
-const evSchema = loadSchema('event-envelope.v1.json');
+const evSchema = loadSchema('contracts/schemas', 'event-envelope.v1.json');
 const evValidate = compile(evSchema, 'event-envelope');
 const validEvent = ex('event.single.valid.json');
 if (evValidate && !evValidate(validEvent))
@@ -221,7 +222,7 @@ delete badFinished.status;
 if (evValidate && evValidate(badFinished))
   fail('event-envelope', 'test.finished without status accepted');
 
-const capSchema = loadSchema('capability.v1.json');
+const capSchema = loadSchema('contracts/adapter', 'capability.v1.json');
 const capValidate = compile(capSchema, 'capability');
 const validCap = ex('capability.valid.json');
 if (capValidate && !capValidate(validCap))
@@ -272,17 +273,17 @@ function walkSchema(node, file, trail) {
   }
 }
 
-for (const file of readdirSync(join(ROOT, 'contracts/schemas')).filter((f) =>
-  f.endsWith('.json'),
-)) {
-  if (!/\.v\d+\.json$/.test(file))
-    fail('dialect', `${file}: schema filename must carry a .vN version suffix`);
-  const schema = JSON.parse(readFileSync(join(ROOT, 'contracts/schemas', file), 'utf8'));
-  if (schema.$schema !== 'https://json-schema.org/draft/2020-12/schema')
-    fail('dialect', `${file}: $schema '${schema.$schema}' is not JSON Schema 2020-12`);
-  if (typeof schema.$id !== 'string' || !schema.$id.includes(file))
-    fail('dialect', `${file}: $id must reference its .vN filename (got '${schema.$id}')`);
-  walkSchema(schema, file, []);
+for (const dir of SCHEMA_DIRS) {
+  for (const file of readdirSync(join(ROOT, dir)).filter((f) => f.endsWith('.json'))) {
+    if (!/\.v\d+\.json$/.test(file))
+      fail('dialect', `${dir}/${file}: schema filename must carry a .vN version suffix`);
+    const schema = loadSchema(dir, file);
+    if (schema.$schema !== 'https://json-schema.org/draft/2020-12/schema')
+      fail('dialect', `${dir}/${file}: $schema '${schema.$schema}' is not JSON Schema 2020-12`);
+    if (typeof schema.$id !== 'string' || !schema.$id.includes(file))
+      fail('dialect', `${dir}/${file}: $id must reference its .vN filename (got '${schema.$id}')`);
+    walkSchema(schema, `${dir}/${file}`, []);
+  }
 }
 
 // AC6 also applies to every schema inside openapi.yaml: component schemas and

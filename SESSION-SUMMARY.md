@@ -5,7 +5,7 @@ Bản tóm tắt cho chủ dự án. Nguồn chính thức vẫn là `DECISIONS.
 ## 1. Dự án là gì
 
 - **Tên:** Evidgate (*evidence* + *gate*). Thu kết quả test tự động (web, API, mobile, unit) từ CI/agent của khách, lưu thành bằng chứng bất biến gắn với build, ra quyết định release PASS / FAIL / INCONCLUSIVE theo policy có phiên bản; healing an toàn (chỉ sửa cơ chế test, không đổi ý định test).
-- **Trạng thái:** vẫn là kế hoạch, chưa có code. Repo GitHub private `anglesen1120/Evidgate`, nhánh `main` (baseline) và `develop` (triển khai).
+- **Trạng thái:** đang làm M0 trên nhánh `feature/m0-foundation`: xong 01.1.1 T1–T3, 01.2.1, 01.3.1, 01.9.1 (toolchain, khung workspace, quality gate, OpenAPI + schema, ADR). Chưa có module, migration hay logic nghiệp vụ. Repo GitHub private `anglesen1120/Evidgate`, nhánh `main` (baseline) và `develop` (triển khai, đã có plan từ PR #1).
 
 ## 2. Đổi stack (CR-D-1, theo yêu cầu chủ dự án)
 

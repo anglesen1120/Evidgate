@@ -1709,7 +1709,7 @@ paths:
                 pool:
                   type: string
                 capability:
-                  $ref: './schemas/capability.v1.json'
+                  $ref: './adapter/capability.v1.json'
       responses:
         '200':
           description: Lease issued (job, lease, epoch, deadline)
