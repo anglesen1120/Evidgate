@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Evidgate.Modules.Ingestion.Contracts</RootNamespace>
+  </PropertyGroup>
+</Project>

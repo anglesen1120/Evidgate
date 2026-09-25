@@ -30,5 +30,27 @@
     <ProjectReference Include="..\..\src\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity.Contracts\Evidgate.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy\Evidgate.Modules.Tenancy.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy.Contracts\Evidgate.Modules.Tenancy.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Orchestrator\Evidgate.Modules.Orchestrator.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion\Evidgate.Modules.Ingestion.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Evidence\Evidgate.Modules.Evidence.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Evidence.Contracts\Evidgate.Modules.Evidence.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Policy\Evidgate.Modules.Policy.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Policy.Contracts\Evidgate.Modules.Policy.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Healing\Evidgate.Modules.Healing.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Healing.Contracts\Evidgate.Modules.Healing.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Usage\Evidgate.Modules.Usage.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Usage.Contracts\Evidgate.Modules.Usage.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Audit\Evidgate.Modules.Audit.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Audit.Contracts\Evidgate.Modules.Audit.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Notifications\Evidgate.Modules.Notifications.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Notifications.Contracts\Evidgate.Modules.Notifications.Contracts.csproj" />
   </ItemGroup>
 </Project>

@@ -38,6 +38,12 @@ Object storage is S3-API (`AWSSDK.S3` 4.0, presigned URLs as bearer credentials 
 - ✅ MinIO licence: AGPL-3.0 — https://github.com/minio/minio/blob/master/LICENSE (api.github.com `/repos/minio/minio/license`, fetched 2026-09-25); `archived: true` per api.github.com `/repos/minio/minio` (fetched 2026-09-25).
 - ✅ LocalStack: `archived: true`, licence reported as `NOASSERTION`/`Other` — api.github.com `/repos/localstack/localstack` + `/license` (fetched 2026-09-25); DECISIONS §4.1 records "free tier non-commercial".
 - ✅ DECISIONS.md §4.1 object-storage row; plans/01-foundation.md §3 emulator decision, §5 failure-mode row, §13 CR-01-1; TL T18 — repo, read 2026-09-25.
+- ✅ 2026-09-26 — presigned-URL parity verified on SeaweedFS (`chrislusf/seaweedfs:4.47@sha256:ce9e796…`) by the 01.8.1-T1 suite, `dotnet test tests/ObjectStorage.IntegrationTests/ObjectStorage.IntegrationTests.csproj` → 3 passed / 0 failed. Observed, not assumed:
+  - `S3_Parity_PresignedPutGet_RoundTrip` — the `AWSSDK.S3` presigned PUT bound `content-length;host;x-amz-checksum-sha256` (so the signed header name 06.1.2 §3 assumes is the one the emulator honours), the PUT returned 200 and the presigned GET returned the exact 37 bytes (200).
+  - `S3_Parity_OversizeContentLength_Rejected` — a URL signing `Content-Length: 37` carrying 53 bytes was refused with 403 `SignatureDoesNotMatch` and stored nothing (the request-level vector; a raw-socket body that under-declares `Content-Length` is not exercised).
+  - `S3_Parity_ChecksumHeader_Enforced` — a 30-byte body that did not match the signed `x-amz-checksum-sha256` was refused with 400 `BadDigest` and stored nothing.
+  - Control probes (throwaway, not part of the suite): the same 53-byte body signed for 53 bytes, and the same 30-byte body with its matching checksum, both returned 200 — so the two refusals come from the signed length and the signed checksum, not from the request shape.
+  - Assertions live in `tests/ObjectStorage.IntegrationTests/S3ParityAssertions.cs` behind an endpoint-agnostic target configured from `EVIDGATE_S3PARITY__*`, so 10.6.1-T2 runs the identical three assertions against the provider; the SeaweedFS identity file is `infra/seaweedfs/s3-config.json`.
 
 ## Revisit trigger
 

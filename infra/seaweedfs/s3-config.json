@@ -1,0 +1,15 @@
+{
+  "_comment": "Local-only SeaweedFS S3 identities for the dev stack (01.8.1-T2 mounts this file) and the 01.8.1-T1 parity tests. These static test credentials are committed on purpose because they are never accepted by anything but a local SeaweedFS container; they are not secrets and must never be reused in production (00 §5.7 S3 / 01.8.1 §8).",
+  "identities": [
+    {
+      "name": "evidgate-local-test-only",
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"],
+      "credentials": [
+        {
+          "accessKey": "evidgate-local-test-only-access-key",
+          "secretKey": "evidgate-local-test-only-secret-key"
+        }
+      ]
+    }
+  ]
+}

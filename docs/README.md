@@ -8,7 +8,9 @@ Where each kind of documentation lives (plan 01.9.1-T3). A path not listed here 
 | Runbooks | `docs/runbooks/` (created when the first runbook lands) | Owned by plan 10 (operations); per-procedure files, e.g. `10.7.1-T1` alert responses |
 | Module READMEs | `src/Modules/Evidgate.Modules.<Name>/README.md` | One per module, next to the module project — purpose, owned tables, exported `.Contracts` surface |
 | Wire contracts | [`../contracts/README.md`](../contracts/README.md) | Contract pipeline and versioning policy; the policy itself is 00 §9 in [`../plans/00-overview.md`](../plans/00-overview.md) (`/v1` prefixing, breaking-change rules, envelope/schema versioning) |
+| Migration playbook | [`migrations-expand-contract.md`](migrations-expand-contract.md) | How a schema change reaches an environment without breaking the running version; owned by plan 01.4.1-T4.1 (runner reference: [`../migrations/README.md`](../migrations/README.md)) |
 | Feature plans | [`../plans/features/`](../plans/features/) `<NN>-<area>/NN.E.S-<slug>.md` | One detailed plan per story (00 §12); area plans stay in [`../plans/`](../plans/) |
+| Dev setup quickstart | [`dev-setup.md`](dev-setup.md) | Prerequisites, `scripts/dev/up.sh`, ports and `.env.dev` mapping, troubleshooting; owned by 01.8.1 |
 | Source design | [`source/`](source/) | Original Vietnamese design the plan set supersedes where DECISIONS.md §9 lists a delta |
 | Repo guide | [`../AGENTS.md`](../AGENTS.md) | Authority order, editing rules, legend |
 

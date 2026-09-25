@@ -1,0 +1,91 @@
+# Local development stack (01.8.1-T2.1, 00 §5.2 / CR-01-3): the two stateful
+# services only. Api, Worker (`dotnet watch`) and web (`ng serve`) run on the
+# host — see docs/dev-setup.md.
+#
+# Start it with `scripts/dev/up.sh`, never by hand: the script reads
+# infra/seaweedfs/s3-config.json, exports EVIDGATE_SEAWEEDFS_S3_CONFIG and runs
+# the database bootstrap. Images are digest-pinned (multi-arch image-index
+# digests, read from registry-1.docker.io 2026-09-26) and shared with
+# tests/Shared/ContainerImages.cs so tests and the dev stack cannot drift.
+#
+# No host path is bind-mounted anywhere in this file: on colima/virtiofs (this
+# repo lives under /Volumes) a bind mount of a file under the repository appears
+# inside the container as an unreadable directory, so state lives in the named
+# volumes pg-data / s3-data and the SeaweedFS identity file is materialised from
+# the environment instead (infra/README.md records the evidence).
+
+name: evidgate-dev
+
+services:
+  postgres:
+    image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    container_name: evidgate-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${EVIDGATE_DB_SUPERUSER_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
+      # The image's initdb defaults leave `host all all 127.0.0.1/32 trust`, i.e.
+      # loopback connections would be accepted without a password and the
+      # owner/app/operator split would not be enforced locally. `--auth-host`
+      # rewrites those initdb lines to scram, so the Api/Worker/Migrator really
+      # authenticate (unix-socket psql inside the container stays trust, as the
+      # image intends, and db-init.sh uses that path).
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256'
+    ports:
+      # 00 §5.7: loopback only — nothing in the dev stack is reachable off-host.
+      - '127.0.0.1:${EVIDGATE_DB_PORT:-5432}:5432'
+    volumes:
+      # postgres:18 keeps PGDATA=/var/lib/postgresql/18/docker and declares
+      # /var/lib/postgresql as its volume; mounting .../data would not persist.
+      - pg-data:/var/lib/postgresql
+    healthcheck:
+      # TCP, not the unix socket: the entrypoint's temporary initdb server
+      # listens on the socket only, so a socket probe would report ready too early.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -p 5432 -U postgres -d postgres']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    stop_grace_period: 10s
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    container_name: evidgate-dev-seaweedfs
+    restart: unless-stopped
+    environment:
+      # Set by scripts/dev/up.sh from infra/seaweedfs/s3-config.json; `$$` is a
+      # literal `$` for compose, so the variable is expanded by the shell inside
+      # the container, never by compose.
+      EVIDGATE_SEAWEEDFS_S3_CONFIG: ${EVIDGATE_SEAWEEDFS_S3_CONFIG:-}
+    # The image's own /entrypoint.sh dispatcher is re-used after the identity
+    # file is written, so the S3 gateway starts exactly as the parity fixture
+    # (01.8.1-T1) starts it, with -s3.config at the path infra/seaweedfs/
+    # documents and /data owned by the image's seaweed user.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$$EVIDGATE_SEAWEEDFS_S3_CONFIG" ]; then
+          echo "seaweedfs: EVIDGATE_SEAWEEDFS_S3_CONFIG is empty — start the stack with scripts/dev/up.sh" >&2
+          exit 1
+        fi
+        printf '%s' "$$EVIDGATE_SEAWEEDFS_S3_CONFIG" > /etc/seaweedfs/s3-config.json
+        exec /entrypoint.sh server -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3-config.json
+    ports:
+      - '127.0.0.1:${EVIDGATE_S3_PORT:-8333}:8333'
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      # The S3 gateway answers 403 on an unsigned GET; any HTTP status proves the
+      # listener is up, a connection error exits curl non-zero (no sleeps anywhere).
+      test: ['CMD-SHELL', 'curl -s -o /dev/null http://127.0.0.1:8333/']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  # AC4: data survives `down` (volumes are kept) and `up.sh --reset` deletes both.
+  pg-data:
+  s3-data:
