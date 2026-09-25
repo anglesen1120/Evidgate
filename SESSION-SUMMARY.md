@@ -30,7 +30,7 @@ Thư viện bị loại vì licence không cho SaaS đóng mã (đã kiểm từ
   - **Security:** 14 finding. Lỗi critical là org khác có thể bind repo GitHub của mình để chiếm evidence CI.
   - **Performance/dữ liệu:** 15 finding. Ví dụ: event đến muộn bị từ chối nên cơ chế late window không chạy; batch gửi lại bị tính tiền hai lần.
   - **Nhất quán:** 7 finding.
-- Tất cả đã được xử lý bằng **97 phán quyết TL (T1–T97)**, xem `plans/features/README.md` §3. Phán quyết chạm hợp đồng chung được ghi vào 00 và log ở 00 §15.
+- Đã xử lý bằng **101 phán quyết TL (T1–T101)**, trừ các mục ở §7a, xem `plans/features/README.md` §3. Phán quyết chạm hợp đồng chung được ghi vào 00 và log ở 00 §15.
 
 ## 4. Feature plan chi tiết
 
@@ -70,6 +70,12 @@ Trước khi đổi stack: 487 task / 543.5 / 652.2. Tăng thêm 15 task (+16.75
 | O9 | Case nào là critical | Chuyển policy sang chặn release |
 | O10 | Chỗ chạy replay healing ở V1 (khuyến nghị: CI của khách) | 08.4.3 |
 | O4, O5, O6, O7 | LLM provider, giá, ngưỡng false-heal, nhãn hiệu | M4, M3, M5, khi ra mắt |
+
+## 7a. Mục còn mở đã biết (không phải "đã sửa hết")
+
+- **Ước lượng là cận dưới:** các control security và dữ liệu thêm ở vòng review cuối (T70–T101) được nhét vào size task cũ, chưa ước lượng lại. Mỗi story phải ước lượng lại ở DoR; nên hiểu 672.3 ngày là mức tối thiểu.
+- **T91/T101:** khoá `FOR SHARE` trên đường ingest được chấp nhận có điều kiện, phải đo trong load test 10.6.1-T1; nếu không đạt thì dùng phương án dự phòng đã ghi.
+- Các `[OPEN]` còn lại trong feature plan là quyết định của chủ dự án (O1–O10) hoặc dữ kiện ⚠️ sẽ được kiểm khi build.
 
 ## 8. Bước tiếp theo
 
