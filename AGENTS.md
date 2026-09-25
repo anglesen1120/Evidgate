@@ -4,7 +4,7 @@
 
 Evidgate collects automated test results (web, API, mobile, unit) from customer CI or agents, keeps them as immutable evidence bound to exact builds, and turns that evidence into a release decision (PASS / FAIL / INCONCLUSIVE) through versioned policies. It adds **safe healing**: repairing test mechanics (for example a changed locator) without changing test intent, shadow first, never hiding a product bug.
 
-**Current state: planning only** (stack changed 2026-09-25 to .NET 10 + CQRS + Angular 22, DECISIONS CR-D-1). No source code, build or tests yet. `apps/`, `packages/`, `src/`, `contracts/`, `migrations/` and `fixtures/` are the target layout (`plans/00-overview.md` §5.2); they do not exist yet.
+**Current state: M0 foundation in progress** (stack per DECISIONS CR-D-1). Done on `feature/m0-foundation`: 01.1.1 T1–T3 (toolchain pins, workspace skeleton), 01.2.1 (analyzers, format, strict TS, `tests/Architecture.Tests`), 01.3.1 (`contracts/openapi.yaml` stubs, `contracts/schemas/`, `contracts/adapter/`), 01.9.1 (ADRs in `docs/adr/`). No module projects (`src/Modules/*`, 01.1.2-T2), migrations or runtime behaviour yet; `migrations/`, `fixtures/`, `infra/` do not exist yet. Local gate: `scripts/verify.sh`.
 
 ## Where things are
 

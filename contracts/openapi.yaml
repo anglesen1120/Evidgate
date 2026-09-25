@@ -1,0 +1,2381 @@
+openapi: 3.1.0
+info:
+  title: Evidgate API
+  version: 1.0.0
+  description: >-
+    Evidgate public API (00 §9). REST + JSON under `/v1`. Conventions:
+    every response carries `X-Request-Id` and echoes it in `error.request_id`;
+    a W3C `traceparent` header is accepted on every operation. Cursor
+    pagination is `?cursor=&limit=` (default 50, max 200), response
+    `{ "items": [], "next_cursor": null }`, ordering `(created_at, id)`.
+    Cookie-authenticated mutations require `X-XSRF-TOKEN` (00 §9.1, T38);
+    bearer-only routes never carry it. Mutations that create resources or
+    side effects require `Idempotency-Key` unless exempted in
+    contracts/README.md. Optimistic concurrency uses `ETag`/`If-Match`
+    (stale → 412). Error envelope is 00 §9.2 (`ErrorEnvelope`); 429/503
+    carry `Retry-After`. Operational routes (`/internal/*`, `/metrics`) are
+    intentionally absent — they never appear in this spec (00 §9.1).
+  contact:
+    name: Evidgate team
+  license:
+    name: Proprietary
+servers:
+  - url: /v1
+    description: API version 1 (stub operations also document V2-tagged routes via `x-version`)
+tags:
+  - name: ci
+    description: CI entry points (token exchange)
+  - name: runs
+    description: Runs, manifests, finalize and control actions
+  - name: events
+    description: Event batch ingest
+  - name: artifacts
+    description: Artifact upload and download
+  - name: decisions
+    description: Run and release decisions
+  - name: environments
+    description: Immutable environment revisions
+  - name: reports
+    description: Raw-report comparisons
+  - name: releases
+    description: Releases and release-run binding
+  - name: identity
+    description: Orgs, projects, memberships (02)
+  - name: ci-admin
+    description: CI bindings and ingest tokens (02)
+  - name: audit
+    description: Tenant-visible audit log (02, 11)
+  - name: support
+    description: Support grants (02)
+  - name: security
+    description: Security events (11)
+  - name: catalog
+    description: Case catalog and suite versioning (03)
+  - name: webhooks
+    description: Inbound provider webhooks (03)
+  - name: drafts
+    description: Authoring drafts, dry run and pull request (03, V2)
+  - name: healing
+    description: Incidents, candidates, switch (08)
+  - name: usage
+    description: Usage summary and ledger (12)
+  - name: jobs
+    description: Runner job claim and heartbeat (V2, 04/05)
+paths:
+  /ci/token:
+    post:
+      operationId: exchangeCiToken
+      tags: [ci]
+      summary: Exchange a GitHub OIDC JWT or project ingest token for a `ci_producer` token
+      description: >-
+        Issues a short-lived `ci_producer` token scoped to one project (00 §9.3, 02).
+        Not a permission-checked route: `x-permission: none`; the credential is the
+        presented token (`x-auth`). Idempotency-Key exempt (stateless exchange, README).
+      x-permission: none
+      x-auth: github_oidc_jwt_or_ingest_token
+      x-version: v1
+      security:
+        - bearerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential, project_id]
+              properties:
+                credential:
+                  type: string
+                  description: GitHub OIDC JWT or project ingest token
+                project_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Short-lived `ci_producer` token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, expires_at]
+                properties:
+                  token:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/manifests:
+    post:
+      operationId: createManifest
+      tags: [runs]
+      summary: Upload and verify a run manifest
+      description: >-
+        Uploads + verifies the manifest and returns `manifest_id` and
+        `manifest_hash` (00 §9.3).
+      x-permission: run:create
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManifestUpload'
+      responses:
+        '201':
+          description: Manifest accepted
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [manifest_id, manifest_hash]
+                properties:
+                  manifest_id:
+                    type: string
+                    format: uuid
+                  manifest_hash:
+                    type: string
+                    pattern: '^sha256:[0-9a-f]{64}$'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/runs:
+    get:
+      operationId: listRuns
+      tags: [runs]
+      summary: Cursor list of runs with state, decision and rerun/reprocess labels
+      description: Cursor list (00 §9.1) with state, decision and rerun/reprocess labels (09).
+      x-permission: run:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of runs
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CursorList'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RunSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: createRun
+      tags: [runs]
+      summary: Create a run
+      description: >-
+        Locks manifest, policy, suite and environment; writes run + planned
+        executions + outbox in one transaction (00 §9.3). `Idempotency-Key`
+        required (00 §9.1).
+      x-permission: run:create
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [manifest_id]
+              properties:
+                manifest_id:
+                  type: string
+                  format: uuid
+                release_id:
+                  type: string
+                  format: uuid
+                  description: Optional release binding (05)
+      responses:
+        '201':
+          description: Run created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run_id]
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /runs/{r}:
+    get:
+      operationId: getRun
+      tags: [runs]
+      summary: Run state + current evidence revision
+      x-permission: run:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: Run detail
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/RunSummary'
+                  - type: object
+                    properties:
+                      evidence_revision:
+                        type: string
+                        format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /runs/{r}/cancel:
+    post:
+      operationId: cancelRun
+      tags: [runs]
+      summary: Request run cancellation (202; recorded, not "stopped")
+      x-permission: run:cancel
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '202':
+          description: Cancel request recorded
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /runs/{r}/events:
+    post:
+      operationId: postRunEvents
+      tags: [events]
+      summary: Atomic event batch (≤ 500 events, ≤ 1 MiB before decompression)
+      description: >-
+        Body validated against `contracts/schemas/event-envelope.v1.json`
+        (00 §9.4). Atomic commit; per-event ack `accepted`/`duplicate`.
+        Idempotency-Key exempt: per-event `event_id` dedupe is the arbiter
+        (00 §9.4; README exemption list).
+      x-permission: event:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventBatch'
+      responses:
+        '200':
+          description: Per-event acknowledgements
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [acks]
+                properties:
+                  acks:
+                    type: array
+                    items:
+                      type: object
+                      required: [index, status]
+                      properties:
+                        index:
+                          type: integer
+                        status:
+                          type: string
+                          enum: [accepted, duplicate]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /runs/{r}/finalize:
+    post:
+      operationId: finalizeRun
+      tags: [runs]
+      summary: Finalize a shard (202, reconcile async)
+      description: >-
+        `producer`, `shard`, `last_sequence`, `count`, `manifest_hash`
+        (00 §9.3) → 202; reconciliation is asynchronous.
+      x-permission: event:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [producer_id, shard, last_sequence, count, manifest_hash]
+              properties:
+                producer_id:
+                  type: string
+                shard:
+                  type: integer
+                last_sequence:
+                  type: integer
+                count:
+                  type: integer
+                manifest_hash:
+                  type: string
+                  pattern: '^sha256:[0-9a-f]{64}$'
+      responses:
+        '202':
+          description: Finalize accepted; reconcile async
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /artifacts/upload-url:
+    post:
+      operationId: createArtifactUploadUrl
+      tags: [artifacts]
+      summary: Request a presigned upload URL for an artifact
+      description: >-
+        Scope run/attempt, media type, size, checksum → server-chosen key +
+        presigned URL (00 §9.3).
+      x-permission: artifact:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [run_id, kind, media_type, size_bytes, checksum]
+              properties:
+                run_id:
+                  type: string
+                  format: uuid
+                attempt_id:
+                  type: string
+                  format: uuid
+                kind:
+                  type: string
+                  enum:
+                    [
+                      trace,
+                      video,
+                      screenshot,
+                      raw_report,
+                      dom_snapshot,
+                      a11y_snapshot,
+                      patch,
+                      ui_hierarchy,
+                    ]
+                media_type:
+                  type: string
+                size_bytes:
+                  type: integer
+                  minimum: 0
+                checksum:
+                  type: string
+                  pattern: '^sha256:[0-9a-f]{64}$'
+      responses:
+        '201':
+          description: Upload URL issued
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [artifact_id, upload_url]
+                properties:
+                  artifact_id:
+                    type: string
+                    format: uuid
+                  upload_url:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /artifacts/{a}/complete:
+    post:
+      operationId: completeArtifact
+      tags: [artifacts]
+      summary: Verify object/size/checksum → artifact `ready`
+      x-permission: artifact:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ArtifactId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: Artifact verified and `ready`
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /runs/{r}/decision:
+    get:
+      operationId: getRunDecision
+      tags: [decisions]
+      summary: Exact evaluation revision + reasons, or `pending`
+      x-permission: decision:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: Evaluation decision or `pending`
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /runs/{r}/rerun:
+    post:
+      operationId: rerunRun
+      tags: [runs]
+      summary: Create a rerun with `rerun_scope` + selection (parent_run_id set)
+      x-permission: run:create
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rerun_scope]
+              properties:
+                rerun_scope:
+                  type: string
+                selection:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Rerun created (`parent_run_id` set)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run_id]
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/environments/{e}/revisions:
+    post:
+      operationId: createEnvironmentRevision
+      tags: [environments]
+      summary: Create an immutable, secret-free, hashed environment revision
+      description: Immutable, secret-free, hashed; referenced revision → 409 on change (05.1.2-T1).
+      x-permission: environment:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentSlug'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Environment revision payload (05); secret-free, hashed server-side.
+      responses:
+        '201':
+          description: Revision created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision_id, revision_hash]
+                properties:
+                  revision_id:
+                    type: string
+                    format: uuid
+                  revision_hash:
+                    type: string
+                    pattern: '^sha256:[0-9a-f]{64}$'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /environment-revisions/{id}:
+    get:
+      operationId: getEnvironmentRevision
+      tags: [environments]
+      x-permission: run:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/EnvironmentRevisionId'
+      responses:
+        '200':
+          description: Environment revision (secret-free)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision_id, revision_hash]
+                properties:
+                  revision_id:
+                    type: string
+                    format: uuid
+                  revision_hash:
+                    type: string
+                    pattern: '^sha256:[0-9a-f]{64}$'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /runs/{r}/reports/{report_id}/comparison:
+    get:
+      operationId: getReportComparison
+      tags: [reports]
+      summary: Parsed events per case vs declared counts/ids, with discrepancy reasons
+      description: >-
+        Raw report bytes are never returned; only the `raw_report` artifact id
+        for `download-url` (`artifact:read` + sensitivity gate) (04.4.1-T6).
+      x-permission: run:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/ReportId'
+      responses:
+        '200':
+          description: Per-case comparison with discrepancy reasons
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [raw_report_id, cases]
+                properties:
+                  raw_report_id:
+                    type: string
+                    format: uuid
+                  cases:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        discrepancy_reasons:
+                          type: array
+                          items:
+                            type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /runs/{r}/reprocess:
+    post:
+      operationId: reprocessRun
+      tags: [runs]
+      summary: Reprocess a raw report → 202, new evidence revision labelled `reprocessed`
+      description: '`raw_report_id` + `parser_version` → 202; never `rerun` (04).'
+      x-permission: run:create
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [raw_report_id, parser_version]
+              properties:
+                raw_report_id:
+                  type: string
+                  format: uuid
+                parser_version:
+                  type: string
+      responses:
+        '202':
+          description: Reprocess accepted; new evidence revision labelled `reprocessed`
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/releases:
+    post:
+      operationId: createRelease
+      tags: [releases]
+      summary: Create a release (components → build digests)
+      x-permission: run:create
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [components]
+              properties:
+                components:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      build_digest:
+                        type: string
+      responses:
+        '201':
+          description: Release created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [release_id]
+                properties:
+                  release_id:
+                    type: string
+                    format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /releases/{id}:
+    get:
+      operationId: getRelease
+      tags: [releases]
+      summary: Read a release
+      x-permission: run:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ReleaseId'
+      responses:
+        '200':
+          description: Release detail
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /releases/{id}/runs:
+    post:
+      operationId: bindReleaseRun
+      tags: [releases]
+      summary: Explicit run ↔ release binding (the only binding, TL T15)
+      description: Refused with 409 once the run has a live evaluation (05.6.1-T2).
+      x-permission: run:create
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ReleaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [run_id]
+              properties:
+                run_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Binding created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /releases/{id}/decision:
+    get:
+      operationId: getReleaseDecision
+      tags: [decisions]
+      summary: Per-component status + release aggregate (never PASS with a missing component)
+      x-permission: decision:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ReleaseId'
+      responses:
+        '200':
+          description: Release decision (07)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /artifacts/{a}/download-url:
+    get:
+      operationId: getArtifactDownloadUrl
+      tags: [artifacts]
+      summary: Short-lived per-view download URL (sensitive issuance audited)
+      description: '`artifact:read`; `sensitive` artifacts additionally need `artifact:read_sensitive` (00 §7, 06).'
+      x-permission: artifact:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ArtifactId'
+      responses:
+        '200':
+          description: Short-lived download URL
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [download_url]
+                properties:
+                  download_url:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/projects:
+    post:
+      operationId: createProject
+      tags: [identity]
+      summary: Provision a project (02)
+      x-permission: project:create
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Project created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [project_id]
+                properties:
+                  project_id:
+                    type: string
+                    format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/memberships:
+    post:
+      operationId: createMembership
+      tags: [identity]
+      summary: Create a membership; last-admin guard applies (02)
+      x-permission: membership:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Membership invite payload (02).
+      responses:
+        '201':
+          description: Membership created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/ci-bindings:
+    post:
+      operationId: createCiBinding
+      tags: [ci-admin]
+      summary: Create a CI binding (02)
+      x-permission: ci_binding:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: CI binding payload (02).
+      responses:
+        '201':
+          description: CI binding created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/ingest-tokens:
+    post:
+      operationId: createIngestToken
+      tags: [ci-admin]
+      summary: Issue an ingest token; plaintext returned once (02)
+      x-permission: ingest_token:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Ingest token creation payload (02).
+      responses:
+        '201':
+          description: Token issued; plaintext returned once
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token]
+                properties:
+                  token:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/audit:
+    get:
+      operationId: listAudit
+      tags: [audit]
+      summary: Cursor list of tenant-visible audit events (support-grant actions included)
+      x-permission: audit:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of audit events (02, 11)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /support-grants:
+    post:
+      operationId: requestSupportGrant
+      tags: [support]
+      summary: Request operator access with scope + expiry (02)
+      x-permission: support:grant
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [org_id, scope, expires_at]
+              properties:
+                org_id:
+                  type: string
+                  format: uuid
+                scope:
+                  type: string
+                expires_at:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Support grant requested
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /support-grants/{g}/approve:
+    post:
+      operationId: approveSupportGrant
+      tags: [support]
+      summary: Approve a support grant; approver is a `tenant_admin` of the target org ≠ requester
+      x-permission: support:approve
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/SupportGrantId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: Grant approved
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /support-grants/{g}/revoke:
+    post:
+      operationId: revokeSupportGrant
+      tags: [support]
+      summary: Revoke a support grant
+      description: >-
+        Permission: 00 §9.3 lists `support:grant` / `support:approve` for the
+        `approve|revoke` route pair; `support:approve` is carried here pending
+        CR clarification.
+      x-permission: support:approve
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/SupportGrantId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: Grant revoked
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/security-events:
+    get:
+      operationId: listSecurityEvents
+      tags: [security]
+      summary: Security events filtered by project/type/severity/time
+      description: >-
+        Auth failures and support access in V1; injection attempts from V2
+        (11.5.1-T5, 11.4.1-T2; view 09.7.1-T9).
+      x-permission: security_event:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of security events
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/cases:
+    get:
+      operationId: listCases
+      tags: [catalog]
+      summary: Case catalog read (03)
+      x-permission: case:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of cases
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /suites/{s}/revisions:
+    post:
+      operationId: createSuiteRevision
+      tags: [catalog]
+      summary: Publish an immutable suite revision (03)
+      x-permission: suite:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/SuiteId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Suite revision payload; immutable once published (00 §8.10).
+      responses:
+        '201':
+          description: Suite revision created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /suite-revisions/{r}/diff:
+    get:
+      operationId: getSuiteRevisionDiff
+      tags: [catalog]
+      summary: Diff between suite revisions (03)
+      x-permission: suite:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/SuiteRevisionId'
+      responses:
+        '200':
+          description: Suite revision diff
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /webhooks/github:
+    post:
+      operationId: receiveGithubWebhook
+      tags: [webhooks]
+      summary: Inbound GitHub webhook (replay-safe by `delivery_id`; forged signature → 401)
+      description: >-
+        `x-permission: none`; authentication is `X-Hub-Signature-256`
+        (`x-auth`, 00 §9.3). Idempotency-Key exempt: `delivery_id` dedupe
+        is the arbiter (README exemption list).
+      x-permission: none
+      x-auth: github_webhook_signature
+      x-version: v1
+      security:
+        - githubWebhookSignature: []
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Delivery accepted
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /drafts/{d}/dry-run:
+    post:
+      operationId: dryRunDraft
+      tags: [drafts]
+      summary: Sandbox dry run of a draft (V2, 03)
+      x-permission: draft:dry_run
+      x-version: v2
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '202':
+          description: Dry run started
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /drafts/{d}/pull-request:
+    post:
+      operationId: openDraftPullRequest
+      tags: [drafts]
+      summary: Open a PR for a draft (V2, 03)
+      description: >-
+        Idempotent by `(branch, commit)` (00 §9.3) — Idempotency-Key exempt
+        (README exemption list). `If-Match` per 00 §9.1 (drafts).
+      x-permission: draft:merge_request
+      x-version: v2
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+        - $ref: '#/components/parameters/XsrfToken'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '201':
+          description: Pull request opened
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/incidents:
+    get:
+      operationId: listIncidents
+      tags: [healing]
+      summary: Cursor list of incidents (08)
+      x-permission: healing:triage
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of incidents
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /incidents/{i}:
+    get:
+      operationId: getIncident
+      tags: [healing]
+      summary: Read an incident (08)
+      x-permission: healing:triage
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Incident detail
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /incidents/{i}/label:
+    post:
+      operationId: labelIncident
+      tags: [healing]
+      summary: Human label — the only ground truth (00 §8.7, 08)
+      x-permission: healing:triage
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label:
+                  type: string
+                  enum: [product_defect, test_drift, environment, data_issue, unknown]
+      responses:
+        '200':
+          description: Label recorded
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/usage/summary:
+    get:
+      operationId: getUsageSummary
+      tags: [usage]
+      summary: Counters vs quota (tenant_admin, 12)
+      x-permission: usage:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Usage counters vs quota
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/usage/ledger:
+    get:
+      operationId: getUsageLedger
+      tags: [usage]
+      summary: Ledger rows + adjustments for reconciliation (12)
+      x-permission: usage:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of ledger rows
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /agents/jobs/claim:
+    post:
+      operationId: claimJob
+      tags: [jobs]
+      summary: Pool + capability match → lease, epoch, deadline (V2)
+      x-permission: job:claim
+      x-version: v2
+      security:
+        - bearerToken: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pool, capability]
+              properties:
+                pool:
+                  type: string
+                capability:
+                  $ref: './adapter/capability.v1.json'
+      responses:
+        '200':
+          description: Lease issued (job, lease, epoch, deadline)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /jobs/{j}/heartbeat:
+    post:
+      operationId: heartbeatJob
+      tags: [jobs]
+      summary: Extend the lease for the current epoch only (V2)
+      description: >-
+        Idempotency-Key exempt: replay is naturally idempotent — the server
+        extends only when the presented epoch is current (00 §9.3; README
+        exemption list).
+      x-permission: job:execute
+      x-version: v2
+      security:
+        - bearerToken: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [epoch]
+              properties:
+                epoch:
+                  type: integer
+      responses:
+        '200':
+          description: Lease extended
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /healing/candidates/{c}/approve:
+    post:
+      operationId: approveHealingCandidate
+      tags: [healing]
+      summary: Approve a healing candidate (V2)
+      description: >-
+        `If-Match` + `candidate_hash` + validation set + expiry; permission
+        and context re-checked (00 §9.3).
+      x-permission: healing:approve
+      x-version: v2
+      parameters:
+        - $ref: '#/components/parameters/CandidateId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [candidate_hash]
+              properties:
+                candidate_hash:
+                  type: string
+                  pattern: '^sha256:[0-9a-f]{64}$'
+                expires_at:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Candidate approved
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /healing/candidates/{c}/revoke:
+    post:
+      operationId: revokeHealingCandidate
+      tags: [healing]
+      summary: Revoke a healing candidate (V2); reason required; audited
+      x-permission: healing:revoke
+      x-version: v2
+      parameters:
+        - $ref: '#/components/parameters/CandidateId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Candidate revoked
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/healing/candidates:
+    get:
+      operationId: listHealingCandidates
+      tags: [healing]
+      summary: Shadow (V1) and proposed (V2) candidates with validation evidence (08)
+      x-permission: healing:triage
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of healing candidates
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /healing/candidates/{c}:
+    get:
+      operationId: getHealingCandidate
+      tags: [healing]
+      summary: Read a healing candidate with validation evidence (08)
+      x-permission: healing:triage
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/CandidateId'
+      responses:
+        '200':
+          description: Healing candidate detail
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /healing/candidates/{c}/reject:
+    post:
+      operationId: rejectHealingCandidate
+      tags: [healing]
+      summary: Reject a healing candidate (V2); reason required; audited (08)
+      x-permission: healing:approve
+      x-version: v2
+      parameters:
+        - $ref: '#/components/parameters/CandidateId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Candidate rejected
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /healing/switch:
+    get:
+      operationId: getHealingSwitch
+      tags: [healing]
+      summary: Resolved healing availability per tenant/project (most restrictive wins)
+      x-permission: healing:triage
+      x-version: v1
+      responses:
+        '200':
+          description: Resolved switch (`enabled|shadow|disabled|unavailable`, 00 §8.7)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [availability]
+                properties:
+                  availability:
+                    type: string
+                    enum: [enabled, shadow, disabled, unavailable]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      operationId: setHealingSwitch
+      tags: [healing]
+      summary: Set the healing switch (`enabled|shadow|disabled` only, TL T33)
+      x-permission: healing:configure
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [availability]
+              properties:
+                availability:
+                  type: string
+                  enum: [enabled, shadow, disabled]
+      responses:
+        '200':
+          description: Switch updated
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-evidgate
+      description: '`__Host-` httpOnly, Secure, SameSite=Lax browser session cookie (00 §9.1).'
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: 'CLI/agent bearer tokens — `ci_producer`, ingest, personal (00 §9.1; T38: never cookie-authenticated).'
+    githubWebhookSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+      description: HMAC signature on inbound GitHub webhook deliveries (00 §9.3).
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 200
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag for optimistic concurrency; stale → 412 (00 §9.1).
+      schema:
+        type: string
+    XsrfToken:
+      name: X-XSRF-TOKEN
+      in: header
+      required: false
+      description: >-
+        Required whenever the caller is cookie-authenticated (00 §9.1, T38);
+        bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+      schema:
+        type: string
+    OrgId:
+      name: o
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ProjectId:
+      name: p
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RunId:
+      name: r
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ReportId:
+      name: report_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ArtifactId:
+      name: a
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ReleaseId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EnvironmentRevisionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EnvironmentSlug:
+      name: e
+      in: path
+      required: true
+      schema:
+        type: string
+    SupportGrantId:
+      name: g
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SuiteId:
+      name: s
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SuiteRevisionId:
+      name: r
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DraftId:
+      name: d
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IncidentId:
+      name: i
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JobId:
+      name: j
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CandidateId:
+      name: c
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  headers:
+    XRequestId:
+      description: Server request id; echoed in `error.request_id` (00 §9.1/§9.2).
+      schema:
+        type: string
+    RetryAfter:
+      description: Seconds (or HTTP-date) to wait before retrying (00 §9.2).
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: 401 unauthenticated (00 §9.2)
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: '403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: 404 not found — also for other-tenant ids (00 §9.2)
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Conflict:
+      description: '409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    PreconditionFailed:
+      description: 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    TooLarge:
+      description: 413 too large (00 §9.2)
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Unprocessable:
+      description: 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    RateLimited:
+      description: '429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Unavailable:
+      description: 503 unavailable — always `Retry-After` (00 §9.2)
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    ErrorEnvelope:
+      type: object
+      description: 00 §9.2 error envelope; `details` never contains secrets.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id, retryable]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+            retryable:
+              type: boolean
+            details:
+              type: array
+              items:
+                type: object
+                required: [reason]
+                properties:
+                  index:
+                    type: integer
+                  path:
+                    type: string
+                  reason:
+                    type: string
+    CursorList:
+      type: object
+      description: 00 §9.1 cursor list envelope; `next_cursor` is null when the page is last.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        next_cursor:
+          type: [string, 'null']
+    RunSummary:
+      type: object
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [created, queued, running, collecting, complete, incomplete, canceled]
+        decision:
+          type: [string, 'null']
+          enum: [PASS, FAIL, INCONCLUSIVE, null]
+          description: null while pending (00 §9.3); UPPER per 00 §7
+        parent_run_id:
+          type: [string, 'null']
+          format: uuid
+        rerun_label:
+          type: [string, 'null']
+        reprocess_label:
+          type: [string, 'null']
+    Decision:
+      type: object
+      description: Evaluation decision or `pending` (00 §8.5/§9.3); `decision` values are upper case (00 §7).
+      properties:
+        decision:
+          type: [string, 'null']
+          enum: [PASS, FAIL, INCONCLUSIVE, null]
+          description: null while pending (00 §9.3); UPPER per 00 §7
+        evaluation_revision:
+          type: string
+        reasons:
+          type: array
+          items:
+            type: string
+    ManifestUpload:
+      type: object
+      description: Manifest upload payload; verified server-side → `manifest_id` + `manifest_hash` (00 §9.3). Shape finalized by 05.
+    EventBatch:
+      type: object
+      description: >-
+        Inline mirror of `contracts/schemas/event-envelope.v1.json` (00 §9.4);
+        the schema file is authoritative.
+      required: [events]
+      properties:
+        events:
+          type: array
+          maxItems: 500
+          items:
+            $ref: './schemas/event-envelope.v1.json#/$defs/event'
+      x-max-bytes: 1048576
+security:
+  - sessionCookie: []
+  - bearerToken: []
