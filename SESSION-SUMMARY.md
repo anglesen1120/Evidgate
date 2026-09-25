@@ -1,89 +1,78 @@
-# Tóm tắt phiên làm việc — Evidgate (cập nhật 2026-09-25)
+# Tóm tắt phiên làm việc — Evidgate (cập nhật 2026-09-25, phiên 2)
 
-Bản tóm tắt cho chủ dự án, để không phụ thuộc tin nhắn chat. Nguồn chính thức vẫn là `DECISIONS.md` và `plans/00-overview.md`; nếu file này lệch với chúng thì chúng đúng.
+Bản tóm tắt cho chủ dự án. Nguồn chính thức vẫn là `DECISIONS.md` và `plans/00-overview.md`; nếu file này lệch với chúng thì chúng đúng.
 
 ## 1. Dự án là gì
 
-- **Tên:** Evidgate (*evidence* + *gate*). Tên làm việc cũ "ReleaseHub" bị loại vì trùng một công ty có sẵn. Lý do và các kiểm tra trùng tên nằm ở `DECISIONS.md` §2.
-- **Mục tiêu:** thu kết quả test tự động (web, API, mobile, unit) từ CI hoặc agent của khách, lưu thành bằng chứng bất biến gắn với build, rồi đưa ra quyết định release PASS / FAIL / INCONCLUSIVE theo policy có phiên bản.
-- **Trạng thái:** mới là kế hoạch, chưa có code. Tài liệu gốc (tiếng Việt, .docx) nằm trong `docs/source/`.
+- **Tên:** Evidgate (*evidence* + *gate*). Thu kết quả test tự động (web, API, mobile, unit) từ CI/agent của khách, lưu thành bằng chứng bất biến gắn với build, ra quyết định release PASS / FAIL / INCONCLUSIVE theo policy có phiên bản; healing an toàn (chỉ sửa cơ chế test, không đổi ý định test).
+- **Trạng thái:** vẫn là kế hoạch, chưa có code. Repo GitHub private `anglesen1120/Evidgate`, nhánh `main` (baseline) và `develop` (triển khai).
 
-## 2. Cấu trúc repo
+## 2. Đổi stack (CR-D-1, theo yêu cầu chủ dự án)
 
-| Đường dẫn | Nội dung |
-|---|---|
-| `DECISIONS.md` | Tên, kiến trúc đã chốt A1–A10, stack và phiên bản, quy tắc healing an toàn, sự kiện đã kiểm chứng, quyết định còn mở O1–O10, chênh lệch so với bản gốc R1–R10 |
-| `plans/00-overview.md` | Hợp đồng chung: thuật ngữ, milestone, kiến trúc, trạng thái, API, NFR, quy trình viết feature plan, tổng ước lượng (§14), nhật ký thay đổi (§15) |
-| `plans/01`–`12` | Kế hoạch theo mảng: epic → story → task, có size |
-| `AGENTS.md` | Quy tắc sửa kế hoạch (size, id, chú thích ✅/⚠️) |
-
-Kế hoạch 01–12 là mức tổng quan. Trước khi làm, mỗi story có thêm feature plan chi tiết trong `plans/features/`, theo quy trình ở 00 §12.
-
-## 3. Số liệu hiện tại (00 §14)
-
-| | Thô | Có buffer 20 % |
+| Phần | Stack mới | Ghi chú |
 |---|---|---|
-| V1 (M0–M3) | 416.5 | 499.8 |
+| Backend + worker | **.NET 10 LTS**, ASP.NET Core minimal APIs, **CQRS** với `Mediator` 3 (MIT), EF Core 10 (ghi), Dapper (đọc) | .NET 11 mới là RC và STS nên không dùng |
+| Database | **PostgreSQL 18**, RLS FORCE, migration SQL thuần bằng DbUp | |
+| Hàng đợi nội bộ | Outbox + bảng `task` tự viết (`SKIP LOCKED`), lịch Cronos có khoá chống trùng | Thay pg-boss (thư viện Node) |
+| Web | **Angular 22.2**: standalone, zoneless, signals, OnPush, `@ngrx/signals`, CDK, i18n vi + en | |
+| Phía khách hàng | CLI, Playwright reporter, adapter, agent vẫn là **Node/TypeScript** | Reporter của Playwright bắt buộc là JS |
+
+Thư viện bị loại vì licence không cho SaaS đóng mã (đã kiểm từ file licence trong nupkg): MediatR 14 (RPL-1.5), JsonSchema.Net 9 (EULA thu phí), FluentAssertions 8 (non-commercial). Quy tắc code chung nằm ở 00 §5.5 (CQRS C1–C9), §5.6 (Angular W1–W9), §5.7 (performance P1–P8, security S1–S8).
+
+## 3. Review high-level (vai trò Tech Lead)
+
+- **Vòng 1:** 4 reviewer chạy song song trên 12 area plan, ra **82 finding** (3 blocker, 21 high), xem `plans/features/REVIEW-2026-09-25.md`. Lỗi đáng chú ý:
+  - Token CI bị lộ có thể giả mạo các shard còn thiếu.
+  - `test_maintainer` có thể quarantine một case critical để biến FAIL thành PASS.
+  - Nút duyệt healing có thể ra trước kill switch.
+  - Policy RLS gây lỗi thay vì trả 0 dòng khi thiếu tenant context.
+- **Vòng cuối**, sau khi viết feature plan, 3 reviewer:
+  - **Security:** 14 finding. Lỗi critical là org khác có thể bind repo GitHub của mình để chiếm evidence CI.
+  - **Performance/dữ liệu:** 15 finding. Ví dụ: event đến muộn bị từ chối nên cơ chế late window không chạy; batch gửi lại bị tính tiền hai lần.
+  - **Nhất quán:** 7 finding.
+- Tất cả đã được xử lý bằng **97 phán quyết TL (T1–T97)**, xem `plans/features/README.md` §3. Phán quyết chạm hợp đồng chung được ghi vào 00 và log ở 00 §15.
+
+## 4. Feature plan chi tiết
+
+- **164/164 story** có feature plan tại `plans/features/<NN>-<area>/`. Mỗi file có 11 mục cố định; mỗi task được chia thành sub-task ≤ 0.5 ngày, và mỗi sub-task có một bước kiểm tra chạy được (tên test, lệnh hoặc screenshot).
+- Kiểm tra bằng script:
+  - `scripts/check_features.py` → **0 lỗi**. Script này kiểm cấu trúc, tổng sub-task, id, và header khớp đồ thị.
+  - `scripts/plan_graph.py` → **0 lỗi**. Script này kiểm id treo, vòng phụ thuộc và phụ thuộc ngược milestone.
+- Sinh tự động bằng `scripts/regen_docs.py`: bảng 00 §14, thứ tự thực thi và index ở README §5/§7.
+
+## 5. Số liệu (00 §14)
+
+| | Raw | Có buffer 20 % |
+|---|---|---|
+| V1 (M0–M3) | 433.25 | 519.9 |
 | V2 (M4) | 113.75 | 136.5 |
 | V3 (M5) | 13.25 | 15.9 |
-| **Tổng (487 task)** | **543.5** | **652.2** |
+| **Tổng (502 task)** | **560.25** | **672.3** |
 
-Đơn vị là ngày công. Chia theo milestone (thô): M0 10.5 · M1 134 · M2 152.5 · M3 119.5 · M4 113.75 · M5 13.25.
+Trước khi đổi stack: 487 task / 543.5 / 652.2. Tăng thêm 15 task (+16.75 ngày raw), gồm CQRS pipeline, idempotency store, task queue tự viết, fuzz parser, tách task xoá tenant (PDPL) và `run.purpose` cho replay.
 
-Kiểm tra bằng script trên toàn bộ plan: tổng từng epic khớp bảng §12 (Estimate summary) của chính plan đó, và tổng các plan khớp bảng 00 §14, không có id treo, không có ô phụ thuộc viết bằng chữ, không task nào phụ thuộc task ở milestone sau, không có vòng phụ thuộc.
+## 6. Thứ tự thực thi (README §5)
 
-## 4. Các vòng review đã xong
+- Làm theo cổng milestone, trong mỗi milestone thì theo **wave** phụ thuộc. Có 8 **bundle** (nhóm story đan xen nhau), phải làm chung và xếp theo task.
+- **Đường găng:** chuỗi phụ thuộc dài nhất tới hết M3 chỉ khoảng **40 ngày**, trong khi khối lượng tới M3 khoảng 433 ngày. Tiến độ phụ thuộc số người, không phải phụ thuộc kỹ thuật: thêm người rút ngắn lịch gần như tỷ lệ thuận.
+- **Gợi ý 3 lane:**
+  - A: platform/core, do Tech Lead giữ đường găng.
+  - B: evidence và decision.
+  - C: web và các package phía khách hàng.
 
-- **Vòng 1:** sửa hợp đồng quyền (`environment:write`, `security_event:read`), thêm endpoint `environment revision` và so sánh report, thêm O9, tính lại O8.
-- **Vòng 2 (19 phát hiện, đã sửa hết và reviewer kiểm lại):**
-  - khóa môi trường theo từng môi trường;
-  - `data_isolation` chỉ còn một nguồn (khai báo suite trong 03);
-  - quyền `billing:read` cho `billing_operator`;
-  - phá 4 vòng phụ thuộc và sửa các chỗ phụ thuộc ngược milestone;
-  - đánh số lại story 09.5.
-- **Quyết định O8 (2026-09-25):** giữ nguyên phạm vi, milestone là thứ tự + cổng nghiệm thu, không phải ngày.
-- **Lưu ý bổ sung sau vòng 2:**
-  - 11-CR-1 (ASVS) ghi đúng là mới áp dụng một phần;
-  - endpoint so sánh report không còn trả raw report qua `run:read`;
-  - thêm O10 về nơi chạy replay healing ở V1.
+## 7. Chủ dự án cần quyết định
 
-## 5. Chủ dự án cần quyết định
-
-| # | Câu hỏi | Cần trước |
+| # | Câu hỏi | Chặn |
 |---|---|---|
-| O1 | Khách pilot, CI và engine test của họ | Bắt đầu M1 |
-| O2 | Quy mô đội và ai là Tech Lead / QA lead | Bắt đầu M1 |
-| ~~O8~~ | **Đã chốt 2026-09-25 (chủ dự án xác nhận (b)):** giữ nguyên phạm vi; cột tuần ở 00 §4 chỉ là thứ tự, milestone kết thúc khi qua cổng nghiệm thu. Đã thử cắt V1: bỏ phần phụ còn 466.8 ngày công, bỏ thêm healing còn 403.8 — cả hai vẫn xa mốc 12 tuần. Ngày cụ thể đặt sau khi có O2 | — |
-| O9 | Case nào là critical (QA lead và product owner của khách). Chưa chọn thì project chỉ ở chế độ advisory, không chặn release | Trước khi policy chuyển sang chặn release |
-| **O10** | Khi healing V1 đề xuất bản sửa test, phải chạy lại test cũ và bản sửa trên máy nào để so sánh? Xem giải thích ở §5.1 | Trước feature plan 08.4.3 (M3) |
+| O1 | Khách pilot, CI và engine | Bắt đầu M1 |
+| O2 | Quy mô đội, Tech Lead / QA lead | Bắt đầu M1, đặt ngày |
+| O3 | Cloud/region (có cần lưu dữ liệu ở VN?) | Dữ liệu pilot ở M2 |
+| O9 | Case nào là critical | Chuyển policy sang chặn release |
+| O10 | Chỗ chạy replay healing ở V1 (khuyến nghị: CI của khách) | 08.4.3 |
+| O4, O5, O6, O7 | LLM provider, giá, ngưỡng false-heal, nhãn hiệu | M4, M3, M5, khi ra mắt |
 
-### 5.1 O10 giải thích ngắn
+## 8. Bước tiếp theo
 
-- Ở V1, healing chỉ **đề xuất** (shadow): khi một test hỏng vì locator đổi, hệ thống sinh bản sửa. Để biết bản sửa có đúng không, phải **chạy thật** test cũ và test đã sửa trên cùng build, cùng dữ liệu (story 08.4.3).
-- Vấn đề: ở V1 Evidgate **không có máy chạy test nào của mình**. Quyết định A5 nói test chạy trong CI của khách; runner do Evidgate vận hành chỉ có từ V2.
-- Vậy cần chọn chỗ chạy:
-  - **(a) CI của khách:** CLI `evidgate` tải bản sửa về và chạy thêm một job trong CI của khách. Không đổi kiến trúc; tốn CI của khách; thêm khoảng 1 task trong 04.
-  - **(b) Máy của Evidgate:** kéo phần runner cần thiết (05.7.1, 05.7.2, 05.7.4) và sandbox (11.2.1-T4) từ V2 về V1. Phải sửa A5, V1 tăng khoảng 12 ngày công thô (khoảng 20 nếu kéo cả 05.7), rủi ro bảo mật cao hơn vì chạy code của khách trên máy mình.
-  - **(c) Chưa chạy ở V1:** V1 chỉ sinh và kiểm tra tĩnh bản sửa (AST, hash assertion); phần chạy thật lùi sang V2/M4. Rẻ nhất, nhưng số đo chất lượng healing ở pilot yếu hơn.
-- Đề xuất: **(a)**, vì giữ A5, chi phí thấp và vẫn đo được chất lượng thật trong pilot.
-
-Còn O3–O7 (cloud/region, nhà cung cấp LLM, giá, ngưỡng false-heal (chốt trước cổng V3), nhãn hiệu). Chi tiết ở `DECISIONS.md` §8.
-
-## 6. Trạng thái khi dừng phiên (2026-09-25)
-
-- Phiên này chỉ làm kế hoạch high-level; đã dừng theo yêu cầu. Chưa viết feature plan nào.
-- O8 = (b) đã được chủ dự án xác nhận.
-- Các sửa sau vòng review 2 chưa được reviewer kiểm tra riêng: endpoint so sánh report (04.4.1-T6, 00 §9.3), tiêu chí 08.4.3 → O10, dòng O8/O10. Nên kiểm tra hẹp các chỗ này ở đầu phiên sau.
-
-## 7. Gợi ý cho các điểm chưa chốt
-
-`RECOMMENDATIONS.md` ghi gợi ý cho O1–O10 và mọi câu hỏi mở trong §11 của các plan. Chủ dự án đồng ý dùng làm mặc định làm việc (2026-09-25). Đây chưa phải quyết định: mỗi dòng chỉ thành quyết định khi được chép vào `DECISIONS.md` §8 hoặc plan liên quan lúc review Definition of Ready của story cần nó. 06-O5 (emulator S3) đã đóng vì DECISIONS §4 đã trả lời.
-
-Sau hai vòng review file gợi ý: O6 chuyển hạn thành "trước cổng V3" (08.8.3-T2, M5), theo quyết định của chủ dự án; các gợi ý đã khớp với FR đã chốt (Google Workspace vẫn có ở V1, backup nằm trong hạn xoá 30 ngày, raw report theo retention 14 ngày của artifact); đóng thêm 09-Q2 và câu hỏi tài khoản staging vì plan đã quyết.
-
-## 8. Bước tiếp theo đề xuất
-
-1. Chốt O1, O2. Có O2 (số người) mới đặt được ngày cho các milestone.
-2. Chốt O10 trước khi viết feature plan 08.4.3.
-3. Bắt đầu viết feature plan cho các story M0/M1 trong `plans/features/`.
-4. Repo chưa có commit git nào. Khi anh đồng ý, tạo commit đầu tiên.
+1. Chốt O1, O2, rồi đặt ngày cho các milestone.
+2. Bắt đầu M0 theo README §5.1: 01.1.1 (toolchain), 01.9.1 (ADR), 12.1.1 (phỏng vấn khách).
+3. Mỗi story chạy DoR (README §6) trước khi code; mọi thay đổi task thì chạy `scripts/regen_docs.py` và `scripts/check_features.py`.

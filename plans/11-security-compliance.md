@@ -17,7 +17,7 @@
 - AI permissions and prompt-injection containment.
 - Audit, support access, monitoring, break-glass.
 - Webhook authentication and replay protection.
-- Dependency and supply-chain controls (lockfile, pinned actions, provenance, SBOM, licence allowlist).
+- Dependency and supply-chain controls (npm + NuGet lockfiles, pinned actions, provenance, SBOM, licence allowlist) (T40).
 - Application security verification: ASVS level decision ⚠️ (L2 proposed), tenant-isolation red team, pen test before the pilot.
 - PDPL (Law 91/2025/QH15) program: DPA, privacy notice, data map, impact dossiers, transfer assessment, consent stance, deletion SLAs, breach runbook, sub-processor list.
 - Data residency decision support for O3/O4.
@@ -37,7 +37,7 @@
 - **FR-11-7** Prompt injection is assumed: DOM, logs, documents and artifact content are untrusted input. No instruction found inside content may change a policy, an approval, a permission, a gate decision or a kill switch; the independent rule engine (validator) is the only authority over a candidate, and injection attempts are logged as security events (read endpoint 11.5.1-T5, `security_event:read`, `tenant_admin` only) and visible to the tenant in the Settings security-events view (09.7.1-T9); the V1 event set is the 11.1.1-T4 baseline plus support-access rows (02.8.1-T1, 11.5.1-T2), with injection-attempt events joining it in V2 (11.4.1-T2).
 - **FR-11-8** Audit: every security-relevant action records actor, action, object, before/after hash and `request_id`; the log is append-only and readable per tenant. Support access is scoped, time-boxed, tenant-visible in the UI, and itself audited.
 - **FR-11-9** Webhooks: outbound signature `v1=hmac-sha256(secret, timestamp + "." + body)` with `Evidgate-Event-Id` and `Evidgate-Timestamp`; receivers reject timestamps older than 5 min (00 §9.5); we keep a per-endpoint dedupe window and never re-sign a replayed body as new.
-- **FR-11-10** Supply chain: committed `package-lock.json` and `npm ci`; dependency review on pull requests; licence allowlist enforcing the DECISIONS §4 rule (no AGPL/SSPL/BUSL/non-commercial in shipped or hosted code); an SBOM per release; provenance for published packages; a vulnerability triage SLA.
+- **FR-11-10** Supply chain, dual ecosystem (T40): npm side — committed `package-lock.json` and `npm ci`; NuGet side — committed `packages.lock.json` (`<RestorePackagesWithLockFile>`) with `dotnet restore --locked-mode` in CI, `dotnet list package --vulnerable --include-transitive` (plus `--deprecated`/`--outdated` or `dotnet nuget audit`) gating server/worker dependencies; dependency review on pull requests; licence allowlist enforcing the DECISIONS §4 rule (no AGPL/SSPL/BUSL/non-commercial in shipped or hosted code) across **both** ecosystems (NuGet licence tool chosen and licence-checked in 01.9.1 ⚠️); a CycloneDX SBOM per release covering NuGet and npm ⚠️ (tool licence checked in 11.6.1-T3); CodeQL scanning for C# and TypeScript (11.7.1-T2); provenance for published packages; a vulnerability triage SLA.
 - **FR-11-11** ASVS: the target level is **⚠️ L2 (proposed)** for web and API; a chapter-level mapping with a published gap list is produced in 11.1.1-T3 before the pilot. This is a verification target, not a certification.
 - **FR-11-12** An external penetration test covering tenant isolation, authentication/session, artifact access, injection, webhook and sandbox surfaces is executed before the M3 pilot exit; critical and high findings are fixed and retested.
 - **FR-11-13** PDPL: a processing contract (DPA) is signed **before** the first pilot upload (Art. 37.2.a ✅: a processor may receive personal data only after entering into an agreement/contract on personal data processing — [Law 91/2025/QH15 English text](https://english.luatvietnam.vn/dan-su/law-on-personal-data-protection-law-no-91-2025-qh15-405135-d1.html), Art. 37.2, read 2026-09-24); a processing impact dossier is prepared and kept (Art. 21.1/21.3 ✅); a cross-border transfer impact dossier is filed within 60 days of the first transfer (Art. 20.2 ✅); a breach is notified within 72 hours with the processor notifying the controller **promptly** rather than waiting for the clock (Art. 23.1 ✅); consent duties are documented as the customer's (Art. 9.2/9.4 ✅, "silence or non-response is not considered consent").
@@ -76,15 +76,17 @@
 
 | Boundary | Threats considered | Controls |
 |---|---|---|
-| Browser → API | spoofing, tampering, XSS-based session theft | OIDC, httpOnly session, CSP, no token in `localStorage`, isolated origin for artifact HTML |
+| Browser → API | spoofing, tampering, XSS-based session theft, CSRF | OIDC, `__Host-` session cookie `HttpOnly; Secure; SameSite=Lax`, ASP.NET Core antiforgery issuing `XSRF-TOKEN` with Angular `withXsrfConfiguration` sending `X-XSRF-TOKEN` on cookie-authenticated mutations (T38), CSP, no token in `localStorage`, isolated origin for artifact HTML |
 | Customer CI → API | spoofing (stolen token), replay, flooding | OIDC-issued short-lived token, hashed ingest token, batch limits, per-project scope, sequence uniqueness |
 | Agent → API | impersonation, stale lease, job theft | per-agent identity, epoch fencing, capability match, heartbeat, lease expiry |
-| API/worker → PostgreSQL | privilege escalation, cross-tenant read | app role not owner, `FORCE ROW LEVEL SECURITY` (DECISIONS F5), `SET LOCAL evidgate.org_id` per transaction, composite FKs |
+| API/worker → PostgreSQL | privilege escalation, cross-tenant read | app role not owner, `FORCE ROW LEVEL SECURITY` (DECISIONS F5), parameterised `set_config('evidgate.org_id', …, true)` per transaction via `ITenantScope.BeginAsync` (00 §5.5 C3), composite FKs |
 | API → object storage | URL leakage, confused deputy | short-lived presigned URL, checksum verification, server-chosen keys, no public buckets |
 | Worker/sandbox → LLM provider | information disclosure, injection, cost abuse | allowlist, redaction, opt-in, structured I/O, token and quota caps, no secret material in prompts |
-| Untrusted artifact content → our parsers/renderers | XXE, zip-slip, decompression bomb, HTML/JS | external entities off, path and size limits, MIME allowlist, isolated origin, no `dangerouslySetInnerHTML` |
+| Untrusted artifact content → our parsers/renderers | XXE, zip-slip, decompression bomb, HTML/JS | external entities off, path and size limits, MIME allowlist, isolated origin, Angular sanitizer on by default — no `[innerHTML]` binding on untrusted content, no `bypassSecurityTrust*` outside the reviewed viewer bridge (lint-enforced, T38/§4 mapping) |
 | API → webhook receivers | spoofing, replay | HMAC over `timestamp.body`, 5-min skew, event-id dedupe, retry/backoff with stable signature |
 | Operator → tenant data | abuse of privilege, undisclosed access | scoped+expiring support grants, UI banner, audit, quarterly access review |
+
+**Residual risk (T9):** producer-slot binding (00 §9.4) binds each `producer_slot` to the token identity at the first accepted write; a leaked ingest token that reaches an *unclaimed* slot before the legitimate producer can still forge that shard's evidence. Accepted residual: slots are per-run and short-lived, bound claims must match the run's CI reference, foreign identities get `403 producer_slot_taken` logged as a security event; recorded in the threat model, no further control in V1.
 
 ### 4.2 Secrets lifecycle (references only)
 
@@ -117,6 +119,8 @@ Every article citation in this table is from the Law text I opened: Law on Perso
 
 Disposable environment per job · default-deny egress with an explicit allowlist (engine CDN, package registry, customer staging host, LLM gateway) · least-privilege identity, no ambient tenant credentials, no long-lived cloud role · no host mounts, no docker socket, no access to the control-plane network · CPU/memory/disk/time caps with a hard kill · artifact collection through the normal upload path only · teardown verified and logged · escape attempts logged as security events. For V3 hosted multi-tenant execution the boundary must be a VM/microVM or a verified equivalent `[OPEN]`.
 
+The healing validator (`packages/healing-validator`, Node 26 + TypeScript 6.0.x, 08-owned) runs V1 shadow replay validation as a **child process of `Evidgate.Worker`** over JSON stdin/stdout — never inside the API process — with CPU, memory and wall-time limits enforced by the worker and a pinned Node runtime carried in the worker image (T36); the worker's own environment follows the disposable/allowlisted rules above, and the V1 replay host is customer-side (DECISIONS O10 option (a)).
+
 ### 4.5 Data flows that trigger Art. 20
 
 1. Artifacts stored in object storage outside Vietnam → transfer. 2. Healing/AI context sent to a provider abroad → transfer. 3. Backups replicated outside Vietnam → transfer. Each is enabled only after the tenant's data owner approves and the transfer dossier is filed or scheduled.
@@ -147,7 +151,7 @@ This plan **is** the security plan; the product-facing rules it owns are: permis
 
 | Suite | Covers |
 |---|---|
-| Tenant isolation red team | API cross-tenant reads/writes, FK violations, RLS with a non-owner role, views, search, presigned URLs, artifact ids from another tenant (NFR-11-1) |
+| Tenant isolation red team | API cross-tenant reads/writes, FK violations, RLS with a non-owner role, views, search, presigned URLs, artifact ids from another tenant — over both server data paths: EF Core write-model commands and Dapper read-only queries on module views (a query missing the tenant setting must still return zero foreign rows) (NFR-11-1, F-11-4) |
 | Untrusted-CI suite | Fork-PR credential reachability, token scope/TTL/replay, workflow recipe lint (SHA pinning, permissions, masking) |
 | Secret-hygiene suite | Scanner on logs/artifacts/error envelopes; metric-label check; command-line visibility check |
 | Prompt-injection corpus | DOM/log/document payloads asserting no policy/approval/permission/decision effect and correct security-event logging |
@@ -194,12 +198,13 @@ Epic 11.1 total: 4.0
 |---|---|---|---|---|---|
 | 11.2.1-T1 | Customer CI security guide: fork-PR rules, `pull_request_target` prohibition, SHA pinning, least-privilege `GITHUB_TOKEN`, masking, rotation ✅ (GitHub secure-use) | M | V1 | M1 | - |
 | 11.2.1-T2 | Fork-PR test: demonstrate no credential reachability and that an attempted use fails authorisation + is logged | M | V1 | M2 | 02.4.1-T1 |
-| 11.2.1-T3 | Ingest token security design review: scope, TTL, OIDC claim validation, revocation, replay (with 02) | M | V1 | M2 | 02.4.1-T1, 02.4.2-T1 |
+| 11.2.1-T3 | Ingest token security design review (with 02): scope, TTL, OIDC claim validation, revocation, replay — and the decided storage design: ≥128-bit random token, public prefix, `HMAC-SHA256(pepper_vN, secret)` + `pepper_version`, prefix lookup + `CryptographicOperations.FixedTimeEquals`; review covers pepper custody in the secret store and the versioned rotation runbook (10.7.1-T4) (T5) | M | V1 | M2 | 02.4.1-T1, 02.4.2-T1 |
 | 11.2.1-T4 | Sandbox requirements spec + verification plan for V2 agent/healing (disposable, allowlist, least privilege, teardown proof) | L | V2 | M4 | 05.7.4-T1, 11.2.1-T6 |
 | 11.2.1-T5 | Hosted multi-tenant isolation evaluation: VM/microVM boundary options and evidence | M | V3 | M5 | 11.2.1-T4 |
-| 11.2.1-T6 | V1 replay-sandbox requirements for shadow healing (08.4.3): one-shot workspace, network allowlist, no tenant secrets, resource caps, teardown check; 11.2.1-T4 extends it to V2 agents | M | V1 | M3 | 08.4.3-T1 |
+| 11.2.1-T6 | V1 replay-sandbox requirements for shadow healing (08.4.3): one-shot workspace, network allowlist, no tenant secrets, resource caps, teardown check; includes the `packages/healing-validator` child-process contract — JSON stdin/stdout, CPU/memory/wall-time limits enforced by the worker, pinned Node runtime in the worker image, never in the API process (T36); 11.2.1-T4 extends it to V2 agents | M | V1 | M3 | 08.4.3-T1 |
+| 11.2.1-T7 | `evidgate_resolve` SECURITY DEFINER review (with 02/03): pinned `search_path`, return limited to `(org_id, project_id, binding_id, status)`, app role `EXECUTE`-only, every call audited; abuse cases checked (binding enumeration, timing oracle, revoked-but-resolvable bindings) (T1) | S | V1 | M2 | 02.6.1-T3, 03.4.1-T2 |
 
-Epic 11.2 total: 7.0
+Epic 11.2 total: 7.5
 
 ### Epic 11.3 - Secrets and key management (M1-M3, V1)
 
@@ -244,20 +249,20 @@ Epic 11.5 total: 4.5
 #### Story 11.6.1 Every dependency is a decision - acceptance: licence allowlist and lockfile enforced in CI, actions pinned, SBOM produced per release.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.6.1-T1 | Lockfile + `npm ci` + dependency review + licence allowlist automation (DECISIONS §4 rule) | M | V1 | M1 | 01.1.1-T2, 01.7.1-T1 |
-| 11.6.1-T2 | Pin all our GitHub Actions to full commit SHAs, minimal permissions, document the same for customers | S | V1 | M1 | 11.2.1-T1 |
-| 11.6.1-T3 | SBOM per release + provenance/attestation for published packages (CLI, adapters, SDK) | M | V1 | M3 | 01.7.1-T1 |
+| 11.6.1-T1 | Dual-ecosystem lockfile enforcement: `package-lock.json` + `npm ci` for CLI/adapters/web; `packages.lock.json` + `dotnet restore --locked-mode` for server/worker; dependency review on PRs; licence allowlist automation for npm and NuGet (DECISIONS §4 rule; NuGet licence tool chosen + licence-checked in 01.9.1 ⚠️) (T40) | L | V1 | M1 | 01.1.1-T2, 01.7.1-T1 |
+| 11.6.1-T2 | Pin all our GitHub Actions to full commit SHAs, minimal permissions, document the same for customers; dependency-update automation (e.g. Dependabot) covers npm and NuGet manifests (T40) | S | V1 | M1 | 11.2.1-T1 |
+| 11.6.1-T3 | CycloneDX SBOM per release covering both ecosystems — NuGet and npm (tool licence-checked against DECISIONS §4 here ⚠️, T40) + provenance/attestation for published packages (CLI, adapters, SDK) | M | V1 | M3 | 01.7.1-T1 |
 | 11.6.1-T4 | Vulnerability triage SLA, patch cadence, base-image refresh schedule | M | V1 | M3 | 10.2.1-T1, 10.2.1-T2 |
 
-Epic 11.6 total: 3.5
+Epic 11.6 total: 4.5
 
 ### Epic 11.7 - Application security verification and pen test (M2-M4)
 
 #### Story 11.7.1 Proved against isolation, not asserted - acceptance: the tenant-isolation red-team suite is green in CI, and an external pen test report exists with criticals/highs closed before pilot exit.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.7.1-T1 | Tenant isolation red-team suite: API, FK, RLS, views, search, presigned URLs, artifact ids | L | V1 | M2 | 02.9.1-T1, 06.3.3-T1 |
-| 11.7.1-T2 | Our own SAST/DAST baseline (code scanning + a staging scan) with triage loop | M | V1 | M3 | 01.7.1-T1 |
+| 11.7.1-T1 | Tenant isolation red-team suite: API, FK, RLS, views, search, presigned URLs, artifact ids — covering both server data paths: EF Core write-model commands and Dapper read-model queries over module views (a Dapper query missing the tenant setting must still return zero foreign rows) (F-11-4) | L | V1 | M2 | 02.9.1-T1, 06.3.3-T1 |
+| 11.7.1-T2 | SAST/DAST baseline: CodeQL for C# and TypeScript, Roslyn security analyzers on the .NET solution, ESLint on `apps/web`/`packages/*`, plus a staging DAST scan, with triage loop (T40, F-11-4) | M | V1 | M3 | 01.7.1-T1 |
 | 11.7.1-T3 | External pen test: scope, vendor selection, execution window | L | V1 | M3 | 10.1.1-T3, 10.2.2-T4 |
 | 11.7.1-T4 | Pen-test remediation, retest of criticals, customer-facing summary | M | V1 | M3 | 11.7.1-T3 |
 | 11.7.1-T5 | ASVS L2 walkthrough with evidence and a published gap list | M | V2 | M4 | 11.1.1-T3, 11.7.1-T4 |
@@ -324,21 +329,23 @@ Epic 11.9 total: 6.0
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
 | 11.1 Threat model and security baseline | 4.0 | 0 | 0 | 4.0 |
-| 11.2 Untrusted CI, runners, sandbox | 4.0 | 2.0 | 1.0 | 7.0 |
+| 11.2 Untrusted CI, runners, sandbox | 4.5 | 2.0 | 1.0 | 7.5 |
 | 11.3 Secrets and key management | 6.0 | 0 | 0 | 6.0 |
 | 11.4 AI security and prompt injection | 0 | 6.0 | 0 | 6.0 |
 | 11.5 Audit, support access, monitoring | 4.5 | 0 | 0 | 4.5 |
-| 11.6 Supply chain and dependency controls | 3.5 | 0 | 0 | 3.5 |
+| 11.6 Supply chain and dependency controls | 4.5 | 0 | 0 | 4.5 |
 | 11.7 AppSec verification and pen test | 6.0 | 1.0 | 0 | 7.0 |
 | 11.8 PDPL compliance program | 9.0 | 0 | 0 | 9.0 |
 | 11.9 Data protection operations | 6.0 | 0 | 0 | 6.0 |
-| **Total** | **43.0** | **9.0** | **1.0** | **53.0** |
+| **Total** | **44.5** | **9.0** | **1.0** | **54.5** |
 
-→ with 20 % buffer **63.6** person-days
+→ with 20 % buffer **65.4** person-days (sizes XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals are the sum of their task rows)
 
 ## 13. Contract change requests
 
 > **Status:** 11-CR-1 partially applied 2026-09-24: 00 §11 names L2 as the target and points at 11.1.1-T3; the decided level is written there when 11.1.1-T3 (M2) closes open question 1. Applied 2026-09-24: 11-CR-2 → 00 §9.3 as `GET /v1/orgs/{o}/security-events`; 11-CR-3 → 00 §9.3 (support grants appear in `GET /v1/orgs/{o}/audit`). Applied 2026-09-25 by integrator: 11-CR-4 → 00 §14 (with 11.2.1-T6 added by the integrator: 44 tasks, 53.0 raw / 63.6 buffered).
+>
+> 2026-09-25 CR-D-1 + TL review: supply-chain controls extended to NuGet + npm — locked-mode restore, `dotnet list package --vulnerable`, NuGet licence scan ⚠️, CycloneDX SBOM ⚠️, CodeQL C#+TS (T40, F-11-1); CSRF/antiforgery + SameSite and Angular sanitizer rules on the browser boundary (T38, F-11-2); ingest-token review names HMAC-SHA256 + pepper custody/rotation (T5, F-11-3); producer-slot leaked-token residual risk recorded (T9); new task 11.2.1-T7 reviewing the `evidgate_resolve` SECURITY DEFINER functions (T1); validator child-process limits named (T36); red-team suite covers EF Core writes + Dapper reads and SAST gains Roslyn analyzers (F-11-4); `SET LOCAL` re-anchored to parameterised `set_config` via `ITenantScope` (§4 mapping).
 
 | # | Request | Why | Status |
 |---|---|---|---|
@@ -346,3 +353,4 @@ Epic 11.9 total: 6.0
 | 11-CR-2 | Add a `security_event` read endpoint to the 00 §9.3 core table (`GET /v1/security-events`, filtered by tenant/project/severity, `tenant_admin` only) so the security-event view and support-access review have a contract | FR-11-7/11.5.1-T2 require visibility of injection attempts and support access; without a contract the UI would have to invent one | applied 2026-09-24 |
 | 11-CR-3 | State in 00 §9.3 that `POST /v1/support-access` style operator grants (scope + expiry) are audited and returned in the tenant audit feed | Support access must be tenant-visible per FR-11-8 | applied 2026-09-24 |
 | 11-CR-4 | 00 §14: this plan's row becomes `43 tasks, V1 42, V2 9, V3 1, raw 52.0, buffered 62.4` (new task 11.5.1-T5, M, V1, M3); 2026-09-25 integrator: plus 11.2.1-T6 (M, V1, M3) → `44 tasks, V1 43, V2 9, V3 1, raw 53.0, buffered 63.6`. Note that 11-CR-2's request text still shows the pre-apply path `GET /v1/security-events`; 00 §9.3 already carries the applied path `GET /v1/orgs/{o}/security-events`, so no further 00 edit is needed there | Keep the roll-up equal to the sum of plan §12 tables after every task addition | Applied 2026-09-25 by integrator |
+| 11-CR-5 | 00 §14: this plan's row becomes `45 tasks, V1 44.5, V2 9.0, V3 1.0, raw 54.5, buffered 65.4` (new task 11.2.1-T7 S/V1/M2 for the T1 resolver review; 11.6.1-T1 resized M→L, +1.0, for dual-ecosystem lockfile work) | Keep the roll-up equal to the sum of plan §12 tables after every task addition | filed 2026-09-25 (CR-D-1 + TL review) |

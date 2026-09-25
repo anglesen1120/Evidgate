@@ -29,7 +29,7 @@ Rejected names:
 - **ProofGate**: existing "evidence gate for agents" project ✅ ([github.com/SergioGL-14/ProofGate](https://github.com/SergioGL-14/ProofGate)).
 - **Evidra**: used by several evidence/audit products ✅ (evidra.com and GitHub).
 
-Code identifiers: npm scope `@evidgate/*`, CLI binary `evidgate`, env prefix `EVIDGATE_`, test annotation key `evidgate.id`.
+Code identifiers: .NET root namespace and assembly prefix `Evidgate.*`, npm scope `@evidgate/*`, CLI binary `evidgate`, env prefix `EVIDGATE_` (.NET configuration binds `EVIDGATE__Section__Key`), test annotation key `evidgate.id`.
 
 ## 3. Locked architecture decisions (from the source, confirmed)
 
@@ -46,25 +46,58 @@ Code identifiers: npm scope `@evidgate/*`, CLI binary `evidgate`, env prefix `EV
 | A9 | Retry upload, retry job and retry test are three different operations with their own ids and audit | No blind retries of side-effecting operations |
 | A10 | Delivery is at-least-once; consumers dedupe | Never claim exactly-once for side effects outside the database |
 
-## 4. Stack and versions [DECISION] (checked 2026-09-24)
+## 4. Stack and versions [DECISION] (checked 2026-09-25; CR-D-1 in §10 replaces the 2026-09-24 Node/NestJS/React server stack)
+
+Owner direction 2026-09-25: web on **Angular**, backend on the **latest .NET** with **CQRS**, database **PostgreSQL**. Customer-side packages that run inside customer CI stay on Node/TypeScript because Playwright reporters are JavaScript and CI runners already carry Node.
+
+### 4.1 Server and worker (.NET)
 
 | Layer | Choice | Evidence | Note |
 |---|---|---|---|
-| Runtime | **Node.js 26 LTS** | v26 released 2026-05-05, LTS 2026-10-28, maintenance 2027-10-20, EOL 2029-04-30 ✅ ([nodejs/Release schedule.json](https://github.com/nodejs/Release)) | Node 24 leaves Active LTS on 2026-10-20 ✅. M0 (weeks 1–2) writes no production code, so the project starts on 26. Node 27 (first annual line) is LTS only in Oct 2027 ✅ ([nodejs.org releases](https://nodejs.org/en/about/previous-releases)) |
-| Language | **TypeScript 6.0.x** (not 7.0) | npm `typescript` latest = 7.0.2 ✅ ([registry](https://registry.npmjs.org/typescript/7.0.2)), but `typescript-eslint` 8.70.1 declares peer `typescript >=4.8.4 <6.1.0` ✅ ([registry](https://registry.npmjs.org/typescript-eslint/8.70.1)) and `@nestjs/swagger` 12.0.2 declares peer `typescript ^5.5.0 \|\| ^6.0.0` ✅ ([registry](https://registry.npmjs.org/@nestjs%2Fswagger/12.0.2)) | Move to 7.x only when **both** peer ranges include 7 (01.1.1-T4, V3) |
-| Backend framework | **NestJS 12** | 12.0.0 published 2026-08-27, 12.1.0 on 2026-09-23, MIT, `engines.node >= 20` ✅ ([registry](https://registry.npmjs.org/@nestjs%2Fcore/12.1.0)) | Very new major: check every `@nestjs/*` module we use supports 12 in 01.1 ⚠️ |
-| Database | **PostgreSQL 18** | 18.6 current, supported until 2030-11-14; 19 is at Beta 4 on 2026-09-24 ✅ ([versioning policy](https://www.postgresql.org/support/versioning/)) | Managed provider [OPEN] (plan 10) |
-| Data access | **Kysely** (typed SQL builder) + plain SQL migration files | kysely 0.29.6, MIT, `node >= 22` ✅ ([registry](https://registry.npmjs.org/kysely/0.29.6)) | Explicit transactions are required for `SET LOCAL` tenant context (RLS) and `FOR UPDATE SKIP LOCKED`; no ORM that hides transactions |
-| Internal background tasks | **transactional outbox + pg-boss** | pg-boss 12.34.0, MIT, `node >= 22.12` ✅ ([registry](https://registry.npmjs.org/pg-boss/12.34.0)) | For outbox dispatch, reconcile, retention, sweeps, cron. **Runner job leasing is domain logic** (epoch fencing, capability match) in our own tables (plan 05), not pg-boss |
-| Contracts | **Contract-first**: OpenAPI 3.1 + JSON Schema files in `contracts/` | — | The adapter protocol and CLI must be implementable outside TypeScript; TS types are generated from the files |
-| Web | **React 19 + Vite 8** | react 19.3.0 MIT ✅ ([registry](https://registry.npmjs.org/react/19.3.0)); vite 8.3.1 MIT ✅ ([registry](https://registry.npmjs.org/vite/8.3.1)) | Router/data libraries chosen in plan 09 |
-| Object storage | **S3 API** (AWS SDK v3 `@aws-sdk/client-s3`, Apache-2.0 ✅) | Presigned URLs are bearer credentials with an expiry ✅ ([AWS docs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)) | Provider [OPEN] (O3). Local emulator: **SeaweedFS** (Apache-2.0 ✅); fallback Scality CloudServer (Apache-2.0 ✅); MinIO rejected (AGPL-3.0 ✅); LocalStack rejected (Community repo archived, free tier non-commercial ✅) — 01.8.1-T1 |
-| Tests (our own code) | **Vitest 5**, **Testcontainers 12** (PostgreSQL), **Playwright 1.63** for our web E2E | vitest 5.0.1 MIT ✅ ([registry](https://registry.npmjs.org/vitest/5.0.1)); testcontainers 12.1.0 MIT ✅ ([registry](https://registry.npmjs.org/testcontainers/12.1.0)); @playwright/test 1.63.0 Apache-2.0 ✅ ([registry](https://registry.npmjs.org/@playwright%2Ftest/1.63.0)) | Dogfooding: Evidgate ingests its own CI results from M2 |
-| Observability | **OpenTelemetry** SDK + collector | @opentelemetry/sdk-node 0.222.0, Apache-2.0 ✅ ([registry](https://registry.npmjs.org/@opentelemetry%2Fsdk-node/0.222.0)) | 0.x package line: pin exact versions |
-| Package manager | **npm workspaces**, committed `package-lock.json`, `npm ci` in CI | ships with Node | No extra tool to install |
-| Engines we integrate | Playwright (web/API), Appium 3 with UiAutomator2 / XCUITest drivers, JUnit XML producers | appium 3.7.0 Apache-2.0 ✅ ([registry](https://registry.npmjs.org/appium/3.7.0)); XCUITest needs macOS ✅ ([driver install docs](https://appium.github.io/appium-xcuitest-driver/latest/getting-started/installation/)) | Evidgate never pins "latest" inside runners |
+| Runtime | **.NET 10 LTS** (SDK/runtime 10.0.x, pinned by `global.json`) | 10.0 `active`, `lts`, latest 10.0.12 (2026-09-08), EOL 2028-11-14; 11.0 is `go-live` **STS** (11.0.0-rc.1) ✅ ([dotnet/core releases-index.json](https://github.com/dotnet/core/blob/main/release-notes/releases-index.json), read 2026-09-25) | "Latest .NET" = latest GA LTS. STS 11 is skipped; move to .NET 12 LTS when it is GA (01.1.1-T4, V3) |
+| Web framework | **ASP.NET Core 10 minimal APIs**, route groups per module | `Microsoft.AspNetCore.App.Ref` 10.0.12 ✅ ([NuGet](https://www.nuget.org/packages/Microsoft.AspNetCore.App.Ref/10.0.12)) | No MVC controllers; endpoint filters for auth/idempotency |
+| CQRS dispatch | **`Mediator` 3.0.2** (martinothamar, source-generated) | MIT (LICENSE in nupkg) ✅ ([NuGet](https://www.nuget.org/packages/Mediator.Abstractions/3.0.2)) | Compile-time handler registration, no reflection on the hot path. Rejected: **MediatR 14.2.0** — RPL-1.5 or paid commercial licence ✅ (LICENSE.md in nupkg), fails the licence rule; **WolverineFx 6.40.0** MIT ✅ — runtime code generation and its own envelope tables are more machinery than we need |
+| Write model | **EF Core 10 + Npgsql EF provider 10** mapped onto the SQL-migrated schema | `Microsoft.EntityFrameworkCore` 10.0.12 MIT ✅; `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 PostgreSQL licence ✅ ([NuGet](https://www.nuget.org/packages/Npgsql.EntityFrameworkCore.PostgreSQL/10.0.3)) | Always on the connection + transaction opened by the tenant scope (00 §5.5). EF migrations are **not** used |
+| Read model and hot paths | **Dapper 2.1** over `Npgsql` 10 | Dapper 2.1.89 Apache-2.0 ✅; Npgsql 10.0.3 PostgreSQL licence ✅ ([NuGet](https://www.nuget.org/packages/Npgsql/10.0.3)) | Queries, event batch insert (`unnest` arrays, one round trip), lease claim `FOR UPDATE SKIP LOCKED` (F6) |
+| Database | **PostgreSQL 18** | 18.6 current, supported until 2030-11-14 ✅ ([versioning policy](https://www.postgresql.org/support/versioning/)) | Managed provider [OPEN] (O3) |
+| Migrations | Plain SQL files run by **DbUp 7** (`dbup-postgresql` 7.0.1) in `Evidgate.Migrator` as the owner role | MIT ✅ ([NuGet](https://www.nuget.org/packages/dbup-postgresql/7.0.1)) | Custom journal adds the checksum column 01 FR-01-5 requires ⚠️ (DbUp's default journal stores names only — confirm in 01.4.1) |
+| Internal background tasks | **Transactional outbox + own `task` queue table** (`FOR UPDATE SKIP LOCKED`, retry cap, dead letter); schedules parsed by **Cronos** 0.13.0, fired idempotently by unique `(schedule_name, fire_at)` on the task row (no leader election; transaction-scoped advisory lock only against contention) | Cronos MIT ✅ ([NuGet](https://www.nuget.org/packages/Cronos/0.13.0)) | Replaces pg-boss (a Node library). One queue primitive shared with runner leases (plan 05). Rejected: Hangfire 1.8.25 (LGPL-3.0 ✅, extra storage schema), Quartz.NET 4.1.1 (Apache-2.0 ✅, but a second scheduler model for a need Cronos + a unique fire key covers) |
+| Validation | **FluentValidation 12** for command rules; **Corvus.Json.Validator 5.6** for JSON Schema 2020-12 wire validation | FluentValidation 12.1.1 Apache-2.0 ✅; Corvus.Json.Validator 5.6.1 Apache-2.0 ✅ ([NuGet](https://www.nuget.org/packages/Corvus.Json.Validator/5.6.1)) | Rejected: **JsonSchema.Net 9.4.0** — binary release under a paid "Open Source Maintenance Fee" EULA ✅ (OSMFEULA.txt in nupkg); NJsonSchema 11.6.1 MIT ✅ but its 2020-12 support is partial ⚠️ |
+| Canonical hashing | RFC 8785 JCS implemented in `Evidgate.Canonicalization` (~200 lines) and tested against the RFC 8785 reference vectors ⚠️ (cyberphone/json-canonicalization test data, licence checked in 01.3.1) | — | No maintained, licensed NuGet package found (`JsonCanonicalizer` 1.0.0 declares no licence ✅, NuGet nuspec) |
+| Serialization | `System.Text.Json` source-generated contexts, `JsonNamingPolicy.SnakeCaseLower` | in-box | Matches 00 §7 snake_case |
+| OpenAPI | Contract file `contracts/openapi.yaml` is the source; `Microsoft.AspNetCore.OpenApi` 10 emits the served document and CI diffs it against the contract | 10.0.12 MIT ✅ | OpenAPI 3.1 output of the in-box generator ⚠️ — confirm in 01.3.1; fallback: contract tests only |
+| Auth libraries | ASP.NET Core OpenID Connect + cookie handlers; `Microsoft.IdentityModel.JsonWebTokens` 8.23 for GitHub OIDC JWT validation; `Microsoft.AspNetCore.DataProtection` keys in PostgreSQL | MIT ✅ (NuGet 10.0.12 / 8.23.0) | No password storage (R5) |
+| Object storage | **S3 API** via `AWSSDK.S3` 4.0 | 4.0.103.4 Apache-2.0 ✅ ([NuGet](https://www.nuget.org/packages/AWSSDK.S3/4.0.103.4)); presigned URLs are bearer credentials with an expiry ✅ ([AWS docs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)) | Provider [OPEN] (O3). Local emulator **SeaweedFS** (Apache-2.0 ✅); fallback Scality CloudServer (Apache-2.0 ✅); MinIO rejected (AGPL-3.0 ✅); LocalStack rejected (archived Community repo ✅) — 01.8.1-T1 |
+| Resilience | `Microsoft.Extensions.Http.Resilience` 10.10 (Polly 8 underneath) | MIT ✅; Polly.Core 8.8.0 BSD-3-Clause ✅ | Outbound GitHub, webhooks, LLM gateway |
+| Observability | **OpenTelemetry .NET** (`OpenTelemetry.Extensions.Hosting` 1.19) + `Microsoft.Extensions.Logging`; log redaction via `Microsoft.Extensions.Compliance.Redaction` ⚠️ | 1.19.1 Apache-2.0 ✅ ([NuGet](https://www.nuget.org/packages/OpenTelemetry.Extensions.Hosting/1.19.1)) | No Serilog: one logging pipeline |
+| Tests (server) | **xUnit v3** 4.0, **Shouldly** 4.3, **NSubstitute** 6.2, **Testcontainers.PostgreSQL** 4.15, **Respawn** 7.0; `WebApplicationFactory` | xunit.v3 4.0.1 Apache-2.0 ✅; Shouldly 4.3.0 BSD-3-Clause ✅; NSubstitute 6.2.0 BSD-3-Clause ✅; Testcontainers.PostgreSQL 4.15.0 MIT ✅; Respawn 7.0.0 Apache-2.0 ✅ (NuGet nuspec) | Rejected: **FluentAssertions 8.11.0** — Xceed Community Licence is non-commercial ✅ (LICENSE in nupkg) |
+| Package management | NuGet **Central Package Management** (`Directory.Packages.props`), `packages.lock.json` committed, `dotnet restore --locked-mode` in CI | in-box | Exact versions; no floating ranges |
 
-Licence rule [DECISION]: dependencies must allow closed-source commercial SaaS. No AGPL/SSPL/BUSL or non-commercial licences in shipped code or hosted services; dev-only tools are checked case by case in plan 01.
+### 4.2 Web (Angular)
+
+| Layer | Choice | Evidence | Note |
+|---|---|---|---|
+| Framework | **Angular 22.2** (`@angular/core`, `@angular/cli`, `@angular/build`, `@angular/cdk`) | 22.2.0 MIT, published 2026-09-23, `engines.node ^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0` ✅ ([registry](https://registry.npmjs.org/@angular/core/22.2.0)) | Standalone components, signals, zoneless change detection ⚠️ (stable status confirmed in 09.1.1-T2), `OnPush`, built-in control flow, lazy routes per feature |
+| Language | **TypeScript 6.0.x** | `@angular/build` 22.2.0 peer `typescript >=6.0 <6.1` ✅ ([registry](https://registry.npmjs.org/@angular/build/22.2.0)); npm `typescript` latest 7.0.2 ✅ | Same pin as customer-side packages; TS 7 only when Angular's peer range allows it |
+| State | **`@ngrx/signals` 22** (SignalStore) for feature state; plain signals for local state | 22.0.1 MIT ✅ ([registry](https://registry.npmjs.org/@ngrx/signals/22.0.1)) | No global Redux store |
+| API client | SDK generated from `contracts/openapi.yaml` by `@hey-api/openapi-ts` 0.99 | 0.99.0 MIT ✅ | Shared with the CLI (`packages/sdk`); Angular wraps it behind `HttpClient` interceptors ⚠️ (plugin fit checked in 09.1.1-T2) |
+| i18n | **`@angular/localize`** (first-party), vi + en builds | MIT, same release line ⚠️ | Runtime switch = locale-prefixed builds (`/vi/`, `/en/`) |
+| Lint | `angular-eslint` 22.5 | 22.5.0 MIT ✅ ([registry](https://registry.npmjs.org/@angular-eslint/eslint-plugin/22.5.0)) | |
+| Tests (web) | **Vitest 5** unit tests; **Playwright 1.63** E2E | vitest 5.0.1 MIT ✅; @playwright/test 1.63.0 Apache-2.0 ✅ | Angular unit-test builder with Vitest ⚠️ (confirmed in 09.1.1-T2) |
+
+### 4.3 Customer-side packages (unchanged language: Node + TypeScript)
+
+| Layer | Choice | Evidence | Note |
+|---|---|---|---|
+| Runtime | **Node.js 26 LTS** to build; published packages support **Node 22+** (00 §11) | v26 released 2026-05-05, LTS 2026-10-28, EOL 2029-04-30 ✅ ([nodejs/Release](https://github.com/nodejs/Release)) | CLI `evidgate`, Playwright reporter, JUnit/Appium mappers, V2 agent |
+| Language | **TypeScript 6.0.x** | `typescript-eslint` 8.70.1 peer `typescript >=4.8.4 <6.1.0` ✅ ([registry](https://registry.npmjs.org/typescript-eslint/8.70.1)) | Move to 7.x with the web (01.1.1-T4, V3) |
+| Tests | **Vitest 5** | as above | |
+| Package manager | **npm workspaces** for `apps/web` + `packages/*`, committed `package-lock.json`, `npm ci` | ships with Node | |
+| Engines we integrate | Playwright (web/API), Appium 3 with UiAutomator2 / XCUITest drivers, JUnit XML producers | appium 3.7.0 Apache-2.0 ✅ ([registry](https://registry.npmjs.org/appium/3.7.0)); XCUITest needs macOS ✅ ([driver docs](https://appium.github.io/appium-xcuitest-driver/latest/getting-started/installation/)) | Evidgate never pins "latest" inside runners |
+
+Contract-first keeps the two languages honest: `contracts/` (OpenAPI 3.1 + JSON Schema) is the only source of wire shapes; C# DTOs are checked against it by contract tests and the served-document diff, TS types are generated from it.
+
+Licence rule [DECISION]: dependencies must allow closed-source commercial SaaS. No AGPL/SSPL/BUSL/RPL, paid-maintenance EULAs or non-commercial licences in shipped code or hosted services; LGPL needs an ADR. The rule is enforced for **both** NuGet and npm (01.9.1). Dev-only tools are checked case by case in plan 01.
 
 ## 5. Safe-healing rules (locked)
 
@@ -105,13 +138,13 @@ Working recommendations for every open item: `RECOMMENDATIONS.md` (not decisions
 | # | Decision | Needed before | Plan |
 |---|---|---|---|
 | O1 | Pilot customers, their CI and engines (assumed GitHub Actions + Playwright TS + one JUnit producer) | M1 start | 12.1 |
-| O2 | Team size and who is Tech Lead / QA lead (estimates assume one senior full-stack TS developer; calendar for 2–3) | M1 start | 00 §14 |
+| O2 | Team size and who is Tech Lead / QA lead (estimates assume one senior full-stack .NET + Angular developer who can also maintain the TypeScript customer-side packages; calendar for 2–3) | M1 start | 00 §14 |
 | O3 | Cloud provider/region for PostgreSQL + object storage (VN residency?) | M2 (first pilot data) | 10, 11 |
 | O4 | LLM provider(s) and whether any tenant data may leave Vietnam | V2 healing PR (M4) | 08, 11 |
 | O5 | Pricing and pilot contract (onboarding fee, project/concurrency subscription) | M3 pilot | 12 |
 | O6 | False-heal acceptance threshold per severity (V3 gate; the V2 gate is "every forbidden case blocked", 08 FR-08-19) | before the V3 gate (08.8.3-T2, M5) | 08 |
 | O7 | Trademark filing for "Evidgate" | before public launch | 12 |
-| O8 | Scope vs calendar: buffered V1 = 499.8 person-days ≈ 50 weeks for 2 engineers / ≈ 33 for 3, against the source's 12 weeks to the M3 pilot. **Decided 2026-09-25 [DECISION] (owner): option (b)** — scope is kept; the 00 §4 weeks are sequence only and a milestone ends when its exit gate passes, not on a date (source §1: "Mọi mốc trong tài liệu là thứ tự ưu tiên"). Why not (a) alone [INFERENCE] (script over the task rows, dependency closure included): deferring UI polish, templates, reprocess, outbound webhooks, policy shadow compare, quota enforcement and trademark filing removes 27.5 raw days (V1 466.8 buffered ≈ 46.7 / 31.1 weeks); also deferring V1 shadow healing (08.1.2–08.4.3, 09.5.1) removes 80 (V1 403.8 ≈ 40.4 / 26.9 weeks) — neither reaches 12 weeks. Dates are set only after O2 (team size) | decided | 00 §4, §14 |
+| O8 | Scope vs calendar: buffered V1 = 499.8 person-days ≈ 50 weeks for 2 engineers / ≈ 33 for 3 (519.9 ≈ 52.0 / 34.7 weeks after CR-D-1, the TL review and feature detailing, 00 §14; the decision below is unchanged), against the source's 12 weeks to the M3 pilot. **Decided 2026-09-25 [DECISION] (owner): option (b)** — scope is kept; the 00 §4 weeks are sequence only and a milestone ends when its exit gate passes, not on a date (source §1: "Mọi mốc trong tài liệu là thứ tự ưu tiên"). Why not (a) alone [INFERENCE] (script over the task rows, dependency closure included): deferring UI polish, templates, reprocess, outbound webhooks, policy shadow compare, quota enforcement and trademark filing removes 27.5 raw days (V1 466.8 buffered ≈ 46.7 / 31.1 weeks); also deferring V1 shadow healing (08.1.2–08.4.3, 09.5.1) removes 80 (V1 403.8 ≈ 40.4 / 26.9 weeks) — neither reaches 12 weeks. Dates are set only after O2 (team size) | decided | 00 §4, §14 |
 | O9 | Which cases are critical and their business intent (source decision row "Case critical và ý định nghiệp vụ": customer QA lead + product owner). Mechanism [DECISION]: the critical-case list is a field of the policy revision (00 §8.6), so it is versioned, hashed and published by a `release_approver`; which cases go on it is the customer's decision. Until it is set, the project stays advisory | before a project's policy moves from advisory to gating | 07, 12.2 |
 | O10 | V1 shadow-healing replay host. 05 has no V1 executor (runner jobs 05.7 are V2) and A5 forbids a hosted runner in V1–V2. Options: (a) customer CI job driven by the CLI, (b) move 05.7 runner + 11.2.1-T4 sandbox into V1 (A5 change request), (c) slip sandbox replay to V2/M4. Current estimates carry only 08.4.3-T1..T3 + 11.2.1-T6; option (a) adds a customer-side CLI replay task in 04, option (b) moves V2 rows into V1. Recommended [INFERENCE]: (a) — keeps A5, no hosted execution of customer code in V1, and still measures real replay quality in the pilot; (b) adds ≈ 12 raw days for 05.7.1/05.7.2/05.7.4 + 11.2.1-T4 (≈ 20 if all of 05.7 moves) | before the 08.4.3 feature plan (M3) | 05, 08, 11 |
 
@@ -120,14 +153,14 @@ Working recommendations for every open item: `RECOMMENDATIONS.md` (not decisions
 | # | Source says | This plan set says | Why |
 |---|---|---|---|
 | R1 | Name "ReleaseHub" | **Evidgate** | §2 collision |
-| R2 | "NestJS trên Node.js LTS", "SQL migration", "PostgreSQL và outbox", React | Exact lines and libraries in §4 | Source leaves versions open; Node 24 leaves Active LTS on 2026-10-20; TS 7 is not yet supported by typescript-eslint |
+| R2 | "NestJS trên Node.js LTS", "SQL migration", "PostgreSQL và outbox", React | Owner changed the stack on 2026-09-25 (CR-D-1): .NET 10 LTS + CQRS server, Angular 22 web, PostgreSQL 18, plain SQL migrations + outbox kept; customer-side packages on Node/TS. Exact lines and libraries in §4 | Source leaves versions open; the owner's team direction wins over the source's NestJS suggestion; the source's invariants (SQL migrations, outbox, RLS) carry over unchanged |
 | R3 | Healing pipeline built from scratch; no mention of Playwright's healer | Playwright's healer (F1) may be used **only as a candidate generator inside the sandbox**; its output goes through the same AST validator; `skip` output is rejected by rule 5.2 | Reuse engine features (source principle "tái dùng engine") without breaking the no-skip rule |
 | R4 | "Một CI phổ biến" | GitHub Actions first, authenticated by **GitHub OIDC → short-lived Evidgate ingest token** (F3); a hashed project ingest token for other CIs | Removes long-lived secrets from customer CI; confirm in M0 (O1) |
 | R5 | Human login not specified | OIDC login (GitHub, Google Workspace); no password storage in V1; enterprise SAML later | Smallest secure surface for a B2B pilot |
 | R6 | Data residency only "a deployment option" | PDPL facts (F7, F8) drive an explicit plan 11 epic: DPA, redaction, provider opt-in, transfer assessment | Artifacts contain personal data; fines are revenue-based |
 | R7 | Milestones only (M0–M5), no task sizes | Stories + tasks with sizes and V1/V2/V3 tags; roll-up in 00 §14 | Needed to plan staffing |
 | R8 | Section numbers repeat (five "§4", four "§6") and a page map for the .docx | Plans 01–12 by area; the page map is dropped | Unique ids for cross-references |
-| R9 | Background worker pattern implied | Two mechanisms, stated: pg-boss for internal tasks, domain lease tables for runner jobs | Epoch fencing and capability matching are product logic |
+| R9 | Background worker pattern implied | Two mechanisms, stated: own outbox + `task` queue table for internal tasks (CR-D-1; was pg-boss), domain lease tables for runner jobs; both use `FOR UPDATE SKIP LOCKED` | Epoch fencing and capability matching are product logic |
 | R10 | Product tests itself? not stated | Evidgate's own CI results are ingested into Evidgate from M2 (dogfooding) | Cheapest realistic fixture for adapters and gates |
 
 Checked and kept: capacity arithmetic (100 000 × 1 KiB ≈ 97.7 MiB/day, ≈ 8.6 GiB/90 days; 50 × 20 × 2 MB = 2 GB/day, 28 GB/14 days; 50 000 events/60 s ≈ 833/s) ✅ recomputed; rule-of-three statement ✅.
@@ -145,3 +178,4 @@ Checked and kept: capacity arithmetic (100 000 × 1 KiB ≈ 97.7 MiB/day, ≈ 8.
 | 2026-09-25 | `RECOMMENDATIONS.md` consistency pass: added the missing plan-01 provider row (= O3), corrected 07-O4 (allowed skips ≠ waiver; skipped required case never PASSes), scoped O6 to the V3 gate, and made §3 order-to-close exhaustive by each question's deadline. |
 | 2026-09-25 | O6 deadline moved to "before the V3 gate (08.8.3-T2, M5)" by the owner, matching 08 FR-08-19; `RECOMMENDATIONS.md` §3 and 07-O6 delivery-row retention updated. |
 | 2026-09-25 | `RECOMMENDATIONS.md` review round 2: rows aligned with decided FRs (02 FR-02-3/D7, 03 FR-03-9, 06 FR-06-10/13, 10 FR-10-1, 00 §7); 02-Q2 moved to before M1; 11-Q3 added; O10 (a) task cost flagged. |
+| 2026-09-25 | **CR-D-1 (owner): stack change.** §4 rewritten: server/worker on .NET 10 LTS + ASP.NET Core minimal APIs + CQRS (`Mediator` 3.0.2, EF Core 10 write model, Dapper read model), DbUp plain-SQL migrations, own outbox + task queue (pg-boss removed), web on Angular 22.2 + `@ngrx/signals`; customer-side CLI/adapters/agent stay Node 26/TS 6.0.x. Rejected on the licence rule: MediatR 14 (RPL-1.5), JsonSchema.Net 9 (maintenance-fee EULA), FluentAssertions 8 (non-commercial); Hangfire (LGPL) avoided. Estimate unit becomes one senior full-stack .NET + Angular developer. Contract edits in 00 §5.1–§5.5, §6, §11, §12, §15; plan edits in 01–12. |

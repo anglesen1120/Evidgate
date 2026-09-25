@@ -26,7 +26,7 @@
 - **FR-12-4** Baseline is measured **before** the gate is enabled: triage time per failure and test-maintenance hours per sprint, using the method fixed in 12.2.1-T2, for at least two sprints, with raw data retained so the comparison can be audited.
 - **FR-12-5** After metrics: triage time, maintenance time, repeated incidents handled correctly (counted against the customer's own labels — only human labels count as ground truth, 00 §8.7), retention (still using it after the pilot window), and contribution margin per tenant.
 - **FR-12-6** Guardrail metric: heal rate and missed-bug rate are reviewed together every month. A rising heal rate with rising missed bugs is a **failed** pilot outcome, not a success (source §9: "tỷ lệ healed thành công cao nhưng bỏ sót bug tăng là kết quả không đạt").
-- **FR-12-7** Usage ledger: append-only entries, each with a unique `billing_key`, quantity, unit, period, the applied price reference and the resulting amount. The `billing_key` is produced by the emitting plan, not by plan 12: 04 `04.8.1-T1` for accepted results, 06 `06.5.2-T2` for storage/egress usage. Corrections are new adjustment rows referencing the corrected row - never edits to an issued row (source §9).
+- **FR-12-7** Usage ledger: append-only entries, each with a unique `billing_key` per source metering event — `unique (org_id, billing_key)` (T43), quantity, unit, period, the applied price reference and the resulting amount. The `billing_key` is produced by the emitting plan, not by plan 12: 04 `04.8.1-T1` for accepted results (per-batch `batch:<event_batch_id>:<metric>` keys, T50), 06 `06.5.2-T2` for storage/egress usage. Corrections are new adjustment rows referencing the corrected row - never edits to an issued row (source §9).
 - **FR-12-8** Metered metrics (each with a defined measurement point and a reconciliation query): results count; artifact GB-month; egress GB; runner minutes (later, only if we ever run tests); device minutes (later); AI tokens; support hours.
 - **FR-12-9** Quota enforcement: per-project and per-tenant limits with warn at 80 % and block at 100 %. A blocked upload is an explicit error (429/`quota_exceeded` style), never a silent drop; ingestion already committed is unaffected.
 - **FR-12-10** Pricing hypotheses (not commitments): an onboarding fee plus a subscription per project (and/or per concurrency level) with an included results-and-artifact quota; AI usage priced as an overage once measured. In V1 the customer's CI pays for runner minutes, so we do not bill runner minutes - but our own cloud and support cost still exist.
@@ -88,11 +88,11 @@ screen against FR-12-2 → letter of intent → agreement + DPA signed → onboa
 
 ### 4.4 Usage ledger (high level tables)
 
-`usage_ledger_entry`: `id`, `org_id`, `project_id`, `metric` (results | artifact_gb_month | egress_gb | ai_tokens | support_hours | runner_minutes | device_minutes), `quantity`, `unit`, `period` (YYYY-MM), `billing_key` (the dedupe key, unique per metric per period; emitted by 04 `04.8.1-T1` for accepted results and 06 `06.5.2-T2` for storage usage), `occurred_at`, `price_ref`, `amount`, `currency`, `adjustment_of` (nullable), `reason` (required for adjustments), `created_at`. Append-only: no `updated_at`, no deletes; the application role has no `UPDATE`/`DELETE` privilege on this table.
+`usage_ledger_entry`: `id`, `org_id`, `project_id`, `metric` (results | artifact_gb_month | egress_gb | ai_tokens | support_hours | runner_minutes | device_minutes), `quantity`, `unit`, `period` (YYYY-MM), `billing_key` (the dedupe key, unique per source metering event: `unique (org_id, billing_key)` — T43), `occurred_at`, `price_ref`, `amount`, `currency`, `adjustment_of` (nullable), `reason` (required for adjustments), `created_at`. `billing_key` is produced by the emitting plan: ingestion emits per-batch keys `batch:<event_batch_id>:<metric>` (one ledger row per batch per metric, quantity = count — T50/T43), 06 emits per-period storage/egress keys (`06.5.2-T2`); per-period sums live in the roll-up table, not as a uniqueness rule (T43). Append-only: no `updated_at`, no deletes; the application role has no `UPDATE`/`DELETE` privilege on this table.
 
-`usage_price`: `metric`, `unit_price`, `currency`, `effective_from`, `effective_to`, `included_quota`, `version`. Loading a new price creates a new row; existing ledger rows keep the price they were written with.
+`usage_price`: `id`, `org_id` (nullable — `NULL` rows are the global rate card, non-`NULL` rows are negotiated per-org overrides; price resolution picks the org override first, then the global row — T44), `metric`, `unit_price`, `currency`, `effective_from`, `effective_to`, `included_quota`, `version`, `unique (org_id, id)` (T3). Loading a new price creates a new row; existing ledger rows keep the price they were written with.
 
-`quota_counter` (materialised per org/project/period): `metric`, `used`, `limit`, `warned_at`, `blocked_at`.
+`quota_counter` (materialised per org/project/period): `id`, `org_id`, `project_id`, `period` (YYYY-MM), `metric`, `used`, `limit`, `warned_at`, `blocked_at`, `unique (org_id, id)` (T45/T3).
 
 Enforcement flow: metering event → validate + dedupe by `billing_key` (idempotent insert) → counter increment in the same transaction → 80 % warn (notification) / 100 % block (explicit error on new uploads only). Quota changes are audited.
 
@@ -209,7 +209,7 @@ Epic 12.2 total: 5.5
 |---|---|---|---|---|---|
 | 12.3.1-T1 | Ledger schema + append-only privileges + adjustment model + migrations | L | V1 | M2 | 02.1.1-T1 |
 | 12.3.1-T2 | Metering points for results, artifact GB-month, egress, AI tokens (V2 dependency), support hours - each with its `billing_key` dedupe key (04 `04.8.1-T1`, 06 `06.5.2-T2`) and emission transaction | L | V1 | M3 | 04.8.1-T1, 06.5.2-T1, 06.5.2-T2, 12.3.1-T1 |
-| 12.3.1-T3 | Versioned price table + loader/validation (no numbers until O5) | M | V1 | M3 | 12.3.1-T1 |
+| 12.3.1-T3 | Versioned price table + loader/validation: global rate card rows plus nullable-`org_id` per-pilot overrides resolved override-first (T44); no numbers until O5 | M | V1 | M3 | 12.3.1-T1 |
 | 12.3.1-T4 | Quota counters and enforcement (80 % warn, 100 % block, explicit error, audited limit raise) | L | V1 | M3 | 12.3.1-T2 |
 | 12.3.1-T5 | Roll-up job + reconciliation query (idempotent; reports gaps and duplicates) | M | V1 | M3 | 12.3.1-T1 |
 | 12.3.1-T6 | Usage summary data for the quota screen | S | V1 | M3 | 12.3.1-T5 |
@@ -295,6 +295,8 @@ Epic 12.6 total: 3.5
 
 → with 20 % buffer **37.8** person-days
 
+Estimate unit: sizes assume one senior full-stack .NET + Angular developer (00 §6, CR-D-1).
+
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: 12-CR-1 → 00 §2; 12-CR-2 → 00 §9.3 (`/v1/orgs/{o}/usage/*`) + 00 §9.2 `quota_exceeded`; 12-CR-3 → 00 §9.1.
@@ -304,3 +306,5 @@ Epic 12.6 total: 3.5
 | 12-CR-1 | Add an internal role `billing_operator` to 00 §2 (read ledger/invoice data across tenants, no artifact access, audited) | Invoicing and reconciliation need a role that is neither `tenant_admin` nor `platform_operator` | applied 2026-09-24; permission string `billing:read` (00 §2) |
 | 12-CR-2 | Add `GET /v1/usage/summary` and `GET /v1/usage/ledger` (tenant-scoped, cursor-paginated) to the 00 §9.3 core table, plus a documented quota error code in 00 §9.2 | The quota screen and customer reconciliation need a contract; without it both 09 and 12 would invent one | applied 2026-09-24 |
 | 12-CR-3 | State in 00 §9.1 that metering/ledger writes are **not** exposed as a public API (internal module only) and never accept a client-supplied quantity | Billing data must not be client-writable | applied 2026-09-24 |
+
+2026-09-25 CR-D-1 + TL review: `billing_key` re-scoped to `unique (org_id, billing_key)` per source event with per-batch ingest keys (T43/T50); `usage_price` gained nullable `org_id` per-pilot overrides (T44, applied in 12.3.1-T3); `quota_counter` gained `org_id`/`project_id`/`period`/`unique (org_id, id)` (T45); estimate unit re-based to senior .NET + Angular (F-12-4). No task ids added, removed or resized.
