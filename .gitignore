@@ -1,0 +1,24 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local data and test output
+.local/
+playwright-report/
+test-results/
+blob-report/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

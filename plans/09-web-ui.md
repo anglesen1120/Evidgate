@@ -1,0 +1,333 @@
+# 09 - Web UI (M2-M4)
+
+> Contracts: `00-overview.md`. Facts: `../DECISIONS.md` §2 (IDs), §4 (stack), §5 (healing rules), §7 (data position). Source: design §3 (screens and mandatory UX criteria), §2 (phasing), §7 (rerun vs reprocess), §8 (viewer isolation, roles).
+> Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
+> Legend: ✅ verified (link opened for this plan) · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`.
+
+## 1. Purpose and scope
+
+**Goal:** one operational surface where a QA engineer can see *what was collected*, *what the policy decided* and *what to do next* without ever re-deriving the gate in the browser.
+
+**In scope**
+
+- V1 (M2-M3): auth + app shell, onboarding wizard, Project & Catalog, Run & Release views, evidence/completeness panels, Failure Inbox + investigation flow, healing **shadow** view, Settings (members, integrations, policy, quota/retention, audit), sandboxed artifact viewer integration, i18n vi+en, WCAG 2.2 AA on core flows, Playwright E2E dogfooded into Evidgate.
+- V2 (M4): Test Studio (templates, draft editor, patch review, dry run, AI draft review, suite composition), healing approve/reject with `If-Match`, agents page, webhook/integration page, release matrix, E2E extension.
+- V3 (M5+): trend/root-cause analytics, enterprise settings (SSO/SAML), visual-regression review surface.
+
+**Out of scope:** any client-side policy evaluation, a mobile app, an offline mode, a public share portal (customer-facing report links are V3 at the earliest), and any screen that renders a secret value.
+
+## 2. Requirements
+
+- **FR-09-1** The UI never computes or infers a decision. `PASS`/`FAIL`/`INCONCLUSIVE` is rendered only from `GET /v1/runs/{r}/decision` (00 §9.3) with its `policy_hash`, evidence revision and `reasons[]`; while no evaluation exists the screen shows `pending`.
+- **FR-09-2** "Complete" is used **only** for collection completeness (00 §8.1/§8.5). No screen may use "complete"/"passed" to mean a gate verdict, and both values are always shown as separate controls with separate labels.
+- **FR-09-3** Every failure view keeps the **pre-healing** failure visible: original raw status, original evidence revision and the healing candidate (if any) are shown as two blocks, never as a replacement.
+- **FR-09-4** Flaky and healed are **separate labels** from pass/fail (00 §8.6 flaky policy; §8.7 candidate states). A healed label always carries the candidate hash and the shadow/official distinction.
+- **FR-09-5** Screen headers always carry the identity of the data shown: `manifest_hash`, `evidence_revision`, `policy_revision` and the release component digests when known.
+- **FR-09-6** Missing evidence is always explained: the `missing[]` reasons of the evidence revision are rendered verbatim (missing shard, count mismatch, artifact missing, build mismatch, unknown status, stale epoch) with a deep link to the producer/attempt.
+- **FR-09-7** Waivers and quarantine are shown as such: a waiver banner "approved by waiver: <approver>, expires <date>" next to results, never replacing them; a quarantine chip on the case row with the reason and expiry.
+- **FR-09-8** Healing approval and release approval are visibly different actions with different permissions (`healing:approve` vs policy/waiver rights); the healing panel never displays a release verdict, and the release screen never shows an approve-healing control.
+- **FR-09-9** Rerun (new execution, `parent_run_id` + `rerun_scope`) and reprocess (new evidence revision from the same raw report) are two distinct actions with distinct copy and distinct result rendering (source §7).
+- **FR-09-10** All wire types come from the generated SDK (`@evidgate/sdk`, plan 01 contracts pipeline); no hand-written request/response types in `apps/web`.
+- **FR-09-11** i18n: every user-visible string exists in `vi` and `en`; a missing key fails CI. Locale affects only presentation; UTC is used for storage and display of raw timestamps.
+- **FR-09-12** Accessibility: core flows (login, project switch, run detail, failure triage, evidence viewer, onboarding) meet WCAG 2.2 AA; keyboard-only operation is possible for them.
+- **FR-09-13** Mutations that create resources send an `Idempotency-Key`; mutations on policy/draft/candidate send `If-Match` and render 412 as "someone else changed this - reload" with the diff.
+- **FR-09-14** Artifact rendering happens on an isolated origin (no app cookies, CSP) via the plan 06 viewer; presigned URL expiry is handled by refresh, never by showing a raw URL.
+- **NFR-09-1** Cold load of the three heaviest screens (run detail, failure detail, candidate detail) stays within the pilot budget measured in 10; large tables use cursor pagination (00 §9.1), never "load all".
+
+**Acceptance criteria (testable)**
+
+1. A run with a missing shard and one failed assertion renders: state `complete`/`incomplete` for collection, decision `FAIL` with the missing-shard reason and the unknown/absent shard named - and no element of the page renders `PASS`.
+2. A healing-approved candidate renders the original failure with its raw status and evidence revision, plus the candidate hash and shadow result, in two separate blocks.
+3. A waiver exists → the banner shows approver and expiry, and the failing results are still listed as failing.
+4. Policy edit by a second user while the first edits → first save returns 412 and the UI shows the reload/diff path.
+5. CI fails when a `vi` or `en` key is missing; axe reports no new violations on the five core flows.
+
+## 3. Key decisions
+
+| # | Decision | Rationale | Rejected |
+|---|---|---|---|
+| D1 | React 19 + Vite 8 SPA, no SSR tier | `[DECISION]` DECISIONS §4; no server rendering in the pilot deployment (00 §5.1) | Next.js/SSR: an extra runtime to operate for a B2B tool whose data is all authenticated |
+| D2 | Router and data-fetching libraries are chosen in a **spike task** (09.1.1-T2) with a licence and React 19 support check; the outcome is an ADR | Keeps the stack decision cheap to change; avoids pinning versions nobody verified | Fixing libraries in this plan with unverified versions |
+| D3 | Decision values are **rendered, never computed**; the SDK response is the only source | A3: the decision is an immutable evaluation row; a second implementation in the client would drift | Client-side evaluation cache or precomputed verdicts in list payloads |
+| D4 | Collection status and gate verdict are two separate components (`EvidenceBadge`, `DecisionChip`) reused everywhere | FR-09-2 is the most likely UX regression; component-level enforcement is testable | Free-form text per screen |
+| D5 | All wire types from generated SDK; the web app never defines wire shapes | 00 §9.1 contract-first | Hand-written fetch layer |
+| D6 | i18n from day one (vi + en) with a key-completeness test in CI | 00 §11; retrofitting i18n is a rewrite of every screen | English-only V1 |
+| D7 | Playwright E2E runs in Evidgate's own CI **and** its results are ingested into Evidgate (dogfooding, DECISIONS R10) | Cheapest realistic fixture for the gate and for adapters | A separate demo app for dogfooding |
+| D8 | Sensitive-artifact viewing is gated by `artifact:read_sensitive` and rendered on the isolated origin only | 00 §2 roles; source §8 | Inlining DOM/HTML in the app origin |
+
+Candidate libraries (licence and version read from `registry.npmjs.org` on 2026-09-24 ✅): `react-router` 8.4.0 MIT · `@tanstack/react-router` 1.170.39 MIT · `@tanstack/react-query` 5.103.2 MIT · `swr` 2.5.1 MIT · `axios` 1.20.0 MIT · `zod` 4.6.5 MIT. All satisfy the DECISIONS §4 licence rule. The **choice** is made in 09.1.1-T2, not here `[OPEN: tracker in §11]`.
+
+## 4. Design
+
+### 4.1 Screens (source §3) and their contract surface
+
+| Screen | Main tasks (source §3) | Evidence to show | Endpoints / data | Permission |
+|---|---|---|---|---|
+| Project & Catalog | connect repo, filter tests, assign owner | test id, revision, test type, rename history | catalog read APIs (03); `GET /v1/projects/{p}/runs` | `project:read`, `case:write` |
+| Test Studio (V2) | create draft, review patch | diff, assertion, data, dry run, approver | drafts/revisions/suites APIs (03) | `draft:write`, `draft:dry_run`, `draft:merge_request` |
+| Run & Release | start, cancel, view gate | build digest, manifest, missing shards, each attempt | `POST /v1/projects/{p}/runs`, `GET /v1/runs/{r}`, `POST /v1/runs/{r}/cancel`, `GET /v1/runs/{r}/decision` | `run:create`, `run:cancel`, `decision:read` |
+| Failure Inbox | triage, assign owner | log, trace, root error, infra error, related issue | incidents APIs (08), artifact viewer (06) | `healing:triage`, `artifact:read` |
+| Healing Review | approve or reject (V2) | patch, validation, risk, lineage, rollback | candidates APIs (08), `POST /v1/healing/candidates/{c}/approve|revoke` | `healing:approve`, `healing:revoke` |
+| Settings | agents, secret references, policy, security events | permission, audit, quota, retention, security events | 02 membership/integration, 07 policy, 12 quota, audit read, `GET /v1/orgs/{o}/security-events` | `tenant_admin`, `tenant_admin`+`policy:write`, `security_event:read` |
+
+### 4.2 State rendering (maps to 00 §8, no new states)
+
+| Object | States rendered | UI rule |
+|---|---|---|
+| Run (00 §8.1) | `created, queued, running, collecting, complete, incomplete, canceled` | `complete/incomplete/canceled` are terminal; canceled never rendered as complete even if evidence arrives later |
+| Attempt (00 §8.3) | raw status + normalised `passed,failed,skipped,timed_out,error,blocked` | Show raw and normalised side by side; a blocked dependant is never rendered as passed |
+| Artifact (00 §8.4) | `pending_upload, uploaded, ready, rejected, pending_delete, deleted` | Objects without `ready` are not offered as evidence |
+| Evidence (00 §8.5) | `completeness`, `missing[]`, evaluation fields | `pending` when no evaluation exists |
+| Candidate (00 §8.7) | `proposed, validated, approved, applied, rejected, insufficient_evidence, expired, revoked` | Availability chip from `enabled|shadow|disabled|unavailable` |
+| Waiver / quarantine (00 §8.8) | `requested, approved, expired, revoked` / `active, expired, removed` | Banner/chip with approver, reason, expiry |
+
+### 4.3 Flows
+
+**Onboarding (source §3):** create project → connect repo/CI (GitHub OIDC exchange or hashed project token, shown once) → run a sample suite → **compare with the original report** (normalised results vs the producer's own report: counts, ids, statuses, digests; discrepancies become mapping findings for 04) → enable regular collection (collect mode, policy advisory preview, explicit statement of what is not yet gating). No step may be skipped silently; each step is resumable and shows the run it produced.
+
+**Investigation (source §3):** open failure → triage label (rule/model/human source shown) → either "fix the product" or "propose healing" (V2) → rerun a new revision → compare. Comparison is always evidence-revision based; the previous revision stays linkable.
+
+**Approval paths:** healing approve (V2, `If-Match` + `candidate_hash`, sensitive cases need a second reviewer per DECISIONS §5.5) is separated in navigation and copy from release policy/waiver approval.
+
+### 4.4 Client-side data rules
+
+- Cursor pagination in the URL (`?cursor=&limit=`), default 50 (00 §9.1); filters are URL state so links are shareable.
+- ETag/`If-Match` for policy revisions, drafts and candidates; 412 → conflict dialog with a reload path.
+- Idempotency-Key generated once per user intent (button press), reused on retry of the same intent.
+- No long-lived token in `localStorage` `[DECISION]`: session via httpOnly cookie set by the API, or in-memory token + silent refresh; exact mechanism is fixed in the plan 02 login story and consumed here.
+
+## 5. Failure modes and edge cases
+
+| Case | Handling | Invariant kept |
+|---|---|---|
+| Evaluation still `pending` | `pending` chip + collection state only; no colour implying a verdict | No invented verdict (FR-09-1) |
+| Evidence revision superseded by late evidence | Banner "a newer revision exists"; the old revision stays viewable | A used decision is never rewritten (A3) |
+| Presigned URL expired while viewing an artifact | Silent re-request + retry once; user-visible error on the second failure | Short-lived URL, never logged (source §8) |
+| 412 on policy/draft/candidate save | Conflict dialog with diff, explicit reload; no auto-merge | Optimistic concurrency (00 §9.1) |
+| 403 on another project's run (404 for other tenants) | Render "not found" not "forbidden" for foreign ids | No tenant enumeration (00 §9.2) |
+| Run canceled while the UI shows `collecting` | Terminal `canceled` wins on next poll; late evidence shown as informational | 00 §8.1 race rule |
+| Missing i18n key | CI failure; in production the key name is shown, never a blank | FR-09-11 |
+| Large artifact / slow DOM snapshot | Bounded viewer with size notice and download; UI stays responsive | No page-blocking load |
+| Stale epoch events arriving | Shown as stale evidence, never as completion | 00 §8.2 |
+| Healing `unavailable` (LLM/knowledge store down) | Banner; tests and gates keep working, healing controls disabled | DECISIONS §5.9 |
+| Same-count-different-content report after reprocess | Comparison shows per-case diff, not just totals | Report comparison step |
+
+## 6. Security and privacy
+
+- Auth: OIDC login (00 §2/plan 02); the SPA stores no password and no long-lived API token; logout clears the session and cancels in-flight polling.
+- Authz: every route and control is permission-checked against the server-declared permissions; hidden controls are a convenience only - the server is the authority.
+- Untrusted content: log excerpts, DOM snapshots, HTML traces, hover text and AI-generated drafts are treated as untrusted text; no `dangerouslySetInnerHTML` on them, artifact HTML renders only on the isolated origin with CSP (source §8).
+- Artifact access: sensitive artifacts require `artifact:read_sensitive`; the UI never renders a raw presigned URL as text and never puts one in the URL bar; every sensitive read is audited.
+- Support access: when a `platform_operator` accesses the tenant, a persistent banner shows scope and expiry.
+- No personal data in telemetry: web vitals/error attributes carry ids (project, run), never artifact content; error screens never echo request bodies.
+- Export/download actions (audit CSV, artifact download) are audited with actor, object and reason.
+- Changelog/UX reveals never display secret values; secret references show metadata only (name, scope, rotation state).
+
+## 7. Test strategy
+
+| Layer | What it proves |
+|---|---|
+| Vitest component tests | `EvidenceBadge`/`DecisionChip` semantics (FR-09-2/3/4), missing-reason list, waiver banner, blocked-never-passed rendering, conflict dialog, i18n key lookup |
+| Contract tests | SDK calls match `contracts/openapi.yaml` (generated types compile; a recorded fixture per endpoint fails on drift) |
+| Playwright E2E (dogfooded) | Onboarding, run detail with missing shard, failure triage, evidence viewer with expired URL, policy 412 race, V2 draft and healing approve/reject |
+| a11y | axe on the five core flows in E2E; manual keyboard and screen-reader spot check per milestone |
+| i18n | Key-completeness + unused-key report in CI; vi layout review with longest strings |
+| Boundaries | decision `pending`; empty project; 200-item cursor page; very long test names; zero-attempt run; expired session; 429 with `Retry-After` |
+
+**Fixtures:** golden API recordings derived from `fixtures/` (01/04) plus one ingested Evidgate run (R10); the "missing shard + failure" run is the canonical UI fixture.
+
+## 8. Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| UI drifts into re-deriving the gate | Medium | High (product promise) | FR-09-1/2 enforced by shared components + component tests + one E2E that greps for a PASS control on a FAIL-with-missing-evidence run |
+| Healing approval read as release approval | Medium | High | FR-09-8: separate navigation, separate copy, E2E assertion, review checklist item |
+| Router/data library choice becomes a rewrite | Medium | Medium | Spike first (09.1.1-T2), thin data layer so the library is swappable |
+| i18n debt | High if deferred | Medium | D6 + CI key check + review gate |
+| E2E flakiness slows CI | Medium | Medium | Dogfooded E2E on a seeded fixture tenant; retries only for known infra defects, never to mask product bugs |
+| Depends on backend endpoints not yet stable | High (early M2) | Medium | SDK generated from `contracts/`; screens built against contract fixtures before the API lands |
+| Scope creep from 6 screens × 3 milestones | High | Medium | V1/V2/V3 tags and M-milestone gating; editor screens explicitly V2 |
+
+## 9. Epics, stories and tasks
+
+### Epic 09.1 - App shell, SDK and UX foundations (M2, V1)
+
+#### Story 09.1.1 App scaffold and build - acceptance: `npm ci && npm run build -w apps/web` produces a production bundle; Vitest and Playwright configs run in CI.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.1.1-T1 | Scaffold `apps/web` (React 19 + Vite 8 + TS 6) in the npm workspace with lint/format and test configs | M | V1 | M2 | 01.1.1-T3 |
+| 09.1.1-T2 | Spike: router + data-fetching library evaluation (licence, React 19 support, bundle size, no SSR need) and ADR | S | V1 | M2 | - |
+| 09.1.1-T3 | Generated SDK consumption (`@evidgate/sdk`), typed error-envelope mapping, `X-Request-Id`/`traceparent` propagation | M | V1 | M2 | 01.3.2-T1 |
+| 09.1.1-T4 | App shell: layout, navigation, permission-aware route guards, tenant/project switcher | M | V1 | M2 | 09.1.1-T1 |
+| 09.1.1-T5 | OIDC login/logout/session refresh handling, 401 → re-auth without losing the current route | M | V1 | M2 | 02.3.1-T1 |
+| 09.1.1-T6 | i18n foundation (vi + en catalogues, locale switch, formats) with key-completeness test | M | V1 | M2 | - |
+| 09.1.1-T7 | Shared state components: `EvidenceBadge`, `DecisionChip`, status pills, missing-reason list, hash/revision chips, waiver banner, label chips | M | V1 | M2 | 09.1.1-T4 |
+| 09.1.1-T8 | Loading/empty/error/403/404/412/429 patterns and an idempotent-retry helper | S | V1 | M2 | 09.1.1-T3 |
+| 09.1.1-T9 | Web telemetry: vitals + API error funnel (no PII, ids only) | S | V1 | M2 | 09.1.1-T3 |
+
+Epic 09.1 total: 7.5
+
+### Epic 09.2 - Onboarding and project setup (M2-M3, V1)
+
+#### Story 09.2.1 Onboarding wizard - acceptance: a new tenant reaches an enabled collecting project through the five steps, resumable, each step showing the run/evidence it produced.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.2.1-T1 | Wizard shell with resumable steps and per-step evidence panel | L | V1 | M2 | 09.1.1-T4 |
+| 09.2.1-T2 | Connect repo/CI step: GitHub OIDC exchange path and project ingest token (shown once, copyable, rotatable) | M | V1 | M2 | 02.4.1-T1, 02.4.2-T1 |
+| 09.2.1-T3 | Sample-suite step: first run shown live (state, attempts, failures) | M | V1 | M2 | 09.3.1-T2 |
+| 09.2.1-T4 | Report comparison step: normalised results vs the original producer report with per-case diffs and discrepancy reasons | L | V1 | M3 | 04.4.1-T6, 06.1.2-T1 |
+| 09.2.1-T5 | Enable step: collect mode, policy advisory preview, explicit "not gating yet" statement, confirmation audit | M | V1 | M3 | 07.1.1-T1 |
+| 09.2.1-T6 | Project & Catalog screens: test list (id, revision, platform/level/purpose, owner, rename history), filters, owner assignment | L | V1 | M3 | 03.1.1-T1, 03.1.2-T2 |
+| 09.2.1-T7 | Connection health panel + CLI quickstart snippet (copyable, secret-free) | S | V1 | M3 | 09.2.1-T2 |
+
+Epic 09.2 total: 9.5
+
+### Epic 09.3 - Run and Release (M2-M4)
+
+#### Story 09.3.1 Run detail is the truth surface - acceptance: for any run the page shows manifest, build digests, per-producer finalize state, every attempt and the stored evaluation without computing anything client-side.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.3.1-T1 | Run list with state/completeness/decision filters and rerun-scope labels | M | V1 | M2 | 09.1.1-T7 |
+| 09.3.1-T2 | Run detail: manifest summary, release components + digests, environment, pinned `manifest_hash`/suite/policy revision | L | V1 | M2 | 05.2.1-T1 |
+| 09.3.1-T3 | Evidence panel: completeness verdict, `missing[]` reasons with deep links, immutable evidence-revision selector | L | V1 | M2 | 05.3.2-T1, 06.5.1-T1 |
+| 09.3.1-T4 | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible | M | V1 | M2 | 05.3.1-T1 |
+| 09.3.1-T5 | Decision view from `GET /v1/runs/{r}/decision`: verdict, reasons, policy hash, evaluation revision, `pending` | M | V1 | M2 | 07.5.2-T1 |
+| 09.3.1-T6 | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events | M | V1 | M2 | 05.3.2-T1 |
+| 09.3.1-T7 | Actions with correct semantics: create run (Idempotency-Key), cancel (202), rerun full/subset, reprocess-vs-rerun copy | L | V1 | M3 | 05.2.1-T1, 05.4.1-T1, 05.5.1-T1 |
+| 09.3.1-T8 | Flaky and healed labels rendered separately; retry fail→pass shows both attempts | M | V1 | M3 | 07.4.1-T1, 08.3.1-T1 |
+| 09.3.1-T9 | Waiver/quarantine rendering: banner with approver+expiry, quarantine chip, results never suppressed | M | V1 | M3 | 07.3.1-T1, 07.3.2-T1 |
+| 09.3.1-T10 | Release view: components → digests → runs → decisions matrix with freshness/late-window warnings | L | V2 | M4 | 07.5.3-T1 |
+
+Epic 09.3 total: 14.0
+
+### Epic 09.4 - Failure Inbox and investigation (M3, V1)
+
+#### Story 09.4.1 Triage without losing the original failure - acceptance: from the inbox a failure can be labelled, assigned, investigated and either fixed or (V2) sent to healing, with the original evidence intact.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.4.1-T1 | Inbox list with filters (status, label, owner, severity, flaky) and URL-persisted cursor | M | V1 | M3 | 08.1.1-T1, 08.2.2-T1 |
+| 09.4.1-T2 | Failure detail: root error vs infrastructure error separated, log excerpt, step events, artifact links, related issue | L | V1 | M3 | 06.2.1-T1, 08.1.2-T1 |
+| 09.4.1-T3 | Triage actions: label (5 labels), assign, close, with `label_source` shown (rule/model/human) | M | V1 | M3 | 08.2.2-T1 |
+| 09.4.1-T4 | Investigation flow: case history across revisions, rerun comparison, evidence-revision diff | L | V1 | M3 | 09.3.1-T3 |
+| 09.4.1-T5 | Bounded artifact viewer integration: isolated origin, URL refresh, sensitivity gate | M | V1 | M3 | 06.2.1-T1, 06.3.3-T1 |
+| 09.4.1-T6 | Insufficient-evidence states (unknown status, missing artifact, stale epoch) each with reason + fix action | S | V1 | M3 | 09.3.1-T3 |
+
+Epic 09.4 total: 7.5
+
+### Epic 09.5 - Healing Review (M3 shadow, M4 approve/reject)
+
+#### Story 09.5.1 Shadow review (V1) - acceptance: candidates are inspectable with validation and lineage, and no control can apply a patch in V1.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.5.1-T1 | Healing Review queue (shadow): candidate status, label source, sample counts, availability state | M | V1 | M3 | 08.3.1-T1 |
+| 09.5.1-T2 | Candidate detail (V1 read-only): patch diff, validation results, negative control, lineage, risk flags, "proposal only" banner | L | V1 | M3 | 08.4.1-T1, 08.4.2-T1 |
+| 09.5.1-T3 | Shadow comparison: original failure vs shadow result in two blocks, official run untouched | M | V1 | M3 | 09.3.1-T4 |
+#### Story 09.5.2 Approval (V2) - acceptance: approve/reject binds to `candidate_hash` + base commit, is re-permissioned, and a stale hash is rejected with a visible conflict.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.5.2-T1 | Approve/reject flow (V2): `If-Match`+`candidate_hash`, reason required, expiry, sensitive-case second reviewer | L | V2 | M4 | 08.6.1-T1 |
+| 09.5.2-T2 | Knowledge-record and revocation UI: lineage, dependent candidates, effect preview, rollback | M | V2 | M4 | 08.7.2-T1 |
+| 09.5.2-T3 | Availability and kill switches: resolved scope (system→tenant→project) plus per-scope controls | M | V2 | M4 | 08.6.3-T1 |
+| 09.5.2-T4 | Separation of healing vs release approval in copy, navigation and E2E assertions | S | V2 | M4 | 09.3.1-T5 |
+
+Epic 09.5 total: 8.5
+
+### Epic 09.6 - Test Studio UI (M4, V2)
+
+#### Story 09.6.1 Draft to review to merge - acceptance: a draft created from a template can be edited, reviewed as a diff with its assertion hash, dry-run and then approved by another person.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.6.1-T1 | Template gallery and draft creation with required assertion fields | M | V2 | M4 | 03.5.1-T1 |
+| 09.6.1-T2 | Draft editor: intent/assertion, `evidgate.id` assignment, variant parameters, inline forbidden-change lint | L | V2 | M4 | 03.6.1-T1 |
+| 09.6.1-T3 | Patch review: diff vs base revision, assertion-hash change highlight, approver identity | L | V2 | M4 | 03.2.1-T5, 03.6.1-T1 |
+| 09.6.1-T4 | Dry-run panel with bounded results, pre-healing failure and evidence links | M | V2 | M4 | 03.6.1-T2 |
+| 09.6.1-T5 | AI draft review: AI-labelled candidates, untrusted-text rendering, accept/reject into draft | M | V2 | M4 | 03.7.1-T1 |
+| 09.6.1-T6 | Suite composition: case revisions × variants, shard strategy, DAG/coverage gap warnings | M | V2 | M4 | 03.2.1-T1, 03.2.1-T3, 03.2.1-T4 |
+
+Epic 09.6 total: 8.0
+
+### Epic 09.7 - Settings and administration (M2-M4)
+
+#### Story 09.7.1 Administer without seeing secrets - acceptance: an admin manages members, integrations, policy, quota, retention and audit; no screen can render a secret value.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.7.1-T1 | Settings shell and org/project tabs with permission-aware content | M | V1 | M2 | 02.1.1-T1, 02.2.1-T1 |
+| 09.7.1-T2 | Members and roles: role matrix per project, invite/remove, scope preview | M | V1 | M2 | 02.1.2-T1, 02.2.1-T1 |
+| 09.7.1-T3 | Secret references: metadata only, resolution scope, rotation state and reminder | S | V1 | M3 | 02.4.2-T1 |
+| 09.7.1-T4 | Policy view/edit for release approvers: revision list, revision diff, publish with ETag, advisory-vs-gating indicator | L | V1 | M3 | 07.1.1-T1 |
+| 09.7.1-T5 | Quota and retention view: limits, current counters, retention change with deletion-impact warning | M | V1 | M3 | 06.5.2-T1, 12.3.1-T6 |
+| 09.7.1-T6 | Audit log viewer: actor/action/object/time filters, CSV export, support-access rows flagged | M | V1 | M3 | 02.7.1-T1 |
+| 09.7.1-T7 | Agents page (V2): pools, capabilities, lease/heartbeat health, `unschedulable` reasons, version drift | L | V2 | M4 | 05.7.3-T1 |
+| 09.7.1-T8 | Integrations page: webhook endpoints, signing-secret rotation, delivery log with retry state | M | V2 | M4 | 07.6.2-T1 |
+| 09.7.1-T9 | Security events view in Settings (tenant_admin): V1 lists the 11.1.1-T4 baseline events (auth failures, cross-tenant 404 patterns) plus flagged support-access rows, with project/type/severity/time filters, reading `GET /v1/orgs/{o}/security-events`; injection-attempt events appear from V2 (11.4.1-T2) | S | V1 | M3 | 11.5.1-T5 |
+
+Epic 09.7 total: 10.0
+
+### Epic 09.8 - Accessibility, i18n and E2E hardening (M3-M4)
+
+#### Story 09.8.1 Core flows are usable and proven end to end - acceptance: axe-clean core flows, keyboard-only completion, and an E2E suite green in Evidgate's CI whose results are ingested into Evidgate.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.8.1-T1 | WCAG 2.2 AA pass on core flows (keyboard, focus, contrast, target size, error identification) with fixes | L | V1 | M3 | 09.1.1-T4 |
+| 09.8.1-T2 | Automated a11y checks (axe) in component tests and E2E, with a documented exception list | S | V1 | M3 | 09.8.1-T1 |
+| 09.8.1-T3 | Playwright E2E suite for core flows, wired into CI and dogfooded into Evidgate | L | V1 | M3 | 09.1.1-T1 |
+| 09.8.1-T4 | i18n coverage QA: vi review, longest-string layout, no concatenation bugs | S | V1 | M3 | 09.1.1-T6 |
+| 09.8.1-T5 | V2 E2E extension: draft workflow, healing approve/reject 412 race, agents page | M | V2 | M4 | 09.8.1-T3 |
+
+Epic 09.8 total: 6.0
+
+## 10. Dependencies
+
+| Needs | From |
+|---|---|
+| Workspace scaffold, contracts pipeline, generated SDK, lint/test toolchain | 01.1.1-T3, 01.3.2-T1, 01.7.1-T1 |
+| OIDC login, membership, permissions, CI token exchange, audit read | 02.3.1-T1, 02.1.2-T1, 02.2.1-T1, 02.4.1-T1, 02.4.2-T1, 02.7.1-T1 |
+| Catalog identity/revisions/mapping, suites, templates, drafts, AI drafts | 03.1.1-T1, 03.1.2-T2, 03.2.1-T1, 03.2.1-T3, 03.2.1-T4, 03.2.1-T5, 03.5.1-T1, 03.6.1-T1, 03.6.1-T2, 03.7.1-T1 |
+| Report comparison vs the original producer report (stored raw report + parsed events per case with discrepancy reasons) | 04.4.1-T6 |
+| Run creation/state, finalize+`missing[]`, cancel, rerun, agent pools | 05.2.1-T1, 05.3.1-T1, 05.3.2-T1, 05.4.1-T1, 05.5.1-T1, 05.7.3-T1 |
+| Artifact sensitivity, isolated viewer, evidence freeze, storage usage | 06.2.1-T1, 06.3.3-T1, 06.5.1-T1, 06.5.2-T1 |
+| Policy revisions, waivers/quarantine, decision endpoint, release aggregate, webhooks | 07.1.1-T1, 07.3.1-T1, 07.3.2-T1, 07.5.2-T1, 07.5.3-T1, 07.6.2-T1 |
+| Incidents/labels, candidates, validator evidence, approval binding, kill switch, lineage | 08.1.1-T1, 08.1.2-T1, 08.2.2-T1, 08.3.1-T1, 08.4.1-T1, 08.4.2-T1, 08.6.1-T1, 08.6.3-T1, 08.7.2-T1 |
+| Quota counters and usage summary for the quota screen | 12.3.1-T6 |
+| Security rules the UI must honour (untrusted artifact/AI content, secret refs, support banner) | 11.3.1-T1, 11.5.1-T2 |
+| Security events data for the Settings security-events view | 11.5.1-T5 |
+
+**Provides to:** 11 (UI is an attack surface and an audit source in the threat model), 12 (quota screen is the visible side of the usage ledger), 10 (frontend SLOs and static hosting).
+
+## 11. Open questions
+
+| # | Question | Owner | Needed by |
+|---|---|---|---|
+| 1 | Which router and data-fetching libraries (spike 09.1.1-T2 outcome) | Tech Lead | M2 start |
+| 2 | Session mechanism (httpOnly cookie vs in-memory token + refresh) — decided with plan 02 | Tech Lead | M2 start |
+| 3 | Static hosting target for `apps/web` and its role in the RTO/RPO story | Tech Lead (with 10) | M2 mid |
+| 4 | Whether a customer-facing read-only report link is needed by the pilot (would add a share surface) | Owner | M3 |
+| 5 | Cross-plan story ids: the `Depends on` column references ids from plans 01-08, 11 and 12 that were written in parallel (plan 10 at plan level until it lands); the integrator must reconcile any mismatch — **Closed 2026-09-25:** script check over all 487 task rows finds 0 unresolved ids; whether each cited id means what the citation says is checked in each feature plan's Definition of Ready (00 §12) | Tech Lead | before M1 |
+
+## 12. Estimate summary
+
+| Epic | V1 | V2 | V3 | Total |
+|---|---|---|---|---|
+| 09.1 App shell, SDK, UX foundations | 7.5 | 0 | 0 | 7.5 |
+| 09.2 Onboarding and project setup | 9.5 | 0 | 0 | 9.5 |
+| 09.3 Run and Release | 12.0 | 2.0 | 0 | 14.0 |
+| 09.4 Failure Inbox and investigation | 7.5 | 0 | 0 | 7.5 |
+| 09.5 Healing Review | 4.0 | 4.5 | 0 | 8.5 |
+| 09.6 Test Studio UI | 0 | 8.0 | 0 | 8.0 |
+| 09.7 Settings and administration | 7.0 | 3.0 | 0 | 10.0 |
+| 09.8 Accessibility, i18n, E2E | 5.0 | 1.0 | 0 | 6.0 |
+| **Total** | **52.5** | **18.5** | **0** | **71.0** |
+
+→ with 20 % buffer **85.2** person-days
+
+## 13. Contract change requests
+
+> **Status:** Applied 2026-09-24: 09-CR-1 → 00 §9.3 with the owning plans' routes (`/v1/projects/{p}/incidents`, `/v1/projects/{p}/healing/candidates`, `/v1/orgs/{o}/audit`, `/v1/orgs/{o}/usage/summary`); 09-CR-2 → 00 §9.1 (412 carries the current revision id; run creation already uses `Idempotency-Key`, so no `If-Match` there). Applied 2026-09-25 by integrator: 09-CR-3 → 00 §14.
+
+| # | Request | Why | Status |
+|---|---|---|---|
+| 09-CR-1 | Add the list endpoints the UI depends on to the 00 §9.3 core table: `GET /v1/projects/{p}/runs`, `GET /v1/projects/{p}/cases`, `GET /v1/incidents`, `GET /v1/healing/candidates`, `GET /v1/audit-events`, `GET /v1/usage/summary` (all cursor-paginated, permissions as in 00 §2) | The UI cannot be built against a table that only lists single-resource reads; the shapes are mine to consume, not to invent | applied 2026-09-24 |
+| 09-CR-2 | State that `ETag`/`If-Match` is also required on run creation responses used for rerun labelling, and that 412 responses carry the current revision id in `error.details` | The UI must be able to refresh the object it conflicted with without a second guess | applied 2026-09-24 (partly; see status line) |
+| 09-CR-3 | 00 §14: this plan's row becomes 09 `59 tasks, V1 52.5, V2 18.5, V3 0, raw 71.0, buffered 85.2` (new task 09.7.1-T9, S, V1, M3); with 10 (+1.0 V1) and 11 (+1.0 V1) the set totals become 479 tasks, V1 410.5, V2 112.75, V3 13.25, raw 536.0, buffered 643.2, V1 buffered 492.6, and by milestone M2 147.5, M3 118. `AGENTS.md`'s header line ("476 tasks, 533.5 raw / 640.2 buffered") needs the same refresh | The roll-up is the program's one authoritative total and must equal the sum of plan §12 tables after every task addition | Applied 2026-09-25 by integrator |
+
+> **Addendum (09-CR-3):** Integrator applied 2026-09-25: final set after 04/05/10/11 additions = 487 tasks, V1 416.5, V2 113.75, V3 13.25, raw 543.5, buffered 652.2 (00 §14); the interim figures above are superseded.
