@@ -4,7 +4,7 @@
 
 Evidgate collects automated test results (web, API, mobile, unit) from customer CI or agents, keeps them as immutable evidence bound to exact builds, and turns that evidence into a release decision (PASS / FAIL / INCONCLUSIVE) through versioned policies. It adds **safe healing**: repairing test mechanics (for example a changed locator) without changing test intent, shadow first, never hiding a product bug.
 
-**Current state: planning only.** No source code, build or tests yet. `apps/`, `packages/`, `src/`, `contracts/`, `migrations/` and `fixtures/` are the target layout (`plans/00-overview.md` §5.2); they do not exist yet.
+**Current state: planning only** (stack changed 2026-09-25 to .NET 10 + CQRS + Angular 22, DECISIONS CR-D-1). No source code, build or tests yet. `apps/`, `packages/`, `src/`, `contracts/`, `migrations/` and `fixtures/` are the target layout (`plans/00-overview.md` §5.2); they do not exist yet.
 
 ## Where things are
 
@@ -13,8 +13,8 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 | `DECISIONS.md` | Name, locked architecture (A1–A10), stack + versions (§4), safe-healing rules (§5), verified facts (§6), open owner decisions (§8), review deltas vs the source (§9) |
 | `RECOMMENDATIONS.md` | Working recommendations for open decisions (O1–O10) and plan §11 questions; not decisions |
 | `plans/00-overview.md` | Shared contracts: glossary, milestones, architecture, IDs, state machines, API, NFRs, feature-plan process, estimate roll-up |
-| `plans/01`–`12` | High-level area plans (epics → stories → tasks with sizes); 487 tasks, 543.5 raw / 652.2 buffered person-days (00 §14) |
-| `plans/features/` | Detailed feature plans, written per story before build (00 §12) |
+| `plans/01`–`12` | High-level area plans (epics → stories → tasks with sizes); 502 tasks, 560.25 raw / 672.3 buffered person-days (00 §14, after CR-D-1) |
+| `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T96), findings register (`REVIEW-2026-09-25.md`), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
 | `docs/source/` | Original Vietnamese system design (working name "ReleaseHub") and its .docx |
 
 ## Authority and editing rules
@@ -29,7 +29,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 
 ## Planned stack (DECISIONS §4)
 
-Node.js 26 LTS · TypeScript 6.0 · NestJS 12 · PostgreSQL 18 (RLS, FORCE) · Kysely + plain SQL migrations · transactional outbox + pg-boss for internal tasks, own lease tables for runner jobs · React 19 + Vite 8 · S3 API · OpenTelemetry · Vitest, Testcontainers, Playwright · npm workspaces. Contract-first: OpenAPI 3.1 + JSON Schema in `contracts/`.
+Server/worker: .NET 10 LTS · ASP.NET Core minimal APIs · CQRS (`Mediator` 3, EF Core 10 write model, Dapper read model) · PostgreSQL 18 (RLS, FORCE) · DbUp + plain SQL migrations · own transactional outbox + task queue (`SKIP LOCKED`), own lease tables for runner jobs · OpenTelemetry · xUnit v3, Shouldly, Testcontainers. Web: Angular 22 (standalone, zoneless, signals) + `@ngrx/signals` · Vitest, Playwright. Customer-side CLI/adapters/agent: Node.js 26 LTS · TypeScript 6.0 · npm workspaces. S3 API. Contract-first: OpenAPI 3.1 + JSON Schema in `contracts/`. Code rules: 00 §5.5 (CQRS), §5.6 (Angular), §5.7 (performance/security).
 
 ## Invariants code must keep
 

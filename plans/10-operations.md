@@ -16,17 +16,17 @@
 
 ## 2. Requirements
 
-- **FR-10-1** Three environments with separate credentials and data: dev (local stack, 01.8.1-T2), staging (own account/secrets, sanitised data), prod (load balancer, ≥2 API replicas, ≥1 worker replica, managed PostgreSQL with backup, object storage) — source §9 ✅.
+- **FR-10-1** Three environments with separate credentials and data: dev (local stack, 01.8.1-T2), staging (own account/secrets, sanitised data), prod (load balancer, ≥2 `Evidgate.Api` replicas, ≥1 `Evidgate.Worker` replica — ASP.NET Core minimal-API/worker processes — managed PostgreSQL with backup, object storage) — source §9 ✅ (F-10-4).
 - **FR-10-2** Images are built once, pinned by digest, and promoted unchanged dev → staging → prod; `latest` is never deployed.
-- **FR-10-3** A deploy runs expand migrations (as the owner role, 01.4.1-T2) before the new version takes traffic; contract migrations ship at least one release later; a rollback never requires a schema change and never runs a destructive migration while the previous version is live — source §9 ✅.
+- **FR-10-3** A deploy runs expand migrations before the new version takes traffic — the `Evidgate.Migrator` image (DbUp 7, checksum journal) runs as the owner role (01.4.1-T2) and the expand gate verifies the journal head; contract migrations ship at least one release later; a rollback never requires a schema change and never runs a destructive migration while the previous version is live — source §9 ✅ (F-10-2).
 - **FR-10-4** Policy-revision rollouts (and any change that can alter a decision) use canary + shadow decision compare: the same evidence revision is evaluated under the incoming policy revision in shadow, the decisions are diffed, and the diff must be empty or explicitly approved per project before promotion — source §9 ✅.
 - **FR-10-5** Telemetry is OTel traces/metrics/logs carrying `request_id`, `run_id`, `job_id`, `trace_id` (00 §11); no secret appears in a log field or a metric label (00 §11, source §9 ✅).
-- **FR-10-6** Alerts exist for queue age, lease loss rate, incomplete rate, parser errors, artifact failures, healing false positives (source §9 ✅) plus outbox dispatch lag and dead-letter depth, each linking to its runbook.
-- **FR-10-7** The SLIs of 00 §11 are measured continuously: ingest p95 < 1 s per batch within limits, decision p95 < 60 s from complete evidence, availability 99.5 %/month on core endpoints (explicitly not the test pass rate) — source §9 ✅.
+- **FR-10-6** Alerts exist for `task`-queue age, lease loss rate, incomplete rate, parser errors, artifact failures, healing false positives (source §9 ✅) plus `outbox` dispatch lag and dead-letter depth — all measured on Evidgate's own `task`/`outbox` tables (`FOR UPDATE SKIP LOCKED`, retry cap, dead-letter; 00 §5.3) — each linking to its runbook (F-10-4).
+- **FR-10-7** The SLIs of 00 §11 are measured continuously: ingest p95 < 1 s per batch within limits, decision p95 < 60 s from complete evidence, availability 99.5 %/month on core endpoints (explicitly not the test pass rate) — source §9 ✅ — plus web-vitals SLIs (LCP, INP) recorded from plan 09's browser telemetry against the 00 §5.6 W7 budgets (T39, F-09-6).
 - **FR-10-8** Backup with PITR where the provider supports it, plus a scheduled restore verification; a full restore drill (RPO 15 min / RTO 4 h) passes before the pilot — source §9 ✅ and 00 §4 M2 exit gate.
 - **FR-10-9** The burst acceptance load test (50 000 events in 60 s, batches within the 00 §9.3 limits of ≤ 500 events and ≤ 1 MiB) passes on staging before the pilot, and the capacity model is kept current with the source §9 numbers ✅.
 - **FR-10-10** Runbooks exist and are exercised at least once: dead-letter triage, stuck run, orphan artifact, key rotation, kill switch, incident/postmortem.
-- **FR-10-11** Healing availability (`enabled | shadow | disabled | unavailable`, 00 §8.7) is switchable at system, tenant and project level before any apply capability ships, and a healing failure never blocks ingest, runs or gates — DECISIONS §5.9, source §9 ✅.
+- **FR-10-11** Healing availability (settable `enabled | shadow | disabled`; `unavailable` is derived, 00 §8.7) is switchable at system, tenant and project level before any apply capability ships, and a healing failure never blocks ingest, runs or gates — DECISIONS §5.9, source §9 ✅ (T33).
 - **FR-10-12** Cost is monitored per environment and per unit (1000 events, artifact GB-month, run, LLM token) and the model is handed to plan 12 for pricing.
 - **FR-10-13** O3 produces a decision memo comparing at least two providers on residency, PITR, S3 compatibility, egress and cost; no vendor is selected in this plan.
 - **NFR-10-1** Operator reconstruction: for any run, decision or dead-letter row, the telemetry + audit trail explains what happened without reading application logs by hand.
@@ -37,8 +37,8 @@
 ## 3. Key decisions
 
 - **No Kubernetes in V1-V2** [DECISION: A7] — containers on a managed runtime with a load balancer; source §9 ✅ says Kubernetes is not required while simple operation suffices. Rejected: managed K8s (operational surface for one team), serverless functions (long-running webhook and dispatcher work, connection pooling against PostgreSQL).
-- **Migrations as a one-shot job, not an app-start side effect** [DECISION] — the deploy runs `migrate` with the owner role and only then starts the new version; the app role has no DDL rights (01.4.1-T2). Rejected: migrate-on-boot (two replicas racing, no dry run, deploy and schema change indistinguishable).
-- **Two deploy artefacts only: images + migration job** [DECISION] — configuration is injected as environment variables and validated at boot (01.1.2-T1); no per-environment code branch.
+- **Migrations as a one-shot job, not an app-start side effect** [DECISION] — the deploy runs the `Evidgate.Migrator` image (DbUp 7, checksum journal) with the owner role and only then starts the new version; the app role has no DDL rights (01.4.1-T2). Rejected: migrate-on-boot (two replicas racing, no dry run, deploy and schema change indistinguishable) (F-10-2).
+- **Deploy artefacts: three images + one static bundle** [DECISION] — `dotnet publish` produces the `Evidgate.Api`, `Evidgate.Worker` and `Evidgate.Migrator` images; `apps/web` ships as a static bundle on object storage + CDN (T41). Configuration is injected as environment variables and validated at boot (01.1.2-T1); no per-environment code branch.
 - **Shadow decision compare is mandatory for anything that can change a decision** [DECISION] — policy revisions, evaluator changes, adapter normalisation changes. Rejected: trusting unit tests alone (a decision change is a product-visible event), and comparing on production after rollout.
 - **OpenTelemetry collector as the only egress for telemetry** [DECISION] — applications export OTLP to the collector; the backend is swap­pable and no vendor SDK enters application code (DECISIONS §4 row). Rejected: vendor agents per host, direct app → SaaS export (secret/redaction risk, licence lock-in).
 - **Alert threshold ownership** [DECISION] — every alert has a numeric threshold, an owner and a runbook link in one file per environment; an alert without all three is not merged.
@@ -50,10 +50,10 @@
 
 **Data owned:** plan 10 owns no business tables. It owns `infra/` (container definitions, compose, collector config, dashboards, alert rules — see 01 §13 CR-01-3), the deploy workflow, and `docs/runbooks/`. Database objects it touches are only those created by 01.4 (roles, RLS helpers); module tables stay with 02-08.
 
-**Operational endpoints used:** `GET /internal/health/live`, `GET /internal/health/ready`, `GET /metrics` (outside `/v1`, per 01 §13 CR-01-4). Readiness is green only with a reachable database, migrations at the expected head and a writable object store.
+**Operational endpoints used:** `GET /internal/health/live`, `GET /internal/health/ready`, `GET /metrics` (outside `/v1`, per 01 §13 CR-01-4), implemented as ASP.NET Core health checks (`AddHealthChecks`/`MapHealthChecks` with Npgsql, object-store and DbUp-journal-head checks) (F-10-4). Readiness is green only with a reachable database, migrations at the expected head and a writable object store.
 
 **Flows:**
-1. *Build → promote:* build images with digest pins + SBOM → push → staging deploy (expand migrations → canary 1 replica → shadow decision compare → promote) → prod deploy with the same digests.
+1. *Build → promote:* multi-stage `dotnet publish` images for api, worker and migrator with digest pins + CycloneDX SBOM → push; publish the `apps/web` static bundle to object storage + CDN → staging deploy (`Evidgate.Migrator` expand migrations → journal-head check → canary 1 replica → shadow decision compare → promote) → prod deploy with the same digests (T41, F-10-1/F-10-2).
 2. *Decision-change rollout:* replay a fixed evidence set through the incoming policy revision in shadow; diff decisions; empty diff or approved diff → promote; otherwise abort and keep the current revision.
 3. *Alert → runbook:* metric breach → routing → runbook step → operator action recorded (DLQ replay, kill switch, restore).
 4. *Restore drill:* take a PITR backup → restore into a clean project → apply migrations head → run the tenant-isolation + smoke suite → record duration against RPO/RTO.
@@ -120,20 +120,20 @@
 | 10.1.1-T3 | Environment bootstrap automation: database + owner/app/operator roles (01.4.1-T2), object storage buckets and policies, secret placeholders, network rules | L | V1 | M2 | 10.1.1-T2 |
 | 10.1.1-T4 | Isolated artifact-viewer origin: separate registrable domain, DNS record and TLS certificate, hosting/deploy of the viewer bundle, CSP/CORS headers, no app cookies on that origin | M | V1 | M2 | - |
 
-Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, headers); the viewer application and its iframe/CSP behaviour stay in 06.3.3-T1, which already lists the 10 DNS/TLS dependency. Static hosting for `apps/web` remains an open question (09 §11 #3) decided with this plan.
+Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, headers); the viewer application and its iframe/CSP behaviour stay in 06.3.3-T1, which already lists the 10 DNS/TLS dependency. Static hosting for `apps/web` is settled by T41: the Angular build is a static bundle on object storage + CDN (closes 09 §11 #3).
 
 ### Epic 10.2 Images, registry and deployment (M1-M2)
 
 #### Story 10.2.1 Images and provenance — acceptance: one image per app built once, pinned by digest, promoted unchanged; `latest` never reachable in a deploy file
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.2.1-T1 | Container images for `apps/api`, `apps/worker`, `apps/web`: multi-stage builds, base images pinned by digest, non-root user, SBOM per image | L | V1 | M1 | 01.1.2-T1 |
+| 10.2.1-T1 | Container images for `src/Evidgate.Api`, `src/Evidgate.Worker` and `src/Evidgate.Migrator`: multi-stage `dotnet publish` on a pinned `mcr.microsoft.com/dotnet/sdk:10.0` builder, runtime on a digest-pinned chiseled non-root `mcr.microsoft.com/dotnet/aspnet:10.0` (⚠️ exact chiseled tag/digest verified at build), CycloneDX SBOM per image; `apps/web` is an Angular static bundle on object storage + CDN, not a container (T41, F-10-1) | L | V1 | M1 | 01.1.2-T1 |
 | 10.2.1-T2 | Registry, image signing and provenance (attestation), digest promotion rule enforced by the deploy workflow | M | V1 | M1 | 10.2.1-T1 |
 
 #### Story 10.2.2 Deploy with expand/contract and canary — acceptance: a deploy never takes traffic on a version whose migrations have not run, and a decision-changing canary is blocked by the shadow compare
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.2.2-T1 | Deploy pipeline: migration job (owner role) → expand gate → rollout → post-deploy verification; refuses a deploy whose migration set is not expand-only while the old version lives | L | V1 | M1 | 10.2.1-T2, 01.4.1-T1 |
+| 10.2.2-T1 | Deploy pipeline: `Evidgate.Migrator` job (owner role, DbUp 7) → expand gate that verifies the DbUp checksum journal head → rollout → post-deploy verification; refuses a deploy whose migration set is not expand-only while the old version lives (F-10-2) | L | V1 | M1 | 10.2.1-T2, 01.4.1-T1 |
 | 10.2.2-T2 | Canary rollout + automatic rollback on SLI breach (error rate, latency, readiness) with a documented rollback that never rewrites the schema | L | V1 | M2 | 10.2.2-T1, 10.3.1-T5 |
 | 10.2.2-T3 | Shadow decision compare: replay a fixed evidence set under the incoming policy revision, diff decisions, block promotion on unexplained diff, per-project rollout — source §9 ✅ | L | V1 | M2 | 10.2.2-T1 |
 | 10.2.2-T4 | Release runbook: who deploys, order of steps, verification checklist, rollback drill, post-deploy watch window | M | V1 | M2 | 10.2.2-T2 |
@@ -143,9 +143,9 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 #### Story 10.3.1 Telemetry and alerting — acceptance: every alert in FR-10-6 fires in staging with a severity and a runbook link; no secret appears in a label or log field
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.3.1-T1 | OTel SDK in api, worker and web: traces, metrics, logs with `request_id`/`run_id`/`job_id`/`trace_id`, sampling policy, resource attributes (service, env, version) | L | V1 | M1 | 10.1.1-T1 |
+| 10.3.1-T1 | OpenTelemetry instrumentation in `Evidgate.Api` and `Evidgate.Worker`: traces, metrics, logs with `request_id`/`run_id`/`job_id`/`trace_id`, sampling policy, resource attributes (service, env, version); browser web-vitals are emitted by 09's telemetry (09.1.1-T9) and only recorded here (T39) | L | V1 | M1 | 10.1.1-T1 |
 | 10.3.1-T2 | Collector deployment and exporters with retention, batching and redaction of secrets (00 §11) | M | V1 | M1 | 10.3.1-T1 |
-| 10.3.1-T3 | Metrics catalogue: queue age, outbox dispatch lag, lease loss, dead-letter depth, incomplete rate, parser errors, artifact failures, healing false-positive rate, ingest p95, decision p95, plus per-unit cost counters (10.9.1-T1) | M | V1 | M1 | 10.3.1-T2 |
+| 10.3.1-T3 | Metrics catalogue: `task`-queue age, `outbox` dispatch lag, lease loss, dead-letter depth (own queue tables, 00 §5.3), incomplete rate, parser errors, artifact failures, healing false-positive rate, ingest p95, decision p95, .NET runtime metrics (GC heap/gen-2/LOH collections, thread-pool worker counts and starvation, Npgsql pool occupancy/wait, EF Core command durations), plus per-unit cost counters (10.9.1-T1) (F-10-3/F-10-4) | M | V1 | M1 | 10.3.1-T2 |
 | 10.3.1-T4 | Dashboards: service health, ingest/decision SLI, queue and lease state, tenant-neutral cost view | M | V1 | M2 | 10.3.1-T3 |
 | 10.3.1-T5 | Alert rules with thresholds, owners and runbook links, routing to the on-call channel; consumed by 01.5.1-T4 (dead-letter hook) and 10.2.2-T2 (rollback trigger) | L | V1 | M2 | 10.3.1-T3 |
 
@@ -154,7 +154,7 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 #### Story 10.4.1 Measured service targets — acceptance: the three 00 §11 targets are queryable per environment with a monthly report, and a burn-rate alert fires on a staged breach
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.4.1-T1 | SLI definitions and recording rules for ingest p95, decision p95 and availability (core endpoints only, never the test pass rate), per environment and per tenant class | M | V1 | M2 | 10.3.1-T3 |
+| 10.4.1-T1 | SLI definitions and recording rules for ingest p95, decision p95 and availability (core endpoints only, never the test pass rate), per environment and per tenant class; plus web-vitals SLIs (LCP, INP) recorded from 09's vitals telemetry (09.1.1-T9) against the 00 §5.6 W7 budgets (T39, F-09-6) | M | V1 | M2 | 10.3.1-T3 |
 | 10.4.1-T2 | Error budget: burn-rate alerts, monthly review ritual, and the rule that a budget breach pauses feature rollout instead of lowering the target | M | V1 | M2 | 10.4.1-T1 |
 
 ### Epic 10.5 Backup, PITR and restore drills (M2)
@@ -172,9 +172,9 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 #### Story 10.6.1 Proving the pilot load — acceptance: 50 000 events in 60 s and the pilot artifact profile pass on staging, and the capacity model names the next bottleneck
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.6.1-T1 | Ingest load generator: valid batches within the 00 §9.3 limits (≤ 500 events, ≤ 1 MiB), 833 events/s target, quota and error-rate measurement | L | V1 | M2 | 10.3.1-T3 |
-| 10.6.1-T2 | Artifact upload load profile (presigned URL concurrency, 2 GB/day, ≥ 20 MB objects) + one smoke against the real provider S3 endpoint to close the emulator-parity gap of 01.8.1-T1 | M | V1 | M3 | 10.5.1-T2 |
-| 10.6.1-T3 | Capacity model: recompute the source §9 numbers ✅ (100 000 results/day ≈ 98 MiB/day ≈ 8.6 GiB/90 d; 2 GB/day artifacts, 28 GB/14 d; 833 events/s burst), add pool sizes, connection counts and growth triggers | M | V1 | M2 | 10.6.1-T1 |
+| 10.6.1-T1 | Ingest load generator: valid batches within the 00 §9.3 limits (≤ 500 events, ≤ 1 MiB), 833 events/s target, quota and error-rate measurement; measures the hot path end to end — the single `INSERT … SELECT … FROM unnest(…) ON CONFLICT DO NOTHING RETURNING` batch insert (T50) and the per-org audit hash chain serialised by `pg_advisory_xact_lock` (T8) | L | V1 | M2 | 10.3.1-T3 |
+| 10.6.1-T2 | Artifact upload load profile (presigned URL concurrency, 2 GB/day, ≥ 20 MB objects) + one smoke against the real provider S3 endpoint to close the emulator-parity gap of 01.8.1-T1, verifying presigned-PUT parity: `Content-Length` and the checksum header are signed (⚠️ parity on SeaweedFS and the provider, T18) | M | V1 | M3 | 10.5.1-T2 |
+| 10.6.1-T3 | Capacity model: recompute the source §9 numbers ✅ (100 000 results/day ≈ 98 MiB/day ≈ 8.6 GiB/90 d; 2 GB/day artifacts, 28 GB/14 d; 833 events/s burst), add Npgsql pool sizes/connection counts, container memory limits and .NET GC settings (`DOTNET_GCServer`, heap hard-limit), thread-pool headroom and growth triggers (F-10-3) | M | V1 | M2 | 10.6.1-T1 |
 | 10.6.1-T4 | Soak and back-pressure test: sustained multi-hour ingest, quota behaviour (429/503 with `Retry-After`), queue growth limits, recovery after overload | M | V2 | M4 | 10.6.1-T2 |
 
 ### Epic 10.7 Runbooks and incident readiness (M1-M3)
@@ -182,10 +182,10 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 #### Story 10.7.1 Operable by a second person — acceptance: each runbook is executed once by someone who did not write it, in staging, and its steps are correct without tribal knowledge
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.7.1-T1 | Dead-letter runbook: triage query, classification, safe replay, escalation — the linked action for 01.5.1-T4 and alert 10.3.1-T5 | M | V1 | M2 | 01.5.1-T4 |
+| 10.7.1-T1 | Dead-letter runbook for the `task` queue table: triage query, classification, safe replay, escalation — the linked action for 01.5.1-T4 and alert 10.3.1-T5 (F-10-4) | M | V1 | M2 | 01.5.1-T4 |
 | 10.7.1-T2 | Stuck run runbook: detect runs past the collection deadline, inspect lease/epoch state (00 §5.3), reconcile or cancel without inventing evidence | M | V1 | M2 | 10.3.1-T3 |
 | 10.7.1-T3 | Orphan artifact runbook: objects without `ready`, `pending_upload` past TTL, retention sweep failures (00 §8.4) | S | V1 | M2 | 10.5.1-T2 |
-| 10.7.1-T4 | Key rotation runbook: ingest tokens, CI OIDC trust, JWT signing keys, webhook secrets, database credentials, provider keys — rotation without downtime or lost events | M | V1 | M2 | 10.1.1-T2 |
+| 10.7.1-T4 | Key rotation runbook: ingest tokens, CI OIDC trust, JWT signing keys, webhook secrets, database credentials, provider keys, and the ingest/API token HMAC pepper — a new `pepper_vN` signs new tokens while old versions verify until their last token expires (T5) — rotation without downtime or lost events | M | V1 | M2 | 10.1.1-T2 |
 | 10.7.1-T5 | Kill switch runbook + drill: system → tenant → project healing availability (00 §8.7, DECISIONS §5.9) flipped while ingest, runs and gates continue | M | V1 | M2 | 10.3.1-T5 |
 | 10.7.1-T6 | Incident process: severity ladder, on-call expectation for the pilot, communication, postmortem template with a follow-up task rule | M | V1 | M3 | 10.7.1-T1 |
 
@@ -216,7 +216,7 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 
 ## 10. Dependencies
 
-- **01-foundation:** CI pipeline (01.7.1-T1), migration runner and role split (01.4.1-T1/T2), dev stack (01.8.1-T2), outbox + dead-letter + operator CLI (01.5.1-T4), event schema and limits (01.3.1-T2), Testcontainers harness (01.6.1-T2). Plan 10 needs the layout additions of `01 §13 CR-01-3` (`infra/`, `scripts/`).
+- **01-foundation:** CI pipeline (01.7.1-T1), `Evidgate.Migrator` DbUp runner and role split (01.4.1-T1/T2), dev stack (01.8.1-T2), `outbox`/`task` dead-letter + operator CLI (01.5.1-T4), event schema and limits (01.3.1-T2), Testcontainers.PostgreSQL harness (01.6.1-T2). Plan 10 needs the layout additions of `01 §13 CR-01-3` (`infra/`, `scripts/`).
 - **02-identity-tenancy:** token and signing keys for the rotation runbook (10.7.1-T4), audit trail for support access (§6).
 - **03-catalog-authoring / 05-runs-orchestration:** stuck-run detection signals and lease/epoch state for 10.7.1-T2; outbox task types for the queue-age alert.
 - **06-evidence-artifacts:** artifact lifecycle states, retention sweep and orphan reconciliation feeding 10.7.1-T3 and 10.5.1-T2.
@@ -234,6 +234,8 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 - **[OPEN]** Whether staging shares the production object-storage account (recommended: separate accounts; source §9 asks for separate account/secret and data ✅). Owner: Tech Lead, needed by M2.
 
 ## 12. Estimate summary
+
+Task sizes use the shared units (XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days); each epic total is the sum of its task rows.
 
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
@@ -254,6 +256,7 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: CR-10-1 → 00 §11. Applied 2026-09-25 by integrator: CR-10-2 → 00 §14.
+> 2026-09-25 CR-D-1 + TL review: images retargeted to `dotnet publish` + digest-pinned chiseled non-root `aspnet:10.0`, `Evidgate.Migrator` as its own image, `apps/web` a static bundle on object storage + CDN (T41, F-10-1); deploy gate verifies the DbUp checksum journal (F-10-2); metrics catalogue and capacity model gain .NET runtime metrics, GC/container-memory settings and Npgsql pool sizing (F-10-3); health checks, queue/dead-letter alerts and runbooks re-anchored to the own `task`/`outbox` tables (F-10-4); pepper rotation added to 10.7.1-T4 (T5); load test measures the audit hash chain and the batch insert (T8, T50); presign parity in 10.6.1-T2 (T18); web-vitals SLIs in FR-10-7 and 10.4.1-T1 (T39); healing switch modes corrected (T33). No task added, removed or resized; totals unchanged.
 
 | # | Target | Request (verbatim) | Owner |
 |---|---|---|---|
