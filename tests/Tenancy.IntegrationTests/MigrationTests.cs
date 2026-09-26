@@ -44,7 +44,12 @@ public sealed class MigrationTests
             "0003_foundation_rls_probe.sql",
         ]);
 
-        var applied = _fixture.ApplyMigrations(database);
+        // Forward step bounded to the identity files, so later migrations (01.5.1
+        // platform tables) never change what this test asserts.
+        using var identity = TempMigrationDirectory.CreateFrom(
+            PostgresTenancyFixture.RepoMigrationsPath, "0001", "0002", "0003", "0004", "0005");
+
+        var applied = _fixture.ApplyMigrations(database, identity.Path);
 
         applied.ExitCode.ShouldBe(MigratorExitCodes.Success);
         applied.Result.AppliedNow.ShouldBe(["0004_identity_organization.sql", "0005_identity_project.sql"]);
@@ -86,7 +91,7 @@ public sealed class MigrationTests
         (await _fixture.RowSecurityAsync(database, "project")).Forced.ShouldBeTrue();
 
         // Re-run: nothing pending, nothing applied, same journal.
-        var second = _fixture.ApplyMigrations(database);
+        var second = _fixture.ApplyMigrations(database, identity.Path);
         second.ExitCode.ShouldBe(MigratorExitCodes.Success);
         second.Result.AppliedNow.ShouldBeEmpty();
         second.Result.Plan!.Pending.ShouldBeEmpty();

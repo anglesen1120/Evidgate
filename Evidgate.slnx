@@ -34,10 +34,12 @@
   <Project Path="src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj" />
   <Project Path="tests/Architecture.Tests/Architecture.Tests.csproj" />
   <Project Path="tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj" />
+  <Project Path="tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj" />
   <Project Path="tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj" />
   <Project Path="tests/Isolation.Tests/Isolation.Tests.csproj" />
   <Project Path="tests/Migrator.IntegrationTests/Migrator.IntegrationTests.csproj" />
   <Project Path="tests/ObjectStorage.IntegrationTests/ObjectStorage.IntegrationTests.csproj" />
   <Project Path="tests/Persistence.IntegrationTests/Persistence.IntegrationTests.csproj" />
+  <Project Path="tests/Tasks.IntegrationTests/Tasks.IntegrationTests.csproj" />
   <Project Path="tests/Tenancy.IntegrationTests/Tenancy.IntegrationTests.csproj" />
 </Solution>

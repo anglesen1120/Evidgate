@@ -122,6 +122,7 @@ fi
 # 01.2.1-T1.2: tests/Architecture.Tests is part of the expected project list.
 # M1 wave 1-2: 01.1.2-T2.1 module pairs; test projects of 01.4.1, 01.1.2, 01.8.1-T1.
 # M1 wave 3: test projects of 01.3.2-T4, 01.4.2-T1, 02.1.1-T1.
+# M1 wave 4: test projects of 01.6.1-T2 (Foundation) and 01.5.1 (Tasks).
 cat > "$TMP/expected-proj" <<'EOF'
 src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csproj
 src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj
@@ -155,11 +156,13 @@ src/Modules/Evidgate.Modules.Usage.Contracts/Evidgate.Modules.Usage.Contracts.cs
 src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj
 tests/Architecture.Tests/Architecture.Tests.csproj
 tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj
+tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj
 tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj
 tests/Isolation.Tests/Isolation.Tests.csproj
 tests/Migrator.IntegrationTests/Migrator.IntegrationTests.csproj
 tests/ObjectStorage.IntegrationTests/ObjectStorage.IntegrationTests.csproj
 tests/Persistence.IntegrationTests/Persistence.IntegrationTests.csproj
+tests/Tasks.IntegrationTests/Tasks.IntegrationTests.csproj
 tests/Tenancy.IntegrationTests/Tenancy.IntegrationTests.csproj
 EOF
 

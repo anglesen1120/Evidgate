@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 01.6.1-T2: the shared Testcontainers.PostgreSQL harness (DatabaseFixture, Respawn reset,
+       TenantTestScope, app-role checks) and its own verification. Named Foundation.* rather than
+       Evidgate.Foundation.* (01.6.1 AC1) so the Architecture.Tests reflection scan never picks it up.
+       The xUnit/Shouldly package set and OutputType live in tests/Directory.Build.props (01.6.1-T1.1). -->
+  <PropertyGroup>
+    <RootNamespace>Foundation.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSQL" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Respawn" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+  </ItemGroup>
+</Project>

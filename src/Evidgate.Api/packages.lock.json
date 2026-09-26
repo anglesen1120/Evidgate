@@ -83,6 +83,9 @@
           "OpenTelemetry.Api": "1.19.1"
         }
       },
+      "evidgate.buildingblocks.canonicalization": {
+        "type": "Project"
+      },
       "evidgate.buildingblocks.observability": {
         "type": "Project",
         "dependencies": {
@@ -93,7 +96,9 @@
       "evidgate.buildingblocks.persistence": {
         "type": "Project",
         "dependencies": {
+          "Cronos": "[0.13.0, )",
           "Dapper": "[2.1.89, )",
+          "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[10.0.12, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )",
           "Npgsql": "[10.0.3, )",
@@ -231,6 +236,12 @@
       },
       "evidgate.modules.usage.contracts": {
         "type": "Project"
+      },
+      "Cronos": {
+        "type": "CentralTransitive",
+        "requested": "[0.13.0, )",
+        "resolved": "0.13.0",
+        "contentHash": "Nkve+Yi0+ol3ntSBRHeW0ka9cJQ8vndSUvvkXqF9LVqwpoqWueyxu/HS275r98RDOmF7/mzRnZW5XXUBXob+TA=="
       },
       "Dapper": {
         "type": "CentralTransitive",
