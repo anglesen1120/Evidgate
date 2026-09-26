@@ -7,10 +7,10 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | Item | State |
 |---|---|
 | Branch flow | `feature/*` or `docs/*` → PR into `develop` → owner merges. `main` = planning baseline |
-| `develop` head | `73f957b` (PR #9 merged) |
-| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 |
+| `develop` head | `c70585e` (PR #10 merged) |
+| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 |
 | Open PRs | none |
-| Active branch | `feature/m1-wave5` (off `develop` `73f957b`); wave 5 delivered, gates green, PR pending |
+| Active branch | `feature/m1-wave6` (off `develop` `c70585e`); wave 6 implementing |
 | M0/M1 tasks | 39 done · 95 open (of 134) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
@@ -57,7 +57,7 @@ Shared prerequisites committed first (`06e47b5`): `tests/Foundation.IntegrationT
 
 Not in this wave, now ready next (§5): 01.5.1-T3 dispatcher, T4 retry/dead-letter/operator routes, T5 crash tests; 01.4.2-T4 pipeline. Still blocked: 02.1.1-T2 org/project API (unrelated to this wave).
 
-## 3.5. Wave 5 (delivered on `feature/m1-wave5`; gates green, PR pending)
+## 3.5. Wave 5 (delivered on `feature/m1-wave5`; merged PR #10)
 
 Scope (STATUS §5 ready + plan_graph deps verified): **01.4.2-T4** Mediator pipeline + endpoint filter + `AddEvidgateTenancy` wiring (L); **01.5.1-T3** outbox dispatcher (M); **01.5.1-T4** handler contract/retry cap/dead letter/operator routes (M, needs T3); **01.5.1-T5** crash + operator suites on the harness (M, needs T4); **01.7.1-T1** real `ci.yml` (L — deletes interim `docker-tests.yml`, applies its deferred fixes: `global-json-file`, `ubuntu-24.04`, single trigger).
 
@@ -77,9 +77,29 @@ Carried items whose owner task lands in this wave: the `task`/`outbox` operator 
 
 QA defects fixed in wave: Worker host missing `AddEvidgatePipeline` (QA-P D1 — every Mediator dispatch would have run bare), `IdempotencyBehaviour` missing the `ResultContract` guard its siblings carry (QA-P D2), `task_dead_letter_total` moved into `TaskAlertNotifier` so a custom `ITaskAlertSink` can't silence it (QA-H H-1), empty `queue=` param normalised to no-filter (QA-H H-3). Review fixes: `dotnet format` whitespace (IdempotencyBehaviour switch arms — would have failed the format gate), dispatcher queues added to `TaskQueueHostedService.QueuePlan` (dispatched rows were stamped but never claimed — a silent inert chain), `outbox_undispatched` gauge capped at 100k + 5 s command timeout (was a linear seq-scan risk on the metrics thread), pooled connection released before alert-sink notify (a slow sink held a pool slot), `task.last_error` secret masking (`Password=`/bearer/`token=` patterns — mirrors SecretRedactor's regex set), main app DSN pinned to `evidgate_app` (mirrors the sweep-DSN guard), `ci.yml` job `timeout-minutes` added. `scripts/verify.sh` green after all of it: all 17 stages, full test suite incl. Docker.
 
-Deferred to first CI run on GitHub (by design, AC-level): a green trivial-PR run, cache-hit annotations, <10 min wall time, Testcontainers on the hosted runner (the deleted docker-tests.yml already proved Docker works — run 36205176754).
+Verified on GitHub after merge: run 36251021746 (PR) + 36252017788 (develop push) — all 4 jobs green, dotnet job 247 s < 10 min; AC-level deferrals closed.
 
-Drift-gate note: `npm run codegen` in root `package.json` is a real no-op script (echo + exit 0) so the `ci.yml` gate and `check-ci-parity.sh` stay honest today; it becomes the SDK generator at 01.3.2-T1.
+
+## 3.6. Wave 6 (in progress on `feature/m1-wave6`)
+
+Scope (STATUS §5 ready + plan_graph deps verified): area-01 M1 remainder — **01.3.2-T1** generated TS SDK (L); **01.3.2-T2** dual-runtime validators + parity corpus (L); **01.3.2-T3** contract tests + served-doc diff (M, after T1); **01.6.1-T3** `fixtures/` layout + loaders (M); **01.6.1-T4** tenant-isolation suite (M); **01.7.1-T2** licence gate (M); **01.7.1-T3** CODEOWNERS/PR template (S — branch-protection API half is [blocked]: 403 "Upgrade to GitHub Pro or make this repository public", owner decision recorded §6); **01.7.1-T4** supply-chain hardening (M). Not in this wave: 01.8.1-T3 seed-dev (still needs 02.x/07.1.1 tables), 01.10.1 (M2), 01.1.1-T4 (M5).
+
+Evidence landed since wave 5: `ci.yml` first runs green on PR #10 (dotnet job 247 s < 10 min budget; run 36251021746, develop push 36252017788) — closes the 01.7.1-T1 deferred AC rows.
+
+Dependency order: S (SDK) ∥ V (validators) ∥ F (fixtures) ∥ I (isolation) ∥ G (CI governance) in parallel → K (contract tests, needs S's SDK + the parity corpus format). Prereqs landed by orchestrator before dispatch: `@hey-api/openapi-ts` 0.99.0, `license-checker-rseidelsohn` 5.0.1, `@cyclonedx/cyclonedx-npm` 6.0.1 (root devDeps), `ajv`/`ajv-formats` into `packages/cli`, dotnet tools `nuget-license` 4.0.18 + `CycloneDX` 6.2.0 (`.config/dotnet-tools.json`), ADR-0002 rows for all of them.
+
+Gate order per slice: implement → QA agent → code/perf/security reviews → fixes re-tested → commit.
+
+| Slice | Tasks | Size | Implement | QA | Code review | Perf review | Security review |
+|---|---|---|---|---|---|---|---|
+| S | 01.3.2-T1: `@hey-api/openapi-ts` codegen config (deterministic), `packages/sdk/gen/` output, real `npm run codegen`, `scripts/check-codegen-drift.sh`, header-injection hooks, golden-file check | L | - | - | - | - | - |
+| V | 01.3.2-T2: `Evidgate.BuildingBlocks.Contracts.Validation` (Corvus, §9.2 `details[]` mapping, endpoint filter), `packages/cli` Ajv validator, `fixtures/contracts/` corpus + verdicts, `tests/Contract.Tests` ParityCorpusTests + `packages/cli` parity spec | L | - | - | - | - | - |
+| F | 01.6.1-T3: `fixtures/<domain>/<name>/` + `meta.json` contract, `tests/Shared/FixtureLoader.cs`, `packages/test-fixtures` loader + golden canonical-JSON helper | M | - | - | - | - | - |
+| I | 01.6.1-T4: isolation suite in `tests/Isolation.Tests` — EF read/write, Dapper read, API id-guessing via real route, planted-violation meta-test | M | - | - | - | - | - |
+| G | 01.7.1-T2 (`licence-policy.json`, `licence-scan.sh` both ecosystems, licence job) + T3.2 (PR-template/CONTRIBUTING polish) + T4 (`dependabot.yml`, `audit-deps.sh` + `exceptions.json`, CycloneDX SBOM artifacts) | M+XS+M | - | - | - | - | - |
+| K | 01.3.2-T3: `tests/Contract.Tests` response-vs-spec + normalised `Microsoft.AspNetCore.OpenApi` served-doc diff vs `contracts/openapi.yaml` (3.1 emission confirmed or fallback recorded) | M | - | - | - | - | - |
+
+Contract for slices: `verify.sh`/`ci.yml`/`check-ci-parity.sh`/`check-adr-matrix.sh`/`scripts/check-layout.sh`/`Evidgate.slnx`/`STATUS.md`/`AGENTS.md`/`docs/adr/*` are orchestrator-owned; slices produce their own scripts (`scripts/check-codegen-drift.sh`, `licence-policy.json`, `licence-scan.sh`, `audit-deps.sh`, `exceptions.json`, `.github/dependabot.yml`) which the orchestrator wires into `verify.sh` stages (new stage names: `check-codegen-drift`, `licence-scan`, `audit-deps`) + `ci.yml` after wave A. New test project `tests/Contract.Tests` is created once by V (csproj skeleton + slnx + check-layout registration); K adds files only. `packages/test-fixtures` belongs to F. The `Isolation_ApiGet_*` tests may add a test-only route inside `tests/` hosts if no tenant read endpoint exists yet — mark clearly, real `/v1` routes inherit the check when 02.x lands.
 
 ## 4. Wave 3 (delivered, PR #6)
 
@@ -155,6 +175,7 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | `evidgate_owner` permissive policy on `organization`/`project` | Rationale logged in 00 §15 and in the `0003` copy block; 00 §5.4.3 still lacks the sentence | Tech Lead |
 | `/internal/*` public-ingress routing rule | `[OPEN]` in 01.1.2 feature plan, no plan-10 task | Tech Lead |
 | O1 pilot names; O2 and O4 readings | Owner confirmation (O1 engine decided 2026-09-26) | Owner |
+| Branch-protection API (01.7.1-T3.1) | Private repo on the free plan: `PUT .../branches/*/protection` → 403 "Upgrade to GitHub Pro or make this repository public". The file half (CODEOWNERS, PR template) ships in wave 6; enforcing rules need an owner decision (Pro upgrade or public repo) | Owner |
 | T80 purge-call audit for `evidgate.purge_expired_idempotency` | `audit_log` lands in 02.7.1 (M2); until then the handler logs at Information (recorded in `migrations/README.md`) | 02.7.1 |
 | Audited operator read path for `task`/`outbox` (T76 grant gate) | T4.2 ships the read path on the app-role connection behind a fail-closed `IOperatorGate`; the audited `SECURITY DEFINER`/grant form lands with the real `platform_operator` credential in 02.x (0008's header still describes the dedicated-grant shape — read it as the target, not the shipped state) | 02.x (operator auth) |
 | `SchemaConventionTests` exemptions: `rls_probe` (pre-convention template, checksum-locked) and `schema_migration` (02 §4) fully exempt; `task` exempt TenantKey/CompositeForeignKey/RowLevelSecurity only (AuditColumns/VersionTrigger stay gated); `outbox` exempt RLS only (`org_id` unique key enforced) | Lint enforcement belongs to 02.6.1-T2, which must adopt the same exemption list | 02.6.1-T2 |

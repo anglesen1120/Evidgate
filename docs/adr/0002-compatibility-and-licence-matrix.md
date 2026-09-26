@@ -82,6 +82,16 @@ npm packages (direct dependencies/devDependencies, root + workspaces):
 | vitest | 5.0.1 | `engines.node ^22.12.0 \|\| ^24.0.0 \|\| >=26.0.0`; brings `vite` 8.3.1 transitively (peer range `^6.4.0 \|\| ^7.0.0 \|\| ^8.0.0`) | MIT | https://registry.npmjs.org/vitest/5.0.1 — web + customer-side unit tests (01.6.1-T1, DECISIONS §4.2–§4.3) |
 | canonicalize | 5.1.0 | `engines.node >=22`; no dependencies | Apache-2.0 | https://registry.npmjs.org/canonicalize/5.1.0 — RFC 8785 canonical JSON in `packages/cli` (01.3.2-T4, DECISIONS §4.3). [WARN] Node 24.x and 26.x warm-process `JSON.parse` mis-decode escaped member names — V8 regression from v8/v8@f2f3b3f7a22d, fixed upstream in v8/v8@93cd21e8254b (2026-09-17) but in no Node release yet. Re-measured 2026-09-26 with a throwaway deterministic generator of 27,027 documents (15,000 random docs whose member names use control/quote/backslash escapes, 12,000 number literals, wide and 64-deep docs): a cold first pass corrupts 142 documents on Node 24.21.0 (V8 13.6) and 26.10.0 (V8 14.6), later passes in the same process range 137–208, and Node 22.23.3 (V8 12.4) stays at 0 in every pass; the same document parsed in a fresh process is correct, so the divergence is process-history state, e.g. `{"\ue000\"":5e-324,"\t":[...]}` decodes its third key as `"\\"` (U+005C) instead of U+0009. Upstream reports: nodejs/node#63785 (open, labelled v8 engine) → Chromium 521080746. On the wave-3 corpus the guard withholds 64–78 of 27,146 documents in-process; it stays in place as a partial mitigation; revisit on Node upgrades |
 | @playwright/test | 1.63.0 | `engines.node >=20`; depends on `playwright` 1.63.0 | Apache-2.0 | https://registry.npmjs.org/@playwright/test/1.63.0 — web E2E runner in `apps/web` (01.6.1-T5, DECISIONS §4.2–§4.3) |
+| @hey-api/openapi-ts | 0.99.0 | `engines.node >=22.18.0` | MIT | https://registry.npmjs.org/@hey-api/openapi-ts/0.99.0 — generates `packages/sdk` from `contracts/openapi.yaml` (01.3.2-T1, DECISIONS §4.2); moved here from Planned when T1 landed it |
+| license-checker-rseidelsohn | 5.0.1 | `engines.node >=24` | BSD-3-Clause | https://registry.npmjs.org/license-checker-rseidelsohn/5.0.1 — npm licence scanner for `scripts/licence-scan.sh` (01.7.1-T2); the maintained fork: `license-checker` upstream is archived (last release 2022), a detail the plan row predates |
+| @cyclonedx/cyclonedx-npm | 6.0.1 | `engines.node >=20.18.0` | Apache-2.0 | https://registry.npmjs.org/@cyclonedx/cyclonedx-npm/6.0.1 — npm CycloneDX SBOM for CI artifacts (01.7.1-T4.2) |
+
+.NET local tools (`.config/dotnet-tools.json`; 01.7.1 — scanned out-of-process, never linked):
+
+| Package | Version | Tool | Licence | Evidence |
+|---|---|---|---|---|
+| nuget-license | 4.0.18 | `nuget-license` | Apache-2.0 | https://api.nuget.org/v3-flatcontainer/nuget-license/4.0.18/nuget-license.nuspec — NuGet licence scanner chosen by 01.7.1-T2 (T40): reads project licences without linking |
+| CycloneDX | 6.2.0 | `dotnet-CycloneDX` | Apache-2.0 | https://api.nuget.org/v3-flatcontainer/cyclonedx/6.2.0/cyclonedx.nuspec — NuGet CycloneDX SBOM for CI artifacts (01.7.1-T4.2) |
 
 Container image pins (`tests/Shared/ContainerImages.cs`, `infra/compose.dev.yml`, `infra/README.md`; 01.6.1-T2.1 and 01.8.1 — multi-arch image-index digests):
 
@@ -101,7 +111,6 @@ Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project
 | @angular/cdk | 22.2.0 | MIT | https://registry.npmjs.org/@angular/cdk/22.2.0 (DECISIONS §4.2) |
 | @angular/localize | 22.2.0 | MIT | https://registry.npmjs.org/@angular/localize/22.2.0 — first-party i18n, vi + en builds (DECISIONS §4.2) |
 | @ngrx/signals | 22.0.1 | MIT | https://registry.npmjs.org/@ngrx/signals/22.0.1 — SignalStore for feature state (DECISIONS §4.2) |
-| @hey-api/openapi-ts | 0.99.0 | MIT | https://registry.npmjs.org/@hey-api/openapi-ts/0.99.0 — generates `packages/sdk` from `contracts/openapi.yaml` (DECISIONS §4.2) |
 | angular-eslint | 22.5.0 | MIT | https://registry.npmjs.org/angular-eslint/22.5.0 (DECISIONS §4.2) |
 | appium | 3.7.0 | Apache-2.0 | https://registry.npmjs.org/appium/3.7.0 — mobile engine with UiAutomator2/XCUITest drivers (DECISIONS §4.3) |
 
