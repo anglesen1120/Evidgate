@@ -9,8 +9,8 @@ Updated 2026-09-27. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | Branch flow | `feature/*` or `docs/*` → PR into `develop` → owner merges. `main` = planning baseline |
 | `develop` head | `c70585e` (PR #10 merged) |
 | Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 |
-| Open PRs | none |
-| Active branch | `feature/m1-wave6` (off `develop` `c70585e`); wave 6 delivered, gates green, PR pending |
+| Open PRs | #11 (`feature/m1-wave6` → `develop`) |
+| Active branch | `feature/m1-wave6` (off `develop` `c70585e`); wave 6 delivered, gates green, open as PR #11 |
 | M0/M1 tasks | 46 done · 88 open (of 134) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
@@ -33,7 +33,7 @@ Updated 2026-09-27. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 02.1.1 | T1 | #6 | `organization` / `project` migrations 0004/0005 |
 | 01.4.2, 01.5.1, 01.6.1 | 01.4.2-T2/T3, 01.5.1-T1/T2/T6, 01.6.1-T2/T5 | #9 | `outbox`/`idempotency_record`/`task` (migrations 0006–0008), claim/consumer/schedule mechanism, schema/EF conventions + UUIDv7 generator, Testcontainers harness, Playwright workspace — see §3 |
 | 01.4.2, 01.5.1, 01.7.1 | 01.4.2-T4, 01.5.1-T3/T4/T5, 01.7.1-T1 | #10 | C2 Mediator pipeline + Result→§9.2 filter, outbox dispatcher (migration 0009), retry/dead-letter + `/internal/operator` routes, AC1–AC7 suites, real `ci.yml` — see §3.5 |
-| 01.3.2, 01.6.1, 01.7.1 | 01.3.2-T1/T2/T3, 01.6.1-T3/T4, 01.7.1-T2/T3.2/T4 | pending | Generated TS SDK + drift gate, Corvus/Ajv dual-runtime validators + parity corpus + endpoint filter, contract tests + served-doc diff, `fixtures/` + loaders, tenant-isolation suite, licence/audit/SBOM/dependabot gates — see §3.6 |
+| 01.3.2, 01.6.1, 01.7.1 | 01.3.2-T1/T2/T3, 01.6.1-T3/T4, 01.7.1-T2/T3.2/T4 | #11 | Generated TS SDK + drift gate, Corvus/Ajv dual-runtime validators + parity corpus + endpoint filter, contract tests + served-doc diff, `fixtures/` + loaders, tenant-isolation suite, licence/audit/SBOM/dependabot gates — see §3.6 |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
