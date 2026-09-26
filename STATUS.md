@@ -8,8 +8,9 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 |---|---|
 | Branch flow | `feature/*` or `docs/*` → PR into `develop` → owner merges. `main` = planning baseline |
 | `develop` head | `cb636ef` (PR #6 merged) |
-| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions (merged into `feature/m1-wave3` after #6; carried to `develop` by #8) |
-| Active branch | `feature/m1-wave4` (based on `docs/owner-decisions-to-develop`, PR #8); wave 4 delivered, gates green, PR pending |
+| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions (merged into `feature/m1-wave3` after #6) |
+| Open PRs | #8 owner decisions → `develop` · #9 M1 wave 4 → `develop` |
+| Active branch | `feature/m1-wave4` (stacked on PR #8's `docs/owner-decisions-to-develop`); wave 4 delivered, gates green, open as PR #9 |
 | M0/M1 tasks | 34 done · 100 open (of 134) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
@@ -30,9 +31,9 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 01.3.2 | T4 | #6 | RFC 8785 canonical JSON hashing (.NET + CLI) |
 | 01.6.1 | T1 | #6 | Test conventions (.NET + Vitest) |
 | 02.1.1 | T1 | #6 | `organization` / `project` migrations 0004/0005 |
-| 01.4.2, 01.5.1, 01.6.1 | 01.4.2-T2/T3, 01.5.1-T1/T2/T6, 01.6.1-T2/T5 | pending | `outbox`/`idempotency_record`/`task` (migrations 0006–0008), claim/consumer/schedule mechanism, schema/EF conventions + UUIDv7 generator, Testcontainers harness, Playwright workspace — see §3 |
+| 01.4.2, 01.5.1, 01.6.1 | 01.4.2-T2/T3, 01.5.1-T1/T2/T6, 01.6.1-T2/T5 | #9 | `outbox`/`idempotency_record`/`task` (migrations 0006–0008), claim/consumer/schedule mechanism, schema/EF conventions + UUIDv7 generator, Testcontainers harness, Playwright workspace — see §3 |
 
-## 3. Wave 4 (delivered on `feature/m1-wave4`; PR into `develop` pending)
+## 3. Wave 4 (delivered on `feature/m1-wave4`; open PR #9 into `develop`)
 
 Scope: the 01.4.2 T2/T3 conventions and the 01.5.1 durable-task tables that 01.4.2-T4 (pipeline, wires `AddEvidgateTenancy` into Api/Worker) depends on, the shared integration harness (01.6.1-T2, needed by 01.7.1-T1 `ci.yml`) and the Playwright workspace. Two wave-3 follow-ups ride along in slice A.
 
@@ -131,7 +132,7 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | O1 pilot names; O2 and O4 readings | Owner confirmation (O1 engine decided 2026-09-26) | Owner |
 | T80 purge-call audit for `evidgate.purge_expired_idempotency` | `audit_log` lands in 02.7.1 (M2); until then the handler logs at Information (recorded in `migrations/README.md`) | 02.7.1 |
 | Operator read path for `task`/`outbox` (dead-letter list, dispatcher visibility) | `evidgate_operator` holds no SELECT on mechanism tables; needs an owner `SECURITY DEFINER` reader or a deliberate grant | 01.5.1-T3/T4.2 |
-| `SchemaConventionTests` exemptions: `rls_probe` (pre-convention template, checksum-locked), `task`/`schema_migration` (02 §4), `outbox` (RLS only — `org_id` unique key enforced) | Lint enforcement belongs to 02.6.1-T2, which must adopt the same exemption list | 02.6.1-T2 |
+| `SchemaConventionTests` exemptions: `rls_probe` (pre-convention template, checksum-locked) and `schema_migration` (02 §4) fully exempt; `task` exempt TenantKey/CompositeForeignKey/RowLevelSecurity only (AuditColumns/VersionTrigger stay gated); `outbox` exempt RLS only (`org_id` unique key enforced) | Lint enforcement belongs to 02.6.1-T2, which must adopt the same exemption list | 02.6.1-T2 |
 | Owned EF entity types (OwnsOne/OwnsMany) fail the model build under `TenantModelConventions` (shadow-FK rename breaks table sharing) | Latent: no M1 entity is owned; fix sketch recorded in QA report (skip owned key/FK properties, derive names per-table) | 01.4.2 follow-up / next owner |
 | Node `JSON.parse` escaped-key defect (upstream V8 regression, 24.x/26.x warm process) | upstream fix landed in V8, awaiting a Node release; the canonicalize guard stays as a partial mitigation | 01.3.2 / Node upgrade |
 | `idempotency.purge` daily cap: `PurgeMaxBatchesPerFire = 50` × 1000 = 50 000 rows/day ceiling; a deployment above that accumulates `idempotency_record` forever | Needs a drain-until-time-budget or restartable cursor (perf review, 01.5.1 §7) | 01.5.1 follow-up |
