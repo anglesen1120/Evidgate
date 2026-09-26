@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 01.4.2-T1: tenant scope, EF/Dapper binding and the interceptor guard (AC1-AC3, AC6) on
+       Testcontainers.PostgreSQL, with migrations applied by the real Evidgate.Migrator.
+       Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up.
+       The xUnit/Shouldly package set and OutputType live in tests/Directory.Build.props (01.6.1-T1.1). -->
+  <PropertyGroup>
+    <RootNamespace>Persistence.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSQL" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+  </ItemGroup>
+</Project>

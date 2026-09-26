@@ -91,8 +91,12 @@ DECISIONS.md
 README.md
 RECOMMENDATIONS.md
 SESSION-SUMMARY.md
-tsconfig.json
+STATUS.md
 eslint.config.js
+tsconfig.json
+tsconfig.spec.json
+vitest.config.base.mts
+vitest.config.ts
 EOF
 cat "$TMP/required-files" "$TMP/allowed-extra-files" | sort -u > "$TMP/allowed-files"
 
@@ -117,6 +121,7 @@ fi
 # ---- solution project list ----
 # 01.2.1-T1.2: tests/Architecture.Tests is part of the expected project list.
 # M1 wave 1-2: 01.1.2-T2.1 module pairs; test projects of 01.4.1, 01.1.2, 01.8.1-T1.
+# M1 wave 3: test projects of 01.3.2-T4, 01.4.2-T1, 02.1.1-T1.
 cat > "$TMP/expected-proj" <<'EOF'
 src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csproj
 src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj
@@ -149,10 +154,13 @@ src/Modules/Evidgate.Modules.Tenancy/Evidgate.Modules.Tenancy.csproj
 src/Modules/Evidgate.Modules.Usage.Contracts/Evidgate.Modules.Usage.Contracts.csproj
 src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj
 tests/Architecture.Tests/Architecture.Tests.csproj
+tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj
 tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj
 tests/Isolation.Tests/Isolation.Tests.csproj
 tests/Migrator.IntegrationTests/Migrator.IntegrationTests.csproj
 tests/ObjectStorage.IntegrationTests/ObjectStorage.IntegrationTests.csproj
+tests/Persistence.IntegrationTests/Persistence.IntegrationTests.csproj
+tests/Tenancy.IntegrationTests/Tenancy.IntegrationTests.csproj
 EOF
 
 grep -oE 'Path="[^"]+\.csproj"' Evidgate.slnx \

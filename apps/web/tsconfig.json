@@ -10,5 +10,8 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src"]
+  "include": ["src"],
+  // 01.6.1-T1.2: specs and the Vitest config are type-checked by tsconfig.spec.json and
+  // must never be emitted into dist.
+  "exclude": ["src/**/*.test.ts", "vitest.config.ts"]
 }

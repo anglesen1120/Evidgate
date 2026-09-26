@@ -18,7 +18,8 @@ The playbook for changing a table without breaking the running version is
   are ignored.
 - Numbering is a **contiguous run from `0001`**: no gaps, no duplicates, and the
   lexical order is the apply order. A module claims the next free block (today
-  `0001`–`0003` are the foundation files, so the next story starts at `0004`); a
+  `0001`–`0003` are the foundation files from 01 and `0004`–`0005` are 02.1.1's
+  `organization`/`project` tables, so the next story starts at `0006`); a
   gap means two branches invented the same sequence and neither history can be
   trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
@@ -77,6 +78,13 @@ Two consequences worth knowing before writing a new migration:
   a per-schema `revoke execute on functions from public` does nothing. `0001`
   revokes it with the schema-less form, which is why a new function created by
   `evidgate_owner` starts owner-only and must be granted explicitly.
+
+The `evidgate.current_org_id()` / `current_project_id()` helpers (0002) return
+NULL when the tenant setting is unset or empty — that case yields zero rows, no
+error and no unfiltered rows (00 §5.4.7). A _malformed_ value is a different
+case: the `::uuid` cast raises 22P02 inside the policy, so the statement fails
+closed with an error instead of comparing to NULL. Accepted because the setting
+is written by the tenant-scope primitive, never from request input.
 
 ## Tests and fixtures
 

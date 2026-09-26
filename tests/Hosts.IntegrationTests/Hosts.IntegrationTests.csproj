@@ -2,19 +2,16 @@
   <!-- 01.1.2: Api/Worker boot, options validation, health, redaction, telemetry, envelope, shutdown, skeleton slice.
        Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up. -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <RootNamespace>Hosts.IntegrationTests</RootNamespace>
   </PropertyGroup>
+  <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio, Shouldly
+       and NSubstitute come from tests/Directory.Build.props (01.6.1-T1.1). -->
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Testcontainers.PostgreSQL" />
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="xunit.runner.visualstudio" />
-    <PackageReference Include="Shouldly" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />

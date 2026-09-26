@@ -79,6 +79,8 @@ npm packages (direct dependencies/devDependencies, root + workspaces):
 | @stoplight/spectral-cli | 6.16.3 | `engines.node ^16.20 \|\| ^18.18 \|\| >= 20.17` | Apache-2.0 | https://registry.npmjs.org/@stoplight%2fspectral-cli/6.16.3 — OpenAPI lint (01.3.1 AC1); transitive `@scarf/scarf` postinstall telemetry is disabled by `scarfSettings.enabled=false` in the root package.json (honoured by @scarf/scarf's report.js), and `SCARF_ANALYTICS=false` is set by the lint script as belt-and-braces |
 | ajv | 8.20.0 | no `engines` field | MIT | https://registry.npmjs.org/ajv/8.20.0 — JSON Schema 2020-12 checks in `scripts/` (01.3.1 AC4/AC6) |
 | ajv-formats | 3.0.1 | no `engines` field | MIT | https://registry.npmjs.org/ajv-formats/3.0.1 |
+| vitest | 5.0.1 | `engines.node ^22.12.0 \|\| ^24.0.0 \|\| >=26.0.0`; brings `vite` 8.3.1 transitively (peer range `^6.4.0 \|\| ^7.0.0 \|\| ^8.0.0`) | MIT | https://registry.npmjs.org/vitest/5.0.1 — web + customer-side unit tests (01.6.1-T1, DECISIONS §4.2–§4.3) |
+| canonicalize | 5.1.0 | `engines.node >=22`; no dependencies | Apache-2.0 | https://registry.npmjs.org/canonicalize/5.1.0 — RFC 8785 canonical JSON in `packages/cli` (01.3.2-T4, DECISIONS §4.3). [WARN] Node 26.10.0 warm-process `JSON.parse` can mis-decode control-escape member names (QA corpus evidence: the guard withholds 64–78 of 27,146 generated documents in-process, but not all affected ones); self-consistency guard in place as a partial mitigation; revisit on Node upgrades |
 
 Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project file references yet; rows here also count as registered:
 
@@ -93,7 +95,6 @@ Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project
 | @ngrx/signals | 22.0.1 | MIT | https://registry.npmjs.org/@ngrx/signals/22.0.1 — SignalStore for feature state (DECISIONS §4.2) |
 | @hey-api/openapi-ts | 0.99.0 | MIT | https://registry.npmjs.org/@hey-api/openapi-ts/0.99.0 — generates `packages/sdk` from `contracts/openapi.yaml` (DECISIONS §4.2) |
 | angular-eslint | 22.5.0 | MIT | https://registry.npmjs.org/angular-eslint/22.5.0 (DECISIONS §4.2) |
-| vitest | 5.0.1 | MIT | https://registry.npmjs.org/vitest/5.0.1 — web + customer-side unit tests (DECISIONS §4.2–§4.3) |
 | @playwright/test | 1.63.0 | Apache-2.0 | https://registry.npmjs.org/@playwright/test/1.63.0 — web E2E + runner engine (DECISIONS §4.2–§4.3) |
 | appium | 3.7.0 | Apache-2.0 | https://registry.npmjs.org/appium/3.7.0 — mobile engine with UiAutomator2/XCUITest drivers (DECISIONS §4.3) |
 

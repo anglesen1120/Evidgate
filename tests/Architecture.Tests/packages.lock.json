@@ -27,6 +27,15 @@
         "resolved": "18.7.23",
         "contentHash": "dyj6z8m+LFjpeH69hdnciCcRCmD0YgMlvuQEywiEshjqj/blgQ+PuWX8Vd5gkWQFoBN4e+TFxx6DvGNSv/gIKg=="
       },
+      "NSubstitute": {
+        "type": "Direct",
+        "requested": "[6.2.0, )",
+        "resolved": "6.2.0",
+        "contentHash": "05oaAmBAvYYUQb/NTb9/kWBDjq0iS772X4t428WJcHRcH+5ULJx6rTbEvqkZJBIHWRLI8MlU3et3F5/gkEHKIw==",
+        "dependencies": {
+          "Castle.Core": "5.1.1"
+        }
+      },
       "Shouldly": {
         "type": "Direct",
         "requested": "[4.3.0, )",
@@ -50,6 +59,14 @@
         "contentHash": "KpDYf6jFjYfOchuRJOAXPOpwN03hLE1AF4kWzCUSnhr8JZMiGH4BT1YidCcm6BE1H4E90GyJzuKoCwXbg9PXmA==",
         "dependencies": {
           "xunit.v3.mtp-v2": "[4.0.1]"
+        }
+      },
+      "Castle.Core": {
+        "type": "Transitive",
+        "resolved": "5.1.1",
+        "contentHash": "rpYtIczkzGpf+EkZgDr9CClTdemhsrwA/W5hMoPjLkRFnXzH44zDLoovXeKtmxb1ykXK9aJVODSpiJml8CTw2g==",
+        "dependencies": {
+          "System.Diagnostics.EventLog": "6.0.0"
         }
       },
       "dbup-core": {
@@ -88,6 +105,36 @@
         "type": "Transitive",
         "resolved": "18.10.1",
         "contentHash": "tV7tCyp/t+DuwQugLkCeUN7NBFFB4fEGRPr0gkMQ2nQgAvQQjmGlZZi1dsLzbyoe/A0mbnKybmkIh8qhT9p4Zw=="
+      },
+      "Microsoft.EntityFrameworkCore.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "kDrux7T6C3V/YYYe2LXr7x6AEsVyq5Y2YoTE9er1SwbDtap3z1g8RgxNh5eKQVyB4T+DKvBBJ4Ezd/VZzJQJZg=="
+      },
+      "Microsoft.EntityFrameworkCore.Analyzers": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "Kd4o2oO1A6dfKxjz5LS16QyLtpCFTUiFWwmBABETAXRsSImBdRdWeKjSgbbRhAMiV3a3/nWr95ZtzClT4uaADQ=="
+      },
+      "Microsoft.Extensions.Caching.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "sI3A6MUAyZwccLnwq0cXuRmC3WBtXieimBWafXSfhRJ4jnM2uGVXrqImDDVyW27u4vVaTOGlJxNJd8d1FGvCNQ==",
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "10.0.12"
+        }
+      },
+      "Microsoft.Extensions.Caching.Memory": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "fhC3DHcBcFF4bXvHIxFtXJYNut7q7ZItqNFcgWfrIgmpVImlcEKNHhE7ztpNSPJYMHYYStS5QGND2I5mC26yeA==",
+        "dependencies": {
+          "Microsoft.Extensions.Caching.Abstractions": "10.0.12",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.12",
+          "Microsoft.Extensions.Options": "10.0.12",
+          "Microsoft.Extensions.Primitives": "10.0.12"
+        }
       },
       "Microsoft.Extensions.Configuration": {
         "type": "Transitive",
@@ -549,10 +596,14 @@
       "evidgate.buildingblocks.persistence": {
         "type": "Project",
         "dependencies": {
+          "Dapper": "[2.1.89, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )",
           "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Hosting": "[10.0.12, )",
           "Microsoft.Extensions.Options.DataAnnotations": "[10.0.12, )",
-          "Npgsql": "[10.0.3, )"
+          "Npgsql": "[10.0.3, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
       },
       "evidgate.buildingblocks.sharedkernel": {
@@ -675,7 +726,9 @@
         "dependencies": {
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Tenancy.Contracts": "[1.0.0, )",
-          "Mediator.Abstractions": "[3.0.2, )"
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )"
         }
       },
       "evidgate.modules.tenancy.contracts": {
@@ -714,6 +767,12 @@
           "Microsoft.Extensions.Options.DataAnnotations": "[10.0.12, )"
         }
       },
+      "Dapper": {
+        "type": "CentralTransitive",
+        "requested": "[2.1.89, )",
+        "resolved": "2.1.89",
+        "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
+      },
       "dbup-postgresql": {
         "type": "CentralTransitive",
         "requested": "[7.0.1, )",
@@ -731,6 +790,30 @@
         "contentHash": "7RnQ/UKn+kK3JDLmTpW+vVqNErWthGPAVAy1aIiBzv4ucQ6g9NFvOJUuT0PHcpvcJxGVxctMxj6t+NESWMrgHQ==",
         "dependencies": {
           "Microsoft.OpenApi": "[2.12.0, 3.0.0)"
+        }
+      },
+      "Microsoft.EntityFrameworkCore": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "e7OrVN8U5yr4kuwdTHWBHGVQIVsGfMkAr0Ej1/BnrS989Q0XBVANpIzNZ2bc1GvMZ0/XwMt5InTnmKskxGy99Q==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore.Abstractions": "10.0.12",
+          "Microsoft.EntityFrameworkCore.Analyzers": "10.0.12",
+          "Microsoft.Extensions.Caching.Memory": "10.0.12",
+          "Microsoft.Extensions.Logging": "10.0.12"
+        }
+      },
+      "Microsoft.EntityFrameworkCore.Relational": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "OiHmr8XzX96dbgMsYGe8qoqg4KxibdZG2r0QUVJBGktFInOp8IrABe8jvcbo5hrqeWfbwpK7fCEBiEPbY/ik4A==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore": "10.0.12",
+          "Microsoft.Extensions.Caching.Memory": "10.0.12",
+          "Microsoft.Extensions.Configuration.Abstractions": "10.0.12",
+          "Microsoft.Extensions.Logging": "10.0.12"
         }
       },
       "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions": {
@@ -786,6 +869,17 @@
         "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
+        }
+      },
+      "Npgsql.EntityFrameworkCore.PostgreSQL": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.3, )",
+        "resolved": "10.0.3",
+        "contentHash": "IPGrrZnRkuW7OlHDhUESZz4G5DLkW7Nej/O3Cx+0iTsgyU5XJxBgpsvTHLloo3WWuAKKbDHXBvWPVkX1deRh1Q==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore": "[10.0.4, 11.0.0)",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.4, 11.0.0)",
+          "Npgsql": "10.0.3"
         }
       },
       "OpenTelemetry.Exporter.OpenTelemetryProtocol": {

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 02.1.1-T1: organization/project schema + RLS (0004/0005), the real Migrator forward run,
+       the DTO contract and the EF write-model mapping (Testcontainers.PostgreSQL).
+       Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up.
+       OutputType, the xUnit/Shouldly/NSubstitute references and IsTestProject come from
+       tests/Directory.Build.props (01.6.1-T1.1); container and EF packages stay here. -->
+  <PropertyGroup>
+    <RootNamespace>Tenancy.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSQL" />
+    <PackageReference Include="Npgsql" />
+    <!-- WriteModelMappingTests builds the real EF Core model over the Npgsql provider. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The suite bootstraps as superuser and applies the real migrations through the
+         Migrator as evidgate_owner (02.1.1-T1.4). -->
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+    <!-- WriteModelMappingTests builds the model through the production path:
+         a context derived from EvidgateDbContext with UseTenantModel (01.4.2-T1.3). -->
+    <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy.Contracts\Evidgate.Modules.Tenancy.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy\Evidgate.Modules.Tenancy.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+  </ItemGroup>
+</Project>

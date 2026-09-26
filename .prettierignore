@@ -22,4 +22,12 @@ docs/**
 DECISIONS.md
 RECOMMENDATIONS.md
 SESSION-SUMMARY.md
+STATUS.md
 AGENTS.md
+
+# 01.3.2-T4.1: the RFC 8785 reference vectors are byte-exact input/output pairs
+# (the expected canonical form is compared as bytes), never reformatted. They live
+# in fixtures/ because the xUnit suite and the CLI Vitest suite both assert them.
+# The README next to them stays prettier-checked.
+fixtures/rfc8785/input
+fixtures/rfc8785/output

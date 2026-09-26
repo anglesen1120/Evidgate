@@ -38,6 +38,19 @@ fi
 stage "tsc -b (solution references)"
 npm run build
 
+# 01.6.1-T1.2: `tsc -b` covers the emitting workspaces only (every tsconfig.json excludes
+# the specs and the Vitest configs) and Vitest does not type-check, so the no-emit spec
+# projects are the only gate for `*.test.ts` and the Vitest configs. Add a line whenever a
+# workspace gains a tsconfig.spec.json.
+stage "tsc -p (spec and vitest config projects)"
+for spec_tsconfig in tsconfig.spec.json apps/web/tsconfig.spec.json packages/*/tsconfig.spec.json; do
+  echo "   $spec_tsconfig"
+  npx tsc -p "$spec_tsconfig"
+done
+
+stage "vitest"
+npm run test
+
 stage "eslint"
 npm run lint
 
