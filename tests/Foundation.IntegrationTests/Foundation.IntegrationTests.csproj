@@ -16,6 +16,13 @@
     <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The harness is shared source (linked, not a project): an integration project
+         adopts it by linking these files plus ContainerImages.cs, the same way
+         *.UnitTests picks up tests/Shared/NoNetworkGuard.cs (01.6.1-T2, T1.1). -->
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\DatabaseFixture.cs" Link="Shared/DatabaseFixture.cs" />
+    <Compile Include="..\Shared\RespawnCheckpoint.cs" Link="Shared/RespawnCheckpoint.cs" />
+    <Compile Include="..\Shared\TenantTestScope.cs" Link="Shared/TenantTestScope.cs" />
+    <Compile Include="..\Shared\HarnessTest.cs" Link="Shared/HarnessTest.cs" />
   </ItemGroup>
 </Project>

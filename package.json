@@ -13,6 +13,7 @@
     "build": "tsc -b tsconfig.json",
     "lint": "eslint . --max-warnings 0",
     "test": "npm run test --workspaces --if-present",
+    "e2e": "npm run e2e --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"

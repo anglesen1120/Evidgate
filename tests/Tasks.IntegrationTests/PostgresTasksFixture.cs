@@ -93,7 +93,7 @@ public sealed class PostgresTasksFixture : IAsyncLifetime
         return database;
     }
 
-    public string OwnerConnectionString(string database) => Build(DatabaseOwnerRole, _ownerPassword, database);
+    public string OwnerConnectionString(string database) => Unpooled(Build(DatabaseOwnerRole, _ownerPassword, database));
 
     public string AppConnectionString(string database) => Build("evidgate_app", _appPassword, database);
 
@@ -132,7 +132,19 @@ public sealed class PostgresTasksFixture : IAsyncLifetime
     }
 
     private string SuperuserConnectionString(string database) =>
-        new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { Database = database }.ConnectionString;
+        Unpooled(new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { Database = database }.ConnectionString);
+
+    /// <summary>
+    /// Bootstrap and verification connections are not pooled. The container allows
+    /// about a hundred backends and every test migrates its own database, so a pooled
+    /// connection per (role, database) pair would leave one idle backend per test
+    /// behind and starve the suite long before the tests run out of work (the failure
+    /// shows up as 53300 from the migration step of a later test). Nothing here needs
+    /// a pool: the migrator's and the fixture's own connections are short-lived, and
+    /// the roles whose connections the mechanism under test reuses keep their pool.
+    /// </summary>
+    private static string Unpooled(string connectionString) =>
+        new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString;
 
     private string Build(string username, string password, string database)
     {

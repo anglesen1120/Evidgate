@@ -1,12 +1,14 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Options;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
 using Evidgate.Worker.Health;
 using Evidgate.Worker.Options;
 using Evidgate.Worker.Slice;
+using Evidgate.Worker.Tasks;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -51,8 +53,15 @@ public static class WorkerHost
         builder.Services.AddCatalogModule();
         builder.Services.AddOrchestratorModule();
 
+        // 01.5.1-T1.2/T1.4: the durable task queue — claim loops per queue and the
+        // cron schedule runner. Both are registered in every worker; the unique fire
+        // key, never a leader, decides who actually fires (00 §5.3).
+        builder.Services.AddEvidgateTasks(builder.Configuration);
+
         builder.Services.AddHostedService<HealthProbeListener>();
         builder.Services.AddHostedService<SliceRunConsumer>();
+        builder.Services.AddHostedService<TaskQueueHostedService>();
+        builder.Services.AddHostedService<TaskScheduleHostedService>();
 
         return builder;
     }
@@ -118,5 +127,6 @@ public static class WorkerHost
         _ = host.Services.GetRequiredService<IOptions<WorkerOptions>>().Value;
         _ = host.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
         _ = host.Services.GetRequiredService<IOptions<TelemetryOptions>>().Value;
+        _ = host.Services.GetRequiredService<IOptions<TasksOptions>>().Value;
     }
 }

@@ -91,8 +91,9 @@ public sealed class WriteModelMappingTests
         // What the module configurations do NOT express and only TenantModelConventions
         // supplies (00 §7): `version` is store-generated on update, because the migration
         // trigger set_updated_at_and_version — 0004 for `organization`, 0005 for `project`,
-        // M1W3-01 — bumps it, and `id` stays the caller's UUIDv7 so EF never substitutes a
-        // v4 Guid. Both are asserted on the production model, not on the configurations.
+        // M1W3-01 — bumps it, and `id` carries a client-side UUIDv7 generator so a
+        // caller that forgets still gets a v7 id and EF never substitutes a v4 Guid
+        // or a zero one. Both are asserted on the production model, not on the configurations.
         foreach (var entityType in new[] { organization, project })
         {
             entityType.GetProperties()
@@ -105,7 +106,8 @@ public sealed class WriteModelMappingTests
                 .Single(property => property.GetColumnName() == "id")
                 .ShouldSatisfyAllConditions(
                     property => property.ClrType.ShouldBe(typeof(Guid)),
-                    property => property.ValueGenerated.ShouldBe(ValueGenerated.Never));
+                    property => property.ValueGenerated.ShouldBe(ValueGenerated.OnAdd),
+                    property => property.GetValueGeneratorFactory().ShouldNotBeNull());
         }
 
         // The conventions are authoritative and run last over the whole model, so every

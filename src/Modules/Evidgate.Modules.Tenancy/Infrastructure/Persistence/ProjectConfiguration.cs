@@ -50,8 +50,7 @@ internal sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .IsUnique();
 
         builder.Property(project => project.Id)
-            .HasColumnName("id")
-            .ValueGeneratedNever();
+            .HasColumnName("id"); // generation (UUIDv7, client-side) is the tenant convention (01.4.2-T3)
 
         builder.Property(project => project.OrgId)
             .HasColumnName("org_id")
