@@ -13,7 +13,7 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | M0/M1 tasks | 23 done · 111 open (of 134) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
-| Owner decisions open before M1 | O1 (pilot customers/CI/engines), O2 (team/TL/QA lead) — DECISIONS §8 |
+| Owner decisions | Decided 2026-09-26: O1 engine = Playwright, customer CI = per-project input; O2 QA lead = customer tenant role; O4 = no third-party LLM, own healing system. Still open before M1: pilot names (O1), Evidgate team size/TL (O2). Open before 08.5 DoR: O4 model-or-not — DECISIONS §8 |
 
 ## 2. Done
 
@@ -95,4 +95,4 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | `docker-tests.yml` fixes (global-json-file, single trigger, `ubuntu-24.04`) | Folded into 01.7.1-T1; the file is deleted when `ci.yml` lands | Tech Lead |
 | `evidgate_owner` permissive policy on `organization`/`project` | Rationale logged in 00 §15 and in the `0003` copy block; 00 §5.4.3 still lacks the sentence | Tech Lead |
 | `/internal/*` public-ingress routing rule | `[OPEN]` in 01.1.2 feature plan, no plan-10 task | Tech Lead |
-| O1, O2 | Owner decision | Owner |
+| O1 pilot names, O2 Evidgate team size/TL | Owner decision (engine + QA-lead parts decided 2026-09-26) | Owner |
