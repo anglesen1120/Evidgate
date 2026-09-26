@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
     <ProjectReference Include="..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
     <ProjectReference Include="..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
   </ItemGroup>
   <!-- 00 §5.1 A1 + 01.1.2-T2.1: both entry points compose the same module set. -->

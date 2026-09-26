@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Options;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
@@ -49,6 +50,12 @@ public static class WorkerHost
 
         builder.Services.AddMediator();
 
+        // 01.4.2-T4: the same C2 pipeline as the Api — a Mediator dispatch inside
+        // the worker must still pass telemetry/validation/tenant/authorization/
+        // idempotency, not run bare (QA-P defect D1; plan §11 names the pipeline
+        // the permanent dispatch path). DTO messages bypass the tenant stages.
+        builder.Services.AddEvidgatePipeline();
+
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
         builder.Services.AddOrchestratorModule();
@@ -62,6 +69,10 @@ public static class WorkerHost
         builder.Services.AddHostedService<SliceRunConsumer>();
         builder.Services.AddHostedService<TaskQueueHostedService>();
         builder.Services.AddHostedService<TaskScheduleHostedService>();
+        // 01.5.1-T3: the outbox dispatcher — same registration posture as the
+        // other loop services (one line, every Worker, no leader: SKIP LOCKED
+        // and the task_idem_uq dedupe key make concurrent dispatchers harmless).
+        builder.Services.AddHostedService<OutboxDispatcherHostedService>();
 
         return builder;
     }

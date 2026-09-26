@@ -5,6 +5,8 @@ using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Health;
 using Evidgate.BuildingBlocks.Persistence.Options;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Ingestion;
@@ -46,6 +48,14 @@ public static partial class ApiHost
 
         builder.Services.AddMediator();
 
+        // 01.4.2-T4: the single data-access path and the C2 pipeline (00 §5.5 C2).
+        // Mediator's generated implementation stays registered by the host — the
+        // source generator is the entry point's, and two generated mediators would
+        // shadow each other. The pipeline wires the behaviours it owns in the fixed
+        // order on top of it.
+        builder.Services.AddEvidgateTenancy();
+        builder.Services.AddEvidgatePipeline();
+
         // 00 §5.5: the composition root registers the modules' slice services;
         // Mediator's source generator registered the handlers themselves.
         builder.Services.AddIngestionModule();
@@ -62,6 +72,10 @@ public static partial class ApiHost
         });
 
         builder.Services.AddOpenApi();
+
+        // 01.5.1-T4.2 (00 §9.1): the operator-ingress task routes and the
+        // fail-closed gate that guards them until 02.x lands authentication.
+        builder.Services.AddOperatorEndpoints();
 
         return builder;
     }
@@ -88,6 +102,7 @@ public static partial class ApiHost
 
         app.MapInternalEndpoints();
         app.MapSliceEndpoints();
+        app.MapOperatorEndpoints();
         app.MapOpenApi();
 
         return app;

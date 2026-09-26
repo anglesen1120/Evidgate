@@ -62,6 +62,32 @@ public sealed class TasksOptions
     [Range(1, 64, ErrorMessage = "EVIDGATE__TASKS__DEFAULTQUEUECONCURRENCY must be between 1 and 64")]
     public int DefaultQueueConcurrency { get; init; } = 1;
 
+    /// <summary>Milliseconds the worker's outbox dispatcher waits between two dispatch passes (01.5.1-T3.1).</summary>
+    [Range(10, 60_000, ErrorMessage = "EVIDGATE__TASKS__DISPATCHPOLLMILLISECONDS must be between 10 and 60000")]
+    public int DispatchPollMilliseconds { get; init; } = 1000;
+
+    /// <summary>Largest number of undispatched outbox rows one dispatch batch moves (01.5.1 §7: batch 200).</summary>
+    [Range(1, 1_000, ErrorMessage = "EVIDGATE__TASKS__DISPATCHBATCHSIZE must be between 1 and 1000")]
+    public int DispatchBatchSize { get; init; } = 200;
+
+    /// <summary>
+    /// Queue an outbox-dispatched task lands in when its <c>task_type</c> has no
+    /// entry in <see cref="QueueRoutes"/>. A task_type carries no queue of its own
+    /// — a consumer claims any registered type on every queue it polls — so the
+    /// dispatcher's choice is purely a deployment routing decision, and an
+    /// unrouted type falling to this queue stays <c>queued</c> until a consumer
+    /// polls it (01.5.1 §11).
+    /// </summary>
+    public string DispatchDefaultQueue { get; init; } = "default";
+
+    /// <summary>
+    /// Task-type to queue routing the dispatcher applies on the insert
+    /// (<c>EVIDGATE__TASKS__QUEUEROUTES__0__TASKTYPE</c>, <c>…__QUEUE</c>). A
+    /// task_type absent from the list gets <see cref="DispatchDefaultQueue"/>.
+    /// </summary>
+    public List<QueueRouteOptions> QueueRoutes { get; init; } = [];
+
+
     /// <summary>
     /// Queues this worker consumes, each with its own concurrency limit
     /// (`EVIDGATE__TASKS__QUEUES__0__NAME`, `…__CONCURRENCY`). The queues the
@@ -93,4 +119,14 @@ public sealed class QueueOptions
     /// <summary>Concurrent claim loops for this queue.</summary>
     [Range(1, 64, ErrorMessage = "EVIDGATE__TASKS__QUEUES__*__CONCURRENCY must be between 1 and 64")]
     public int Concurrency { get; init; } = 1;
+}
+
+/// <summary>One task-type → queue route the dispatcher applies on the insert (01.5.1-T3).</summary>
+public sealed class QueueRouteOptions
+{
+    /// <summary>The <c>task_type</c> the route matches.</summary>
+    public string TaskType { get; init; } = string.Empty;
+
+    /// <summary>Queue a dispatched row of that type lands in.</summary>
+    public string Queue { get; init; } = string.Empty;
 }

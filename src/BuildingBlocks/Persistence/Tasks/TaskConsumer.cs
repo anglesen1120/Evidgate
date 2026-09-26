@@ -25,6 +25,7 @@ public sealed partial class TaskConsumer
     private readonly ITaskLeaseWriter _leases;
     private readonly ITaskHandlerRegistry _handlers;
     private readonly ITenantScopeFactory _scopes;
+    private readonly ITaskAlertSink _alerts;
     private readonly TasksOptions _options;
     private readonly TimeSpan _leaseLength;
     private readonly ILogger<TaskConsumer> _logger;
@@ -44,6 +45,7 @@ public sealed partial class TaskConsumer
         ITaskLeaseWriter leases,
         ITaskHandlerRegistry handlers,
         ITenantScopeFactory scopes,
+        ITaskAlertSink alerts,
         IOptions<TasksOptions> options,
         ILogger<TaskConsumer> logger)
     {
@@ -51,6 +53,7 @@ public sealed partial class TaskConsumer
         ArgumentNullException.ThrowIfNull(leases);
         ArgumentNullException.ThrowIfNull(handlers);
         ArgumentNullException.ThrowIfNull(scopes);
+        ArgumentNullException.ThrowIfNull(alerts);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
 
@@ -58,7 +61,9 @@ public sealed partial class TaskConsumer
         _leases = leases;
         _handlers = handlers;
         _scopes = scopes;
+        _alerts = alerts;
         _options = options.Value;
+
         _leaseLength = TimeSpan.FromSeconds(_options.VisibilityTimeoutSeconds);
         _logger = logger;
     }
@@ -344,6 +349,27 @@ public sealed partial class TaskConsumer
                 if (deadLettered)
                 {
                     LogDeadLetter(claim.Id, claim.TaskType, claim.Attempts, error);
+
+                    // The alert hook of 01.5.1 §7 fires only on a transition that
+                    // committed — the row's last_error is already redacted (00
+                    // §5.7 S3), so the sink receives the stored value, not the
+                    // exception. The bounded budget is deliberate: a slow sink
+                    // cannot outlive the host's shutdown window.
+                    await TaskAlertNotifier
+                        .NotifySafelyAsync(
+                            _alerts,
+                            _logger,
+                            new TaskDeadLetterAlert(
+                                TaskId: claim.Id,
+                                Queue: claim.Queue,
+                                TaskType: claim.TaskType,
+                                OrgId: claim.OrgId,
+                                Attempts: claim.Attempts,
+                                MaxAttempts: claim.MaxAttempts,
+                                LastError: error,
+                                Source: TaskDeadLetterSource.Consumer),
+                            budget.Token)
+                        .ConfigureAwait(false);
                 }
                 else
                 {

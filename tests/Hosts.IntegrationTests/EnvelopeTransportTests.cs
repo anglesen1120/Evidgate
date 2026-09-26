@@ -16,7 +16,7 @@ namespace Hosts.IntegrationTests;
 public sealed class EnvelopeTransportTests
 {
     private const string DeadConnectionString =
-        "Host=127.0.0.1;Port=1;Username=x;Password=y;Database=evidgate;Timeout=2";
+        "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
 
     /// <summary>Kestrel's default request-body limit is 30 MB; stay above it.</summary>
     private const long OversizeLength = 31_000_000;

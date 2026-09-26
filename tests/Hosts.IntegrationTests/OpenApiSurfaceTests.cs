@@ -13,7 +13,7 @@ public sealed class OpenApiSurfaceTests
     public async Task Internal_Routes_Absent_From_Served_Document()
     {
         await using var factory = new EvidgateApiFactory(
-            "Host=127.0.0.1;Port=1;Username=x;Password=y;Database=evidgate;Timeout=2");
+            "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2");
         using var client = factory.CreateClient();
 
         // The operational surface itself exists and answers.

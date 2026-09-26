@@ -29,6 +29,15 @@ public static class EvidgateTelemetry
     /// <summary>Counter of module operations, tagged by <see cref="ModuleTag"/>.</summary>
     public const string ModuleOperationCounterName = "evidgate.module.operations";
 
+    /// <summary>Histogram of pipeline-handler durations in milliseconds (01.4.2-T4.1, the C2 telemetry stage).</summary>
+    public const string PipelineDurationMetricName = "evidgate.pipeline.duration";
+
+    /// <summary>Span tag naming the message type a pipeline span ran (e.g. <c>CreateRun</c>).</summary>
+    public const string PipelineMessageTag = "evidgate.message";
+
+    /// <summary>Span tag carrying the thrown exception's type on a failed pipeline run (OTel <c>error.type</c>).</summary>
+    public const string PipelineErrorTag = "error.type";
+
     private static readonly ActivitySource Source = new(ActivitySourceName);
 
     private static readonly Meter Meter = new(MeterName);
@@ -37,6 +46,11 @@ public static class EvidgateTelemetry
         ModuleOperationCounterName,
         unit: "{operation}",
         description: "Module operations started, tagged by evidgate.module.");
+
+    private static readonly Histogram<double> PipelineDurations = Meter.CreateHistogram<double>(
+        PipelineDurationMetricName,
+        unit: "ms",
+        description: "C2 pipeline handler duration by message type.");
 
     /// <summary>
     /// Starts the span for one module operation, tagged with the module name
@@ -52,5 +66,31 @@ public static class EvidgateTelemetry
         ModuleOperations.Add(1, new KeyValuePair<string, object?>(ModuleTag, module));
 
         return activity;
+    }
+
+    /// <summary>
+    /// Starts the span for one pipeline message (01.4.2-T4.1): tagged with the
+    /// message type but NOT with <see cref="ModuleTag"/> — the pipeline is not a
+    /// module, so the per-module tag vocabulary stays accurate. Returns null when
+    /// nothing listens.
+    /// </summary>
+    public static Activity? StartPipelineActivity(string message)
+    {
+        var activity = Source.StartActivity(message, ActivityKind.Internal);
+        activity?.SetTag(PipelineMessageTag, message);
+
+        return activity;
+    }
+
+    /// <summary>
+    /// Records the handler duration of one pipeline message, tagged with the
+    /// message type and whether it failed, so 10's dashboards split the two.
+    /// </summary>
+    public static void RecordPipelineDuration(string message, TimeSpan duration, bool error)
+    {
+        PipelineDurations.Record(
+            duration.TotalMilliseconds,
+            new KeyValuePair<string, object?>(PipelineMessageTag, message),
+            new KeyValuePair<string, object?>("error", error));
     }
 }

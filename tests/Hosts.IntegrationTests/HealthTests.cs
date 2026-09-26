@@ -22,7 +22,7 @@ public sealed class HealthTests
     public async Task Ready_503_When_Db_Down()
     {
         // Valid shape, nothing listening on the port.
-        var deadConnectionString = "Host=127.0.0.1;Port=1;Username=x;Password=y;Database=evidgate;Timeout=2";
+        var deadConnectionString = "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
 
         await using var factory = new EvidgateApiFactory(deadConnectionString);
         using var client = factory.CreateClient();
@@ -97,7 +97,7 @@ public sealed class HealthTests
     public async Task Live_Always_200()
     {
         // No database at all — liveness must still answer 200 (AC3).
-        await using var factory = new EvidgateApiFactory("Host=127.0.0.1;Port=1;Username=x;Password=y;Database=evidgate;Timeout=2");
+        await using var factory = new EvidgateApiFactory("Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2");
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/internal/health/live", TestContext.Current.CancellationToken);

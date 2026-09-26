@@ -14,6 +14,7 @@
     "lint": "eslint . --max-warnings 0",
     "test": "npm run test --workspaces --if-present",
     "e2e": "npm run e2e --workspaces --if-present",
+    "codegen": "echo 'SDK codegen lands with 01.3.2-T1; no-op keeps the ci.yml drift gate honest' && exit 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"

@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Mediator;
 
 // Synthetic module fixtures for the reflection rules. The namespace mimics a real
@@ -58,4 +59,41 @@ internal sealed class HandlerWithInvalidPermission : ICommandHandler<CreateSampl
 {
     public ValueTask<Guid> Handle(CreateSampleCommand command, CancellationToken cancellationToken) =>
         ValueTask.FromResult(Guid.Empty);
+}
+
+/// <summary>
+/// Seeded violation fixture for the C8 rule: a pipeline handler answering a bare
+/// DTO instead of Result/Result&lt;T&gt;, which would run outside the C2 tenant
+/// stages (01.4.2-T4). It carries a valid permission so only the contract rule
+/// reports it.
+/// </summary>
+internal sealed record CommandReturningDto : ICommand<Evidgate.Modules.Sample.Contracts.SampleDto>;
+
+[Permission("run:create")]
+internal sealed class HandlerReturningDto : ICommandHandler<CommandReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public ValueTask<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        CommandReturningDto command,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new Evidgate.Modules.Sample.Contracts.SampleDto());
+}
+
+/// <summary>Seeded violation fixture for the C8 rule: a Unit-returning command and its handler.</summary>
+internal sealed record CommandReturningUnit : ICommand;
+
+[Permission("run:create")]
+internal sealed class HandlerReturningUnit : ICommandHandler<CommandReturningUnit>
+{
+    public ValueTask<Unit> Handle(CommandReturningUnit command, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(Unit.Value);
+}
+
+/// <summary>Clean fixture for the C8 rule: a handler answering Result&lt;T&gt;.</summary>
+internal sealed record CommandReturningResult : ICommand<Result<Guid>>;
+
+[Permission("run:create")]
+internal sealed class HandlerReturningResult : ICommandHandler<CommandReturningResult, Result<Guid>>
+{
+    public ValueTask<Result<Guid>> Handle(CommandReturningResult command, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(Result.Success(Guid.Empty));
 }

@@ -346,6 +346,7 @@ public sealed class TaskConsumerTests
             leases,
             host.Handlers,
             Substitute.For<Evidgate.BuildingBlocks.Persistence.Tenancy.ITenantScopeFactory>(),
+            Substitute.For<ITaskAlertSink>(),
             Options.Create(new TasksOptions { VisibilityTimeoutSeconds = 1 }),
             NullLogger<TaskConsumer>.Instance);
 

@@ -12,6 +12,8 @@ Repository tooling (00 §5.2). Current scripts:
 | `verify.sh`                     | Full local CI gate: restore, build, format, tests, lint, all check scripts (FR-01-1)                                       | 01.2.1       |
 | `check-links.sh`                | Internal markdown link check                                                                                               | 01.9.1       |
 | `check-contract-conventions.sh` | OpenAPI/Spectral + JSON Schema convention checks                                                                           | 01.3.1       |
+| `check-ci-parity.sh`            | Every `verify.sh` stage is invoked by `ci.yml` and no raw command duplicates one (01.7.1 AC2)                              | 01.7.1       |
+| `check-action-pins.sh`          | Every workflow `uses:` is pinned to a full commit SHA with a version comment (01.7.1 AC6)                                  | 01.7.1       |
 | `check_features.py`             | Feature-plan structure checker (id pattern `NN.E.S`, sections, sizes)                                                      | plan tooling |
 | `feature_index.py`              | Feature-plan index generation                                                                                              | plan tooling |
 | `plan_graph.py`                 | Plan dependency graph                                                                                                      | plan tooling |

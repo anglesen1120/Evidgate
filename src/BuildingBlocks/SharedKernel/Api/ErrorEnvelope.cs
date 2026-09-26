@@ -26,7 +26,7 @@ public sealed record ErrorBody(
 /// <param name="Reason">Machine-readable reason, e.g. <c>required</c>.</param>
 public sealed record ErrorDetail(string Path, string Reason);
 
-/// <summary>Stable error codes used by the skeleton slice (00 §9.2).</summary>
+/// <summary>Stable error codes of the 00 §9.2 envelope, shared by the skeleton slice, the C2 pipeline's Result mapping and the endpoint filter.</summary>
 public static class ApiErrorCode
 {
     /// <summary>The request itself is malformed or misses a required field.</summary>
@@ -38,6 +38,16 @@ public static class ApiErrorCode
     /// <summary>The addressed resource does not exist (or belongs to another tenant).</summary>
     public const string NotFound = "not_found";
 
+    /// <summary>No authenticated principal could be resolved (00 §9.2: 401 unauthenticated).</summary>
+    public const string Unauthenticated = "unauthenticated";
+
+    /// <summary>The principal does not hold the operation's permission (00 §9.2: 403 forbidden).</summary>
+    public const string Forbidden = "forbidden";
+
+    /// <summary>An <c>Idempotency-Key</c> was reused for a different request (00 §9.1/§9.2: 409).</summary>
+    public const string IdempotencyConflict = "idempotency_conflict";
+
+
     /// <summary>The route exists but not for this HTTP method (00 §9.2 does not name 405).</summary>
     public const string MethodNotAllowed = "method_not_allowed";
 
@@ -46,4 +56,10 @@ public static class ApiErrorCode
 
     /// <summary>An unexpected failure; carries no internal detail (00 §5.5 C8).</summary>
     public const string InternalError = "internal_error";
+
+    /// <summary>No task row exists with that id (01.5.1 §5 operator replay: 404).</summary>
+    public const string TaskNotFound = "task_not_found";
+
+    /// <summary>The row exists but is not `dead_letter` (01.5.1 §5 operator replay: 409).</summary>
+    public const string TaskNotDeadLetter = "task_not_dead_letter";
 }

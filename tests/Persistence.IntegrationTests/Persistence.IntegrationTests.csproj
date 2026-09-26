@@ -9,9 +9,15 @@
   <ItemGroup>
     <PackageReference Include="Testcontainers.PostgreSQL" />
     <PackageReference Include="Npgsql" />
+    <!-- 01.4.2-T4: the pipeline tests drive the real generated mediator of this
+         assembly (Mediator.SourceGenerator), its behaviours and FluentValidation. -->
+    <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="Mediator.SourceGenerator" PrivateAssets="all" />
+    <PackageReference Include="FluentValidation" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
     <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
   </ItemGroup>
   <ItemGroup>
