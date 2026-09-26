@@ -339,6 +339,11 @@
         "resolved": "10.0.12",
         "contentHash": "dYfCLR52UA+3DL7C4I/pvSaRPkNqxrUAQmbFL2u0zvYKKzqgrFCJl08Df+F1aYc8leu9JvpC9bsURUdpExcBXQ=="
       },
+      "Microsoft.OpenApi": {
+        "type": "Transitive",
+        "resolved": "2.12.0",
+        "contentHash": "0xB/be+f6qYOhvQPUrVsLrau+fkowYv6gt9RIkajMhwT7sZnqtcA797yW3bS5kgSje+AQW4xZgyLnW641YFioQ=="
+      },
       "Microsoft.Testing.Extensions.Telemetry": {
         "type": "Transitive",
         "resolved": "2.4.0",
@@ -386,6 +391,31 @@
         "type": "Transitive",
         "resolved": "5.0.0",
         "contentHash": "dDoKi0PnDz31yAyETfRntsLArTlVAVzUzCIvvEDsDsucrl33Dl8pIJG06ePTJTI3tGpeyHS9Cq7Foc/s4EeKcg=="
+      },
+      "OpenTelemetry": {
+        "type": "Transitive",
+        "resolved": "1.19.1",
+        "contentHash": "6ywhc3upf+dq8EsOohj7I7zS3l4yX9vfbtFkvyEC8xIUY4Z9iDIOVuke356eCAzIZaWtmwmmyl2UXYCp5n7I3Q==",
+        "dependencies": {
+          "Microsoft.Extensions.Configuration.EnvironmentVariables": "10.0.0",
+          "Microsoft.Extensions.Diagnostics.Abstractions": "10.0.0",
+          "Microsoft.Extensions.Logging.Configuration": "10.0.0",
+          "OpenTelemetry.Api.ProviderBuilderExtensions": "1.19.1"
+        }
+      },
+      "OpenTelemetry.Api": {
+        "type": "Transitive",
+        "resolved": "1.19.1",
+        "contentHash": "9JKIH+xrV0HNTFjQC8zrx9gZpDOMEljN5Htg/U0VE2IvO3N+7bKALCCsGy5tp09marX5dd8UkrgQFoLaulIBRw=="
+      },
+      "OpenTelemetry.Api.ProviderBuilderExtensions": {
+        "type": "Transitive",
+        "resolved": "1.19.1",
+        "contentHash": "HtGe72B/IhzKqdU0a3fNE5osax/Cegwxd+p4u6lOFy20nsgmeaFuP2NRyFs1WvrOv/bpkII3IvvBkKoZXG8BLg==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.0",
+          "OpenTelemetry.Api": "1.19.1"
+        }
       },
       "System.CodeDom": {
         "type": "Transitive",
@@ -481,7 +511,24 @@
       "evidgate.api": {
         "type": "Project",
         "dependencies": {
-          "Mediator.Abstractions": "[3.0.2, )"
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Audit": "[1.0.0, )",
+          "Evidgate.Modules.Catalog": "[1.0.0, )",
+          "Evidgate.Modules.Evidence": "[1.0.0, )",
+          "Evidgate.Modules.Healing": "[1.0.0, )",
+          "Evidgate.Modules.Identity": "[1.0.0, )",
+          "Evidgate.Modules.Ingestion": "[1.0.0, )",
+          "Evidgate.Modules.Notifications": "[1.0.0, )",
+          "Evidgate.Modules.Orchestrator": "[1.0.0, )",
+          "Evidgate.Modules.Policy": "[1.0.0, )",
+          "Evidgate.Modules.Tenancy": "[1.0.0, )",
+          "Evidgate.Modules.Usage": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
+          "OpenTelemetry.Exporter.Prometheus.AspNetCore": "[1.19.1-beta.1, )",
+          "OpenTelemetry.Instrumentation.AspNetCore": "[1.19.0, )"
         }
       },
       "evidgate.buildingblocks.canonicalization": {
@@ -491,10 +538,22 @@
         "type": "Project"
       },
       "evidgate.buildingblocks.observability": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Hosting": "[10.0.12, )",
+          "Microsoft.Extensions.Options.DataAnnotations": "[10.0.12, )",
+          "OpenTelemetry.Exporter.OpenTelemetryProtocol": "[1.19.1, )",
+          "OpenTelemetry.Extensions.Hosting": "[1.19.1, )"
+        }
       },
       "evidgate.buildingblocks.persistence": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions": "[10.0.12, )",
+          "Microsoft.Extensions.Hosting": "[10.0.12, )",
+          "Microsoft.Extensions.Options.DataAnnotations": "[10.0.12, )",
+          "Npgsql": "[10.0.3, )"
+        }
       },
       "evidgate.buildingblocks.sharedkernel": {
         "type": "Project"
@@ -502,13 +561,157 @@
       "evidgate.migrator": {
         "type": "Project",
         "dependencies": {
+          "Npgsql": "[10.0.3, )",
           "dbup-postgresql": "[7.0.1, )"
         }
+      },
+      "evidgate.modules.audit": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Audit.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.audit.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.catalog": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Catalog.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.catalog.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.evidence": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.evidence.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.healing": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Healing.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.healing.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.identity": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Identity.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.identity.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.ingestion": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Ingestion.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.ingestion.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.notifications": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Notifications.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.notifications.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.orchestrator": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Catalog.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Ingestion.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Orchestrator.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.orchestrator.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.policy": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Policy.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.policy.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.tenancy": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Tenancy.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.tenancy.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.usage": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Usage.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.usage.contracts": {
+        "type": "Project"
       },
       "evidgate.worker": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.Hosting": "[10.0.12, )"
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Audit": "[1.0.0, )",
+          "Evidgate.Modules.Catalog": "[1.0.0, )",
+          "Evidgate.Modules.Evidence": "[1.0.0, )",
+          "Evidgate.Modules.Healing": "[1.0.0, )",
+          "Evidgate.Modules.Identity": "[1.0.0, )",
+          "Evidgate.Modules.Ingestion": "[1.0.0, )",
+          "Evidgate.Modules.Notifications": "[1.0.0, )",
+          "Evidgate.Modules.Orchestrator": "[1.0.0, )",
+          "Evidgate.Modules.Policy": "[1.0.0, )",
+          "Evidgate.Modules.Tenancy": "[1.0.0, )",
+          "Evidgate.Modules.Usage": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.Extensions.Hosting": "[10.0.12, )",
+          "Microsoft.Extensions.Options.DataAnnotations": "[10.0.12, )"
         }
       },
       "dbup-postgresql": {
@@ -520,6 +723,21 @@
           "Npgsql": "10.0.1",
           "dbup-core": "6.1.1"
         }
+      },
+      "Microsoft.AspNetCore.OpenApi": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "7RnQ/UKn+kK3JDLmTpW+vVqNErWthGPAVAy1aIiBzv4ucQ6g9NFvOJUuT0PHcpvcJxGVxctMxj6t+NESWMrgHQ==",
+        "dependencies": {
+          "Microsoft.OpenApi": "[2.12.0, 3.0.0)"
+        }
+      },
+      "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "oN4AYFq+50m7a65GgRxRqjdynWS6kVQAH6gHKRTfsrLP/aH7RvxIQ7139fjbnrxBwzfZQtZRhlcjvEIiRzihrg=="
       },
       "Microsoft.Extensions.Hosting": {
         "type": "CentralTransitive",
@@ -551,6 +769,16 @@
           "Microsoft.Extensions.Options": "10.0.12"
         }
       },
+      "Microsoft.Extensions.Options.DataAnnotations": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "rPqU/cnDMmL4Gx7sglNnYwh/upWxSLTwVe0ysT88WH9HEE3OfZgaT7TyM86C4GeXwDsDQaj95fUGL5jEB3vxng==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12",
+          "Microsoft.Extensions.Options": "10.0.12"
+        }
+      },
       "Npgsql": {
         "type": "CentralTransitive",
         "requested": "[10.0.3, )",
@@ -558,6 +786,43 @@
         "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
+        }
+      },
+      "OpenTelemetry.Exporter.OpenTelemetryProtocol": {
+        "type": "CentralTransitive",
+        "requested": "[1.19.1, )",
+        "resolved": "1.19.1",
+        "contentHash": "vsYYOBf/KxNubnuoja8pjJ9LG0zCC9HAYPay+R6N5ZKZMbhNdKWbaq6JZqJqTvK+55rudiqErJySekf9ql8okA==",
+        "dependencies": {
+          "OpenTelemetry": "1.19.1"
+        }
+      },
+      "OpenTelemetry.Exporter.Prometheus.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[1.19.1-beta.1, )",
+        "resolved": "1.19.1-beta.1",
+        "contentHash": "AMfdsdCo6rKCNJv0j3Yx1FJF3pmOgTZjHDpKllRwpxKlO6UIcpcbWFFJUFYd9+UkJWl7LO2IzTpA75Qrl0fvcw==",
+        "dependencies": {
+          "OpenTelemetry": "[1.19.1, 2.0.0)"
+        }
+      },
+      "OpenTelemetry.Extensions.Hosting": {
+        "type": "CentralTransitive",
+        "requested": "[1.19.1, )",
+        "resolved": "1.19.1",
+        "contentHash": "3qqZfVmW8mKA2/fRwI83o8z+yZd33KbEqRlXrlX0+3e/U7i+z0MQiCr0L3Axxa0jGdiylIrpWX4DIT9nAbJ00A==",
+        "dependencies": {
+          "Microsoft.Extensions.Hosting.Abstractions": "10.0.0",
+          "OpenTelemetry": "1.19.1"
+        }
+      },
+      "OpenTelemetry.Instrumentation.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[1.19.0, )",
+        "resolved": "1.19.0",
+        "contentHash": "reypo7g0Nzyssg1EkbfWU6W58CVFgtgkSEGrFXtbpA+bNit7HUs7587DOkOdPCgqWr3IL4f6X9B2yhnU6POrFA==",
+        "dependencies": {
+          "OpenTelemetry.Api.ProviderBuilderExtensions": "[1.19.0, 2.0.0)"
         }
       }
     }

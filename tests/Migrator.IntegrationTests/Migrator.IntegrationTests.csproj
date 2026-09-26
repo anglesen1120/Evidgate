@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 01.4.1 T1/T4: Migrator apply/journal/checksum/dry-run/status + expand/contract playbook tests (Testcontainers.PostgreSQL).
+       Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Migrator.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Testcontainers.PostgreSQL" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Content Include="Fixtures\*.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

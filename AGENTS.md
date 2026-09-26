@@ -4,7 +4,7 @@
 
 Evidgate collects automated test results (web, API, mobile, unit) from customer CI or agents, keeps them as immutable evidence bound to exact builds, and turns that evidence into a release decision (PASS / FAIL / INCONCLUSIVE) through versioned policies. It adds **safe healing**: repairing test mechanics (for example a changed locator) without changing test intent, shadow first, never hiding a product bug.
 
-**Current state: M0 foundation in progress** (stack per DECISIONS CR-D-1). Done on `feature/m0-foundation`: 01.1.1 T1–T3 (toolchain pins, workspace skeleton), 01.2.1 (analyzers, format, strict TS, `tests/Architecture.Tests`), 01.3.1 (`contracts/openapi.yaml` stubs, `contracts/schemas/`, `contracts/adapter/`), 01.9.1 (ADRs in `docs/adr/`). No module projects (`src/Modules/*`, 01.1.2-T2), migrations or runtime behaviour yet; `migrations/`, `fixtures/`, `infra/` do not exist yet. Local gate: `scripts/verify.sh`.
+**Current state: M1 foundation in progress** (stack per DECISIONS CR-D-1). Merged (PR #2): 01.1.1 T1–T3 (toolchain pins, workspace skeleton), 01.2.1 (analyzers, format, strict TS, `tests/Architecture.Tests`), 01.3.1 (`contracts/openapi.yaml` stubs, `contracts/schemas/`, `contracts/adapter/`), 01.9.1 (ADRs in `docs/adr/`). On branch `feature/m1-wave1-2`: 01.4.1 (`src/Evidgate.Migrator`, `migrations/0001`–`0003` roles + RLS baseline, `scripts/dev/db-init.sh`), 01.1.2 (Api/Worker hosts, 11 module pairs, in-memory skeleton slice), 01.8.1 (SeaweedFS parity tests, compose dev stack, `scripts/dev/up.sh`). Not yet: `seed-dev` (needs 02.1.1/02.1.2/07.1.1 tables), web app (09.1.1), business tables. Local gate: `scripts/verify.sh`.
 
 ## Where things are
 
@@ -14,7 +14,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 | `RECOMMENDATIONS.md` | Working recommendations for open decisions (O1–O10) and plan §11 questions; not decisions |
 | `plans/00-overview.md` | Shared contracts: glossary, milestones, architecture, IDs, state machines, API, NFRs, feature-plan process, estimate roll-up |
 | `plans/01`–`12` | High-level area plans (epics → stories → tasks with sizes); 502 tasks, 560.25 raw / 672.3 buffered person-days (00 §14, after CR-D-1) |
-| `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T96), findings register (`REVIEW-2026-09-25.md`), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
+| `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T101), findings register (`REVIEW-2026-09-25.md`), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
 | `docs/source/` | Original Vietnamese system design (working name "ReleaseHub") and its .docx |
 
 ## Authority and editing rules

@@ -50,6 +50,7 @@ allowed_dot_entry() {
   case "$1" in
     .github|.gitignore|.gitattributes|.editorconfig|.nvmrc|.npmrc) return 0 ;;
     .prettierignore|.husky|.spectral.yaml|.config) return 0 ;;
+    .env.dev.template) return 0 ;;
     .prettierrc*) return 0 ;;
     *) return 1 ;;
   esac
@@ -81,6 +82,7 @@ tsconfig.base.json
 EOF
 cat > "$TMP/allowed-extra-files" <<'EOF'
 .editorconfig
+.env.dev.template
 .prettierignore
 .prettierrc.json
 .spectral.yaml
@@ -114,6 +116,7 @@ fi
 
 # ---- solution project list ----
 # 01.2.1-T1.2: tests/Architecture.Tests is part of the expected project list.
+# M1 wave 1-2: 01.1.2-T2.1 module pairs; test projects of 01.4.1, 01.1.2, 01.8.1-T1.
 cat > "$TMP/expected-proj" <<'EOF'
 src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csproj
 src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj
@@ -123,7 +126,33 @@ src/BuildingBlocks/SharedKernel/Evidgate.BuildingBlocks.SharedKernel.csproj
 src/Evidgate.Api/Evidgate.Api.csproj
 src/Evidgate.Migrator/Evidgate.Migrator.csproj
 src/Evidgate.Worker/Evidgate.Worker.csproj
+src/Modules/Evidgate.Modules.Audit.Contracts/Evidgate.Modules.Audit.Contracts.csproj
+src/Modules/Evidgate.Modules.Audit/Evidgate.Modules.Audit.csproj
+src/Modules/Evidgate.Modules.Catalog.Contracts/Evidgate.Modules.Catalog.Contracts.csproj
+src/Modules/Evidgate.Modules.Catalog/Evidgate.Modules.Catalog.csproj
+src/Modules/Evidgate.Modules.Evidence.Contracts/Evidgate.Modules.Evidence.Contracts.csproj
+src/Modules/Evidgate.Modules.Evidence/Evidgate.Modules.Evidence.csproj
+src/Modules/Evidgate.Modules.Healing.Contracts/Evidgate.Modules.Healing.Contracts.csproj
+src/Modules/Evidgate.Modules.Healing/Evidgate.Modules.Healing.csproj
+src/Modules/Evidgate.Modules.Identity.Contracts/Evidgate.Modules.Identity.Contracts.csproj
+src/Modules/Evidgate.Modules.Identity/Evidgate.Modules.Identity.csproj
+src/Modules/Evidgate.Modules.Ingestion.Contracts/Evidgate.Modules.Ingestion.Contracts.csproj
+src/Modules/Evidgate.Modules.Ingestion/Evidgate.Modules.Ingestion.csproj
+src/Modules/Evidgate.Modules.Notifications.Contracts/Evidgate.Modules.Notifications.Contracts.csproj
+src/Modules/Evidgate.Modules.Notifications/Evidgate.Modules.Notifications.csproj
+src/Modules/Evidgate.Modules.Orchestrator.Contracts/Evidgate.Modules.Orchestrator.Contracts.csproj
+src/Modules/Evidgate.Modules.Orchestrator/Evidgate.Modules.Orchestrator.csproj
+src/Modules/Evidgate.Modules.Policy.Contracts/Evidgate.Modules.Policy.Contracts.csproj
+src/Modules/Evidgate.Modules.Policy/Evidgate.Modules.Policy.csproj
+src/Modules/Evidgate.Modules.Tenancy.Contracts/Evidgate.Modules.Tenancy.Contracts.csproj
+src/Modules/Evidgate.Modules.Tenancy/Evidgate.Modules.Tenancy.csproj
+src/Modules/Evidgate.Modules.Usage.Contracts/Evidgate.Modules.Usage.Contracts.csproj
+src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj
 tests/Architecture.Tests/Architecture.Tests.csproj
+tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj
+tests/Isolation.Tests/Isolation.Tests.csproj
+tests/Migrator.IntegrationTests/Migrator.IntegrationTests.csproj
+tests/ObjectStorage.IntegrationTests/ObjectStorage.IntegrationTests.csproj
 EOF
 
 grep -oE 'Path="[^"]+\.csproj"' Evidgate.slnx \
@@ -131,7 +160,7 @@ grep -oE 'Path="[^"]+\.csproj"' Evidgate.slnx \
   | sort -u > "$TMP/actual-proj"
 
 if ! diff -u "$TMP/expected-proj" "$TMP/actual-proj"; then
-  echo "check-layout: Evidgate.slnx project list differs from the M0 contract" >&2
+  echo "check-layout: Evidgate.slnx project list differs from the expected list" >&2
   fail=1
 fi
 

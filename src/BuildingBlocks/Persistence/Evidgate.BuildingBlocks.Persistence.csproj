@@ -2,4 +2,56 @@
   <PropertyGroup>
     <RootNamespace>Evidgate.BuildingBlocks.Persistence</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+
+  <!--
+    01.1.2-T1.3 (AC3): the readiness gate compares public.schema_migration's head
+    with the head this build expects. The expected head is the lexically greatest
+    migrations/*.sql file name, baked into assembly metadata at build time, so
+    adding a migration file changes the gate without touching code. Ordering is a
+    lexical (ordinal) sort over file names; the sentinel "(none)" for a build with
+    no migrations must match ExpectedMigrationHead.NoMigrationsHead.
+  -->
+  <UsingTask
+    TaskName="GetExpectedMigrationHead"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <FileNames ParameterType="System.String[]" Required="false" />
+      <Head ParameterType="System.String" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+        var ordered = (FileNames ?? Array.Empty<string>())
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        Head = ordered.Length == 0 ? "(none)" : ordered[ordered.Length - 1];
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="BakeExpectedMigrationHead" BeforeTargets="GetAssemblyAttributes">
+    <ItemGroup>
+      <EvidgateMigrationFile Include="$(MSBuildThisFileDirectory)..\..\..\migrations\*.sql" />
+    </ItemGroup>
+
+    <GetExpectedMigrationHead
+      FileNames="@(EvidgateMigrationFile->'%(Filename)%(Extension)')">
+      <Output TaskParameter="Head" PropertyName="EvidgateExpectedMigrationHead" />
+    </GetExpectedMigrationHead>
+
+    <ItemGroup>
+      <AssemblyMetadata Include="ExpectedMigrationHead" Value="$(EvidgateExpectedMigrationHead)" />
+    </ItemGroup>
+
+    <Message Importance="normal" Text="Expected migration journal head: $(EvidgateExpectedMigrationHead)" />
+  </Target>
 </Project>

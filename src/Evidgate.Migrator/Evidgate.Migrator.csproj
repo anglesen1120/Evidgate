@@ -4,5 +4,11 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="dbup-postgresql" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The redactor and the options' ToString are internal by design (00 §5.7 S3);
+         the integration suite asserts that no secret can reach a message or a log. -->
+    <InternalsVisibleTo Include="Migrator.IntegrationTests" />
   </ItemGroup>
 </Project>

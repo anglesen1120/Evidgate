@@ -57,7 +57,7 @@ npm ci
 # `git ls-files`, so a fresh repo where every file is untracked reproduces
 # the clean-clone listing.
 git init -q
-scripts/verify.sh
+EVIDGATE_VERIFY_SKIP_DOCKER=1 scripts/verify.sh
 INNER
 
 # The container entry runs as root only for one apt step: verify.sh calls

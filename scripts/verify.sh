@@ -19,8 +19,18 @@ dotnet build -c Release --no-restore Evidgate.slnx
 stage "dotnet format (verify only)"
 dotnet format Evidgate.slnx --verify-no-changes --no-restore
 
-stage "dotnet test (unit + architecture)"
-dotnet test --no-build -c Release Evidgate.slnx
+# EVIDGATE_VERIFY_SKIP_DOCKER=1 skips the Category=Docker integration tests
+# (Testcontainers). Only smoke-clean-build.sh sets it: its container has no
+# Docker daemon, and mounting the host socket would hand it the host. Exit code
+# 8 means an assembly holds only Docker tests, so none ran there.
+if [[ "${EVIDGATE_VERIFY_SKIP_DOCKER:-}" == "1" ]]; then
+  stage "dotnet test (unit + architecture; Docker integration tests skipped)"
+  dotnet test --no-build -c Release Evidgate.slnx \
+    --filter-not-trait "Category=Docker" --ignore-exit-code 8
+else
+  stage "dotnet test (unit, architecture, Docker integration)"
+  dotnet test --no-build -c Release Evidgate.slnx
+fi
 
 # tsc -b of the root tsconfig.json references: packages/* AND apps/web — the
 # --workspaces variant skips apps/web (no build script) and would let it escape

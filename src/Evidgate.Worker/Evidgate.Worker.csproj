@@ -1,5 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
   <ItemGroup>
+    <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="Mediator.SourceGenerator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
+  <!-- 00 §5.1 A1 + 01.1.2-T2.1: both entry points compose the same module set. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Tenancy\Evidgate.Modules.Tenancy.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Orchestrator\Evidgate.Modules.Orchestrator.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Ingestion\Evidgate.Modules.Ingestion.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Evidence\Evidgate.Modules.Evidence.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Policy\Evidgate.Modules.Policy.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Healing\Evidgate.Modules.Healing.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Usage\Evidgate.Modules.Usage.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Audit\Evidgate.Modules.Audit.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Notifications\Evidgate.Modules.Notifications.csproj" />
   </ItemGroup>
 </Project>
