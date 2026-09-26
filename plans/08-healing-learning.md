@@ -290,7 +290,7 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 
 | # | Question | Owner | Needed by |
 |---|---|---|---|
-| O4 | LLM provider(s) and whether any tenant data may leave Vietnam | Owner + data owner | before the V2 healing PR (M4) |
+| O4 | LLM provider(s) and whether any tenant data may leave Vietnam. Direction decided 2026-09-26 (owner): no third-party LLM provider, Evidgate builds its own healing system (DECISIONS §8 O4); still `[OPEN]`: self-hosted model or no model — decides the 08.5 epic's shape | Owner | before the 08.5 feature-plan DoR (M4) |
 | O6 | False-heal acceptance threshold, weighted by severity (V3 gate only; V2 gate = every forbidden case blocked, FR-08-19) | Owner + QA lead | before the V3 gate (08.8.3-T2, M5) |
 | Q-08-1 | Approve provider use during the M3 pilot to shorten the V2 lane? | Owner | M3 `[OPEN]` |
 | O10 | V1 replay execution host: (a) customer CI job via the CLI (A5-aligned; conflicts with FR-08-9 only if the patched test must enter the customer's repo, needs a sized customer-side step in 04), (b) pull 05.7.1/05.7.2/05.7.4 + 11.2.1-T4 into V1 (DECISIONS A5 change), or (c) slip sandbox replay to V2/M4 (V1 = capture, triage, candidates). Recommended [INFERENCE]: (a) — keeps A5, no hosted execution of customer code in V1, and still measures real replay quality in the pilot; (b) adds ≈ 12 raw days for 05.7.1/05.7.2/05.7.4 + 11.2.1-T4 (≈ 20 if all of 05.7 moves) | Owner + Tech Lead | before 08.4.3 feature plan (M3) |

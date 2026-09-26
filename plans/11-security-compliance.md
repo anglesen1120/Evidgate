@@ -318,7 +318,7 @@ Epic 11.9 total: 6.0
 |---|---|---|---|
 | 1 | ASVS target level ⚠️: confirm L2 or accept a documented subset | Tech Lead | M2 (11.1.1-T3) |
 | 2 | Cloud provider/region and whether any store may leave Vietnam (O3) | Owner | M2 (first pilot data) |
-| 3 | LLM provider(s) and whether tenant content may leave Vietnam (O4) | Owner | V2 healing PR |
+| 3 | LLM provider(s) and whether tenant content may leave Vietnam (O4). Direction decided 2026-09-26: no third-party LLM provider, so healing adds no cross-border transfer; 11.4.1-T4 due diligence applies only if a hosted provider is ever reintroduced | Owner | V2 healing PR |
 | 4 | Whether a container-only isolation boundary is acceptable for any V2 execution, or the agent must stay wholly customer-side `[OPEN]` | Tech Lead | M4 (11.2.1-T4) |
 | 5 | Whether the pilot customers require an on-premise or single-tenant deployment | Owner | M3 |
 | 6 | Budget and vendor for the external pen test | Owner | M3 start |
