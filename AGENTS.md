@@ -25,7 +25,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 - Legend in every file: ✅ verified with a link · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`. Never state an external fact (version, price, law, API behaviour) without a source or a ⚠️.
 - Estimates: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals equal the sum of task rows; each plan adds +20 % buffer; the roll-up is 00 §14. Re-check sums after every edit.
 - IDs: stories `NN.E.S`, tasks `NN.E.S-Tn` where `NN.E.S` is the story the row sits under; reference stories/tasks, not page numbers. Every referenced id must exist.
-- Open before M1: owner decisions O1 and O2 (DECISIONS §8). O8 is decided: milestones are sequence + exit gates, not dates.
+- Open before M1: O1 pilot names and O2 Evidgate team size/TL (DECISIONS §8); decided 2026-09-26: Playwright is the UI engine, customer CI and QA lead are customer input, no third-party LLM provider (O4, model-or-not open before 08.5 DoR). O8 is decided: milestones are sequence + exit gates, not dates.
 
 ## Planned stack (DECISIONS §4)
 
