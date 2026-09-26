@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.IO;
 using Evidgate.BuildingBlocks.Persistence.Readiness;
+using Evidgate.Migrator;
 using Evidgate.Testing;
 using Npgsql;
 using Testcontainers.PostgreSql;
@@ -47,6 +49,19 @@ public sealed class PostgresFixture : IAsyncLifetime
         .Build();
 
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+
+    private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Repository <c>migrations/</c>, resolved by the Migrator's own
+    /// default-path rule (walk up from the test directory to <c>Evidgate.slnx</c>),
+    /// so the suite applies the real files through the real entry point.
+    /// </summary>
+    public static string RepoMigrationsPath { get; } = MigratorOptions.FromEnvironment(
+        new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            [MigratorOptions.ConnectionStringVariable] = "Host=127.0.0.1;Database=evidgate;Username=evidgate_owner",
+        }).MigrationsPath;
 
     /// <summary>Superuser connection string for the container's default database (DDL and grants).</summary>
     public string ConnectionString => _container.GetConnectionString();
@@ -99,6 +114,85 @@ public sealed class PostgresFixture : IAsyncLifetime
         await using var connection = await OpenAsync(Builder(appConnectionString, admin: true));
         await ExecuteAsync(connection, $"revoke select on public.schema_migration from {AppRoleName}");
     }
+
+    /// <summary>
+    /// A database owned by the migration role and brought to head by the real
+    /// <c>Evidgate.Migrator</c> — the same bootstrap tests/Tasks.IntegrationTests
+    /// uses (01.4.1 §9). The Api connects as <c>evidgate_app</c>, whose credentials
+    /// were set on the cluster role; the returned string is that role's.
+    /// </summary>
+    public async Task<string> CreateMigratedDatabaseAsync()
+    {
+        var database = "migrated_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
+
+        await using (var connection = await OpenAsync(ConnectionString))
+        {
+            // The migration role's attributes match the bootstrap exactly (LOGIN +
+            // CREATEROLE, nothing that would bypass RLS — DECISIONS F5). The guard
+            // matters because the role is cluster-wide: a second migrated database
+            // in the same container must not re-create it.
+            await ExecuteAsync(
+                connection,
+                $"""
+                do $$
+                begin
+                    if not exists (select 1 from pg_roles where rolname = 'evidgate_owner') then
+                        create role evidgate_owner login createrole nosuperuser nocreatedb nobypassrls password '{_ownerPassword}';
+                    else
+                        alter role evidgate_owner login password '{_ownerPassword}';
+                    end if;
+                end
+                $$;
+                """);
+            await ExecuteAsync(connection, $"create database \"{database}\" owner evidgate_owner");
+        }
+
+        var outcome = MigratorRunner.Run(
+            new MigratorOptions
+            {
+                ConnectionString = OwnerConnectionString(database),
+                MigrationsPath = RepoMigrationsPath,
+            },
+            MigrationCommand.Apply,
+            new StringWriter(CultureInfo.InvariantCulture));
+
+        if (outcome.ExitCode != MigratorExitCodes.Success)
+        {
+            throw new InvalidOperationException(
+                $"the suite could not reach head on '{database}' (exit {outcome.ExitCode}): {string.Join(" | ", outcome.Messages)}");
+        }
+
+        await using (var connection = await OpenAsync(AdminConnectionString(database)))
+        {
+            // The migration creates evidgate_app only when absent; this container's
+            // fixture created it with INHERIT (the Postgres default), while 0001's
+            // contract is NOINHERIT — restore the production attribute before the
+            // host connects, or an inherited membership could silently widen what
+            // the route tests prove.
+            await ExecuteAsync(connection, $"alter role {AppRoleName} noinherit");
+        }
+
+        return AppConnectionString(database);
+    }
+
+    /// <summary>The <c>evidgate_owner</c> connection string for one test database (migrations, seeding).</summary>
+    public string OwnerConnectionString(string database) =>
+        Unpooled(new NpgsqlConnectionStringBuilder(Builder(ConnectionString, database))
+        {
+            Username = "evidgate_owner",
+            Password = _ownerPassword,
+        }.ConnectionString);
+
+    /// <summary>The <c>evidgate_app</c> connection string for one test database.</summary>
+    public string AppConnectionString(string database) =>
+        Builder(ConnectionString, database, AppRoleName, _appPassword);
+
+    /// <summary>Unpooled superuser connection string for a database in this container.</summary>
+    public string AdminConnectionString(string database) =>
+        Unpooled(Builder(ConnectionString, database, admin: true));
+
+    private static string Unpooled(string connectionString) =>
+        new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString;
 
     private async Task EnsureAppRoleAsync()
     {

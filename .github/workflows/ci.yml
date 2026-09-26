@@ -1,0 +1,161 @@
+# Evidgate CI (01.7.1-T1 / FR-01-1, AC1–AC3). One pipeline, one command list:
+# every job invokes `scripts/verify.sh --stage …`, never a copy of the commands
+# inside it, so a local `scripts/verify.sh` pass and CI cannot diverge (AC2 —
+# enforced by scripts/check-ci-parity.sh, itself a verify.sh stage).
+#
+# Runner pin: ubuntu-24.04, not ubuntu-latest — the latest alias migrates to
+# Ubuntu 26 on 2026-10-19 (01.7.1 §7). The Testcontainers suites need a Docker
+# daemon, which GitHub-hosted Ubuntu runners provide (evidence: the interim
+# docker-tests.yml, actions run 36205176754 — that workflow is deleted by this
+# task, not extended; AC2 forbids a parallel copy).
+#
+# Supply chain (AC6): every `uses:` below is a full 40-hex commit SHA with the
+# release tag in a comment; scripts/check-action-pins.sh enforces it.
+#
+# Budget (AC3, NFR-01-1): a warm-cache run must stay under 10 min. NuGet is
+# cached on the `**/packages.lock.json` hash and npm on the `package-lock.json`
+# hash, so a no-dependency-change PR hits both. The first real run measures the
+# wall clock; this file deliberately does not fake a timing gate.
+#
+# Reserved: 01.7.1-T2 adds the `licence` job, 01.7.1-T4 the audit/SBOM gates and
+# 11.6.1 hooks the `security` (CodeQL) stage into this file (§5/§7).
+name: ci
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  # One in-flight run per ref; a superseded commit's run is cancelled so stale
+  # results never hold a runner or report after a newer push.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# 00 §5.7 S3: least privilege — no secret is needed beyond the default token.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: 'verify (dotnet)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # FR-01-2: the SDK (10.0.x) comes from global.json, not a floating range.
+          global-json-file: global.json
+          # AC3: NuGet cache keyed on the locked package graph.
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, format, test — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage format
+          --stage test
+
+  web:
+    name: 'verify (web)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # FR-01-2: the Node version (26) comes from .nvmrc, not a floating range.
+          node-version-file: .nvmrc
+          # AC3: npm cache keyed on the lock-file hash.
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # verify.sh never installs; each job installs the dependencies it needs
+      # (locked modes only — npm ci, 00 §5.7 S6 / FR-01-1).
+      - name: 'Install npm workspaces (locked)'
+        run: npm ci
+      - name: 'tsc, vitest, eslint, prettier — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage tsc-build
+          --stage tsc-spec
+          --stage vitest
+          --stage eslint
+          --stage prettier
+      # Contract drift gate (AC1/§9): regenerates generated sources and fails on
+      # any diff. `npm run codegen --if-present` is a no-op until packages/sdk and
+      # the codegen script land (01.3.2-T1); `git diff --exit-code` then blocks a
+      # hand-edited generated file.
+      - name: 'Contract drift gate — activates with codegen (01.3.2-T1)'
+        run: |
+          npm run codegen --if-present
+          git diff --exit-code
+      # Web build (AC1): `apps/web` gains a build script in 09.1.1; until then
+      # --if-present keeps this step a no-op instead of a failure.
+      - name: 'Web build — activates with apps/web build script (09.1.1)'
+        run: npm run build --workspaces --if-present
+
+  policy:
+    name: 'verify (policy)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # check-sources.sh calls `dotnet nuget list source`; no package work
+          # happens here, so the NuGet cache stays off.
+          global-json-file: global.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # check-contract-conventions.sh runs `npx spectral lint` — devDeps required.
+      - name: 'Install npm workspaces (locked)'
+        run: npm ci
+      - name: 'Layout, sources, ADR, links, contracts, parity, pins — verify.sh stages'
+        run: >-
+          ./scripts/verify.sh
+          --stage check-layout
+          --stage check-sources
+          --stage check-adr-matrix
+          --stage check-adr
+          --stage check-links
+          --stage check-contract-conventions
+          --stage check-ci-parity
+          --stage check-action-pins
+
+  # Non-blocking until the web milestone owns the suite (01.7.1-T1.3, 09):
+  # apps/web has a Playwright spec, but the suite is still a scaffold.
+  e2e:
+    name: 'e2e (playwright, non-blocking until 09)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: 'Install npm workspaces (locked)'
+        run: npm ci
+      - name: 'Install Playwright browsers'
+        run: npx playwright install --with-deps chromium
+      - name: 'Playwright e2e — apps/web'
+        run: npm run e2e -w apps/web
+      - name: 'Upload the Playwright report on failure'
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 14

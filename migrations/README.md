@@ -20,9 +20,10 @@ The playbook for changing a table without breaking the running version is
   lexical order is the apply order. A module claims the next free block (today
   `0001`–`0003` are the foundation files from 01, `0004`–`0005` are 02.1.1's
   `organization`/`project` tables, and `0006`–`0008` are 01.5.1's mechanism
-  tables `outbox`, `idempotency_record` and `task`, so the next story starts at
-  `0009`); a gap means two branches invented the same sequence and neither
-  history can be trusted.
+  tables `outbox`, `idempotency_record` and `task`, `0009` is 01.5.1-T3's
+  dispatcher grant on `outbox`, and `0010` is reserved for 01.5.1-T4's operator
+  read path, so the next story starts at `0011`); a gap means two branches
+  invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -105,6 +106,14 @@ is written by the tenant-scope primitive, never from request input.
   payloads. 01.5.1-T4.2's operator dead-letter list therefore needs an owner
   `SECURITY DEFINER` read function (with the T76 audit trail) or a deliberate
   grant — an open decision for that task, not something to grant early.
+- `0009` (01.5.1-T3.1) pays the grant `0006`'s header promised the dispatcher:
+  `select` on `public.outbox` plus `update (dispatched_at)` only — column-scoped
+  on purpose, so `evidgate_app` can claim and stamp rows but still cannot
+  rewrite `payload`, `task_type`, `org_id` or `idempotency_key` of a committed
+  row. With that file applied, `has_table_privilege('evidgate_app',
+'public.outbox','UPDATE')` stays false while the dispatcher runs as the app
+  role; `select … for update skip locked` needs `select`, not table-level
+  `update` (measured on the pinned postgres:18.6).
 - T80's "every call audited" for `evidgate.purge_expired_idempotency` is
   deferred to 02.7.1 (`audit_log` does not exist in M1); the scheduled handler
   logs function/limit/row-count at Information instead. Accepted as a carried

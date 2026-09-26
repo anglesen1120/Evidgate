@@ -56,6 +56,12 @@ public static class TaskQueueSql
     /// at the cap looks like — and the row becomes visible to the operator path
     /// (01.5.1-T4.2) rather than looping.
     /// </summary>
+    /// <remarks>
+    /// The <c>RETURNING</c> clause exists for the alert hook of §7: the transition
+    /// commits first, then <see cref="ITaskAlertSink"/> is told about each row by
+    /// the caller — an UPDATE over a bounded set is how every dead-lettered row
+    /// gets its own alert instead of the batch count.
+    /// </remarks>
     public const string DeadLetterExpiredLeases = """
         update public.task
            set state = 'dead_letter',
@@ -71,6 +77,13 @@ public static class TaskQueueSql
                   order by locked_until
                   limit @batch_size
                     for update skip locked)
+        returning id as "Id",
+                  org_id as "OrgId",
+                  queue as "Queue",
+                  task_type as "TaskType",
+                  attempts as "Attempts",
+                  max_attempts as "MaxAttempts",
+                  last_error as "LastError"
         """;
 
     /// <summary>
@@ -168,5 +181,89 @@ public static class TaskQueueSql
                version as "Version"
           from claimed
          order by available_at, id
+        """;
+
+    /// <summary>
+    /// The first page of <c>GET /internal/operator/tasks/dead-letter</c>
+    /// (01.5.1 §5/§8 P4): keyset over <c>task_dead_idx</c> in its own
+    /// <c>(created_at, id)</c> order, so the partial index serves both the
+    /// <c>state = 'dead_letter'</c> predicate and the ordering — the limit the
+    /// caller passes is fetch size + 1 (the one extra row is how "there is a next
+    /// page" is answered without a count). The queue filter is an index filter on
+    /// top of the key columns, never part of the ordering.
+    /// </summary>
+    internal const string DeadLetterFirstPage = """
+        select id as "Id",
+               org_id as "OrgId",
+               queue as "Queue",
+               task_type as "TaskType",
+               idempotency_key as "IdempotencyKey",
+               attempts as "Attempts",
+               max_attempts as "MaxAttempts",
+               last_error as "LastError",
+               created_at as "CreatedAt"
+          from public.task
+         where state = 'dead_letter'
+           and (@queue is null or queue = @queue)
+         order by created_at, id
+         limit @limit
+        """;
+
+    /// <summary>
+    /// The continuation of <see cref="DeadLetterFirstPage"/>: the row comparison
+    /// <c>(created_at, id) &gt; (@cursor_created_at, @cursor_id)</c> of 00 §9.1,
+    /// with explicit casts so the comparison types against the index columns
+    /// instead of relying on parameter inference. There is no NULL-sentinel
+    /// branch (that would defeat the index): a missing cursor goes through the
+    /// first-page constant above.
+    /// </summary>
+    internal const string DeadLetterNextPage = """
+        select id as "Id",
+               org_id as "OrgId",
+               queue as "Queue",
+               task_type as "TaskType",
+               idempotency_key as "IdempotencyKey",
+               attempts as "Attempts",
+               max_attempts as "MaxAttempts",
+               last_error as "LastError",
+               created_at as "CreatedAt"
+          from public.task
+         where state = 'dead_letter'
+           and (@queue is null or queue = @queue)
+           and (created_at, id) > (@cursor_created_at::timestamptz, @cursor_id::uuid)
+         order by created_at, id
+         limit @limit
+        """;
+
+    /// <summary>
+    /// The operator replay of 01.5.1 §5/§6 (`dead_letter → queued`): the guard
+    /// is the <c>state = 'dead_letter'</c> predicate, which makes the POST
+    /// idempotent — a second replay of the same row no-ops into the 409 the
+    /// endpoint answers. The row's error is kept: a replay is a re-queue, not an
+    /// acquittal, and the operator's audit of why it dead-lettered stays visible
+    /// on the row until the terminal sweep.
+    /// </summary>
+    internal const string ReplayDeadLetter = """
+        update public.task
+           set state = 'queued',
+               attempts = 0,
+               available_at = now(),
+               locked_until = null
+         where id = @id
+           and state = 'dead_letter'
+        returning available_at as "AvailableAt"
+        """;
+
+    /// <summary>
+    /// The 404/409 discriminator of <see cref="ReplayDeadLetter"/> (01.5.1 §5):
+    /// a replay that matched no dead-letter row reads the row's actual state —
+    /// no row means `task_not_found`, a row in any other state means
+    /// `task_not_dead_letter`. Same connection as the update, so no TOCTOU can
+    /// name a state that was already replaced.
+    /// </summary>
+    internal const string TaskStateById = """
+        select state
+          from public.task
+         where id = @id
         """;
 }

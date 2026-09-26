@@ -9,6 +9,7 @@
   <Project Path="src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
   <Project Path="src/BuildingBlocks/Observability/Evidgate.BuildingBlocks.Observability.csproj" />
   <Project Path="src/BuildingBlocks/Persistence/Evidgate.BuildingBlocks.Persistence.csproj" />
+  <Project Path="src/BuildingBlocks/Pipeline/Evidgate.BuildingBlocks.Pipeline.csproj" />
   <Project Path="src/BuildingBlocks/SharedKernel/Evidgate.BuildingBlocks.SharedKernel.csproj" />
   <Project Path="src/Modules/Evidgate.Modules.Audit.Contracts/Evidgate.Modules.Audit.Contracts.csproj" />
   <Project Path="src/Modules/Evidgate.Modules.Audit/Evidgate.Modules.Audit.csproj" />

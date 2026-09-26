@@ -10,8 +10,8 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | `develop` head | `73f957b` (PR #9 merged) |
 | Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 |
 | Open PRs | none |
-| Active branch | `feature/m1-wave5` (off `develop` `73f957b`); wave 5 in progress — see §3.5 |
-| M0/M1 tasks | 34 done · 100 open (of 134) |
+| Active branch | `feature/m1-wave5` (off `develop` `73f957b`); wave 5 delivered, gates green, PR pending |
+| M0/M1 tasks | 39 done · 95 open (of 134) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
 | Owner decisions | Decided 2026-09-26: O1 engine = Playwright (UI), customer CI = per-project input. Open before M1: O1 pilot names, O2 (owner note recorded, reading unconfirmed). Open before 08.5 DoR: O4 (owner note "tự build hệ thống riêng", model-or-not unconfirmed) — DECISIONS §8 |
@@ -32,6 +32,7 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 01.6.1 | T1 | #6 | Test conventions (.NET + Vitest) |
 | 02.1.1 | T1 | #6 | `organization` / `project` migrations 0004/0005 |
 | 01.4.2, 01.5.1, 01.6.1 | 01.4.2-T2/T3, 01.5.1-T1/T2/T6, 01.6.1-T2/T5 | #9 | `outbox`/`idempotency_record`/`task` (migrations 0006–0008), claim/consumer/schedule mechanism, schema/EF conventions + UUIDv7 generator, Testcontainers harness, Playwright workspace — see §3 |
+| 01.4.2, 01.5.1, 01.7.1 | 01.4.2-T4, 01.5.1-T3/T4/T5, 01.7.1-T1 | pending | C2 Mediator pipeline + Result→§9.2 filter, outbox dispatcher (migration 0009), retry/dead-letter + `/internal/operator` routes, AC1–AC7 suites, real `ci.yml` — see §3.5 |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -56,7 +57,7 @@ Shared prerequisites committed first (`06e47b5`): `tests/Foundation.IntegrationT
 
 Not in this wave, now ready next (§5): 01.5.1-T3 dispatcher, T4 retry/dead-letter/operator routes, T5 crash tests; 01.4.2-T4 pipeline. Still blocked: 02.1.1-T2 org/project API (unrelated to this wave).
 
-## 3.5. Wave 5 (in progress on `feature/m1-wave5`)
+## 3.5. Wave 5 (delivered on `feature/m1-wave5`; gates green, PR pending)
 
 Scope (STATUS §5 ready + plan_graph deps verified): **01.4.2-T4** Mediator pipeline + endpoint filter + `AddEvidgateTenancy` wiring (L); **01.5.1-T3** outbox dispatcher (M); **01.5.1-T4** handler contract/retry cap/dead letter/operator routes (M, needs T3); **01.5.1-T5** crash + operator suites on the harness (M, needs T4); **01.7.1-T1** real `ci.yml` (L — deletes interim `docker-tests.yml`, applies its deferred fixes: `global-json-file`, `ubuntu-24.04`, single trigger).
 
@@ -64,15 +65,19 @@ Gates per slice, in order: implement → QA agent (separate from the author) →
 
 | Slice | Tasks | Size | Implement | QA | Code review | Perf review | Security review |
 |---|---|---|---|---|---|---|---|
-| P | 01.4.2-T4: C2 pipeline behaviours (telemetry → validation → tenant tx → authorization → idempotency → outbox flush), `Result` → §9.2 endpoint filter, pipeline-order arch test, `AddEvidgateTenancy` + mediator into Api/Worker | L | — | — | — | — | — |
-| D | 01.5.1-T3: outbox dispatcher (batch claim `SKIP LOCKED` 200, `INSERT … SELECT` task rows `idempotency_key='outbox:'‖id`, `dispatched_at` in one tx), dispatch metrics + crash test; migration `0009` dispatcher grants | M | — | — | — | — | — |
-| C | 01.7.1-T1: `ci.yml` (SHA-pinned actions, `ubuntu-24.04`, `global-json-file`, caches, `concurrency`, least-privilege `permissions:`), `verify.sh --stage`, `check-ci-parity.sh`, drift gate scaffold, Playwright job non-blocking, delete `docker-tests.yml` | L | — | — | — | — | — |
-| H | 01.5.1-T4: retry→dead-letter semantics + redacted `last_error` + `ITaskAlertSink`; `ListDeadLetterTasksQuery` + `ReplayDeadLetterTask` under `/internal/operator/*` (fail-closed `platform_operator` guard; no `/v1` route); migration `0010` if a read path needs one | M | — | — | — | — | — |
-| T | 01.5.1-T5: AC1–AC7 integration suites on the 01.6.1-T2 harness | M | — | — | — | — | — |
+| P | 01.4.2-T4: C2 pipeline behaviours (telemetry → validation → tenant tx → authorization → idempotency → outbox flush), `Result` → §9.2 endpoint filter, pipeline-order arch test, `AddEvidgateTenancy` + mediator into Api/Worker | L | ✅ | ✅ | ✅ | ✅ | ✅ |
+| D | 01.5.1-T3: outbox dispatcher (batch claim `SKIP LOCKED` 200, `INSERT … SELECT` task rows `idempotency_key='outbox:'‖id`, `dispatched_at` in one tx), dispatch metrics + crash test; migration `0009` dispatcher grants | M | ✅ | ✅ | ✅ | ✅ | ✅ |
+| C | 01.7.1-T1: `ci.yml` (SHA-pinned actions, `ubuntu-24.04`, `global-json-file`, caches, `concurrency`, least-privilege `permissions:`), `verify.sh --stage`, `check-ci-parity.sh`, drift gate scaffold, Playwright job non-blocking, `docker-tests.yml` deleted | L | ✅ | ✅ | ✅ | ✅ | ✅ |
+| H | 01.5.1-T4: retry→dead-letter semantics + redacted `last_error` + `ITaskAlertSink` + `task_dead_letter_total`; `ListDeadLetterTasksQuery` + `ReplayDeadLetterTask` under `/internal/operator/*` behind a fail-closed `IOperatorGate` (deny-all default until 02.x); no `/v1` route, no migration 0010 needed (app-role read path) | M | ✅ | ✅ | ✅ | ✅ | ✅ |
+| T | 01.5.1-T5: AC1–AC7 end-to-end suites on the 01.6.1-T2 harness | M | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 Dependency order: P, D, C in parallel → H (needs D's dispatcher + P's scope) → T (needs H). Migration numbers reserved: `0009` outbox dispatcher grants (D), `0010` operator read path if needed (H).
 
 Carried items whose owner task lands in this wave: the `task`/`outbox` operator read path (§6 → H); `docker-tests.yml` deletion (§6 → C).
+
+QA defects fixed in wave: Worker host missing `AddEvidgatePipeline` (QA-P D1 — every Mediator dispatch would have run bare), `IdempotencyBehaviour` missing the `ResultContract` guard its siblings carry (QA-P D2), `task_dead_letter_total` moved into `TaskAlertNotifier` so a custom `ITaskAlertSink` can't silence it (QA-H H-1), empty `queue=` param normalised to no-filter (QA-H H-3). Review fixes: `dotnet format` whitespace (IdempotencyBehaviour switch arms — would have failed the format gate), dispatcher queues added to `TaskQueueHostedService.QueuePlan` (dispatched rows were stamped but never claimed — a silent inert chain), `outbox_undispatched` gauge capped at 100k + 5 s command timeout (was a linear seq-scan risk on the metrics thread), pooled connection released before alert-sink notify (a slow sink held a pool slot), `task.last_error` secret masking (`Password=`/bearer/`token=` patterns — mirrors SecretRedactor's regex set), main app DSN pinned to `evidgate_app` (mirrors the sweep-DSN guard), `ci.yml` job `timeout-minutes` added. `scripts/verify.sh` green after all of it: all 17 stages, full test suite incl. Docker.
+
+Deferred to first CI run on GitHub (by design, AC-level): a green trivial-PR run, cache-hit annotations, <10 min wall time, Testcontainers on the hosted runner (the deleted docker-tests.yml already proved Docker works — run 36205176754).
 
 ## 4. Wave 3 (delivered, PR #6)
 
@@ -119,10 +124,10 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | Task | Size | Milestone | Note |
 |---|---|---|---|
 | 01.3.2-T1 | L | M1 | Generated SDK |
-| 01.4.2-T4 | L | M1 | Wires `AddEvidgateTenancy` into Api/Worker — **in wave 5 (§3.5)** |
-| 01.5.1-T3 | M | M1 | Outbox dispatcher — **in wave 5 (§3.5)** |
-| 01.5.1-T4 | M | M1 | Retry/dead-letter/operator routes — **in wave 5 (§3.5)**, after T3 per plan_graph |
-| 01.5.1-T5 | M | M1 | Crash/integration suites — **in wave 5 (§3.5)**, after T4 per plan_graph |
+| 01.7.1-T2 | M | M1 | Licence gate (ready: `ci.yml` landed — `licence-policy.json`/`licence-scan.sh` per 01.7.1 §5) |
+| 01.7.1-T3 | S | M1 | Branch protection, CODEOWNERS, PR template (ready: T1 landed) |
+| 01.7.1-T4 | M | M1 | Supply-chain hardening: `dependabot.yml`, `audit-deps.sh`, SBOM (ready: T1 landed) |
+| 01.6.1-T3, 01.6.1-T4 | M each | M1 | Harness follow-ups (ready: T2 harness landed) |
 | 01.3.2-T2 | L | M1 | Validators |
 | 01.8.1-T3 | M | M1 | Dev stack follow-up |
 | 02.1.2-T1, 02.2.1-T1, 02.4.1-T2, 02.9.1-T2 | M each | M1 | Identity area, on 02.1.1-T1 |
@@ -144,12 +149,12 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 |---|---|---|
 | `seed-dev` script | Needs 02.1.1 / 02.1.2 / 07.1.1 tables | Tech Lead |
 | Web app | 09.1.1 (M2) | Lane C |
-| `docker-tests.yml` fixes (global-json-file, single trigger, `ubuntu-24.04`) | Folded into 01.7.1-T1; the file is deleted when `ci.yml` lands | Tech Lead |
+| `docker-tests.yml` deleted | Replaced by `ci.yml` in 01.7.1-T1 (wave 5): `global-json-file` SDK pin, single push+PR trigger, `ubuntu-24.04`, SHA-pinned actions, `check-ci-parity.sh`/`check-action-pins.sh` | done (wave 5) |
 | `evidgate_owner` permissive policy on `organization`/`project` | Rationale logged in 00 §15 and in the `0003` copy block; 00 §5.4.3 still lacks the sentence | Tech Lead |
 | `/internal/*` public-ingress routing rule | `[OPEN]` in 01.1.2 feature plan, no plan-10 task | Tech Lead |
 | O1 pilot names; O2 and O4 readings | Owner confirmation (O1 engine decided 2026-09-26) | Owner |
 | T80 purge-call audit for `evidgate.purge_expired_idempotency` | `audit_log` lands in 02.7.1 (M2); until then the handler logs at Information (recorded in `migrations/README.md`) | 02.7.1 |
-| Operator read path for `task`/`outbox` (dead-letter list, dispatcher visibility) | `evidgate_operator` holds no SELECT on mechanism tables; needs an owner `SECURITY DEFINER` reader or a deliberate grant | 01.5.1-T3/T4.2 |
+| Audited operator read path for `task`/`outbox` (T76 grant gate) | T4.2 ships the read path on the app-role connection behind a fail-closed `IOperatorGate`; the audited `SECURITY DEFINER`/grant form lands with the real `platform_operator` credential in 02.x (0008's header still describes the dedicated-grant shape — read it as the target, not the shipped state) | 02.x (operator auth) |
 | `SchemaConventionTests` exemptions: `rls_probe` (pre-convention template, checksum-locked) and `schema_migration` (02 §4) fully exempt; `task` exempt TenantKey/CompositeForeignKey/RowLevelSecurity only (AuditColumns/VersionTrigger stay gated); `outbox` exempt RLS only (`org_id` unique key enforced) | Lint enforcement belongs to 02.6.1-T2, which must adopt the same exemption list | 02.6.1-T2 |
 | Owned EF entity types (OwnsOne/OwnsMany) fail the model build under `TenantModelConventions` (shadow-FK rename breaks table sharing) | Latent: no M1 entity is owned; fix sketch recorded in QA report (skip owned key/FK properties, derive names per-table) | 01.4.2 follow-up / next owner |
 | Node `JSON.parse` escaped-key defect (upstream V8 regression, 24.x/26.x warm process) | upstream fix landed in V8, awaiting a Node release; the canonicalize guard stays as a partial mitigation | 01.3.2 / Node upgrade |

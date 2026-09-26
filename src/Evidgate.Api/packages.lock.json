@@ -105,6 +105,16 @@
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
       },
+      "evidgate.buildingblocks.pipeline": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "FluentValidation": "[12.1.1, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
       "evidgate.buildingblocks.sharedkernel": {
         "type": "Project"
       },
@@ -248,6 +258,12 @@
         "requested": "[2.1.89, )",
         "resolved": "2.1.89",
         "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
+      },
+      "FluentValidation": {
+        "type": "CentralTransitive",
+        "requested": "[12.1.1, )",
+        "resolved": "12.1.1",
+        "contentHash": "EPpkIe1yh1a0OXyC100oOA8WMbZvqUu5plwhvYcb7oSELfyUZzfxV48BLhvs3kKo4NwG7MGLNgy1RJiYtT8Dpw=="
       },
       "Microsoft.EntityFrameworkCore": {
         "type": "CentralTransitive",

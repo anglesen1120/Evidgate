@@ -2,13 +2,12 @@ using System.Text.Json;
 using Evidgate.Api.Json;
 using Evidgate.Api.Middleware;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
-using Evidgate.BuildingBlocks.SharedKernel.Serialization;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Ingestion.Application.Commands;
 using Evidgate.Modules.Orchestrator.Application.Commands;
 using Evidgate.Modules.Orchestrator.Application.Queries;
 using Evidgate.Modules.Policy.Application.Queries;
 using Mediator;
-using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Evidgate.Api.Endpoints;
 
@@ -33,7 +32,14 @@ public static class SliceEndpoints
 
     private static void MapRun(RouteGroupBuilder group, bool excludeFromDescription)
     {
-        var endpoint = group.MapPost("/run", HandleRunAsync);
+        // 01.4.2-T4.4 (C8): the delegate answers in Result terms and the filter
+        // renders the 00 §9.2 envelope — the shape every real route takes.
+        // Produces<T> keeps the SERVED document honest: the filter unwraps
+        // Result<T>, so the wire body is the slice DTO, not the wrapper the
+        // delegate's return type would otherwise document.
+        var endpoint = group.MapPost("/run", HandleRunAsync)
+            .Produces<SliceRunResponse>(StatusCodes.Status200OK)
+            .AddEndpointFilter<ResultEndpointFilter>();
 
         if (excludeFromDescription)
         {
@@ -50,7 +56,7 @@ public static class SliceEndpoints
     /// <see cref="InvalidOperationException"/>), and Kestrel's own
     /// <see cref="BadHttpRequestException"/> (whose status, e.g. 413, is preserved).
     /// </summary>
-    private static async Task<IResult> HandleRunAsync(
+    private static async Task<Result<SliceRunResponse>> HandleRunAsync(
         HttpContext context,
         IMediator mediator,
         CancellationToken cancellationToken)
@@ -65,29 +71,22 @@ public static class SliceEndpoints
         catch (BadHttpRequestException exception)
         {
             var status = exception.StatusCode;
-            return Envelope(
-                context,
-                status,
+            return Result.Failure<SliceRunResponse>(new Error(
                 ErrorEnvelopeWriter.CodeForStatus(status),
-                ErrorEnvelopeWriter.MessageForStatus(status));
+                ErrorEnvelopeWriter.MessageForStatus(status),
+                status));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         {
-            return Envelope(
-                context,
-                StatusCodes.Status400BadRequest,
-                ApiErrorCode.RequestInvalid,
-                "the request body is not valid JSON");
+            return Result.Failure<SliceRunResponse>(
+                Error.BadRequest("the request body is not valid JSON"));
         }
 
         if (request is null || string.IsNullOrWhiteSpace(request.ProjectRef))
         {
-            return Envelope(
-                context,
-                StatusCodes.Status422UnprocessableEntity,
-                ApiErrorCode.RequestInvalid,
+            return Result.Failure<SliceRunResponse>(Error.Invalid(
                 "project_ref is required",
-                [new ErrorDetail("project_ref", "required")]);
+                [new ErrorDetail("project_ref", "required")]));
         }
 
         var manifest = await mediator.Send(
@@ -106,34 +105,13 @@ public static class SliceEndpoints
 
         var decision = await mediator.Send(new GetDecision(run.RunId), cancellationToken);
 
-        return TypedResults.Json(
-            new SliceRunResponse(
-                manifest.ManifestId,
-                manifest.ManifestHash,
-                run.RunId,
-                plan.ExecutionIds,
-                batch.AcceptedCount,
-                completeness.Completeness,
-                decision.Decision),
-            ApiJsonContext.Default.SliceRunResponse,
-            contentType: "application/json",
-            statusCode: StatusCodes.Status200OK);
+        return Result.Success(new SliceRunResponse(
+            manifest.ManifestId,
+            manifest.ManifestHash,
+            run.RunId,
+            plan.ExecutionIds,
+            batch.AcceptedCount,
+            completeness.Completeness,
+            decision.Decision));
     }
-
-    private static JsonHttpResult<ErrorEnvelope> Envelope(
-        HttpContext context,
-        int statusCode,
-        string code,
-        string message,
-        IReadOnlyList<ErrorDetail>? details = null) =>
-        TypedResults.Json(
-            new ErrorEnvelope(new ErrorBody(
-                Code: code,
-                Message: message,
-                RequestId: context.RequestId(),
-                Retryable: false,
-                Details: details ?? [])),
-            EvidgateJsonContext.Default.ErrorEnvelope,
-            contentType: "application/json",
-            statusCode: statusCode);
 }

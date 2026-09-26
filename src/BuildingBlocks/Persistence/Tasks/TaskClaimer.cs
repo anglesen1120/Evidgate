@@ -80,6 +80,22 @@ public interface ITaskClaimer
 }
 
 /// <summary>
+/// One row of the <c>RETURNING</c> clause of <see cref="TaskQueueSql.DeadLetterExpiredLeases"/>:
+/// the projection the alert hook (01.5.1 §7) turns into one
+/// <see cref="TaskDeadLetterAlert"/> per dead-lettered row once the reclaim has
+/// committed. Internal: it exists to shape one SQL result, not to leave the
+/// mechanism.
+/// </summary>
+internal sealed record DeadLetteredLeaseRow(
+    Guid Id,
+    Guid? OrgId,
+    string Queue,
+    string TaskType,
+    int Attempts,
+    int MaxAttempts,
+    string? LastError);
+
+/// <summary>
 /// The production claim path: Dapper over the app-role <c>NpgsqlDataSource</c>
 /// (01.5.1 §8 S1 — parameterised SQL, no string building). The claim is its own
 /// short transaction, and the handler runs outside it (§8 P5): no row lock is held
@@ -89,18 +105,25 @@ public interface ITaskClaimer
 public sealed partial class TaskClaimer : ITaskClaimer
 {
     private readonly NpgsqlDataSource _dataSource;
+    private readonly ITaskAlertSink _alerts;
     private readonly int _visibilityTimeoutSeconds;
     private readonly int _reclaimBatchSize;
     private readonly ILogger<TaskClaimer> _logger;
 
     /// <summary>Creates the claimer over the registered app-role data source.</summary>
-    public TaskClaimer(NpgsqlDataSource dataSource, IOptions<TasksOptions> options, ILogger<TaskClaimer> logger)
+    public TaskClaimer(
+        NpgsqlDataSource dataSource,
+        ITaskAlertSink alerts,
+        IOptions<TasksOptions> options,
+        ILogger<TaskClaimer> logger)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
+        ArgumentNullException.ThrowIfNull(alerts);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
 
         _dataSource = dataSource;
+        _alerts = alerts;
         _visibilityTimeoutSeconds = options.Value.VisibilityTimeoutSeconds;
         _reclaimBatchSize = options.Value.BatchSize;
         _logger = logger;
@@ -121,8 +144,7 @@ public sealed partial class TaskClaimer : ITaskClaimer
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-
-        await ReclaimAsync(connection, transaction, queue, cancellationToken).ConfigureAwait(false);
+        var reclaim = await ReclaimAsync(connection, transaction, queue, cancellationToken).ConfigureAwait(false);
 
         var rows = await connection.QueryAsync<TaskClaim>(new CommandDefinition(
             TaskQueueSql.ClaimBatch,
@@ -138,6 +160,14 @@ public sealed partial class TaskClaimer : ITaskClaimer
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
+        // The alert hook of 01.5.1 §7 fires only after the commit AND after the
+        // pooled connection has been returned: a slow or non-compliant sink is
+        // bounded by nothing but the caller's token, so it must not hold a pool
+        // slot while it runs (perf review wave 5).
+        await transaction.DisposeAsync().ConfigureAwait(false);
+        await connection.DisposeAsync().ConfigureAwait(false);
+        await NotifyDeadLetteredAsync(reclaim.DeadLettered, cancellationToken).ConfigureAwait(false);
+
         return rows as IReadOnlyList<TaskClaim> ?? [.. rows];
     }
 
@@ -149,20 +179,25 @@ public sealed partial class TaskClaimer : ITaskClaimer
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-        var requeued = await ReclaimAsync(connection, transaction, queue, cancellationToken).ConfigureAwait(false);
+        var reclaim = await ReclaimAsync(connection, transaction, queue, cancellationToken).ConfigureAwait(false);
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-        return requeued.Requeued;
+        await transaction.DisposeAsync().ConfigureAwait(false);
+        await connection.DisposeAsync().ConfigureAwait(false);
+        await NotifyDeadLetteredAsync(reclaim.DeadLettered, cancellationToken).ConfigureAwait(false);
+
+        return reclaim.Requeued;
     }
 
     /// <summary>
     /// The two halves of the visibility timeout (§6), in the caller's transaction:
     /// rows with attempts left come back as `queued`, rows at the cap give up as
     /// `dead_letter` — never silently, so a crash loop ends where the operator can
-    /// see it.
+    /// see it. The dead-lettered rows come back with the commit so the alert hook
+    /// can name each row after it is durable, not before.
     /// </summary>
-    private async Task<(int Requeued, int DeadLettered)> ReclaimAsync(
+    private async Task<(int Requeued, IReadOnlyList<DeadLetteredLeaseRow> DeadLettered)> ReclaimAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         string queue,
@@ -176,18 +211,50 @@ public sealed partial class TaskClaimer : ITaskClaimer
             transaction,
             cancellationToken: cancellationToken)).ConfigureAwait(false);
 
-        var deadLettered = await connection.ExecuteAsync(new CommandDefinition(
+        var deadLettered = await connection.QueryAsync<DeadLetteredLeaseRow>(new CommandDefinition(
             TaskQueueSql.DeadLetterExpiredLeases,
             batch,
             transaction,
             cancellationToken: cancellationToken)).ConfigureAwait(false);
 
-        if (deadLettered > 0)
+        var rows = deadLettered as IReadOnlyList<DeadLetteredLeaseRow> ?? [.. deadLettered];
+
+        if (rows.Count > 0)
         {
-            LogLeaseExpiredAtCap(queue, deadLettered);
+            LogLeaseExpiredAtCap(queue, rows.Count);
         }
 
-        return (requeued, deadLettered);
+        return (requeued, rows);
+    }
+
+    /// <summary>
+    /// Tells the alert sink about every row a committed reclaim dead-lettered
+    /// (01.5.1 §7). Delivery is per row because a batch can hold more than one
+    /// poison task, and it is guarded because a sink failure must never break the
+    /// claim path it runs inside.
+    /// </summary>
+    private async Task NotifyDeadLetteredAsync(
+        IReadOnlyList<DeadLetteredLeaseRow> rows,
+        CancellationToken cancellationToken)
+    {
+        foreach (var row in rows)
+        {
+            await TaskAlertNotifier
+                .NotifySafelyAsync(
+                    _alerts,
+                    _logger,
+                    new TaskDeadLetterAlert(
+                        TaskId: row.Id,
+                        Queue: row.Queue,
+                        TaskType: row.TaskType,
+                        OrgId: row.OrgId,
+                        Attempts: row.Attempts,
+                        MaxAttempts: row.MaxAttempts,
+                        LastError: row.LastError,
+                        Source: TaskDeadLetterSource.ExpiredLease),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 
     [LoggerMessage(

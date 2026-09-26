@@ -98,6 +98,24 @@ internal sealed partial class TaskQueueHostedService : BackgroundService
             }
         }
 
+        // 01.5.1-T3's dispatcher lands rows in QueueRoutes targets or the
+        // DispatchDefaultQueue — the same "never fire into a queue nobody
+        // polls" rule applies to it, so its queues join the plan here at the
+        // default concurrency (code review wave 5: an outbox row dispatched to
+        // an unpolled queue is stamped and invisible to every metric).
+        if (seen.Add(_options.DispatchDefaultQueue))
+        {
+            plan.Add((_options.DispatchDefaultQueue, _options.DefaultQueueConcurrency));
+        }
+
+        foreach (var route in _options.QueueRoutes)
+        {
+            if (seen.Add(route.Queue))
+            {
+                plan.Add((route.Queue, _options.DefaultQueueConcurrency));
+            }
+        }
+
         return plan;
     }
 

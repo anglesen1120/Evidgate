@@ -29,8 +29,38 @@ public static class PersistenceExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddSingleton(provider => NpgsqlDataSource.Create(
-            provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
+        services.AddSingleton(provider =>
+        {
+            var connectionString =
+                provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString;
+
+            // Same role pin the sweep DSN carries (WorkerSchedDataSource, TL T80):
+            // deploying an owner (or any non-app) role string here must fail the
+            // boot, not silently collapse the owner/app privilege split that
+            // 00 §5.4.3 relies on. The parse failure re-throws without echoing
+            // the value — it can carry a password.
+            NpgsqlConnectionStringBuilder builder;
+            try
+            {
+                builder = new NpgsqlConnectionStringBuilder(connectionString);
+            }
+            catch (ArgumentException)
+            {
+                throw new InvalidOperationException(
+                    $"{DatabaseOptions.SectionName} is not a valid connection string "
+                    + "(check quoting and keywords; the value is not echoed because it carries a password).");
+            }
+
+            if (builder.Username != "evidgate_app")
+            {
+                throw new InvalidOperationException(
+                    $"{DatabaseOptions.SectionName} must connect as evidgate_app "
+                    + $"but names '{builder.Username ?? "<none>"}': the app role is the only DML role "
+                    + "in the system (00 §5.4.3).");
+            }
+
+            return NpgsqlDataSource.Create(builder);
+        });
 
         services.AddSingleton<ReadinessProbe>();
 

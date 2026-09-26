@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +39,17 @@ public static class TasksServiceCollectionExtensions
             .Validate(
                 options => options.BackoffMaxSeconds >= options.BackoffBaseSeconds,
                 "EVIDGATE__TASKS__BACKOFFMAXSECONDS must be at least EVIDGATE__TASKS__BACKOFFBASESECONDS")
+            .Validate(
+                options => options.QueueRoutes.All(route =>
+                    !string.IsNullOrWhiteSpace(route.TaskType) && route.TaskType.Length <= 128
+                    && !string.IsNullOrWhiteSpace(route.Queue) && route.Queue.Length <= 64),
+                "every EVIDGATE__TASKS__QUEUEROUTES__* entry needs a non-empty TASKTYPE (≤128 characters) and QUEUE (≤64 characters)")
+            .Validate(
+                options => options.QueueRoutes.Select(route => route.TaskType).Distinct(StringComparer.Ordinal).Count() == options.QueueRoutes.Count,
+                "EVIDGATE__TASKS__QUEUEROUTES__*__TASKTYPE must be unique — a task_type cannot dispatch to two queues")
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.DispatchDefaultQueue) && options.DispatchDefaultQueue.Length <= 64,
+                "EVIDGATE__TASKS__DISPATCHDEFAULTQUEUE must be a non-empty queue name of at most 64 characters")
             .ValidateOnStart();
 
         // The consumer opens the tenant scope of a tenant task from the row's
@@ -51,6 +63,12 @@ public static class TasksServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
 
+        // 01.5.1 §7/T4.1: the default alert sink for every `dead_letter`
+        // transition is the logging/counter one — it exists so the hook is never
+        // unregistered (the consumer and the claimer call it unconditionally).
+        // TryAdd so a host or a test with a real sink wins by registering first.
+        services.TryAddSingleton<ITaskAlertSink, LoggingTaskAlertSink>();
+
         services.TryAddSingleton<ITaskClaimer, TaskClaimer>();
         services.TryAddSingleton<ITaskQueueWriter, TaskQueueWriter>();
         services.TryAddSingleton<ITaskLeaseWriter, TaskLeaseWriter>();
@@ -60,6 +78,12 @@ public static class TasksServiceCollectionExtensions
         services.TryAddSingleton<IWorkerSchedDataSource, WorkerSchedDataSource>();
         services.TryAddSingleton<TaskConsumer>();
         services.TryAddSingleton<TaskScheduleRunner>();
+        // 01.5.1-T3: the read/stamp half of the outbox. It belongs to the
+        // mechanism, not the outbox writer's registration, because it consumes
+        // TasksOptions and the app-role data source and only ever runs in the
+        // Worker — a host that composes the write path without the queue gets
+        // no dispatcher, which is the correct posture for the Api.
+        services.TryAddSingleton<OutboxDispatcher>();
 
         services.AddTaskHandler<IdempotencyPurgePayload, IdempotencyPurgeTaskHandler>();
         services.AddTaskHandler<TaskSweepPayload, TaskSweepTaskHandler>();

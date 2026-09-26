@@ -128,6 +128,7 @@ src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csp
 src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj
 src/BuildingBlocks/Observability/Evidgate.BuildingBlocks.Observability.csproj
 src/BuildingBlocks/Persistence/Evidgate.BuildingBlocks.Persistence.csproj
+src/BuildingBlocks/Pipeline/Evidgate.BuildingBlocks.Pipeline.csproj
 src/BuildingBlocks/SharedKernel/Evidgate.BuildingBlocks.SharedKernel.csproj
 src/Evidgate.Api/Evidgate.Api.csproj
 src/Evidgate.Migrator/Evidgate.Migrator.csproj

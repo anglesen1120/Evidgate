@@ -134,3 +134,36 @@ public sealed class TenantTaskHandler : ITaskHandler<TenantPayload>
             cancellationToken);
     }
 }
+
+/// <summary>
+/// The recording <see cref="ITaskAlertSink"/> of the dead-letter tests (01.5.1
+/// §7): captures every alert the consumer and the claimer hand it, so a test can
+/// assert both the consumer-path and the expired-lease-path notification — and
+/// that a retry (not yet dead-lettered) sends nothing.
+/// </summary>
+public sealed class RecordingTaskAlertSink : ITaskAlertSink
+{
+    private readonly ConcurrentQueue<TaskDeadLetterAlert> _alerts = new();
+
+    /// <summary>Every alert delivered, in delivery order.</summary>
+    public IReadOnlyCollection<TaskDeadLetterAlert> Alerts => _alerts.ToArray();
+
+    /// <inheritdoc />
+    public ValueTask NotifyAsync(TaskDeadLetterAlert alert, CancellationToken cancellationToken = default)
+    {
+        _alerts.Enqueue(alert);
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>
+/// A sink that always throws — the proof that the mechanism's guard keeps a
+/// broken alert channel from breaking the consumer loop (01.5.1 §7, the
+/// ITaskAlertSink "MUST NOT throw" contract).
+/// </summary>
+public sealed class ThrowingTaskAlertSink : ITaskAlertSink
+{
+    /// <inheritdoc />
+    public ValueTask NotifyAsync(TaskDeadLetterAlert alert, CancellationToken cancellationToken = default) =>
+        throw new InvalidOperationException("the alert sink is down");
+}

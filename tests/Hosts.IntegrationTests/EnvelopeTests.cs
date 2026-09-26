@@ -20,7 +20,7 @@ namespace Hosts.IntegrationTests;
 public sealed class EnvelopeTests
 {
     private const string DeadConnectionString =
-        "Host=127.0.0.1;Port=1;Username=x;Password=y;Database=evidgate;Timeout=2";
+        "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
 
     [Fact]
     public async Task Bad_Request_Returns_9_2_Envelope()
