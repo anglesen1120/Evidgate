@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Evidgate.BuildingBlocks.SharedKernel.Api;
 
 /// <summary>
@@ -24,7 +26,16 @@ public sealed record ErrorBody(
 /// <summary>One entry of <see cref="ErrorBody.Details"/> (00 §9.2 example shape).</summary>
 /// <param name="Path">JSON pointer or field name the reason belongs to.</param>
 /// <param name="Reason">Machine-readable reason, e.g. <c>required</c>.</param>
-public sealed record ErrorDetail(string Path, string Reason);
+/// <param name="Index">
+/// For batch payloads, the 0-based position of the failing item (00 §9.2
+/// <c>{"index": 3, "path": "/events/3/sequence", …}</c>); <c>null</c> — and
+/// omitted on the wire — for document-level reasons (01.3.2-T2.1).
+/// </param>
+public sealed record ErrorDetail(
+    string Path,
+    string Reason,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? Index = null);
 
 /// <summary>Stable error codes of the 00 §9.2 envelope, shared by the skeleton slice, the C2 pipeline's Result mapping and the endpoint filter.</summary>
 public static class ApiErrorCode

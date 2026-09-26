@@ -15,5 +15,8 @@
   // must never be emitted into dist. Referencing that project is not valid for `tsc -b`
   // (a referenced project must be composite *and* emit — TS6306/TS6310), so
   // eslint.config.js points the parser at it explicitly instead.
-  "exclude": ["src/**/*.test.ts", "vitest.config.ts"]
+  "exclude": ["src/**/*.test.ts", "vitest.config.ts"],
+  // 01.3.2-T1.2: @evidgate/sdk workspace dependency — the build must see its emitted
+  // declarations (npm workspaces links it via node_modules).
+  "references": [{ "path": "../sdk" }]
 }

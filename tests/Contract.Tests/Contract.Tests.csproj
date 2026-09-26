@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 01.3.2-T2.4: the contract parity corpus (fixtures/contracts/) run through
+       Corvus.Json.Validator — the xUnit half of AC3/T42; the other half is the
+       CLI's Vitest parity spec over the same files. 01.3.2-T3 adds the
+       response-vs-spec and served-document suites to this project.
+       Not named Evidgate.* so the Architecture.Tests reflection scan never
+       picks it up. -->
+  <PropertyGroup>
+    <RootNamespace>Contract.Tests</RootNamespace>
+    <!--
+      Corvus.Json.Validator code-generates and Roslyn-compiles its validators at
+      schema-load time, resolving reference assemblies through DependencyContext
+      — compile assets only reach deps.json with PreserveCompilationContext, and
+      test projects default it off. Without it every schema load throws
+      "missing compiler required member" inside CompileGeneratedType.
+    -->
+    <PreserveCompilationContext>true</PreserveCompilationContext>
+  </PropertyGroup>
+  <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio,
+       Shouldly and NSubstitute come from tests/Directory.Build.props
+       (01.6.1-T1.1). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+    <!-- 01.3.2-T3.1/T3.2: the response-vs-spec and served-document suites boot the
+         real Api in process (Program → ApiHost), so this project needs the host. -->
+    <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- WebApplicationFactory for in-process Api tests (10.0.12, ADR-0002 row
+         "Microsoft.AspNetCore.Mvc.Testing"). No container packages: the contract
+         surface under test answers before any handler reaches PostgreSQL — the
+         Docker-backed slice chain is pinned by
+         tests/Hosts.IntegrationTests/SkeletonSliceTests. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+  <!-- No fixture copy: fixtures/contracts/ is read from the repository
+       (ContractPaths.Fixtures), like Canonicalization.UnitTests reads
+       fixtures/rfc8785 — the CLI asserts the same bytes (01.3.2 AC3). -->
+</Project>

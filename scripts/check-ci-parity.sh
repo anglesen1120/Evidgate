@@ -47,17 +47,42 @@ if [[ ! -f "$WORKFLOW" ]]; then
   exit 1
 fi
 
+# Structural guard over every workflow (not only --workflow): the run-extractor
+# below matches `run:` only as a first key in column-anchored YAML, and the
+# action-pins gate has the same limitation for `uses:`. Equivalent-but-invisible
+# spellings — flow-style steps (`- {run: npm test}`) and quoted keys
+# (`"run":`) — would slip through both gates, so reject them outright.
+shopt -s nullglob
+python3 - check-ci-parity .github/workflows/*.yml .github/workflows/*.yaml "$WORKFLOW" <<'PYEOF' || exit 1
+import re
+import sys
+
+label, files = sys.argv[1], dict.fromkeys(sys.argv[2:])
+quoted = re.compile(r'["\'](?:uses|run)["\']\s*:')
+flow = re.compile(r"\{[^}\n]*\b(?:uses|run)\s*:")
+bad = 0
+for path in files:
+    with open(path, encoding="utf-8") as fh:
+        for n, line in enumerate(fh, 1):
+            if quoted.search(line) or flow.search(line):
+                print("%s: %s:%d: quoted/flow-style 'uses'/'run' key bypasses the line-anchored scan — rewrite as a block-style step"
+                      % (label, path, n), file=sys.stderr)
+                bad = 1
+sys.exit(bad)
+PYEOF
+shopt -u nullglob
+
 # Raw commands the workflow may run without going through verify.sh. Anything
 # matching one of these lines — with a comment-free exact match — is allowed;
 # anything else starting with dotnet/npm/npx/tsc/vitest duplicates a stage.
 ALLOWED_RAW=(
   # Dependency install: verify.sh never installs (its header is the contract),
-  # so every job runs npm ci itself.
-  'npm ci'
-  # Contract drift gate: the codegen script exists as a no-op in root
-  # package.json until packages/sdk lands (01.3.2-T1); the surrounding
-  # `git diff --exit-code` is a git command.
-  'npm run codegen'
+  # so every job runs npm ci itself. --ignore-scripts: lifecycle scripts
+  # (husky prepare, scarf telemetry postinstall, fsevents/libxmljs2 optional
+  # native builds) are never needed in CI — PR-template review owns that risk.
+  'npm ci --ignore-scripts'
+  # Contract drift gate is a verify.sh stage (check-codegen-drift) — no raw
+  # npm invocation is needed or allowed for it.
   # Web build: activates when apps/web gains a build script (09.1.1). Deliberately
   # the --workspaces variant — `npm run build` at the root is the tsc-build stage.
   'npm run build --workspaces --if-present'
@@ -213,7 +238,12 @@ for stage_name in "${STAGES[@]}"; do
   [[ "$covered" -eq 1 ]] || note_error "verify.sh stage '$stage_name' is not wired into the workflow"
 done
 
-# Every invoked stage must exist and appear exactly once.
+# Every invoked stage must exist and appear exactly once — except the
+# environment-setup stages a job needs before its real stages can run
+# (`restore` produces obj/project.assets.json; a second job that also runs
+# `licence-scan`/`audit-deps`/`sbom` must restore first, and repeating it is
+# harmless: locked mode is idempotent).
+REPEATABLE_STAGES=' restore '
 seen=""
 for inv in ${invoked[@]+"${invoked[@]}"}; do
   canonical=0
@@ -221,6 +251,9 @@ for inv in ${invoked[@]+"${invoked[@]}"}; do
     [[ "$inv" == "$stage_name" ]] && canonical=1
   done
   [[ "$canonical" -eq 1 ]] || note_error "workflow passes unknown stage '$inv'"
+  case "$REPEATABLE_STAGES" in
+  *" $inv "*) continue ;;
+  esac
   case " $seen " in
   *" $inv "*) note_error "workflow passes stage '$inv' more than once" ;;
   esac

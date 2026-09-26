@@ -2,4 +2,20 @@
   <PropertyGroup>
     <RootNamespace>Evidgate.BuildingBlocks.Contracts.Validation</RootNamespace>
   </PropertyGroup>
+  <!--
+    01.3.2-T2.1: JSON Schema 2020-12 validation of the ingest payloads (00 §5.5
+    edge, DECISIONS §4.1) with Corvus.Json.Validator, and the endpoint filter that
+    applies it before model binding. The ASP.NET Core shared framework is a
+    FrameworkReference, not a PackageReference (NU1510: the framework packages are
+    pruned), and SharedKernel carries the 00 §9.2 envelope the filter writes.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Corvus.Json.Validator" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
 </Project>

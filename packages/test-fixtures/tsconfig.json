@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    // loadFixture/goldenFile read files and hash bytes: node:fs + node:crypto.
+    // Same reasoning as packages/cli's canonical.ts — only this project needs
+    // the @types/node entry; the specs get it through vitest.config.base.mts.
+    "types": ["node"]
+  },
+  "include": ["src"],
+  // 01.6.1-T1.2 convention (see packages/cli): specs and the Vitest config are
+  // type-checked by tsconfig.spec.json and never emitted into dist.
+  "exclude": ["src/**/*.test.ts", "vitest.config.ts"]
+}

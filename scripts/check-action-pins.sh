@@ -16,6 +16,27 @@ if [[ "${#workflows[@]}" -eq 0 ]]; then
   echo "check-action-pins: no workflow files under .github/workflows/" >&2
   exit 1
 fi
+# Structural guard before the line-anchored scan: both this gate and the parity
+# gate match `uses:`/`run:` only as a first key in column-anchored YAML, so
+# equivalent-but-invisible spellings — flow-style steps (`- {uses: x@v7}`) and
+# quoted keys (`"uses":`) — would slip through silently. Reject them outright.
+python3 - check-action-pins "${workflows[@]}" <<'PYEOF' || exit 1
+import re
+import sys
+
+label, files = sys.argv[1], sys.argv[2:]
+quoted = re.compile(r'["\'](?:uses|run)["\']\s*:')
+flow = re.compile(r"\{[^}\n]*\b(?:uses|run)\s*:")
+bad = 0
+for path in files:
+    with open(path, encoding="utf-8") as fh:
+        for n, line in enumerate(fh, 1):
+            if quoted.search(line) or flow.search(line):
+                print("%s: %s:%d: quoted/flow-style 'uses'/'run' key bypasses the line-anchored scan — rewrite as a block-style step"
+                      % (label, path, n), file=sys.stderr)
+                bad = 1
+sys.exit(bad)
+PYEOF
 
 fail=0
 count=0

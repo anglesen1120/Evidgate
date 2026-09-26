@@ -4,10 +4,22 @@
     "composite": true,
     "declaration": true,
     "outDir": "dist",
-    "rootDir": "src"
+    // 01.3.2-T1: the emitting project spans `src/` (rootDir "." keeps the generated tree
+    // at `gen/` outside `src/`, so `main`/`types` in package.json point into `dist/src/`)
+    // and references the generated tree via tsconfig.gen.json — relative imports like
+    // `../gen/index.js` resolve to its emitted declarations.
+    "rootDir": ".",
+    // 01.3.2-T1.4: the handwritten surface exposes the fetch globals (Request/Response/
+    // Headers) the generated client is typed against; @types/node provides them on Node,
+    // the DOM lib provides them for web consumers.
+    "types": ["node"]
   },
   "include": ["src"],
   // 01.6.1-T1.2: specs and the Vitest config are type-checked by tsconfig.spec.json and
   // must never be emitted into dist.
-  "exclude": ["src/**/*.test.ts", "vitest.config.ts"]
+  "exclude": ["src/**/*.test.ts", "vitest.config.ts"],
+  // 01.3.2-T1: `gen/` is its own composite project (tsconfig.gen.json) because hey-api
+  // 0.99's emitted fetch client is not `exactOptionalPropertyTypes`-clean — the flag is
+  // relaxed only for generated code there; `src/` compiles under the full strict set.
+  "references": [{ "path": "tsconfig.gen.json" }]
 }

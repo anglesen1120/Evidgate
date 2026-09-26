@@ -32,6 +32,10 @@ this change and say how it complies; delete the rest. -->
 ## Dependencies and decisions
 
 - [ ] Every new NuGet/npm dependency has a row in `docs/adr/0002-compatibility-and-licence-matrix.md` (`scripts/check-adr-matrix.sh` passes)
+- [ ] `scripts/licence-scan.sh` passes — deny/warn licences are excepted only via a `scripts/licence-policy.json` `exceptions` entry keyed by the ADR id (01.7.1 AC4)
+- [ ] `scripts/audit-deps.sh` passes — exempted advisories are listed in `scripts/exceptions.json` keyed by advisory id with the accepting ADR id (01.7.1 AC6)
+- [ ] New packages that run install scripts (npm `preinstall`/`postinstall`) or ship NuGet build targets (`build/`/`buildTransitive/` in the nupkg) are flagged under "Notes for reviewers" (plans/01 §6 supply chain)
+- [ ] Test evidence is filled in: every AC row above cites the exact command and observed output; formatting/analyzer ACs show a seeded violation AND a clean run
 - [ ] Each plan 01 §3 decision this change implements cites its ADR in the PR description or the code comment
 - [ ] `scripts/verify.sh` passed locally before opening this PR
 

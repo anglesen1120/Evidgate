@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "event_id": "not-a-uuid",
+  "producer_id": "pw-shard-0",
+  "sequence": 12,
+  "job_id": null,
+  "epoch": 3,
+  "execution_key": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  "attempt_no": 1,
+  "type": "test.finished",
+  "status": "passed",
+  "duration_ms": 1280,
+  "occurred_at": "2026-09-26T10:15:30Z",
+  "artifact_ids": ["0197c9a4-0f3b-7d21-8a2c-5e9f3b7d6e21"],
+  "ext": {
+    "schema": "playwright/1"
+  }
+}

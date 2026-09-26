@@ -14,7 +14,7 @@
     "lint": "eslint . --max-warnings 0",
     "test": "npm run test --workspaces --if-present",
     "e2e": "npm run e2e --workspaces --if-present",
-    "codegen": "echo 'SDK codegen lands with 01.3.2-T1; no-op keeps the ci.yml drift gate honest' && exit 0",
+    "codegen": "openapi-ts -f openapi-ts.config.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"
@@ -22,7 +22,7 @@
   "lint-staged": {
     "{apps/web,packages}/**/*.{ts,tsx}": [
       "prettier --check",
-      "eslint --max-warnings 0"
+      "eslint --max-warnings 0 --no-warn-ignored"
     ],
     "*.{json,yaml,yml,js,mjs,cjs}": [
       "prettier --check"

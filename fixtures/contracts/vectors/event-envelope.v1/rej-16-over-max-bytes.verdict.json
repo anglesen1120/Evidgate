@@ -1,0 +1,12 @@
+{
+  "schema": "event-envelope.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "",
+      "reason": "body_too_large"
+    }
+  ],
+  "comment": "00 \u00a79.3 cap: 1 MiB transport limit (x-max-bytes 1048576). The cap is checked before parsing; the body itself is a valid-shaped document padded with artifact_ids."
+}

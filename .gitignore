@@ -19,6 +19,7 @@ coverage/
 
 # Local data and test output
 .local/
+artifacts/
 playwright-report/
 test-results/
 blob-report/

@@ -1,0 +1,5 @@
+{
+  "schema": "event-envelope.v1",
+  "valid": true,
+  "comment": "DELIBERATELY WRONG: schema_version=2 must be rejected; the seeded 'accept' verdict fails both suites when EVIDGATE_PARITY_INCLUDE_DIVERGENCE=1 includes this directory (01.3.2-T2.4 / AC3)."
+}

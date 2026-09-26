@@ -48,6 +48,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           # FR-01-2: the SDK (10.0.x) comes from global.json, not a floating range.
@@ -69,6 +71,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # FR-01-2: the Node version (26) comes from .nvmrc, not a floating range.
@@ -79,7 +83,7 @@ jobs:
       # verify.sh never installs; each job installs the dependencies it needs
       # (locked modes only — npm ci, 00 §5.7 S6 / FR-01-1).
       - name: 'Install npm workspaces (locked)'
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: 'tsc, vitest, eslint, prettier — verify.sh stages in order'
         run: >-
           ./scripts/verify.sh
@@ -88,14 +92,10 @@ jobs:
           --stage vitest
           --stage eslint
           --stage prettier
-      # Contract drift gate (AC1/§9): regenerates generated sources and fails on
-      # any diff. `npm run codegen` is a real no-op script in root package.json
-      # until packages/sdk and codegen land (01.3.2-T1); `git diff --exit-code`
-      # then blocks a hand-edited generated file.
-      - name: 'Contract drift gate — activates with codegen (01.3.2-T1)'
-        run: |
-          npm run codegen
-          git diff --exit-code
+      # Contract drift gate (AC1/§9, 01.3.2-T1.3): regenerates packages/sdk and
+      # fails on any diff — the spec is the only thing humans edit.
+      - name: 'Contract drift gate'
+        run: ./scripts/verify.sh --stage check-codegen-drift
       # Web build (AC1): `apps/web` gains a build script in 09.1.1; until then
       # --if-present keeps this step a no-op instead of a failure.
       - name: 'Web build — activates with apps/web build script (09.1.1)'
@@ -107,6 +107,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           # check-sources.sh calls `dotnet nuget list source`; no package work
@@ -119,7 +121,7 @@ jobs:
           cache-dependency-path: package-lock.json
       # check-contract-conventions.sh runs `npx spectral lint` — devDeps required.
       - name: 'Install npm workspaces (locked)'
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: 'Layout, sources, ADR, links, contracts, parity, pins — verify.sh stages'
         run: >-
           ./scripts/verify.sh
@@ -141,13 +143,15 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
       - name: 'Install npm workspaces (locked)'
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: 'Install Playwright browsers'
         run: npx playwright install --with-deps chromium
       - name: 'Playwright e2e — apps/web'
@@ -158,4 +162,48 @@ jobs:
         with:
           name: playwright-report
           path: apps/web/playwright-report
+          retention-days: 14
+
+  # 01.7.1-T2/T4 (AC4, AC6, AC7): licence deny-list + vulnerability gates +
+  # CycloneDX SBOMs. Every command below is a verify.sh stage so local and CI
+  # can never diverge (check-ci-parity enforces it).
+  supply-chain:
+    name: 'verify (supply chain)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: 'Install npm workspaces (locked)'
+        run: npm ci --ignore-scripts
+      - name: 'Licence gate + audit + SBOM — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage licence-scan
+          --stage audit-deps
+          --stage sbom
+      - name: 'Upload SBOMs'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom
+          path: artifacts/sbom/
+          # §8: 14 days for PR evidence, 90 for main (release evidence).
+          retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 14 }}
+      - name: 'Upload licence report'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: licence-report
+          path: artifacts/licence-report.json
           retention-days: 14

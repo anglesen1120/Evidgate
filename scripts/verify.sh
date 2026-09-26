@@ -34,6 +34,10 @@ ALL_STAGES=(
   check-contract-conventions
   check-ci-parity
   check-action-pins
+  check-codegen-drift
+  licence-scan
+  audit-deps
+  sbom
 )
 
 stage() { echo "== $1"; }
@@ -142,6 +146,30 @@ run_stage() {
     # AC6 (01.7.1-T4.1, SHA half): no `uses:` may reference a mutable tag.
     stage "check-action-pins"
     scripts/check-action-pins.sh
+    ;;
+  check-codegen-drift)
+    # AC1 (01.3.2-T1.3): regenerate the SDK and fail on any diff — the spec is
+    # the only thing humans edit.
+    stage "check-codegen-drift"
+    scripts/check-codegen-drift.sh
+    ;;
+  licence-scan)
+    # AC4 (01.7.1-T2): deny-list enforced for npm + NuGet; exceptions are ADR ids.
+    stage "licence-scan"
+    # --report writes artifacts/licence-report.json, which the ci.yml
+    # `Upload licence report` step consumes (QA D1: an unargumented call left
+    # that upload empty while the job stayed green).
+    scripts/licence-scan.sh --report artifacts/licence-report.json
+    ;;
+  audit-deps)
+    # AC6 (01.7.1-T4.2): vulnerability gates, exceptions.json is ADR-keyed.
+    stage "audit-deps"
+    scripts/audit-deps.sh
+    ;;
+  sbom)
+    # AC7 (01.7.1-T4.2): CycloneDX SBOMs for both ecosystems into artifacts/sbom/.
+    stage "sbom"
+    scripts/sbom.sh
     ;;
   esac
 }

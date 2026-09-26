@@ -93,6 +93,7 @@ RECOMMENDATIONS.md
 SESSION-SUMMARY.md
 STATUS.md
 eslint.config.js
+openapi-ts.config.mjs
 tsconfig.json
 tsconfig.spec.json
 vitest.config.base.mts
@@ -157,6 +158,7 @@ src/Modules/Evidgate.Modules.Usage.Contracts/Evidgate.Modules.Usage.Contracts.cs
 src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj
 tests/Architecture.Tests/Architecture.Tests.csproj
 tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj
+tests/Contract.Tests/Contract.Tests.csproj
 tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj
 tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj
 tests/Isolation.Tests/Isolation.Tests.csproj

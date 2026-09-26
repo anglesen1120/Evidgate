@@ -1,6 +1,6 @@
 # Evidgate — delivery status
 
-Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
+Updated 2026-09-27. Source of truth for tasks: `plans/01`–`12` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
 
 ## 1. Snapshot
 
@@ -10,8 +10,8 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | `develop` head | `c70585e` (PR #10 merged) |
 | Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 |
 | Open PRs | none |
-| Active branch | `feature/m1-wave6` (off `develop` `c70585e`); wave 6 implementing |
-| M0/M1 tasks | 39 done · 95 open (of 134) |
+| Active branch | `feature/m1-wave6` (off `develop` `c70585e`); wave 6 delivered, gates green, PR pending |
+| M0/M1 tasks | 46 done · 88 open (of 134) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
 | Owner decisions | Decided 2026-09-26: O1 engine = Playwright (UI), customer CI = per-project input. Open before M1: O1 pilot names, O2 (owner note recorded, reading unconfirmed). Open before 08.5 DoR: O4 (owner note "tự build hệ thống riêng", model-or-not unconfirmed) — DECISIONS §8 |
@@ -32,7 +32,8 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 01.6.1 | T1 | #6 | Test conventions (.NET + Vitest) |
 | 02.1.1 | T1 | #6 | `organization` / `project` migrations 0004/0005 |
 | 01.4.2, 01.5.1, 01.6.1 | 01.4.2-T2/T3, 01.5.1-T1/T2/T6, 01.6.1-T2/T5 | #9 | `outbox`/`idempotency_record`/`task` (migrations 0006–0008), claim/consumer/schedule mechanism, schema/EF conventions + UUIDv7 generator, Testcontainers harness, Playwright workspace — see §3 |
-| 01.4.2, 01.5.1, 01.7.1 | 01.4.2-T4, 01.5.1-T3/T4/T5, 01.7.1-T1 | pending | C2 Mediator pipeline + Result→§9.2 filter, outbox dispatcher (migration 0009), retry/dead-letter + `/internal/operator` routes, AC1–AC7 suites, real `ci.yml` — see §3.5 |
+| 01.4.2, 01.5.1, 01.7.1 | 01.4.2-T4, 01.5.1-T3/T4/T5, 01.7.1-T1 | #10 | C2 Mediator pipeline + Result→§9.2 filter, outbox dispatcher (migration 0009), retry/dead-letter + `/internal/operator` routes, AC1–AC7 suites, real `ci.yml` — see §3.5 |
+| 01.3.2, 01.6.1, 01.7.1 | 01.3.2-T1/T2/T3, 01.6.1-T3/T4, 01.7.1-T2/T3.2/T4 | pending | Generated TS SDK + drift gate, Corvus/Ajv dual-runtime validators + parity corpus + endpoint filter, contract tests + served-doc diff, `fixtures/` + loaders, tenant-isolation suite, licence/audit/SBOM/dependabot gates — see §3.6 |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -80,7 +81,7 @@ QA defects fixed in wave: Worker host missing `AddEvidgatePipeline` (QA-P D1 —
 Verified on GitHub after merge: run 36251021746 (PR) + 36252017788 (develop push) — all 4 jobs green, dotnet job 247 s < 10 min; AC-level deferrals closed.
 
 
-## 3.6. Wave 6 (in progress on `feature/m1-wave6`)
+## 3.6. Wave 6 (delivered on `feature/m1-wave6`; PR pending)
 
 Scope (STATUS §5 ready + plan_graph deps verified): area-01 M1 remainder — **01.3.2-T1** generated TS SDK (L); **01.3.2-T2** dual-runtime validators + parity corpus (L); **01.3.2-T3** contract tests + served-doc diff (M, after T1); **01.6.1-T3** `fixtures/` layout + loaders (M); **01.6.1-T4** tenant-isolation suite (M); **01.7.1-T2** licence gate (M); **01.7.1-T3** CODEOWNERS/PR template (S — branch-protection API half is [blocked]: 403 "Upgrade to GitHub Pro or make this repository public", owner decision recorded §6); **01.7.1-T4** supply-chain hardening (M). Not in this wave: 01.8.1-T3 seed-dev (still needs 02.x/07.1.1 tables), 01.10.1 (M2), 01.1.1-T4 (M5).
 
@@ -92,14 +93,16 @@ Gate order per slice: implement → QA agent → code/perf/security reviews → 
 
 | Slice | Tasks | Size | Implement | QA | Code review | Perf review | Security review |
 |---|---|---|---|---|---|---|---|
-| S | 01.3.2-T1: `@hey-api/openapi-ts` codegen config (deterministic), `packages/sdk/gen/` output, real `npm run codegen`, `scripts/check-codegen-drift.sh`, header-injection hooks, golden-file check | L | - | - | - | - | - |
-| V | 01.3.2-T2: `Evidgate.BuildingBlocks.Contracts.Validation` (Corvus, §9.2 `details[]` mapping, endpoint filter), `packages/cli` Ajv validator, `fixtures/contracts/` corpus + verdicts, `tests/Contract.Tests` ParityCorpusTests + `packages/cli` parity spec | L | - | - | - | - | - |
-| F | 01.6.1-T3: `fixtures/<domain>/<name>/` + `meta.json` contract, `tests/Shared/FixtureLoader.cs`, `packages/test-fixtures` loader + golden canonical-JSON helper | M | - | - | - | - | - |
-| I | 01.6.1-T4: isolation suite in `tests/Isolation.Tests` — EF read/write, Dapper read, API id-guessing via real route, planted-violation meta-test | M | - | - | - | - | - |
-| G | 01.7.1-T2 (`licence-policy.json`, `licence-scan.sh` both ecosystems, licence job) + T3.2 (PR-template/CONTRIBUTING polish) + T4 (`dependabot.yml`, `audit-deps.sh` + `exceptions.json`, CycloneDX SBOM artifacts) | M+XS+M | - | - | - | - | - |
-| K | 01.3.2-T3: `tests/Contract.Tests` response-vs-spec + normalised `Microsoft.AspNetCore.OpenApi` served-doc diff vs `contracts/openapi.yaml` (3.1 emission confirmed or fallback recorded) | M | - | - | - | - | - |
+| S | 01.3.2-T1: `@hey-api/openapi-ts` codegen config (deterministic), `packages/sdk/gen/` output, real `npm run codegen`, `scripts/check-codegen-drift.sh`, header-injection hooks, golden-file check | L | ✅ | ✅ | ✅ | ✅ | ✅ |
+| V | 01.3.2-T2: `Evidgate.BuildingBlocks.Contracts.Validation` (Corvus, §9.2 `details[]` mapping, endpoint filter), `packages/cli` Ajv validator, `fixtures/contracts/` corpus + verdicts, `tests/Contract.Tests` ParityCorpusTests + `packages/cli` parity spec | L | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F | 01.6.1-T3: `fixtures/<domain>/<name>/` + `meta.json` contract, `tests/Shared/FixtureLoader.cs`, `packages/test-fixtures` loader + golden canonical-JSON helper | M | ✅ | ✅ | ✅ | ✅ | ✅ |
+| I | 01.6.1-T4: isolation suite in `tests/Isolation.Tests` — EF read/write, Dapper read, API id-guessing via real route, planted-violation meta-test | M | ✅ | ✅ | ✅ | ✅ | ✅ |
+| G | 01.7.1-T2 (`licence-policy.json`, `licence-scan.sh` both ecosystems, licence job) + T3.2 (PR-template/CONTRIBUTING polish) + T4 (`dependabot.yml`, `audit-deps.sh` + `exceptions.json`, CycloneDX SBOM artifacts) | M+XS+M | ✅ | ✅ | ✅ | ✅ | ✅ |
+| K | 01.3.2-T3: `tests/Contract.Tests` response-vs-spec + normalised `Microsoft.AspNetCore.OpenApi` served-doc diff vs `contracts/openapi.yaml` (3.1.1 emission confirmed; diff allows only the recorded `/v1/slice/run` dev surface) | M | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 Contract for slices: `verify.sh`/`ci.yml`/`check-ci-parity.sh`/`check-adr-matrix.sh`/`scripts/check-layout.sh`/`Evidgate.slnx`/`STATUS.md`/`AGENTS.md`/`docs/adr/*` are orchestrator-owned; slices produce their own scripts (`scripts/check-codegen-drift.sh`, `licence-policy.json`, `licence-scan.sh`, `audit-deps.sh`, `exceptions.json`, `.github/dependabot.yml`) which the orchestrator wires into `verify.sh` stages (new stage names: `check-codegen-drift`, `licence-scan`, `audit-deps`) + `ci.yml` after wave A. New test project `tests/Contract.Tests` is created once by V (csproj skeleton + slnx + check-layout registration); K adds files only. `packages/test-fixtures` belongs to F. The `Isolation_ApiGet_*` tests may add a test-only route inside `tests/` hosts if no tenant read endpoint exists yet — mark clearly, real `/v1` routes inherit the check when 02.x lands.
+
+Outcome (2026-09-27): all 21 `verify.sh` stages green (`/tmp/w6-verify3.log`) — 9 .NET test assemblies incl. Contract.Tests (60), Foundation.IntegrationTests (34), Isolation.Tests (13); vitest 119 tests across workspaces; licence-scan 693 packages (0 deny, 2 MPL warns covered by ADR-0002); audit-deps 0 findings; SBOMs npm 598 + nuget 133 components. QA found and the wave fixed: TS loader duplicate-key hole, drift-gate precondition wording, `licence-report.json` missing `--report`, unwritten filter tests. Reviews found and the wave fixed: O(n²) error dedup + 100-row `truncated` marker (both runtimes, CWE-770), self-leaf composite keywords (`not`/`contains`/`propertyNames`/…) no longer dropped to `IsValid=true`, `Flag`-before-`Detailed` accept path (13.8 MB→48 B per 1 MiB body), schema dir resolved by upward search not content root, `JsonSchema` compiled with `allowFileSystemAndHttpResolution:false` end to end, `sbom.sh -dpr` (19 s→0.9 s, no unlocked lockfile rewrite) + vacuous-BOM refusal, licence/audit empty-inventory fail-closed + ADR-id format+existence on exception keys, `.config/dotnet-tools.json` now an ADR-matrix source, flow-style/quoted `uses:`/`run:` keys rejected in the pin and parity gates, `persist-credentials:false` + `npm ci --ignore-scripts` everywhere in ci.yml. Recorded deviations: `packages/sdk/gen` compiles strict minus `exactOptionalPropertyTypes` (generator-side TS2379, noted in the 01.3.2 plan §11); TS fixture loader uses a raw-text scanner for duplicate-key parity.
 
 ## 4. Wave 3 (delivered, PR #6)
 
@@ -145,12 +148,6 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 | Task | Size | Milestone | Note |
 |---|---|---|---|
-| 01.3.2-T1 | L | M1 | Generated SDK |
-| 01.7.1-T2 | M | M1 | Licence gate (ready: `ci.yml` landed — `licence-policy.json`/`licence-scan.sh` per 01.7.1 §5) |
-| 01.7.1-T3 | S | M1 | Branch protection, CODEOWNERS, PR template (ready: T1 landed) |
-| 01.7.1-T4 | M | M1 | Supply-chain hardening: `dependabot.yml`, `audit-deps.sh`, SBOM (ready: T1 landed) |
-| 01.6.1-T3, 01.6.1-T4 | M each | M1 | Harness follow-ups (ready: T2 harness landed) |
-| 01.3.2-T2 | L | M1 | Validators |
 | 01.8.1-T3 | M | M1 | Dev stack follow-up |
 | 02.1.2-T1, 02.2.1-T1, 02.4.1-T2, 02.9.1-T2 | M each | M1 | Identity area, on 02.1.1-T1 |
 | 02.6.1-T1 | L | M1 | RLS lint / policy helpers |
@@ -182,3 +179,6 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | Owned EF entity types (OwnsOne/OwnsMany) fail the model build under `TenantModelConventions` (shadow-FK rename breaks table sharing) | Latent: no M1 entity is owned; fix sketch recorded in QA report (skip owned key/FK properties, derive names per-table) | 01.4.2 follow-up / next owner |
 | Node `JSON.parse` escaped-key defect (upstream V8 regression, 24.x/26.x warm process) | upstream fix landed in V8, awaiting a Node release; the canonicalize guard stays as a partial mitigation | 01.3.2 / Node upgrade |
 | `idempotency.purge` daily cap: `PurgeMaxBatchesPerFire = 50` × 1000 = 50 000 rows/day ceiling; a deployment above that accumulates `idempotency_record` forever | Needs a drain-until-time-budget or restartable cursor (perf review, 01.5.1 §7) | 01.5.1 follow-up |
+| `01.7.1-T3.1` branch protection + required check names | API returns 403 on the free private repo (owner decision needed: Pro upgrade or public repo); required-check names must match `ci.yml` job names | Owner |
+| Per-operation request/response body diff in `ServedDocumentTests` | Zero shared paths today (`/v1/slice/run` is the only served route); `contracts/openapi.yaml` path items use folded block scalars the strict `YamlSubset` reader refuses — parsing lands with the first real route | 04/05 ingest routes |
+| `ci.yml` security stage | Feature plan §7 reserves a scaffolded-but-empty security stage; nothing to run in it yet | 11.6.1 |
