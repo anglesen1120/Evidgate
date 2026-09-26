@@ -7,10 +7,10 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | Item | State |
 |---|---|
 | Branch flow | `feature/*` or `docs/*` → PR into `develop` → owner merges. `main` = planning baseline |
-| `develop` head | `e6e2a38` (PR #5 merged) |
-| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) |
-| Active branch | `feature/m1-wave3` (this wave) |
-| M0/M1 tasks | 23 done · 111 open (of 134) |
+| `develop` head | `cb636ef` (PR #6 merged) |
+| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions (merged into `feature/m1-wave3` after #6; carried to `develop` by #8) |
+| Active branch | `feature/m1-wave4` (based on `docs/owner-decisions-to-develop`, PR #8) |
+| M0/M1 tasks | 27 done · 107 open (of 134) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
 | Owner decisions | Decided 2026-09-26: O1 engine = Playwright (UI), customer CI = per-project input. Open before M1: O1 pilot names, O2 (owner note recorded, reading unconfirmed). Open before 08.5 DoR: O4 (owner note "tự build hệ thống riêng", model-or-not unconfirmed) — DECISIONS §8 |
@@ -26,10 +26,33 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 01.4.1 | T1–T4 | #3 | `Evidgate.Migrator`, migrations 0001–0003 (roles, RLS baseline), `db-init.sh` |
 | 01.1.2 | T1–T3 | #3 | Api/Worker hosts, 11 module pairs, skeleton slice |
 | 01.8.1 | T1–T2 | #3 | SeaweedFS parity tests, compose dev stack, `scripts/dev/up.sh` |
+| 01.4.2 | T1 | #6 | Tenant scope, EF/Dapper binding, interceptor |
+| 01.3.2 | T4 | #6 | RFC 8785 canonical JSON hashing (.NET + CLI) |
+| 01.6.1 | T1 | #6 | Test conventions (.NET + Vitest) |
+| 02.1.1 | T1 | #6 | `organization` / `project` migrations 0004/0005 |
 
-## 3. Wave 3 (in progress on `feature/m1-wave3`)
+## 3. Wave 4 (in progress on `feature/m1-wave4`)
 
-Every task passes the gates in order: implement → QA agent (separate from the author) → code review + performance review + security review (parallel) → fixes re-tested → commit.
+Scope: the 01.4.2 T2/T3 conventions and the 01.5.1 durable-task tables that 01.4.2-T4 (pipeline, wires `AddEvidgateTenancy` into Api/Worker) depends on, the shared integration harness (01.6.1-T2, needed by 01.7.1-T1 `ci.yml`) and the Playwright workspace. Two wave-3 follow-ups ride along in slice A.
+
+Gates per slice, in order: implement → QA agent (separate from the author) → code review + performance review + security review (parallel) → fixes re-tested → commit.
+
+| Slice | Tasks | Size | Implement | QA | Code review | Perf review | Security review |
+|---|---|---|---|---|---|---|---|
+| A | 01.4.2-T2.2 `SchemaConventionTests`, 01.4.2-T3 column conventions; fix 1 (`TenantModelConventions` must reject an explicit table/column name that differs from snake_case instead of overwriting it); fix 2 (catalogue test: every table with a `version` column has the `set_updated_at_and_version` trigger) | S + S (+ fixes) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| B1 | 01.5.1-T2 `outbox` + `OutboxWriter`; 01.5.1-T6.1 `idempotency_record` + `IIdempotencyStore` + purge function | M + S | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| B2 | 01.4.2-T2.1 `SKIP LOCKED` claim helper; 01.5.1-T1 `task` queue + consumer + Cronos schedules; 01.5.1-T6.2 purge schedule | S + L + S | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| C | 01.6.1-T2 Testcontainers harness (`tests/Foundation.IntegrationTests`) | L | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| D | 01.6.1-T5 Playwright workspace (`apps/web`) | S | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| E | Node 26.10 `JSON.parse` repro on other Node versions; `SESSION-SUMMARY.md` status trimmed to a pointer to this file | — | ⏳ | — | — | — | — |
+
+Shared prerequisites committed first (`06e47b5`): `tests/Foundation.IntegrationTests` and `tests/Tasks.IntegrationTests` registered in `Evidgate.slnx` and `scripts/check-layout.sh`; `Cronos` and the Canonicalization project referenced from `BuildingBlocks.Persistence`; `Tenancy.IntegrationTests/MigrationTests` bounded to files 0001–0005 so new migrations do not change it. Migration numbers reserved: `0006_platform_outbox.sql`, `0007_platform_idempotency_record.sql` (B1), `0008_platform_task_queue.sql` (B2).
+
+Deferred to later waves: 01.5.1-T3 dispatcher, T4 retry/dead-letter/operator routes, T5 crash tests (they depend on T1/T2 landing); 01.4.2-T4 pipeline (needs 01.5.1-T2/T6); 02.1.1-T2 org/project API.
+
+## 4. Wave 3 (delivered, PR #6)
+
+Every task passed the gates in order: implement → QA agent (separate from the author) → code review + performance review + security review (parallel) → fixes re-tested → commit.
 
 | Task | Size | Depends on | Implement | QA | Code review | Perf review | Security review |
 |---|---|---|---|---|---|---|---|
@@ -67,15 +90,16 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | `delete` is revoked from `evidgate_app` on `organization` and `project` (0004:127, 0005:96) because 0001's default privileges grant DELETE on every table the owner creates in `public`; `migrations/README.md`'s role table and the `0003` copy block (items 5 and 7) still prescribe the old operator policy and the DELETE grant for new tables | Tech Lead / next table author |
 | Per-request EF context creation measures 0.109–0.140 ms and 56.2 KiB (the first command on a fresh context +0.55–0.7 ms) — noise against the p95 < 1 s ingest budget, but one line in the 01.4.2 plan keeps a future handler from creating a context per row | 01.4.2 |
 
-## 4. Ready next (dependencies met, not started)
+## 5. Ready next (dependencies met, not started)
 
 | Task | Size | Milestone | Note |
 |---|---|---|---|
 | 01.3.2-T1 | L | M1 | Generated SDK |
 | 01.3.2-T2 | L | M1 | Validators |
-| 01.6.1-T2 | L | M1 | Integration harness |
-| 01.6.1-T5 | S | M1 | Playwright workspace |
 | 01.8.1-T3 | M | M1 | Dev stack follow-up |
+| 02.1.2-T1, 02.2.1-T1, 02.4.1-T2, 02.9.1-T2 | M each | M1 | Identity area, on 02.1.1-T1 |
+| 02.6.1-T1 | L | M1 | RLS lint / policy helpers |
+| 03.1.1-T1 | L | M1 | Stable case identity (critical chain) |
 | 04.1.2-T4 | M | M1 | `producer_slot` table + registry |
 | 04.7.1-T1 | M | M1 | |
 | 05.1.1-T1 | L | M1 | |
@@ -86,7 +110,7 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | 12.1.1-T1, 12.1.1-T2 | L, M | M0 | Customer interviews (owner) |
 | 12.2.1-T2, 12.6.1-T1 | M, M | M1 | Commercial area |
 
-## 5. Blocked / carried items
+## 6. Blocked / carried items
 
 | Item | Blocker | Owner |
 |---|---|---|
