@@ -11,5 +11,14 @@
     // to the `.mts` source, and tsc only allows the `.mts` extension under noEmit.
     "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.test.ts", "vitest.config.ts", "../../vitest.config.base.mts"]
+  // 01.6.1-T5.1: the Playwright config and the E2E specs are outside the emitting
+  // `tsconfig.json` (`include: ["src"]`), and Playwright transpiles without type-checking,
+  // so this project is the only gate for them — same role as for the Vitest specs.
+  "include": [
+    "src/**/*.test.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "e2e/**/*.ts",
+    "../../vitest.config.base.mts"
+  ]
 }

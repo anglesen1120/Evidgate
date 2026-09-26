@@ -7,10 +7,11 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | Item | State |
 |---|---|
 | Branch flow | `feature/*` or `docs/*` → PR into `develop` → owner merges. `main` = planning baseline |
-| `develop` head | `e6e2a38` (PR #5 merged) |
-| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) |
-| Active branch | `feature/m1-wave3` (this wave) |
-| M0/M1 tasks | 23 done · 111 open (of 134) |
+| `develop` head | `cb636ef` (PR #6 merged) |
+| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions (merged into `feature/m1-wave3` after #6) |
+| Open PRs | #8 owner decisions → `develop` · #9 M1 wave 4 → `develop` |
+| Active branch | `feature/m1-wave4` (stacked on PR #8's `docs/owner-decisions-to-develop`); wave 4 delivered, gates green, open as PR #9 |
+| M0/M1 tasks | 34 done · 100 open (of 134) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
 | Owner decisions | Decided 2026-09-26: O1 engine = Playwright (UI), customer CI = per-project input. Open before M1: O1 pilot names, O2 (owner note recorded, reading unconfirmed). Open before 08.5 DoR: O4 (owner note "tự build hệ thống riêng", model-or-not unconfirmed) — DECISIONS §8 |
@@ -26,10 +27,38 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 01.4.1 | T1–T4 | #3 | `Evidgate.Migrator`, migrations 0001–0003 (roles, RLS baseline), `db-init.sh` |
 | 01.1.2 | T1–T3 | #3 | Api/Worker hosts, 11 module pairs, skeleton slice |
 | 01.8.1 | T1–T2 | #3 | SeaweedFS parity tests, compose dev stack, `scripts/dev/up.sh` |
+| 01.4.2 | T1 | #6 | Tenant scope, EF/Dapper binding, interceptor |
+| 01.3.2 | T4 | #6 | RFC 8785 canonical JSON hashing (.NET + CLI) |
+| 01.6.1 | T1 | #6 | Test conventions (.NET + Vitest) |
+| 02.1.1 | T1 | #6 | `organization` / `project` migrations 0004/0005 |
+| 01.4.2, 01.5.1, 01.6.1 | 01.4.2-T2/T3, 01.5.1-T1/T2/T6, 01.6.1-T2/T5 | #9 | `outbox`/`idempotency_record`/`task` (migrations 0006–0008), claim/consumer/schedule mechanism, schema/EF conventions + UUIDv7 generator, Testcontainers harness, Playwright workspace — see §3 |
 
-## 3. Wave 3 (in progress on `feature/m1-wave3`)
+## 3. Wave 4 (delivered on `feature/m1-wave4`; open PR #9 into `develop`)
 
-Every task passes the gates in order: implement → QA agent (separate from the author) → code review + performance review + security review (parallel) → fixes re-tested → commit.
+Scope: the 01.4.2 T2/T3 conventions and the 01.5.1 durable-task tables that 01.4.2-T4 (pipeline, wires `AddEvidgateTenancy` into Api/Worker) depends on, the shared integration harness (01.6.1-T2, needed by 01.7.1-T1 `ci.yml`) and the Playwright workspace. Two wave-3 follow-ups ride along in slice A.
+
+Gates per slice, in order: implement → QA agent (separate from the author) → code review + performance review + security review (parallel) → fixes re-tested → commit.
+
+| Slice | Tasks | Size | Implement | QA | Code review | Perf review | Security review |
+|---|---|---|---|---|---|---|---|
+| A | 01.4.2-T2.2 `SchemaConventionTests`, 01.4.2-T3 column conventions; fix 1 (explicit names rejected); fix 2 (version-trigger check); + UUIDv7 `id` value generator (QA-A-05) | S + S (+ fixes) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| B1 | 01.5.1-T2 `outbox` + `OutboxWriter`; 01.5.1-T6.1 `idempotency_record` + `IIdempotencyStore` + purge function | M + S | ✅ | ✅ | ✅ | ✅ | ✅ |
+| B2 | 01.4.2-T2.1 `SKIP LOCKED` claim helper; 01.5.1-T1 `task` queue + consumer + Cronos schedules; 01.5.1-T6.2 purge schedule | S + L + S | ✅ | ✅ | ✅ | ✅ | ✅ |
+| C | 01.6.1-T2 Testcontainers harness (`tests/Foundation.IntegrationTests`) | L | ✅ | ✅ | ✅ | ✅ | ✅ |
+| D | 01.6.1-T5 Playwright workspace (`apps/web`) | S | ✅ | ✅ | ✅ | ✅ | ✅ |
+| E | Node 26.10 `JSON.parse` repro on other Node versions; `SESSION-SUMMARY.md` status trimmed to a pointer to this file | — | ✅ | — | — | — | — |
+
+QA findings fixed in wave: scan false-negatives (positional composite-FK pairing, disabled/column-scoped version triggers, allow-list pin), `task_active_idx` for the reclaim poll (seq scan → 0.2 ms at 100k rows), sweep payload clamps (purge limit 1..10000, sweep window ≥1 day), harness namespace/doc corrections. `scripts/verify.sh` green after all of it: 305 tests incl. Docker, all stages pass.
+
+Code/perf/security review fixes (parallel reviewers, all re-tested, `verify.sh` green): monotonic (not host-clock) lease-expiry check in `TaskConsumer.ExecuteAsync`; `DeadLetterExpiredLeases` always overwrites `last_error` with the lease cause instead of `coalesce`; `SchemaConventionTests` narrows the `public.task` exemption to TenantKey/CompositeForeignKey/RowLevelSecurity only (AuditColumns/VersionTrigger stay checked — task has both); misleading test comment fixed (`TaskQueueWriterTests`); `task_claim_type_idx` partial index added (0008) so an unrunnable task_type backlog can't force a sequential scan on every poll (measured 5.61 ms + Seq Scan at 100k → 1.01 ms with the index); `MarkDoneAsync` now bounded by the same 2 s `TransitionWriteBudget` as the failure transition; `WorkerSchedDataSource` validates the DSN's role at construction (fails at boot naming the key, never echoes the credential); `task`/`outbox` gain `pg_column_size(payload) <= 65536` plus matching writer-side length/size validation (queue/task_type/schedule_name/idempotency_key/payload); `IdempotencyStore.CompleteSql` adds `and org_id = @OrgId` as defence in depth alongside RLS; `ITaskHandler.HandleAsync`'s contract doc now states the no-secrets-in-exception-message rule (`last_error`/logs store the first line verbatim). Deferred, recorded in §6: idempotency purge's 50k-rows/day drain ceiling (needs a time-budget or restartable cursor).
+
+Shared prerequisites committed first (`06e47b5`): `tests/Foundation.IntegrationTests` and `tests/Tasks.IntegrationTests` registered in `Evidgate.slnx` and `scripts/check-layout.sh`; `Cronos` and the Canonicalization project referenced from `BuildingBlocks.Persistence`; `Tenancy.IntegrationTests/MigrationTests` bounded to files 0001–0005 so new migrations do not change it. Migration numbers reserved: `0006_platform_outbox.sql`, `0007_platform_idempotency_record.sql` (B1), `0008_platform_task_queue.sql` (B2).
+
+Not in this wave, now ready next (§5): 01.5.1-T3 dispatcher, T4 retry/dead-letter/operator routes, T5 crash tests; 01.4.2-T4 pipeline. Still blocked: 02.1.1-T2 org/project API (unrelated to this wave).
+
+## 4. Wave 3 (delivered, PR #6)
+
+Every task passed the gates in order: implement → QA agent (separate from the author) → code review + performance review + security review (parallel) → fixes re-tested → commit.
 
 | Task | Size | Depends on | Implement | QA | Code review | Perf review | Security review |
 |---|---|---|---|---|---|---|---|
@@ -67,15 +96,20 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | `delete` is revoked from `evidgate_app` on `organization` and `project` (0004:127, 0005:96) because 0001's default privileges grant DELETE on every table the owner creates in `public`; `migrations/README.md`'s role table and the `0003` copy block (items 5 and 7) still prescribe the old operator policy and the DELETE grant for new tables | Tech Lead / next table author |
 | Per-request EF context creation measures 0.109–0.140 ms and 56.2 KiB (the first command on a fresh context +0.55–0.7 ms) — noise against the p95 < 1 s ingest budget, but one line in the 01.4.2 plan keeps a future handler from creating a context per row | 01.4.2 |
 
-## 4. Ready next (dependencies met, not started)
+## 5. Ready next (dependencies met, not started)
 
 | Task | Size | Milestone | Note |
 |---|---|---|---|
 | 01.3.2-T1 | L | M1 | Generated SDK |
+| 01.4.2-T4 | L | M1 | Wires `AddEvidgateTenancy` into Api/Worker (ready: 01.5.1-T2/T6 landed) |
+| 01.5.1-T3 | M | M1 | Outbox dispatcher (ready: T1/T2 landed) |
+| 01.5.1-T4 | L | M1 | Retry/dead-letter/operator routes (ready: T1 landed) |
+| 01.5.1-T5 | S | M1 | Crash tests (ready: T1/T2 landed) |
 | 01.3.2-T2 | L | M1 | Validators |
-| 01.6.1-T2 | L | M1 | Integration harness |
-| 01.6.1-T5 | S | M1 | Playwright workspace |
 | 01.8.1-T3 | M | M1 | Dev stack follow-up |
+| 02.1.2-T1, 02.2.1-T1, 02.4.1-T2, 02.9.1-T2 | M each | M1 | Identity area, on 02.1.1-T1 |
+| 02.6.1-T1 | L | M1 | RLS lint / policy helpers |
+| 03.1.1-T1 | L | M1 | Stable case identity (critical chain) |
 | 04.1.2-T4 | M | M1 | `producer_slot` table + registry |
 | 04.7.1-T1 | M | M1 | |
 | 05.1.1-T1 | L | M1 | |
@@ -86,7 +120,7 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | 12.1.1-T1, 12.1.1-T2 | L, M | M0 | Customer interviews (owner) |
 | 12.2.1-T2, 12.6.1-T1 | M, M | M1 | Commercial area |
 
-## 5. Blocked / carried items
+## 6. Blocked / carried items
 
 | Item | Blocker | Owner |
 |---|---|---|
@@ -96,3 +130,9 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | `evidgate_owner` permissive policy on `organization`/`project` | Rationale logged in 00 §15 and in the `0003` copy block; 00 §5.4.3 still lacks the sentence | Tech Lead |
 | `/internal/*` public-ingress routing rule | `[OPEN]` in 01.1.2 feature plan, no plan-10 task | Tech Lead |
 | O1 pilot names; O2 and O4 readings | Owner confirmation (O1 engine decided 2026-09-26) | Owner |
+| T80 purge-call audit for `evidgate.purge_expired_idempotency` | `audit_log` lands in 02.7.1 (M2); until then the handler logs at Information (recorded in `migrations/README.md`) | 02.7.1 |
+| Operator read path for `task`/`outbox` (dead-letter list, dispatcher visibility) | `evidgate_operator` holds no SELECT on mechanism tables; needs an owner `SECURITY DEFINER` reader or a deliberate grant | 01.5.1-T3/T4.2 |
+| `SchemaConventionTests` exemptions: `rls_probe` (pre-convention template, checksum-locked) and `schema_migration` (02 §4) fully exempt; `task` exempt TenantKey/CompositeForeignKey/RowLevelSecurity only (AuditColumns/VersionTrigger stay gated); `outbox` exempt RLS only (`org_id` unique key enforced) | Lint enforcement belongs to 02.6.1-T2, which must adopt the same exemption list | 02.6.1-T2 |
+| Owned EF entity types (OwnsOne/OwnsMany) fail the model build under `TenantModelConventions` (shadow-FK rename breaks table sharing) | Latent: no M1 entity is owned; fix sketch recorded in QA report (skip owned key/FK properties, derive names per-table) | 01.4.2 follow-up / next owner |
+| Node `JSON.parse` escaped-key defect (upstream V8 regression, 24.x/26.x warm process) | upstream fix landed in V8, awaiting a Node release; the canonicalize guard stays as a partial mitigation | 01.3.2 / Node upgrade |
+| `idempotency.purge` daily cap: `PurgeMaxBatchesPerFire = 50` × 1000 = 50 000 rows/day ceiling; a deployment above that accumulates `idempotency_record` forever | Needs a drain-until-time-budget or restartable cursor (perf review, 01.5.1 §7) | 01.5.1 follow-up |

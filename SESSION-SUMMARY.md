@@ -1,11 +1,11 @@
-# Tóm tắt phiên làm việc — Evidgate (cập nhật 2026-09-25, phiên 2)
+# Tóm tắt phiên làm việc — Evidgate (cập nhật 2026-09-26, phiên 2)
 
 Bản tóm tắt cho chủ dự án. Nguồn chính thức vẫn là `DECISIONS.md` và `plans/00-overview.md`; nếu file này lệch với chúng thì chúng đúng.
 
 ## 1. Dự án là gì
 
 - **Tên:** Evidgate (*evidence* + *gate*). Thu kết quả test tự động (web, API, mobile, unit) từ CI/agent của khách, lưu thành bằng chứng bất biến gắn với build, ra quyết định release PASS / FAIL / INCONCLUSIVE theo policy có phiên bản; healing an toàn (chỉ sửa cơ chế test, không đổi ý định test).
-- **Trạng thái:** đang làm M0 trên nhánh `feature/m0-foundation`: xong 01.1.1 T1–T3, 01.2.1, 01.3.1, 01.9.1 (toolchain, khung workspace, quality gate, OpenAPI + schema, ADR). Chưa có module, migration hay logic nghiệp vụ. Repo GitHub private `anglesen1120/Evidgate`, nhánh `main` (baseline) và `develop` (triển khai, đã có plan từ PR #1).
+- **Trạng thái:** xem `STATUS.md` là nguồn theo dõi tiến độ thực thi. M0 đã xong; M1 wave 1–3 đã merge qua PR #2, #3, #6; wave 4 đang làm trên nhánh `feature/m1-wave4`. Repo GitHub private `anglesen1120/Evidgate`, nhánh `main` (baseline planning) và `develop` (triển khai).
 
 ## 2. Đổi stack (CR-D-1, theo yêu cầu chủ dự án)
 
@@ -79,6 +79,6 @@ Trước khi đổi stack: 487 task / 543.5 / 652.2. Tăng thêm 15 task (+16.75
 
 ## 8. Bước tiếp theo
 
-1. Chốt O1, O2, rồi đặt ngày cho các milestone.
-2. Bắt đầu M0 theo README §5.1: 01.1.1 (toolchain), 01.9.1 (ADR), 12.1.1 (phỏng vấn khách).
+1. Đã chốt O1 ngày 2026-09-26 (engine = Playwright cho UI; CI của khách là input theo từng dự án). O2 còn mở; ngày milestone chưa đặt.
+2. Đã xong phần code của M0 theo `STATUS.md` §2: 01.1.1 (toolchain), 01.2.1, 01.3.1, 01.9.1 (ADR), 01.4.1, 01.1.2, 01.8.1; riêng 12.1.1 (phỏng vấn khách) chưa làm.
 3. Mỗi story chạy DoR (README §6) trước khi code; mọi thay đổi task thì chạy `scripts/regen_docs.py` và `scripts/check_features.py`.

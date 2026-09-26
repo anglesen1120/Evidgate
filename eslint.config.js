@@ -19,10 +19,11 @@ module.exports = tseslint.config(
   },
   {
     files: ['apps/web/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
-    // 01.6.1-T1.2: specs and Vitest configs are excluded from the emitting build
-    // projects (`exclude` in every workspace tsconfig.json), so the project service
-    // cannot open them. The block below types them against tsconfig.spec.json instead.
-    ignores: ['**/*.test.ts', '**/vitest.config.ts'],
+    // 01.6.1-T1.2 / 01.6.1-T5.1: specs, the Vitest configs and the Playwright config are
+    // excluded from the emitting build projects (`exclude`/`include` in every workspace
+    // tsconfig.json), so the project service cannot open them. The block below types them
+    // against the no-emit tsconfig.spec.json projects instead.
+    ignores: ['**/*.test.ts', '**/*.spec.ts', '**/vitest.config.ts', '**/playwright.config.ts'],
     extends: [tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
@@ -39,12 +40,20 @@ module.exports = tseslint.config(
     },
   },
   {
-    // 01.6.1-T1.2: `*.test.ts` (Vitest), the per-workspace `vitest.config.ts` and the two
-    // root Vitest configs are type-checked against a no-emit tsconfig.spec.json. A project
-    // that is only referenced from tsconfig.json is not visible to the project service,
-    // hence the explicit list — keep it in sync with the root tsconfig.spec.json and the
-    // workspaces of the root package.json.
-    files: ['vitest.config.ts', 'vitest.config.base.mts', '**/*.test.ts', '**/vitest.config.ts'],
+    // 01.6.1-T1.2 / 01.6.1-T5.1: `*.test.ts` (Vitest), `*.spec.ts` (Playwright E2E, and the
+    // Angular component specs of 09.x later), the per-workspace `vitest.config.ts` /
+    // `playwright.config.ts` and the two root Vitest configs are type-checked against a
+    // no-emit tsconfig.spec.json. A project that is only referenced from tsconfig.json is
+    // not visible to the project service, hence the explicit list — keep it in sync with
+    // the root tsconfig.spec.json and the workspaces of the root package.json.
+    files: [
+      'vitest.config.ts',
+      'vitest.config.base.mts',
+      '**/*.test.ts',
+      '**/*.spec.ts',
+      '**/vitest.config.ts',
+      '**/playwright.config.ts',
+    ],
     extends: [tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {

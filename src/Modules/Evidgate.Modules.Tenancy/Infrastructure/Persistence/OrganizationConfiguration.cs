@@ -34,8 +34,7 @@ internal sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organ
             .HasName("organization_pkey");
 
         builder.Property(organization => organization.Id)
-            .HasColumnName("id")
-            .ValueGeneratedNever();
+            .HasColumnName("id"); // generation (UUIDv7, client-side) is the tenant convention (01.4.2-T3)
 
         builder.Property(organization => organization.Name)
             .HasColumnName("name")

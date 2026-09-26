@@ -3,6 +3,7 @@
     <RootNamespace>Evidgate.BuildingBlocks.Persistence</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Cronos" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
@@ -13,6 +14,10 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 01.5.1-T6: idempotency request_hash is the RFC 8785 canonical hash (01.3.2-T4). -->
+    <ProjectReference Include="..\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
+  </ItemGroup>
   <!--
     01.1.2-T1.3 (AC3): the readiness gate compares public.schema_migration's head
     with the head this build expects. The expected head is the lexically greatest

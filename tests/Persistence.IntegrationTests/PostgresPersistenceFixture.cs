@@ -88,7 +88,16 @@ public sealed class PostgresPersistenceFixture : IAsyncLifetime
         return database;
     }
 
-    public string OwnerConnectionString(string database) => Build(DatabaseOwnerRole, _ownerPassword, database);
+    /// <summary>
+    /// The owner-role string used for migrations and owner-role assertions. Pooling
+    /// is off for the owner and superuser roles on purpose: the suite creates one
+    /// database per test, and an idle session left in Npgsql's process-wide pool for
+    /// each database and role consumes a container connection slot, which exhausts
+    /// the server (`53300`) as the assembly grows. The app-role string below keeps
+    /// pooling — 01.4.2-T1.2's pool-reset proof is about that pool.
+    /// </summary>
+    public string OwnerConnectionString(string database) =>
+        Build(DatabaseOwnerRole, _ownerPassword, database, pooling: false);
 
     public string AppConnectionString(string database) => Build("evidgate_app", _appPassword, database);
 
@@ -151,16 +160,16 @@ public sealed class PostgresPersistenceFixture : IAsyncLifetime
         await command.ExecuteNonQueryAsync();
     }
 
-    private string SuperuserConnectionString(string database) =>
-        new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { Database = database }.ConnectionString;
+    private string SuperuserConnectionString(string database) => Build("postgres", "postgres", database, pooling: false);
 
-    private string Build(string username, string password, string database)
+    private string Build(string username, string password, string database, bool pooling = true)
     {
         var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
         {
             Database = database,
             Username = username,
             Password = password,
+            Pooling = pooling,
         };
 
         return builder.ConnectionString;

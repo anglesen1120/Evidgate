@@ -18,10 +18,11 @@ The playbook for changing a table without breaking the running version is
   are ignored.
 - Numbering is a **contiguous run from `0001`**: no gaps, no duplicates, and the
   lexical order is the apply order. A module claims the next free block (today
-  `0001`–`0003` are the foundation files from 01 and `0004`–`0005` are 02.1.1's
-  `organization`/`project` tables, so the next story starts at `0006`); a
-  gap means two branches invented the same sequence and neither history can be
-  trusted.
+  `0001`–`0003` are the foundation files from 01, `0004`–`0005` are 02.1.1's
+  `organization`/`project` tables, and `0006`–`0008` are 01.5.1's mechanism
+  tables `outbox`, `idempotency_record` and `task`, so the next story starts at
+  `0009`); a gap means two branches invented the same sequence and neither
+  history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -85,6 +86,29 @@ error and no unfiltered rows (00 §5.4.7). A _malformed_ value is a different
 case: the `::uuid` cast raises 22P02 inside the policy, so the statement fails
 closed with an error instead of comparing to NULL. Accepted because the setting
 is written by the tenant-scope primitive, never from request input.
+
+## Notes on the current head (01.5.1 mechanism tables)
+
+- `0006` says "`created_at` is the only time column the mechanism needs" — the
+  mechanism also uses `dispatched_at` (the `dispatched_at is null` predicate and
+  the dispatch-lag metric). And `0007` calls the `version` column the thing that
+  "keeps that write honest": `CompleteSql` has no `version` predicate, so a
+  second `CompleteAsync` for the same record silently overwrites (version still
+  advances 1→2→3). Both files are checksum-locked once applied; the corrections
+  live here, not in edits (QA wave 4).
+- `public.rls_probe` (`0003`) predates the audit-column convention: it has
+  `created_at` but no `updated_at`/`version` and no
+  `set_updated_at_and_version` trigger, and the schema-convention scan exempts
+  it. Do not read `0003` as a template for new tenant tables.
+- `0008` revoked `evidgate_operator` SELECT on `task` (same posture as
+  `outbox`): without an RLS policy a standing SELECT grant reads every org's
+  payloads. 01.5.1-T4.2's operator dead-letter list therefore needs an owner
+  `SECURITY DEFINER` read function (with the T76 audit trail) or a deliberate
+  grant — an open decision for that task, not something to grant early.
+- T80's "every call audited" for `evidgate.purge_expired_idempotency` is
+  deferred to 02.7.1 (`audit_log` does not exist in M1); the scheduled handler
+  logs function/limit/row-count at Information instead. Accepted as a carried
+  item in STATUS.md.
 
 ## Tests and fixtures
 

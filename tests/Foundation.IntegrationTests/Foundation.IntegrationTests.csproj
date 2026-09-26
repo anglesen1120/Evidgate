@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 01.6.1-T2: the shared Testcontainers.PostgreSQL harness (DatabaseFixture, Respawn reset,
+       TenantTestScope, app-role checks) and its own verification. Named Foundation.* rather than
+       Evidgate.Foundation.* (01.6.1 AC1) so the Architecture.Tests reflection scan never picks it up.
+       The xUnit/Shouldly package set and OutputType live in tests/Directory.Build.props (01.6.1-T1.1). -->
+  <PropertyGroup>
+    <RootNamespace>Foundation.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSQL" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Respawn" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The harness is shared source (linked, not a project): an integration project
+         adopts it by linking these files plus ContainerImages.cs, the same way
+         *.UnitTests picks up tests/Shared/NoNetworkGuard.cs (01.6.1-T2, T1.1). -->
+    <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\DatabaseFixture.cs" Link="Shared/DatabaseFixture.cs" />
+    <Compile Include="..\Shared\RespawnCheckpoint.cs" Link="Shared/RespawnCheckpoint.cs" />
+    <Compile Include="..\Shared\TenantTestScope.cs" Link="Shared/TenantTestScope.cs" />
+    <Compile Include="..\Shared\HarnessTest.cs" Link="Shared/HarnessTest.cs" />
+  </ItemGroup>
+</Project>

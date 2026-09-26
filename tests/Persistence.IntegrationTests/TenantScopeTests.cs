@@ -356,7 +356,7 @@ public sealed class TenantScopeTests
         entity.FindProperty(nameof(RlsProbe.OrgId))!.GetColumnName().ShouldBe("org_id");
         entity.FindProperty(nameof(RlsProbe.CreatedAt))!.GetColumnName().ShouldBe("created_at");
         entity.FindProperty(nameof(RlsProbe.Version))!.IsConcurrencyToken.ShouldBeTrue();
-        entity.FindProperty(nameof(RlsProbe.Id))!.ValueGenerated.ShouldBe(ValueGenerated.Never);
+        entity.FindProperty(nameof(RlsProbe.Id))!.ValueGenerated.ShouldBe(ValueGenerated.OnAdd);
 
         Guid.CreateVersion7().Version.ShouldBe(7);
     }

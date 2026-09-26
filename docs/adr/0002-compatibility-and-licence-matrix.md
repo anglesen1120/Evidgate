@@ -80,7 +80,15 @@ npm packages (direct dependencies/devDependencies, root + workspaces):
 | ajv | 8.20.0 | no `engines` field | MIT | https://registry.npmjs.org/ajv/8.20.0 — JSON Schema 2020-12 checks in `scripts/` (01.3.1 AC4/AC6) |
 | ajv-formats | 3.0.1 | no `engines` field | MIT | https://registry.npmjs.org/ajv-formats/3.0.1 |
 | vitest | 5.0.1 | `engines.node ^22.12.0 \|\| ^24.0.0 \|\| >=26.0.0`; brings `vite` 8.3.1 transitively (peer range `^6.4.0 \|\| ^7.0.0 \|\| ^8.0.0`) | MIT | https://registry.npmjs.org/vitest/5.0.1 — web + customer-side unit tests (01.6.1-T1, DECISIONS §4.2–§4.3) |
-| canonicalize | 5.1.0 | `engines.node >=22`; no dependencies | Apache-2.0 | https://registry.npmjs.org/canonicalize/5.1.0 — RFC 8785 canonical JSON in `packages/cli` (01.3.2-T4, DECISIONS §4.3). [WARN] Node 26.10.0 warm-process `JSON.parse` can mis-decode control-escape member names (QA corpus evidence: the guard withholds 64–78 of 27,146 generated documents in-process, but not all affected ones); self-consistency guard in place as a partial mitigation; revisit on Node upgrades |
+| canonicalize | 5.1.0 | `engines.node >=22`; no dependencies | Apache-2.0 | https://registry.npmjs.org/canonicalize/5.1.0 — RFC 8785 canonical JSON in `packages/cli` (01.3.2-T4, DECISIONS §4.3). [WARN] Node 24.x and 26.x warm-process `JSON.parse` mis-decode escaped member names — V8 regression from v8/v8@f2f3b3f7a22d, fixed upstream in v8/v8@93cd21e8254b (2026-09-17) but in no Node release yet. Re-measured 2026-09-26 with a throwaway deterministic generator of 27,027 documents (15,000 random docs whose member names use control/quote/backslash escapes, 12,000 number literals, wide and 64-deep docs): a cold first pass corrupts 142 documents on Node 24.21.0 (V8 13.6) and 26.10.0 (V8 14.6), later passes in the same process range 137–208, and Node 22.23.3 (V8 12.4) stays at 0 in every pass; the same document parsed in a fresh process is correct, so the divergence is process-history state, e.g. `{"\ue000\"":5e-324,"\t":[...]}` decodes its third key as `"\\"` (U+005C) instead of U+0009. Upstream reports: nodejs/node#63785 (open, labelled v8 engine) → Chromium 521080746. On the wave-3 corpus the guard withholds 64–78 of 27,146 documents in-process; it stays in place as a partial mitigation; revisit on Node upgrades |
+| @playwright/test | 1.63.0 | `engines.node >=20`; depends on `playwright` 1.63.0 | Apache-2.0 | https://registry.npmjs.org/@playwright/test/1.63.0 — web E2E runner in `apps/web` (01.6.1-T5, DECISIONS §4.2–§4.3) |
+
+Container image pins (`tests/Shared/ContainerImages.cs`, `infra/compose.dev.yml`, `infra/README.md`; 01.6.1-T2.1 and 01.8.1 — multi-arch image-index digests):
+
+| Image | Pin | Licence | Evidence |
+|---|---|---|---|
+| `postgres` | `18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722` | PostgreSQL licence | https://hub.docker.com/_/postgres — digest resolves to a multi-arch OCI index (amd64 + arm64); `docker manifest inspect` verified 2026-09-26 |
+| `chrislusf/seaweedfs` | `4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882` | Apache-2.0 | https://hub.docker.com/r/chrislusf/seaweedfs — same verification |
 
 Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project file references yet; rows here also count as registered:
 
@@ -95,7 +103,6 @@ Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project
 | @ngrx/signals | 22.0.1 | MIT | https://registry.npmjs.org/@ngrx/signals/22.0.1 — SignalStore for feature state (DECISIONS §4.2) |
 | @hey-api/openapi-ts | 0.99.0 | MIT | https://registry.npmjs.org/@hey-api/openapi-ts/0.99.0 — generates `packages/sdk` from `contracts/openapi.yaml` (DECISIONS §4.2) |
 | angular-eslint | 22.5.0 | MIT | https://registry.npmjs.org/angular-eslint/22.5.0 (DECISIONS §4.2) |
-| @playwright/test | 1.63.0 | Apache-2.0 | https://registry.npmjs.org/@playwright/test/1.63.0 — web E2E + runner engine (DECISIONS §4.2–§4.3) |
 | appium | 3.7.0 | Apache-2.0 | https://registry.npmjs.org/appium/3.7.0 — mobile engine with UiAutomator2/XCUITest drivers (DECISIONS §4.3) |
 
 "Registered" means the name appears as the first cell of a matrix-table row in this Decision section (including the Planned table); rows in *Alternatives rejected* below are **not** registrations — a dependency whose name matches a rejected row fails `check-adr-matrix.sh` with "rejected in ADR-0002".
