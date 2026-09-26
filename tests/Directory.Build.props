@@ -1,0 +1,35 @@
+<Project>
+  <!--
+    01.6.1-T1.1: conventions shared by every project under tests/. The repository-root
+    props is imported first (MSBuild does not chain them automatically once this file
+    exists), so net10.0, nullable, TreatWarningsAsErrors and the lock files still apply.
+    Only what is common to *all* test projects is added here; container, ASP.NET and
+    storage packages stay in the individual csproj files.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!-- xUnit v3 runs on Microsoft.Testing.Platform (global.json "test.runner"): test projects are executables. -->
+    <OutputType>Exe</OutputType>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="NSubstitute" />
+  </ItemGroup>
+
+  <!--
+    01.6.1-T1.1: unit projects get the no-network convention guard compiled in
+    (00 §5.6 W9). *.IntegrationTests projects deliberately do not: they boot
+    containers and Kestrel listeners on purpose.
+    The suffix test is case-insensitive (01.6.1-T1 QA): a `<Name>.unittests`
+    project must not silently lose the guard through a casing difference.
+  -->
+  <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.unittests', System.StringComparison.OrdinalIgnoreCase))">
+    <Compile Include="$(MSBuildThisFileDirectory)Shared/NoNetworkGuard.cs" Link="Shared/NoNetworkGuard.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 01.3.2-T4.1: RFC 8785 canonical JSON and the sha256:<hex> digest of 00 §7.
+       Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up. -->
+  <PropertyGroup>
+    <RootNamespace>Canonicalization.UnitTests</RootNamespace>
+  </PropertyGroup>
+  <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio, Shouldly,
+       NSubstitute and the no-network guard come from tests/Directory.Build.props (01.6.1-T1.1). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
+  </ItemGroup>
+  <!-- No TestData copy: the byte-exact RFC 8785 reference pairs of fixtures/rfc8785/
+       are read from the repository (RepoPaths.Fixtures), because the CLI's Vitest spec
+       asserts the same files (01.3.2-T4.2 / AC5). -->
+</Project>

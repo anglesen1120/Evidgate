@@ -4,7 +4,16 @@
     "composite": true,
     "declaration": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    // 01.3.2-T4.2: src/canonical.ts imports node:crypto. Nothing in the build program
+    // pulls @types/node in (the specs get it through vitest/config's
+    // /// <reference types="node" />, which is why only this project needs the entry).
+    "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  // 01.6.1-T1.2: specs and the Vitest config are type-checked by tsconfig.spec.json and
+  // must never be emitted into dist. Referencing that project is not valid for `tsc -b`
+  // (a referenced project must be composite *and* emit — TS6306/TS6310), so
+  // eslint.config.js points the parser at it explicitly instead.
+  "exclude": ["src/**/*.test.ts", "vitest.config.ts"]
 }

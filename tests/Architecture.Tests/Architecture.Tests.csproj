@@ -5,15 +5,12 @@
     (Evidgate.*.dll in the output directory) never picks up its own fixtures.
   -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <RootNamespace>Architecture.Tests</RootNamespace>
   </PropertyGroup>
+  <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio, Shouldly
+       and NSubstitute come from tests/Directory.Build.props (01.6.1-T1.1). -->
   <ItemGroup>
     <PackageReference Include="Mediator.Abstractions" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="xunit.runner.visualstudio" />
-    <PackageReference Include="Shouldly" />
   </ItemGroup>
   <!--
     Every Evidgate.* production project in Evidgate.slnx must be ProjectReferenced

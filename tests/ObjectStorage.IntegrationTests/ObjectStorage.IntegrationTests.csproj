@@ -2,14 +2,11 @@
   <!-- 01.8.1-T1: S3_Parity_* presigned PUT/GET assertions via AWSSDK.S3, runnable against any S3 endpoint (SeaweedFS locally, provider in 10.6.1-T2).
        Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up. -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <RootNamespace>ObjectStorage.IntegrationTests</RootNamespace>
   </PropertyGroup>
+  <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio, Shouldly
+       and NSubstitute come from tests/Directory.Build.props (01.6.1-T1.1). -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="xunit.runner.visualstudio" />
-    <PackageReference Include="Shouldly" />
     <PackageReference Include="AWSSDK.S3" />
     <PackageReference Include="Testcontainers" />
   </ItemGroup>

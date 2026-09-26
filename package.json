@@ -12,6 +12,7 @@
   "scripts": {
     "build": "tsc -b tsconfig.json",
     "lint": "eslint . --max-warnings 0",
+    "test": "npm run test --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"
@@ -41,6 +42,7 @@
     "lint-staged": "17.5.1",
     "prettier": "3.9.9",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.70.1"
+    "typescript-eslint": "8.70.1",
+    "vitest": "5.0.1"
   }
 }
