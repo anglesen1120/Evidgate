@@ -7,10 +7,10 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | Item | State |
 |---|---|
 | Branch flow | `feature/*` or `docs/*` → PR into `develop` → owner merges. `main` = planning baseline |
-| `develop` head | `cb636ef` (PR #6 merged) |
-| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions (merged into `feature/m1-wave3` after #6) |
-| Open PRs | #8 owner decisions → `develop` · #9 M1 wave 4 → `develop` |
-| Active branch | `feature/m1-wave4` (stacked on PR #8's `docs/owner-decisions-to-develop`); wave 4 delivered, gates green, open as PR #9 |
+| `develop` head | `73f957b` (PR #9 merged) |
+| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 |
+| Open PRs | none |
+| Active branch | `feature/m1-wave5` (off `develop` `73f957b`); wave 5 in progress — see §3.5 |
 | M0/M1 tasks | 34 done · 100 open (of 134) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
@@ -33,7 +33,7 @@ Updated 2026-09-26. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 02.1.1 | T1 | #6 | `organization` / `project` migrations 0004/0005 |
 | 01.4.2, 01.5.1, 01.6.1 | 01.4.2-T2/T3, 01.5.1-T1/T2/T6, 01.6.1-T2/T5 | #9 | `outbox`/`idempotency_record`/`task` (migrations 0006–0008), claim/consumer/schedule mechanism, schema/EF conventions + UUIDv7 generator, Testcontainers harness, Playwright workspace — see §3 |
 
-## 3. Wave 4 (delivered on `feature/m1-wave4`; open PR #9 into `develop`)
+## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
 Scope: the 01.4.2 T2/T3 conventions and the 01.5.1 durable-task tables that 01.4.2-T4 (pipeline, wires `AddEvidgateTenancy` into Api/Worker) depends on, the shared integration harness (01.6.1-T2, needed by 01.7.1-T1 `ci.yml`) and the Playwright workspace. Two wave-3 follow-ups ride along in slice A.
 
@@ -55,6 +55,24 @@ Code/perf/security review fixes (parallel reviewers, all re-tested, `verify.sh` 
 Shared prerequisites committed first (`06e47b5`): `tests/Foundation.IntegrationTests` and `tests/Tasks.IntegrationTests` registered in `Evidgate.slnx` and `scripts/check-layout.sh`; `Cronos` and the Canonicalization project referenced from `BuildingBlocks.Persistence`; `Tenancy.IntegrationTests/MigrationTests` bounded to files 0001–0005 so new migrations do not change it. Migration numbers reserved: `0006_platform_outbox.sql`, `0007_platform_idempotency_record.sql` (B1), `0008_platform_task_queue.sql` (B2).
 
 Not in this wave, now ready next (§5): 01.5.1-T3 dispatcher, T4 retry/dead-letter/operator routes, T5 crash tests; 01.4.2-T4 pipeline. Still blocked: 02.1.1-T2 org/project API (unrelated to this wave).
+
+## 3.5. Wave 5 (in progress on `feature/m1-wave5`)
+
+Scope (STATUS §5 ready + plan_graph deps verified): **01.4.2-T4** Mediator pipeline + endpoint filter + `AddEvidgateTenancy` wiring (L); **01.5.1-T3** outbox dispatcher (M); **01.5.1-T4** handler contract/retry cap/dead letter/operator routes (M, needs T3); **01.5.1-T5** crash + operator suites on the harness (M, needs T4); **01.7.1-T1** real `ci.yml` (L — deletes interim `docker-tests.yml`, applies its deferred fixes: `global-json-file`, `ubuntu-24.04`, single trigger).
+
+Gates per slice, in order: implement → QA agent (separate from the author) → code review + performance review + security review (parallel) → fixes re-tested → commit.
+
+| Slice | Tasks | Size | Implement | QA | Code review | Perf review | Security review |
+|---|---|---|---|---|---|---|---|
+| P | 01.4.2-T4: C2 pipeline behaviours (telemetry → validation → tenant tx → authorization → idempotency → outbox flush), `Result` → §9.2 endpoint filter, pipeline-order arch test, `AddEvidgateTenancy` + mediator into Api/Worker | L | — | — | — | — | — |
+| D | 01.5.1-T3: outbox dispatcher (batch claim `SKIP LOCKED` 200, `INSERT … SELECT` task rows `idempotency_key='outbox:'‖id`, `dispatched_at` in one tx), dispatch metrics + crash test; migration `0009` dispatcher grants | M | — | — | — | — | — |
+| C | 01.7.1-T1: `ci.yml` (SHA-pinned actions, `ubuntu-24.04`, `global-json-file`, caches, `concurrency`, least-privilege `permissions:`), `verify.sh --stage`, `check-ci-parity.sh`, drift gate scaffold, Playwright job non-blocking, delete `docker-tests.yml` | L | — | — | — | — | — |
+| H | 01.5.1-T4: retry→dead-letter semantics + redacted `last_error` + `ITaskAlertSink`; `ListDeadLetterTasksQuery` + `ReplayDeadLetterTask` under `/internal/operator/*` (fail-closed `platform_operator` guard; no `/v1` route); migration `0010` if a read path needs one | M | — | — | — | — | — |
+| T | 01.5.1-T5: AC1–AC7 integration suites on the 01.6.1-T2 harness | M | — | — | — | — | — |
+
+Dependency order: P, D, C in parallel → H (needs D's dispatcher + P's scope) → T (needs H). Migration numbers reserved: `0009` outbox dispatcher grants (D), `0010` operator read path if needed (H).
+
+Carried items whose owner task lands in this wave: the `task`/`outbox` operator read path (§6 → H); `docker-tests.yml` deletion (§6 → C).
 
 ## 4. Wave 3 (delivered, PR #6)
 
@@ -101,10 +119,10 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | Task | Size | Milestone | Note |
 |---|---|---|---|
 | 01.3.2-T1 | L | M1 | Generated SDK |
-| 01.4.2-T4 | L | M1 | Wires `AddEvidgateTenancy` into Api/Worker (ready: 01.5.1-T2/T6 landed) |
-| 01.5.1-T3 | M | M1 | Outbox dispatcher (ready: T1/T2 landed) |
-| 01.5.1-T4 | L | M1 | Retry/dead-letter/operator routes (ready: T1 landed) |
-| 01.5.1-T5 | S | M1 | Crash tests (ready: T1/T2 landed) |
+| 01.4.2-T4 | L | M1 | Wires `AddEvidgateTenancy` into Api/Worker — **in wave 5 (§3.5)** |
+| 01.5.1-T3 | M | M1 | Outbox dispatcher — **in wave 5 (§3.5)** |
+| 01.5.1-T4 | M | M1 | Retry/dead-letter/operator routes — **in wave 5 (§3.5)**, after T3 per plan_graph |
+| 01.5.1-T5 | M | M1 | Crash/integration suites — **in wave 5 (§3.5)**, after T4 per plan_graph |
 | 01.3.2-T2 | L | M1 | Validators |
 | 01.8.1-T3 | M | M1 | Dev stack follow-up |
 | 02.1.2-T1, 02.2.1-T1, 02.4.1-T2, 02.9.1-T2 | M each | M1 | Identity area, on 02.1.1-T1 |
