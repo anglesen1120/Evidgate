@@ -218,7 +218,7 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 #### Story 01.7.1 Evidgate's own pipeline — acceptance: a PR with a compile error, a drifted contract, an AGPL/RPL dependency (NuGet or npm) or an unformatted file is blocked by required checks
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.7.1-T1 | GitHub Actions pipeline: .NET 10 SDK + Node 26 setup, `dotnet restore --locked-mode`, `npm ci`, build, analyzers, unit, integration (Docker on the runner ⚠️ confirm), architecture, contract drift, web build; NuGet/npm caching, concurrency cancel | L | V1 | M1 | 01.6.1-T1, 01.6.1-T2 |
+| 01.7.1-T1 | GitHub Actions pipeline: .NET 10 SDK + Node 26 setup, `dotnet restore --locked-mode`, `npm ci`, build, analyzers, unit, integration (Docker on the runner ✅ verified via `docker-tests.yml`, §11), architecture, contract drift, web build; NuGet/npm caching, concurrency cancel; folds the interim `docker-tests.yml` fixes listed in §11 | L | V1 | M1 | 01.6.1-T1, 01.6.1-T2 |
 | 01.7.1-T2 | Dependency licence gate for both ecosystems: npm `license-checker` + a NuGet licence scanner (tool choice and its own licence ⚠️ in this task) over one `scripts/licence-policy.json` allow/deny (AGPL/SSPL/BUSL/RPL/non-commercial/paid-maintenance EULA denied per DECISIONS §4); runs on every PR and lock-file change; exception = ADR row (T40) | M | V1 | M1 | 01.7.1-T1 |
 | 01.7.1-T3 | Branch protection on `main`/`develop`: required checks, CODEOWNERS, PR template enforcement | S | V1 | M1 | 01.7.1-T1 |
 | 01.7.1-T4 | Supply chain: Actions pinned by commit SHA, Dependabot for NuGet + npm, `dotnet list package --vulnerable --include-transitive` and `npm audit --omit=dev` gates with a documented exception list, CycloneDX SBOM for both ecosystems ⚠️ tool licence (T40) | M | V1 | M1 | 01.7.1-T1 |
@@ -263,7 +263,8 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 
 - **[OPEN]** Cloud provider/region (O3, owner) — blocks nothing in M0-M1 but decides how the emulator parity check (01.8.1-T1) and the provider smoke test (10.6.1-T2) are run. Needed by M2.
 - **[OPEN]** Does the licence gate also run in the published CLI/adapter release path (shipped to customer CI), or only in the repo? Owner: Tech Lead, needed by M4 (CLI publish).
-- **[OPEN]** ⚠️ GitHub-hosted runners' Docker availability for Testcontainers is assumed, not verified; 01.7.1-T1 confirms it or moves integration tests to a self-hosted runner. Needed by M1.
+- **[CLOSED]** ✅ Docker on GitHub-hosted runners verified: `.github/workflows/docker-tests.yml` (`docker-tests` job) ran the full suite incl. all `Category=Docker` Testcontainers tests on `ubuntu-latest` — 88 succeeded / 0 failed / 0 skipped (runs [36205176754](https://github.com/anglesen1120/Evidgate/actions/runs/36205176754) and [36205193530](https://github.com/anglesen1120/Evidgate/actions/runs/36205193530), 2026-09-26). 01.7.1-T1 no longer needs the confirm/fallback decision.
+- **[OPEN]** `docker-tests.yml` interim-workflow fixes, fold into 01.7.1-T1 when the full pipeline lands: (a) use `global-json-file: global.json` instead of `dotnet-version: "10.0.x"` so CI follows the repo SDK pin; (b) drop the `pull_request:` trigger or scope `push` to `develop` only — push on `feature/*` plus `pull_request` runs the suite twice per PR; (c) pin `ubuntu-24.04` — the `ubuntu-latest` label migrates to Ubuntu 26 on 2026-10-19.
 - **[OPEN]** Whether `scripts/` in §13 CR-01-3 is the final home for repo tooling, or each tool becomes its own project. Owner: Tech Lead, needed by M1.
 
 ## 12. Estimate summary
