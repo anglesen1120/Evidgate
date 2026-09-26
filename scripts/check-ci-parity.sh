@@ -54,9 +54,10 @@ ALLOWED_RAW=(
   # Dependency install: verify.sh never installs (its header is the contract),
   # so every job runs npm ci itself.
   'npm ci'
-  # Contract drift gate: activates when packages/sdk + the codegen script land
-  # (01.3.2-T1); the surrounding `git diff --exit-code` is a git command.
-  'npm run codegen --if-present'
+  # Contract drift gate: the codegen script exists as a no-op in root
+  # package.json until packages/sdk lands (01.3.2-T1); the surrounding
+  # `git diff --exit-code` is a git command.
+  'npm run codegen'
   # Web build: activates when apps/web gains a build script (09.1.1). Deliberately
   # the --workspaces variant — `npm run build` at the root is the tsc-build stage.
   'npm run build --workspaces --if-present'

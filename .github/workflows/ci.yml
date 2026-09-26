@@ -89,12 +89,12 @@ jobs:
           --stage eslint
           --stage prettier
       # Contract drift gate (AC1/§9): regenerates generated sources and fails on
-      # any diff. `npm run codegen --if-present` is a no-op until packages/sdk and
-      # the codegen script land (01.3.2-T1); `git diff --exit-code` then blocks a
-      # hand-edited generated file.
+      # any diff. `npm run codegen` is a real no-op script in root package.json
+      # until packages/sdk and codegen land (01.3.2-T1); `git diff --exit-code`
+      # then blocks a hand-edited generated file.
       - name: 'Contract drift gate — activates with codegen (01.3.2-T1)'
         run: |
-          npm run codegen --if-present
+          npm run codegen
           git diff --exit-code
       # Web build (AC1): `apps/web` gains a build script in 09.1.1; until then
       # --if-present keeps this step a no-op instead of a failure.

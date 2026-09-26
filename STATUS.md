@@ -79,6 +79,8 @@ QA defects fixed in wave: Worker host missing `AddEvidgatePipeline` (QA-P D1 —
 
 Deferred to first CI run on GitHub (by design, AC-level): a green trivial-PR run, cache-hit annotations, <10 min wall time, Testcontainers on the hosted runner (the deleted docker-tests.yml already proved Docker works — run 36205176754).
 
+Drift-gate note: `npm run codegen` in root `package.json` is a real no-op script (echo + exit 0) so the `ci.yml` gate and `check-ci-parity.sh` stay honest today; it becomes the SDK generator at 01.3.2-T1.
+
 ## 4. Wave 3 (delivered, PR #6)
 
 Every task passed the gates in order: implement → QA agent (separate from the author) → code review + performance review + security review (parallel) → fixes re-tested → commit.
