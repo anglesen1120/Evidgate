@@ -1,0 +1,11 @@
+{
+  "schema": "event-envelope.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": 0,
+      "path": "/events/0/ext/schema",
+      "reason": "required"
+    }
+  ]
+}

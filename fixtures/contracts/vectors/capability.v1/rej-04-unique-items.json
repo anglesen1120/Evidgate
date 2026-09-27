@@ -1,0 +1,18 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "engine": {
+    "family": "playwright",
+    "version": "1.49.0"
+  },
+  "platforms": ["a", "a"],
+  "supports": {
+    "discovery": true,
+    "step_events": true,
+    "retry": true,
+    "cancel": true
+  },
+  "mode": "full"
+}

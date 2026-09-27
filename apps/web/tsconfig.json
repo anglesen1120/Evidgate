@@ -13,5 +13,8 @@
   "include": ["src"],
   // 01.6.1-T1.2: specs and the Vitest config are type-checked by tsconfig.spec.json and
   // must never be emitted into dist.
-  "exclude": ["src/**/*.test.ts", "vitest.config.ts"]
+  "exclude": ["src/**/*.test.ts", "vitest.config.ts"],
+  // 01.3.2-T1.2: @evidgate/sdk workspace dependency — the build must see its emitted
+  // declarations (npm workspaces links it via node_modules).
+  "references": [{ "path": "../../packages/sdk" }]
 }

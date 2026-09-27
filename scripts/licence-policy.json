@@ -1,0 +1,80 @@
+{
+  "$comment": "01.7.1-T2 / DECISIONS §4 / 00 §5.7 S6. The single licence allow/deny list consumed by scripts/licence-scan.sh for BOTH ecosystems (npm via license-checker-rseidelsohn, NuGet via nuget-license). Evaluation: every licence token of every dependency is classified — first matching verdict wins in deny > warn > allow > unknown order; 'unknown' means 'no allow pattern matched' and behaves like warn. deny/warn verdicts fail the gate UNLESS the package is listed under an exception keyed by an ADR id; a warn-level exception still prints the warning (that is the 'warn + required ADR row' rule for LGPL). SPDX 'OR' expressions are treated conservatively: a denied token anywhere in the expression denies the package — choose the permitted side by adding an ADR exception. Exceptions carry package keys as '<ecosystem>:<name>' or '<ecosystem>:<name>@<version>' where ecosystem is npm|nuget; the exception does not apply until the ADR id exists in docs/adr/.",
+  "version": 1,
+  "allow": [
+    { "match": "^MIT(-0)?$", "why": "MIT" },
+    { "match": "^Apache(-2\\.0| License.*)$", "why": "Apache-2.0" },
+    { "match": "^(0?BSD|BSD-.*|BSD.*Clause.*)$", "why": "BSD family" },
+    { "match": "^ISC$", "why": "ISC" },
+    { "match": "^(PostgreSQL|PostgreSQL License)$", "why": "PostgreSQL licence (BSD-style)" },
+    { "match": "^Unlicense$", "why": "public domain" },
+    { "match": "^(CC0-1\\.0|CC0.*)$", "why": "public domain dedication" },
+    { "match": "^Zlib$", "why": "zlib" },
+    { "match": "^(Python-2\\.0|PSF-.*|Python Software.*)$", "why": "Python/PSF" },
+    { "match": "^(OFL-1\\.1|SIL Open Font.*)$", "why": "SIL Open Font (assets only)" },
+    { "match": "^CC-BY-(3\\.0|4\\.0)$", "why": "attribution-only Creative Commons" },
+    { "match": "^BlueOak-.*$", "why": "Blue Oak Model (patent-permissive)" },
+    { "match": "^WTFPL$", "why": "public-domain equivalent" }
+  ],
+  "deny": [
+    { "match": "\\bAGPL", "why": "DECISIONS §4: no AGPL" },
+    { "match": "GNU Affero", "why": "AGPL written out" },
+    { "match": "\\bSSPL\\b", "why": "Server Side Public License — SaaS-hostile" },
+    { "match": "Server Side Public License", "why": "SSPL written out" },
+    {
+      "match": "\\bBUSL\\b",
+      "why": "Business Source License — commercial use restricted until change date"
+    },
+    { "match": "Business Source Licen[cs]e", "why": "BUSL written out" },
+    { "match": "\\bRPL-?[0-9]", "why": "Reciprocal Public License" },
+    { "match": "\\bRPSL\\b", "why": "Reciprocal Public License id" },
+    { "match": "Reciprocal Public License", "why": "RPL written out" },
+    { "match": "non[-\\s]?commercial", "why": "non-commercial clauses are denied" },
+    { "match": "CC-BY-NC", "why": "Creative Commons NonCommercial" },
+    { "match": "\\bNC-[0-9]", "why": "CC NonCommercial licence id" },
+    { "match": "Commons Clause", "why": "commons-clause commercial-use restriction" },
+    { "match": "Elastic Licen[cs]e", "why": "ELv2 forbids providing as managed service" },
+    { "match": "\\bELv2\\b", "why": "Elastic License 2.0 id" },
+    {
+      "match": "Open Source Maintenance Fee",
+      "why": "paid-maintenance EULA (JsonSchema.Net pattern)"
+    },
+    { "match": "\\bOSMFEULA\\b", "why": "OSMF EULA file id" },
+    { "match": "Maintenance Fee", "why": "paid-maintenance licence" },
+    { "match": "paid[-\\s]?maintenance", "why": "paid-maintenance EULA" },
+    {
+      "match": "\\bXceed\\b",
+      "why": "Xceed Community Licence — non-commercial (FluentAssertions pattern)"
+    },
+    { "match": "\\bEULA\\b", "why": "end-user licence agreements are not open licences" },
+    {
+      "match": "Fair(?:[-\\s]?Source)? Licen[cs]e",
+      "why": "Fair Source License — paid-use restriction"
+    }
+  ],
+  "warn": [
+    {
+      "match": "\\bLGPL",
+      "why": "LGPL needs an ADR row (DECISIONS §4; Hangfire precedent in ADR-0002)"
+    },
+    { "match": "GNU Lesser General Public", "why": "LGPL written out" },
+    {
+      "match": "\\bGPL-?[0-9]",
+      "why": "strong copyleft — needs an ADR row (AGPL/LGPL are already classified above)"
+    },
+    { "match": "\\bGPLv", "why": "GPL written out as GPLvN" },
+    { "match": "\\bMPL-[0-9]", "why": "Mozilla Public License — weak copyleft, needs an ADR row" },
+    { "match": "\\bEPL-[0-9]", "why": "Eclipse Public License — weak copyleft, needs an ADR row" },
+    {
+      "match": "SEE LICENSE",
+      "why": "licence text cannot be machine-classified — needs an ADR row"
+    },
+    { "match": "^UNLICEN[SC]ED$", "why": "unlicensed third-party code has no usable licence" }
+  ],
+  "exceptions": {
+    "ADR-0002": {
+      "reason": "MPL-2.0 weak copyleft is compatible with closed-source SaaS: lightningcss is a build-time-only transitive of vite (via vitest) and never ships in runtime artefacts; ADR-0002's vitest row carries the direct dependency. Package keys are case-insensitive fnmatch patterns ('ecosystem:name' or 'ecosystem:name@version').",
+      "packages": ["npm:lightningcss*"]
+    }
+  }
+}

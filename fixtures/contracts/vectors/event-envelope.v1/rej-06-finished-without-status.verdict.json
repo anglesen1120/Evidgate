@@ -1,0 +1,12 @@
+{
+  "schema": "event-envelope.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/status",
+      "reason": "required"
+    }
+  ],
+  "comment": "00 \u00a79.4: a test.finished event requires status (if/then in the schema)."
+}

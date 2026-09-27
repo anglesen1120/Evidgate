@@ -1,0 +1,16 @@
+{
+  "schema": "event-envelope.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": 1,
+      "path": "/events/1",
+      "reason": "type"
+    },
+    {
+      "index": 2,
+      "path": "/events/2",
+      "reason": "type"
+    }
+  ]
+}

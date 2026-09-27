@@ -9,13 +9,36 @@
   <ItemGroup>
     <PackageReference Include="Testcontainers.PostgreSQL" />
     <PackageReference Include="Npgsql" />
+    <!-- 01.6.1-T4: the shared harness (DatabaseFixture/RespawnCheckpoint) and the EF Core
+         write-model probe over public.project (migrations 0004/0005). -->
+    <PackageReference Include="Respawn" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+  <!-- 01.6.1-T4.2: the in-process host of the test-only /v1 tenant route. A non-web
+       project reaches ASP.NET Core through the shared framework, never through a
+       PackageReference to a framework package. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
     <!-- The isolation suite bootstraps as superuser and then applies the real
          migrations through the Migrator as evidgate_owner (01.4.1 §9). -->
     <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+    <!-- 01.6.1-T4: the production tenancy registration (ITenantScope/ITenantDb,
+         01.4.2) the task isolation is asserted through, and the public ProjectDto the
+         Dapper read and the test-only route materialise. -->
+    <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy.Contracts\Evidgate.Modules.Tenancy.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <!-- 01.6.1-T2: the shared harness is linked source, exactly as
+         tests/Foundation.IntegrationTests adopts it (tests/README.md). -->
+    <Compile Include="..\Shared\DatabaseFixture.cs" Link="Shared/DatabaseFixture.cs" />
+    <Compile Include="..\Shared\RespawnCheckpoint.cs" Link="Shared/RespawnCheckpoint.cs" />
+    <Compile Include="..\Shared\TenantTestScope.cs" Link="Shared/TenantTestScope.cs" />
+    <Compile Include="..\Shared\HarnessTest.cs" Link="Shared/HarnessTest.cs" />
   </ItemGroup>
 </Project>

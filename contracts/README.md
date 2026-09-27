@@ -52,6 +52,13 @@ agent job routes) must not (T38). All error responses reference
 - `POST /v1/jobs/{j}/heartbeat` — naturally idempotent: the server extends
   only the current epoch (00 §9.3).
 
+## Validation corpus (`fixtures/contracts/`, 01.3.2-T2)
+
+The accept/reject vectors both runtime validators must agree on live in
+`fixtures/contracts/` — see `fixtures/contracts/README.md` for the vector and
+verdict-sidecar format. Parity is a gate: a vector the Corvus (xUnit) and Ajv
+(Vitest) suites disagree on fails both builds.
+
 ## Versioning and deprecation (AC5)
 
 - **Breaking change ⇒ new major**: a new `/vN` server block in

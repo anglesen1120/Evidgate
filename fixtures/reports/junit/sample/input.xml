@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  01.6.1-T3.2: synthetic JUnit XML (00 §5.7 S3 — no real customer data, synthetic
+  identifiers only). The three cases cover the normalisation boundaries 04 needs:
+  a pass, a failure carrying a message, and a skipped case. The same bytes are
+  loaded by tests/Foundation.IntegrationTests/FixtureLoaderTests.cs and by
+  packages/test-fixtures/src/loadFixture.test.ts, which is what makes the fixture
+  corpus shared between the runtimes (AC6).
+-->
+<testsuites name="sample" tests="3" failures="1" errors="0" skipped="1" time="0.42">
+  <testsuite name="Sample.Tests" tests="3" failures="1" errors="0" skipped="1" time="0.42" timestamp="2026-01-01T00:00:00">
+    <testcase classname="Sample.Tests" name="Case_Passes" time="0.10" />
+    <testcase classname="Sample.Tests" name="Case_Fails" time="0.22">
+      <failure message="expected 2 but was 1" type="AssertionError">Sample.Tests.Case_Fails()</failure>
+    </testcase>
+    <testcase classname="Sample.Tests" name="Case_Skipped" time="0.00">
+      <skipped message="not applicable" />
+    </testcase>
+  </testsuite>
+</testsuites>

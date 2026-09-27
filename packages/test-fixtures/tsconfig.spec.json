@@ -1,0 +1,13 @@
+{
+  // 01.6.1-T1.2 convention (see packages/cli): type-checks the specs and the
+  // Vitest config without emitting, so they stay out of the dist build.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // The workspace config imports the shared base by its real `.mts` path (the
+    // Vitest native config loader does not remap `.js`/`.mjs` specifiers to the
+    // `.mts` source, and tsc only allows `.mts` under noEmit).
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*.test.ts", "vitest.config.ts", "../../vitest.config.base.mts"]
+}

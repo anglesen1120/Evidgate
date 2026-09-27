@@ -1,0 +1,41 @@
+{
+  "schema": "event-envelope.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/event_id",
+      "reason": "required"
+    },
+    {
+      "index": null,
+      "path": "/producer_id",
+      "reason": "required"
+    },
+    {
+      "index": null,
+      "path": "/sequence",
+      "reason": "required"
+    },
+    {
+      "index": null,
+      "path": "/execution_key",
+      "reason": "required"
+    },
+    {
+      "index": null,
+      "path": "/attempt_no",
+      "reason": "required"
+    },
+    {
+      "index": null,
+      "path": "/type",
+      "reason": "required"
+    },
+    {
+      "index": null,
+      "path": "/occurred_at",
+      "reason": "required"
+    }
+  ]
+}

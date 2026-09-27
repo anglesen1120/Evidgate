@@ -1,0 +1,5 @@
+{
+  "$comment": "01.7.1-T4.2 (AC6): vulnerability-scan allowlist consumed by scripts/audit-deps.sh. Keyed by advisory id (GHSA-xxxx-yyyy-zzzz or CVE-YYYY-NNNNN — the last path segment of the advisory URL from 'npm audit --json' or 'dotnet list package --vulnerable --format json'). Every entry must name the accepting ADR (adr), the affected package, and the reason; 'expires' (YYYY-MM-DD) is optional — an expired exception no longer exempts. An empty object means no exceptions: every vulnerability found by the scanners fails the gate.",
+  "version": 1,
+  "exceptions": {}
+}

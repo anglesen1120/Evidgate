@@ -1,0 +1,23 @@
+{
+  // 01.3.2-T1: the committed @hey-api/openapi-ts output (`gen/`) as its own composite
+  // project, referenced by tsconfig.json. Two deliberate relaxations vs
+  // tsconfig.base.json, both confined to generated code that is never hand-edited:
+  //
+  //   - exactOptionalPropertyTypes: hey-api 0.99 emits `T | undefined` actuals into
+  //     `T?`-typed parameter positions (TS2379 across the bundled fetch client);
+  //     fixing that is a generator concern, so the flag is off here and stays ON for
+  //     `src/` (see tsconfig.json, AC2).
+  //   - lib DOM: the bundled fetch client names `BodyInit`, which @types/node does not
+  //     declare globally (Request/Response/Headers it does, and the DOM declarations win
+  //     over node's web-globals fallbacks when both are present).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["gen"]
+}

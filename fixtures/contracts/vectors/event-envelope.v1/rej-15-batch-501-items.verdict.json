@@ -1,0 +1,12 @@
+{
+  "schema": "event-envelope.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/events",
+      "reason": "max_items"
+    }
+  ],
+  "comment": "00 \u00a79.3 cap: a batch holds at most 500 events; the cap failure is envelope-level, items are never validated."
+}

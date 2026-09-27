@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # AC6 (01.1.1): every NuGet package name (PackageVersion/GlobalPackageReference in
-# Directory.Packages.props, PackageReference in every *.csproj/*.props/*.targets)
-# and every npm dependency name (dependencies/devDependencies/optionalDependencies/
-# peerDependencies of the root and every workspace package.json) must appear as the
+# Directory.Packages.props, PackageReference in every *.csproj/*.props/*.targets),
+# every npm dependency name (dependencies/devDependencies/optionalDependencies/
+# peerDependencies of the root and every workspace package.json), and every .NET
+# local tool package id (.config/dotnet-tools.json tools.*) must appear as the
 # first cell of a matrix-table row in docs/adr/0002-compatibility-and-licence-matrix.md.
 # Names listed in the "Alternatives rejected" table are NOT registrations; a
 # dependency matching one fails with "rejected in ADR-0002".
@@ -171,6 +172,23 @@ for (const f of manifestPaths()) {
 }
 for (const n of [...names].sort()) console.log(n);
 EOF
+
+# --- .NET local tools (.config/dotnet-tools.json): every entry ships a NuGet
+# package into the build pipeline (nuget-license, CycloneDX), so a new or
+# bumped tool without an ADR-0002 row must fail this gate like any other
+# package. `id` is the NuGet package id when present; the tool name otherwise.
+python3 - "$ROOT/.config/dotnet-tools.json" <<'PYEOF' >> "$names"
+import json, sys
+
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+except FileNotFoundError:
+    sys.exit(0)  # no local tools -> nothing to register
+except json.JSONDecodeError as e:
+    sys.exit("check-adr-matrix: cannot parse %s: %s" % (sys.argv[1], e))
+for tool_name, tool in (data.get("tools") or {}).items():
+    print((tool or {}).get("id") or tool_name)
+PYEOF
 
 sort -u "$names" -o "$names"
 
