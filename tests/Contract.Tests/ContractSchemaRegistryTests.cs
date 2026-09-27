@@ -1,0 +1,240 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Evidgate.BuildingBlocks.Contracts.Validation;
+using Shouldly;
+using Xunit;
+
+namespace Contract.Tests;
+
+/// <summary>
+/// 04.7.1-T1.2/T1.4 and 05.1.1-T1.1/T1.4: the loader contract the two runtimes
+/// share — recursive discovery of <c>contracts/{schemas,adapter/**,manifest}</c>,
+/// keys that are never silently overwritten, cross-file <c>$ref</c>s resolved
+/// from the loaded set only, the <c>x-max-bytes</c> cap — plus the two
+/// registrations that must not drift from their schema files: the
+/// <c>POST /v1/projects/{p}/manifests</c> body (05.1.1-T1.4) and the
+/// adapter operations' reference to the 00 §9.4 envelope (04.7.1-T1.2).
+/// </summary>
+/// <remarks>
+/// The verdict of a document that crosses a file boundary is pinned by the
+/// <c>fixtures/contracts/vectors/execute.v1|collect.v1</c> corpus both runtimes
+/// run (AC5/T42); these tests cover what a corpus cannot express: load-time
+/// failures, the cap, and the spec-to-file binding.
+/// </remarks>
+public sealed class ContractSchemaRegistryTests
+{
+    private const string Dialect = "https://json-schema.org/draft/2020-12/schema";
+
+    private static readonly Lazy<ContractSchemaSet> Schemas =
+        new(() => ContractSchemaSet.Load(ContractPaths.ContractsDirectory));
+
+    [Fact]
+    public void Nested_Operations_Config_And_Manifest_Load_Under_Their_File_Name_Keys()
+    {
+        foreach (var key in new[]
+        {
+            "event-envelope.v1",
+            "capability.v1",
+            "config.v1",
+            "discover.v1",
+            "prepare.v1",
+            "execute.v1",
+            "collect.v1",
+            "cleanup.v1",
+            "manifest.v1",
+        })
+        {
+            Schemas.Value.Contains(key).ShouldBeTrue(
+                $"'{key}' must be discovered (contracts/schemas, contracts/adapter/** and contracts/manifest)");
+        }
+
+        // The two transport caps the plans decide: 04.7.1 §8 (≤ 16 KiB capability
+        // document) and 05.1.1 §8 (256 KiB manifest body).
+        Schemas.Value.MaxBytes("capability.v1").ShouldBe(16384L);
+        Schemas.Value.MaxBytes(ContractSchemaKeys.Manifest).ShouldBe(262144L);
+    }
+
+    [Fact]
+    public void Byte_Cap_Rejects_A_Body_Before_It_Is_Parsed()
+    {
+        var overCap = new byte[Schemas.Value.MaxBytes(ContractSchemaKeys.Manifest)!.Value + 1];
+
+        var result = Schemas.Value.Validate(ContractSchemaKeys.Manifest, overCap);
+
+        result.IsValid.ShouldBeFalse();
+        result.Errors.ShouldBe([ContractValidationError.BodyTooLarge]);
+    }
+
+    [Fact]
+    public void Duplicate_Keys_Fail_Loud_Instead_Of_Last_One_Wins()
+    {
+        using var tree = new SchemaTree();
+        var key = $"dup-{Guid.NewGuid():N}.v1";
+        tree.Write($"schemas/{key}.json", MinimalSchema(key));
+        tree.Write($"adapter/operations/{key}.json", MinimalSchema(key));
+
+        var exception = Should.Throw<InvalidOperationException>(() => ContractSchemaSet.Load(tree.Root));
+
+        exception.Message.ShouldContain($"duplicate contract schema key '{key}'");
+        exception.Message.ShouldContain("schemas");
+        exception.Message.ShouldContain("operations");
+    }
+
+    [Fact]
+    public void A_Ref_Outside_The_Loaded_Set_Fails_At_Load()
+    {
+        using var tree = new SchemaTree();
+        var absent = $"absent-{Guid.NewGuid():N}.v1";
+        var key = $"dangling-{Guid.NewGuid():N}.v1";
+        tree.Write(
+            $"schemas/{key}.json",
+            $$"""{"$schema":"{{Dialect}}","$id":"{{key}}.json","$ref":"urn:evidgate:contract:{{absent}}"}""");
+
+        var exception = Record.Exception(() => ContractSchemaSet.Load(tree.Root));
+
+        // No file-system and no HTTP resolution: the registry is exactly the
+        // loaded set, so an unresolved address is a load failure, never a fetch.
+        exception.ShouldNotBeNull("a $ref outside the loaded set must fail at load, not at first use");
+        exception!.Message.ShouldContain(absent);
+    }
+
+    /// <summary>
+    /// 05.1.1-T1.4: the spec body and the schema file cannot drift. The path's
+    /// request body references <c>contracts/manifest/&lt;file&gt;</c>, that file's
+    /// <c>$id</c> is its own name, the key both loaders derive from it is
+    /// <see cref="ContractSchemaKeys.Manifest"/>, and the empty inline stub the
+    /// reference replaced must not come back (a mirror could drift; a reference
+    /// cannot).
+    /// </summary>
+    [Fact]
+    public void Manifest_Body_In_The_Spec_Is_The_Schema_File()
+    {
+        var specPath = Path.Combine(ContractPaths.ContractsDirectory, "openapi.yaml");
+        var lines = File.ReadAllLines(specPath);
+        var start = Array.IndexOf(lines, "  /projects/{p}/manifests:");
+        start.ShouldBeGreaterThanOrEqualTo(0, "the 00 §9.3 manifest endpoint must stay documented");
+
+        var end = lines.Length;
+        for (var index = start + 1; index < lines.Length; index++)
+        {
+            if (Regex.IsMatch(lines[index], @"^  /\S"))
+            {
+                end = index;
+                break;
+            }
+        }
+
+        var block = string.Join('\n', lines[start..end]);
+        block.Contains("operationId: createManifest", StringComparison.Ordinal)
+            .ShouldBeTrue($"the sliced block must be the manifest operation, got:\n{block}");
+
+        var reference = Regex.Match(block, @"^\s+\$ref: '\./manifest/(?<file>[^']+)'$", RegexOptions.Multiline);
+        reference.Success.ShouldBeTrue($"the manifest request body must $ref contracts/manifest/*.json:\n{block}");
+
+        var file = reference.Groups["file"].Value;
+        var schemaFile = Path.Combine(ContractPaths.ContractsDirectory, "manifest", file);
+        File.Exists(schemaFile).ShouldBeTrue($"'{file}' is referenced by the spec but does not exist");
+
+        using var document = JsonDocument.Parse(File.ReadAllText(schemaFile));
+        document.RootElement.GetProperty("$id").GetString().ShouldBe(file);
+        Path.GetFileNameWithoutExtension(file).ShouldBe(ContractSchemaKeys.Manifest);
+
+        File.ReadAllText(specPath)
+            .Contains("ManifestUpload", StringComparison.Ordinal)
+            .ShouldBeFalse(
+                "the empty ManifestUpload stub must stay deleted: the body is the schema file, never an inline mirror");
+    }
+
+    /// <summary>
+    /// 05.1.1-T1.2: the bounds live in the schema, not in a later check — 10 000
+    /// planned executions and 256 shards are accepted at the limit and one past it
+    /// is not. Validated as a parsed document because the 256 KiB transport cap
+    /// (05.1.1 §8) would otherwise fire first: a body that large is a 413, not a
+    /// `max_items` row.
+    /// </summary>
+    [Fact]
+    public void Manifest_Bounds_Are_Encoded_In_The_Schema()
+    {
+        AtLimit(10000, 256).IsValid.ShouldBeTrue("10 000 planned executions and 256 shards are the declared bounds");
+
+        AtLimit(10001, 1).Errors.ShouldBe(
+            [new ContractValidationError(null, "/planned_executions", "max_items")]);
+        AtLimit(1, 257).Errors.ShouldBe(
+            [new ContractValidationError(null, "/shard_plan/shards", "max_items")]);
+    }
+
+    /// <summary>Validates (as a parsed body) a manifest with exactly these counts.</summary>
+    private static ContractValidationResult AtLimit(int plannedExecutions, int shards)
+    {
+        const string execution =
+            """{"case_revision_id":"00000000-0000-0000-0000-000000000010","variant":{"params":{}},"target_env":"e"}""";
+        const string shard = """{"shard_id":"s","from_index":0,"to_index":0}""";
+        var text = $$$"""
+            {"schema_version":1,"suite_revision_id":"00000000-0000-0000-0000-000000000020","planned_executions":[{{{string.Join(',', Enumerable.Repeat(execution, plannedExecutions))}}}],"matrix":{"case_revision_ids":[],"variants":[],"target_envs":[]},"shard_plan":{"shards":[{{{string.Join(',', Enumerable.Repeat(shard, shards))}}}]},"env_needs":{"target_envs":[]}}
+            """;
+
+        using var document = JsonDocument.Parse(text);
+        return Schemas.Value.Validate(ContractSchemaKeys.Manifest, document.RootElement);
+    }
+
+    /// <summary>
+    /// The corpus the spec's own body definition must agree with: the golden
+    /// vector is accepted and a reject vector is rejected, each exactly as its
+    /// sidecar says, when validated through the key derived from
+    /// <c>openapi.yaml</c> rather than a hard-coded one. The per-vector theory
+    /// that also runs these files is <see cref="ParityCorpusTests"/>.
+    /// </summary>
+    [Theory]
+    [InlineData("acc-01-golden.json")]
+    [InlineData("rej-11-matrix-duplicate-variant.json")]
+    public void ManifestSchema_ParityCorpus(string vector)
+    {
+        var key = SpecManifestKey();
+        var file = Path.Combine(ContractPaths.FixturesDirectory, "vectors", key, vector);
+        var sidecar = JsonDocument.Parse(File.ReadAllText(file[..^".json".Length] + ".verdict.json")).RootElement;
+        sidecar.GetProperty("schema").GetString().ShouldBe(key);
+
+        var result = Schemas.Value.Validate(key, File.ReadAllBytes(file));
+
+        result.IsValid.ShouldBe(sidecar.GetProperty("valid").GetBoolean(), vector);
+    }
+
+    /// <summary>The manifest schema key as the spec's body reference derives it (file name without <c>.json</c>).</summary>
+    private static string SpecManifestKey()
+    {
+        var spec = File.ReadAllText(Path.Combine(ContractPaths.ContractsDirectory, "openapi.yaml"));
+        var reference = Regex.Match(spec, @"\$ref: '\./manifest/(?<file>[^']+)'");
+        reference.Success.ShouldBeTrue("the manifest request body must $ref contracts/manifest/*.json");
+        return Path.GetFileNameWithoutExtension(reference.Groups["file"].Value);
+    }
+
+    private static string MinimalSchema(string key) =>
+        $$"""{"$schema":"{{Dialect}}","$id":"{{key}}.json","type":"object"}""";
+
+    /// <summary>A throwaway <c>contracts/</c> tree; the directory name is random so the key can be too.</summary>
+    private sealed class SchemaTree : IDisposable
+    {
+        public SchemaTree()
+        {
+            Root = Path.Combine(Path.GetTempPath(), $"contract-tree-{Guid.NewGuid():N}", "contracts");
+        }
+
+        public string Root { get; }
+
+        public void Write(string relativePath, string content)
+        {
+            var path = Path.Combine(Root, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, content);
+        }
+
+        public void Dispose()
+        {
+            var directory = Directory.GetParent(Root);
+            if (directory is not null && directory.Exists)
+            {
+                directory.Delete(recursive: true);
+            }
+        }
+    }
+}

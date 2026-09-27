@@ -119,6 +119,29 @@ public sealed record Error(
     /// <summary>403: the principal does not hold the handler's permission, or the handler declares none.</summary>
     public static Error Forbidden(string message) => new(ApiErrorCode.Forbidden, message, 403);
 
+    /// <summary>
+    /// 403 with an explicit 00 §9.2 code: the C2 authorization stage's other two
+    /// denials, <c>project_scope_mismatch</c> (the request addresses a project
+    /// outside the principal's token scope, 00 §9.1) and <c>no_membership</c> (the
+    /// principal has no active membership in the org it addressed, 02 §4.3).
+    /// </summary>
+    public static Error Denied(string code, string message) => new(code, message, 403);
+
     /// <summary>409: a conflict with the caller's own earlier request, e.g. a reused <c>Idempotency-Key</c>.</summary>
     public static Error Conflict(string code, string message) => new(code, message, 409);
+
+    /// <summary>404: the addressed resource does not exist (also for another tenant's id, 00 §9.2).</summary>
+    public static Error NotFound(string message) => new(ApiErrorCode.NotFound, message, 404);
+
+    /// <summary>412: the row changed since the caller read it (the <c>version</c> precondition, 00 §5.5 C4).</summary>
+    public static Error PreconditionFailed(string message) => new(ApiErrorCode.PreconditionFailed, message, 412);
+
+    /// <summary>
+    /// 422 with an explicit 00 §9.2 code — the domain codes a validator cannot express
+    /// through <see cref="Invalid"/> (<c>unknown_permission</c>,
+    /// <c>permission_not_assignable</c>, …), still parsed-but-refused rather than
+    /// malformed.
+    /// </summary>
+    public static Error Unprocessable(string code, string message, IReadOnlyList<ErrorDetail>? details = null) =>
+        new(code, message, 422, false, details);
 }

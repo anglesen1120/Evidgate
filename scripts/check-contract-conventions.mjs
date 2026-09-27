@@ -2,8 +2,8 @@
 // 01.3.1 contract conventions gate (AC2-AC4, AC6).
 // Invoked by scripts/check-contract-conventions.sh after the spectral stage.
 // Prints "E <check>: <detail>" per violation; exits non-zero if any.
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -52,6 +52,16 @@ const EXPECTED = [
   ['/artifacts/{a}/download-url', 'get', 'artifact:read', 'v1'],
   ['/orgs/{o}/projects', 'post', 'project:create', 'v1'],
   ['/orgs/{o}/memberships', 'post', 'membership:write', 'v1'],
+  ['/orgs/{o}/memberships', 'get', 'membership:read', 'v1'],
+  ['/orgs/{o}/memberships/{m}', 'get', 'membership:read', 'v1'],
+  ['/orgs/{o}/memberships/{m}', 'patch', 'membership:write', 'v1'],
+  ['/orgs/{o}/memberships/{m}', 'delete', 'membership:write', 'v1'],
+  ['/orgs/{o}/memberships/{m}/roles', 'post', 'membership:write', 'v1'],
+  ['/orgs/{o}/memberships/{m}/roles/{r}', 'delete', 'membership:write', 'v1'],
+  ['/permissions', 'get', 'role:read', 'v1'],
+  ['/roles', 'get', 'role:read', 'v1'],
+  ['/roles', 'post', 'role:write', 'v1'],
+  ['/roles/{r}', 'patch', 'role:write', 'v1'],
   ['/projects/{p}/ci-bindings', 'post', 'ci_binding:write', 'v1'],
   ['/projects/{p}/ingest-tokens', 'post', 'ingest_token:write', 'v1'],
   ['/orgs/{o}/audit', 'get', 'audit:read', 'v1'],
@@ -273,16 +283,65 @@ function walkSchema(node, file, trail) {
   }
 }
 
-for (const dir of SCHEMA_DIRS) {
-  for (const file of readdirSync(join(ROOT, dir)).filter((f) => f.endsWith('.json'))) {
+// 04.7.1-T1.4 / 05.1.1-T1.1: every schema file is discovered the way both
+// loaders discover it — recursively under contracts/schemas, contracts/adapter
+// (so adapter/operations/*.v1.json is covered) and contracts/manifest — and
+// its key is the file name without `.json`.
+const SCHEMA_ROOTS = ['contracts/schemas', 'contracts/adapter', 'contracts/manifest'];
+
+function* schemaFiles(relativeDirectory) {
+  const entries = readdirSync(join(ROOT, relativeDirectory), { withFileTypes: true }).sort(
+    (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+  );
+  for (const entry of entries) {
+    const relative = `${relativeDirectory}/${entry.name}`;
+    if (entry.isDirectory()) yield* schemaFiles(relative);
+    else if (entry.name.endsWith('.json')) yield relative;
+  }
+}
+
+const refs = []; // { file, ref }
+function collectRefs(node, file) {
+  if (!node || typeof node !== 'object') return;
+  if (typeof node.$ref === 'string') refs.push({ file, ref: node.$ref });
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) for (const item of value) collectRefs(item, file);
+    else if (value && typeof value === 'object') collectRefs(value, file);
+  }
+}
+
+const schemaKeys = new Set();
+for (const root of SCHEMA_ROOTS) {
+  if (!existsSync(join(ROOT, root))) continue;
+  for (const relative of schemaFiles(root)) {
+    const file = basename(relative);
     if (!/\.v\d+\.json$/.test(file))
-      fail('dialect', `${dir}/${file}: schema filename must carry a .vN version suffix`);
-    const schema = loadSchema(dir, file);
+      fail('dialect', `${relative}: schema filename must carry a .vN version suffix`);
+    const schema = JSON.parse(readFileSync(join(ROOT, relative), 'utf8'));
     if (schema.$schema !== 'https://json-schema.org/draft/2020-12/schema')
-      fail('dialect', `${dir}/${file}: $schema '${schema.$schema}' is not JSON Schema 2020-12`);
+      fail('dialect', `${relative}: $schema '${schema.$schema}' is not JSON Schema 2020-12`);
     if (typeof schema.$id !== 'string' || !schema.$id.includes(file))
-      fail('dialect', `${dir}/${file}: $id must reference its .vN filename (got '${schema.$id}')`);
-    walkSchema(schema, `${dir}/${file}`, []);
+      fail('dialect', `${relative}: $id must reference its .vN filename (got '${schema.$id}')`);
+    schemaKeys.add(basename(file, '.json'));
+    walkSchema(schema, relative, []);
+    collectRefs(schema, relative);
+  }
+}
+
+// A schema may address a sibling only by its canonical URI
+// (urn:evidgate:contract:<key>, the same address the loaders register in their
+// in-memory registry); anything else would need file-system or network
+// resolution, which both runtimes turn off.
+for (const { file, ref } of refs) {
+  if (ref.startsWith('#')) continue;
+  const target = /^urn:evidgate:contract:([^#]+)(#.*)?$/.exec(ref);
+  if (!target) {
+    fail(
+      'ref',
+      `${file}: '$ref: ${ref}' is neither a local pointer nor a urn:evidgate:contract:<key> address`,
+    );
+  } else if (!schemaKeys.has(target[1])) {
+    fail('ref', `${file}: $ref '${ref}' names no loaded contract schema key ('${target[1]}')`);
   }
 }
 

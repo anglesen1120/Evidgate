@@ -31,6 +31,12 @@ public sealed class ContractSchemaSet
     /// <summary>JSON Schema draft all contract schemas declare (00 §5.2).</summary>
     private const string SchemaDialect = "https://json-schema.org/draft/2020-12/schema";
 
+    /// <summary>
+    /// The <c>contracts/</c> sub-directories holding JSON Schema documents, each
+    /// searched recursively (01.3.2-T2, extended by 04.7.1-T1.2/05.1.1-T1.1).
+    /// </summary>
+    private static readonly string[] SchemaRoots = ["schemas", "adapter", "manifest"];
+
     private readonly IReadOnlyDictionary<string, ContractSchema> _schemas;
 
     private ContractSchemaSet(IReadOnlyDictionary<string, ContractSchema> schemas) => _schemas = schemas;
@@ -39,37 +45,82 @@ public sealed class ContractSchemaSet
     public IEnumerable<string> Keys => _schemas.Keys;
 
     /// <summary>
-    /// Loads every <c>*.json</c> schema under <c>&lt;contractsDirectory&gt;/schemas</c>
-    /// and <c>&lt;contractsDirectory&gt;/adapter</c>, keyed by file name without
-    /// extension (<c>event-envelope.v1</c>, <c>capability.v1</c>).
+    /// Loads every <c>*.json</c> schema under <c>&lt;contractsDirectory&gt;/schemas</c>,
+    /// <c>/adapter</c> (recursively, so <c>adapter/operations/*.v1.json</c> is
+    /// included) and <c>/manifest</c>, keyed by file name without extension
+    /// (<c>event-envelope.v1</c>, <c>capability.v1</c>, <c>execute.v1</c>,
+    /// <c>manifest.v1</c>). The whole set is registered in one in-memory
+    /// document resolver under the canonical URI
+    /// <c>urn:evidgate:contract:&lt;key&gt;</c>, which is how a schema addresses
+    /// another file — <c>execute.v1</c> references
+    /// <c>urn:evidgate:contract:event-envelope.v1#/$defs/event</c> instead of
+    /// copying the 00 §9.4 envelope. File-system and HTTP resolution stay off.
     /// </summary>
     /// <param name="contractsDirectory">The repository's <c>contracts/</c> directory.</param>
-    /// <exception cref="InvalidOperationException">No schema file was found.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// No schema file was found, or two files load under the same key.
+    /// </exception>
     public static ContractSchemaSet Load(string contractsDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(contractsDirectory);
 
-        var schemas = new Dictionary<string, ContractSchema>(StringComparer.Ordinal);
-        foreach (var subdirectory in new[] { "schemas", "adapter" })
+        var documents = new Dictionary<string, (string Origin, string Text)>(StringComparer.Ordinal);
+        foreach (var root in SchemaRoots)
         {
-            var directory = Path.Combine(contractsDirectory, subdirectory);
+            var directory = Path.Combine(contractsDirectory, root);
             if (!Directory.Exists(directory))
             {
                 continue;
             }
 
-            foreach (var file in Directory.EnumerateFiles(directory, "*.json").Order(StringComparer.Ordinal))
+            foreach (var file in Directory
+                .EnumerateFiles(directory, "*.json", SearchOption.AllDirectories)
+                .Order(StringComparer.Ordinal))
             {
                 var key = Path.GetFileNameWithoutExtension(file);
-                using var document = JsonDocument.Parse(File.ReadAllText(file));
-                schemas[key] = ContractSchema.Build(key, document.RootElement);
+                if (documents.TryGetValue(key, out var existing))
+                {
+                    // Keys are file names without extension and address a schema
+                    // from every runtime (and the fixtures/contracts/<key>/
+                    // corpus directory), so a duplicate is a contract bug, not a
+                    // last-one-wins.
+                    throw new InvalidOperationException(
+                        $"duplicate contract schema key '{key}': '{existing.Origin}' and '{file}' both load under it");
+                }
+
+                documents.Add(key, (file, File.ReadAllText(file)));
             }
         }
 
-        return schemas.Count == 0
-            ? throw new InvalidOperationException($"no contract schema (*.json) found under '{contractsDirectory}'")
-            : new ContractSchemaSet(schemas);
+        if (documents.Count == 0)
+        {
+            throw new InvalidOperationException($"no contract schema (*.json) found under '{contractsDirectory}'");
+        }
+
+        // One registry for the whole set: every document is reachable by its
+        // canonical URI, so a cross-file $ref resolves from memory and never
+        // touches the file system or the network.
+        var resolver = new PrepopulatedDocumentResolver();
+        foreach (var (key, document) in documents)
+        {
+            resolver.AddDocument(CanonicalUri(key), JsonDocument.Parse(document.Text));
+        }
+
+        var options = SchemaOptions(resolver);
+        var schemas = new Dictionary<string, ContractSchema>(StringComparer.Ordinal);
+        foreach (var (key, document) in documents)
+        {
+            schemas[key] = ContractSchema.Build(key, document.Text, options);
+        }
+
+        return new ContractSchemaSet(schemas);
     }
+
+    /// <summary>
+    /// The canonical URI a schema is addressed by, in a document's own
+    /// <c>$ref</c> as well as in the resolver: <c>urn:evidgate:contract:&lt;key&gt;</c>.
+    /// </summary>
+    public static string CanonicalUri(string schemaKey) => $"urn:evidgate:contract:{schemaKey}";
 
     /// <summary>True when <paramref name="schemaKey"/> was loaded.</summary>
     public bool Contains(string schemaKey) => _schemas.ContainsKey(schemaKey);
@@ -287,13 +338,12 @@ public sealed class ContractSchemaSet
         /// <summary><c>x-max-bytes</c> transport cap, or null.</summary>
         public long? MaxBytes { get; private set; }
 
-        public static ContractSchema Build(string key, JsonElement documentElement)
+        public static ContractSchema Build(string key, string text, JsonSchema.Options options)
         {
-            var document = JsonNode.Parse(documentElement.GetRawText())!.AsObject();
+            var document = JsonNode.Parse(text)!.AsObject();
             var schema = new ContractSchema
             {
-                Root = JsonSchema.FromText(
-                    documentElement.GetRawText(), $"urn:evidgate:contract:{key}", SchemaOptions()),
+                Root = JsonSchema.FromText(text, CanonicalUri(key), options),
                 Document = document,
             };
 
@@ -346,35 +396,38 @@ public sealed class ContractSchemaSet
                 var envelopeDocument = (JsonObject)batchDef.DeepClone();
                 ((JsonObject)envelopeDocument["properties"]!["events"]!)["items"] = true;
                 envelopeDocument["$schema"] = dialect;
-                var envelopeId = $"urn:evidgate:contract:{key}:envelope";
+                var envelopeId = $"{CanonicalUri(key)}:envelope";
                 envelopeDocument["$id"] = envelopeId;
                 schema.EnvelopeDocument = envelopeDocument;
-                schema.Envelope = JsonSchema.FromText(envelopeDocument.ToJsonString(), envelopeId, SchemaOptions());
+                schema.Envelope = JsonSchema.FromText(envelopeDocument.ToJsonString(), envelopeId, options);
 
                 // Item: the referenced def hoisted to its own document.
                 var itemDocument = (JsonObject)itemNode.DeepClone();
                 itemDocument["$schema"] = dialect;
-                var itemId = $"urn:evidgate:contract:{key}:item";
+                var itemId = $"{CanonicalUri(key)}:item";
                 itemDocument["$id"] = itemId;
                 schema.ItemDocument = itemDocument;
-                schema.Item = JsonSchema.FromText(itemDocument.ToJsonString(), itemId, SchemaOptions());
+                schema.Item = JsonSchema.FromText(itemDocument.ToJsonString(), itemId, options);
 
                 break;
             }
 
             return schema;
         }
-
-        /// <summary>
-        /// Every schema document — the on-disk root and the synthesized
-        /// envelope/item texts alike — compiles with the same lockdown: no file
-        /// system or HTTP document resolution (a schema with an external
-        /// <c>$ref</c> fails at load instead of touching the network), and
-        /// <c>format</c> is always asserted so the result matches
-        /// Ajv+ajv-formats on the corpus (AC3). Same values as
-        /// <c>JsonSchema.Options.Default</c> except the resolution gate.
-        /// </summary>
-        private static JsonSchema.Options SchemaOptions() =>
-            new(allowFileSystemAndHttpResolution: false, alwaysAssertFormat: true);
     }
+
+    /// <summary>
+    /// Every schema document — the on-disk roots and the synthesized
+    /// envelope/item texts alike — compiles with the same lockdown: no file
+    /// system or HTTP document resolution (an unresolved external
+    /// <c>$ref</c> fails at load instead of touching the network), and
+    /// <c>format</c> is always asserted so the result matches
+    /// Ajv+ajv-formats on the corpus (AC3). Cross-file <c>$ref</c>s resolve
+    /// from <paramref name="resolver"/> — the in-memory registry of the
+    /// loaded contract documents only. Same values as
+    /// <c>JsonSchema.Options.Default</c> except the resolution gate and the
+    /// registry.
+    /// </summary>
+    private static JsonSchema.Options SchemaOptions(IDocumentResolver resolver) =>
+        new(resolver, allowFileSystemAndHttpResolution: false, alwaysAssertFormat: true);
 }

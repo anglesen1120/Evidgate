@@ -1,0 +1,14 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "platforms": ["linux-x64"],
+  "supports": {
+    "discovery": true,
+    "step_events": true,
+    "retry": true,
+    "cancel": true
+  },
+  "mode": "full"
+}

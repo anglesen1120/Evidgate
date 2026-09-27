@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "manifest.v1.json",
+  "title": "Manifest v1",
+  "description": "The run manifest accepted by POST /v1/projects/{p}/manifests (05.1.1-T1.1/T1.2, 00 §9.3). It declares the suite revision, the planned executions (case revision × variant params × target env), the matrix those executions cover, the shard plan that partitions them and the per-environment needs. Bounds are encoded here: at most 10000 planned executions, 256 shards, 32 target environments, 32 variant params; the transport cap is 256 KiB [DECISION 05.1.1 §8]. Semantic checks — unknown case revision, secret literal in variant params, matrix coverage — are 05.1.1-T2's; this schema only fixes the shape.",
+  "x-max-bytes": 262144,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "suite_revision_id",
+    "planned_executions",
+    "matrix",
+    "shard_plan",
+    "env_needs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "suite_revision_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "environment_revision_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Optional in V1: environment_revision is created by 05.1.2-T1, which adds the composite FK (org_id, environment_revision_id)"
+    },
+    "planned_executions": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/plannedExecution"
+      }
+    },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_revision_ids", "variants", "target_envs"],
+      "properties": {
+        "case_revision_ids": {
+          "type": "array",
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "variants": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "description": "The variant axis; planned_executions must equal case_revision_ids × variants × target_envs (05.1.1-T2.4)",
+          "items": {
+            "$ref": "#/$defs/variant"
+          }
+        },
+        "target_envs": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/targetEnv"
+          }
+        }
+      }
+    },
+    "shard_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shards"],
+      "properties": {
+        "shards": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "description": "One entry per producer slot (05.2.1 registers one per shard); the index ranges partition planned_executions exactly (05.1.1-T2.4)",
+          "items": {
+            "$ref": "#/$defs/shard"
+          }
+        }
+      }
+    },
+    "env_needs": {
+      "$ref": "#/$defs/envNeeds"
+    }
+  },
+  "$defs": {
+    "plannedExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_revision_id", "variant", "target_env"],
+      "properties": {
+        "case_revision_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "variant": {
+          "$ref": "#/$defs/variant"
+        },
+        "target_env": {
+          "$ref": "#/$defs/targetEnv"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Absent means required (05.2.1 planned_execution.required defaults true); an optional tuple is reported but cannot by itself make the run complete"
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["params"],
+      "properties": {
+        "params": {
+          "$ref": "#/$defs/params"
+        }
+      }
+    },
+    "params": {
+      "type": "object",
+      "maxProperties": 32,
+      "description": "Normalised secret-free variant parameters (03.2.1): the server hashes them into variant_hash, and execution_key = sha256(case_id ‖ variant_hash ‖ target_env) (00 §7). A literal where a secret is meant is rejected by 05.1.1-T2.3, not by this schema.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 256
+      }
+    },
+    "targetEnv": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+    },
+    "shard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shard_id", "from_index", "to_index"],
+      "properties": {
+        "shard_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
+        },
+        "from_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999,
+          "description": "Inclusive start index into planned_executions"
+        },
+        "to_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "Exclusive end index into planned_executions; a shard owns [from_index, to_index)"
+        },
+        "producer_hint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Versioned producer metadata for the pool; never authoritative (00 §5.4.5)"
+        }
+      }
+    },
+    "envNeeds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_envs"],
+      "properties": {
+        "target_envs": {
+          "type": "array",
+          "maxItems": 32,
+          "description": "One entry per target env of the matrix; secrets are references only (00 §5.7 S3)",
+          "items": {
+            "$ref": "#/$defs/envNeed"
+          }
+        }
+      }
+    },
+    "envNeed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_env"],
+      "properties": {
+        "target_env": {
+          "$ref": "#/$defs/targetEnv"
+        },
+        "secret_refs": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^secret:[A-Za-z0-9_.-]{1,64}$"
+          }
+        }
+      }
+    }
+  }
+}

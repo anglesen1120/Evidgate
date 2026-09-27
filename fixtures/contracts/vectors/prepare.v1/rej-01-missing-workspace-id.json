@@ -1,0 +1,10 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "operation": "prepare",
+  "workspace": {
+    "secret_refs": ["secret:STAGING_BASE_URL"]
+  }
+}

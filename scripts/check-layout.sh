@@ -161,6 +161,7 @@ tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj
 tests/Contract.Tests/Contract.Tests.csproj
 tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj
 tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj
+tests/Identity.IntegrationTests/Identity.IntegrationTests.csproj
 tests/Isolation.Tests/Isolation.Tests.csproj
 tests/Migrator.IntegrationTests/Migrator.IntegrationTests.csproj
 tests/ObjectStorage.IntegrationTests/ObjectStorage.IntegrationTests.csproj

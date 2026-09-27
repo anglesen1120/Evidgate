@@ -57,7 +57,7 @@ public sealed class IdempotencyEndToEndTests
     public async Task Idempotency_ReplayConflictRetentionAndOrgScopedDedupe_ThroughThePipeline()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionChecker(granted: true));
+        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionEvaluator(granted: true));
 
         // Org-scoped operation: project_id carries NULL (T94).
         using var tenant = host.TenantContext.Publish(OrgA, projectId: null);

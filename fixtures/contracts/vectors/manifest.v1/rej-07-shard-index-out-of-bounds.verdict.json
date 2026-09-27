@@ -1,0 +1,11 @@
+{
+  "schema": "manifest.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/shard_plan/shards/1/to_index",
+      "reason": "maximum"
+    }
+  ]
+}

@@ -7,13 +7,13 @@ Updated 2026-09-27. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | Item | State |
 |---|---|
 | Branch flow | `feature/*` or `docs/*` → PR into `develop` → owner merges. `main` = planning baseline |
-| `develop` head | `c70585e` (PR #10 merged) |
-| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 |
-| Open PRs | #11 (`feature/m1-wave6` → `develop`) |
-| Active branch | `feature/m1-wave6` (off `develop` `c70585e`); wave 6 delivered, gates green, open as PR #11 |
-| M0/M1 tasks | 46 done · 88 open (of 134) |
+| `develop` head | `6dce731` (PR #11 merged) |
+| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 · #11 M1 wave 6 |
+| Open PRs | #12 M1 wave 7 (CI green, run 36297866088) |
+| Active branch | `feature/m1-wave7` (off `develop` `6dce731`); wave 7 delivered, gates green, open as PR #12 — see §3.7 |
+| M0/M1 tasks | 56 done · 78 open (of 134; 10.2.1-T1 counted open until T1.4) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
-| CI | Interim `.github/workflows/docker-tests.yml` (88/88 green on hosted runner, run 36205176754); replaced by `ci.yml` in 01.7.1-T1 |
+| CI | `.github/workflows/ci.yml` runs every `verify.sh` stage (01.7.1-T1); interim `docker-tests.yml` deleted in wave 5 |
 | Owner decisions | Decided 2026-09-26: O1 engine = Playwright (UI), customer CI = per-project input. Open before M1: O1 pilot names, O2 (owner note recorded, reading unconfirmed). Open before 08.5 DoR: O4 (owner note "tự build hệ thống riêng", model-or-not unconfirmed) — DECISIONS §8 |
 
 ## 2. Done
@@ -34,6 +34,7 @@ Updated 2026-09-27. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 01.4.2, 01.5.1, 01.6.1 | 01.4.2-T2/T3, 01.5.1-T1/T2/T6, 01.6.1-T2/T5 | #9 | `outbox`/`idempotency_record`/`task` (migrations 0006–0008), claim/consumer/schedule mechanism, schema/EF conventions + UUIDv7 generator, Testcontainers harness, Playwright workspace — see §3 |
 | 01.4.2, 01.5.1, 01.7.1 | 01.4.2-T4, 01.5.1-T3/T4/T5, 01.7.1-T1 | #10 | C2 Mediator pipeline + Result→§9.2 filter, outbox dispatcher (migration 0009), retry/dead-letter + `/internal/operator` routes, AC1–AC7 suites, real `ci.yml` — see §3.5 |
 | 01.3.2, 01.6.1, 01.7.1 | 01.3.2-T1/T2/T3, 01.6.1-T3/T4, 01.7.1-T2/T3.2/T4 | #11 | Generated TS SDK + drift gate, Corvus/Ajv dual-runtime validators + parity corpus + endpoint filter, contract tests + served-doc diff, `fixtures/` + loaders, tenant-isolation suite, licence/audit/SBOM/dependabot gates — see §3.6 |
+| 02.1.2, 02.2.1, 02.6.1, 02.9.1, 04.7.1, 05.1.1, 10.1.1, 10.2.1, 10.8.1, 11.1.1 | 02.1.2-T1, 02.2.1-T1/T2, 02.6.1-T1, 02.9.1-T2, 04.7.1-T1, 05.1.1-T1, 10.1.1-T1, 10.2.1-T1.1–T1.3, 10.8.1-T1, 11.1.1-T2 | #12 | Permission catalogue + evaluator, membership API, RLS assertions + boot self-check, composite FK suite, adapter/manifest schemas, environment matrix, container images + SBOM, provider memo, DoR checklist — see §3.7 |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -81,7 +82,7 @@ QA defects fixed in wave: Worker host missing `AddEvidgatePipeline` (QA-P D1 —
 Verified on GitHub after merge: run 36251021746 (PR) + 36252017788 (develop push) — all 4 jobs green, dotnet job 247 s < 10 min; AC-level deferrals closed.
 
 
-## 3.6. Wave 6 (delivered on `feature/m1-wave6`; PR pending)
+## 3.6. Wave 6 (delivered on `feature/m1-wave6`; merged PR #11)
 
 Scope (STATUS §5 ready + plan_graph deps verified): area-01 M1 remainder — **01.3.2-T1** generated TS SDK (L); **01.3.2-T2** dual-runtime validators + parity corpus (L); **01.3.2-T3** contract tests + served-doc diff (M, after T1); **01.6.1-T3** `fixtures/` layout + loaders (M); **01.6.1-T4** tenant-isolation suite (M); **01.7.1-T2** licence gate (M); **01.7.1-T3** CODEOWNERS/PR template (S — branch-protection API half is [blocked]: 403 "Upgrade to GitHub Pro or make this repository public", owner decision recorded §6); **01.7.1-T4** supply-chain hardening (M). Not in this wave: 01.8.1-T3 seed-dev (still needs 02.x/07.1.1 tables), 01.10.1 (M2), 01.1.1-T4 (M5).
 
@@ -102,7 +103,32 @@ Gate order per slice: implement → QA agent → code/perf/security reviews → 
 
 Contract for slices: `verify.sh`/`ci.yml`/`check-ci-parity.sh`/`check-adr-matrix.sh`/`scripts/check-layout.sh`/`Evidgate.slnx`/`STATUS.md`/`AGENTS.md`/`docs/adr/*` are orchestrator-owned; slices produce their own scripts (`scripts/check-codegen-drift.sh`, `licence-policy.json`, `licence-scan.sh`, `audit-deps.sh`, `exceptions.json`, `.github/dependabot.yml`) which the orchestrator wires into `verify.sh` stages (new stage names: `check-codegen-drift`, `licence-scan`, `audit-deps`) + `ci.yml` after wave A. New test project `tests/Contract.Tests` is created once by V (csproj skeleton + slnx + check-layout registration); K adds files only. `packages/test-fixtures` belongs to F. The `Isolation_ApiGet_*` tests may add a test-only route inside `tests/` hosts if no tenant read endpoint exists yet — mark clearly, real `/v1` routes inherit the check when 02.x lands.
 
+Outcome (2026-09-27): all `verify.sh` stages green (`/tmp/verify-w7-final3.log`), 614 .NET tests incl. Identity.IntegrationTests (81), Contract.Tests (123), Hosts.IntegrationTests boot self-check (21). QA found and the wave fixed: `invited_email` normalisation, keyset cursor and replay-assertion gaps, self-check blind spots (wrong role, `using(true)`, select-only, unscoped sibling policies), a stale generated SDK. Reviews found and the wave fixed: a dead SQL constant and duplicated edge helpers (now `EdgeInputs`), a cross-org 404 test that targeted a random id, the three-roots loader rationale; perf: `membership_role_role_idx` for the last-admin guard (252→2 rows read); security: the self-check predicate matcher accepted OR-widened policies once parentheses were stripped (now structural, shared with `RlsPolicyCoverageTests`), `role.kind` so staff/service roles can't be granted to members, `role_permission` insert/update tied to the role's org, self-escalation refused on grant/invite/create/update role, and `forbiddenValues` keeping `EVIDGATE__ISOLATION__SELFCHECK=Disabled` out of staging/prod. Carried: W7-SEC-06 (02.6.2), guard skew, 10.2.1-T1.4 (see §6).
+
+Pre-merge review (2026-09-27, commit `5cfcc28`): an independent authz and RLS-matcher re-review of the post-review fixes found and the wave fixed: a self-grant onto a pending invite for the caller's own address, the service-path divergence between `ResolveAsync` and the evaluator, catalogue tables skipping the OR-widening sibling guard in `IsolationSelfCheck`, the coverage lint accepting a tenant policy scoped only by WITH CHECK, and two `check-env-matrix` gaps (enum declared after its options class, untyped declared values). `verify.sh` green: 620 .NET tests.
+
 Outcome (2026-09-27): all 21 `verify.sh` stages green (`/tmp/w6-verify3.log`) — 9 .NET test assemblies incl. Contract.Tests (60), Foundation.IntegrationTests (34), Isolation.Tests (13); vitest 119 tests across workspaces; licence-scan 693 packages (0 deny, 2 MPL warns covered by ADR-0002); audit-deps 0 findings; SBOMs npm 598 + nuget 133 components. QA found and the wave fixed: TS loader duplicate-key hole, drift-gate precondition wording, `licence-report.json` missing `--report`, unwritten filter tests. Reviews found and the wave fixed: O(n²) error dedup + 100-row `truncated` marker (both runtimes, CWE-770), self-leaf composite keywords (`not`/`contains`/`propertyNames`/…) no longer dropped to `IsValid=true`, `Flag`-before-`Detailed` accept path (13.8 MB→48 B per 1 MiB body), schema dir resolved by upward search not content root, `JsonSchema` compiled with `allowFileSystemAndHttpResolution:false` end to end, `sbom.sh -dpr` (19 s→0.9 s, no unlocked lockfile rewrite) + vacuous-BOM refusal, licence/audit empty-inventory fail-closed + ADR-id format+existence on exception keys, `.config/dotnet-tools.json` now an ADR-matrix source, flow-style/quoted `uses:`/`run:` keys rejected in the pin and parity gates, `persist-credentials:false` + `npm ci --ignore-scripts` everywhere in ci.yml. Recorded deviations: `packages/sdk/gen` compiles strict minus `exactOptionalPropertyTypes` (generator-side TS2379, noted in the 01.3.2 plan §11); TS fixture loader uses a raw-text scanner for duplicate-key parity.
+
+## 3.7. Wave 7 (delivered on `feature/m1-wave7`; open PR #12)
+
+Scope (STATUS §5 ready + `plan_graph.py` deps verified): **02.2.1-T1** permission catalogue (M); **02.6.1-T1** RLS role/helper/policy assertions + boot self-check + `contracts/rls-exceptions.txt` (L; roles, helpers and the org/project policies already landed in 01.4.1/02.1.1); **04.7.1-T1** adapter protocol schemas + corpus (M); **05.1.1-T1** manifest schema + corpus (L); **10.1.1-T1** environment model + config matrix (M); **10.2.1-T1.1–T1.3** container images + SBOM (T1.4 web bundle/CDN needs 09.1.1 and object-storage publishing — carried); **10.8.1-T1** provider criteria memo (S); **11.1.1-T2** DoR security checklist (S); **02.9.1-T2** composite FK suite (M); then **02.1.2-T1** membership (M) and **02.2.1-T2** authorization evaluator (M). Not in this wave: 03.1.1-T1 (T1.4 needs 02.2.1-T2 — next wave), 04.1.2-T4 (FK to 04.1.x `producer_slot` parent not in graph), 02.4.1-T2, 11.2.1-T1, 11.8.1-T1/T2, 12.x.
+
+Dependency order: P ∥ R ∥ CM ∥ E ∥ G ∥ D ∥ F → B (membership needs P's `role`; evaluator needs membership). Migration numbers: `0010` P (`identity_permission_catalogue`); R needed no migration, so B took `0011` (`identity_membership`). C and M share the two schema loaders (`ContractSchemaSet.cs`, `packages/cli/src/validate.ts`), so one slice owns both.
+
+Gate order per slice: implement → QA agent → code/perf/security reviews → fixes re-tested → commit.
+
+| Slice | Tasks | Size | Implement | QA | Code review | Perf review | Security review |
+|---|---|---|---|---|---|---|---|
+| P | 02.2.1-T1: `contracts/permissions.json`, generated C# `Permissions` + drift check, `0010` catalogue tables + seed, `GET /v1/permissions`, `GET /v1/roles` | M | ✅ | ✅ | ✅ | ✅ | ✅ |
+| R | 02.6.1-T1: role/GUC/forced-RLS assertion tests, `contracts/rls-exceptions.txt`, boot self-check refusing startup | L | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CM | 04.7.1-T1 (`contracts/adapter/` capability/config/operations + corpus + README) and 05.1.1-T1 (`contracts/manifest/` + corpus + `ManifestUpload` body) | M+L | ✅ | ✅ | ✅ | ✅ | ✅ |
+| E | 10.1.1-T1: environment model, `EVIDGATE_*` matrix + lint, `infra/<env>/` probes, `docs/runbooks/environments.md`, `/internal/*` ingress rule, smoke | M | ✅ | ✅ | ✅ | ✅ | ✅ |
+| G | 10.2.1-T1.1–T1.3: Api/Worker/Migrator images, CycloneDX per image, SBOM↔lock consistency | S+S+S | ✅ | ✅ | ✅ | ✅ | ✅ |
+| D | 10.8.1-T1 criteria memo + shortlist; 11.1.1-T2 DoR checklist + PR-template questions | S+S | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F | 02.9.1-T2: composite FK suite + negative fixtures | M | ✅ | ✅ | ✅ | ✅ | ✅ |
+| B | 02.1.2-T1 membership schema/API/contracts; 02.2.1-T2 `RequirePermission` + evaluator | M+M | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+Contract for slices: `verify.sh`/`ci.yml`/`check-ci-parity.sh`/`check-layout.sh`/`Evidgate.slnx`/`STATUS.md`/`AGENTS.md`/`docs/adr/*`/`migrations/README.md` are orchestrator-owned; slices report new scripts, packages and migration notes, and the orchestrator wires them. `contracts/openapi.yaml` is shared by P (paths) and CM (`ManifestUpload`): each re-reads before editing, and nobody runs `npm run codegen` — the orchestrator regenerates the SDK once after wave A. New test project `tests/Identity.IntegrationTests` (shared harness linked) is created and registered by the orchestrator.
 
 ## 4. Wave 3 (delivered, PR #6)
 
@@ -146,19 +172,23 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met, not started)
 
+Recomputed from `plan_graph.py` deps after wave 7.
+
 | Task | Size | Milestone | Note |
 |---|---|---|---|
+| 01.7.1-T3 | S | M1 | T3.2 shipped (wave 6); T3.1 branch protection owner-blocked (§6) |
 | 01.8.1-T3 | M | M1 | Dev stack follow-up |
-| 02.1.2-T1, 02.2.1-T1, 02.4.1-T2, 02.9.1-T2 | M each | M1 | Identity area, on 02.1.1-T1 |
-| 02.6.1-T1 | L | M1 | RLS lint / policy helpers |
+| 02.1.1-T2, 02.2.1-T3, 02.4.1-T2 | M each | M1 | Identity area |
+| 02.3.1-T1 | L | M1 | |
+| 02.6.1-T3, 02.6.2-T1 | M each | M1 | Isolation follow-ups; 02.6.2 also owns W7-SEC-06 |
 | 03.1.1-T1 | L | M1 | Stable case identity (critical chain) |
-| 04.1.2-T4 | M | M1 | `producer_slot` table + registry |
-| 04.7.1-T1 | M | M1 | |
-| 05.1.1-T1 | L | M1 | |
-| 10.1.1-T1 | M | M1 | |
-| 10.2.1-T1 | L | M1 | Container images + SBOM |
-| 10.8.1-T1 | S | M1/M2 | Provider decision memo (O3) |
-| 11.1.1-T2, 11.2.1-T1, 11.8.1-T1, 11.8.1-T2 | S, M, L, M | M1 | Security area |
+| 04.1.2-T4, 04.3.1-T1, 04.7.1-T2 | M each | M1 | Ingestion area |
+| 04.4.1-T1 | L | M1 | |
+| 05.1.1-T3 | M | M1 | |
+| 10.1.1-T2 | M | M1 | `ISecretProvider` + no-secret-literals scan |
+| 10.3.1-T1 | L | M1 | Telemetry |
+| 11.1.1-T1, 11.6.1-T1, 11.8.1-T1 | L each | M1 | Security area |
+| 11.2.1-T1, 11.8.1-T2 | M each | M1 | Security area |
 | 12.1.1-T1, 12.1.1-T2 | L, M | M0 | Customer interviews (owner) |
 | 12.2.1-T2, 12.6.1-T1 | M, M | M1 | Commercial area |
 
@@ -166,7 +196,7 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 | Item | Blocker | Owner |
 |---|---|---|
-| `seed-dev` script | Needs 02.1.1 / 02.1.2 / 07.1.1 tables | Tech Lead |
+| `seed-dev` script | Needs 07.1.1 tables (02.1.1/02.1.2 landed) | Tech Lead |
 | Web app | 09.1.1 (M2) | Lane C |
 | `docker-tests.yml` deleted | Replaced by `ci.yml` in 01.7.1-T1 (wave 5): `global-json-file` SDK pin, single push+PR trigger, `ubuntu-24.04`, SHA-pinned actions, `check-ci-parity.sh`/`check-action-pins.sh` | done (wave 5) |
 | `evidgate_owner` permissive policy on `organization`/`project` | Rationale logged in 00 §15 and in the `0003` copy block; 00 §5.4.3 still lacks the sentence | Tech Lead |
@@ -182,3 +212,6 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | `01.7.1-T3.1` branch protection + required check names | API returns 403 on the free private repo (owner decision needed: Pro upgrade or public repo); required-check names must match `ci.yml` job names | Owner |
 | Per-operation request/response body diff in `ServedDocumentTests` | Zero shared paths today (`/v1/slice/run` is the only served route); `contracts/openapi.yaml` path items use folded block scalars the strict `YamlSubset` reader refuses — parsing lands with the first real route | 04/05 ingest routes |
 | `ci.yml` security stage | Feature plan §7 reserves a scaffolded-but-empty security stage; nothing to run in it yet | 11.6.1 |
+| 10.2.1-T1.4 web bundle / CDN publishing | Needs 09.1.1 (web app) and object-storage publishing | 09.1.1 |
+| Service-principal claim bound (W7-SEC-06) | `PermissionEvaluator`'s service path accepts any catalogue code; no reachable path until the token resolver exists. Bound claims to the service-kind roles (`ci_producer`, `agent`) and deny staff-only codes (`billing:*`, `support:grant`) | 02.6.2 |
+| Last-admin guard under extreme skew | `membership_role_role_idx` (0011) drives the guard from the role (0.031 ms, 2 rows read at 200×250); on one 50k-member org the planner may still seq-scan (role_id selectivity estimated 1/ndistinct) — a constant/InitPlan role id would be needed (W7 perf review) | 02.1.2 follow-up |

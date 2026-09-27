@@ -15,6 +15,20 @@ public static class ContractSchemaKeys
 
     /// <summary><c>contracts/adapter/capability.v1.json</c> — 00 §10 adapter protocol document.</summary>
     public const string Capability = "capability.v1";
+
+    /// <summary>
+    /// <c>contracts/adapter/operations/execute.v1.json</c> — the execute operation's
+    /// result document, which references the 00 §9.4 envelope from
+    /// <c>contracts/schemas/event-envelope.v1.json</c> by <c>$id</c> instead of
+    /// copying it (04.7.1-T1.2).
+    /// </summary>
+    public const string AdapterExecute = "execute.v1";
+
+    /// <summary>
+    /// <c>contracts/manifest/manifest.v1.json</c> — the <c>POST /v1/projects/{p}/manifests</c>
+    /// request body (05.1.1-T1.1), referenced from <c>contracts/openapi.yaml</c>.
+    /// </summary>
+    public const string Manifest = "manifest.v1";
 }
 
 /// <summary>

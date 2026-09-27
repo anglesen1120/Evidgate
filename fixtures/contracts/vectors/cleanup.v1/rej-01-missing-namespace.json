@@ -1,0 +1,10 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "operation": "cleanup",
+  "cleanup": {
+    "removed": ["ws-018f0e6f"]
+  }
+}

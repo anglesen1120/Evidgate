@@ -49,15 +49,48 @@ public static class ApiErrorCode
     /// <summary>The addressed resource does not exist (or belongs to another tenant).</summary>
     public const string NotFound = "not_found";
 
+    /// <summary>The row changed since the caller read it — the <c>version</c> precondition (00 §9.2: 412).</summary>
+    public const string PreconditionFailed = "precondition_failed";
+
     /// <summary>No authenticated principal could be resolved (00 §9.2: 401 unauthenticated).</summary>
     public const string Unauthenticated = "unauthenticated";
 
     /// <summary>The principal does not hold the operation's permission (00 §9.2: 403 forbidden).</summary>
     public const string Forbidden = "forbidden";
 
+    /// <summary>The request addresses a project outside the principal's token scope (00 §9.1, 02 §4.3: 403).</summary>
+    public const string ProjectScopeMismatch = "project_scope_mismatch";
+
+    /// <summary>The principal has no active membership in the org it addressed (02.1.2 AC2, 02.3.1 AC3: 403).</summary>
+    public const string NoMembership = "no_membership";
+
     /// <summary>An <c>Idempotency-Key</c> was reused for a different request (00 §9.1/§9.2: 409).</summary>
     public const string IdempotencyConflict = "idempotency_conflict";
 
+
+    /// <summary>A built-in role is immutable (02.2.1 AC6: 409 <c>builtin_role_immutable</c>).</summary>
+    public const string BuiltinRoleImmutable = "builtin_role_immutable";
+
+    /// <summary>A submitted permission code is not in the catalogue (02.2.1 §5: 422 <c>unknown_permission</c>).</summary>
+    public const string UnknownPermission = "unknown_permission";
+
+    /// <summary>A member principal may never hold that code (TL T79, 02.2.1 AC7: 422 <c>permission_not_assignable</c>).</summary>
+    public const string PermissionNotAssignable = "permission_not_assignable";
+
+    /// <summary>The custom-role code is already taken in this org (02.2.1 §4 <c>unique (org_id, code)</c>: 409).</summary>
+    public const string RoleCodeTaken = "role_code_taken";
+
+    /// <summary>A pending invite for that address already exists in this org (02.1.2 AC1: 409).</summary>
+    public const string InviteExists = "invite_exists";
+
+    /// <summary>The org's last active <c>tenant_admin</c> cannot be removed or demoted (02.1.2 AC4: 409).</summary>
+    public const string LastAdmin = "last_admin";
+
+    /// <summary>The role id is neither a built-in catalogue role nor one of the caller's org roles (02.1.2 §5: 409).</summary>
+    public const string UnknownRole = "unknown_role";
+
+    /// <summary>The membership's current status does not allow the requested transition (02.1.2 §6: 409).</summary>
+    public const string InvalidTransition = "invalid_transition";
 
     /// <summary>The route exists but not for this HTTP method (00 §9.2 does not name 405).</summary>
     public const string MethodNotAllowed = "method_not_allowed";

@@ -1,0 +1,100 @@
+# Evidgate.Api container image — 10.2.1-T1.1, ruling T41, 01 §13 CR-01-3.
+#
+# Build it through scripts/build-images.sh (which also runs the AC1 checks):
+#   scripts/build-images.sh --platform linux/arm64 --image api
+# Direct equivalent:
+#   docker buildx build --platform linux/arm64 -f infra/docker/Dockerfile.api \
+#     --load -t evidgate-api:dev .
+#
+# BuildKit is required: `FROM --platform=$BUILDPLATFORM` plus the automatic
+# TARGETARCH argument are what make one Dockerfile serve linux/amd64 and
+# linux/arm64 (00 §11). The build stage always runs on the builder's own
+# platform and cross-publishes with `-r linux-<target rid>`; only the runtime
+# stage carries the target architecture, so an amd64 image builds on arm64
+# without emulation.
+#
+# Pins, resolved from mcr.microsoft.com on 2026-09-27 (recorded in
+# infra/README.md, registered in ADR-0002, asserted by
+# `scripts/build-images.sh --check-pins`):
+#   builder  mcr.microsoft.com/dotnet/sdk:10.0.100
+#            (= global.json sdk.version, the SDK CI installs)
+#   runtime  mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled
+#            (digest of the multi-arch manifest list — one pin, both platforms;
+#             chiseled: no shell, no package manager, runs as UID 1654)
+
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.100@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71 AS build
+
+ARG TARGETARCH
+WORKDIR /src
+
+# The restore is a layer of its own and runs in locked mode against the
+# committed packages.lock.json files (00 §5.7 S6 / ruling T40); publish then
+# consumes the restored graph without restoring again, so a missing lock-file
+# entry can never be papered over by an implicit restore.
+#
+# The whole of src/ is copied at once (Dockerfile COPY has no `src/**/*.csproj`
+# glob): the restore layer is invalidated by an application edit, and the
+# alternative — one COPY line per project file — drifts from Evidgate.slnx.
+# The build context is trimmed by Dockerfile.api.dockerignore.
+COPY Directory.Build.props Directory.Packages.props global.json nuget.config ./
+# .editorconfig carries the analyzer severities the repository gate enforces
+# (e.g. VSTHRD200 = suggestion, VSTHRD002 = error): without it the container
+# build applies the analyzers' default severities instead, and a rule the
+# repository downgraded fails the image build as an error (measured 2026-09-27).
+COPY .editorconfig ./
+COPY src/ ./src/
+# Two repository directories are build inputs of shipped projects, not just
+# runtime data: Persistence embeds contracts/rls-exceptions.txt and bakes the
+# greatest migrations/*.sql file name into assembly metadata (see
+# Dockerfile.api.dockerignore). Both must sit at the same relative path as in the
+# repository or the compile fails / the expected-head sentinel silently degrades.
+COPY contracts/ ./contracts/
+COPY migrations/ ./migrations/
+# -p:PublishReadyToRun=true at RESTORE time: since .NET 6 the R2R runtime assets
+# must be part of the restored graph, or the publish below fails with NETSDK1094
+# ("a valid runtime package was not found"). Locked mode still holds — the RID
+# targets the property pulls in are exactly the ones Directory.Build.props
+# declares, which is what the first measured failure of this Dockerfile showed.
+RUN dotnet restore --locked-mode -p:PublishReadyToRun=true src/Evidgate.Api/Evidgate.Api.csproj
+
+# Directory.Build.props declares RuntimeIdentifiers=linux-x64;linux-arm64 for
+# every shipped project, so this restore already resolved both RID targets and
+# `dotnet publish -r linux-<rid>` needs no restore. TARGETARCH is BuildKit's:
+# amd64 on an x64 runner, arm64 on an Apple Silicon/arm64 runner.
+#
+# PublishReadyToRun is an image-only property (00 §5.7 P7); InvariantGlobalization
+# and ServerGarbageCollection come from Directory.Build.props and are verified on
+# the published runtimeconfig.json by scripts/build-images.sh.
+RUN set -eux; \
+    case "$TARGETARCH" in \
+      amd64) rid=x64 ;; \
+      arm64) rid=arm64 ;; \
+      *) echo "unsupported TARGETARCH '$TARGETARCH': 00 §11 supports linux/amd64 and linux/arm64 only" >&2; exit 1 ;; \
+    esac; \
+    dotnet publish src/Evidgate.Api/Evidgate.Api.csproj \
+      --configuration Release \
+      --no-restore \
+      --runtime "linux-$rid" \
+      --self-contained false \
+      -p:PublishReadyToRun=true \
+      --output /app
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS runtime
+
+# Non-root by construction (ruling T41, 00 §5.7 S3): the chiseled base already
+# runs as UID 1654 via APP_UID, and the two lines below keep that true even if
+# the base image is ever swapped for one that does not. No shell and no package
+# manager are installed, so nothing can be added at run time.
+USER $APP_UID
+WORKDIR /app
+COPY --from=build --chown=$APP_UID:$APP_UID /app ./
+
+# The chiseled base sets ASPNETCORE_HTTP_PORTS=8080 (verified by
+# scripts/build-images.sh), which is why no ASPNETCORE_URLS is set here:
+# configuration is injected as environment variables per environment (10.1.1).
+EXPOSE 8080
+
+# No HEALTHCHECK: the chiseled image has neither a shell nor curl. Readiness is
+# probed from outside at /internal/health/live and /internal/health/ready
+# (00 §9.1, 01.1.2-T1.3) by the platform configured in 10.1.1-T1.
+ENTRYPOINT ["/usr/bin/dotnet", "/app/Evidgate.Api.dll"]

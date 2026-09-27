@@ -1,0 +1,11 @@
+{
+  "schema": "cleanup.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/cleanup/namespace",
+      "reason": "required"
+    }
+  ]
+}

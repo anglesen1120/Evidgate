@@ -1,11 +1,14 @@
 // 01.3.2-T2.2: the CLI half of the dual-runtime validators (00 §5.5 edge,
 // DECISIONS §4.2/§4.3). Ajv 8 against the 2020-12 meta-schema + ajv-formats
 // asserts `format`, matching Corvus.Json.Validator's `alwaysAssertFormat` on the
-// server. The module loads every `contracts/schemas/*.json` and
-// `contracts/adapter/*.json` document once, and `validate` maps engine output to
-// the 00 §9.2 `details[]` rows (`index`, `path`, `reason`) — the same mapping
+// server. The module loads every `contracts/schemas/*.json`, `contracts/adapter/**/*.json`
+// (including `adapter/operations/`) and `contracts/manifest/*.json` document once,
+// keyed by file name without extension, and `validate` maps engine output to the
+// 00 §9.2 `details[]` rows (`index`, `path`, `reason`) — the same mapping
 // `Evidgate.BuildingBlocks.Contracts.Validation` produces, exercised against the
-// `fixtures/contracts/` parity corpus by both suites (AC3, T42).
+// `fixtures/contracts/` parity corpus by both suites (AC3, T42). A document may
+// reference a sibling by its canonical URI (`urn:evidgate:contract:<key>`) — the
+// registry is the loaded set only, never the file system or the network.
 //
 // The core (`contractValidator`/`ContractSchemaSet`) is schema-text in, errors
 // out, so a web or SDK consumer can reuse it with schemas fetched out-of-band;
@@ -330,42 +333,124 @@ function mapError(
 }
 
 /**
- * Loads every `*.json` schema under `<contractsDirectory>/schemas` and
- * `<contractsDirectory>/adapter`, compiling them through one Ajv 2020-12
- * instance with `ajv-formats` (format assertions on, like the server's
- * `alwaysAssertFormat`). Keyed by file name without extension.
+ * The canonical URI a schema is addressed by — in a sibling document's `$ref`
+ * and in Ajv's registry alike: `urn:evidgate:contract:<key>`. Mirrors
+ * `ContractSchemaSet.CanonicalUri` on the server.
+ */
+export function canonicalUri(schemaKey: string): string {
+  return `urn:evidgate:contract:${schemaKey}`;
+}
+
+/** `contracts/` sub-directories holding JSON Schema documents, each searched recursively. */
+const schemaRoots = ['schemas', 'adapter', 'manifest'] as const;
+
+/** One loaded schema file: its path (for the duplicate-key message) and raw text. */
+interface SchemaDocument {
+  readonly file: string;
+  readonly text: string;
+}
+
+/**
+ * Every `*.json` document under the schema roots, keyed by file name without
+ * `.json` (the key every runtime, and the `fixtures/contracts/vectors/<key>/`
+ * corpus directory, addresses a schema by). A duplicate key is a contract bug,
+ * not a last-one-wins.
+ */
+function collectSchemaDocuments(contractsDirectory: string): Map<string, SchemaDocument> {
+  const documents = new Map<string, SchemaDocument>();
+  for (const root of schemaRoots) {
+    const directory = join(contractsDirectory, root);
+    if (!existsSync(directory)) {
+      continue;
+    }
+
+    for (const file of listJsonFiles(directory)) {
+      const key = basename(file, '.json');
+      const existing = documents.get(key);
+      if (existing !== undefined) {
+        throw new Error(
+          `duplicate contract schema key '${key}': '${existing.file}' and '${file}' both load under it`,
+        );
+      }
+
+      documents.set(key, { file, text: readFileSync(file, 'utf8') });
+    }
+  }
+
+  if (documents.size === 0) {
+    throw new Error(`no contract schema (*.json) found under '${contractsDirectory}'`);
+  }
+
+  return documents;
+}
+
+/** The `*.json` files of a directory tree, depth-first, ordinally sorted at every level. */
+function listJsonFiles(directory: string): string[] {
+  const entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
+    left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+  );
+
+  const files: string[] = [];
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listJsonFiles(path));
+    } else if (entry.name.endsWith('.json')) {
+      files.push(path);
+    }
+  }
+
+  return files;
+}
+
+/**
+ * Loads every `*.json` schema under `<contractsDirectory>/schemas`,
+ * `<contractsDirectory>/adapter` (recursively, so `adapter/operations/*.v1.json`
+ * is included) and `<contractsDirectory>/manifest`, compiling them through one
+ * Ajv 2020-12 instance with `ajv-formats` (format assertions on, like the
+ * server's `alwaysAssertFormat`). Keyed by file name without extension.
+ *
+ * Every document is registered in the same Ajv instance under its canonical URI
+ * before anything is compiled, so a cross-file `$ref` (for example
+ * `execute.v1.json` → `urn:evidgate:contract:event-envelope.v1#/$defs/event`)
+ * resolves from that in-memory registry only — nothing is fetched from the file
+ * system or the network.
  */
 export function loadContractSchemas(contractsDirectory: string): ContractSchemaSet {
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   ajvFormats.default(ajv);
 
-  const schemas = new Map<string, ContractSchema>();
-  for (const subdirectory of ['schemas', 'adapter']) {
-    const directory = join(contractsDirectory, subdirectory);
-    if (!existsSync(directory)) {
-      continue;
-    }
+  const documents = collectSchemaDocuments(contractsDirectory);
 
-    for (const file of readdirSync(directory)
-      .filter((name) => name.endsWith('.json'))
-      .sort()) {
-      const key = basename(file, '.json');
-      const document = JSON.parse(readFileSync(join(directory, file), 'utf8')) as Record<
-        string,
-        unknown
-      >;
-      schemas.set(key, buildSchema(ajv, key, document));
-    }
+  // The canonical URI is the address a sibling file may $ref and the key Ajv
+  // resolves it under; the file's own `$id` is its file name, which nothing
+  // references. One addressed copy per key is registered AND compiled, so a
+  // document can never be validated against a different text than the one a
+  // cross-file reference sees.
+  const addressed = new Map<string, Record<string, unknown>>();
+  for (const [key, document] of documents) {
+    const copy = {
+      ...(JSON.parse(document.text) as Record<string, unknown>),
+      $id: canonicalUri(key),
+    };
+    ajv.addSchema(copy);
+    addressed.set(key, copy);
   }
 
-  if (schemas.size === 0) {
-    throw new Error(`no contract schema (*.json) found under '${contractsDirectory}'`);
+  const schemas = new Map<string, ContractSchema>();
+  for (const [key, document] of addressed) {
+    schemas.set(key, buildSchema(ajv, key, document));
   }
 
   return new ContractSchemaSet(schemas);
 }
 
 function buildSchema(ajv: Ajv2020, key: string, document: Record<string, unknown>): ContractSchema {
+  const root = ajv.getSchema(canonicalUri(key));
+  if (root === undefined) {
+    throw new Error(`contract schema '${key}' was not registered under '${canonicalUri(key)}'`);
+  }
+
   const schema: {
     root: ValidateFunction;
     document: Record<string, unknown>;
@@ -373,7 +458,7 @@ function buildSchema(ajv: Ajv2020, key: string, document: Record<string, unknown
     item?: ValidateFunction;
     maxBytes?: number;
   } = {
-    root: ajv.compile(document),
+    root,
     document,
   };
 

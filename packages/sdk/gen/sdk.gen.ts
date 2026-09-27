@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses } from './types.gen.js';
+import type { ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -36,7 +36,7 @@ export const exchangeCiToken = <ThrowOnError extends boolean = false>(options: O
 /**
  * Upload and verify a run manifest
  *
- * Uploads + verifies the manifest and returns `manifest_id` and `manifest_hash` (00 §9.3).
+ * Uploads + verifies the manifest and returns `manifest_id` and `manifest_hash` (00 §9.3). The request body is `contracts/manifest/manifest.v1.json` — the schema file is authoritative, the same file both validators load (server Corvus, CLI Ajv, T42). Body ≤ 256 KiB → `413`.
  */
 export const createManifest = <ThrowOnError extends boolean = false>(options: Options<CreateManifestData, ThrowOnError>): RequestResult<CreateManifestResponses, CreateManifestErrors, ThrowOnError> => (options.client ?? client).post<CreateManifestResponses, CreateManifestErrors, ThrowOnError>({
     security: [{
@@ -370,7 +370,24 @@ export const createProject = <ThrowOnError extends boolean = false>(options: Opt
 });
 
 /**
- * Create a membership; last-admin guard applies (02)
+ * Cursor page of the org's memberships (02)
+ *
+ * Keyset-ordered on `(created_at, id)` per 00 §9.1 and served by `membership_org_created_id_idx`. The tenant filter is row level security, so another org's rows are unreachable from the statement rather than merely filtered out (02.1.2 AC7).
+ */
+export const listMemberships = <ThrowOnError extends boolean = false>(options: Options<ListMembershipsData, ThrowOnError>): RequestResult<ListMembershipsResponses, ListMembershipsErrors, ThrowOnError> => (options.client ?? client).get<ListMembershipsResponses, ListMembershipsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs/{o}/memberships',
+    ...options
+});
+
+/**
+ * Invite a member; a duplicate pending invite is 409 invite_exists (02)
+ *
+ * Creates a `pending` membership bound to the normalised address. It becomes `active` only when the invite's single-use secret is presented **and** a login reports the same address as provider-verified (T75, 02.1.2 AC2), so this route never activates one. Optional initial roles must be built-in or the caller's own (409 `unknown_role`); a second invite while one is pending is 409 `invite_exists` (AC1). `Idempotency-Key` per T11.
  */
 export const createMembership = <ThrowOnError extends boolean = false>(options: Options<CreateMembershipData, ThrowOnError>): RequestResult<CreateMembershipResponses, CreateMembershipErrors, ThrowOnError> => (options.client ?? client).post<CreateMembershipResponses, CreateMembershipErrors, ThrowOnError>({
     security: [{
@@ -379,6 +396,155 @@ export const createMembership = <ThrowOnError extends boolean = false>(options: 
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Remove a member; the last active tenant_admin is protected (02, AC4)
+ *
+ * Sets `status = removed` and keeps the row as audit history (02.1.2 §8). Removing the org's last active `tenant_admin` is 409 `last_admin`; a `pending` invite is 409 `invalid_transition` (cancel it through 02.1.2-T2's route). 02.1.2-T3.2 adds the in-transaction session revocation (AC3).
+ */
+export const removeMember = <ThrowOnError extends boolean = false>(options: Options<RemoveMemberData, ThrowOnError>): RequestResult<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError> => (options.client ?? client).delete<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs/{o}/memberships/{m}',
+    ...options
+});
+
+/**
+ * One membership; another org's id is 404 (02, AC7)
+ */
+export const getMembership = <ThrowOnError extends boolean = false>(options: Options<GetMembershipData, ThrowOnError>): RequestResult<GetMembershipResponses, GetMembershipErrors, ThrowOnError> => (options.client ?? client).get<GetMembershipResponses, GetMembershipErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs/{o}/memberships/{m}',
+    ...options
+});
+
+/**
+ * Disable a member (status removed) under If-Match; last-admin guard applies (02)
+ *
+ * The admin disable path: `active → removed` (02.1.2 AC3, §6). `If-Match` carries the row's `version`; a stale value is 412. Removing the org's last active `tenant_admin` is 409 `last_admin` (AC4), and a `pending` invite is cancelled through 02.1.2-T2's route, so any other source status is 409 `invalid_transition`.
+ */
+export const updateMembership = <ThrowOnError extends boolean = false>(options: Options<UpdateMembershipData, ThrowOnError>): RequestResult<UpdateMembershipResponses, UpdateMembershipErrors, ThrowOnError> => (options.client ?? client).patch<UpdateMembershipResponses, UpdateMembershipErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs/{o}/memberships/{m}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Grant one role to a membership (02)
+ *
+ * Idempotent by `unique (membership_id, role_id)`: granting a role the membership already holds answers 200 with the current state. A role the tenant cannot see is 409 `unknown_role`. AC5: the next request evaluates the new role set — nothing is cached.
+ */
+export const grantMembershipRole = <ThrowOnError extends boolean = false>(options: Options<GrantMembershipRoleData, ThrowOnError>): RequestResult<GrantMembershipRoleResponses, GrantMembershipRoleErrors, ThrowOnError> => (options.client ?? client).post<GrantMembershipRoleResponses, GrantMembershipRoleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs/{o}/memberships/{m}/roles',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Revoke one role from a membership; the last admin is protected (02, AC4)
+ *
+ * Revoking the `tenant_admin` role from the org's last active admin is 409 `last_admin` — demoting the last admin locks the tenant out exactly as removing them would. A pair that was never granted is 404; AC5: the next request evaluates the reduced role set.
+ */
+export const revokeMembershipRole = <ThrowOnError extends boolean = false>(options: Options<RevokeMembershipRoleData, ThrowOnError>): RequestResult<RevokeMembershipRoleResponses, RevokeMembershipRoleErrors, ThrowOnError> => (options.client ?? client).delete<RevokeMembershipRoleResponses, RevokeMembershipRoleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs/{o}/memberships/{m}/roles/{r}',
+    ...options
+});
+
+/**
+ * Cursor page of the permission catalogue (02)
+ *
+ * The platform catalogue of 00 §2: every `resource:action` string with its `sensitive`, `reserved` and `tenant_assignable` flags. Readable by any member (`role:read`). The page is ordered by `code` — the catalogue's primary key — because a platform catalogue has no `created_at`; the cursor is the last code of the previous page.
+ */
+export const listPermissions = <ThrowOnError extends boolean = false>(options?: Options<ListPermissionsData, ThrowOnError>): RequestResult<ListPermissionsResponses, ListPermissionsErrors, ThrowOnError> => (options?.client ?? client).get<ListPermissionsResponses, ListPermissionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/permissions',
+    ...options
+});
+
+/**
+ * Cursor page of roles — built-ins plus the caller's org rows (02)
+ *
+ * The 00 §2 built-in roles plus, once the flagged custom-role commands ship, the caller's own org rows; another org's role is never visible (catalogue RLS, 02 §4.5). Keyset-ordered on `(created_at, id)` per 00 §9.1; the cursor is opaque.
+ */
+export const listRoles = <ThrowOnError extends boolean = false>(options?: Options<ListRolesData, ThrowOnError>): RequestResult<ListRolesResponses, ListRolesErrors, ThrowOnError> => (options?.client ?? client).get<ListRolesResponses, ListRolesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/roles',
+    ...options
+});
+
+/**
+ * Create a custom role in the caller's org (02.2.1, V1 flag-gated)
+ *
+ * The route exists in V1 but answers 403 until `EVIDGATE__IDENTITY__CUSTOMROLESENABLED` is on (RECOMMENDATIONS 02-Q3): built-in roles only in V1. A submitted code the catalogue refuses is 422 `unknown_permission` or `permission_not_assignable` (T79); a code already taken in the org is 409 `role_code_taken`; a built-in code is 409 `builtin_role_immutable`.
+ */
+export const createRole = <ThrowOnError extends boolean = false>(options: Options<CreateRoleData, ThrowOnError>): RequestResult<CreateRoleResponses, CreateRoleErrors, ThrowOnError> => (options.client ?? client).post<CreateRoleResponses, CreateRoleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/roles',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Rename a custom role and/or add grants to it (02.2.1, V1 flag-gated)
+ *
+ * Both body fields are optional. Grants are additive only: migration 0010 revokes `DELETE` on `role_permission` for the app role, so V1 cannot shrink a role's grant set (02.2.1 §3). A built-in role is 409 `builtin_role_immutable`; an id the tenant cannot see is 404. No `If-Match`: the row's `version` token makes a racing update fail with 412 without a client precondition.
+ */
+export const updateRole = <ThrowOnError extends boolean = false>(options: Options<UpdateRoleData, ThrowOnError>): RequestResult<UpdateRoleResponses, UpdateRoleErrors, ThrowOnError> => (options.client ?? client).patch<UpdateRoleResponses, UpdateRoleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/roles/{r}',
     ...options,
     headers: {
         'Content-Type': 'application/json',

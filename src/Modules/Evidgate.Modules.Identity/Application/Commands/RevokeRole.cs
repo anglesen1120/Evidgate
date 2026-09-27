@@ -1,0 +1,136 @@
+using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.BuildingBlocks.SharedKernel.Authorization;
+using Evidgate.BuildingBlocks.SharedKernel.Messaging;
+using Evidgate.BuildingBlocks.SharedKernel.Modules;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Identity.Contracts;
+using Evidgate.Modules.Identity.Infrastructure.Persistence;
+using FluentValidation;
+using Mediator;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+
+namespace Evidgate.Modules.Identity.Application.Commands;
+
+/// <summary>
+/// Revoke one role from one membership (<c>DELETE …/{m}/roles/{r}</c>, 02.1.2 §5).
+/// Revoking the <c>tenant_admin</c> role of the org's last active admin is 409
+/// <c>last_admin</c> (AC4): the same guard as removal, because demoting the last
+/// admin locks the tenant out exactly as removing them would. AC5: the next request
+/// evaluates the reduced role set — nothing is cached.
+/// </summary>
+/// <param name="OrgId">The org from the route; it must equal the request tenant (otherwise 404).</param>
+/// <param name="MembershipId">The membership from the route.</param>
+/// <param name="RoleId">The role to revoke; the pair must currently be granted.</param>
+/// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1).</param>
+internal sealed record RevokeRoleCommand(Guid OrgId, Guid MembershipId, Guid RoleId, string IdempotencyKey)
+    : ICommand<Result>, IIdempotentCommand;
+
+/// <summary>Shape validation of <see cref="RevokeRoleCommand"/> (C2 stage 2).</summary>
+internal sealed class RevokeRoleCommandValidator : AbstractValidator<RevokeRoleCommand>
+{
+    /// <summary>Builds the rules.</summary>
+    public RevokeRoleCommandValidator() =>
+        RuleFor(command => command.RoleId)
+            .Must(roleId => roleId != Guid.Empty)
+            .WithErrorCode("required");
+}
+
+/// <summary>
+/// Handler of <see cref="RevokeRoleCommand"/>. A membership the tenant cannot see is
+/// 404, and so is a pair that was never granted (00 §9.2: the addressed resource does
+/// not exist) — the route is not an upsert. Only an <b>active</b> membership's
+/// <c>tenant_admin</c> grant can trip the last-admin guard: a pending or removed row
+/// grants nothing, so revoking from it is harmless.
+/// </summary>
+[Permission(Permissions.Membership.Write)]
+internal sealed class RevokeRoleCommandHandler(
+    ITenantDbContextFactory<IdentityDbContext> contexts,
+    ITenantDb db,
+    ITenantScopeAccessor scopes)
+    : ICommandHandler<RevokeRoleCommand, Result>
+{
+    /// <inheritdoc />
+    public async ValueTask<Result> Handle(
+        RevokeRoleCommand command,
+        CancellationToken cancellationToken)
+    {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Identity, nameof(RevokeRoleCommand));
+
+        var orgId = scopes.Require().OrgId;
+
+        if (command.OrgId != orgId)
+        {
+            return Result.Failure(Error.NotFound(OrgMismatch.Message));
+        }
+
+        await using var context = contexts.Create();
+
+        var membership = await context.Memberships
+            .SingleOrDefaultAsync(row => row.Id == command.MembershipId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (membership is null)
+        {
+            return Result.Failure(Error.NotFound("no membership with that id is visible to this tenant"));
+        }
+
+        var grant = await context.MembershipRoles
+            .SingleOrDefaultAsync(
+                row => row.MembershipId == membership.Id && row.RoleId == command.RoleId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (grant is null)
+        {
+            return Result.Failure(Error.NotFound("that membership does not hold that role"));
+        }
+
+        if (membership.IsActive)
+        {
+            // The role's code is what the guard keys on; a role the tenant cannot see
+            // cannot be the built-in admin role, so an unreadable code skips the guard
+            // rather than inventing a refusal.
+            var roleCode = await context.Roles
+                .Where(role => role.Id == command.RoleId)
+                .Select(role => role.Code)
+                .SingleOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (string.Equals(roleCode, LastAdminGuard.TenantAdminRoleCode, StringComparison.Ordinal)
+                && await LastAdminGuard.WouldOrphanOrgAsync(db, orgId, membership.Id, cancellationToken).ConfigureAwait(false))
+            {
+                return Result.Failure(Error.Conflict(
+                    ApiErrorCode.LastAdmin,
+                    "the organization must keep at least one active tenant_admin (AC4)"));
+            }
+        }
+
+        context.MembershipRoles.Remove(grant);
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The grant row moved (its `version` token, 00 §5.5 C4): a concurrent
+            // revoke took the same pair, so the DELETE matched no row. The serial
+            // replay would now find no grant and answer 404, which is what the route
+            // documents for a pair that is not granted — not a 500.
+            var stillGranted = await db.QuerySingleOrDefaultAsync<Guid>(
+                MembershipReadSql.MembershipRolePair,
+                new { org_id = orgId, membership_id = membership.Id, role_id = command.RoleId },
+                cancellationToken).ConfigureAwait(false);
+
+            return stillGranted == Guid.Empty
+                ? Result.Failure(Error.NotFound("that membership does not hold that role"))
+                : Result.Failure(Error.PreconditionFailed(
+                    "the role grant changed since it was read; re-read the membership and retry"));
+        }
+
+        return Result.Success(StatusCodes.Status204NoContent);
+    }
+}

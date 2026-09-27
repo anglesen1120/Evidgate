@@ -1,0 +1,12 @@
+{
+  "schema": "capability.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/engine",
+      "reason": "required"
+    }
+  ],
+  "comment": "engine {family, version} is required"
+}

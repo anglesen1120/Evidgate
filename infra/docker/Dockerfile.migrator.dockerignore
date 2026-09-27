@@ -1,0 +1,51 @@
+# Build context for infra/docker/Dockerfile.api (BuildKit picks
+# <Dockerfile>.dockerignore up automatically; it takes precedence over a
+# .dockerignore at the context root, which this repository cannot have — 00 §5.2
+# allows no such top-level dot entry, see scripts/check-layout.sh).
+#
+# The context is the repository root. The image needs Directory.Build.props,
+# Directory.Packages.props, global.json, nuget.config, src/ (with the committed
+# packages.lock.json files) and the two repository directories the shipped
+# projects read AT BUILD TIME:
+#
+#   contracts/   contracts/rls-exceptions.txt is an EmbeddedResource of
+#                BuildingBlocks.Persistence (02.6.1-T1.4), and its absence fails
+#                the compile (measured 2026-09-27);
+#   migrations/  Persistence globs migrations/*.sql and bakes the greatest file
+#                name into assembly metadata as the expected journal head
+#                (01.1.2-T1.3). A missing directory would not fail the build — it
+#                would silently bake the "(none)" sentinel and make every ready
+#                probe fail — so it stays in the context.
+#
+# Everything below is host state: it must never enter a layer and must not be
+# tarred into the context. The three Dockerfile.<name>.dockerignore files are
+# kept byte-identical; scripts/build-images.sh --check-pins fails when they drift.
+.git
+.github
+.spectral.yaml
+artifacts
+TestResults
+docs
+plans
+tests
+node_modules
+**/node_modules
+apps/web/dist
+package-lock.json
+**/bin
+**/obj
+**/*.user
+**/*.md
+.DS_Store
+# Git-ignored host state that is otherwise tarred into the context (measured
+# 2026-09-27: `.env.dev`, `.local/` and `apps/web/playwright-report/` were all in
+# the context until these lines were added). `.env.dev` is the one that matters:
+# scripts/dev/up.sh writes real per-role passwords into it (00 §5.7 S3). The
+# Dockerfiles COPY named paths only, so none of this reaches a layer — but the
+# context is uploaded to the builder, so it must not carry credentials either.
+.env*
+.local
+.husky
+**/playwright-report
+**/test-results
+**/*.tsbuildinfo

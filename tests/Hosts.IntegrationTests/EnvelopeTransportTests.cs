@@ -32,6 +32,7 @@ public sealed class EnvelopeTransportTests
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}",
                 ["DOTNET_ENVIRONMENT"] = "Production",
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
 
         try

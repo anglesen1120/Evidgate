@@ -2,44 +2,83 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "capability.v1.json",
   "title": "Adapter capability document v1",
-  "description": "00 §10 adapter protocol capability document. The server rejects an incompatible protocol.major. See contracts/README.md for the *.vN.json versioning rule.",
+  "description": "00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.",
+  "x-max-bytes": 16384,
   "type": "object",
-  "required": ["protocol", "engine", "platforms", "supports", "mode"],
   "additionalProperties": false,
+  "required": ["protocol", "engine", "platforms", "supports", "mode"],
   "properties": {
     "protocol": {
       "type": "object",
-      "required": ["major", "minor"],
       "additionalProperties": false,
+      "required": ["major", "minor"],
       "properties": {
-        "major": { "type": "integer", "minimum": 1 },
-        "minor": { "type": "integer", "minimum": 0 }
+        "major": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "minor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
       }
     },
     "engine": {
       "type": "object",
-      "required": ["family", "version"],
       "additionalProperties": false,
+      "required": ["family", "version"],
       "properties": {
-        "family": { "type": "string", "maxLength": 64 },
-        "version": { "type": "string", "maxLength": 128 }
+        "family": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Exact engine version; carried here and (V2) pinned in the immutable JobSpec with the image digest — runners never resolve 'latest' at run time (D8)"
+        }
       }
     },
     "platforms": {
       "type": "array",
       "minItems": 1,
+      "maxItems": 16,
       "uniqueItems": true,
-      "items": { "type": "string", "maxLength": 64 }
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
     },
     "supports": {
       "type": "object",
+      "maxProperties": 32,
       "required": ["discovery", "step_events", "retry", "cancel"],
-      "additionalProperties": false,
       "properties": {
-        "discovery": { "type": "boolean" },
-        "step_events": { "type": "boolean" },
-        "retry": { "type": "boolean" },
-        "cancel": { "type": "boolean" }
+        "discovery": {
+          "type": "boolean"
+        },
+        "step_events": {
+          "type": "boolean"
+        },
+        "retry": {
+          "type": "boolean"
+        },
+        "cancel": {
+          "type": "boolean"
+        },
+        "capture_control": {
+          "type": "boolean",
+          "description": "false = the adapter cannot honour contracts/adapter/config.v1.json at run create, so the run carries the capture_uncontrolled label (T97, AC7); absent = the configuration document is delivered and must be honoured"
+        }
+      },
+      "additionalProperties": {
+        "type": "boolean",
+        "description": "A support flag this server does not know: ignored, never evaluated, and stored verbatim (04.7.1 AC3)"
       }
     },
     "mode": {

@@ -1,0 +1,5 @@
+{
+  "schema": "capability.v1",
+  "valid": true,
+  "comment": "a different protocol major is schema-valid (major >= 1); 04.7.1-T2 rejects it at negotiation with unsupported_protocol_major, so this vector pins the schema/negotiator split"
+}

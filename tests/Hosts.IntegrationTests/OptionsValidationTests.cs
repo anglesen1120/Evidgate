@@ -21,6 +21,7 @@ public sealed class OptionsValidationTests
             new Dictionary<string, string>
             {
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{HostLocator.FreePort()}",
+                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
         Assert.NotEqual(0, apiResult.ExitCode);
         Assert.Contains("EVIDGATE__DATABASE__CONNECTIONSTRING", apiResult.Stdout + apiResult.Stderr, StringComparison.Ordinal);
@@ -31,6 +32,7 @@ public sealed class OptionsValidationTests
             new Dictionary<string, string>
             {
                 ["EVIDGATE__WORKER__HEALTHPORT"] = HostLocator.FreePort().ToString(CultureInfo.InvariantCulture),
+                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
         Assert.NotEqual(0, workerResult.ExitCode);
         Assert.Contains("EVIDGATE__DATABASE__CONNECTIONSTRING", workerResult.Stdout + workerResult.Stderr, StringComparison.Ordinal);
@@ -46,6 +48,7 @@ public sealed class OptionsValidationTests
             {
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
                 ["EVIDGATE__WORKER__HEALTHPORT"] = "abc",
+                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
 
         var output = result.Stdout + result.Stderr;
@@ -53,6 +56,26 @@ public sealed class OptionsValidationTests
         Assert.Contains("Configuration invalid:", output, StringComparison.Ordinal);
         Assert.Contains("HealthPort", output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Unhandled exception", output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Invalid_HealthAddress_Fails_Startup_Cleanly()
+    {
+        var result = await RunUntilExitAsync(
+            HostLocator.AppHost("Evidgate.Worker"),
+            new Dictionary<string, string>
+            {
+                ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                ["EVIDGATE__WORKER__HEALTHPORT"] = HostLocator.FreePort().ToString(CultureInfo.InvariantCulture),
+                ["EVIDGATE__WORKER__HEALTHADDRESS"] = "localhost",
+                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
+            });
+
+        var output = result.Stdout + result.Stderr;
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Configuration invalid:", output, StringComparison.Ordinal);
+        Assert.Contains("HEALTHADDRESS", output, StringComparison.Ordinal);
         Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
     }
 
@@ -66,6 +89,7 @@ public sealed class OptionsValidationTests
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{HostLocator.FreePort()}",
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
                 ["EVIDGATE__TELEMETRY__OTLPENDPOINT"] = "not a url",
+                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
 
         var output = result.Stdout + result.Stderr;

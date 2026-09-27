@@ -28,7 +28,7 @@ public static class EvidgatePipelineServiceCollectionExtensions
     /// The complete C2 pipeline: behaviours in the fixed order plus the services
     /// they resolve. All uses are <c>TryAdd*</c> so a host's own registration wins
     /// (the Api's explicit <c>AddEvidgateTenancy</c>, or a test's fake
-    /// <see cref="IPermissionChecker"/>).
+    /// <see cref="IPermissionEvaluator"/>).
     /// </summary>
     public static IServiceCollection AddEvidgatePipeline(this IServiceCollection services)
     {
@@ -42,6 +42,15 @@ public static class EvidgatePipelineServiceCollectionExtensions
         services.TryAddSingleton<IRequestTenantContextSetter>(
             provider => provider.GetRequiredService<RequestTenantContextAccessor>());
 
+        // The ambient caller of the flow (02.6.2-T1.1 resolves the credential and
+        // publishes it next to the tenant): the authorization stage reads its kind
+        // (member, service identity, operator) to pick the evaluation path.
+        services.TryAddSingleton<RequestPrincipalAccessor>();
+        services.TryAddSingleton<IRequestPrincipalAccessor>(
+            provider => provider.GetRequiredService<RequestPrincipalAccessor>());
+        services.TryAddSingleton<IRequestPrincipalSetter>(
+            provider => provider.GetRequiredService<RequestPrincipalAccessor>());
+
         // The stages' collaborators — the single data-access path (01.4.2-T1), the
         // idempotency store (01.5.1-T6) and the outbox writer (01.5.1-T2) — are part
         // of this registration so a host that forgets them fails to resolve at boot,
@@ -50,10 +59,12 @@ public static class EvidgatePipelineServiceCollectionExtensions
         services.AddEvidgateIdempotency();
         services.AddEvidgateOutbox();
 
-        // 02's permission catalogue replaces this (01.4.2 plan §3): until then every
-        // pipeline-managed message is denied — a host that forgot the real checker
-        // fails closed, never open.
-        services.TryAddSingleton<IPermissionChecker, DenyAllPermissionChecker>();
+        // The Identity module replaces this with the real 02.2.1-T2 evaluator
+        // (`AddIdentityModule`, both entry points): until then every
+        // pipeline-managed message is denied — a host that forgot the module fails
+        // closed, never open. A TryAdd, so a test's substitute registered before the
+        // pipeline wins.
+        services.TryAddSingleton<IPermissionEvaluator, DenyAllPermissionEvaluator>();
 
         return services.AddEvidgatePipelineBehaviours();
     }

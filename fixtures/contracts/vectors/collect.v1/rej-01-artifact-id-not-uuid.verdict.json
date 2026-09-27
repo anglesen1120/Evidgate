@@ -1,0 +1,12 @@
+{
+  "schema": "collect.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/events/0/artifact_ids/0",
+      "reason": "format"
+    }
+  ],
+  "comment": "artifact_ids comes from the referenced envelope"
+}

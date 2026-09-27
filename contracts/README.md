@@ -12,11 +12,46 @@ client and the server-side JSON Schema validation (01.3.2).
 - `schemas/*.vN.json` — versioned JSON Schema 2020-12 documents
   (`event-envelope.v1.json` per 00 §9.4).
 - `adapter/*.vN.json` — adapter protocol v1 schemas (00 §10, 04 D6):
-  `capability.v1.json` now; operation and configuration schemas follow in
-  04.7.1-T1.
+  `capability.v1.json` and `config.v1.json` (the run-create configuration
+  document, T97).
+- `adapter/operations/*.vN.json` — one schema per protocol operation
+  (`discover`, `prepare`, `execute`, `collect`, `cleanup`); `execute` and
+  `collect` reference the 00 §9.4 envelope by `$id` instead of copying it
+  (04.7.1-T1.2). Negotiation rules: `adapter/README.md`.
+- `manifest/*.vN.json` — `manifest.v1.json` is the
+  `POST /v1/projects/{p}/manifests` request body (05.1.1-T1.1), referenced from
+  `openapi.yaml` so the spec body and the schema file cannot drift.
 - `examples/` — documents used by the conventions gate.
+- `permissions.json` — the single source of every `resource:action` string
+  (00 §2, 02 D2): the platform permission catalogue plus the nine built-in roles
+  and their grants. Migration 0010 seeds it into `public.permission` /
+  `public.role` / `public.role_permission`, and
+  `scripts/generate-permissions.py` renders the C# `Permissions` constants from
+  it (`scripts/check-permissions-drift.sh` fails when either side lags).
+- `permissions.schema.json` — the JSON Schema 2020-12 shape of that file.
+  Deliberately NOT under `schemas/`, `adapter/` or `manifest/`: both runtime
+  loaders compile every `*.json` under those three roots, and this is a build-time catalogue, not a
+  request body. Validated by `tests/Contract.Tests/PermissionCatalogueTests.cs`.
+- `rls-exceptions.txt` — the RLS exception list (02.6.1-T1.4): one
+  `public.<table> <platform|catalogue|mechanism>` entry per table that is not
+  org-scoped, with a `#` reason. The single source both the CI lint (02.6.1-T2)
+  and the boot-time isolation self-check read — the latter embeds this file into
+  `Evidgate.BuildingBlocks.Persistence` at build time, so a published process
+  cannot start without it.
 - `.spectral.yaml` (repo root) — lint ruleset; custom rules live in
   `scripts/spectral/`. Enforced by `scripts/check-contract-conventions.sh`.
+
+## Addressing a schema from another schema
+
+Every `*.json` under `schemas/`, `adapter/` (recursively) and `manifest/` is
+loaded by both validators — server (`ContractSchemaSet`, Corvus) and CLI
+(`loadContractSchemas`, Ajv 8) — and keyed by file name without `.json`
+(`event-envelope.v1`, `execute.v1`, `manifest.v1`). A schema references a sibling
+by its canonical URI — `urn:evidgate:contract:<key>` — never by a relative path:
+`execute.v1.json` uses
+`{"$ref": "urn:evidgate:contract:event-envelope.v1#/$defs/event"}`. Both runtimes
+resolve those references from the loaded set only (file-system and HTTP
+resolution are off), and two files that would share a key fail the load.
 
 ## Operation conventions
 

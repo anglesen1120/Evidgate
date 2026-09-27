@@ -1,0 +1,12 @@
+{
+  "schema": "capability.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/supports",
+      "reason": "max_properties"
+    }
+  ],
+  "comment": "supports is capped at 32 properties (04.7.1 \u00a78 size cap)"
+}

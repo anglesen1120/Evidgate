@@ -19,19 +19,21 @@ namespace Contract.Tests;
 /// committed rather than falling back.
 /// </para>
 /// <para>
-/// <b>Recorded deviations — what the normalised diff covers today.</b> The served
-/// document carries exactly one path (<c>/v1/slice/run</c>) and one schema
-/// (<c>SliceRunResponse</c>): the sprint-1 dev surface 01.1.2 mounts so a bad
-/// request proves the 00 §9.2 envelope on <c>/v1</c>, which
-/// <c>contracts/openapi.yaml</c> deliberately does not document (its paths are the
-/// 00 §9.3 V1 surface of 02–08, and CR-01-4 keeps operational routes out). With
-/// no shared path there is no operation or schema <em>body</em> to diff yet, so
-/// the comparable surface is the dialect line plus the served path and DTO-name
-/// sets — asserted below, with a non-vacuity check that the comparison catches an
-/// undocumented route. Per-operation diffs land with the first real route (04/05),
-/// at which point the spec's path items must be parsed as well; that reader step
-/// is deliberately absent now, because several spec path items use folded block
-/// scalars the test-side reader rejects by design.
+/// <b>What the normalised diff covers today.</b> The served document carries the
+/// sprint-1 dev surface 01.1.2 mounts (<c>/v1/slice/run</c>, which
+/// <c>contracts/openapi.yaml</c> deliberately does not document: its paths are the
+/// 00 §9.3 V1 surface of 02–08, and CR-01-4 keeps operational routes out) plus the
+/// first real documented routes — <c>/v1/permissions</c> and <c>/v1/roles</c> of
+/// 02.2.1-T1.2, whose schemas <c>PermissionListResponse</c>/<c>PermissionView</c>/
+/// <c>RoleListResponse</c>/<c>RoleView</c> the spec now declares. The served path
+/// keys are mounted route templates while the spec's <c>paths</c> keys are relative
+/// to <c>servers[0].url</c> (<c>/v1</c>), so the comparison strips the prefix
+/// before diffing. Operation <em>body</em> diffs (parameters, request/response
+/// shapes) are still absent: the spec's path items use folded block scalars the
+/// test-side reader rejects by design, so the comparable surface stays the dialect
+/// line plus the served path and DTO-name sets — asserted below, with non-vacuity
+/// checks that the comparison catches an undocumented route and that the prefix
+/// strip is what makes a documented route match its spec key.
 /// </para>
 /// <para>
 /// <b>Document-level drift observed but not asserted</b> (it is host configuration
@@ -49,14 +51,23 @@ namespace Contract.Tests;
 public sealed class ServedDocumentTests
 {
     /// <summary>
-    /// Paths the served document may carry that the spec does not: 01.1.2's
-    /// run-only slice dev surface. A new entry here must be a recorded decision —
-    /// the assertion below fails on any route added without one.
+    /// Paths the served document may carry that the spec does not, in spec-relative
+    /// spelling (the spec's path keys are relative to <c>servers[0].url</c>): 01.1.2's
+    /// run-only slice dev surface. A new entry here must be a recorded decision — the
+    /// assertion below fails on any route added without one.
     /// </summary>
-    private static readonly string[] RecordedDevSurfacePaths = ["/v1/slice/run"];
+    private static readonly string[] RecordedDevSurfacePaths = ["/slice/run"];
 
     /// <summary>The DTO the recorded dev surface documents (<c>Produces&lt;SliceRunResponse&gt;</c>).</summary>
     private static readonly string[] RecordedDevSurfaceSchemas = ["SliceRunResponse"];
+
+    /// <summary>
+    /// The spec's <c>servers[0].url</c> (00 §9.1: "Servers mount under /v1"). The
+    /// served document carries the mounted route template (<c>/v1/permissions</c>)
+    /// while the spec's <c>paths</c> keys are relative to this prefix
+    /// (<c>/permissions</c>), so the comparison normalises the served side.
+    /// </summary>
+    private const string ServerPrefix = "/v1";
 
     [Fact]
     public async Task Served_Document_Is_OpenApi_31()
@@ -80,7 +91,9 @@ public sealed class ServedDocumentTests
     {
         var spec = OpenApiSpec.Load();
         using var document = await FetchServedDocumentAsync();
-        var servedPaths = MemberNames(document.RootElement.GetProperty("paths"));
+        var servedPaths = MemberNames(document.RootElement.GetProperty("paths"))
+            .Select(SpecRelative)
+            .ToList();
         var servedSchemas = document.RootElement.TryGetProperty("components", out var components)
             && components.TryGetProperty("schemas", out var schemas)
                 ? MemberNames(schemas)
@@ -94,10 +107,25 @@ public sealed class ServedDocumentTests
         Assert.Equal(RecordedDevSurfacePaths, Unexplained(servedPaths, spec.PathKeys, []));
         Assert.Equal(RecordedDevSurfaceSchemas, Unexplained(servedSchemas, spec.SchemaNames, []));
 
+        // The prefix normalisation itself: the strip must be what makes a real route
+        // match its spec key, or the two assertions above would pass vacuously for a
+        // host that served no documented route at all.
+        Assert.Equal("/permissions", SpecRelative("/v1/permissions"));
+        Assert.Equal("/slice/run", SpecRelative("/v1/slice/run"));
+        Assert.Equal("/unmounted", SpecRelative("/unmounted"));
+        Assert.Contains("/permissions", servedPaths);
+        Assert.Contains("/roles", servedPaths);
+
         // Non-vacuity: the same comparison fails on an undocumented route or DTO.
-        Assert.Equal(["/v1/undocumented"], Unexplained(["/v1/undocumented"], spec.PathKeys, []));
+        Assert.Equal(["/undocumented"], Unexplained(["/undocumented"], spec.PathKeys, []));
         Assert.Equal(["UndocumentedDto"], Unexplained(["UndocumentedDto"], spec.SchemaNames, []));
     }
+
+    /// <summary>Strips the spec's server prefix from a served route template (00 §9.1).</summary>
+    private static string SpecRelative(string servedPath) =>
+        servedPath.StartsWith(ServerPrefix, StringComparison.Ordinal)
+            ? servedPath[ServerPrefix.Length..]
+            : servedPath;
 
     private static async Task<JsonDocument> FetchServedDocumentAsync()
     {

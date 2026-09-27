@@ -1,0 +1,51 @@
+# RLS exception list (02.6.1-T1.4) — the single source for tables that are not
+# org-scoped, consumed by the boot-time isolation self-check (embedded into
+# Evidgate.BuildingBlocks.Persistence at build time) and by the RLS coverage test
+# `RlsPolicies_EveryBusinessTable_HasForcedRls`, the unset-GUC test
+# `TenantGuc_Unset_OrEmpty_ReturnsZeroRows` of 02.6.1-T1 and the tenant-set
+# discovery of the composite-FK suite (02.9.1-T2).
+#
+# Format: `public.<table> <kind>  # reason` — one entry per line.
+#   * the table token is schema-qualified (`public.role`, never bare `role`);
+#   * `#` starts a comment; blank lines are ignored;
+#   * an entry for a table that does not exist yet is allowed and stays inert
+#     until the migration that creates it lands.
+#
+# `idempotency_record` (0007) and `rls_probe` (0003) are deliberately NOT listed:
+# both are org-scoped, carry `unique (org_id, id)` and run under ENABLE + FORCE
+# ROW LEVEL SECURITY with the standard `org_id = evidgate.current_org_id()` policy.
+#
+# Kinds, and exactly what each one skips (00 §5.4.1, §5.4.6, §5.4.7; TL T3, T4, T80):
+#
+#   platform   No `org_id` column: the table is outside the org scope (02 D12).
+#              Skips: the org-scoped-policy requirement. Still requires ENABLE +
+#              FORCE row level security and at least one policy — `organization`
+#              carries `id = evidgate.current_org_id()` (T4); the platform identity
+#              tables are reached through `evidgate_resolve` and membership, never
+#              by an org-scoped select.
+#   catalogue  Nullable `org_id`: platform catalogue data, readable by every org and
+#              written only by the owner/migration role. Skips: the org_id NOT NULL /
+#              org-scoped-policy requirement. Still requires ENABLE + FORCE and at
+#              least one policy whose USING (or WITH CHECK) is the all-org read shape
+#              `org_id IS NULL OR org_id = evidgate.current_org_id()`.
+#   mechanism  01's mechanism tables. They carry `org_id` (nullable for `task`) but
+#              deliberately hold no row level security policy, because the outbox
+#              dispatcher scan and the task claim walk every org by design (00 §5.3,
+#              migrations 0006-0008). Skips: org_id, RLS flags and policy presence
+#              entirely — these tables are outside the rule set, not merely outside
+#              the org policy.
+
+public.organization    platform   # T4: root of the tenant hierarchy; no org_id column, policy `id = evidgate.current_org_id()`
+public.user            platform   # D12: platform identity, holds no customer business data
+public.user_identity   platform   # D12: identity key (provider, subject); reached through membership
+public.session         platform   # D12: the server-side credential row; scoped to a user, not to an org
+public.permission      platform   # platform catalogue with no org_id column at all (02 §4.5)
+
+public.role            catalogue  # built-in rows have org_id NULL; a tenant-created role carries its own org
+public.role_permission catalogue  # built-in rows have org_id NULL, mirroring their role
+public.template        catalogue  # built-in rows (03); a tenant template carries its own org
+public.report_parser   catalogue  # built-in rows (03); a tenant parser carries its own org
+
+public.schema_migration mechanism # the DbUp journal: no org_id at all, written only by the Migrator
+public.outbox           mechanism # the dispatcher scans every org by design; the tenant boundary is enforced one hop later, on `task`
+public.task             mechanism # org_id is nullable for platform tasks; the claim scan walks every org by design

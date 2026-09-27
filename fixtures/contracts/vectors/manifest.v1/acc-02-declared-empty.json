@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "suite_revision_id": "00000000-0000-0000-0000-000000000020",
+  "planned_executions": [],
+  "matrix": {
+    "case_revision_ids": [],
+    "variants": [],
+    "target_envs": []
+  },
+  "shard_plan": {
+    "shards": [
+      {
+        "shard_id": "shard-1",
+        "from_index": 0,
+        "to_index": 0
+      }
+    ]
+  },
+  "env_needs": {
+    "target_envs": []
+  }
+}

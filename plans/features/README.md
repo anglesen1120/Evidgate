@@ -345,9 +345,16 @@ File: `plans/features/<NN>-<area>/<story-id>-<slug>.md`. Header and sections are
 
 Rules for section 10: one `### NN.E.S-Tn — <task> (<size>)` block per area-plan task, containing a table `| Sub-task | Work | Size | Done when |` with ids `NN.E.S-Tn.k`, each ≤ 0.5 person-day (XS 0.25 / S 0.5), each "Done when" a runnable check (test name, command, screenshot). The sub-task sizes of a task sum to the task's size in the area plan. If a task needs more, its row says so in "Re-estimate" and the area plan is updated.
 
-Rules for section 8: name every 00 §5.7 rule (P1–P8, S1–S8) and §5.5/§5.6 rule the story touches, with the test that proves it; state data retention/deletion impact; state which role/permission each command/query needs.
+Rules for section 8: name every 00 §5.7 rule (P1–P8, S1–S8) and §5.5/§5.6 rule the story touches, with the test that proves it. The section also carries the **four security review questions** (11.1.1-T2), each answered on its own labelled line — a table row whose first cell is the label, or a line that starts with it:
 
-**Definition of Ready (checked at build start):** contracts in 00/`contracts/` updated; acceptance criteria testable; dependencies done or stubbed by contract; retention/deletion impact stated; estimate re-checked; security review done for identity, tenancy, artifacts and healing stories; blocking owner decisions (§5.3) closed.
+- `Authorization:` which role/permission every command/query of the story needs, or `none` when the story has no endpoint or handler;
+- `Retention/deletion:` what the story writes or reads, how long it is kept, and what deletion does to it (00 §11 and the owning retention rule);
+- `Telemetry:` which metric, trace span, audit record or `security_event` it emits, or `none`;
+- `Failure path:` what a caller or operator sees when it fails — error code/envelope, retry policy, dead-letter, runbook note.
+
+`scripts/check-dor-security.sh` greps those four answers here, in `.github/PULL_REQUEST_TEMPLATE.md` and in every feature plan added or changed in the change set under review, so a plan touched without answering them fails its DoR review note.
+
+**Definition of Ready (checked at build start):** contracts in 00/`contracts/` updated; acceptance criteria testable; dependencies done or stubbed by contract; estimate re-checked; security review done for identity, tenancy, artifacts and healing stories; the four review questions of §8 answered (authorization, retention/deletion, telemetry, failure path — `scripts/check-dor-security.sh`); blocking owner decisions (§5.3) closed.
 
 ## 7. Index
 

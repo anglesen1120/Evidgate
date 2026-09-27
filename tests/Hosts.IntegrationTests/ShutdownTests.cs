@@ -23,6 +23,7 @@ public sealed class ShutdownTests
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{apiPort}",
                 ["DOTNET_ENVIRONMENT"] = "Production",
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             },
             $"http://127.0.0.1:{apiPort}/internal/health/live",
             TimeSpan.FromSeconds(30),
@@ -40,6 +41,7 @@ public sealed class ShutdownTests
             {
                 ["DOTNET_ENVIRONMENT"] = "Production",
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
                 ["EVIDGATE__WORKER__HEALTHPORT"] =
                     workerPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["EVIDGATE__WORKER__READINESSPOLLMILLISECONDS"] = "100",
