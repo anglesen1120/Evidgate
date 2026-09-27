@@ -44,9 +44,35 @@ public sealed class RlsPolicyCoverageTests
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
         await connection.OpenAsync(TestContext.Current.CancellationToken);
 
-        var tables = await ReadTablesAsync(connection);
-        var policies = await ReadPoliciesAsync(connection);
+        var scan = Scan(exceptions, await ReadTablesAsync(connection), await ReadPoliciesAsync(connection));
 
+        scan.Failures.ShouldBeEmpty();
+
+        // The scan is not vacuous: the M1 tenant tables were judged, and the three
+        // mechanism tables were skipped — which is also how this test proves the
+        // exception list, not a hard-coded name, decides who is exempt.
+        scan.CheckedTables.Count.ShouldBeGreaterThanOrEqualTo(4);
+        scan.CheckedTables.ShouldContain("public.organization");
+        scan.CheckedTables.ShouldContain("public.project");
+        scan.CheckedTables.ShouldContain("public.rls_probe");
+        scan.CheckedTables.ShouldContain("public.idempotency_record");
+        scan.SkippedTables.ShouldBe(["public.outbox", "public.schema_migration", "public.task"]);
+    }
+
+    /// <summary>
+    /// The coverage rule of AC1/AC5 as one function over catalogue rows, so the Docker scan
+    /// above and the shape tests below run the same rule over their own evidence. The catalogue
+    /// assertion uses <see cref="Matches"/> — 0010 carries the read shape in USING (the read
+    /// policy) and in WITH CHECK (the insert policy), so either side counts. The tenant
+    /// assertion uses <see cref="MatchesUsing"/>: a tenant policy whose USING is <c>true</c>
+    /// lets the runtime role read every org's rows, and the production check refuses exactly
+    /// that shape (IsolationSelfCheckBootTests.SelfCheck_TenantPolicyWithOpenUsing_Fails).
+    /// </summary>
+    private static CoverageScan Scan(
+        RlsExceptionList exceptions,
+        IReadOnlyList<TableRow> tables,
+        IReadOnlyList<PolicyRow> policies)
+    {
         var checkedTables = new List<string>();
         var skippedTables = new List<string>();
         var failures = new List<string>();
@@ -94,25 +120,69 @@ public sealed class RlsPolicyCoverageTests
 
             if (entry is null
                 && table.HasOrgId
-                && !tablePolicies.Any(policy => Matches(policy, TenantPredicate)))
+                && !tablePolicies.Any(policy => MatchesUsing(policy, TenantPredicate)))
             {
                 failures.Add(
-                    $"{table.Name}: an org-scoped table needs a policy that scopes it through "
+                    $"{table.Name}: an org-scoped table needs a policy whose USING scopes it through "
                     + "evidgate.current_org_id() (00 §5.4.7/T2)");
             }
         }
 
-        failures.ShouldBeEmpty();
+        return new CoverageScan(failures, checkedTables, skippedTables);
+    }
 
-        // The scan is not vacuous: the M1 tenant tables were judged, and the three
-        // mechanism tables were skipped — which is also how this test proves the
-        // exception list, not a hard-coded name, decides who is exempt.
-        checkedTables.Count.ShouldBeGreaterThanOrEqualTo(4);
-        checkedTables.ShouldContain("public.organization");
-        checkedTables.ShouldContain("public.project");
-        checkedTables.ShouldContain("public.rls_probe");
-        checkedTables.ShouldContain("public.idempotency_record");
-        skippedTables.ShouldBe(["public.outbox", "public.schema_migration", "public.task"]);
+    /// <summary>
+    /// The tenant half of the rule needs USING, and this is the negative that proves it: the
+    /// production check refuses <c>for all … using (true) with check (org_id = evidgate.current_org_id())</c>
+    /// as <c>tenant_policy_using_not_scoped</c> (IsolationSelfCheckBootTests), so the coverage
+    /// rule must not accept the shape merely because one of its two sides carries the predicate.
+    /// The policy is real PostgreSQL — created as the owner inside a transaction that is rolled
+    /// back — so the clause the rule reads is the one <c>pg_get_expr</c> writes.
+    /// </summary>
+    [Fact]
+    public async Task CoverageRule_TenantPolicyScopedOnlyByItsWithCheck_IsRefused()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+
+        await using var connection = new NpgsqlConnection(_fixture.OwnerConnectionString(database));
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        await ExecuteAsync(
+            connection,
+            transaction,
+            """
+            drop policy project_app_tenant on public.project;
+            create policy project_app_tenant on public.project
+              for all
+              to evidgate_app
+              using (true)
+              with check (org_id = evidgate.current_org_id());
+            """);
+
+        var scan = Scan(RlsExceptionFile.Read(), await ReadTablesAsync(connection), await ReadPoliciesAsync(connection));
+
+        scan.Failures.ShouldContain(failure =>
+            failure.Contains("public.project", StringComparison.Ordinal)
+            && failure.Contains("USING", StringComparison.Ordinal));
+
+        await transaction.RollbackAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// The catalogue half keeps the OR: a catalogue policy carries the read shape in USING or in
+    /// WITH CHECK — 0010's read policy in the first, its tenant INSERT in the second — so a row
+    /// scoped on either side stays accepted. The row is the shape <c>pg_get_expr</c> reports.
+    /// </summary>
+    [Fact]
+    public void CoverageRule_CataloguePolicyScopedOnlyByItsWithCheck_IsAccepted()
+    {
+        var scan = Scan(
+            RlsExceptionFile.Read(),
+            [new TableRow("public.role", true, true, true)],
+            [new PolicyRow("public.role", "true", CataloguePredicate)]);
+
+        scan.Failures.ShouldBeEmpty();
     }
 
     [Fact]
@@ -296,7 +366,28 @@ public sealed class RlsPolicyCoverageTests
         IsolationSelfCheck.MatchesPredicate(policy.Using, predicate)
         || IsolationSelfCheck.MatchesPredicate(policy.WithCheck, predicate);
 
+    /// <summary>
+    /// True when the policy's USING clause itself carries the predicate. The tenant assertion
+    /// needs this and not the OR above: PostgreSQL reuses USING as the WITH CHECK of a policy
+    /// that declares none, so a tenant row scoped only by its WITH CHECK is one the runtime role
+    /// can still read across orgs.
+    /// </summary>
+    private static bool MatchesUsing(PolicyRow policy, string predicate) =>
+        IsolationSelfCheck.MatchesPredicate(policy.Using, predicate);
+
+    /// <summary>Runs one statement inside the caller's transaction — the scratch-policy DDL of the tests above.</summary>
+    private static async Task ExecuteAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
     private sealed record TableRow(string Name, bool RowLevelSecurityEnabled, bool RowLevelSecurityForced, bool HasOrgId);
 
     private sealed record PolicyRow(string Table, string Using, string WithCheck);
+
+    /// <summary>What the coverage rule saw: its named failures, and the table lists the Docker case asserts on.</summary>
+    private sealed record CoverageScan(List<string> Failures, List<string> CheckedTables, List<string> SkippedTables);
 }

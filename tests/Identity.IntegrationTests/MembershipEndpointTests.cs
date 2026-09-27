@@ -670,6 +670,48 @@ public sealed class MembershipEndpointTests : CatalogueTestBase
             .ShouldBe(1, "the refused invite wrote no membership");
     }
 
+    /// <summary>
+    /// W7-SEC-02, the two-step form of the invite half: an invite to the caller's own
+    /// address with no roles passes (it grants nothing), but a later grant onto that
+    /// pending row is still a self-grant — the row binds to the caller — so it is the same
+    /// 403 `forbidden` and no grant is written.
+    /// </summary>
+    [Fact]
+    public async Task Granting_A_Role_To_A_Pending_Invite_For_The_Callers_Own_Address_Is_403()
+    {
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
+        var releaseApproverId = await RoleIdAsync("release_approver");
+
+        await using var factory = IdentityApiFactory.Start(
+            Fixture,
+            new IdentityHostSetup(org, Principal: RequestPrincipal.Member(adminUserId)));
+        using var client = factory.CreateClient();
+
+        using var invite = await PostAsync(
+            client,
+            $"/v1/orgs/{org}/memberships",
+            """{"email":"  Admin@Example.com ","roles":[]}""",
+            "self-invite-empty-1");
+
+        invite.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var pendingId = JsonSerializer.Deserialize<MembershipView>(await invite.Content.ReadAsStringAsync(Token), Wire)!.Id;
+
+        using var grant = await PostAsync(
+            client,
+            $"/v1/orgs/{org}/memberships/{pendingId}/roles",
+            $$"""{"role_id":"{{releaseApproverId}}"}""",
+            "self-pending-grant-1");
+
+        grant.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await grant.Content.ReadFromJsonAsync<JsonElement>(Token))
+            .GetProperty("error").GetProperty("code").GetString().ShouldBe("forbidden");
+
+        (await ScalarAsync<long>(
+            "select count(*) from public.membership_role where membership_id = @id",
+            ("id", pendingId))).ShouldBe(0, "the refused grant wrote nothing onto the pending row");
+    }
+
     /// <summary>Every <c>error.details[].reason</c> of an envelope.</summary>
     private static List<string> Reasons(JsonElement envelope) =>
     [

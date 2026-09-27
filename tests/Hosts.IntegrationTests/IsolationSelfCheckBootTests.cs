@@ -358,6 +358,58 @@ public sealed class IsolationSelfCheckBootTests
     }
 
     /// <summary>
+    /// The same OR-combining rule on the catalogue tables: <c>public.role</c> and
+    /// <c>public.role_permission</c> hand every org the built-in rows, so a second permissive
+    /// app-role policy without the predicate lets <c>evidgate_app</c> read and write every org's
+    /// tenant-created rows (02 §4.5). The read shape is still in place here, so the sibling rule
+    /// alone has to refuse it — and it must name the table and the leaking policy.
+    /// </summary>
+    [Theory]
+    [InlineData("public.role")]
+    [InlineData("public.role_permission")]
+    public async Task SelfCheck_CatalogueTableWithExtraPermissiveUnscopedPolicy_Fails(string table)
+    {
+        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        Assert.True((await RunSelfCheckAsync(connectionString)).Passed, "the migrated database must pass before the mutation");
+
+        await ExecuteAsOwnerAsync(
+            connectionString,
+            $"""
+            create policy catalogue_app_all on {table}
+              for all
+              to evidgate_app
+              using (true)
+              with check (true);
+            """);
+
+        var report = await RunSelfCheckAsync(connectionString);
+
+        AssertViolation(report, table, IsolationSelfCheckCodes.PermissivePolicyUnscoped);
+        Assert.Contains(report.Violations, violation =>
+            violation.Code == IsolationSelfCheckCodes.PermissivePolicyUnscoped
+            && violation.Detail.Contains("catalogue_app_all", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The positive control of the catalogue rule: the schema this build migrates passes, and
+    /// the two catalogue tables were judged — the write policies of 0010 carry the tenant
+    /// predicate, which is narrower than the all-org read shape and must not be read as a leak.
+    /// </summary>
+    [Fact]
+    public async Task SelfCheck_CatalogueTables_UnmodifiedSchema_Passes()
+    {
+        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+
+        var report = await RunSelfCheckAsync(connectionString);
+
+        Assert.True(report.Passed, $"the migrated catalogue tables must pass; violations: {string.Join("; ", report.Violations)}");
+        Assert.Contains("public.role", report.CheckedTables);
+        Assert.Contains("public.role_permission", report.CheckedTables);
+        Assert.DoesNotContain(report.Violations, violation =>
+            violation.Code == IsolationSelfCheckCodes.PermissivePolicyUnscoped);
+    }
+
+    /// <summary>
     /// D7 of the story's failure-path review: <c>organization</c> carries no <c>org_id</c> column,
     /// so a platform-kind entry that merely requires "a policy" accepts <c>using (true)</c> and
     /// every org then sees every organization. Its predicate is <c>id = evidgate.current_org_id()</c>

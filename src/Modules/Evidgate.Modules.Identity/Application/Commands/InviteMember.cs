@@ -139,30 +139,24 @@ internal sealed class InviteMemberCommandHandler(
 
         // W7-SEC-02: an invite addressed to the caller's own membership is the same
         // self-grant as their membership id, so it carries only what the caller already
-        // holds. `invited_email` is stored normalised on both sides (InviteEmail.Normalize
-        // and 0011's check), so one ordinal comparison settles it.
-        if (roles.Count > 0 && caller?.UserId is { } callerUserId)
+        // holds (SelfEscalation.IsSelfTargetAsync is the shared definition of "self").
+        if (roles.Count > 0
+            && await SelfEscalation
+                .IsSelfTargetAsync(context, orgId, caller, targetUserId: null, email, cancellationToken)
+                .ConfigureAwait(false))
         {
-            var ownMembership = await SelfEscalation
-                .CallerMembershipAsync(context, orgId, callerUserId, cancellationToken)
-                .ConfigureAwait(false);
+            var missing = await SelfEscalation.MissingAsync(
+                permissions,
+                orgId,
+                caller,
+                await SelfEscalation
+                    .RoleCodesAsync(context, [.. roles.Select(role => role.Id)], cancellationToken)
+                    .ConfigureAwait(false),
+                cancellationToken).ConfigureAwait(false);
 
-            if (ownMembership is not null
-                && string.Equals(ownMembership.InvitedEmail, email, StringComparison.Ordinal))
+            if (missing.Count > 0)
             {
-                var missing = await SelfEscalation.MissingAsync(
-                    permissions,
-                    orgId,
-                    caller,
-                    await SelfEscalation
-                        .RoleCodesAsync(context, [.. roles.Select(role => role.Id)], cancellationToken)
-                        .ConfigureAwait(false),
-                    cancellationToken).ConfigureAwait(false);
-
-                if (missing.Count > 0)
-                {
-                    return Result.Failure<MembershipView>(SelfEscalation.Refused);
-                }
+                return Result.Failure<MembershipView>(SelfEscalation.Refused);
             }
         }
 

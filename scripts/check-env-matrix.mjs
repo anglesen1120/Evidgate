@@ -36,10 +36,11 @@
 //               prod; its `environment` matches its directory; every declared
 //               key is in the matrix; every matrix key required in that
 //               environment is declared; `origin` matches the matrix `source`
-//               for that environment; a declared `value` is inside the row's
-//               `constraints.enum` and never on the row's `forbiddenValues`
-//               list for that environment; a secret key never carries a literal
-//               value (00 §5.7 S3);
+//               for that environment; a declared `value` fits the row's `type`
+//               (a string, or the row's own integer/boolean), is inside the
+//               row's `constraints.enum` and never on the row's
+//               `forbiddenValues` list for that environment; a secret key never
+//               carries a literal value (00 §5.7 S3);
 //   probes      liveness/readiness use the 00 §9.1 internal paths with sane
 //               thresholds, and the worker probe port equals the declared
 //               EVIDGATE__WORKER__HEALTHPORT;
@@ -277,6 +278,33 @@ function constraintsFrom(attributes, enums) {
 }
 
 /**
+ * Every `enum` block in a C# file: name -> member names. A property's
+ * `[EnumDataType(typeof(X))]` may name an enum declared later in the same file
+ * (or in another one), so the whole tree is collected before any class is
+ * parsed; otherwise the constraint silently derives as `{}`.
+ */
+function collectEnums(text) {
+  const enums = new Map();
+  let current = null;
+  for (const line of text.split('\n')) {
+    const header = line.match(/^\s*(?:public|internal)?\s*enum\s+(\w+)/);
+    if (header) {
+      current = header[1];
+      enums.set(current, []);
+      continue;
+    }
+    if (current === null) continue;
+    if (/^\s*\}/.test(line)) {
+      current = null;
+      continue;
+    }
+    const member = line.match(/^\s*(\w+)\s*(?:=|,)/);
+    if (member) enums.get(current).push(member[1]);
+  }
+  return enums;
+}
+
+/**
  * Every binding declaration in `src/**\/*.cs`. Returns key -> derived facts
  * { type, requiredAtBoot, constraints, consumers }.
  */
@@ -288,6 +316,12 @@ function discoverFromSource(root, graph) {
   const constants = [];
   const keys = new Map();
   const enums = new Map(); // enum name -> member names
+  const texts = new Map(
+    sourceFiles.map((file) => [file, stripComments(readFileSync(file, 'utf8'))]),
+  );
+  for (const text of texts.values()) {
+    for (const [name, members] of collectEnums(text)) enums.set(name, members);
+  }
 
   const record = (key, facts) => {
     const existing = keys.get(key);
@@ -302,26 +336,19 @@ function discoverFromSource(root, graph) {
   };
 
   for (const file of sourceFiles) {
-    const text = stripComments(readFileSync(file, 'utf8'));
+    const text = texts.get(file);
     const consumers = consumersOf(graph, projectOf(root, file));
     let current = null;
     let attributes = [];
-    let currentEnum = null;
+    let inEnum = false;
 
     for (const line of text.split('\n')) {
-      const enumMatch = line.match(/^\s*(?:public|internal)?\s*enum\s+(\w+)/);
-      if (enumMatch) {
-        currentEnum = enumMatch[1];
-        enums.set(currentEnum, []);
+      if (/^\s*(?:public|internal)?\s*enum\s+\w+/.test(line)) {
+        inEnum = true;
         continue;
       }
-      if (currentEnum) {
-        if (/^\s*\}/.test(line)) {
-          currentEnum = null;
-          continue;
-        }
-        const member = line.match(/^\s*(\w+)\s*(?:=|,)/);
-        if (member) enums.get(currentEnum).push(member[1]);
+      if (inEnum) {
+        if (/^\s*\}/.test(line)) inEnum = false;
         continue;
       }
       const classMatch = line.match(
@@ -697,6 +724,18 @@ function checkMatrix(root, discovered, envs) {
   return rows;
 }
 
+/**
+ * A declared `value` is the text an environment sets, so a string always fits.
+ * A non-string is accepted only when it is the row's own JSON type: `true` for a
+ * boolean row, a whole number for an integer row. `null` is never a declaration.
+ */
+function declarationFitsType(value, type) {
+  if (typeof value === 'string') return true;
+  if (type === 'integer') return Number.isInteger(value);
+  if (type === 'boolean') return typeof value === 'boolean';
+  return false;
+}
+
 function checkEnvironment(root, env, rows) {
   const rel = `infra/${env}/environment.json`;
   const path = join(root, rel);
@@ -746,6 +785,12 @@ function checkEnvironment(root, env, rows) {
       // A value the row itself declares must be one the option accepts, and must
       // not be one this environment forbids (W7-SEC-04): "Required or Disabled,
       // but never Disabled in staging or prod" is a matrix rule, not a note.
+      if (!declarationFitsType(entry.value, row.type)) {
+        fail(
+          'env',
+          `${rel}: ${key} declares value ${JSON.stringify(entry.value)} but the matrix type is ${row.type}`,
+        );
+      }
       if (Array.isArray(row.constraints?.enum) && !row.constraints.enum.includes(entry.value)) {
         fail(
           'env',
@@ -986,6 +1031,9 @@ function fixture(root) {
       `    public int PageSize { get; init; } = 50;\n` +
       `    [EnumDataType(typeof(DemoMode), ErrorMessage = "EVIDGATE__DEMO__MODE must be Required or Disabled")]\n` +
       `    public DemoMode Mode { get; init; } = DemoMode.Required;\n` +
+      `    public string Label { get; init; } = string.Empty;\n` +
+      `    [Range(1, 10, ErrorMessage = "EVIDGATE__DEMO__RETRIES must be 1..10")]\n` +
+      `    public int Retries { get; init; } = 1;\n` +
       `    public List<RowOptions> Rows { get; init; } = [];\n` +
       `}\n` +
       `public sealed class RowOptions\n{\n` +
@@ -1038,6 +1086,16 @@ function fixture(root) {
             key: 'EVIDGATE__DEMO__MODE',
             constraints: { enum: ['Required', 'Disabled'] },
             forbiddenValues: { staging: ['Disabled'], prod: ['Disabled'] },
+            source: { dev: 'environment', staging: 'environment', prod: 'environment' },
+          }),
+          row({
+            key: 'EVIDGATE__DEMO__LABEL',
+            source: { dev: 'environment', staging: 'environment', prod: 'environment' },
+          }),
+          row({
+            key: 'EVIDGATE__DEMO__RETRIES',
+            type: 'integer',
+            constraints: { min: 1, max: 10 },
             source: { dev: 'environment', staging: 'environment', prod: 'environment' },
           }),
           row({ key: 'EVIDGATE__DEMO__ROWS__<n>__NAME' }),
@@ -1294,6 +1352,51 @@ function selfTest() {
     },
     1,
     'E matrix: EVIDGATE__DEMO__MODE: forbiddenValues.prod lists disabled, which the enum Required/Disabled does not allow',
+  );
+
+  expect(
+    'enum-declared-after-the-options-class',
+    (root) => {
+      const path = join(root, 'src/BuildingBlocks/Demo/DemoOptions.cs');
+      const text = readFileSync(path, 'utf8');
+      const declaration = text.match(/public enum DemoMode\n\{[\s\S]*?\n\}\n/)[0];
+      writeFileSync(path, text.replace(declaration, '') + declaration);
+    },
+    0,
+    'check-env-matrix: ',
+  );
+  expect(
+    'null-value-on-a-string-row',
+    (root) => {
+      const path = join(root, 'infra/staging/environment.json');
+      const file = readJson(path);
+      file.config['EVIDGATE__DEMO__LABEL'] = { origin: 'environment', value: null };
+      writeFileSync(path, JSON.stringify(file, null, 2));
+    },
+    1,
+    'E env: infra/staging/environment.json: EVIDGATE__DEMO__LABEL declares value null but the matrix type is string',
+  );
+  expect(
+    'numeric-value-on-a-string-row',
+    (root) => {
+      const path = join(root, 'infra/staging/environment.json');
+      const file = readJson(path);
+      file.config['EVIDGATE__DEMO__LABEL'] = { origin: 'environment', value: 12345 };
+      writeFileSync(path, JSON.stringify(file, null, 2));
+    },
+    1,
+    'E env: infra/staging/environment.json: EVIDGATE__DEMO__LABEL declares value 12345 but the matrix type is string',
+  );
+  expect(
+    'integer-value-on-an-integer-row',
+    (root) => {
+      const path = join(root, 'infra/dev/environment.json');
+      const file = readJson(path);
+      file.config['EVIDGATE__DEMO__RETRIES'] = { origin: 'environment', value: 3 };
+      writeFileSync(path, JSON.stringify(file, null, 2));
+    },
+    0,
+    'check-env-matrix: ',
   );
 
   let failed = 0;

@@ -301,6 +301,18 @@ public sealed class IsolationSelfCheck
                         + "'org_id IS NULL OR org_id = evidgate.current_org_id()' (02 §4.5)"));
                 }
 
+                // The read shape is not the whole contract: the app role also writes its own
+                // rows here (the 0010 tenant INSERT/UPDATE policies), and a permissive sibling
+                // is OR-ed with them, so it opens the table however correct the read shape is.
+                // The tenant predicate counts as scoped too — it is strictly narrower than the
+                // all-org read shape, so a policy carrying it reaches no other org's row.
+                AddUnscopedPermissiveViolations(
+                    table.Name,
+                    ApplicablePolicies(tablePolicies),
+                    CataloguePredicate,
+                    TenantPredicate,
+                    violations);
+
                 continue;
             }
 
@@ -379,9 +391,7 @@ public sealed class IsolationSelfCheck
         // A RESTRICTIVE policy can only narrow what the permissive ones allow, so it is not
         // part of the leak surface; only permissive policies the runtime role can use are
         // judged (00 §5.4.7/T2; DECISIONS F5).
-        var applicable = tablePolicies
-            .Where(policy => policy.Permissive && policy.AppliesTo(ApplicationRole, PublicRole))
-            .ToList();
+        var applicable = ApplicablePolicies(tablePolicies);
 
         if (applicable.Count == 0)
         {
@@ -432,9 +442,38 @@ public sealed class IsolationSelfCheck
             return;
         }
 
-        // Permissive policies are OR-ed, so a second one that reaches the runtime role
-        // without the predicate opens the table however correct the scoped policy is (AC1).
-        foreach (var policy in applicable.Where(policy => !IsScopedForItsCommands(policy, displayPredicate)))
+        AddUnscopedPermissiveViolations(table, applicable, displayPredicate, null, violations);
+    }
+
+    /// <summary>
+    /// The permissive policies of one table that reach the runtime role — the only ones whose
+    /// clauses are OR-ed into what that role may read or write.
+    /// </summary>
+    private static List<PolicyShape> ApplicablePolicies(IReadOnlyList<PolicyShape> tablePolicies) =>
+        tablePolicies
+            .Where(policy => policy.Permissive && policy.AppliesTo(ApplicationRole, PublicRole))
+            .ToList();
+
+    /// <summary>
+    /// The OR-combining rule shared by every scoped-policy kind: a permissive policy that
+    /// reaches the runtime role without the predicate opens the table however correct its
+    /// siblings are (AC1). <paramref name="narrowerPredicate"/>, when given, is a second
+    /// predicate that also counts as scoped because it admits a subset of the rows the first
+    /// one does — the catalogue read shape accepts the tenant predicate that way.
+    /// </summary>
+    /// <param name="table">Schema-qualified table under judgement.</param>
+    /// <param name="applicable">The table's permissive policies that reach the runtime role.</param>
+    /// <param name="displayPredicate">The rule's own predicate, as a migration writes it.</param>
+    /// <param name="narrowerPredicate">A second accepted predicate, or null when there is none.</param>
+    /// <param name="violations">The report's violation list to append to.</param>
+    private static void AddUnscopedPermissiveViolations(
+        string table,
+        IReadOnlyList<PolicyShape> applicable,
+        string displayPredicate,
+        string? narrowerPredicate,
+        List<IsolationViolation> violations)
+    {
+        foreach (var policy in applicable.Where(policy => !IsScopedForItsCommands(policy, displayPredicate, narrowerPredicate)))
         {
             violations.Add(new IsolationViolation(
                 table,
@@ -444,16 +483,25 @@ public sealed class IsolationSelfCheck
     }
 
     /// <summary>
-    /// True when every clause PostgreSQL consults for the policy's command carries the
-    /// predicate: USING for the commands that filter rows (SELECT/UPDATE/DELETE and
+    /// True when every clause PostgreSQL consults for the policy's command carries one of the
+    /// predicates: USING for the commands that filter rows (SELECT/UPDATE/DELETE and
     /// <c>FOR ALL</c>), WITH CHECK for the commands that admit rows (INSERT/UPDATE and
     /// <c>FOR ALL</c>, reusing USING when none is declared). A policy is only judged for the
     /// commands it governs, so an INSERT-only policy with a scoped WITH CHECK is scoped, while
     /// a DELETE-only policy with <c>using (true)</c> is not.
     /// </summary>
-    private static bool IsScopedForItsCommands(PolicyShape policy, string predicate) =>
-        (!policy.UsesUsing || MatchesUsing(policy, predicate))
-        && (!policy.UsesWithCheck || CheckSatisfied(policy, predicate));
+    private static bool IsScopedForItsCommands(PolicyShape policy, string predicate, string? narrowerPredicate)
+    {
+        var usingScoped = !policy.UsesUsing
+            || MatchesUsing(policy, predicate)
+            || (narrowerPredicate is not null && MatchesUsing(policy, narrowerPredicate));
+
+        var checkScoped = !policy.UsesWithCheck
+            || CheckSatisfied(policy, predicate)
+            || (narrowerPredicate is not null && CheckSatisfied(policy, narrowerPredicate));
+
+        return usingScoped && checkScoped;
+    }
 
     /// <summary>
     /// True when <paramref name="expression"/> — a policy clause as <c>pg_get_expr</c> writes

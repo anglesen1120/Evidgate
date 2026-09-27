@@ -183,9 +183,11 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
                     : row.Codes.ToHashSet(StringComparer.Ordinal);
 
             case PrincipalKind.ServicePrincipal:
-                return principal.ClaimedPermissions
-                    .Where(Permissions.IsKnown)
-                    .ToHashSet(StringComparer.Ordinal);
+                // Same bound as Service(): one claim outside the catalogue makes the
+                // token malformed, so it holds nothing rather than the rest of its claims.
+                return principal.ClaimedPermissions.All(Permissions.IsKnown)
+                    ? principal.ClaimedPermissions.ToHashSet(StringComparer.Ordinal)
+                    : NoPermissions;
 
             default:
                 return NoPermissions;

@@ -127,4 +127,38 @@ internal static class SelfEscalation
                 membership => membership.OrgId == orgId && membership.UserId == callerUserId,
                 cancellationToken);
     }
+
+    /// <summary>
+    /// True when a grant addressed to <paramref name="targetUserId"/> or
+    /// <paramref name="targetEmail"/> lands on the caller: the caller's own user id, or
+    /// the address of the caller's own membership (a pending row addressed to the caller
+    /// binds to them later). The one definition GrantRole and InviteMember share, so the
+    /// two routes cannot disagree on what "self" means. <c>invited_email</c> is stored
+    /// normalised (InviteEmail.Normalize and 0011's check), so an ordinal comparison
+    /// settles the address arm.
+    /// </summary>
+    internal static async Task<bool> IsSelfTargetAsync(
+        IdentityDbContext context,
+        Guid orgId,
+        IRequestPrincipal? caller,
+        Guid? targetUserId,
+        string targetEmail,
+        CancellationToken cancellationToken)
+    {
+        if (caller?.UserId is not { } callerUserId)
+        {
+            return false;
+        }
+
+        if (targetUserId == callerUserId)
+        {
+            return true;
+        }
+
+        var ownMembership = await CallerMembershipAsync(context, orgId, callerUserId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return ownMembership is not null
+            && string.Equals(ownMembership.InvitedEmail, targetEmail, StringComparison.Ordinal);
+    }
 }

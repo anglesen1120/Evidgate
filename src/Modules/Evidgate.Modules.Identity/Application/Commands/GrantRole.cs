@@ -106,11 +106,13 @@ internal sealed class GrantRoleCommandHandler(
 
         var caller = principals.Current;
 
-        // W7-SEC-02: a caller may grant its own membership only what it already holds.
-        // Checked before the idempotency check on purpose — a refusal must not depend on
-        // whether the row happens to exist (a corrupt or filtered grant set would then
-        // decide it).
-        if (membership.UserId is { } targetUserId && targetUserId == caller?.UserId)
+        // W7-SEC-02: a caller may grant its own membership — or a pending row addressed to
+        // its own address — only what it already holds. Checked before the idempotency
+        // check on purpose — a refusal must not depend on whether the row happens to exist
+        // (a corrupt or filtered grant set would then decide it).
+        if (await SelfEscalation
+                .IsSelfTargetAsync(context, orgId, caller, membership.UserId, membership.InvitedEmail, cancellationToken)
+                .ConfigureAwait(false))
         {
             var missing = await SelfEscalation.MissingAsync(
                 permissions,

@@ -372,10 +372,17 @@ public sealed class EvaluatorTests : CatalogueTestBase
         (await evaluator.ResolveAsync(org, RequestPrincipal.Operator(), Token))
             .ShouldBeEmpty("the operator stub holds nothing until 02.8.1");
 
-        var producer = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create, "not_a:permission"]);
+        var malformed = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create, "not_a:permission"]);
+
+        (await EvaluateAsync(evaluator, org, malformed, Permissions.Run.Create))
+            .IsGranted.ShouldBeFalse("one unknown claim makes the token malformed for the verdict");
+        (await evaluator.ResolveAsync(org, malformed, Token))
+            .ShouldBeEmpty("the set must agree with the verdict: a malformed token holds nothing");
+
+        var producer = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create]);
 
         (await evaluator.ResolveAsync(org, producer, Token))
-            .ShouldBe([Permissions.Run.Create], ignoreOrder: true, "the service path is bounded by the catalogue, like the verdict");
+            .ShouldBe([Permissions.Run.Create], ignoreOrder: true, "a well-formed token holds exactly its claims");
     }
 
     private static ValueTask<PermissionDecision> EvaluateAsync(
