@@ -420,15 +420,15 @@ public sealed class SchemaConventionTests
 /// The allow-list of <see cref="SchemaConventionScan"/> is the one place where a
 /// rule can be excused, so it is asserted offline and exactly: an entry added,
 /// widened or dropped fails here rather than silently stopping a rule for a real
-/// table. <c>rls_probe</c> is the only non-mechanism entry, and it is excused from
-/// the version-trigger rule alone (0003 predates the shared trigger function of
-/// 0004 and is checksum-locked), so its tenant key, RLS and audit columns stay
-/// checked.
+/// table. <c>rls_probe</c> is the only non-mechanism entry that predates the shared
+/// trigger function (0003 is checksum-locked), and <c>role_permission</c> is the only
+/// entry excused from a single rule for a reason a migration cannot fix (a built-in
+/// role carries <c>org_id IS NULL</c>, so its composite tenant FK cannot exist).
 /// </summary>
 public sealed class SchemaConventionAllowListTests
 {
     [Fact]
-    public void AllowList_Is_Exactly_The_Four_Documented_Exemptions()
+    public void AllowList_Is_Exactly_The_Documented_Exemptions()
     {
         SchemaConventionScan.Exemptions
             .Select(entry => (entry.Table, entry.Rules))
@@ -438,6 +438,7 @@ public sealed class SchemaConventionAllowListTests
                 ("public.outbox", SchemaRule.RowLevelSecurity | SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.task", SchemaRule.TenantKey | SchemaRule.CompositeForeignKey | SchemaRule.RowLevelSecurity),
                 ("public.rls_probe", SchemaRule.VersionTrigger),
+                ("public.role_permission", SchemaRule.CompositeForeignKey),
             ]);
 
         // Every exclusion carries its reason: an exemption without one is a silencer,
@@ -448,5 +449,10 @@ public sealed class SchemaConventionAllowListTests
         // task queue as 01's exceptions to `unique (org_id, id)`.
         SchemaConventionScan.Exemptions.ShouldContain(
             entry => entry.Table == "public.outbox" && (entry.Rules & SchemaRule.TenantKey) == 0);
+
+        // `role_permission` is excused from exactly one rule: its tenant key, RLS flags
+        // and audit columns are checked like any other business table (02.2.1-T1.2).
+        SchemaConventionScan.Exemptions.ShouldContain(
+            entry => entry.Table == "public.role_permission" && entry.Rules == SchemaRule.CompositeForeignKey);
     }
 }

@@ -41,7 +41,7 @@ internal sealed class PipelineTestHost : IAsyncDisposable
     internal static PipelineTestHost Start(
         PostgresPersistenceFixture fixture,
         string database,
-        IPermissionChecker permissions,
+        IPermissionEvaluator permissions,
         Action<IServiceCollection>? configureServices = null)
     {
         ArgumentNullException.ThrowIfNull(fixture);
@@ -57,8 +57,16 @@ internal sealed class PipelineTestHost : IAsyncDisposable
         services.AddSingleton<ITenantScopeFactory>(scopes);
 
         // Registered before the pipeline so its TryAdd* keeps this fake — the same
-        // way 02.6.2's real checker will replace the deny-all default.
+        // way the Identity module's real evaluator replaces the deny-all default.
         services.AddSingleton(permissions);
+
+        // The 02.6.2-T1.1 principal slot: the host publishes the caller the
+        // authorization stage reads. Registered before the pipeline so its TryAdd*
+        // keeps this one; ProbePrincipalAccessor.Current = null is the
+        // "host resolved no caller" case.
+        services.AddSingleton<ProbePrincipalAccessor>();
+        services.AddSingleton<IRequestPrincipalAccessor>(provider =>
+            provider.GetRequiredService<ProbePrincipalAccessor>());
 
         // The probe validators a host registers for itself — the pipeline resolves
         // whatever the container holds, it never scans assemblies (that is a host

@@ -26,6 +26,11 @@ internal static class WorkerHostFactory
             ["EVIDGATE:Database:ConnectionString"] = connectionString,
             ["EVIDGATE:Worker:HealthPort"] = healthPort.ToString(CultureInfo.InvariantCulture),
             ["EVIDGATE:Worker:ReadinessPollMilliseconds"] = "100",
+            // This suite boots the Worker for the readiness and queue surfaces, on
+            // purpose not always against a migrated database; the boot-time isolation
+            // self-check (02.6.1-T1.4, AC5) is proven against real processes in
+            // IsolationSelfCheckBootTests and is opted out of here explicitly.
+            [IsolationSelfCheckEnvironment.InMemoryKey] = IsolationSelfCheckEnvironment.Disabled,
         });
 
         if (capture is not null)

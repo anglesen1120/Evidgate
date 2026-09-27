@@ -1,0 +1,11 @@
+{
+  "schema": "discover.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "",
+      "reason": "any_of"
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "collect.v1.json",
+  "title": "Adapter operation: collect v1",
+  "description": "00 §10 protocol operation 'collect' (04.7.1-T1.2). Direction: adapter → server — the artifact inventory collected from the allowed workspace directory, reported as the shared 00 §9.4 event envelope whose artifact_ids carry the collected artifacts (source §4: 'artifact inventory, checksum; never reads files outside the workspace'). The envelope schema is referenced by $id (urn:evidgate:contract:event-envelope.v1), never copied. At most 500 events, like the ingest batch (00 §9.3). A failed phase reports `error` instead of the payload: at least one of `events` and `error` is required (contracts/adapter/README.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "operation"],
+  "anyOf": [
+    {
+      "required": ["events"]
+    },
+    {
+      "required": ["error"]
+    }
+  ],
+  "properties": {
+    "protocol": {
+      "$ref": "#/$defs/protocol"
+    },
+    "operation": {
+      "const": "collect"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "$ref": "urn:evidgate:contract:event-envelope.v1#/$defs/event"
+      }
+    },
+    "error": {
+      "$ref": "#/$defs/operationError"
+    }
+  },
+  "$defs": {
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["major", "minor"],
+      "properties": {
+        "major": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "minor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "operationError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    }
+  }
+}

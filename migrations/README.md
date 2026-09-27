@@ -21,8 +21,10 @@ The playbook for changing a table without breaking the running version is
   `0001`–`0003` are the foundation files from 01, `0004`–`0005` are 02.1.1's
   `organization`/`project` tables, and `0006`–`0008` are 01.5.1's mechanism
   tables `outbox`, `idempotency_record` and `task`, `0009` is 01.5.1-T3's
-  dispatcher grant on `outbox`, and `0010` is reserved for 01.5.1-T4's operator
-  read path, so the next story starts at `0011`); a gap means two branches
+  dispatcher grant on `outbox`, `0010` is 02.2.1-T1's permission
+  catalogue — 01.5.1-T4 shipped its operator read path without a migration, so
+  its `0010` reservation lapsed — and `0011` is 02.1.2-T1's `membership` /
+  `membership_role` tables); a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and

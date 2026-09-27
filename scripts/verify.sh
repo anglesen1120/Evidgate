@@ -32,9 +32,14 @@ ALL_STAGES=(
   check-adr
   check-links
   check-contract-conventions
+  check-env-matrix
+  check-dor-security
   check-ci-parity
   check-action-pins
   check-codegen-drift
+  check-permissions-drift
+  image-pins
+  images
   licence-scan
   audit-deps
   sbom
@@ -136,6 +141,19 @@ run_stage() {
     stage "check-contract-conventions"
     scripts/check-contract-conventions.sh
     ;;
+  check-env-matrix)
+    # AC1 (10.1.1-T1.1): every consumed EVIDGATE_* key has a matrix row and a
+    # per-environment origin; the self-test proves the lint still rejects.
+    stage "check-env-matrix"
+    node scripts/check-env-matrix.mjs --self-test
+    node scripts/check-env-matrix.mjs
+    ;;
+  check-dor-security)
+    # AC4 (11.1.1-T2): feature plans added or changed in the change set answer
+    # the four DoR security questions.
+    stage "check-dor-security"
+    scripts/check-dor-security.sh
+    ;;
   check-ci-parity)
     # AC2 (01.7.1-T1.4): the workflow must run these stages and nothing else from
     # the same set — a raw `dotnet test` next to a `--stage test` call fails here.
@@ -152,6 +170,27 @@ run_stage() {
     # the only thing humans edit.
     stage "check-codegen-drift"
     scripts/check-codegen-drift.sh
+    ;;
+  check-permissions-drift)
+    # 02.2.1-T1: Permissions.g.cs is regenerated from contracts/permissions.json.
+    stage "check-permissions-drift"
+    scripts/check-permissions-drift.sh
+    ;;
+  image-pins)
+    # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three
+    # Dockerfiles and ignore lists agree. No Docker.
+    stage "image-pins"
+    scripts/build-images.sh --check-pins
+    ;;
+  images)
+    # AC1/AC5 (10.2.1-T1.1/T1.2): build api/worker/migrator for the host platform,
+    # then migrate a throwaway PostgreSQL with the Migrator image and probe the Api.
+    if [[ "${EVIDGATE_VERIFY_SKIP_DOCKER:-}" == "1" ]]; then
+      stage "images (skipped: EVIDGATE_VERIFY_SKIP_DOCKER=1)"
+    else
+      stage "images"
+      scripts/build-images.sh --with-db
+    fi
     ;;
   licence-scan)
     # AC4 (01.7.1-T2): deny-list enforced for npm + NuGet; exceptions are ADR ids.

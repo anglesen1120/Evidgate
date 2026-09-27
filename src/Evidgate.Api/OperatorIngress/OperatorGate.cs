@@ -21,7 +21,7 @@ public interface IOperatorGate
 
 /// <summary>
 /// The fail-closed default (01.5.1-T4.2, mirroring the
-/// <c>DenyAllPermissionChecker</c> precedent of
+/// <c>DenyAllPermissionEvaluator</c> precedent of
 /// <c>src/BuildingBlocks/Pipeline/Authorization</c>): until the 02.x
 /// authentication story wires the real operator identity, every call denies — a
 /// host that forgot the real gate fails closed, never open. Tests substitute

@@ -56,13 +56,6 @@ export type Decision = {
 };
 
 /**
- * Manifest upload payload; verified server-side → `manifest_id` + `manifest_hash` (00 §9.3). Shape finalized by 05.
- */
-export type ManifestUpload = {
-    [key: string]: unknown;
-};
-
-/**
  * Inline mirror of `contracts/schemas/event-envelope.v1.json` (00 §9.4); the schema file is authoritative.
  */
 export type EventBatch = {
@@ -70,9 +63,170 @@ export type EventBatch = {
 };
 
 /**
+ * One entry of the permission catalogue (00 §2). The catalogue holds no secrets: `sensitive` describes the permission, it is never a value.
+ */
+export type PermissionView = {
+    /**
+     * The `resource:action` string — the catalogue's identity.
+     */
+    code: string;
+    resource: string;
+    action: string;
+    description: string;
+    /**
+     * True when the permission gates secret-adjacent data (AC5).
+     */
+    sensitive: boolean;
+    /**
+     * True when the string has no V1 consumer yet (AC2).
+     */
+    reserved: boolean;
+    /**
+     * False for a code a member principal must never hold (T79).
+     */
+    tenant_assignable: boolean;
+};
+
+/**
+ * 00 §9.1 cursor page of `PermissionView`, ordered by `code`.
+ */
+export type PermissionListResponse = {
+    items: Array<PermissionView>;
+    /**
+     * The last code of the page when a further page exists, else null.
+     */
+    next_cursor: string | null;
+};
+
+/**
+ * One role — a built-in (`org_id` null) or the caller's own org row (02 §4.5).
+ */
+export type RoleView = {
+    id: string;
+    /**
+     * Null for a built-in role, the owning org for a custom role.
+     */
+    org_id?: string | null;
+    code: string;
+    name: string;
+    is_builtin: boolean;
+    created_at: string;
+    version: number;
+};
+
+/**
+ * 00 §9.1 cursor page of `RoleView`, keyset-ordered on `(created_at, id)`.
+ */
+export type RoleListResponse = {
+    items: Array<RoleView>;
+    /**
+     * Opaque cursor of the next page, or null on the last page.
+     */
+    next_cursor: string | null;
+};
+
+/**
+ * Body of `POST /v1/roles` (02.2.1 §5). V1 answers 403 until the custom-role flag is on.
+ */
+export type CreateRoleRequest = {
+    /**
+     * Role code; unique per org → 409 `role_code_taken`.
+     */
+    code: string;
+    name: string;
+    /**
+     * Catalogue codes to grant; unknown → 422 `unknown_permission`, non-assignable → 422 `permission_not_assignable` (T79).
+     */
+    permissions: Array<string>;
+};
+
+/**
+ * Body of `PATCH /v1/roles/{r}` (02.2.1 §5). Both fields optional; a built-in role is 409 `builtin_role_immutable`.
+ */
+export type UpdateRoleRequest = {
+    name?: string;
+    /**
+     * Catalogue codes granted in addition to the role's current set. Additive only: migration 0010 revokes `DELETE` on `role_permission` for the app role, so V1 cannot shrink a role's grant set (02.2.1 §3).
+     */
+    add_permissions?: Array<string>;
+};
+
+/**
+ * One membership of an org (02.1.2 §4) with the roles it currently holds.
+ */
+export type MembershipView = {
+    id: string;
+    org_id: string;
+    /**
+     * Null while the invite is `pending`; set when a login binds it (02.3.1-T2).
+     */
+    user_id?: string | null;
+    /**
+     * The normalised invite address (trimmed, lowercased). Personal data (02.1.2 §8).
+     */
+    invited_email: string;
+    status: 'pending' | 'active' | 'removed' | 'revoked' | 'expired';
+    /**
+     * The role set of 02.1.2 §6 — built-in catalogue roles plus the org's own.
+     */
+    roles: Array<RoleView>;
+    created_at: string;
+    updated_at: string;
+    /**
+     * Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+     */
+    version: number;
+};
+
+/**
+ * 00 §9.1 cursor page of `MembershipView`, keyset-ordered on `(created_at, id)`.
+ */
+export type MembershipListResponse = {
+    items: Array<MembershipView>;
+    /**
+     * Opaque cursor of the next page, or null on the last page.
+     */
+    next_cursor: string | null;
+};
+
+/**
+ * Body of `POST /v1/orgs/{o}/memberships` (02.1.2 §5) — invite by address, optionally with initial roles.
+ */
+export type InviteMemberRequest = {
+    /**
+     * The invited address; normalised (trimmed, lowercased) before it is stored or compared.
+     */
+    email: string;
+    /**
+     * Role ids the membership starts with; each must be built-in or the caller's own org role (else 409 `unknown_role`).
+     */
+    roles?: Array<string>;
+};
+
+/**
+ * Body of `PATCH /v1/orgs/{o}/memberships/{m}` (02.1.2 §5). `If-Match` carries the row's `version`; stale → 412.
+ */
+export type UpdateMembershipRequest = {
+    /**
+     * Only `removed` — the admin disable path (AC3). Activating a pending invite is the invite-binding flow of 02.1.2-T2 (T75), never a client-set status.
+     */
+    status: 'removed';
+};
+
+/**
+ * Body of `POST /v1/orgs/{o}/memberships/{m}/roles` (02.1.2 §5) — grant one role to one membership.
+ */
+export type GrantRoleRequest = {
+    /**
+     * A built-in catalogue role or one of the caller's own org roles (else 409 `unknown_role`).
+     */
+    role_id: string;
+};
+
+/**
  * Adapter capability document v1
  *
- * 00 §10 adapter protocol capability document. The server rejects an incompatible protocol.major. See contracts/README.md for the *.vN.json versioning rule.
+ * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
  */
 export type CapabilityV1 = {
     protocol: {
@@ -81,6 +235,9 @@ export type CapabilityV1 = {
     };
     engine: {
         family: string;
+        /**
+         * Exact engine version; carried here and (V2) pinned in the immutable JobSpec with the image digest — runners never resolve 'latest' at run time (D8)
+         */
         version: string;
     };
     platforms: Array<string>;
@@ -89,11 +246,97 @@ export type CapabilityV1 = {
         step_events: boolean;
         retry: boolean;
         cancel: boolean;
+        /**
+         * false = the adapter cannot honour contracts/adapter/config.v1.json at run create, so the run carries the capture_uncontrolled label (T97, AC7); absent = the configuration document is delivered and must be honoured
+         */
+        capture_control?: boolean;
+        [key: string]: boolean | undefined;
     };
     /**
      * ingest_only results are viewable but not gate-eligible unless the manifest is proven complete (00 §10)
      */
     mode: 'full' | 'ingest_only';
+};
+
+/**
+ * Manifest v1
+ *
+ * The run manifest accepted by POST /v1/projects/{p}/manifests (05.1.1-T1.1/T1.2, 00 §9.3). It declares the suite revision, the planned executions (case revision × variant params × target env), the matrix those executions cover, the shard plan that partitions them and the per-environment needs. Bounds are encoded here: at most 10000 planned executions, 256 shards, 32 target environments, 32 variant params; the transport cap is 256 KiB [DECISION 05.1.1 §8]. Semantic checks — unknown case revision, secret literal in variant params, matrix coverage — are 05.1.1-T2's; this schema only fixes the shape.
+ */
+export type ManifestV1 = {
+    schema_version: 1;
+    suite_revision_id: string;
+    /**
+     * Optional in V1: environment_revision is created by 05.1.2-T1, which adds the composite FK (org_id, environment_revision_id)
+     */
+    environment_revision_id?: string | null;
+    planned_executions: Array<PlannedExecution>;
+    matrix: {
+        case_revision_ids: Array<string>;
+        /**
+         * The variant axis; planned_executions must equal case_revision_ids × variants × target_envs (05.1.1-T2.4)
+         */
+        variants: Array<Variant>;
+        target_envs: Array<TargetEnv>;
+    };
+    shard_plan: {
+        /**
+         * One entry per producer slot (05.2.1 registers one per shard); the index ranges partition planned_executions exactly (05.1.1-T2.4)
+         */
+        shards: Array<Shard>;
+    };
+    env_needs: EnvNeeds;
+};
+
+export type EnvNeed = {
+    target_env: TargetEnv;
+    secret_refs?: Array<string>;
+};
+
+export type EnvNeeds = {
+    /**
+     * One entry per target env of the matrix; secrets are references only (00 §5.7 S3)
+     */
+    target_envs: Array<EnvNeed>;
+};
+
+/**
+ * Normalised secret-free variant parameters (03.2.1): the server hashes them into variant_hash, and execution_key = sha256(case_id ‖ variant_hash ‖ target_env) (00 §7). A literal where a secret is meant is rejected by 05.1.1-T2.3, not by this schema.
+ */
+export type Params = {
+    [key: string]: string;
+};
+
+export type PlannedExecution = {
+    case_revision_id: string;
+    variant: Variant;
+    target_env: TargetEnv;
+    /**
+     * Absent means required (05.2.1 planned_execution.required defaults true); an optional tuple is reported but cannot by itself make the run complete
+     */
+    required?: boolean;
+};
+
+export type Shard = {
+    shard_id: string;
+    /**
+     * Inclusive start index into planned_executions
+     */
+    from_index: number;
+    /**
+     * Exclusive end index into planned_executions; a shard owns [from_index, to_index)
+     */
+    to_index: number;
+    /**
+     * Versioned producer metadata for the pool; never authoritative (00 §5.4.5)
+     */
+    producer_hint?: string;
+};
+
+export type TargetEnv = string;
+
+export type Variant = {
+    params: Params;
 };
 
 export type Event = unknown & {
@@ -150,6 +393,10 @@ export type IfMatch = string;
 export type XsrfToken = string;
 
 export type OrgId = string;
+
+export type MembershipId = string;
+
+export type RoleId = string;
 
 export type ProjectId = string;
 
@@ -230,7 +477,7 @@ export type ExchangeCiTokenResponses = {
 export type ExchangeCiTokenResponse = ExchangeCiTokenResponses[keyof ExchangeCiTokenResponses];
 
 export type CreateManifestData = {
-    body: ManifestUpload;
+    body: ManifestV1;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -1426,13 +1673,61 @@ export type CreateProjectResponses = {
 
 export type CreateProjectResponse = CreateProjectResponses[keyof CreateProjectResponses];
 
-export type CreateMembershipData = {
-    /**
-     * Membership invite payload (02).
-     */
-    body: {
-        [key: string]: unknown;
+export type ListMembershipsData = {
+    body?: never;
+    path: {
+        o: string;
     };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/orgs/{o}/memberships';
+};
+
+export type ListMembershipsErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListMembershipsError = ListMembershipsErrors[keyof ListMembershipsErrors];
+
+export type ListMembershipsResponses = {
+    /**
+     * Page of memberships (02.1.2)
+     */
+    200: MembershipListResponse;
+};
+
+export type ListMembershipsResponse = ListMembershipsResponses[keyof ListMembershipsResponses];
+
+export type CreateMembershipData = {
+    body: InviteMemberRequest;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -1464,6 +1759,10 @@ export type CreateMembershipErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
      */
     422: ErrorEnvelope;
@@ -1481,10 +1780,519 @@ export type CreateMembershipError = CreateMembershipErrors[keyof CreateMembershi
 
 export type CreateMembershipResponses = {
     /**
-     * Membership created
+     * Membership created (`pending`)
      */
-    201: unknown;
+    201: MembershipView;
 };
+
+export type CreateMembershipResponse = CreateMembershipResponses[keyof CreateMembershipResponses];
+
+export type RemoveMemberData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        o: string;
+        m: string;
+    };
+    query?: never;
+    url: '/orgs/{o}/memberships/{m}';
+};
+
+export type RemoveMemberErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RemoveMemberError = RemoveMemberErrors[keyof RemoveMemberErrors];
+
+export type RemoveMemberResponses = {
+    /**
+     * The membership is removed (idempotent)
+     */
+    204: void;
+};
+
+export type RemoveMemberResponse = RemoveMemberResponses[keyof RemoveMemberResponses];
+
+export type GetMembershipData = {
+    body?: never;
+    path: {
+        o: string;
+        m: string;
+    };
+    query?: never;
+    url: '/orgs/{o}/memberships/{m}';
+};
+
+export type GetMembershipErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetMembershipError = GetMembershipErrors[keyof GetMembershipErrors];
+
+export type GetMembershipResponses = {
+    /**
+     * The membership (02.1.2)
+     */
+    200: MembershipView;
+};
+
+export type GetMembershipResponse = GetMembershipResponses[keyof GetMembershipResponses];
+
+export type UpdateMembershipData = {
+    body: UpdateMembershipRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        o: string;
+        m: string;
+    };
+    query?: never;
+    url: '/orgs/{o}/memberships/{m}';
+};
+
+export type UpdateMembershipErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateMembershipError = UpdateMembershipErrors[keyof UpdateMembershipErrors];
+
+export type UpdateMembershipResponses = {
+    /**
+     * The membership in its new state
+     */
+    200: MembershipView;
+};
+
+export type UpdateMembershipResponse = UpdateMembershipResponses[keyof UpdateMembershipResponses];
+
+export type GrantMembershipRoleData = {
+    body: GrantRoleRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        o: string;
+        m: string;
+    };
+    query?: never;
+    url: '/orgs/{o}/memberships/{m}/roles';
+};
+
+export type GrantMembershipRoleErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GrantMembershipRoleError = GrantMembershipRoleErrors[keyof GrantMembershipRoleErrors];
+
+export type GrantMembershipRoleResponses = {
+    /**
+     * The membership with its new role set
+     */
+    200: MembershipView;
+};
+
+export type GrantMembershipRoleResponse = GrantMembershipRoleResponses[keyof GrantMembershipRoleResponses];
+
+export type RevokeMembershipRoleData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        o: string;
+        m: string;
+        r: string;
+    };
+    query?: never;
+    url: '/orgs/{o}/memberships/{m}/roles/{r}';
+};
+
+export type RevokeMembershipRoleErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RevokeMembershipRoleError = RevokeMembershipRoleErrors[keyof RevokeMembershipRoleErrors];
+
+export type RevokeMembershipRoleResponses = {
+    /**
+     * The role is no longer granted (idempotent by pair)
+     */
+    204: void;
+};
+
+export type RevokeMembershipRoleResponse = RevokeMembershipRoleResponses[keyof RevokeMembershipRoleResponses];
+
+export type ListPermissionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/permissions';
+};
+
+export type ListPermissionsErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListPermissionsError = ListPermissionsErrors[keyof ListPermissionsErrors];
+
+export type ListPermissionsResponses = {
+    /**
+     * Page of catalogue entries (02.2.1)
+     */
+    200: PermissionListResponse;
+};
+
+export type ListPermissionsResponse = ListPermissionsResponses[keyof ListPermissionsResponses];
+
+export type ListRolesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/roles';
+};
+
+export type ListRolesErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListRolesError = ListRolesErrors[keyof ListRolesErrors];
+
+export type ListRolesResponses = {
+    /**
+     * Page of roles (02.2.1)
+     */
+    200: RoleListResponse;
+};
+
+export type ListRolesResponse = ListRolesResponses[keyof ListRolesResponses];
+
+export type CreateRoleData = {
+    body: CreateRoleRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/roles';
+};
+
+export type CreateRoleErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateRoleError = CreateRoleErrors[keyof CreateRoleErrors];
+
+export type CreateRoleResponses = {
+    /**
+     * The custom role
+     */
+    201: RoleView;
+};
+
+export type CreateRoleResponse = CreateRoleResponses[keyof CreateRoleResponses];
+
+export type UpdateRoleData = {
+    body: UpdateRoleRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        r: string;
+    };
+    query?: never;
+    url: '/roles/{r}';
+};
+
+export type UpdateRoleErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateRoleError = UpdateRoleErrors[keyof UpdateRoleErrors];
+
+export type UpdateRoleResponses = {
+    /**
+     * The updated role
+     */
+    200: RoleView;
+};
+
+export type UpdateRoleResponse = UpdateRoleResponses[keyof UpdateRoleResponses];
 
 export type CreateCiBindingData = {
     /**

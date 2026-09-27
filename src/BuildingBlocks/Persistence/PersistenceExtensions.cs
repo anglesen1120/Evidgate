@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Evidgate.BuildingBlocks.Persistence.Options;
 using Evidgate.BuildingBlocks.Persistence.Readiness;
 using Microsoft.Extensions.Configuration;
@@ -10,8 +11,11 @@ namespace Evidgate.BuildingBlocks.Persistence;
 /// <summary>
 /// Persistence wiring shared by <c>Evidgate.Api</c> and <c>Evidgate.Worker</c>
 /// (01.1.2-T1.1/T1.3): validated database options, the app-role
-/// <see cref="NpgsqlDataSource"/> and the single <see cref="ReadinessProbe"/>.
-/// No connection is opened at startup — readiness reports it instead (AC3).
+/// <see cref="NpgsqlDataSource"/>, the single <see cref="ReadinessProbe"/> and the
+/// boot-time isolation self-check of 02.6.1-T1.4 (AC5).
+/// No connection is opened at startup for readiness — it reports instead (AC3) —
+/// while the isolation self-check deliberately runs once before the host serves,
+/// and refuses the start when a table is not under database-enforced isolation.
 /// </summary>
 public static class PersistenceExtensions
 {
@@ -63,6 +67,23 @@ public static class PersistenceExtensions
         });
 
         services.AddSingleton<ReadinessProbe>();
+
+        // 02.6.1-T1.4 (AC5): the boot-time isolation self-check. The exception list
+        // is the one embedded at build time from contracts/rls-exceptions.txt, so
+        // the published process judges the same list the CI lint does and cannot be
+        // started without it. It is registered as a hosted service, so it runs in
+        // both entry points before any tenant traffic is served; a failure surfaces
+        // from Host.StartAsync as an IsolationSelfCheckException with a non-zero
+        // exit code (ApiHost/WorkerHost translate it into one named line).
+        services
+            .AddOptions<IsolationSelfCheckOptions>()
+            .Bind(configuration.GetSection(IsolationSelfCheckOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton(_ => RlsExceptionList.LoadEmbedded());
+        services.AddSingleton<IsolationSelfCheck>();
+        services.AddHostedService<IsolationSelfCheckHostedService>();
 
         return services;
     }

@@ -1,0 +1,17 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 3
+  },
+  "operation": "discover",
+  "run_id": "00000000-0000-0000-0000-000000000090",
+  "discovery": {
+    "case_ids": ["00000000-0000-0000-0000-000000000001"],
+    "variant_hashes": ["0000000000000000000000000000000000000000000000000000000000000001"],
+    "shard_ids": ["shard-1"]
+  },
+  "error": {
+    "code": "discovery_partial",
+    "message": "2 files unreadable"
+  }
+}

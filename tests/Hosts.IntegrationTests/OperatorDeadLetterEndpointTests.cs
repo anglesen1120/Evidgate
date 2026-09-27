@@ -263,7 +263,7 @@ public sealed class OperatorDeadLetterEndpointTests
     }
 
     /// <summary>
-    /// The default gate is fail-closed (01.5.1-T4.2, the DenyAllPermissionChecker
+    /// The default gate is fail-closed (01.5.1-T4.2, the DenyAllPermissionEvaluator
     /// precedent): with nothing registered to answer "is this an operator",
     /// a request without an authenticated principal gets 401 `unauthenticated` —
     /// on both routes, so the group filter is proven, not just one endpoint's.

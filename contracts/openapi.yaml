@@ -124,7 +124,10 @@ paths:
       summary: Upload and verify a run manifest
       description: >-
         Uploads + verifies the manifest and returns `manifest_id` and
-        `manifest_hash` (00 §9.3).
+        `manifest_hash` (00 §9.3). The request body is
+        `contracts/manifest/manifest.v1.json` — the schema file is authoritative,
+        the same file both validators load (server Corvus, CLI Ajv, T42). Body ≤
+        256 KiB → `413`.
       x-permission: run:create
       x-version: v1
       parameters:
@@ -136,7 +139,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ManifestUpload'
+              $ref: './manifest/manifest.v1.json'
       responses:
         '201':
           description: Manifest accepted
@@ -1051,10 +1054,54 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
   /orgs/{o}/memberships:
+    get:
+      operationId: listMemberships
+      tags: [identity]
+      summary: Cursor page of the org's memberships (02)
+      description: >-
+        Keyset-ordered on `(created_at, id)` per 00 §9.1 and served by
+        `membership_org_created_id_idx`. The tenant filter is row level security, so
+        another org's rows are unreachable from the statement rather than merely
+        filtered out (02.1.2 AC7).
+      x-permission: membership:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of memberships (02.1.2)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     post:
       operationId: createMembership
       tags: [identity]
-      summary: Create a membership; last-admin guard applies (02)
+      summary: Invite a member; a duplicate pending invite is 409 invite_exists (02)
+      description: >-
+        Creates a `pending` membership bound to the normalised address. It becomes
+        `active` only when the invite's single-use secret is presented **and** a login
+        reports the same address as provider-verified (T75, 02.1.2 AC2), so this route
+        never activates one. Optional initial roles must be built-in or the caller's own
+        (409 `unknown_role`); a second invite while one is pending is 409
+        `invite_exists` (AC1). `Idempotency-Key` per T11.
       x-permission: membership:write
       x-version: v1
       parameters:
@@ -1066,11 +1113,136 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: Membership invite payload (02).
+              $ref: '#/components/schemas/InviteMemberRequest'
       responses:
         '201':
-          description: Membership created
+          description: Membership created (`pending`)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/memberships/{m}:
+    get:
+      operationId: getMembership
+      tags: [identity]
+      summary: One membership; another org's id is 404 (02, AC7)
+      x-permission: membership:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '200':
+          description: The membership (02.1.2)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      operationId: updateMembership
+      tags: [identity]
+      summary: Disable a member (status removed) under If-Match; last-admin guard applies (02)
+      description: >-
+        The admin disable path: `active → removed` (02.1.2 AC3, §6). `If-Match` carries
+        the row's `version`; a stale value is 412. Removing the org's last active
+        `tenant_admin` is 409 `last_admin` (AC4), and a `pending` invite is cancelled
+        through 02.1.2-T2's route, so any other source status is 409
+        `invalid_transition`.
+      x-permission: membership:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMembershipRequest'
+      responses:
+        '200':
+          description: The membership in its new state
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: removeMember
+      tags: [identity]
+      summary: Remove a member; the last active tenant_admin is protected (02, AC4)
+      description: >-
+        Sets `status = removed` and keeps the row as audit history (02.1.2 §8). Removing
+        the org's last active `tenant_admin` is 409 `last_admin`; a `pending` invite is
+        409 `invalid_transition` (cancel it through 02.1.2-T2's route). 02.1.2-T3.2 adds
+        the in-transaction session revocation (AC3).
+      x-permission: membership:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: The membership is removed (idempotent)
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -1080,6 +1252,254 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/memberships/{m}/roles:
+    post:
+      operationId: grantMembershipRole
+      tags: [identity]
+      summary: Grant one role to a membership (02)
+      description: >-
+        Idempotent by `unique (membership_id, role_id)`: granting a role the membership
+        already holds answers 200 with the current state. A role the tenant cannot see is
+        409 `unknown_role`. AC5: the next request evaluates the new role set — nothing is
+        cached.
+      x-permission: membership:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantRoleRequest'
+      responses:
+        '200':
+          description: The membership with its new role set
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/memberships/{m}/roles/{r}:
+    delete:
+      operationId: revokeMembershipRole
+      tags: [identity]
+      summary: Revoke one role from a membership; the last admin is protected (02, AC4)
+      description: >-
+        Revoking the `tenant_admin` role from the org's last active admin is 409
+        `last_admin` — demoting the last admin locks the tenant out exactly as removing
+        them would. A pair that was never granted is 404; AC5: the next request evaluates
+        the reduced role set.
+      x-permission: membership:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: The role is no longer granted (idempotent by pair)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /permissions:
+    get:
+      operationId: listPermissions
+      tags: [identity]
+      summary: Cursor page of the permission catalogue (02)
+      description: >-
+        The platform catalogue of 00 §2: every `resource:action` string with its
+        `sensitive`, `reserved` and `tenant_assignable` flags. Readable by any
+        member (`role:read`). The page is ordered by `code` — the catalogue's
+        primary key — because a platform catalogue has no `created_at`; the
+        cursor is the last code of the previous page.
+      x-permission: role:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of catalogue entries (02.2.1)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /roles:
+    get:
+      operationId: listRoles
+      tags: [identity]
+      summary: Cursor page of roles — built-ins plus the caller's org rows (02)
+      description: >-
+        The 00 §2 built-in roles plus, once the flagged custom-role commands
+        ship, the caller's own org rows; another org's role is never visible
+        (catalogue RLS, 02 §4.5). Keyset-ordered on `(created_at, id)` per
+        00 §9.1; the cursor is opaque.
+      x-permission: role:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of roles (02.2.1)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: createRole
+      tags: [identity]
+      summary: Create a custom role in the caller's org (02.2.1, V1 flag-gated)
+      description: >-
+        The route exists in V1 but answers 403 until
+        `EVIDGATE__IDENTITY__CUSTOMROLESENABLED` is on (RECOMMENDATIONS 02-Q3): built-in
+        roles only in V1. A submitted code the catalogue refuses is 422
+        `unknown_permission` or `permission_not_assignable` (T79); a code already taken in
+        the org is 409 `role_code_taken`; a built-in code is 409 `builtin_role_immutable`.
+      x-permission: role:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        '201':
+          description: The custom role
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /roles/{r}:
+    patch:
+      operationId: updateRole
+      tags: [identity]
+      summary: Rename a custom role and/or add grants to it (02.2.1, V1 flag-gated)
+      description: >-
+        Both body fields are optional. Grants are additive only: migration 0010 revokes
+        `DELETE` on `role_permission` for the app role, so V1 cannot shrink a role's grant
+        set (02.2.1 §3). A built-in role is 409 `builtin_role_immutable`; an id the tenant
+        cannot see is 404. No `If-Match`: the row's `version` token makes a racing update
+        fail with 412 without a client precondition.
+      x-permission: role:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+      responses:
+        '200':
+          description: The updated role
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -2093,6 +2513,20 @@ components:
       schema:
         type: string
         format: uuid
+    MembershipId:
+      name: m
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RoleId:
+      name: r
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     ProjectId:
       name: p
       in: path
@@ -2197,6 +2631,10 @@ components:
         type: string
     RetryAfter:
       description: Seconds (or HTTP-date) to wait before retrying (00 §9.2).
+      schema:
+        type: string
+    ETag:
+      description: The row's `version`, quoted; send it back in `If-Match` (00 §9.1).
       schema:
         type: string
   responses:
@@ -2360,9 +2798,6 @@ components:
           type: array
           items:
             type: string
-    ManifestUpload:
-      type: object
-      description: Manifest upload payload; verified server-side → `manifest_id` + `manifest_hash` (00 §9.3). Shape finalized by 05.
     EventBatch:
       type: object
       description: >-
@@ -2376,6 +2811,197 @@ components:
           items:
             $ref: './schemas/event-envelope.v1.json#/$defs/event'
       x-max-bytes: 1048576
+    PermissionView:
+      type: object
+      description: >-
+        One entry of the permission catalogue (00 §2). The catalogue holds no
+        secrets: `sensitive` describes the permission, it is never a value.
+      required: [code, resource, action, description, sensitive, reserved, tenant_assignable]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z_]+:[a-z_]+$'
+          description: The `resource:action` string — the catalogue's identity.
+        resource:
+          type: string
+        action:
+          type: string
+        description:
+          type: string
+        sensitive:
+          type: boolean
+          description: True when the permission gates secret-adjacent data (AC5).
+        reserved:
+          type: boolean
+          description: True when the string has no V1 consumer yet (AC2).
+        tenant_assignable:
+          type: boolean
+          description: False for a code a member principal must never hold (T79).
+    PermissionListResponse:
+      type: object
+      description: 00 §9.1 cursor page of `PermissionView`, ordered by `code`.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionView'
+        next_cursor:
+          type: [string, 'null']
+          description: The last code of the page when a further page exists, else null.
+    RoleView:
+      type: object
+      description: One role — a built-in (`org_id` null) or the caller's own org row (02 §4.5).
+      required: [id, code, name, is_builtin, created_at, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: [string, 'null']
+          format: uuid
+          description: Null for a built-in role, the owning org for a custom role.
+        code:
+          type: string
+        name:
+          type: string
+        is_builtin:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    RoleListResponse:
+      type: object
+      description: 00 §9.1 cursor page of `RoleView`, keyset-ordered on `(created_at, id)`.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleView'
+        next_cursor:
+          type: [string, 'null']
+          description: Opaque cursor of the next page, or null on the last page.
+    CreateRoleRequest:
+      type: object
+      description: Body of `POST /v1/roles` (02.2.1 §5). V1 answers 403 until the custom-role flag is on.
+      required: [code, name, permissions]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*$'
+          description: Role code; unique per org → 409 `role_code_taken`.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        permissions:
+          type: array
+          description: Catalogue codes to grant; unknown → 422 `unknown_permission`, non-assignable → 422 `permission_not_assignable` (T79).
+          items:
+            type: string
+            pattern: '^[a-z_]+:[a-z_]+$'
+    UpdateRoleRequest:
+      type: object
+      description: Body of `PATCH /v1/roles/{r}` (02.2.1 §5). Both fields optional; a built-in role is 409 `builtin_role_immutable`.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        add_permissions:
+          type: array
+          description: >-
+            Catalogue codes granted in addition to the role's current set. Additive only:
+            migration 0010 revokes `DELETE` on `role_permission` for the app role, so V1 cannot
+            shrink a role's grant set (02.2.1 §3).
+          items:
+            type: string
+            pattern: '^[a-z_]+:[a-z_]+$'
+    MembershipView:
+      type: object
+      description: One membership of an org (02.1.2 §4) with the roles it currently holds.
+      required: [id, org_id, invited_email, status, roles, created_at, updated_at, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        user_id:
+          type: [string, 'null']
+          format: uuid
+          description: Null while the invite is `pending`; set when a login binds it (02.3.1-T2).
+        invited_email:
+          type: string
+          description: The normalised invite address (trimmed, lowercased). Personal data (02.1.2 §8).
+        status:
+          type: string
+          enum: [pending, active, removed, revoked, expired]
+        roles:
+          type: array
+          description: The role set of 02.1.2 §6 — built-in catalogue roles plus the org's own.
+          items:
+            $ref: '#/components/schemas/RoleView'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          description: Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+    MembershipListResponse:
+      type: object
+      description: 00 §9.1 cursor page of `MembershipView`, keyset-ordered on `(created_at, id)`.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MembershipView'
+        next_cursor:
+          type: [string, 'null']
+          description: Opaque cursor of the next page, or null on the last page.
+    InviteMemberRequest:
+      type: object
+      description: Body of `POST /v1/orgs/{o}/memberships` (02.1.2 §5) — invite by address, optionally with initial roles.
+      required: [email]
+      properties:
+        email:
+          type: string
+          maxLength: 320
+          description: The invited address; normalised (trimmed, lowercased) before it is stored or compared.
+        roles:
+          type: array
+          description: Role ids the membership starts with; each must be built-in or the caller's own org role (else 409 `unknown_role`).
+          items:
+            type: string
+            format: uuid
+    UpdateMembershipRequest:
+      type: object
+      description: Body of `PATCH /v1/orgs/{o}/memberships/{m}` (02.1.2 §5). `If-Match` carries the row's `version`; stale → 412.
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [removed]
+          description: >-
+            Only `removed` — the admin disable path (AC3). Activating a pending invite is the
+            invite-binding flow of 02.1.2-T2 (T75), never a client-set status.
+    GrantRoleRequest:
+      type: object
+      description: Body of `POST /v1/orgs/{o}/memberships/{m}/roles` (02.1.2 §5) — grant one role to one membership.
+      required: [role_id]
+      properties:
+        role_id:
+          type: string
+          format: uuid
+          description: A built-in catalogue role or one of the caller's own org roles (else 409 `unknown_role`).
 security:
   - sessionCookie: []
   - bearerToken: []

@@ -1,0 +1,11 @@
+{
+  "schema": "config.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/schema_version",
+      "reason": "const"
+    }
+  ]
+}

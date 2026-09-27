@@ -1,6 +1,9 @@
 using Architecture.Tests.Rules;
 using Evidgate.BuildingBlocks.Pipeline;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Behaviours;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -57,5 +60,36 @@ public class PipelineOrderTests
     public void Canonical_Order_Matches_The_Contract()
     {
         PipelineBehaviourOrder.C2.ShouldBe(C2, ignoreOrder: false);
+    }
+
+    /// <summary>
+    /// 02.2.1-T2.2 (S2, 00 §5.5 C2 stage 4): a host that composes the pipeline
+    /// without the Identity module — which is the only thing that replaces this
+    /// registration — keeps a checker that denies every permission, so a missing
+    /// module or a forgotten registration fails closed instead of granting. The
+    /// module's own evaluator is what the entry points resolve (asserted end to end
+    /// by <c>Identity.IntegrationTests</c>' route suites).
+    /// </summary>
+    [Fact]
+    public async Task Pipeline_Without_The_Identity_Module_Fails_Closed()
+    {
+        var services = new ServiceCollection();
+
+        services.AddLogging();
+        services.AddEvidgatePipeline();
+
+        using var provider = services.BuildServiceProvider();
+        var evaluator = provider.GetRequiredService<IPermissionEvaluator>();
+
+        evaluator.ShouldBeOfType<DenyAllPermissionEvaluator>();
+
+        var decision = await evaluator.EvaluateAsync(
+            "role:read",
+            RequestPrincipal.Member(Guid.CreateVersion7()),
+            new RequestTenantContext(Guid.CreateVersion7(), ProjectId: null),
+            TestContext.Current.CancellationToken);
+
+        decision.IsGranted.ShouldBeFalse();
+        decision.DenyCode.ShouldBe(ApiErrorCode.Forbidden);
     }
 }

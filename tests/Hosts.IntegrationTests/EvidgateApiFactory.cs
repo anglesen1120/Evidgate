@@ -38,14 +38,26 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment("Production");
 
-        if (_connectionString is not null)
+        builder.ConfigureAppConfiguration((_, configuration) =>
         {
-            builder.ConfigureAppConfiguration((_, configuration) =>
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["EVIDGATE:Database:ConnectionString"] = _connectionString,
-                }));
-        }
+            var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                // This factory boots hosts that are not the production entry point:
+                // several of them are pointed at a closed port on purpose, and the
+                // boot-time isolation self-check (02.6.1-T1.4, AC5) would refuse them
+                // because it cannot read the catalogue. Saying so explicitly is the
+                // contract — the refusal and the passing boot are proven with real
+                // processes in IsolationSelfCheckBootTests.
+                [IsolationSelfCheckEnvironment.InMemoryKey] = IsolationSelfCheckEnvironment.Disabled,
+            };
+
+            if (_connectionString is not null)
+            {
+                settings["EVIDGATE:Database:ConnectionString"] = _connectionString;
+            }
+
+            configuration.AddInMemoryCollection(settings);
+        });
 
         builder.ConfigureServices(services =>
         {

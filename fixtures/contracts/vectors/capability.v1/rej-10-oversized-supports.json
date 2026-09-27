@@ -1,0 +1,47 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "engine": {
+    "family": "playwright",
+    "version": "1.49.0"
+  },
+  "platforms": ["linux-x64"],
+  "supports": {
+    "discovery": true,
+    "step_events": true,
+    "retry": true,
+    "cancel": true,
+    "flag_00": true,
+    "flag_01": true,
+    "flag_02": true,
+    "flag_03": true,
+    "flag_04": true,
+    "flag_05": true,
+    "flag_06": true,
+    "flag_07": true,
+    "flag_08": true,
+    "flag_09": true,
+    "flag_10": true,
+    "flag_11": true,
+    "flag_12": true,
+    "flag_13": true,
+    "flag_14": true,
+    "flag_15": true,
+    "flag_16": true,
+    "flag_17": true,
+    "flag_18": true,
+    "flag_19": true,
+    "flag_20": true,
+    "flag_21": true,
+    "flag_22": true,
+    "flag_23": true,
+    "flag_24": true,
+    "flag_25": true,
+    "flag_26": true,
+    "flag_27": true,
+    "flag_28": true
+  },
+  "mode": "full"
+}

@@ -1,5 +1,6 @@
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Mediator;
@@ -10,16 +11,24 @@ namespace Evidgate.BuildingBlocks.Pipeline.Behaviours;
 /// <summary>
 /// C2 stage 4 (00 §5.5 C2, authorization): reads the handler's
 /// <see cref="PermissionAttribute"/> and checks it through
-/// <see cref="IPermissionChecker"/>, inside the tenant scope the previous stage
-/// opened (membership/role rows are tenant rows under RLS). A handler declaring
-/// no permission is denied — the same fail-closed as the 02-pending
-/// <see cref="DenyAllPermissionChecker"/>, with Architecture.Tests failing such a
-/// handler at build time (00 §5.7 S2).
+/// <see cref="IPermissionEvaluator"/>, inside the tenant scope the previous stage
+/// opened (membership, role and role_permission rows are tenant rows under RLS, so
+/// the check must run there — 02 §4.5).
+/// <para>
+/// Deny by default, in four steps: a handler that declares no permission is denied
+/// (Architecture.Tests fails such a handler at build time, 00 §5.7 S2); a request
+/// the host resolved no principal for is denied; a request with no resolved tenant
+/// throws <see cref="TenantContextMissingException"/> (the host maps it to 401
+/// <c>unauthenticated</c> — no tenant means no authenticated caller); and the
+/// evaluator's verdict carries the 403 code the envelope renders
+/// (<c>forbidden</c>, <c>project_scope_mismatch</c>, <c>no_membership</c>).
+/// </para>
 /// </summary>
 public sealed class AuthorizationBehaviour<TMessage, TResponse>(
     IServiceProvider services,
-    IPermissionChecker permissions,
-    IRequestTenantContextAccessor tenant)
+    IPermissionEvaluator permissions,
+    IRequestTenantContextAccessor tenant,
+    IRequestPrincipalAccessor principals)
     : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
@@ -35,16 +44,24 @@ public sealed class AuthorizationBehaviour<TMessage, TResponse>(
         }
 
         var permission = HandlerLookup.PermissionOf(services, typeof(TMessage), typeof(TResponse));
-        var context = tenant.Require();
 
-        if (permission is null
-            || !await permissions.IsGrantedAsync(permission, context, cancellationToken).ConfigureAwait(false))
+        if (permission is null)
         {
-            return ResultFactory.Failure<TResponse>(Error.Forbidden(permission is null
-                ? "the handler declares no permission (00 §5.7 S2)"
-                : "the principal is not allowed to perform this operation"));
+            return ResultFactory.Failure<TResponse>(Error.Forbidden(
+                "the handler declares no permission (00 §5.7 S2)"));
         }
 
-        return await next(message, cancellationToken).ConfigureAwait(false);
+        // The tenant first: the evaluator's member path reads tenant rows under RLS,
+        // and a request with no resolved tenant is unauthenticated, not forbidden.
+        var context = tenant.Require();
+
+        var principal = principals.Current;
+        var decision = principal is null
+            ? PermissionDecision.Denied(ApiErrorCode.Forbidden)
+            : await permissions.EvaluateAsync(permission, principal, context, cancellationToken).ConfigureAwait(false);
+
+        return decision.IsGranted
+            ? await next(message, cancellationToken).ConfigureAwait(false)
+            : ResultFactory.Failure<TResponse>(decision.ToError());
     }
 }

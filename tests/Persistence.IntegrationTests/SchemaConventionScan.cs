@@ -47,6 +47,10 @@ internal static class SchemaConventionScan
             "public.rls_probe",
             SchemaRule.VersionTrigger,
             "The tenancy template of migration 0003 predates the shared trigger function (0004, M1W3-01) and 0003 is checksum-locked, so the trigger cannot be added there; 0004/0005 are the copy source for module tables."),
+        new SchemaExemption(
+            "public.role_permission",
+            SchemaRule.CompositeForeignKey,
+            "Catalogue table (02.2.1-T1.2, 02 §4.5): its only foreign key is `role_permission.role_id -> public.role (id)`, deliberately single-column because a built-in role row carries `org_id IS NULL` and the composite `(org_id, role_id) -> (org_id, id)` reference this rule wants could never match one — the catalogue is org-agnostic by design (TL T3). Its tenant key, RLS flags and audit columns are NOT exempt: 0010 declares `unique (org_id, id)`, ENABLE + FORCE and the shared version trigger."),
     ];
 
     /// <summary>

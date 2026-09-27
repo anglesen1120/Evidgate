@@ -61,7 +61,7 @@ internal sealed partial class HealthProbeListener : BackgroundService
     /// </remarks>
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Any, _options.HealthPort);
+        var listener = new TcpListener(IPAddress.Parse(_options.HealthAddress), _options.HealthPort);
         try
         {
             listener.Start();

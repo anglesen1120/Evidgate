@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cleanup.v1.json",
+  "title": "Adapter operation: cleanup v1",
+  "description": "00 §10 protocol operation 'cleanup' (04.7.1-T1.2). Direction: adapter → server — the adapter reports the run namespace it cleaned, the resources it removed and, separately, the ones it could not (source §4: 'idempotent resource cleanup; reports separately if cleanup fails'). A cleanup failure is reported in failed[] and/or as error.code, never as a silent success. At least one of `cleanup` and `error` is required, so a phase that produces nothing still reports why (contracts/adapter/README.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "operation"],
+  "anyOf": [
+    {
+      "required": ["cleanup"]
+    },
+    {
+      "required": ["error"]
+    }
+  ],
+  "properties": {
+    "protocol": {
+      "$ref": "#/$defs/protocol"
+    },
+    "operation": {
+      "const": "cleanup"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace"],
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "removed": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "failed": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    "error": {
+      "$ref": "#/$defs/operationError"
+    }
+  },
+  "$defs": {
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["major", "minor"],
+      "properties": {
+        "major": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "minor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "operationError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 02.2.1 / 02.1.2: permission catalogue, membership and authorization evaluator against
+       real migrations (Testcontainers.PostgreSQL). Not named Evidgate.* so the Architecture.Tests
+       reflection scan never picks it up. OutputType and the xUnit/Shouldly/NSubstitute set come
+       from tests/Directory.Build.props (01.6.1-T1.1). -->
+  <PropertyGroup>
+    <RootNamespace>Identity.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSQL" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Respawn" />
+    <!-- 02.2.1-T1.2: the catalogue route tests boot the real Api composition
+         (Program → ApiHost) in process, exactly as tests/Contract.Tests does, so the
+         served route, the C2 pipeline and the ResultEndpointFilter are the shipping
+         ones. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity.Contracts\Evidgate.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shared Testcontainers harness (01.6.1-T2), linked like Foundation.IntegrationTests. -->
+    <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\DatabaseFixture.cs" Link="Shared/DatabaseFixture.cs" />
+    <Compile Include="..\Shared\RespawnCheckpoint.cs" Link="Shared/RespawnCheckpoint.cs" />
+    <Compile Include="..\Shared\TenantTestScope.cs" Link="Shared/TenantTestScope.cs" />
+    <Compile Include="..\Shared\HarnessTest.cs" Link="Shared/HarnessTest.cs" />
+  </ItemGroup>
+</Project>

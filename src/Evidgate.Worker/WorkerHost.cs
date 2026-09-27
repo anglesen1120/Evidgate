@@ -1,9 +1,11 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence;
+using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Evidgate.BuildingBlocks.Persistence.Options;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Catalog;
+using Evidgate.Modules.Identity;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
 using Evidgate.Worker.Health;
@@ -32,6 +34,13 @@ public static class WorkerHost
     /// <summary>Exit code for a missing or invalid <c>EVIDGATE__*</c> value (NFR-01-2).</summary>
     public const int ConfigurationExitCode = 1;
 
+    /// <summary>
+    /// Exit code when the boot-time isolation self-check refuses the start
+    /// (02.6.1-T1.4 AC5). The Worker claims tenant tasks and opens tenant scopes, so
+    /// it is held to the same gate as the API.
+    /// </summary>
+    public const int IsolationSelfCheckExitCode = 3;
+
     /// <summary>Builds the host builder: options, persistence, telemetry, Mediator, modules, hosted services.</summary>
     public static HostApplicationBuilder CreateBuilder(string[] args)
     {
@@ -59,6 +68,8 @@ public static class WorkerHost
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
         builder.Services.AddOrchestratorModule();
+        // 02.2.1-T1.2: both entry points compose the same module set (00 §5.1 A1).
+        builder.Services.AddIdentityModule(builder.Configuration);
 
         // 01.5.1-T1.2/T1.4: the durable task queue — claim loops per queue and the
         // cron schedule runner. Both are registered in every worker; the unique fire
@@ -89,6 +100,14 @@ public static class WorkerHost
             ValidateOptions(host);
             await host.RunAsync();
             return 0;
+        }
+        catch (Exception exception) when (IsolationSelfCheckException.FindIn(exception) is { } refusal)
+        {
+            // 02.6.1-T1.4 (AC5): the same gate as the API. A worker that serves
+            // tenant tasks must not run on a database that stopped enforcing tenant
+            // isolation. One named line, no stack trace, non-zero exit.
+            await Console.Error.WriteLineAsync($"Isolation self-check failed: {refusal.Message}");
+            return IsolationSelfCheckExitCode;
         }
         catch (OptionsValidationException exception)
         {
@@ -137,6 +156,7 @@ public static class WorkerHost
     {
         _ = host.Services.GetRequiredService<IOptions<WorkerOptions>>().Value;
         _ = host.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+        _ = host.Services.GetRequiredService<IOptions<IsolationSelfCheckOptions>>().Value;
         _ = host.Services.GetRequiredService<IOptions<TelemetryOptions>>().Value;
         _ = host.Services.GetRequiredService<IOptions<TasksOptions>>().Value;
     }

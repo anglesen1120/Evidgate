@@ -84,7 +84,7 @@
 - Telemetry is redacted at the collector: `authorization`, cookie and `EVIDGATE_*` values are dropped; trace attributes never carry artifact content (06 owns artifact redaction).
 - Operator/support access to a tenant is scoped, time-boxed and audited (00 §2 `platform_operator`), and the access request is visible in telemetry.
 - Artifact access stays on short-lived presigned URLs (DECISIONS §4 ✅); expiry and 403 rates are monitored to catch leaked links.
-- Cross-border transfer and residency are plan 11's; this plan only guarantees that a provider change can be stated in the O3 memo before any customer data lands (O3, DECISIONS §7).
+- Cross-border transfer and residency are plan 11's; this plan only guarantees that a provider change can be stated in the O3 memo before any customer data lands (O3, DECISIONS §8).
 
 ## 7. Test strategy
 

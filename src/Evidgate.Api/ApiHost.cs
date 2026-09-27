@@ -4,11 +4,14 @@ using Evidgate.Api.Middleware;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Health;
+using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Evidgate.BuildingBlocks.Persistence.Options;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.Modules.Catalog;
+using Evidgate.Modules.Identity;
+using Evidgate.Modules.Identity.Endpoints;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
 using Mediator;
@@ -61,6 +64,10 @@ public static partial class ApiHost
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
         builder.Services.AddOrchestratorModule();
+        // 02.2.1-T1.2/T2.2: the permission-catalogue module — reads (00 §2, 02 §4.2),
+        // the flagged custom-role writes and the C2 permission evaluator, which
+        // replaces the pipeline's fail-closed default.
+        builder.Services.AddIdentityModule(builder.Configuration);
 
         // 00 §5.5 edge: snake_case JSON through the source-generated context;
         // reflection stays enabled as a fallback for framework types.
@@ -103,6 +110,12 @@ public static partial class ApiHost
         app.MapInternalEndpoints();
         app.MapSliceEndpoints();
         app.MapOperatorEndpoints();
+        // 02.2.1-T1.2 (00 §5.5 C8): the module maps its /v1 read routes and the host
+        // applies the envelope filter, so a Result becomes the 00 §9.2 body once.
+        app.MapIdentityEndpoints().AddEndpointFilter<ResultEndpointFilter>();
+        // 02.1.2-T1.2 (00 §5.5 C8): the membership routes of 02.1.2 and the same
+        // single Result → 00 §9.2 envelope filter.
+        app.MapMembershipEndpoints().AddEndpointFilter<ResultEndpointFilter>();
         app.MapOpenApi();
 
         return app;
@@ -118,6 +131,16 @@ public static partial class ApiHost
             LogBootConfiguration(app);
             await app.RunAsync();
             return 0;
+        }
+        catch (Exception exception) when (IsolationSelfCheckException.FindIn(exception) is { } refusal)
+        {
+            // 02.6.1-T1.4 (AC5): the boot-time self-check found a table that is not
+            // under database-enforced isolation, so the API must not serve tenant
+            // traffic. One named line (no connection string, no stack trace) and a
+            // non-zero exit; the diagnostic detail is in the Error log line the
+            // hosted service already wrote.
+            await Console.Error.WriteLineAsync($"Isolation self-check failed: {refusal.Message}");
+            return IsolationSelfCheckExitCode;
         }
         catch (OptionsValidationException exception)
         {
@@ -140,6 +163,13 @@ public static partial class ApiHost
     public const int ConfigurationExitCode = 1;
 
     /// <summary>
+    /// Exit code when the boot-time isolation self-check refuses the start
+    /// (02.6.1-T1.4 AC5): the process must never serve tenant traffic on a database
+    /// that stopped enforcing tenant isolation.
+    /// </summary>
+    public const int IsolationSelfCheckExitCode = 3;
+
+    /// <summary>
     /// Materialises every validated option group before the host starts. The same
     /// validation runs on start anyway (<c>ValidateOnStart</c>), but by then the
     /// failure escapes <c>RunAsync</c> and the host logs it as a critical "Hosting
@@ -149,6 +179,7 @@ public static partial class ApiHost
     private static void ValidateOptions(WebApplication app)
     {
         _ = app.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+        _ = app.Services.GetRequiredService<IOptions<IsolationSelfCheckOptions>>().Value;
         _ = app.Services.GetRequiredService<IOptions<TelemetryOptions>>().Value;
     }
 

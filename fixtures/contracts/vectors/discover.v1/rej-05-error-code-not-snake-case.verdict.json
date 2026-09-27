@@ -1,0 +1,12 @@
+{
+  "schema": "discover.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/error/code",
+      "reason": "pattern"
+    }
+  ],
+  "comment": "the error alternative is validated, not merely accepted: code is lower_snake"
+}

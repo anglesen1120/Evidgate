@@ -33,6 +33,7 @@ public sealed class WorkerStartupTests
                 {
                     ["DOTNET_ENVIRONMENT"] = "Production",
                     ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                    [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
                     ["EVIDGATE__WORKER__HEALTHPORT"] = port.ToString(CultureInfo.InvariantCulture),
                     ["EVIDGATE__WORKER__READINESSPOLLMILLISECONDS"] = "100",
                 });

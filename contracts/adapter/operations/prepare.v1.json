@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prepare.v1.json",
+  "title": "Adapter operation: prepare v1",
+  "description": "00 §10 protocol operation 'prepare' (04.7.1-T1.2). Direction: adapter → server — the adapter reports the sandbox/workspace it provisioned, the engine it will run and the secret references it resolved (source §4: 'sandbox, test data, engine; reports setup errors separately'). Secrets travel as references only, never as values (00 §5.7 S3). A failed phase reports `error` instead of the payload: at least one of `workspace` and `error` is required (contracts/adapter/README.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "operation"],
+  "anyOf": [
+    {
+      "required": ["workspace"]
+    },
+    {
+      "required": ["error"]
+    }
+  ],
+  "properties": {
+    "protocol": {
+      "$ref": "#/$defs/protocol"
+    },
+    "operation": {
+      "const": "prepare"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workspace_id"],
+      "properties": {
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "engine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["family", "version"],
+          "properties": {
+            "family": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        "secret_refs": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^secret:[A-Za-z0-9_.-]{1,64}$"
+          }
+        }
+      }
+    },
+    "error": {
+      "$ref": "#/$defs/operationError"
+    }
+  },
+  "$defs": {
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["major", "minor"],
+      "properties": {
+        "major": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "minor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "operationError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    }
+  }
+}

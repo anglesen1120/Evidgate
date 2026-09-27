@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -174,17 +175,39 @@ internal static class ProbeRows
             cancellationToken);
 }
 
-/// <summary>Grants any permission, and records what the authorization stage asked for.</summary>
-internal sealed class RecordingPermissionChecker(bool granted) : IPermissionChecker
+/// <summary>
+/// Grants (or denies) any permission, and records what the authorization stage
+/// asked for — the 02.2.1-T2 evaluator's seam, substituted the same way a host's
+/// real evaluator replaces the pipeline's fail-closed default.
+/// </summary>
+internal sealed class RecordingPermissionEvaluator(bool granted) : IPermissionEvaluator
 {
     private readonly List<(string Permission, Guid OrgId)> _checks = [];
 
     internal IReadOnlyList<(string Permission, Guid OrgId)> Checks => _checks;
 
     /// <inheritdoc />
-    public ValueTask<bool> IsGrantedAsync(string permission, IRequestTenantContext context, CancellationToken cancellationToken)
+    public ValueTask<PermissionDecision> EvaluateAsync(
+        string permission,
+        IRequestPrincipal principal,
+        IRequestTenantContext context,
+        CancellationToken cancellationToken)
     {
         _checks.Add((permission, context.OrgId));
-        return ValueTask.FromResult(granted);
+        return ValueTask.FromResult(granted
+            ? PermissionDecision.Granted
+            : PermissionDecision.Denied(ApiErrorCode.Forbidden));
     }
+}
+
+/// <summary>
+/// The caller of every flow of this host: 02.6.2-T1.1 resolves the credential and
+/// publishes the principal next to the tenant, and until it lands this stands in for
+/// it so the probe commands run as a member. A test that needs "no principal
+/// resolved" clears <see cref="Current"/>.
+/// </summary>
+internal sealed class ProbePrincipalAccessor : IRequestPrincipalAccessor
+{
+    /// <inheritdoc />
+    public IRequestPrincipal? Current { get; set; } = RequestPrincipal.Member(Guid.CreateVersion7());
 }

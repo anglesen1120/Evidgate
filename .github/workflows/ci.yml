@@ -95,7 +95,7 @@ jobs:
       # Contract drift gate (AC1/§9, 01.3.2-T1.3): regenerates packages/sdk and
       # fails on any diff — the spec is the only thing humans edit.
       - name: 'Contract drift gate'
-        run: ./scripts/verify.sh --stage check-codegen-drift
+        run: ./scripts/verify.sh --stage check-codegen-drift --stage check-permissions-drift
       # Web build (AC1): `apps/web` gains a build script in 09.1.1; until then
       # --if-present keeps this step a no-op instead of a failure.
       - name: 'Web build — activates with apps/web build script (09.1.1)'
@@ -109,6 +109,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # check-dor-security diffs against origin/develop (11.1.1-T2); a
+          # shallow clone has no base ref and the stage fails closed.
+          fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           # check-sources.sh calls `dotnet nuget list source`; no package work
@@ -122,7 +125,7 @@ jobs:
       # check-contract-conventions.sh runs `npx spectral lint` — devDeps required.
       - name: 'Install npm workspaces (locked)'
         run: npm ci --ignore-scripts
-      - name: 'Layout, sources, ADR, links, contracts, parity, pins — verify.sh stages'
+      - name: 'Layout, sources, ADR, links, contracts, env matrix, DoR, parity, pins, image pins — verify.sh stages'
         run: >-
           ./scripts/verify.sh
           --stage check-layout
@@ -131,8 +134,25 @@ jobs:
           --stage check-adr
           --stage check-links
           --stage check-contract-conventions
+          --stage check-env-matrix
+          --stage check-dor-security
           --stage check-ci-parity
           --stage check-action-pins
+          --stage image-pins
+
+  # 10.2.1-T1 (AC1, AC5): the three service images build for the runner's platform
+  # on the digest-pinned bases; the Migrator image brings a throwaway PostgreSQL to
+  # head and the Api image reports ready against it.
+  images:
+    name: 'verify (images)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 'Build and check the service images — verify.sh stage'
+        run: ./scripts/verify.sh --stage images
 
   # Non-blocking until the web milestone owns the suite (01.7.1-T1.3, 09):
   # apps/web has a Playwright spec, but the suite is still a scaffold.

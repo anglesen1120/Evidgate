@@ -1,0 +1,211 @@
+{
+  "//": [
+    "staging environment (10.1.1-T1.1). Account, region and replica counts are [OPEN]",
+    "in docs/runbooks/environments.md until 10.8.1 (O3) picks a provider; this file",
+    "declares the EVIDGATE_* surface staging answers for, its probe behaviour and its",
+    "ingress rule, and nothing provider-specific.",
+    "Required rows (matrix required.staging = true) must be declared here; the",
+    "secrets are injected from the provider secret store at deploy time (10.1.1-T2/T3)",
+    "and never live in this repository (00 §5.7 S3)."
+  ],
+  "environment": "staging",
+  "description": "Pre-production environment on its own provider account with its own database, bucket and credentials and sanitised data (FR-10-1): a deploy reaches it exactly as prod is reached, so a release is proven before the pilot. Load tests run here and never against prod (area plan §3). Provider, region and replica counts are [OPEN] pending 10.8.1 (O3).",
+  "config": {
+    "EVIDGATE__DATABASE__CONNECTIONSTRING": {
+      "origin": "secret-store",
+      "from": "provider secret store (10.1.1-T3), injected as an environment variable at deploy; Username=evidgate_app, staging's own host and database — no path or credential is shared with prod (AC4)"
+    },
+    "EVIDGATE__ISOLATION__SELFCHECK": {
+      "origin": "default",
+      "from": "not set: the option default Required applies; Disabled is only for hosts that boot without a database"
+    },
+    "EVIDGATE__TASKS__BACKOFFBASESECONDS": {
+      "origin": "default",
+      "from": "option default 5"
+    },
+    "EVIDGATE__TASKS__BACKOFFMAXSECONDS": {
+      "origin": "default",
+      "from": "option default 3600"
+    },
+    "EVIDGATE__TASKS__BATCHSIZE": {
+      "origin": "default",
+      "from": "option default 50"
+    },
+    "EVIDGATE__TASKS__DEFAULTQUEUECONCURRENCY": {
+      "origin": "default",
+      "from": "option default 1"
+    },
+    "EVIDGATE__TASKS__DISPATCHBATCHSIZE": {
+      "origin": "default",
+      "from": "option default 200"
+    },
+    "EVIDGATE__TASKS__DISPATCHDEFAULTQUEUE": {
+      "origin": "default",
+      "from": "option default \"default\""
+    },
+    "EVIDGATE__TASKS__DISPATCHPOLLMILLISECONDS": {
+      "origin": "default",
+      "from": "option default 1000"
+    },
+    "EVIDGATE__TASKS__POLLINTERVALMILLISECONDS": {
+      "origin": "default",
+      "from": "option default 1000"
+    },
+    "EVIDGATE__TASKS__QUEUEROUTES__<n>__QUEUE": {
+      "origin": "default",
+      "from": "empty route list until 10.2.2 routes a task type"
+    },
+    "EVIDGATE__TASKS__QUEUEROUTES__<n>__TASKTYPE": {
+      "origin": "default",
+      "from": "empty route list until 10.2.2 routes a task type"
+    },
+    "EVIDGATE__TASKS__QUEUES__<n>__CONCURRENCY": {
+      "origin": "default",
+      "from": "empty queue list; the schedule-declared queues are consumed at DefaultQueueConcurrency"
+    },
+    "EVIDGATE__TASKS__QUEUES__<n>__NAME": {
+      "origin": "default",
+      "from": "empty queue list; the schedule-declared queues are consumed at DefaultQueueConcurrency"
+    },
+    "EVIDGATE__TASKS__SCHEDULELOOKBACKSECONDS": {
+      "origin": "default",
+      "from": "option default 300"
+    },
+    "EVIDGATE__TASKS__SCHEDULEPOLLMILLISECONDS": {
+      "origin": "default",
+      "from": "option default 60000"
+    },
+    "EVIDGATE__TASKS__SWEEPCONNECTIONSTRING": {
+      "origin": "secret-store",
+      "from": "provider secret store; a staging-only evidgate_worker_sched credential — the sweep role is per environment, like every other credential"
+    },
+    "EVIDGATE__TASKS__VISIBILITYTIMEOUTSECONDS": {
+      "origin": "default",
+      "from": "option default 300"
+    },
+    "EVIDGATE__TELEMETRY__OTLPENDPOINT": {
+      "origin": "environment",
+      "from": "the staging collector endpoint injected at deploy (10.3.1-T2). Required because a staging release is what proves the telemetry path that prod will use (FR-10-5); the backend and endpoint themselves are [OPEN]"
+    },
+    "EVIDGATE__WORKER__HEALTHADDRESS": {
+      "origin": "default",
+      "from": "not set: the listener binds 0.0.0.0 inside the instance, which is what a container probe needs, and the edge/load balancer is what keeps /internal/* off the public ingress (00 §9.1). ⚠️ the container address and the edge rule are 10.2.1-T1's; a deployment states this explicitly if it needs another address"
+    },
+    "EVIDGATE__WORKER__HEALTHPORT": {
+      "origin": "default",
+      "from": "not set: the Worker's internal health listener uses 8081, which is what probes.worker.baseUrl below addresses"
+    },
+    "EVIDGATE__WORKER__READINESSPOLLMILLISECONDS": {
+      "origin": "default",
+      "from": "option default 1000"
+    },
+    "EVIDGATE_APP_PASSWORD": {
+      "origin": "default",
+      "from": "dev-stack only (scripts/dev/up.sh placeholder): staging holds the evidgate_app credential in the provider secret store, referenced by EVIDGATE__DATABASE__CONNECTIONSTRING"
+    },
+    "EVIDGATE_DB_PORT": {
+      "origin": "default",
+      "from": "dev-stack only (compose loopback port); staging reaches its database through the provider network, not a local port"
+    },
+    "EVIDGATE_DB_SUPERUSER_PASSWORD": {
+      "origin": "default",
+      "from": "dev-stack only; staging's bootstrap runs under the deploy identity (10.1.1-T3) and never uses a superuser password from this repository"
+    },
+    "EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS": {
+      "origin": "default",
+      "from": "option default 0 (no statement timeout)"
+    },
+    "EVIDGATE_MIGRATOR__CONNECTIONSTRING": {
+      "origin": "secret-store",
+      "from": "provider secret store: the staging evidgate_owner credential, used only by the migration job (10.2.2-T1) and never by Api or Worker (00 §5.4.3)"
+    },
+    "EVIDGATE_MIGRATOR__MIGRATIONSPATH": {
+      "origin": "default",
+      "from": "not set: ⚠️ what the Evidgate.Migrator image ships is settled in 10.2.1-T1; until then the process resolves <application directory>/migrations"
+    },
+    "EVIDGATE_OPERATOR_PASSWORD": {
+      "origin": "default",
+      "from": "dev-stack only; the staging evidgate_operator credential lives in the provider secret store (01.4.1-T2, 10.7.1 operator runbooks)"
+    },
+    "EVIDGATE_OWNER_PASSWORD": {
+      "origin": "default",
+      "from": "dev-stack only: staging holds the same role's password in the provider secret store, referenced by EVIDGATE_MIGRATOR__CONNECTIONSTRING"
+    },
+    "EVIDGATE_S3_ACCESS_KEY": {
+      "origin": "default",
+      "from": "dev-stack only (local SeaweedFS identity); the runtime object-storage options and their staging credentials arrive with 06.3.1 and 10.1.1-T3"
+    },
+    "EVIDGATE_S3_BUCKET": {
+      "origin": "default",
+      "from": "dev-stack only; the staging bucket is provisioned by 10.1.1-T3"
+    },
+    "EVIDGATE_S3_ENDPOINT": {
+      "origin": "default",
+      "from": "dev-stack only; the staging S3-compatible endpoint is [OPEN] until O3"
+    },
+    "EVIDGATE_S3_PORT": {
+      "origin": "default",
+      "from": "dev-stack only (compose loopback port)"
+    },
+    "EVIDGATE_S3_REGION": {
+      "origin": "default",
+      "from": "dev-stack only; the provider region is [OPEN] until O3"
+    },
+    "EVIDGATE_S3_SECRET_KEY": {
+      "origin": "default",
+      "from": "dev-stack only (local SeaweedFS identity); staging's key lives in the provider secret store"
+    },
+    "EVIDGATE_SEAWEEDFS_S3_CONFIG": {
+      "origin": "default",
+      "from": "dev-stack only: the committed local identity is accepted by the local container and by nothing else"
+    },
+    "EVIDGATE_WORKER_SCHED_PASSWORD": {
+      "origin": "default",
+      "from": "dev-stack only; staging holds the same role's password in the provider secret store, referenced by EVIDGATE__TASKS__SWEEPCONNECTIONSTRING"
+    }
+  },
+  "probes": {
+    "api": {
+      "baseUrl": "http://127.0.0.1:8080",
+      "baseUrlNote": "the probe runs on the instance (container/sidecar) next to the Api, so it addresses the loopback port; ⚠️ the image's listen port and the probe's execution location are settled in 10.2.1-T1",
+      "liveness": {
+        "path": "/internal/health/live",
+        "periodSeconds": 10,
+        "timeoutSeconds": 1,
+        "failureThreshold": 3
+      },
+      "readiness": {
+        "path": "/internal/health/ready",
+        "periodSeconds": 5,
+        "timeoutSeconds": 3,
+        "failureThreshold": 3,
+        "successThreshold": 1,
+        "startupGraceSeconds": 60
+      }
+    },
+    "worker": {
+      "baseUrl": "http://127.0.0.1:8081",
+      "baseUrlNote": "EVIDGATE__WORKER__HEALTHPORT default 8081, addressed from inside the instance",
+      "liveness": {
+        "path": "/internal/health/live",
+        "periodSeconds": 10,
+        "timeoutSeconds": 1,
+        "failureThreshold": 3
+      },
+      "readiness": {
+        "path": "/internal/health/ready",
+        "periodSeconds": 5,
+        "timeoutSeconds": 3,
+        "failureThreshold": 3,
+        "successThreshold": 1,
+        "startupGraceSeconds": 60
+      }
+    }
+  },
+  "ingress": {
+    "publicPaths": ["/v1/*"],
+    "operatorPaths": ["/internal/operator/*"],
+    "internalOnlyPaths": ["/internal/*", "/metrics"],
+    "note": "The load balancer forwards only /v1/* to Evidgate.Api; /internal/* and /metrics are reachable only on the internal path (the instance's private network), and /internal/operator/* additionally only on the operator ingress with an audited support grant (00 §9.1, TL T16). The rule is provider-neutral: it is implemented by the load-balancer/edge configuration of 10.2.1-T1 with the path lists above, and scripts/smoke-environment.sh --env staging asserts the internal paths answer while nothing exposes them publicly."
+  }
+}

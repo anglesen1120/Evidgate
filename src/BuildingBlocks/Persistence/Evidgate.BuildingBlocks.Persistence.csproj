@@ -18,6 +18,20 @@
     <!-- 01.5.1-T6: idempotency request_hash is the RFC 8785 canonical hash (01.3.2-T4). -->
     <ProjectReference Include="..\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      02.6.1-T1.4: contracts/rls-exceptions.txt is the single source of the RLS
+      exception list, read by the boot-time isolation self-check. It is embedded
+      rather than copied to the output directory: the verdict must not depend on the
+      process's working directory (container, `dotnet run`, test host) and a
+      published app must not be able to start with the list missing, stale or
+      hand-edited. The file on disk stays the one source; the embedded copy is the
+      same bytes at build time.
+    -->
+    <EmbeddedResource Include="..\..\..\contracts\rls-exceptions.txt"
+                      LogicalName="Evidgate.BuildingBlocks.Persistence.rls-exceptions.txt" />
+  </ItemGroup>
   <!--
     01.1.2-T1.3 (AC3): the readiness gate compares public.schema_migration's head
     with the head this build expects. The expected head is the lexically greatest

@@ -95,12 +95,14 @@ npm packages (direct dependencies/devDependencies, root + workspaces):
 | nuget-license | 4.0.18 | `nuget-license` | Apache-2.0 | https://api.nuget.org/v3-flatcontainer/nuget-license/4.0.18/nuget-license.nuspec — NuGet licence scanner chosen by 01.7.1-T2 (T40): reads project licences without linking |
 | CycloneDX | 6.2.0 | `dotnet-CycloneDX` | Apache-2.0 | https://api.nuget.org/v3-flatcontainer/cyclonedx/6.2.0/cyclonedx.nuspec — NuGet CycloneDX SBOM for CI artifacts (01.7.1-T4.2) |
 
-Container image pins (`tests/Shared/ContainerImages.cs`, `infra/compose.dev.yml`, `infra/README.md`; 01.6.1-T2.1 and 01.8.1 — multi-arch image-index digests):
+Container image pins (`tests/Shared/ContainerImages.cs`, `infra/compose.dev.yml`, `infra/docker/Dockerfile.*`, `infra/README.md`; 01.6.1-T2.1, 01.8.1 and 10.2.1-T1 — multi-arch image-index digests):
 
 | Image | Pin | Licence | Evidence |
 |---|---|---|---|
 | `postgres` | `18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722` | PostgreSQL licence | https://hub.docker.com/_/postgres — digest resolves to a multi-arch OCI index (amd64 + arm64); `docker manifest inspect` verified 2026-09-26 |
 | `chrislusf/seaweedfs` | `4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882` | Apache-2.0 | https://hub.docker.com/r/chrislusf/seaweedfs — same verification |
+| `mcr.microsoft.com/dotnet/sdk` | `10.0.100@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71` | MIT (.NET); Ubuntu content under the MCR OSS notice | https://github.com/dotnet/dotnet-docker/blob/main/LICENSE — builder stage only; tag = `global.json` `sdk.version`; index covers amd64/arm/arm64, `docker manifest inspect` verified 2026-09-27 |
+| `mcr.microsoft.com/dotnet/aspnet` | `10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02` | MIT (.NET); Ubuntu 24.04 chiseled content under the MCR OSS notice | https://github.com/dotnet/dotnet-docker/blob/main/README.md#license (aka.ms/mcr/osslegalnotice) — runtime base of the api/worker/migrator images, non-root UID 1654; same verification |
 
 Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project file references yet; rows here also count as registered:
 

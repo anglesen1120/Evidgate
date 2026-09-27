@@ -1,0 +1,12 @@
+{
+  "schema": "execute.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/events/0/event_id",
+      "reason": "required"
+    }
+  ],
+  "comment": "removing an envelope member changes this verdict without editing execute.v1.json — the cross-file $ref is live"
+}

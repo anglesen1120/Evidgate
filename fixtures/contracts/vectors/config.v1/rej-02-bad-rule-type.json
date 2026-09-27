@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "run_id": "00000000-0000-0000-0000-000000000090",
+  "kinds": {
+    "trace": {
+      "capture_enabled": true,
+      "redaction_rules": [
+        {
+          "rule_type": "body",
+          "name_pattern": "x"
+        }
+      ]
+    }
+  }
+}

@@ -41,7 +41,7 @@ public sealed class PipelineTests
     public async Task Query_Scope_Is_Read_Only_And_Tenant_Scoped_From_Its_First_Statement()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionChecker(granted: true));
+        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionEvaluator(granted: true));
 
         using var tenant = host.TenantContext.Publish(OrgA, ProjectA);
 
@@ -62,7 +62,7 @@ public sealed class PipelineTests
     public async Task Write_In_A_Query_Scope_Fails_At_The_Database()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionChecker(granted: true));
+        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionEvaluator(granted: true));
 
         using var tenant = host.TenantContext.Publish(OrgA, ProjectA);
         var id = Guid.CreateVersion7();
@@ -83,7 +83,7 @@ public sealed class PipelineTests
     public async Task Invalid_Command_Is_Rejected_Before_The_Transaction_Opens()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionChecker(granted: true));
+        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionEvaluator(granted: true));
 
         using var tenant = host.TenantContext.Publish(OrgA, ProjectA);
 
@@ -107,7 +107,7 @@ public sealed class PipelineTests
     public async Task Denied_Command_Rolls_Back_Without_Committing()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        var permissions = new RecordingPermissionChecker(granted: false);
+        var permissions = new RecordingPermissionEvaluator(granted: false);
         await using var host = PipelineTestHost.Start(_fixture, database, permissions);
 
         using var tenant = host.TenantContext.Publish(OrgA, ProjectA);
@@ -129,7 +129,7 @@ public sealed class PipelineTests
     public async Task Command_Commits_Its_Row_In_The_Tenant_Scope()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionChecker(granted: true));
+        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionEvaluator(granted: true));
 
         using var tenant = host.TenantContext.Publish(OrgA, ProjectA);
         var id = Guid.CreateVersion7();
@@ -148,7 +148,7 @@ public sealed class PipelineTests
     public async Task Failed_Result_Rolls_The_Command_Back()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionChecker(granted: true));
+        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionEvaluator(granted: true));
 
         using var tenant = host.TenantContext.Publish(OrgA, ProjectA);
         var id = Guid.CreateVersion7();
@@ -168,7 +168,7 @@ public sealed class PipelineTests
     public async Task Missing_Tenant_Context_Fails_Closed_Without_Opening_A_Transaction()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionChecker(granted: true));
+        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionEvaluator(granted: true));
 
         await Should.ThrowAsync<TenantContextMissingException>(
             async () => await host.Mediator.Send(new ProbeWriteCommand(Guid.CreateVersion7()), Token));
@@ -185,7 +185,7 @@ public sealed class PipelineTests
     public async Task Idempotent_Command_Replays_And_Conflicts()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionChecker(granted: true));
+        await using var host = PipelineTestHost.Start(_fixture, database, new RecordingPermissionEvaluator(granted: true));
 
         // Org-scoped: idempotency_record.project_id carries a composite FK to
         // identity.project, and this test creates no project row.
@@ -222,7 +222,7 @@ public sealed class PipelineTests
     public async Task Skeleton_Dto_Message_Bypasses_The_Tenant_Stages()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        var permissions = new RecordingPermissionChecker(granted: false);
+        var permissions = new RecordingPermissionEvaluator(granted: false);
         await using var host = PipelineTestHost.Start(_fixture, database, permissions);
 
         var id = Guid.CreateVersion7();
@@ -245,7 +245,7 @@ public sealed class PipelineTests
         await using var host = PipelineTestHost.Start(
             _fixture,
             database,
-            new RecordingPermissionChecker(granted: true),
+            new RecordingPermissionEvaluator(granted: true),
             services => services.AddSingleton<IValidator<ProbeWriteCommand>, ProbeWriteCommandValidator>());
 
         using var tenant = host.TenantContext.Publish(OrgA, ProjectA);

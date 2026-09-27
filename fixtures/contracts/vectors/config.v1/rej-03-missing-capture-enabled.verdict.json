@@ -1,0 +1,11 @@
+{
+  "schema": "config.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/kinds/trace/capture_enabled",
+      "reason": "required"
+    }
+  ]
+}

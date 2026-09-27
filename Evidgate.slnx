@@ -38,6 +38,7 @@
   <Project Path="tests/Contract.Tests/Contract.Tests.csproj" />
   <Project Path="tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj" />
   <Project Path="tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj" />
+  <Project Path="tests/Identity.IntegrationTests/Identity.IntegrationTests.csproj" />
   <Project Path="tests/Isolation.Tests/Isolation.Tests.csproj" />
   <Project Path="tests/Migrator.IntegrationTests/Migrator.IntegrationTests.csproj" />
   <Project Path="tests/ObjectStorage.IntegrationTests/ObjectStorage.IntegrationTests.csproj" />

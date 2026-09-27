@@ -14,11 +14,22 @@
 # restore can therefore never rewrite packages.lock.json behind the gate's back.
 # (Measured: a cold unlocked restore made this stage ~20 s; with -dpr it is ~2 s.)
 #
-# usage: scripts/sbom.sh [--out <dir>] [--spec-version <1.5|1.6|1.7>] [-h|--help]
+# 10.2.1-T1.3 (AC3) adds the per-image SBOMs below: one CycloneDX document per
+# deployable image (evidgate-api, evidgate-worker, evidgate-migrator) generated
+# from that image's entry-point project, plus the SBOM↔packages.lock.json
+# consistency check (scripts/check-image-sbom-lock.py) that fails when the two
+# disagree. The image adds nothing but the digest-pinned chiseled aspnet runtime,
+# so the NuGet graph of the published project is what a reviewer has to compare
+# with the lock files.
 #
-# Exit 0: both SBOMs written + schema-checked (bomFormat == 'CycloneDX', a
-#         specVersion, and at least one component — an empty BOM is a failure).
-# Exit 2: a generator failed or produced invalid/empty output.
+# usage: scripts/sbom.sh [--out <dir>] [--spec-version <1.5|1.6|1.7>]
+#                        [--image-version <version>] [-h|--help]
+#
+# Exit 0: every SBOM written + schema-checked (bomFormat == 'CycloneDX', a
+#         specVersion, and at least one component — an empty BOM is a failure),
+#         and every image SBOM consistent with the lock files.
+# Exit 2: a generator failed, produced invalid/empty output, or an image SBOM
+#         disagrees with packages.lock.json.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,15 +37,20 @@ cd "$ROOT"
 
 OUT_DIR="artifacts/sbom"
 SPEC="1.6"
+IMAGE_VERSION="dev"
 
 usage() {
   cat <<'EOF'
-usage: scripts/sbom.sh [--out <dir>] [--spec-version <1.5|1.6|1.7>] [-h|--help]
+usage: scripts/sbom.sh [--out <dir>] [--spec-version <1.5|1.6|1.7>]
+                       [--image-version <version>] [-h|--help]
 
 Generates CycloneDX JSON SBOMs: <out>/npm.cdx.json (cyclonedx-npm over the npm
-workspace lockfile tree) and <out>/dotnet.cdx.json (dotnet-CycloneDX over
-Evidgate.slnx, test projects excluded). Exit 2 when a generator fails or the
-output fails the CycloneDX shape check.
+workspace lockfile tree), <out>/dotnet.cdx.json (dotnet-CycloneDX over
+Evidgate.slnx, test projects excluded) and one <out>/images/evidgate-<name>.cdx.json
+per deployable image, each checked against the committed packages.lock.json by
+scripts/check-image-sbom-lock.py (10.2.1-T1.3, AC3). Exit 2 when a generator
+fails, the output fails the CycloneDX shape check, or an image SBOM disagrees
+with the lock files.
 EOF
 }
 
@@ -42,6 +58,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --out)           OUT_DIR="$2"; shift 2 ;;
     --spec-version)  SPEC="$2"; shift 2 ;;
+    --image-version) IMAGE_VERSION="$2"; shift 2 ;;
     -h|--help)       usage; exit 0 ;;
     *) echo "sbom: unknown argument '$1'" >&2; usage; exit 2 ;;
   esac
@@ -113,5 +130,36 @@ if ! dotnet dotnet-CycloneDX Evidgate.slnx -o "$OUT_DIR" -fn dotnet.cdx.json \
   exit 2
 fi
 check_bom "$DOTNET_BOM"
+
+# --- per-image SBOMs (10.2.1-T1.3, AC3) --------------------------------------
+# One CycloneDX document per deployable image, generated from that image's
+# entry-point project: the image adds nothing but the digest-pinned chiseled
+# aspnet runtime (pinned in infra/docker/Dockerfile.*), so the published project's
+# NuGet graph is what a reviewer compares with the lock files. `-st Container`
+# marks the metadata component as the image, `-rs` walks the ProjectReferences,
+# `-dpr` consumes the graph `dotnet restore --locked-mode` produced (header), and
+# `-ns` keeps the document deterministic.
+IMAGE_DIR="$OUT_DIR/images"
+mkdir -p "$IMAGE_DIR"
+while read -r name project; do
+  [[ -n "$name" ]] || continue
+  bom="$IMAGE_DIR/evidgate-$name.cdx.json"
+  echo "== sbom: $name image ($project)"
+  if ! dotnet dotnet-CycloneDX "$project" -o "$IMAGE_DIR" -fn "evidgate-$name.cdx.json" \
+      --output-format Json --spec-version "$SPEC" -ns -rs -dpr \
+      -st Container -sn "evidgate-$name" -sv "$IMAGE_VERSION"; then
+    echo "sbom: dotnet-CycloneDX failed for $project" >&2
+    exit 2
+  fi
+  check_bom "$bom"
+  if ! python3 "$ROOT/scripts/check-image-sbom-lock.py" --project "$project" --sbom "$bom"; then
+    echo "sbom: the SBOM for the $name image disagrees with the committed lock files (AC3)" >&2
+    exit 2
+  fi
+done <<'IMAGE_SBOMS'
+api src/Evidgate.Api/Evidgate.Api.csproj
+worker src/Evidgate.Worker/Evidgate.Worker.csproj
+migrator src/Evidgate.Migrator/Evidgate.Migrator.csproj
+IMAGE_SBOMS
 
 echo "sbom: artifacts in $OUT_DIR"

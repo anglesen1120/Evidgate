@@ -1,0 +1,12 @@
+{
+  "schema": "execute.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/events/0/extra",
+      "reason": "additional_properties"
+    }
+  ],
+  "comment": "the referenced envelope keeps additionalProperties:false"
+}

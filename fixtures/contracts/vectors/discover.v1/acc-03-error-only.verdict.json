@@ -1,0 +1,5 @@
+{
+  "schema": "discover.v1",
+  "valid": true,
+  "comment": "a failed phase reports error instead of the payload (contracts/adapter/README.md)"
+}

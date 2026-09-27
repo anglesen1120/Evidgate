@@ -1,0 +1,7 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "operation": "discover"
+}

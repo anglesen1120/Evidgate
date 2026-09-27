@@ -4,6 +4,14 @@ using Evidgate.Worker;
 // tests run the very same services (AC5).
 return await WorkerHost.RunAsync(args);
 
+/// <summary>
+/// The top-level entry point, declared so it stays internal: the ASP.NET Core
+/// shared framework (reached through module references) otherwise generates a
+/// public <c>Program</c> that collides with the Api's in a test assembly
+/// referencing both hosts (CS0433).
+/// </summary>
+internal partial class Program;
+
 namespace Evidgate.Worker
 {
     /// <summary>

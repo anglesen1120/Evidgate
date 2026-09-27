@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "config.v1.json",
+  "title": "Adapter run configuration document v1",
+  "description": "The adapter protocol v1 run-create configuration document (T97, 04.7.1-T1.2). It is assembled server-side at run create (05.2.1-T1 from 06.2.2's per-project capture flags, redaction patterns and per-kind size caps) and delivered to the adapter, which applies redaction and skips capture for a disabled kind before any byte leaves the CI runner. A capability document declaring capture_control: false may ignore this document; the run is then labelled capture_uncontrolled (04.7.1 AC7). Directions: server → adapter. Kinds are the closed 00 §7 artifact-kind list; redaction rule types are the 06.2.2 allowlist. The body is capped at 64 KiB (x-max-bytes) as a defensive transport bound — the 04.7.1 §8 16 KiB rule applies to the capability document, which the adapter sends.",
+  "x-max-bytes": 65536,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "kinds"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "kinds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The closed 00 §7 artifact-kind list; a kind outside it is an unknown member and is rejected here as well as by 06.1.2's kind lookup",
+      "properties": {
+        "trace": { "$ref": "#/$defs/kindPolicy" },
+        "video": { "$ref": "#/$defs/kindPolicy" },
+        "screenshot": { "$ref": "#/$defs/kindPolicy" },
+        "raw_report": { "$ref": "#/$defs/kindPolicy" },
+        "dom_snapshot": { "$ref": "#/$defs/kindPolicy" },
+        "a11y_snapshot": { "$ref": "#/$defs/kindPolicy" },
+        "patch": { "$ref": "#/$defs/kindPolicy" },
+        "ui_hierarchy": { "$ref": "#/$defs/kindPolicy" }
+      }
+    }
+  },
+  "$defs": {
+    "kindPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capture_enabled"],
+      "properties": {
+        "capture_enabled": {
+          "type": "boolean",
+          "description": "false = the adapter must not capture this kind at all (06.2.2 AC4); the server never receives pre-redaction bytes"
+        },
+        "max_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1099511627776,
+          "description": "Per-kind policy cap (06 artifact_kind_policy.max_bytes); 1 TiB is the schema's sanity bound, the real default is 06.1.2-T3.1's per-kind value"
+        },
+        "redaction_rules": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/redactionRule"
+          }
+        }
+      }
+    },
+    "redactionRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule_type", "name_pattern"],
+      "properties": {
+        "rule_type": {
+          "type": "string",
+          "enum": ["header", "cookie", "form_field", "query_param"],
+          "description": "06.2.2 allowlist — a rule type outside it is rejected at write time (422 redaction_rule_type_unknown)"
+        },
+        "name_pattern": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    }
+  }
+}

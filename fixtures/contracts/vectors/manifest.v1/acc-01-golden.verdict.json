@@ -1,0 +1,5 @@
+{
+  "schema": "manifest.v1",
+  "valid": true,
+  "comment": "05.1.1-T1.1/T1.2 golden accept: 2 cases × 2 variants × 1 env, partitioned over 2 shards"
+}

@@ -1,0 +1,92 @@
+{
+  "schema_version": 2,
+  "suite_revision_id": "00000000-0000-0000-0000-000000000020",
+  "environment_revision_id": "00000000-0000-0000-0000-000000000021",
+  "planned_executions": [
+    {
+      "case_revision_id": "00000000-0000-0000-0000-000000000010",
+      "variant": {
+        "params": {
+          "browser": "chromium",
+          "locale": "en-US"
+        }
+      },
+      "target_env": "staging"
+    },
+    {
+      "case_revision_id": "00000000-0000-0000-0000-000000000010",
+      "variant": {
+        "params": {
+          "browser": "firefox",
+          "locale": "en-US"
+        }
+      },
+      "target_env": "staging"
+    },
+    {
+      "case_revision_id": "00000000-0000-0000-0000-000000000011",
+      "variant": {
+        "params": {
+          "browser": "chromium",
+          "locale": "en-US"
+        }
+      },
+      "target_env": "staging",
+      "required": false
+    },
+    {
+      "case_revision_id": "00000000-0000-0000-0000-000000000011",
+      "variant": {
+        "params": {
+          "browser": "firefox",
+          "locale": "en-US"
+        }
+      },
+      "target_env": "staging"
+    }
+  ],
+  "matrix": {
+    "case_revision_ids": [
+      "00000000-0000-0000-0000-000000000010",
+      "00000000-0000-0000-0000-000000000011"
+    ],
+    "variants": [
+      {
+        "params": {
+          "browser": "chromium",
+          "locale": "en-US"
+        }
+      },
+      {
+        "params": {
+          "browser": "firefox",
+          "locale": "en-US"
+        }
+      }
+    ],
+    "target_envs": ["staging"]
+  },
+  "shard_plan": {
+    "shards": [
+      {
+        "shard_id": "shard-1",
+        "from_index": 0,
+        "to_index": 2,
+        "producer_hint": "playwright"
+      },
+      {
+        "shard_id": "shard-2",
+        "from_index": 2,
+        "to_index": 4
+      }
+    ]
+  },
+  "env_needs": {
+    "target_envs": [
+      {
+        "target_env": "staging",
+        "secret_refs": ["secret:STAGING_BASE_URL"]
+      }
+    ]
+  }
+}

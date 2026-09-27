@@ -50,19 +50,10 @@ public sealed class TaskHostPipelineTests
             payload: $$"""{"older_than_days":{{EvidgateSweeps.TerminalRetentionDays}}}""",
             idempotencyKey: "host-sweep");
 
-        var port = FreePort();
-        var host = WorkerHost.CreateBuilder(
-        [
-            $"--EVIDGATE:Database:ConnectionString={_fixture.AppConnectionString(database)}",
-            $"--EVIDGATE:Worker:HealthPort={port}",
-            "--EVIDGATE:Worker:ReadinessPollMilliseconds=100",
-            "--EVIDGATE:Tasks:PollIntervalMilliseconds=50",
-        ]).Build();
+        var host = await StartWorkerAsync(database);
 
         using (host)
         {
-            await host.StartAsync(Token);
-
             var drained = await WaitUntilAsync(
                 async () => await TaskSql.ScalarAsync<string>(
                     owner,
@@ -77,6 +68,37 @@ public sealed class TaskHostPipelineTests
                 owner,
                 "select count(*) from public.task where idempotency_key = 'host-old-terminal'"))
                 .ShouldBe(0, "the handler ran: the retention sweep deleted the old terminal row");
+        }
+    }
+
+    /// <summary>
+    /// Starts the Worker on a free loopback health port. The port is probed, released
+    /// and then bound by the host, so a parallel test assembly can take it in between;
+    /// a bind collision retries on a fresh port instead of failing the suite.
+    /// </summary>
+    private async Task<IHost> StartWorkerAsync(string database)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var host = WorkerHost.CreateBuilder(
+            [
+                $"--EVIDGATE:Database:ConnectionString={_fixture.AppConnectionString(database)}",
+                "--EVIDGATE:Worker:HealthAddress=127.0.0.1",
+                $"--EVIDGATE:Worker:HealthPort={FreePort()}",
+                "--EVIDGATE:Worker:ReadinessPollMilliseconds=100",
+                "--EVIDGATE:Tasks:PollIntervalMilliseconds=50",
+            ]).Build();
+
+            try
+            {
+                await host.StartAsync(Token);
+                return host;
+            }
+            catch (Exception exception) when (attempt < 3
+                && exception.InnerException is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse })
+            {
+                host.Dispose();
+            }
         }
     }
 
