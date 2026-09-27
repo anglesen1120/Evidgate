@@ -9,8 +9,8 @@ Updated 2026-09-27. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | Branch flow | `feature/*` or `docs/*` → PR into `develop` → owner merges. `main` = planning baseline |
 | `develop` head | `6dce731` (PR #11 merged) |
 | Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 · #11 M1 wave 6 |
-| Open PRs | none |
-| Active branch | `feature/m1-wave7` (off `develop` `6dce731`); wave 7 delivered, gates green, PR pending — see §3.7 |
+| Open PRs | #12 M1 wave 7 (CI green, run 36297866088) |
+| Active branch | `feature/m1-wave7` (off `develop` `6dce731`); wave 7 delivered, gates green, open as PR #12 — see §3.7 |
 | M0/M1 tasks | 56 done · 78 open (of 134; 10.2.1-T1 counted open until T1.4) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | `.github/workflows/ci.yml` runs every `verify.sh` stage (01.7.1-T1); interim `docker-tests.yml` deleted in wave 5 |
@@ -34,7 +34,7 @@ Updated 2026-09-27. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 01.4.2, 01.5.1, 01.6.1 | 01.4.2-T2/T3, 01.5.1-T1/T2/T6, 01.6.1-T2/T5 | #9 | `outbox`/`idempotency_record`/`task` (migrations 0006–0008), claim/consumer/schedule mechanism, schema/EF conventions + UUIDv7 generator, Testcontainers harness, Playwright workspace — see §3 |
 | 01.4.2, 01.5.1, 01.7.1 | 01.4.2-T4, 01.5.1-T3/T4/T5, 01.7.1-T1 | #10 | C2 Mediator pipeline + Result→§9.2 filter, outbox dispatcher (migration 0009), retry/dead-letter + `/internal/operator` routes, AC1–AC7 suites, real `ci.yml` — see §3.5 |
 | 01.3.2, 01.6.1, 01.7.1 | 01.3.2-T1/T2/T3, 01.6.1-T3/T4, 01.7.1-T2/T3.2/T4 | #11 | Generated TS SDK + drift gate, Corvus/Ajv dual-runtime validators + parity corpus + endpoint filter, contract tests + served-doc diff, `fixtures/` + loaders, tenant-isolation suite, licence/audit/SBOM/dependabot gates — see §3.6 |
-| 02.1.2, 02.2.1, 02.6.1, 02.9.1, 04.7.1, 05.1.1, 10.1.1, 10.2.1, 10.8.1, 11.1.1 | 02.1.2-T1, 02.2.1-T1/T2, 02.6.1-T1, 02.9.1-T2, 04.7.1-T1, 05.1.1-T1, 10.1.1-T1, 10.2.1-T1.1–T1.3, 10.8.1-T1, 11.1.1-T2 | pending | Permission catalogue + evaluator, membership API, RLS assertions + boot self-check, composite FK suite, adapter/manifest schemas, environment matrix, container images + SBOM, provider memo, DoR checklist — see §3.7 |
+| 02.1.2, 02.2.1, 02.6.1, 02.9.1, 04.7.1, 05.1.1, 10.1.1, 10.2.1, 10.8.1, 11.1.1 | 02.1.2-T1, 02.2.1-T1/T2, 02.6.1-T1, 02.9.1-T2, 04.7.1-T1, 05.1.1-T1, 10.1.1-T1, 10.2.1-T1.1–T1.3, 10.8.1-T1, 11.1.1-T2 | #12 | Permission catalogue + evaluator, membership API, RLS assertions + boot self-check, composite FK suite, adapter/manifest schemas, environment matrix, container images + SBOM, provider memo, DoR checklist — see §3.7 |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -107,7 +107,7 @@ Outcome (2026-09-27): all `verify.sh` stages green (`/tmp/verify-w7-final3.log`)
 
 Outcome (2026-09-27): all 21 `verify.sh` stages green (`/tmp/w6-verify3.log`) — 9 .NET test assemblies incl. Contract.Tests (60), Foundation.IntegrationTests (34), Isolation.Tests (13); vitest 119 tests across workspaces; licence-scan 693 packages (0 deny, 2 MPL warns covered by ADR-0002); audit-deps 0 findings; SBOMs npm 598 + nuget 133 components. QA found and the wave fixed: TS loader duplicate-key hole, drift-gate precondition wording, `licence-report.json` missing `--report`, unwritten filter tests. Reviews found and the wave fixed: O(n²) error dedup + 100-row `truncated` marker (both runtimes, CWE-770), self-leaf composite keywords (`not`/`contains`/`propertyNames`/…) no longer dropped to `IsValid=true`, `Flag`-before-`Detailed` accept path (13.8 MB→48 B per 1 MiB body), schema dir resolved by upward search not content root, `JsonSchema` compiled with `allowFileSystemAndHttpResolution:false` end to end, `sbom.sh -dpr` (19 s→0.9 s, no unlocked lockfile rewrite) + vacuous-BOM refusal, licence/audit empty-inventory fail-closed + ADR-id format+existence on exception keys, `.config/dotnet-tools.json` now an ADR-matrix source, flow-style/quoted `uses:`/`run:` keys rejected in the pin and parity gates, `persist-credentials:false` + `npm ci --ignore-scripts` everywhere in ci.yml. Recorded deviations: `packages/sdk/gen` compiles strict minus `exactOptionalPropertyTypes` (generator-side TS2379, noted in the 01.3.2 plan §11); TS fixture loader uses a raw-text scanner for duplicate-key parity.
 
-## 3.7. Wave 7 (delivered on `feature/m1-wave7`; PR pending)
+## 3.7. Wave 7 (delivered on `feature/m1-wave7`; open PR #12)
 
 Scope (STATUS §5 ready + `plan_graph.py` deps verified): **02.2.1-T1** permission catalogue (M); **02.6.1-T1** RLS role/helper/policy assertions + boot self-check + `contracts/rls-exceptions.txt` (L; roles, helpers and the org/project policies already landed in 01.4.1/02.1.1); **04.7.1-T1** adapter protocol schemas + corpus (M); **05.1.1-T1** manifest schema + corpus (L); **10.1.1-T1** environment model + config matrix (M); **10.2.1-T1.1–T1.3** container images + SBOM (T1.4 web bundle/CDN needs 09.1.1 and object-storage publishing — carried); **10.8.1-T1** provider criteria memo (S); **11.1.1-T2** DoR security checklist (S); **02.9.1-T2** composite FK suite (M); then **02.1.2-T1** membership (M) and **02.2.1-T2** authorization evaluator (M). Not in this wave: 03.1.1-T1 (T1.4 needs 02.2.1-T2 — next wave), 04.1.2-T4 (FK to 04.1.x `producer_slot` parent not in graph), 02.4.1-T2, 11.2.1-T1, 11.8.1-T1/T2, 12.x.
 
