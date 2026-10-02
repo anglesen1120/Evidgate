@@ -218,6 +218,17 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 |---|---|---|---|---|---|
 | 08.5.4-T1 | Healer run in the sandbox + output mapping + `skip`/`fixme` rejection | M | V2 | M4 | 08.4.3-T2, 08.4.1-T2 |
 | 08.5.4-T2 | Agent-definition regeneration on Playwright bumps + compatibility gate | M | V2 | M4 | 08.5.4-T1 |
+
+#### Story 08.5.5 AI credits and spend control — acceptance: a tenant can call the model only while it has credit and has opted in; every call consumes credit exactly once under an idempotent key; the provider key is held only by Evidgate and never reaches a tenant, log or artifact; a per-tenant cap, a global daily cap and the kill switch each stop model calls within one request. [CR from owner decision O4, 2026-10-02]
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 08.5.5-T1 | `ai_credit_account` (org_id, balance, period cap) + append-only `ai_credit_entry` (grant, consume, refund, expire) with RLS, composite FKs and audit; each entry also writes a usage-ledger row, metric `ai_credit` (12.3.1) | M | V2 | M4 | 08.5.1-T1, 12.3.1-T1 |
+| 08.5.5-T2 | Gateway consumption path: reserve → provider call → settle, billing key `ai:<call_id>`; insufficient credit returns `ai_credit_exhausted` with no provider call; failed calls are refunded once | M | V2 | M4 | 08.5.5-T1 |
+| 08.5.5-T3 | Provider key custody and spend control: Evidgate-held key in the secret store (10.1.1-T2) with rotation (10.7.1-T4), global daily cap + per-tenant cap, alert at 80 %, kill switch (08.6.3-T1) halts all model calls | M | V2 | M4 | 08.5.5-T2, 08.6.3-T1, 10.7.1-T4 |
+| 08.5.5-T4 | Provider evaluation harness on the locator-break corpus (accuracy, cost per accepted candidate, refusal, latency) + decision memo covering the no-retention term and region | L | V2 | M4 | 08.5.1-T1, 08.8.1-T1 |
+| 08.5.5-T5 | Credit administration: operator grant/adjust (two-person above a threshold, audited) and tenant read of balance and usage | S | V2 | M4 | 08.5.5-T1 |
+
+**Story 08.5.5 total: 5.5**
 ### Epic 08.6 Apply: PR, approval, canary, revoke, kill switches (V2, M4)
 #### Story 08.6.1 Validation PR and approval binding — acceptance: the PR carries the diff, original failure, context hash, validation results, assertion hash and expiry; approval binds `candidate_hash` + base commit via `If-Match`; sensitive cases are proposal-only and the approver must differ from the candidate's requester/editor and from the member whose human label set `test_drift` (T35); approval never grants Git merge unless the integration is explicitly permitted.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -304,14 +315,14 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 | 08.2 Retrieval, ranker and triage labels | 6 | - | - | 6 |
 | 08.3 Candidate generation, bounded loop and shadow | 9.5 | - | - | 9.5 |
 | 08.4 Validation: AST, semantics, negative control, sandbox | 15.5 | - | - | 15.5 |
-| 08.5 LLM gateway, privacy and healer generator | - | 14 | - | 14 |
+| 08.5 LLM gateway, privacy and healer generator | - | 19.5 | - | 19.5 |
 | 08.6 Apply: PR, approval, canary, revoke, kill switches | 1 | 11 | - | 12 |
 | 08.7 Knowledge, feedback and lineage | - | 5.25 | - | 5.25 |
 | 08.8 Evaluation, metrics and phase gates | - | 7.5 | 1 | 8.5 |
 | 08.9 V3 narrow reuse and mobile healing | - | - | 5 | 5 |
-| **Total** | **41** | **37.75** | **6** | **84.75** |
+| **Total** | **41** | **43.25** | **6** | **90.25** |
 
-→ with 20 % buffer **101.7** person-days (V1 49.2 · V2 45.3 · V3 7.2).
+→ with 20 % buffer **108.3** person-days (V1 49.2 · V2 51.9 · V3 7.2).
 
 ## 13. Contract change requests
 
