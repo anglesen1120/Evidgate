@@ -222,7 +222,16 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 
 **Story 02.4.3 total: 2.0**
 
-**Epic 02.4 total: 8.0**
+#### Story 02.4.4 API tokens for automation — acceptance: a project admin creates an expiring, scope-limited API token that works for read/automation calls, cannot exceed its creator's permissions or hold admin permissions, and is shown once.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 02.4.4-T1 | `api_token` table (project scope, permission subset, mandatory expiry, HMAC + `pepper_version` like 02.4.2-T1, show-once, revoke, `last_used_at`) and create/list/revoke API | M | V1 | M3 | 02.4.2-T1, 02.2.1-T2, 02.7.1-T2 |
+| 02.4.4-T2 | Bearer authentication for `evg_` tokens through the permission evaluator; refuses member/role/support/billing-admin permissions and any permission the creator lacks | M | V1 | M3 | 02.4.4-T1 |
+| 02.4.4-T3 | Tests: self-escalation, expired, revoked, wrong project, rotated pepper, audit rows on create/use-denied/revoke | S | V1 | M3 | 02.4.4-T2 |
+
+**Story 02.4.4 total: 2.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
+
+**Epic 02.4 total: 10.5**
 
 ### Epic 02.5 Agent service identity (V2)
 #### Story 02.5.1 Agent identity per tenant and pool — acceptance: an `evidgate-agent` enrols into one pool of one tenant, can claim only that pool's jobs, cannot approve, change policy or read another project; its credential can be rotated or revoked and the revocation takes effect on the next request.
@@ -278,7 +287,15 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | 02.10.1-T3 | Bounce/complaint webhook, suppression list, per-org opt-out for non-transactional mail | M | V1 | M3 | 02.10.1-T2 |
 | 02.10.1-T4 | Wire consumers: invite (02.1.2-T2), support grant (02.8.1-T1), quota 80 % warning (12.3.1-T4); candidate expiry (08.6.1-T3) is wired in V2 | M | V1 | M3 | 02.10.1-T2, 02.1.2-T2, 02.8.1-T1, 12.3.1-T4 |
 
-**Epic 02.10 total: 4.5**
+#### Story 02.10.2 Chat notifications (Slack, Teams) — acceptance: an org admin routes selected events to a chat incoming webhook without storing the URL as plain text.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 02.10.2-T1 | Incoming-webhook channel per org: URL kept as a secret reference, https-only and private-address guard, per-event opt-in | M | V2 | M4 | 02.10.1-T2, 11.3.1-T1 |
+| 02.10.2-T2 | Message templates for blocked release, quota 80 %, candidate expiry; no test content or secrets in the message | S | V2 | M4 | 02.10.2-T1, 02.10.1-T4 |
+
+**Story 02.10.2 total: 1.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
+
+**Epic 02.10 total: 6**
 ## 10. Dependencies
 
 - **01** (`01.4.1-T1` `Evidgate.Migrator`/DbUp runner, `01.4.2-T1` `ITenantScope`/`set_config` infrastructure, `01.3.1-T1` contracts pipeline, `01.1.2-T1` api/worker boot): SQL migration runner, `contracts/` generation, local PostgreSQL.
@@ -302,16 +319,16 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | 02.1 Tenant core | 5.0 | 0 | 0 | 5.0 |
 | 02.2 Roles and permissions as data | 3.0 | 0 | 0 | 3.0 |
 | 02.3 Human login (OIDC / OAuth2) | 4.5 | 0 | 3.0 | 7.5 |
-| 02.4 CI authentication | 8.0 | 0 | 0 | 8.0 |
+| 02.4 CI authentication | 10.5 | 0 | 0 | 10.5 |
 | 02.5 Agent service identity | 0 | 2.0 | 0 | 2.0 |
 | 02.6 Tenant isolation (RLS) | 4.0 | 0 | 0 | 4.0 |
 | 02.7 Audit core | 2.5 | 0 | 0 | 2.5 |
 | 02.8 Support access | 2.0 | 0 | 0 | 2.0 |
 | 02.9 Cross-tenant isolation suite | 3.0 | 0 | 0 | 3.0 |
-| 02.10 Transactional notifications | 4.5 | 0 | 0 | 4.5 |
-| **Total** | **36.5** | **2.0** | **3.0** | **41.5** |
+| 02.10 Transactional notifications | 4.5 | 1.5 | 0 | 6.0 |
+| **Total** | **39.0** | **3.5** | **3.0** | **45.5** |
 
-→ with 20 % buffer **49.8** person-days
+→ with 20 % buffer **54.6** person-days
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: CR-1 → 00 §5.4.1; CR-2 → 00 §8.9; CR-3 → 00 §9.3; CR-4 → 00 §2; CR-5 confirmed (ids resolve).

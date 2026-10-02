@@ -236,27 +236,29 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | M2 | 16 | [03.3.1 + 04.8.1 + 06.4.4 + 06.5.2 + 10.4.1 + 10.7.1 + 11.3.1 + 12.3.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 30 |
 | M2 | 17 | 02.10.1, 05.10.1, 09.3.1, 10.6.1, 10.7.2, 10.9.1, 10.10.1, 11.5.2 | 33 |
 | M2 | 18 | 07.6.2, 07.7.2, 09.2.1, 11.7.1 | 19 |
-| M2 | 19 | 09.7.1 | 10 |
+| M2 | 20 | 09.7.1 | 10 |
 | M3 | 5 | 10.5.2 | 2.5 |
 | M3 | 6 | 09.8.1 | 6 |
+| M3 | 7 | 02.4.4 | 2.5 |
 | M3 | 13 | 03.9.1, 08.1.1 | 5 |
 | M3 | 14 | 03.9.2, 07.5.3, 07.6.1, 08.1.2, 08.2.2 | 15.5 |
 | M3 | 15 | 04.9.2, 08.2.1 | 5.5 |
 | M3 | 16 | [04.9.1 + 08.3.1 + 08.3.2 + 08.4.3 + 08.6.3 + 11.9.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 22.5 |
 | M3 | 17 | 08.4.1 | 7 |
 | M3 | 18 | 08.4.2, 09.4.1, 11.9.2, 12.4.1 | 19 |
-| M3 | 19 | 08.8.1, 09.5.1 | 8 |
+| M3 | 19 | 07.6.3, 07.8.1, 08.2.3, 08.8.1, 09.5.1 | 16 |
 | M3 | 20 | 12.5.1 | 4.5 |
-| M3 | 21 | 08.3.3 | 3.5 |
+| M3 | 21 | 08.3.3, 09.7.2 | 5.5 |
 | M4 | 4 | 05.7.1 | 2 |
 | M4 | 5 | 05.7.2 | 3 |
 | M4 | 9 | 05.7.3 | 5 |
 | M4 | 10 | 05.8.1 | 3 |
 | M4 | 11 | 04.5.1 | 5 |
+| M4 | 14 | 09.9.1 | 2.5 |
 | M4 | 15 | 07.5.4 | 0.5 |
 | M4 | 16 | [02.5.1 + 03.4.2 + 03.6.1 + 05.7.4 + 08.5.1 + 08.6.1 + 08.6.2 + 08.7.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 29.25 |
 | M4 | 17 | 05.7.5, 05.7.6, 06.3.5, 08.5.2, 08.5.3, 08.7.2 | 13.5 |
-| M4 | 18 | 08.5.4, 09.5.2, 11.4.1 | 12.5 |
+| M4 | 18 | 02.10.2, 08.5.4, 09.5.2, 11.4.1 | 14 |
 | M4 | 19 | 03.7.1 | 3.5 |
 | M4 | 20 | 03.8.1, 08.5.5, 08.8.2, 09.6.1 | 19.5 |
 | M4 | 21 | 08.8.3 | 1.5 |
@@ -273,8 +275,8 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | M0 | 10.5 | 4.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.3.1-T1 |
 | M1 | 147.5 | 26 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.3-T1 → 05.3.3-T2 → 04.1.1-T1 → 04.1.1-T2 → 04.2.3-T1 |
 | M2 | 175.25 | 29 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 06.1.2-T1 → 06.1.2-T2 → 06.5.1-T1 → 06.5.1-T2 → 05.3.2-T2 → 05.3.2-T3 → 07.5.1-T1 → 07.5.1-T2 → 06.5.1-T3 → 04.4.2-T1 |
-| M3 | 147.5 | 40.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.4.1-T1 → 08.4.2-T1 → 08.4.2-T2 |
-| M4 | 117.25 | 51.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 |
+| M3 | 160.5 | 40.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.4.1-T1 → 08.4.2-T1 → 09.5.1-T2 |
+| M4 | 120.75 | 51.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 |
 | M5 | 13.25 | 57.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 → 08.8.3-T2 → 08.9.1-T1 → 08.9.1-T2 → 08.9.2-T1 → 08.9.2-T2 |
 
 Reading [INFERENCE] (arithmetic over the graph): the longest dependency chain to the end of M3 is ≈ 40.5 raw days while M0–M3 hold ≈ 433 raw days of work, so the schedule is **capacity-bound, not dependency-bound**: adding engineers shortens the calendar almost linearly up to roughly 8–10 parallel lanes. The chain runs through tenancy (01.4.1 → 02.1.1) → catalog (03.1–03.2) → manifest/run (05.1–05.2) → ingest/attempts bundle → evidence freeze → healing (08.1–08.4): these tasks get the most senior owner and are never blocked on review.
@@ -372,22 +374,24 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [01.8.1](01-foundation/01.8.1-one-command-local-stack.md) | One-command local stack | M1 | 1 | — | 2.5 | — | — |
 | [01.9.1](01-foundation/01.9.1-decision-records.md) | Decision records | M0 | 1 | — | 2 | — | — |
 | [01.10.1](01-foundation/01.10.1-evidgate-gates-evidgate.md) | Evidgate gates Evidgate | M2 | 5 | — | 3.5 | 01.7.1 | — |
-| [02.1.1](02-identity-tenancy/02.1.1-org-and-project-registry.md) | Org and project registry | M1 | 3 | yes | 2.5 | 01.4.1, 02.2.1 | 02.1.2, 02.2.1, 02.4.1, 02.4.3, 02.6.1, 02.9.1, 03.1.1, 03.4.1, 09.7.1, 11.1.1, 12.3.1 |
+| [02.1.1](02-identity-tenancy/02.1.1-org-and-project-registry.md) | Org and project registry | M1 | 3 | yes | 2.5 | 01.4.1, 02.2.1 | 02.1.2, 02.2.1, 02.4.1, 02.4.3, 02.6.1, 02.9.1, 03.1.1, 03.4.1, 07.8.1, 09.7.1, 11.1.1, 12.3.1 |
 | [02.1.2](02-identity-tenancy/02.1.2-membership-and-invites.md) | Membership and invites | M1 | 4 | yes | 2.5 | 02.1.1, 02.3.1, 02.3.2 | 02.3.1, 02.3.3, 02.8.1, 02.10.1, 09.7.1 |
-| [02.2.1](02-identity-tenancy/02.2.1-permission-catalogue-and-enforcement.md) | Permission catalogue and enforcement | M1 | 3 | yes | 3 | 02.1.1 | 02.1.1, 02.4.1, 02.5.1, 02.7.1, 02.9.1, 03.7.1, 06.2.1, 06.4.1, 07.3.1, 07.5.2, 09.7.1 |
+| [02.2.1](02-identity-tenancy/02.2.1-permission-catalogue-and-enforcement.md) | Permission catalogue and enforcement | M1 | 3 | yes | 3 | 02.1.1 | 02.1.1, 02.4.1, 02.4.4, 02.5.1, 02.7.1, 02.9.1, 03.7.1, 06.2.1, 06.4.1, 07.3.1, 07.5.2, 07.6.3, 09.7.1 |
 | [02.3.1](02-identity-tenancy/02.3.1-federated-login.md) | Federated login | M1 | 4 | yes | 3 | 01.1.2, 02.1.2 | 02.1.2, 02.3.2, 09.1.1 |
 | [02.3.2](02-identity-tenancy/02.3.2-sessions-and-revocation.md) | Sessions and revocation | M1 | 4 | yes | 1.5 | 02.3.1 | 02.1.2, 02.3.3 |
 | [02.3.3](02-identity-tenancy/02.3.3-enterprise-saml.md) | Enterprise SAML | M5 | 5 | — | 3 | 02.1.2, 02.3.2 | — |
 | [02.4.1](02-identity-tenancy/02.4.1-github-oidc-exchange.md) | GitHub OIDC exchange | M1 | 5 | — | 5 | 02.1.1, 02.2.1, 02.6.1 | 02.4.2, 02.4.3, 02.5.1, 04.2.1, 05.2.2, 07.6.1, 09.2.1, 11.2.1 |
-| [02.4.2](02-identity-tenancy/02.4.2-non-github-ci-ingest-tokens.md) | Non-GitHub CI ingest tokens | M2 | 6 | — | 1 | 02.4.1 | 04.2.1, 09.2.1, 09.7.1, 11.2.1, 11.3.1 |
+| [02.4.2](02-identity-tenancy/02.4.2-non-github-ci-ingest-tokens.md) | Non-GitHub CI ingest tokens | M2 | 6 | — | 1 | 02.4.1 | 02.4.4, 04.2.1, 09.2.1, 09.7.1, 11.2.1, 11.3.1 |
 | [02.4.3](02-identity-tenancy/02.4.3-github-app-installation.md) | GitHub App installation | M2 | 6 | — | 2 | 02.1.1, 02.4.1 | 05.5.2 |
+| [02.4.4](02-identity-tenancy/02.4.4-api-tokens-for-automation.md) | API tokens for automation | M3 | 7 | — | 2.5 | 02.2.1, 02.4.2, 02.7.1 | 09.7.2 |
 | [02.5.1](02-identity-tenancy/02.5.1-agent-identity-per-tenant-and-pool.md) | Agent identity per tenant and pool | M4 | 16 | yes | 2 | 02.2.1, 02.4.1, 05.7.3, 10.7.1 | 05.7.4 |
 | [02.6.1](02-identity-tenancy/02.6.1-database-enforced-isolation.md) | Database-enforced isolation | M1 | 4 | — | 3.5 | 02.1.1 | 02.4.1, 02.6.2, 02.7.1, 02.9.1, 06.1.1, 07.1.1, 11.1.1, 11.2.1 |
 | [02.6.2](02-identity-tenancy/02.6.2-tenant-context.md) | Tenant context | M1 | 5 | — | 0.5 | 01.4.2, 02.6.1 | 02.8.1, 02.9.1 |
-| [02.7.1](02-identity-tenancy/02.7.1-audit-trail.md) | Audit trail | M1 | 5 | — | 2.5 | 02.2.1, 02.6.1 | 02.8.1, 03.6.1, 05.3.1, 09.7.1, 11.1.1, 11.5.1 |
+| [02.7.1](02-identity-tenancy/02.7.1-audit-trail.md) | Audit trail | M1 | 5 | — | 2.5 | 02.2.1, 02.6.1 | 02.4.4, 02.8.1, 03.6.1, 05.3.1, 07.6.3, 07.8.1, 09.7.1, 11.1.1, 11.5.1 |
 | [02.8.1](02-identity-tenancy/02.8.1-time-boxed-operator-access.md) | Time-boxed operator access | M2 | 6 | — | 2 | 02.1.2, 02.6.2, 02.7.1 | 02.10.1, 06.4.4, 11.5.1 |
 | [02.9.1](02-identity-tenancy/02.9.1-isolation-suite.md) | Isolation suite | M1 | 6 | — | 3 | 02.1.1, 02.2.1, 02.6.1, 02.6.2 | 11.7.1 |
-| [02.10.1](02-identity-tenancy/02.10.1-one-outbound-email-channel.md) | One outbound email channel | M2 | 17 | — | 4.5 | 01.5.1, 02.1.2, 02.8.1, 12.3.1 | — |
+| [02.10.1](02-identity-tenancy/02.10.1-one-outbound-email-channel.md) | One outbound email channel | M2 | 17 | — | 4.5 | 01.5.1, 02.1.2, 02.8.1, 12.3.1 | 02.10.2 |
+| [02.10.2](02-identity-tenancy/02.10.2-chat-notifications-slack-teams.md) | Chat notifications (Slack, Teams) | M4 | 18 | — | 1.5 | 02.10.1, 11.3.1 | — |
 | [03.1.1](03-catalog-authoring/03.1.1-stable-case-identity.md) | Stable case identity | M1 | 4 | — | 2.5 | 01.4.1, 02.1.1 | 03.1.2, 03.1.3, 03.1.4, 03.4.1, 03.5.1, 04.3.2, 09.2.1 |
 | [03.1.2](03-catalog-authoring/03.1.2-imported-identity-and-mapping.md) | Imported identity and mapping | M1 | 12 | — | 2 | 03.1.1, 04.3.2, 04.4.1 | 09.2.1 |
 | [03.1.3](03-catalog-authoring/03.1.3-immutable-test-revisions.md) | Immutable test revisions | M1 | 5 | — | 1 | 03.1.1 | 03.2.1, 03.7.1, 04.3.2, 05.1.1 |
@@ -400,7 +404,7 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [03.6.1](03-catalog-authoring/03.6.1-draft-dry-run-pr.md) | Draft → dry run → PR | M4 | 16 | yes | 5 | 02.7.1, 03.2.1, 03.3.1, 03.4.1, 03.4.2, 05.7.3, 05.7.4 | 03.4.2, 03.7.1, 09.6.1 |
 | [03.7.1](03-catalog-authoring/03.7.1-ai-assisted-drafts.md) | AI-assisted drafts | M4 | 19 | — | 3.5 | 02.2.1, 03.1.3, 03.6.1, 11.4.1 | 03.8.1, 09.6.1 |
 | [03.8.1](03-catalog-authoring/03.8.1-regression-candidates-from-confirmed-bugs.md) | Regression candidates from confirmed bugs | M4 | 20 | — | 3 | 03.7.1, 06.1.2, 07.2.1, 08.2.2 | — |
-| [03.9.1](03-catalog-authoring/03.9.1-case-result-history-and-baseline-read.md) | Case result history and baseline read model | M3 | 13 | — | 2.5 | 05.3.2, 06.4.6 | 03.9.2 |
+| [03.9.1](03-catalog-authoring/03.9.1-case-result-history-and-baseline-read.md) | Case result history and baseline read model | M3 | 13 | — | 2.5 | 05.3.2, 06.4.6 | 03.9.2, 09.9.1 |
 | [03.9.2](03-catalog-authoring/03.9.2-historical-import-to-seed-a-baseline.md) | Historical import to seed a baseline | M3 | 14 | — | 2 | 03.9.1, 04.2.3, 04.4.2 | — |
 | [04.1.1](04-ingestion-adapters/04.1.1-atomic-batch-ingest-with-per-event.md) | Atomic batch ingest with per-event ack | M1 | 9 | yes | 5 | 01.3.1, 05.3.3 | 04.1.2, 04.1.3, 04.2.3, 04.3.3, 04.6.1, 04.8.1, 06.4.6, 11.3.1 |
 | [04.1.2](04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md) | Quota, epochs and observability | M1 | 9 | yes | 4 | 01.4.1, 04.1.1 | 05.2.1, 05.5.2, 06.1.2, 10.11.1 |
@@ -461,7 +465,7 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [06.4.6](06-evidence-artifacts/06.4.6-retention-and-partitioning-for-high-volume.md) | Retention and partitioning for high-volume tables | M1 | 10 | — | 2.5 | 04.1.1, 06.4.2 | 03.9.1 |
 | [06.5.1](06-evidence-artifacts/06.5.1-freeze-interface-with-05.md) | Freeze interface with 05 | M2 | 12 | yes | 2.5 | 05.3.2, 05.3.3, 06.1.2, 07.5.1 | 04.4.2, 05.3.2, 07.2.1, 09.3.1 |
 | [06.5.2](06-evidence-artifacts/06.5.2-storage-usage-metrics.md) | Storage usage metrics | M2 | 16 | yes | 1.5 | 01.5.1, 10.3.1, 12.3.1 | 09.7.1, 12.3.1 |
-| [07.1.1](07-policy-decisions/07.1.1-revision-record-hash-activation-and-pinning.md) | Revision record, hash, activation and pinning | M2 | 10 | — | 3 | 01.4.1, 02.6.1, 05.2.1 | 05.3.2, 07.3.1, 09.2.1, 09.7.1 |
+| [07.1.1](07-policy-decisions/07.1.1-revision-record-hash-activation-and-pinning.md) | Revision record, hash, activation and pinning | M2 | 10 | — | 3 | 01.4.1, 02.6.1, 05.2.1 | 05.3.2, 07.3.1, 07.8.1, 09.2.1, 09.7.1 |
 | [07.2.1](07-policy-decisions/07.2.1-pure-evaluation-completeness-outcome-decision.md) | Pure evaluation: completeness, outcome, decision | M2 | 12 | yes | 2 | 05.3.2, 06.5.1 | 03.8.1, 05.6.1, 07.2.2, 07.3.2, 07.4.1 |
 | [07.2.2](07-policy-decisions/07.2.2-persistence-idempotency-and-the-decision-matrix.md) | Persistence, idempotency and the decision matrix | M2 | 12 | yes | 2.75 | 01.5.1, 05.2.1, 07.2.1, 07.3.1 | 07.5.1, 07.5.2, 07.5.3, 07.6.1, 07.6.2, 07.7.1, 07.7.2, 08.3.3 |
 | [07.3.1](07-policy-decisions/07.3.1-waiver-and-quarantine-lifecycles.md) | Waiver and quarantine lifecycles | M2 | 11 | — | 2 | 02.2.1, 07.1.1 | 07.2.2, 07.3.2, 09.3.1 |
@@ -469,17 +473,20 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [07.4.1](07-policy-decisions/07.4.1-in-run-flaky-detection-and-budget.md) | In-run flaky detection and budget | M2 | 13 | — | 2 | 05.3.3, 07.2.1 | 05.5.1, 07.4.2, 09.3.1 |
 | [07.4.2](07-policy-decisions/07.4.2-flaky-surface-and-cross-run-trend.md) | Flaky surface and cross-run trend | M2 | 14 | — | 1 | 05.3.3, 07.4.1 | — |
 | [07.5.1](07-policy-decisions/07.5.1-late-evidence-and-immutability.md) | Late evidence and immutability | M2 | 12 | yes | 1.5 | 05.3.2, 07.2.2 | 06.5.1 |
-| [07.5.2](07-policy-decisions/07.5.2-run-decision-api.md) | Run decision API | M2 | 13 | — | 0.5 | 01.3.1, 02.2.1, 07.2.2 | 07.6.1, 09.3.1 |
-| [07.5.3](07-policy-decisions/07.5.3-release-aggregation-and-decision-endpoint.md) | Release aggregation and decision endpoint | M3 | 14 | — | 1.5 | 05.6.1, 07.2.2 | 07.5.4, 09.3.1 |
+| [07.5.2](07-policy-decisions/07.5.2-run-decision-api.md) | Run decision API | M2 | 13 | — | 0.5 | 01.3.1, 02.2.1, 07.2.2 | 07.6.1, 07.6.3, 09.3.1, 09.9.1 |
+| [07.5.3](07-policy-decisions/07.5.3-release-aggregation-and-decision-endpoint.md) | Release aggregation and decision endpoint | M3 | 14 | — | 1.5 | 05.6.1, 07.2.2 | 07.5.4, 07.8.1, 09.3.1 |
 | [07.5.4](07-policy-decisions/07.5.4-multi-component-releases-with-mobile-digests.md) | Multi-component releases with mobile digests | M4 | 15 | — | 0.5 | 04.5.1, 07.5.3 | — |
-| [07.6.1](07-policy-decisions/07.6.1-ci-delivery-github-and-the-cli.md) | CI delivery: GitHub and the CLI gate | M3 | 14 | — | 2 | 02.4.1, 04.2.1, 07.2.2, 07.5.2 | 07.7.1 |
-| [07.6.2](07-policy-decisions/07.6.2-outbound-webhooks-and-delivery-operations.md) | Outbound webhooks and delivery operations | M2 | 18 | — | 2 | 01.5.1, 07.2.2, 10.3.1, 10.6.1 | 09.7.1 |
+| [07.6.1](07-policy-decisions/07.6.1-ci-delivery-github-and-the-cli.md) | CI delivery: GitHub and the CLI gate | M3 | 14 | — | 2 | 02.4.1, 04.2.1, 07.2.2, 07.5.2 | 07.7.1, 07.8.1 |
+| [07.6.2](07-policy-decisions/07.6.2-outbound-webhooks-and-delivery-operations.md) | Outbound webhooks and delivery operations | M2 | 18 | — | 2 | 01.5.1, 07.2.2, 10.3.1, 10.6.1 | 07.6.3, 07.8.1, 09.7.1 |
+| [07.6.3](07-policy-decisions/07.6.3-webhook-endpoint-management-and-status-badge.md) | Webhook endpoint management and status badge | M3 | 19 | — | 2.5 | 02.2.1, 02.7.1, 07.5.2, 07.6.2 | 09.7.1 |
 | [07.7.1](07-policy-decisions/07.7.1-advisory-and-enforcing-modes.md) | Advisory and enforcing modes | M2 | 15 | — | 1 | 07.2.2, 07.6.1 | 07.7.2 |
 | [07.7.2](07-policy-decisions/07.7.2-shadow-evaluation-divergence-and-rollback.md) | Shadow evaluation, divergence and rollback | M2 | 18 | — | 1.5 | 07.2.2, 07.7.1, 10.2.2 | — |
+| [07.8.1](07-policy-decisions/07.8.1-promotion-gate-release-to-environment.md) | Promotion gate: release to environment | M3 | 19 | — | 4.5 | 02.1.1, 02.7.1, 07.1.1, 07.5.3, 07.6.1, 07.6.2 | 09.7.2 |
 | [08.1.1](08-healing-learning/08.1.1-incident-record-from-verified-failures.md) | Incident record from verified failures | M3 | 13 | — | 2.5 | 05.2.1, 05.3.2 | 08.1.2, 08.2.2, 08.3.1, 09.4.1 |
 | [08.1.2](08-healing-learning/08.1.2-filtered-context-capture-and-versioned-fingerprint.md) | Filtered context capture and versioned fingerprint | M3 | 14 | — | 6.5 | 06.1.1, 08.1.1 | 08.2.1, 08.4.2, 09.4.1 |
 | [08.2.1](08-healing-learning/08.2.1-tenant-scoped-retrieval-and-ranker.md) | Tenant-scoped retrieval and ranker | M3 | 15 | — | 2.5 | 08.1.2 | 08.3.1, 08.5.2, 08.7.1 |
-| [08.2.2](08-healing-learning/08.2.2-triage-labels-with-provenance.md) | Triage labels with provenance | M3 | 14 | — | 3.5 | 08.1.1 | 03.8.1, 08.5.1, 09.4.1, 12.5.1 |
+| [08.2.2](08-healing-learning/08.2.2-triage-labels-with-provenance.md) | Triage labels with provenance | M3 | 14 | — | 3.5 | 08.1.1 | 03.8.1, 08.2.3, 08.5.1, 09.4.1, 12.5.1 |
+| [08.2.3](08-healing-learning/08.2.3-external-issue-reference-on-an-incident.md) | External issue reference on an incident | M3 | 19 | — | 1 | 08.2.2, 09.4.1 | — |
 | [08.3.1](08-healing-learning/08.3.1-candidate-model-and-rule-based-generation.md) | Candidate model and rule-based generation | M3 | 16 | yes | 3 | 08.1.1, 08.2.1, 08.6.3 | 08.3.2, 08.3.3, 08.4.1, 09.3.1, 09.5.1 |
 | [08.3.2](08-healing-learning/08.3.2-bounded-validation-loop.md) | Bounded validation loop | M3 | 16 | yes | 3 | 08.3.1 | 08.4.3 |
 | [08.3.3](08-healing-learning/08.3.3-shadow-only-operation-and-measurement.md) | Shadow-only operation and measurement | M3 | 21 | — | 3.5 | 07.2.2, 08.3.1, 08.6.3, 12.5.1 | — |
@@ -501,15 +508,17 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [08.8.3](08-healing-learning/08.8.3-phase-gates.md) | Phase gates | M4 | 21 | — | 1.5 | 08.6.2, 08.8.2 | 08.9.1 |
 | [08.9.1](08-healing-learning/08.9.1-narrow-context-reuse-of-approved-mappings.md) | Narrow-context reuse of approved mappings | M5 | 22 | — | 3 | 08.8.3 | 08.9.2 |
 | [08.9.2](08-healing-learning/08.9.2-mobile-locator-healing.md) | Mobile locator healing | M5 | 23 | — | 2 | 04.5.1, 08.9.1 | — |
-| [09.1.1](09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md) | App scaffold and build - acceptance: `npm ci && npm run build -w apps/web` runs `ng build` and produces a production bundle inside the W7 budgets; Vitest and Playwright configs run in CI (F-09-1). | M2 | 5 | — | 8.5 | 01.1.1, 01.3.2, 02.3.1 | 09.2.1, 09.3.1, 09.8.1, 11.5.1 |
+| [09.1.1](09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md) | App scaffold and build - acceptance: `npm ci && npm run build -w apps/web` runs `ng build` and produces a production bundle inside the W7 budgets; Vitest and Playwright configs run in CI (F-09-1). | M2 | 5 | — | 8.5 | 01.1.1, 01.3.2, 02.3.1 | 09.2.1, 09.3.1, 09.8.1, 09.9.1, 11.5.1 |
 | [09.2.1](09-web-ui/09.2.1-onboarding-wizard-acceptance-a-new-tenant.md) | Onboarding wizard - acceptance: a new tenant reaches an enabled collecting project through the five steps, resumable, each step showing the run/evidence it produced. | M2 | 18 | — | 9.5 | 02.4.1, 02.4.2, 03.1.1, 03.1.2, 04.4.1, 06.1.2, 07.1.1, 09.1.1, 09.3.1 | 12.2.1 |
 | [09.3.1](09-web-ui/09.3.1-run-detail-is-the-truth-surface.md) | Run detail is the truth surface - acceptance: for any run the page shows manifest, build digests, per-producer finalize state, every attempt and the stored evaluation without computing anything client-side. | M2 | 17 | — | 14 | 05.2.1, 05.3.1, 05.3.2, 05.4.1, 05.5.1, 06.5.1, 07.3.1, 07.3.2, 07.4.1, 07.5.2, 07.5.3, 08.3.1, 09.1.1 | 09.2.1, 09.4.1, 09.5.1, 09.5.2 |
-| [09.4.1](09-web-ui/09.4.1-triage-without-losing-the-original-failure.md) | Triage without losing the original failure - acceptance: from the inbox a failure can be labelled, assigned, investigated and either fixed or (V2) sent to healing, with the original evidence intact. | M3 | 18 | — | 7.5 | 06.2.1, 06.3.3, 08.1.1, 08.1.2, 08.2.2, 09.3.1 | — |
+| [09.4.1](09-web-ui/09.4.1-triage-without-losing-the-original-failure.md) | Triage without losing the original failure - acceptance: from the inbox a failure can be labelled, assigned, investigated and either fixed or (V2) sent to healing, with the original evidence intact. | M3 | 18 | — | 7.5 | 06.2.1, 06.3.3, 08.1.1, 08.1.2, 08.2.2, 09.3.1 | 08.2.3 |
 | [09.5.1](09-web-ui/09.5.1-shadow-review-v1-acceptance-candidates-are.md) | Shadow review (V1) - acceptance: candidates are inspectable with validation and lineage, and no control can apply a patch in V1. | M3 | 19 | — | 4 | 08.3.1, 08.4.1, 08.4.2, 09.3.1 | — |
 | [09.5.2](09-web-ui/09.5.2-approval-v2-acceptance-approve-reject-binds.md) | Approval (V2) - acceptance: approve/reject binds to `candidate_hash` + base commit, is re-permissioned, and a stale hash is rejected with a visible conflict. | M4 | 18 | — | 4.5 | 08.6.1, 08.6.3, 08.7.2, 09.3.1 | — |
 | [09.6.1](09-web-ui/09.6.1-draft-to-review-to-merge-acceptance.md) | Draft to review to merge - acceptance: a draft created from a template can be edited, reviewed as a diff with its assertion hash, dry-run and then approved by another person. | M4 | 20 | — | 8 | 03.2.1, 03.5.1, 03.6.1, 03.7.1 | — |
-| [09.7.1](09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md) | Administer without seeing secrets - acceptance: an admin manages members, integrations, policy, quota, retention and audit; no screen can render a secret value. | M2 | 19 | — | 10 | 02.1.1, 02.1.2, 02.2.1, 02.4.2, 02.7.1, 05.7.3, 06.5.2, 07.1.1, 07.6.2, 11.5.1, 12.3.1 | — |
+| [09.7.1](09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md) | Administer without seeing secrets - acceptance: an admin manages members, integrations, policy, quota, retention and audit; no screen can render a secret value. | M2 | 20 | — | 10 | 02.1.1, 02.1.2, 02.2.1, 02.4.2, 02.7.1, 05.7.3, 06.5.2, 07.1.1, 07.6.2, 07.6.3, 11.5.1, 12.3.1 | 09.7.2 |
+| [09.7.2](09-web-ui/09.7.2-api-tokens-and-deploy-targets-screens.md) | API tokens and deploy targets screens | M3 | 21 | — | 2 | 02.4.4, 07.8.1, 09.7.1 | — |
 | [09.8.1](09-web-ui/09.8.1-core-flows-are-usable-and-proven.md) | Core flows are usable and proven end to end - acceptance: axe-clean core flows, keyboard-only completion, and an E2E suite green in Evidgate's CI whose results are ingested into Evidgate. | M3 | 6 | — | 6 | 09.1.1 | — |
+| [09.9.1](09-web-ui/09.9.1-quality-overview-for-managers.md) | Quality overview for managers | M4 | 14 | — | 2.5 | 03.9.1, 07.5.2, 09.1.1 | — |
 | [10.1.1](10-operations/10.1.1-three-environments.md) | Three environments | M1 | 3 | — | 5 | 01.1.2 | 06.3.3, 10.1.2, 10.3.1, 10.5.1, 10.7.1, 11.3.1, 11.7.1 |
 | [10.1.2](10-operations/10.1.2-secrets-inventory-scanning-and-break-glass.md) | Secrets inventory, scanning and break-glass | M1 | 17 | — | 2.75 | 01.7.1, 10.1.1, 10.2.1, 10.7.1 | — |
 | [10.2.1](10-operations/10.2.1-images-and-provenance.md) | Images and provenance | M1 | 3 | — | 3 | 01.1.2 | 10.1.2, 10.2.2, 11.6.1 |
@@ -528,7 +537,7 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [10.11.1](10-operations/10.11.1-ingress-and-abuse-limits.md) | Ingress and abuse limits | M2 | 10 | — | 2 | 04.1.2, 10.8.1 | — |
 | [11.1.1](11-security-compliance/11.1.1-a-living-threat-model-acceptance-v1.md) | A living threat model - acceptance: v1 covers every module and boundary, each threat maps to a control or a written acceptance, and it is re-reviewed at each milestone exit. | M1 | 6 | — | 4 | 02.1.1, 02.6.1, 02.7.1 | 06.3.3, 11.5.1, 11.7.1 |
 | [11.2.1](11-security-compliance/11.2.1-a-fork-pull-request-cannot-reach.md) | A fork pull request cannot reach our credentials - acceptance: the published recipe and the fork-PR test prove no Evidgate credential is reachable from an untrusted workflow context. | M1 | 16 | yes | 7.5 | 02.4.1, 02.4.2, 02.6.1, 03.4.1, 05.7.4, 08.4.3 | 04.9.1, 05.9.2, 08.4.3, 11.6.1 |
-| [11.3.1](11-security-compliance/11.3.1-secrets-never-leave-a-reference-acceptance.md) | Secrets never leave a reference - acceptance: no secret value is stored in the database, logged, or visible in an error envelope; leak response is rehearsed. | M2 | 16 | yes | 6 | 02.4.2, 04.1.1, 06.2.2, 06.2.3, 10.1.1, 10.5.1, 10.7.1 | 03.3.1, 11.4.1 |
+| [11.3.1](11-security-compliance/11.3.1-secrets-never-leave-a-reference-acceptance.md) | Secrets never leave a reference - acceptance: no secret value is stored in the database, logged, or visible in an error envelope; leak response is rehearsed. | M2 | 16 | yes | 6 | 02.4.2, 04.1.1, 06.2.2, 06.2.3, 10.1.1, 10.5.1, 10.7.1 | 02.10.2, 03.3.1, 11.4.1 |
 | [11.4.1](11-security-compliance/11.4.1-a-model-cannot-change-the-product.md) | A model cannot change the product's mind - acceptance: the injection corpus produces zero policy/approval/permission/decision effects, and every outbound request is opt-in, redacted and audited. | M4 | 18 | — | 6 | 08.5.1, 08.5.2, 08.5.3, 11.3.1, 11.8.1 | 03.7.1 |
 | [11.5.1](11-security-compliance/11.5.1-who-saw-what-provably-acceptance-audit.md) | Who saw what, provably - acceptance: audit rows are append-only with before/after hashes, and any operator access is scoped, expiring, tenant-visible and audited. | M2 | 7 | — | 4.5 | 02.7.1, 02.8.1, 09.1.1, 11.1.1 | 09.7.1, 11.5.2, 11.9.1 |
 | [11.5.2](11-security-compliance/11.5.2-audit-chain-integrity-outside-its-own.md) | Audit chain integrity outside its own database | M2 | 17 | — | 2.5 | 10.3.1, 11.5.1 | 11.9.2 |

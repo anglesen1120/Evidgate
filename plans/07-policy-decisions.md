@@ -242,6 +242,16 @@
 | 07.6.2-T2 | Delivery records, dead-letter visibility, replay tool, receiver conformance fixture | S | V1 | M2 | 07.6.2-T1 |
 | 07.6.2-T3 | Decision-latency measurement: histogram `evidence_frozen_at → evaluation.created_at` emitted by the handler; this task builds the freeze→evaluate latency fixture (driven by `10.6.1-T1`'s ingest load generator) asserting p95 < 60 s in the M3 load run; SLI registered in `10.3.1-T3` (T28) | S | V1 | M3 | 07.2.2-T1, 10.3.1-T3, 10.6.1-T1 |
 
+#### Story 07.6.3 Webhook endpoint management and status badge — acceptance: a project admin registers, rotates and disables outbound webhook endpoints, sees per-endpoint delivery history, and may opt in to a status badge that exposes only the decision label.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 07.6.3-T1 | `webhook_endpoint` (https URL, private-address/SSRF guard, event types, state, secret reference) + CRUD API with show-once signing secret, audited | M | V1 | M3 | 07.6.2-T1, 02.2.1-T2, 02.7.1-T2 |
+| 07.6.3-T2 | Secret rotation with an overlap window, per-endpoint delivery history filters and manual redeliver on top of 07.6.2-T2 | S | V1 | M3 | 07.6.3-T1, 07.6.2-T2 |
+| 07.6.3-T3 | Tests: SSRF cases (private ranges, redirects, DNS rebinding), rotation overlap, disabled endpoint stops delivery, cross-tenant isolation | S | V1 | M3 | 07.6.3-T2 |
+| 07.6.3-T4 | Opt-in status badge: per-project unguessable token URL, off by default, returns only decision label and timestamp | S | V2 | M4 | 07.5.2-T1, 07.6.3-T1 |
+
+**Story 07.6.3 total: 2.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
+
 ### Epic 07.7 Rollout: advisory, enforcing and shadow
 
 #### Story 07.7.1 Advisory and enforcing modes — acceptance: in M2 decisions are computed, stored, shown and delivered without blocking; flipping a project to `enforcing` blocks on FAIL and INCONCLUSIVE per policy, is audited and is reversible.
@@ -255,6 +265,20 @@
 |---|---|---|---|---|---|
 | 07.7.2-T1 | Shadow evaluation over recorded evidence + comparison inside 10's deploy flow | M | V1 | M2 | 07.2.2-T1, 10.2.2-T3 |
 | 07.7.2-T2 | Divergence report + rollback to advisory + pilot readiness checklist input | S | V1 | M3 | 07.7.2-T1, 07.7.1-T2 |
+
+### Epic 07.8 Promotion gate for deployments [PROPOSAL missing-features review 2026-10-02]
+#### Story 07.8.1 Promotion gate: release to environment — acceptance: a CD pipeline asks whether a release may be promoted to a named target and gets allowed, blocked or pending with reasons from the release decision and the target's policy; a missing component is never allowed.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 07.8.1-T1 | `deploy_target` (project-scoped name such as staging/prod, order, optional pinned policy revision) + CRUD with ETag, audited | M | V1 | M3 | 02.1.1-T1, 07.1.1-T1, 02.7.1-T2 |
+| 07.8.1-T2 | `POST /v1/releases/{id}/promotions` evaluates the release decision under the target's policy and writes an immutable `promotion_check` (allowed \| blocked \| pending, reasons, decision and policy revision); idempotent per release, target and decision revision | L | V1 | M3 | 07.8.1-T1, 07.5.3-T2 |
+| 07.8.1-T3 | `evidgate gate --release <id> --target <name>` with the exit codes 0/1/2/3, `--wait` and JSON output | S | V1 | M3 | 07.8.1-T2, 07.6.1-T2 |
+| 07.8.1-T4 | `promotion.checked` webhook event, audit row and `GET /v1/releases/{id}/promotions` history | S | V1 | M3 | 07.8.1-T2, 07.6.2-T1 |
+| 07.8.1-T5 | Tests: missing component never allowed, per-target policy differences, a waiver cannot turn FAIL into allowed, late evidence creates a new check row | S | V1 | M3 | 07.8.1-T2 |
+
+**Story 07.8.1 total: 4.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
+
+**Epic 07.8 total: 4.5**
 
 ## 10. Dependencies
 
@@ -288,11 +312,12 @@ Sibling story ids referenced above are ⚠️ pending confirmation: `plans/` con
 | 07.3 Waivers and quarantine | 3.5 | 0 | 0 | 3.5 |
 | 07.4 Flaky detection and budget | 2.5 | 0.5 | 0 | 3.0 |
 | 07.5 Late evidence, immutability and release decisions | 3.5 | 0.5 | 0 | 4.0 |
-| 07.6 CI integration and webhooks | 4.0 | 0 | 0 | 4.0 |
+| 07.6 CI integration and webhooks | 6.0 | 0.5 | 0 | 6.5 |
 | 07.7 Rollout: advisory, enforcing and shadow | 2.5 | 0 | 0 | 2.5 |
-| **Total** | **23.75** | **1.0** | **0** | **24.75** |
+| 07.8 Promotion gate for deployments | 4.5 | 0 | 0 | 4.5 |
+| **Total** | **30.25** | **1.5** | **0** | **31.75** |
 
-→ with 20 % buffer **29.7** person-days (one senior full-stack .NET + Angular developer, CR-D-1; 00 §6 units).
+→ with 20 % buffer **38.1** person-days (one senior full-stack .NET + Angular developer, CR-D-1; 00 §6 units).
 
 ## 13. Contract change requests
 

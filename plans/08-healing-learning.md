@@ -161,6 +161,15 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 | 08.2.2-T1 | Label taxonomy, `label_source` precedence, storage | S | V1 | M3 | 08.1.1-T2 |
 | 08.2.2-T2 | Rule triage (product_defect/test_drift/environment/data_issue/unknown) with evidence refs | L | V1 | M3 | 08.2.2-T1 |
 | 08.2.2-T3 | Human triage action, audit, ground-truth rule, `unknown` guard, triage-time metric | M | V1 | M3 | 08.2.2-T2 |
+
+#### Story 08.2.3 External issue reference on an incident — acceptance: an incident can carry a link to the team's own tracker so triage results are traceable there.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 08.2.3-T1 | `incident.external_issue_url` (https only, length cap, audited PATCH, never fetched by the server) | S | V1 | M3 | 08.2.2-T3 |
+| 08.2.3-T2 | Show and edit the link in the failure detail and carry it in the incident webhook payload | S | V1 | M3 | 08.2.3-T1, 09.4.1-T3 |
+
+**Story 08.2.3 total: 1** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
+
 ### Epic 08.3 Candidate generation, bounded loop and shadow measurement (V1, M3)
 #### Story 08.3.1 Candidate model and rule-based generation — acceptance: at most 3 candidates per incident, each with `candidate_hash`, base commit, old/new locator, context hash and expiry; states follow 00 §8.7.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -312,7 +321,7 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
 | 08.1 Incident capture and fingerprinting | 9 | - | - | 9 |
-| 08.2 Retrieval, ranker and triage labels | 6 | - | - | 6 |
+| 08.2 Retrieval, ranker and triage labels | 7 | - | - | 7 |
 | 08.3 Candidate generation, bounded loop and shadow | 9.5 | - | - | 9.5 |
 | 08.4 Validation: AST, semantics, negative control, sandbox | 15.5 | - | - | 15.5 |
 | 08.5 LLM gateway, privacy and healer generator | - | 19.5 | - | 19.5 |
@@ -320,9 +329,9 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 | 08.7 Knowledge, feedback and lineage | - | 5.25 | - | 5.25 |
 | 08.8 Evaluation, metrics and phase gates | 2 | 5.5 | 1 | 8.5 |
 | 08.9 V3 narrow reuse and mobile healing | - | - | 5 | 5 |
-| **Total** | **43** | **41.25** | **6** | **90.25** |
+| **Total** | **44** | **41.25** | **6** | **91.25** |
 
-→ with 20 % buffer **108.3** person-days (V1 51.6 · V2 49.5 · V3 7.2).
+→ with 20 % buffer **109.5** person-days (V1 52.8 · V2 49.5 · V3 7.2).
 
 ## 13. Contract change requests
 

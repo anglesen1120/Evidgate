@@ -271,10 +271,18 @@ Epic 09.6 total: 8.0
 | 09.7.1-T5 | Quota and retention view: limits, current counters, retention change with deletion-impact warning | M | V1 | M3 | 06.5.2-T1, 12.3.1-T6 |
 | 09.7.1-T6 | Audit log viewer: actor/action/object/time filters, CSV export, support-access rows flagged | M | V1 | M3 | 02.7.1-T1 |
 | 09.7.1-T7 | Agents page (V2): pools, capabilities, lease/heartbeat health, `unschedulable` reasons, version drift | L | V2 | M4 | 05.7.3-T1 |
-| 09.7.1-T8 | Integrations page: webhook endpoints, signing-secret rotation, delivery log with retry state | M | V2 | M4 | 07.6.2-T1 |
+| 09.7.1-T8 | Integrations page: webhook endpoints, signing-secret rotation, delivery log with retry state | M | V1 | M3 | 07.6.2-T1, 07.6.3-T1, 07.6.3-T2 |
 | 09.7.1-T9 | Security events view in Settings (tenant_admin): V1 lists the 11.1.1-T4 baseline events (auth failures, cross-tenant 404 patterns) plus flagged support-access rows, with project/type/severity/time filters, reading `GET /v1/orgs/{o}/security-events`; injection-attempt events appear from V2 (11.4.1-T2) | S | V1 | M3 | 11.5.1-T5 |
 
-Epic 09.7 total: 10.0
+#### Story 09.7.2 API tokens and deploy targets screens — acceptance: an admin manages API tokens and deploy targets and reads promotion history without leaving Settings.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.7.2-T1 | API tokens screen: list, create with mandatory expiry, show-once secret, revoke, last used | M | V1 | M3 | 02.4.4-T1, 09.7.1-T1 |
+| 09.7.2-T2 | Deploy targets and promotion history screen with per-target policy pin and blocked reasons | M | V1 | M3 | 07.8.1-T2, 09.7.1-T1 |
+
+**Story 09.7.2 total: 2** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
+
+Epic 09.7 total: 12
 
 ### Epic 09.8 - Accessibility, i18n and E2E hardening (M3-M4)
 
@@ -288,6 +296,18 @@ Epic 09.7 total: 10.0
 | 09.8.1-T5 | V2 E2E extension: draft workflow, healing approve/reject 412 race, agents page | M | V2 | M4 | 09.8.1-T3 |
 
 Epic 09.8 total: 6.0
+
+### Epic 09.9 Quality overview [PROPOSAL missing-features review 2026-10-02]
+#### Story 09.9.1 Quality overview for managers — acceptance: a project shows pass rate over time, most flaky cases, time to decision and incomplete rate from stored history, with the same permission rules as run pages.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.9.1-T1 | `GET /v1/projects/{p}/overview` read model (pass rate trend, top-N flaky, decision latency p50/p95, incomplete rate) over 03.9.1 history | M | V2 | M4 | 03.9.1-T2, 07.5.2-T1 |
+| 09.9.1-T2 | Overview screen with date range, per-branch filter and links to run detail | M | V2 | M4 | 09.9.1-T1, 09.1.1-T7 |
+| 09.9.1-T3 | Tests and accessibility: empty state, large history, keyboard and screen-reader pass | S | V2 | M4 | 09.9.1-T2 |
+
+**Story 09.9.1 total: 2.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
+
+**Epic 09.9 total: 2.5**
 
 ## 10. Dependencies
 
@@ -327,11 +347,12 @@ Epic 09.8 total: 6.0
 | 09.4 Failure Inbox and investigation | 7.5 | 0 | 0 | 7.5 |
 | 09.5 Healing Review | 4.0 | 4.5 | 0 | 8.5 |
 | 09.6 Test Studio UI | 0 | 8.0 | 0 | 8.0 |
-| 09.7 Settings and administration | 7.0 | 3.0 | 0 | 10.0 |
+| 09.7 Settings and administration | 10.0 | 2.0 | 0 | 12.0 |
 | 09.8 Accessibility, i18n, E2E | 5.0 | 1.0 | 0 | 6.0 |
-| **Total** | **53.5** | **18.5** | **0** | **72.0** |
+| 09.9 Quality overview | 0 | 2.5 | 0 | 2.5 |
+| **Total** | **56.5** | **20.0** | **0** | **76.5** |
 
-→ with 20 % buffer **86.4** person-days
+→ with 20 % buffer **91.8** person-days
 
 ## 13. Contract change requests
 
