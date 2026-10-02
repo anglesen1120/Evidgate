@@ -213,6 +213,15 @@
 |---|---|---|---|---|---|
 | 06.3.5-T1 | Mobile kinds end-to-end (`video` range requests, `ui_hierarchy` + `a11y_snapshot` parsing/rendering, kind defaults) (T20) | S | V2 | M4 | 04.5.1-T1, 05.7.4-T1 |
 
+#### Story 06.3.6 Parsers run in a resource-limited child with per-tenant concurrency — acceptance: a pathological file cannot OOM or starve the worker, and one tenant cannot occupy every parse slot.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 06.3.6-T1 | Parse runner as a child process with memory, CPU and wall-time limits and no network; exit codes map to `rejected` with a reason | L | V1 | M2 | 06.3.1-T1, 06.3.1-T2, 01.5.1-T1 |
+| 06.3.6-T2 | Per-tenant parse concurrency cap and fair scheduling through the task queue; metric for wait time | M | V1 | M2 | 06.3.6-T1 |
+| 06.3.6-T3 | Hostile-input tests: memory bomb, deep nesting, huge attribute; the worker survives and other tenants' parses continue | S | V1 | M2 | 06.3.6-T1 |
+
+**Story 06.3.6 total: 3.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
 ### Epic 06.4 Retention, deletion and sweeper
 
 #### Story 06.4.1 Retention policy — acceptance: a project can set artifact and metadata days above the floor; defaults are 14 and 90.
@@ -241,6 +250,15 @@
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 06.4.5-T1 | Idempotency re-run tests, failure alerting, audit assertions | S | V1 | M2 | 06.4.2-T1, 06.4.3-T1 |
+
+#### Story 06.4.6 Retention and partitioning for high-volume tables — acceptance: retention windows for `event`, `event_batch`, `case_attempt` and `evaluation` are decided, enforced by a job, and the dedupe key survives partitioning.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 06.4.6-T1 | ADR: partition `event`/`event_batch`/`case_attempt` by time; the dedupe key `(org_id, run_id, event_id)` is kept unique via a partition-aware design; retention window per table | S | V1 | M1 | 04.1.1-T2 |
+| 06.4.6-T2 | Partitioned migration and a partition create/drop job with audit rows; evaluations kept at least as long as their decision | M | V1 | M2 | 06.4.6-T1, 06.4.2-T1 |
+| 06.4.6-T3 | Tests: dedupe across a partition boundary, retention drop leaves referenced runs readable, restore keeps partitions | M | V1 | M2 | 06.4.6-T2 |
+
+**Story 06.4.6 total: 2.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 
 ### Epic 06.5 Evidence revision interface and storage usage
 
@@ -289,12 +307,12 @@ Sibling story ids referenced above are ⚠️ pending confirmation: `plans/` con
 |---|---|---|---|---|
 | 06.1 Upload path and artifact state machine | 4.5 | 0 | 0 | 4.5 |
 | 06.2 Sensitivity, redaction and masking | 3.5 | 0 | 0 | 3.5 |
-| 06.3 Safe parsing and isolated viewer | 7.5 | 0.5 | 0 | 8.0 |
-| 06.4 Retention, deletion and sweeper | 5.0 | 0.5 | 0 | 5.5 |
+| 06.3 Safe parsing and isolated viewer | 11.0 | 0.5 | 0 | 11.5 |
+| 06.4 Retention, deletion and sweeper | 7.5 | 0.5 | 0 | 8.0 |
 | 06.5 Evidence revision interface and storage usage | 4.0 | 0 | 0 | 4.0 |
-| **Total** | **24.5** | **1.0** | **0** | **25.5** |
+| **Total** | **30.5** | **1.0** | **0** | **31.5** |
 
-→ with 20 % buffer **30.6** person-days (one senior full-stack .NET + Angular developer; 00 §6 units, CR-D-1).
+→ with 20 % buffer **37.8** person-days (one senior full-stack .NET + Angular developer; 00 §6 units, CR-D-1).
 
 ## 13. Contract change requests
 

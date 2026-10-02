@@ -210,7 +210,16 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 |---|---|---|---|---|---|
 | 03.1.3-T1 | `test_revision` schema, content + assertion hashing, append-only enforcement (privileges + trigger) | M | V1 | M1 | 03.1.1-T1 |
 **Story 03.1.3 total: 1.0**
-**Epic 03.1 total: 5.5**
+#### Story 03.1.4 Requirement link, taxonomy and execution-coverage definition — acceptance: a case may carry an optional `requirement_ref`, platform × level × purpose are stored fields, and UI coverage is defined as declared executions, not code coverage.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 03.1.4-T1 | Decision + contract: optional `requirement_ref` on `test_case` (or recorded decision to drop it); 00 §7 and §15 updated before schema | S | V1 | M1 | 03.1.1-T1 |
+| 03.1.4-T2 | Add `platform`, `level`, `purpose` to suite/template with an enum catalogue; mobile emulation counts only as web | S | V1 | M1 | 03.2.1-T1 |
+| 03.1.4-T3 | State the coverage definition in 00 §3 and 09: ratio of declared case × variant executions with an accepted result; a Chromium pass never masks a Firefox failure | S | V1 | M2 | 03.1.4-T2, 03.2.1-T2 |
+
+**Story 03.1.4 total: 1.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
+**Epic 03.1 total: 7**
 ### Epic 03.2 Suite revisions
 #### Story 03.2.1 Versioned suites — acceptance: a suite revision pins members, variants, DAG, shard strategy, retry policy and environment requirements; cycles are rejected; a referenced revision cannot be edited.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -277,6 +286,27 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | 03.8.1-T1 | Candidate regression test draft from confirmed incident evidence (why the assertion matches the failure) | L | V2 | M4 | 03.7.1-T1, 08.2.2-T3 |
 | 03.8.1-T2 | Proof harness: fail-on-buggy / pass-on-fixed using run evidence; recorded-limitation field when a control build is missing | M | V2 | M4 | 03.8.1-T1, 06.1.2-T2, 07.2.1-T2 |
 **Epic 03.8 total: 3.0**
+### Epic 03.9 History and baseline (V1) [PROPOSAL review 2026-10-02]
+#### Story 03.9.1 Case result history and baseline read model — acceptance: a case shows its recent results per variant, a new failure is distinguished from one already failing on the main branch, and history respects RLS and retention.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 03.9.1-T1 | `case_result_history` read table projected from accepted evidence revisions by an outbox consumer; Dapper read model | M | V1 | M3 | 05.3.2-T5, 06.4.6-T1 |
+| 03.9.1-T2 | Classification new failure vs failing on main and flake-rate input; `GET …/cases/{id}/history` with paging | M | V1 | M3 | 03.9.1-T1 |
+| 03.9.1-T3 | RLS, retention and replay tests (projection rebuild from revisions gives the same rows) | S | V1 | M3 | 03.9.1-T1 |
+
+**Story 03.9.1 total: 2.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
+#### Story 03.9.2 Historical import to seed a baseline — acceptance: a team can import past JUnit/Playwright JSON results as `purpose = import` runs that feed history and never a release decision.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 03.9.2-T1 | Import endpoint accepting an archive of past reports with explicit commit/branch/time; runs marked `import` and excluded from evaluation | M | V1 | M3 | 03.9.1-T1, 04.4.2-T1 |
+| 03.9.2-T2 | `evidgate import-history` CLI command with a dry run and a size cap | S | V1 | M3 | 03.9.2-T1, 04.2.3-T1 |
+| 03.9.2-T3 | Tests: an import never changes a decision or quota ledger beyond its own usage rows, and is idempotent | S | V1 | M3 | 03.9.2-T1 |
+
+**Story 03.9.2 total: 2** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
+**Epic 03.9 total: 4.5**
+
 ## 10. Dependencies
 
 - **01** (`01.4.1-T1` migrations, `01.3.1-T1` contracts pipeline, `01.5.1-T1` worker/outbox + `task`-queue bootstrap).
@@ -300,7 +330,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
-| 03.1 Test identity and revisions | 5.5 | 0 | 0 | 5.5 |
+| 03.1 Test identity and revisions | 7.0 | 0 | 0 | 7.0 |
 | 03.2 Suite revisions | 4.0 | 0 | 0 | 4.0 |
 | 03.3 Fixtures and data namespaces | 2.5 | 0 | 0 | 2.5 |
 | 03.4 Git integration | 4.0 | 1.0 | 0 | 5.0 |
@@ -308,9 +338,10 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | 03.6 Draft editor | 0 | 5.0 | 0 | 5.0 |
 | 03.7 AI drafts | 0 | 3.5 | 0 | 3.5 |
 | 03.8 Bug → regression candidate | 0 | 3.0 | 0 | 3.0 |
-| **Total** | **19.0** | **13.0** | **0** | **32.0** |
+| 03.9 History and baseline | 4.5 | 0 | 0 | 4.5 |
+| **Total** | **25.0** | **13.0** | **0** | **38.0** |
 
-→ with 20 % buffer **38.4** person-days
+→ with 20 % buffer **45.6** person-days
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: CR-1 → 00 §7 (conflict rule; filename in 03.1.1-T1); CR-2 → 00 §8.10; CR-3 → 00 §3; CR-4 → 00 §9.3; CR-5 → 00 §2 (mapping owned by 03 §4); CR-6 confirmed after the 09 renumbering.

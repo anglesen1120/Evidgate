@@ -167,6 +167,15 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 | 10.5.1-T3 | Restore drill automation: restore into a clean project, apply migrations head, run isolation + smoke suites, record duration against RTO, attach evidence to the M2 exit gate | L | V1 | M2 | 10.5.1-T1 |
 | 10.5.1-T4 | DR runbook: failover decision, communication, data-loss statement at the measured RPO, recovery order (database → object storage → queues → app) | M | V1 | M2 | 10.5.1-T3 |
 
+#### Story 10.5.2 Object storage delete protection and restore — acceptance: a compromised application credential cannot delete evidence or its versions, and an object restore is tested.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 10.5.2-T1 | Separate write-only app credential and a deletion-only retention credential; bucket policy or object lock where the provider supports it; note the PDPL transfer implication of offshore replicas | M | V1 | M3 | 10.5.1-T2 |
+| 10.5.2-T2 | Automated object restore test: delete an object, restore from version/copy, verify checksum and artifact `ready` state | M | V1 | M3 | 10.5.1-T3, 10.5.2-T1 |
+| 10.5.2-T3 | Runbook entry and drill result attached to the restore evidence | S | V1 | M3 | 10.5.2-T2, 10.5.1-T4 |
+
+**Story 10.5.2 total: 2.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
 ### Epic 10.6 Load, performance and capacity (M2-M4)
 
 #### Story 10.6.1 Proving the pilot load — acceptance: 50 000 events in 60 s and the pilot artifact profile pass on staging, and the capacity model names the next bottleneck
@@ -188,6 +197,15 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 | 10.7.1-T4 | Key rotation runbook: ingest tokens, CI OIDC trust, JWT signing keys, webhook secrets, database credentials, provider keys, and the ingest/API token HMAC pepper — a new `pepper_vN` signs new tokens while old versions verify until their last token expires (T5) — rotation without downtime or lost events | M | V1 | M2 | 10.1.1-T2 |
 | 10.7.1-T5 | Kill switch runbook + drill: system → tenant → project healing availability (00 §8.7, DECISIONS §5.9) flipped while ingest, runs and gates continue | M | V1 | M2 | 10.3.1-T5 |
 | 10.7.1-T6 | Incident process: severity ladder, on-call expectation for the pilot, communication, postmortem template with a follow-up task rule | M | V1 | M3 | 10.7.1-T1 |
+
+#### Story 10.7.2 Paging and on-call at the first alert — acceptance: every alert in 10.3.1-T5 reaches a named destination and a person, including out of hours.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 10.7.2-T1 | Choose the paging tool and route alert rules to it; record the decision | S | V1 | M2 | 10.3.1-T5 |
+| 10.7.2-T2 | Escalation and out-of-hours cover for a single operator (primary, secondary or auto-ack fallback); a test page each month | S | V1 | M2 | 10.7.2-T1 |
+| 10.7.2-T3 | Tie the breach runbook (11.9.1-T2) to the paging path and name the 72 h clock owner | S | V1 | M3 | 10.7.2-T1, 11.9.1-T2 |
+
+**Story 10.7.2 total: 1.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 
 ### Epic 10.8 Cloud provider evaluation (O3) (M1-M2)
 
@@ -213,6 +231,18 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 |---|---|---|---|---|---|
 | 10.10.1-T1 | Define and measure the trigger: number of workflows with long human waits, recovery incidents caused by queue/outbox limitations, and the manual work each costs (metrics from 10.3.1-T3) | S | V1 | M2 | 10.3.1-T3 |
 | 10.10.1-T2 | Temporal evaluation spike (only if the trigger fires): model the healing PR flow and approval waits, cost of running one more system, migration path; output memo to plan 08/00 | M | V3 | M5 | 10.10.1-T1 |
+
+### Epic 10.11 Edge and abuse limits (M2) [PROPOSAL review 2026-10-02]
+#### Story 10.11.1 Ingress and abuse limits — acceptance: unauthenticated endpoints, presign issuance and org-level reads have limits, and oversized or slow requests are cut at the edge.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 10.11.1-T1 | Request body-size, header and timeout limits in Kestrel; per-IP limits for unauthenticated routes; per-org limits for reads and presign issuance, all with `Retry-After` | M | V1 | M2 | 04.1.2-T1 |
+| 10.11.1-T2 | Abuse test in CI: burst on `/v1/ci/token`, slow-body and oversized-body requests, presign flood; expected status codes asserted | S | V1 | M2 | 10.11.1-T1 |
+| 10.11.1-T3 | Record the WAF/edge decision as dependent on O3 and list what runs without it | S | V1 | M2 | 10.8.1-T1 |
+
+**Story 10.11.1 total: 2** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
+**Epic 10.11 total: 2**
 
 ## 10. Dependencies
 
@@ -243,15 +273,16 @@ Task sizes use the shared units (XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-d
 | 10.2 Images, registry and deployment | 10.0 | 0 | 0 | 10.0 |
 | 10.3 Instrumentation, dashboards and alerts | 7.0 | 0 | 0 | 7.0 |
 | 10.4 SLIs, SLOs and error budget | 2.0 | 0 | 0 | 2.0 |
-| 10.5 Backup, PITR and restore drills | 5.0 | 0 | 0 | 5.0 |
+| 10.5 Backup, PITR and restore drills | 7.5 | 0 | 0 | 7.5 |
 | 10.6 Load, performance and capacity | 4.0 | 1.0 | 0 | 5.0 |
-| 10.7 Runbooks and incident readiness | 5.5 | 0 | 0 | 5.5 |
+| 10.7 Runbooks and incident readiness | 7.0 | 0 | 0 | 7.0 |
 | 10.8 Cloud provider evaluation (O3) | 3.0 | 0 | 0 | 3.0 |
 | 10.9 Cost monitoring | 0.5 | 1.0 | 0 | 1.5 |
 | 10.10 Temporal re-evaluation trigger | 0.5 | 0 | 1.0 | 1.5 |
-| **Total** | **42.5** | **2.0** | **1.0** | **45.5** |
+| 10.11 Edge and abuse limits | 2.0 | 0 | 0 | 2.0 |
+| **Total** | **48.5** | **2.0** | **1.0** | **51.5** |
 
-→ with 20 % buffer **54.6** person-days
+→ with 20 % buffer **61.8** person-days
 
 ## 13. Contract change requests
 

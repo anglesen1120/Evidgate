@@ -242,7 +242,16 @@ Epic 11.4 total: 6.0
 | 11.5.1-T4 | Break-glass procedure and quarterly operator-access review | S | V1 | M3 | 11.5.1-T2 |
 | 11.5.1-T5 | `GET /v1/orgs/{o}/security-events` read endpoint + authorisation (`security_event:read`, `tenant_admin` only), filters by project/type/severity/time over the V1 event set: the 11.1.1-T4 baseline plus support-access rows from 02.8.1-T1 and 11.5.1-T2 (injection-attempt events join in V2 via 11.4.1-T2) | M | V1 | M3 | 11.1.1-T4 |
 
-Epic 11.5 total: 4.5
+#### Story 11.5.2 Audit chain integrity outside its own database — acceptance: a tampered or truncated audit chain is detected by a job that does not trust the database.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 11.5.2-T1 | ADR: HMAC-keyed chain, key custody and rotation (10.7.1-T4), checkpoint cadence | S | V1 | M2 | 11.5.1-T1 |
+| 11.5.2-T2 | Signed periodic checkpoint exported to separate storage with a write-once policy | M | V1 | M2 | 11.5.2-T1 |
+| 11.5.2-T3 | Verification job and tamper/truncation tests; alert on mismatch | M | V1 | M3 | 11.5.2-T2, 10.3.1-T5 |
+
+**Story 11.5.2 total: 2.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
+Epic 11.5 total: 7
 
 ### Epic 11.6 - Supply chain and dependency controls (M1-M3, V1)
 
@@ -294,7 +303,16 @@ Epic 11.8 total: 9.0
 | 11.9.1-T4 | Sub-processor change process: notification, objection window, versioned list | S | V1 | M3 | 11.8.1-T1 |
 | 11.9.1-T5 | Retention/deletion verification against plan 06 artifact states (`pending_delete → deleted` with proof) | M | V1 | M3 | 11.9.1-T1 |
 
-Epic 11.9 total: 6.0
+#### Story 11.9.2 Data-subject requests (PDPL) — acceptance: a data-subject request for access, correction, deletion or restriction is handled by a runnable procedure with a recorded outcome.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 11.9.2-T1 | Intake, identity check, scope lookup across tables and artifacts, response template and deadline tracker (deadline per counsel ⚠️) | M | V1 | M3 | 11.9.1-T1 |
+| 11.9.2-T2 | Reconcile the audit chain with deletion: pseudonymous subject ids in audit rows, no personal data in chain payloads; written rule | S | V1 | M3 | 11.5.2-T1 |
+| 11.9.2-T3 | Rehearse one request end to end in staging and attach the report | S | V1 | M3 | 11.9.2-T1, 11.9.2-T2 |
+
+**Story 11.9.2 total: 2** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
+Epic 11.9 total: 8
 
 ## 10. Dependencies
 
@@ -332,14 +350,14 @@ Epic 11.9 total: 6.0
 | 11.2 Untrusted CI, runners, sandbox | 4.5 | 2.0 | 1.0 | 7.5 |
 | 11.3 Secrets and key management | 6.0 | 0 | 0 | 6.0 |
 | 11.4 AI security and prompt injection | 0 | 6.0 | 0 | 6.0 |
-| 11.5 Audit, support access, monitoring | 4.5 | 0 | 0 | 4.5 |
+| 11.5 Audit, support access, monitoring | 7.0 | 0 | 0 | 7.0 |
 | 11.6 Supply chain and dependency controls | 4.5 | 0 | 0 | 4.5 |
 | 11.7 AppSec verification and pen test | 6.0 | 1.0 | 0 | 7.0 |
 | 11.8 PDPL compliance program | 9.0 | 0 | 0 | 9.0 |
-| 11.9 Data protection operations | 6.0 | 0 | 0 | 6.0 |
-| **Total** | **44.5** | **9.0** | **1.0** | **54.5** |
+| 11.9 Data protection operations | 8.0 | 0 | 0 | 8.0 |
+| **Total** | **49.0** | **9.0** | **1.0** | **59.0** |
 
-→ with 20 % buffer **65.4** person-days (sizes XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals are the sum of their task rows)
+→ with 20 % buffer **70.8** person-days (sizes XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals are the sum of their task rows)
 
 ## 13. Contract change requests
 

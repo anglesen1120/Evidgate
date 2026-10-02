@@ -156,6 +156,15 @@
 | 04.1.2-T4 | `producer_slot` table (DbUp migration) + `IProducerRegistry.RegisterSlotsAsync` contract + implementation; called by 05's run-create command in the same tenant transaction, one slot per manifest shard (T9) | M | V1 | M1 | 01.4.1-T1 |
 | 04.1.2-T5 | Producer-slot binding enforcement: first write binds `bound_token_jti`/`bound_ci_run_ref`, foreign identity → 403 `producer_slot_taken`, unknown producer → 422 `unknown_producer`; the check lives in this module — 05's finalize handler (05.3.2-T1) enforces it by calling the `IProducerRegistry` contract, so only the bound identity may `finalize` (T9); 422 `unknown_execution_key` batch reject with indices (T10); accept-and-mark `after_cancel` after cancel (T12) | M | V1 | M1 | 04.1.1-T1, 04.1.2-T4 |
 
+#### Story 04.1.3 Large-report caps and streaming — acceptance: a 100 000-test report is accepted or refused with a documented cap, parsing and reconciliation use bounded memory, and run detail and comparison are paged.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 04.1.3-T1 | Manifest and report caps (cases, variants, bytes) with `413`/`422` codes in OpenAPI; run-detail and comparison list endpoints return a cursor page shape (00 §9) | S | V1 | M2 | 04.1.1-T3 |
+| 04.1.3-T2 | Reconciler and parsers stream: page through acked events by `(producer, sequence)` cursor instead of one pass; no whole-report XML/JSON in memory | M | V1 | M2 | 05.3.2-T2, 04.1.1-T4 |
+| 04.1.3-T3 | 100 000-test fixture in `fixtures/` and a memory/time budget test on it; feeds 10.6.1-T1 | M | V1 | M2 | 04.1.3-T2, 01.6.1-T3 |
+
+**Story 04.1.3 total: 2.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
 ### Epic 04.2 `evidgate` CLI
 #### Story 04.2.1 Authenticate from CI — acceptance: the CLI exchanges an OIDC JWT or ingest token for a scoped `ci_producer` token, caches it, refreshes before expiry and fails loudly on 403.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -293,7 +302,7 @@
 
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
-| 04.1 Event ingest API | 9.0 | — | — | 9.0 |
+| 04.1 Event ingest API | 11.5 | — | — | 11.5 |
 | 04.2 `evidgate` CLI | 7.0 | — | — | 7.0 |
 | 04.3 Playwright reporter | 6.0 | — | — | 6.0 |
 | 04.4 JUnit XML mapper | 7.5 | — | — | 7.5 |
@@ -302,9 +311,9 @@
 | 04.7 Capability and protocol | 2.5 | — | — | 2.5 |
 | 04.8 Usage events | 1.5 | — | — | 1.5 |
 | 04.9 Replay step, release, docs | 7.5 | — | — | 7.5 |
-| **Total** | **44.5** | **5.0** | **—** | **49.5** |
+| **Total** | **47.0** | **5.0** | **—** | **52.0** |
 
-→ with 20 % buffer **59.4** person-days (V1 44.4, V2 6.0; unit: one senior full-stack .NET + Angular developer for server work, Node/TypeScript unchanged for CLI/adapters, CR-D-1).
+→ with 20 % buffer **62.4** person-days (V1 56.4, V2 6.0; unit: one senior full-stack .NET + Angular developer for server work, Node/TypeScript unchanged for CLI/adapters, CR-D-1).
 
 ## 13. Contract change requests
 
