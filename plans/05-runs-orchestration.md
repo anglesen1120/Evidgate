@@ -189,7 +189,7 @@
 | 05.2.2-T2 | Run list and read model: filter by `ref_name`, `pr_number`, `trigger_event`, `is_fork`; keyset index `(project_id, ref_name, created_at, id)` | S | V1 | M2 | 05.2.2-T1 |
 | 05.2.2-T3 | Fork-PR behaviour: `is_fork = true` runs are labelled, advisory-only, never bound to a release (05.6.1) and never satisfy a gating policy; the token path for forks is documented as unsupported or advisory-only (02.4.1, 02.4.2) | M | V1 | M2 | 05.2.2-T1, 02.4.1-T2 |
 
-**Story 05.2.2 total: 2.5** — `[OPEN]` branch-scoped policy mode (strict on the default branch, advisory on PRs) is a 07 decision; this story supplies the inputs only.
+**Story 05.2.2 total: 2.5** — branch-scoped policy mode decided (DECISIONS §8.1 D-A10, D-A11: `gating_refs`; unverified and fork runs advisory); 07 implements it, this story supplies the inputs.
 
 ### Epic 05.3 Lifecycle, finalize and reconcile
 #### Story 05.3.1 Run state machine — acceptance: only the transitions of 00 §8.1 are accepted, each writes audit + outbox, and a stale `version` write fails 412.

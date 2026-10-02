@@ -27,7 +27,7 @@
 | 01 | Docker on GitHub-hosted runners for Testcontainers ⚠️ | Keep the plan: 01.7.1-T1 verifies it; self-hosted runner only if it fails. |
 | 01 | `scripts/` vs `packages/*` for tooling | Keep `scripts/`; promote a tool to a workspace only when it needs its own dependencies or tests. |
 | 02 | Q1 identity provider | Both GitHub and Google Workspace are already built in V1 (FR-02-3, 02.3.1-T1); M0 interviews only confirm which one the pilot uses. |
-| 02 | Q2 `ci_producer` TTL | 60 min is already decided (02 D7). Open part: no refresh endpoint; long jobs re-exchange the OIDC token. |
+| 02 | Q2 `ci_producer` TTL | Decided, see DECISIONS §8.1 D-A3. |
 | 02 | Q3 custom roles | Built-in roles only in V1. |
 | 02 | Q4 token hashing (superseded) | 02 D6 replaced `scrypt` with `HMAC-SHA256` + a versioned server pepper (tokens are random ≥ 128 bit, so a slow KDF adds nothing). Pepper custody and rotation: `plans/open-items/01-core-identity.md` OI-02-03. |
 | 02 | Q5 support-access scope | Per project. |
@@ -41,7 +41,7 @@
 | 03 | Q7 unmapped results | Visible, labelled "unmapped", never gate-counted. |
 | 03 | Q8 multi-repo projects | Not in V2. |
 | 04 | Q1, Q2 producer and sharding | Answered by the M0 interviews (O1). |
-| 04 | Q3 gzip cap | Strict cap first; relax after the load test. |
+| 04 | Q3 gzip cap | Decided, see DECISIONS §8.1 D-A8. |
 | 04 | Q4 raw report retention | Follow the artifact retention (14 d default, FR-06-10); reprocess works inside that window. A longer raw-report window needs per-kind retention (a change to `retention_policy`) — not in V1. |
 | 04 | Q5 `ingest_only` | Keep; it is the onboarding path for unsupported engines. |
 | 05 | Q1 lease/heartbeat | Measure first, then tune. |

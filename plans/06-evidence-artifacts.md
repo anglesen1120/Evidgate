@@ -295,7 +295,7 @@ Sibling story ids referenced above are ⚠️ pending confirmation: `plans/` con
 |---|---|---|---|
 | 06-O1 | Confirm artifact 14 d / metadata 90 d defaults with the pilots (cost vs. audit need) | Owner + Tech Lead | M2 end |
 | 06-O2 | Storage region/provider and any VN residency requirement (O3) | Owner | M2 start |
-| 06-O3 | Maximum single artifact size per kind (2 MB assumed from the capacity model; traces and video exceed it) | Tech Lead | 06.1.2-T3 |
+| 06-O3 | Maximum single artifact size per kind (2 MB assumed from the capacity model; traces and video exceed it) — **decided: DECISIONS §8.1 D-A9** | Tech Lead | 06.1.2-T3 |
 | 06-O4 | Are Playwright traces `sensitive` by default (they can embed request bodies and auth state)? | Tech Lead + security review | 06.2.1-T1 |
 | 06-O5 | Which object-storage emulator is allowed by the licence rule (⚠️ DECISIONS §4) — decides the integration-test container — **Closed 2026-09-25:** SeaweedFS (Apache-2.0 ✅), MinIO rejected (AGPL-3.0 ✅); DECISIONS §4, 01.8.1-T1 | Tech Lead | 01, before 06.1.2-T1 |
 | 06-O6 | Is `reject_on_secret` needed in V1, or is alert-and-classify enough for the first pilot? | QA lead | 06.2.3-T1 |

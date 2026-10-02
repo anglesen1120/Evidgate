@@ -307,9 +307,9 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | # | Question | Owner | Needed by |
 |---|---|---|---|
 | Q1 | Which identity provider does the pilot customer actually use (GitHub org vs Google Workspace)? Confirm in M0 interviews | Tech Lead (O1) | M1 start |
-| Q2 | `ci_producer` default TTL (60 min assumed) and whether long CI jobs need a refresh endpoint | Tech Lead | M1 (story 02.4.1-T3) |
+| Q2 | `ci_producer` default TTL (60 min assumed) and whether long CI jobs need a refresh endpoint — **decided: DECISIONS §8.1 D-A3** | Tech Lead | M1 (story 02.4.1-T3) |
 | Q3 | Is an org-created custom role allowed in V1, or are built-ins fixed until V2? | Product owner | before 02.2.1-T1 is detailed |
-| Q4 | Where does the pepper live in the secret store, and who owns the rotation cadence and the multi-version verify window (T5)? | Tech Lead + security (11) | before 02.4.2-T1 |
+| Q4 | Where does the pepper live in the secret store, and who owns the rotation cadence and the multi-version verify window (T5)? — **decided: DECISIONS §8.1 D-A2, D-A4, D-A5** | Tech Lead + security (11) | before 02.4.2-T1 |
 | Q5 | Support-access scope granularity: per object type or per project? | QA Lead + Tech Lead | before 02.8.1-T1 |
 | Q6 | Does the pilot need an email-only invite for a user without GitHub/Google (blocked today)? | Product owner | M1 (M0 O1) |
 ## 12. Estimate summary

@@ -148,6 +148,24 @@ Working recommendations for every open item: `RECOMMENDATIONS.md` (not decisions
 | O9 | Which cases are critical and their business intent (source decision row "Case critical và ý định nghiệp vụ": customer QA lead + product owner). Mechanism [DECISION]: the critical-case list is a field of the policy revision (00 §8.6), so it is versioned, hashed and published by a `release_approver`; which cases go on it is the customer's decision. Until it is set, the project stays advisory | before a project's policy moves from advisory to gating | 07, 12.2 |
 | O10 | **Decided 2026-10-02 [DECISION] (owner): option (a)** — customer CI job driven by the CLI (story 04.9.1). V1 shadow-healing replay host. 05 has no V1 executor (runner jobs 05.7 are V2) and A5 forbids a hosted runner in V1–V2. Options: (a) customer CI job driven by the CLI, (b) move 05.7 runner + 11.2.1-T4 sandbox into V1 (A5 change request), (c) slip sandbox replay to V2/M4. Current estimates carry only 08.4.3-T1..T3 + 11.2.1-T6; option (a) adds a customer-side CLI replay task in 04, option (b) moves V2 rows into V1. Recommended [INFERENCE]: (a) — keeps A5, no hosted execution of customer code in V1, and still measures real replay quality in the pilot; (b) adds ≈ 12 raw days for 05.7.1/05.7.2/05.7.4 + 11.2.1-T4 (≈ 20 if all of 05.7 moves) | before the 08.4.3 feature plan (M3) | 05, 08, 11 |
 
+### 8.1 Stage A defaults [DECISION] (owner, 2026-10-02)
+
+The owner accepted the recommended defaults of the eleven Stage A owner-decision rows of `plans/open-items/README.md` §2 in chat on 2026-10-02. Numbers are owner-accepted defaults, not verified facts; D-A8 and D-A9 are revisited after the 10.6.1 load test. The contract edits they imply (00 §7/§8.6/§9) are made at each story's DoR and logged in 00 §15.
+
+| # | Register row | Decision | Unblocks |
+|---|---|---|---|
+| D-A1 | OI-02-01 | Slug grammar `^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$` (2–63 chars, no leading or trailing hyphen), in the validator and in a new migration replacing the 0004/0005 slug checks | 02.1.1-T2 |
+| D-A2 | OI-10-04 | Secrets reach the process by environment injection through the one secret-provider interface (10.1.1-T2); each is `secret: true` with a versioned name in `infra/config-matrix.json`, generated per environment, never committed. Managed store after O3 | 02.4.1-T3, 02.4.2-T1 |
+| D-A3 | OI-02-02 | `ci_producer` token TTL 60 min (02 D7), no refresh endpoint; long jobs exchange a fresh GitHub OIDC token | 02.4.1-T3 |
+| D-A4 | OI-02-03 | Ingest-token pepper lives in the secret store (D-A2), the owner is custodian, versioned `pepper_vN`, rotated per 10.7.1-T4 | 02.4.2-T1 |
+| D-A5 | OI-02-04 | Ingest-token rotation overlap window 24 h | 02.4.2-T1 |
+| D-A6 | OI-03-02 | Keep `requirement_ref`: optional, ≤ 128 chars `[A-Za-z0-9._:/#-]`, metadata only, never gating, sidecar key `requirement` (annotation optional); no requirement table in V1–V2 | 03.1.1-T1, 03.1.4-T1 |
+| D-A7 | OI-03-03 | The 03.1.4 taxonomy lists and defaults are a closed V1 catalogue in `contracts/schemas/taxonomy.v1.json`; the columns land in 03.2.1-T1 so the suite revision hash never changes later | 03.2.1-T1, 03.1.4-T2 |
+| D-A8 | OI-04-04 | Ingest gzip: expanded size ≤ 8 MiB per batch and ratio ≤ 20:1, streaming abort → 413 `batch_too_large`; relax only after the 10.6.1 load test | 04.1.1-T3 |
+| D-A9 | OI-06-03 | Per-kind artifact caps: screenshot 10 MiB, log 20 MiB, trace 100 MiB, html_report 100 MiB, video 200 MiB, raw_report 256 MiB (configurable down, never up without a decision) | 06.1.2-T3 |
+| D-A10 | OI-05-01 | One policy per project with a `gating_refs` rule: runs on the default branch (and an optional release-branch glob) gate; runs on other refs are evaluated and reported as advisory | 07.1.1-T1 |
+| D-A11 | OI-05-02 | A run with `unverified_ref = true` or from a fork is recorded with `advisory = true` and never gates; no override in V1 | 07.2.1-T1 |
+
 ## 9. Delta from the source design (review findings)
 
 | # | Source says | This plan set says | Why |
@@ -180,3 +198,4 @@ Checked and kept: capacity arithmetic (100 000 × 1 KiB ≈ 97.7 MiB/day, ≈ 8.
 | 2026-09-25 | `RECOMMENDATIONS.md` review round 2: rows aligned with decided FRs (02 FR-02-3/D7, 03 FR-03-9, 06 FR-06-10/13, 10 FR-10-1, 00 §7); 02-Q2 moved to before M1; 11-Q3 added; O10 (a) task cost flagged. |
 | 2026-09-25 | **CR-D-1 (owner): stack change.** §4 rewritten: server/worker on .NET 10 LTS + ASP.NET Core minimal APIs + CQRS (`Mediator` 3.0.2, EF Core 10 write model, Dapper read model), DbUp plain-SQL migrations, own outbox + task queue (pg-boss removed), web on Angular 22.2 + `@ngrx/signals`; customer-side CLI/adapters/agent stay Node 26/TS 6.0.x. Rejected on the licence rule: MediatR 14 (RPL-1.5), JsonSchema.Net 9 (maintenance-fee EULA), FluentAssertions 8 (non-commercial); Hangfire (LGPL) avoided. Estimate unit becomes one senior full-stack .NET + Angular developer. Contract edits in 00 §5.1–§5.5, §6, §11, §12, §15; plan edits in 01–12. |
 | 2026-09-26 | O1 engine decided by the owner: Playwright for UI tests; customer CI/producers are per-project customer input. Owner notes recorded verbatim on O2 and O4 with `[INFERENCE]` readings; both rows stay open until the owner confirms the reading. |
+| 2026-10-02 | §8.1 Stage A defaults D-A1…D-A11 recorded (owner accepted the open-items register defaults). |

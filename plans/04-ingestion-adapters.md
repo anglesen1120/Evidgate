@@ -295,7 +295,7 @@
 |---|---|---|---|
 | Q1 | Which JUnit producer is the pilot's (assumed pytest `junitxml`, O1) and does it emit nested `testsuites`? | Tech Lead | M1 start |
 | Q2 | Do pilot CIs split Playwright runs with `--shard`, or with separate matrix jobs? (changes producer/shard mapping) ⚠️ | Tech Lead | M1 start |
-| Q3 | Exact gzip expanded-size/ratio cap value (needs the 10 load test) | Tech Lead | M2 |
+| Q3 | Exact gzip expanded-size/ratio cap value (needs the 10 load test) — **decided: DECISIONS §8.1 D-A8** (≤ 8 MiB expanded, ≤ 20:1) | Tech Lead | M2 |
 | Q4 | Are raw reports retained as artifacts of the run for the whole retention window? (cost vs reprocess) | Tech Lead | M2 |
 | Q5 | Does the pilot need `ingest_only` at all, or is CI mode always full? | Product owner | M2 |
 

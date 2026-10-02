@@ -179,7 +179,7 @@ Recomputed 2026-10-02 from `plan_graph.py` after the review additions, de-duplic
 | Task | Size | Milestone | Note |
 |---|---|---|---|
 | 02.4.1-T2 | M | M1 | `ci_binding` model + admin API; unblocks the `seed-dev` bootstrap (01.8.1-T3) |
-| 02.1.1-T2 | M | M1 | Org/project API; slug regex decision first (open items) |
+| 02.1.1-T2 | M | M1 | Org/project API; slug grammar decided (DECISIONS §8.1 D-A1) |
 | 02.6.1-T2, 02.6.1-T3, 02.6.2-T1 | S, M, S | M1 | RLS lint now M1; 02.6.2-T1 is entry points only (reuses 01.4.2-T1) |
 | 02.7.1-T1 | M | M1 | Audit log moved to M1 (05.3.1 writes audit rows) |
 | 03.1.1-T1 | L | M1 | Stable case identity (critical chain) |
