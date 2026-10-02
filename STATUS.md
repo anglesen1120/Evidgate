@@ -1,16 +1,16 @@
 # Evidgate — delivery status
 
-Updated 2026-09-27. Source of truth for tasks: `plans/01`–`12` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
+Updated 2026-10-02. Source of truth for tasks: `plans/01`–`12` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
 
 ## 1. Snapshot
 
 | Item | State |
 |---|---|
 | Branch flow | `feature/*` or `docs/*` → PR into `develop` → owner merges. `main` = planning baseline |
-| `develop` head | `6dce731` (PR #11 merged) |
-| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 · #11 M1 wave 6 |
-| Open PRs | #12 M1 wave 7 (CI green, run 36297866088) |
-| Active branch | `feature/m1-wave7` (off `develop` `6dce731`); wave 7 delivered, gates green, open as PR #12 — see §3.7 |
+| `develop` head | `db4eb44` (PR #12 merged) |
+| Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 · #11 M1 wave 6 · #12 M1 wave 7 |
+| Open PRs | none |
+| Active branch | `develop` — plan review follow-ups (`plans/REVIEW-2026-10-02.md`); wave 7 (§3.7) is merged |
 | M0/M1 tasks | 56 done · 78 open (of 134; 10.2.1-T1 counted open until T1.4) |
 | Plan checks | `plan_graph.py` errors 0 · 502 tasks · 560.25 raw / 672.3 buffered person-days |
 | CI | `.github/workflows/ci.yml` runs every `verify.sh` stage (01.7.1-T1); interim `docker-tests.yml` deleted in wave 5 |

@@ -89,7 +89,7 @@ Owner direction 2026-09-25: web on **Angular**, backend on the **latest .NET** w
 
 | Layer | Choice | Evidence | Note |
 |---|---|---|---|
-| Runtime | **Node.js 26 LTS** to build; published packages support **Node 22+** (00 §11) | v26 released 2026-05-05, LTS 2026-10-28, EOL 2029-04-30 ✅ ([nodejs/Release](https://github.com/nodejs/Release)) | CLI `evidgate`, Playwright reporter, JUnit/Appium mappers, V2 agent |
+| Runtime | **Node.js 26** (Current; becomes LTS 2026-10-28) to build; published packages support **Node 22+** (00 §11) | v26 released 2026-05-05, LTS 2026-10-28, EOL 2029-04-30 ✅ ([nodejs/Release](https://github.com/nodejs/Release)) | CLI `evidgate`, Playwright reporter, JUnit/Appium mappers, V2 agent |
 | Language | **TypeScript 6.0.x** | `typescript-eslint` 8.70.1 peer `typescript >=4.8.4 <6.1.0` ✅ ([registry](https://registry.npmjs.org/typescript-eslint/8.70.1)) | Move to 7.x with the web (01.1.1-T4, V3) |
 | Tests | **Vitest 5** | as above | |
 | Package manager | **npm workspaces** for `apps/web` + `packages/*`, committed `package-lock.json`, `npm ci` | ships with Node | |

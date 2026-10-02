@@ -107,7 +107,7 @@ Permissions are strings `resource:action` (for example `run:create`, `job:claim`
 | M4 | 13-18 | **V2**: agent web/API, draft workflow, healing PR | Validation and approval bound to hash; rollback drill passes |
 | M5 | after V2 review | Deeper Android; iOS/hosted runners or V3 on demand | Paying demand and safety evidence (08 gate) |
 
-The Weeks column is the source's sequence, not a date commitment (DECISIONS O8, decided 2026-09-25).
+The Weeks column is the source's sequence, not a date commitment (DECISIONS O8, decided 2026-09-25). It does **not** fit the scope: M1 alone is 142 raw person-days (§14). For an arithmetic re-baseline (buffer, focus factor, critical path) see `plans/REVIEW-2026-10-02.md` §4 `[INFERENCE]`.
 
 Version tags on every task: `V1` (needed for M3), `V2` (M4), `V3` (M5+). Each task also names its milestone.
 
