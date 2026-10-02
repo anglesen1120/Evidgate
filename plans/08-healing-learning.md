@@ -193,7 +193,7 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 #### Story 08.4.3 Sandbox replay — acceptance: baseline and candidate run on the same app digest, fixture and environment; non-comparable runs are rejected; the replay host chosen in O10 meets the 11.2.1-T6 requirements (one-shot, network allowlist, no tenant secrets).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.4.3-T1 | Replay job spec (app digest, fixture, env, engine pin) + comparability gate | L | V1 | M3 | 08.3.2-T1, 05.2.1-T4 |
+| 08.4.3-T1 | Replay job spec (app digest, fixture, env, engine pin) + comparability gate | L | V1 | M3 | 08.3.2-T1, 05.2.1-T4, 04.9.1-T1 |
 | 08.4.3-T2 | One-shot isolation, replay caps + metering, Playwright version pin | M | V1 | M3 | 08.4.3-T1, 11.2.1-T6 |
 | 08.4.3-T3 | Validation report + rejection taxonomy; incident returns to triage | S | V1 | M3 | 08.4.3-T2 |
 ### Epic 08.5 LLM gateway, privacy and healer generator (V2, M4)

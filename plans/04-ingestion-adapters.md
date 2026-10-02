@@ -241,6 +241,29 @@
 | 04.8.1-T1 | Emit `usage_ledger_entry` rows per batch per metric (quantity = event count) via an outbox task, `billing_key = batch:<event_batch_id>:<metric>` (T43, T50) | M | V1 | M2 | 04.1.1-T2, 12.3.1-T1 |
 | 04.8.1-T2 | No-double-count integration test (resend, reprocess, retry-fail-pass) + handoff notes to the usage roll-up | S | V1 | M2 | 04.8.1-T1 |
 
+### Epic 04.9 Customer-side replay step, release and docs [PROPOSAL review 2026-10-02]
+#### Story 04.9.1 Customer-side replay step (O10 option a) — acceptance: a shadow replay runs in the customer's own CI job through the CLI against a server-issued replay grant, never executes server-side, never carries the customer's secrets to Evidgate, and reports its result as a `purpose = replay` run that cannot affect a release decision.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 04.9.1-T1 | `evidgate replay` CLI command: fetch the replay job spec by `replay_grant_id` (08.4.3-T1), check out the candidate patch, run the pinned Playwright version, send results as a `replay` run | L | V1 | M3 | 04.2.3-T1, 05.2.1-T5 |
+| 04.9.1-T2 | CI workflow template and quickstart for the replay job (OIDC, no long-lived secret), with the isolation requirements of 11.2.1-T6 stated for the customer | M | V1 | M3 | 04.9.1-T1, 11.2.1-T6 |
+| 04.9.1-T3 | Conformance tests: replay refused without a valid grant, replay run excluded from regression/release/incident creation, pinned-version mismatch reported | M | V1 | M3 | 04.9.1-T1 |
+| 04.9.1-T4 | Failure paths: grant expiry mid-run, customer CI timeout, partial result upload; documented exit codes | S | V1 | M3 | 04.9.1-T1 |
+
+**Story 04.9.1 total: 4.5** — `[INFERENCE]` size; DECISIONS §8 O10 estimated 12–20 days for the whole replay path including 08 work, so 08.4.3 must be re-sized at its DoR.
+
+#### Story 04.9.2 CLI/SDK release, compatibility and customer docs — acceptance: a tagged release publishes the CLI and adapters with provenance and a changelog, a client older than the supported window gets an actionable error from the server, and a customer can reach a first accepted run from the docs alone.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 04.9.2-T1 | Publish pipeline for `@evidgate/*` packages (semver, npm provenance, changelog, signed tag) and the written N-1 server/client compatibility window | M | V1 | M3 | 04.2.4-T2, 01.7.1-T1 |
+| 04.9.2-T2 | Docs site skeleton: quickstart per CI, API reference generated from `contracts/openapi.yaml`, glossary from 00 §3, error-code catalogue | M | V1 | M3 | 04.2.4-T2 |
+| 04.9.2-T3 | `security.txt`, vulnerability-disclosure page and a status-page choice recorded as a decision | S | V1 | M3 | 04.9.2-T2 |
+| 04.9.2-T4 | Version-skew check: client sends `X-Evidgate-Client`; an unsupported version receives 426 with an upgrade message and the supported range | S | V1 | M3 | 04.9.2-T1 |
+
+**Story 04.9.2 total: 3.0**
+
+**Epic 04.9 total: 7.5**
+
 ## 10. Dependencies
 
 | Plan | Needed for | Story/task ids (checked against the sibling plan files 2026-09-24, plan 10 re-checked 2026-09-25) |
@@ -278,9 +301,10 @@
 | 04.6 Fixtures and conformance | 3.5 | — | — | 3.5 |
 | 04.7 Capability and protocol | 2.5 | — | — | 2.5 |
 | 04.8 Usage events | 1.5 | — | — | 1.5 |
-| **Total** | **37.0** | **5.0** | **—** | **42.0** |
+| 04.9 Replay step, release, docs | 7.5 | — | — | 7.5 |
+| **Total** | **44.5** | **5.0** | **—** | **49.5** |
 
-→ with 20 % buffer **50.4** person-days (V1 44.4, V2 6.0; unit: one senior full-stack .NET + Angular developer for server work, Node/TypeScript unchanged for CLI/adapters, CR-D-1).
+→ with 20 % buffer **59.4** person-days (V1 44.4, V2 6.0; unit: one senior full-stack .NET + Angular developer for server work, Node/TypeScript unchanged for CLI/adapters, CR-D-1).
 
 ## 13. Contract change requests
 

@@ -182,6 +182,15 @@
 | 05.2.1-T4 | CI-mode shard expectations derived from the shard plan (one `producer_slot` per shard committed in T1) + the `created → queued` transition at slot commit (T13) | M | V1 | M1 | 05.2.1-T1 |
 | 05.2.1-T5 | `run.purpose ∈ {regular, replay}` (default `regular`, immutable): `replay` is accepted only with a server-issued `replay_grant_id` from 08.4.3 (bound to project, candidate and expiry; otherwise 422 `replay_grant_invalid`); replay runs are never bound to a release, never counted as regression and are exposed on the run read model (T67) | S | V1 | M1 | 05.2.1-T1 |
 
+#### Story 05.2.2 Branch, PR and commit identity of a run — acceptance: a run records the branch or PR, head and base commit, trigger event and fork flag it was created for; the run list filters by them; a fork run is labelled, advisory-only and never bound to a release; none of these fields can change after creation. [PROPOSAL review 2026-10-02 D1]
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 05.2.2-T1 | `run` columns `ref_kind` (`branch`/`tag`/`pull_request`), `ref_name`, `pr_number`, `head_sha`, `base_sha`, `trigger_event` (`push`/`pull_request`/`schedule`/`manual`/`dispatch`), `is_fork`; taken from the verified GitHub OIDC claims when present, otherwise from CLI-supplied values labelled `unverified_ref`; immutable after run creation; OpenAPI + 00 §7 change first | M | V1 | M1 | 05.2.1-T1 |
+| 05.2.2-T2 | Run list and read model: filter by `ref_name`, `pr_number`, `trigger_event`, `is_fork`; keyset index `(project_id, ref_name, created_at, id)` | S | V1 | M2 | 05.2.2-T1 |
+| 05.2.2-T3 | Fork-PR behaviour: `is_fork = true` runs are labelled, advisory-only, never bound to a release (05.6.1) and never satisfy a gating policy; the token path for forks is documented as unsupported or advisory-only (02.4.1, 02.4.2) | M | V1 | M2 | 05.2.2-T1, 02.4.1-T2 |
+
+**Story 05.2.2 total: 2.5** — `[OPEN]` branch-scoped policy mode (strict on the default branch, advisory on PRs) is a 07 decision; this story supplies the inputs only.
+
 ### Epic 05.3 Lifecycle, finalize and reconcile
 #### Story 05.3.1 Run state machine — acceptance: only the transitions of 00 §8.1 are accepted, each writes audit + outbox, and a stale `version` write fails 412.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -216,6 +225,16 @@
 |---|---|---|---|---|---|
 | 05.5.1-T1 | Rerun flow: selection (failed subset from the current revision) → new run + `parent_run_id` + `rerun_scope` | M | V1 | M2 | 05.3.2-T2 |
 | 05.5.1-T2 | Subset labelling: exposure in API/UI/report and the policy input that blocks subset runs from satisfying a full-regression policy | M | V1 | M2 | 05.5.1-T1, 07.4.1 |
+
+#### Story 05.5.2 CI re-run semantics and trigger — acceptance: a GitHub "Re-run jobs" (same `run_id`, higher `run_attempt`) never collides with the producer-slot binding and is recorded as a new run with `parent_run_id`; a re-run can be triggered from Evidgate through the GitHub App when installed; a cancelled run stops the customer's shards within one poll interval; a shard exceeding its max duration is reported, not left to the collection deadline. [PROPOSAL review 2026-10-02 D2/D8]
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 05.5.2-T1 | Decision + 00 §9.4 CR: the bound CI identity is `(repository_id, run_id, run_attempt)`; a higher `run_attempt` creates a new Evidgate run with `parent_run_id` and `rerun_scope = ci_attempt`; evidence of the earlier attempt stays immutable | S | V1 | M1 | 05.2.1-T4 |
+| 05.5.2-T2 | Producer-slot binding and `finalize` accept the attempt in `bound_ci_run_ref`; tests for re-run, partial re-run of one shard and a stale attempt writing late (`producer_slot_taken` vs accept-and-mark) | M | V1 | M2 | 05.5.2-T1, 04.1.2-T4 |
+| 05.5.2-T3 | Evidgate-initiated re-run via `workflow_dispatch`/re-run API through the GitHub App installation (02.4.3): optional, per-project flag, audited, idempotent per parent run | M | V1 | M3 | 05.5.2-T1, 02.4.3-T2, 05.5.1-T1 |
+| 05.5.2-T4 | CLI cancel poll (`GET /v1/runs/{r}` state, interval with jitter) and per-shard maximum duration with a reported `shard_timeout` reason; server side stores `shard_max_duration` in the manifest | M | V1 | M2 | 05.5.2-T1, 04.2.3-T1 |
+
+**Story 05.5.2 total: 3.5**
 
 ### Epic 05.6 Release and components
 #### Story 05.6.1 Digest-bound release — acceptance: a release lists components with digests; only runs whose manifest components match are bound; no run is ever bound by recency.
@@ -311,18 +330,18 @@
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
 | 05.1 Manifest | 7.5 | — | — | 7.5 |
-| 05.2 Run creation | 5.0 | — | — | 5.0 |
+| 05.2 Run creation | 7.5 | — | — | 7.5 |
 | 05.3 Lifecycle, finalize, reconcile | 10.0 | — | — | 10.0 |
 | 05.4 Cancel | 2.5 | — | — | 2.5 |
-| 05.5 Rerun | 2.0 | — | — | 2.0 |
+| 05.5 Rerun | 5.5 | — | — | 5.5 |
 | 05.6 Release and components | 3.0 | — | — | 3.0 |
 | 05.7 Agent mode | — | 18.0 | — | 18.0 |
 | 05.8 Android device lease | — | 3.0 | — | 3.0 |
 | 05.9 iOS and hosted runners (placeholder, rough) | — | — | 2.0 | 2.0 |
 | 05.10 Consistency jobs | 1.5 | 1.0 | — | 2.5 |
-| **Total** | **31.5** | **22.0** | **2.0** | **55.5** |
+| **Total** | **37.5** | **22.0** | **2.0** | **61.5** |
 
-→ with 20 % buffer **66.6** person-days (V1 31.5, V2 22.0, V3 2.0 rough). Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals are the sum of their task rows.
+→ with 20 % buffer **73.8** person-days (V1 37.5, V2 22.0, V3 2.0 rough). Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals are the sum of their task rows.
 
 ## 13. Contract change requests
 

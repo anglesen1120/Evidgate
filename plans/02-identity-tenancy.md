@@ -213,7 +213,17 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 |---|---|---|---|---|---|
 | 02.4.2-T1 | `ingest_token` (prefix + `HMAC-SHA256` + `pepper_version`, T5), show-once response, rotate/revoke API, `last_used_at` tracking | S | V1 | M2 | 02.4.1-T3 |
 | 02.4.2-T2 | CI auth contract tests: fork PR, renamed repo, wrong audience, replayed `jti`, rotated and revoked tokens | S | V1 | M2 | 02.4.1-T4, 02.4.2-T1 |
-**Epic 02.4 total: 6.0**
+#### Story 02.4.3 GitHub App installation — acceptance: one GitHub App is installed per organization, its installation id is stored per org, a short-lived installation token is minted on demand and never persisted, an uninstall or suspension disables the integrations that use it, and every change is audited. [PROPOSAL review 2026-10-02]
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 02.4.3-T1 | Decision (ADR): one Evidgate GitHub App serves checks (07.6.1), catalog webhooks (03.4.x), healing PRs (08.6.x) and re-run triggers (05.5.2), with the minimal permission set per feature and a documented owner for its private key | S | V1 | M2 | 02.4.1-T2 |
+| 02.4.3-T2 | `github_installation` table (org_id, installation_id, account, permissions, state), install callback with state/nonce, installation-token minting with cache below expiry, RLS + composite FK, audit | M | V1 | M2 | 02.4.3-T1, 02.1.1-T1 |
+| 02.4.3-T3 | Installation lifecycle webhooks (`installation`, `installation_repositories`, suspend/unsuspend): update state, disable dependent bindings, notify the org admin | S | V1 | M3 | 02.4.3-T2 |
+
+**Story 02.4.3 total: 2.0**
+
+**Epic 02.4 total: 8.0**
+
 ### Epic 02.5 Agent service identity (V2)
 #### Story 02.5.1 Agent identity per tenant and pool — acceptance: an `evidgate-agent` enrols into one pool of one tenant, can claim only that pool's jobs, cannot approve, change policy or read another project; its credential can be rotated or revoked and the revocation takes effect on the next request.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -258,6 +268,17 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | 02.9.1-T2 | Composite FK suite: cross-org inserts rejected on every tenant table | M | V1 | M1 | 02.1.1-T1 |
 | 02.9.1-T3 | RLS suite: unset GUC → 0 rows, set GUC → exact rows, `relforcerowsecurity` true, app role has no `BYPASSRLS` (platform catalogue rows asserted separately per §4.5; platform-scoped identity tables excluded) | M | V1 | M1 | 02.6.1-T1, 02.6.2-T1 |
 **Epic 02.9 total: 3.0**
+
+### Epic 02.10 Transactional notifications [PROPOSAL review 2026-10-02 P4]
+#### Story 02.10.1 One outbound email channel — acceptance: an invite, a support grant, a quota warning and a candidate expiry each send exactly one localized (vi/en) email through the outbox; a bounce or complaint suppresses further mail to that address; no email contains a secret or customer test data.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 02.10.1-T1 | Provider choice and sender setup (SPF/DKIM/DMARC, sending domain, region vs PDPL transfer note), recorded as a decision in DECISIONS §8 | S | V1 | M2 | — |
+| 02.10.1-T2 | `Evidgate.Modules.Notifications`: `notification` table (RLS, idempotency key), outbox-driven sender task with retry/dead-letter, vi/en templates, no PII beyond recipient and org name in logs | L | V1 | M2 | 02.10.1-T1, 01.5.1-T3 |
+| 02.10.1-T3 | Bounce/complaint webhook, suppression list, per-org opt-out for non-transactional mail | M | V1 | M3 | 02.10.1-T2 |
+| 02.10.1-T4 | Wire consumers: invite (02.1.2-T2), support grant (02.8.1-T1), quota 80 % warning (12.3.1-T4); candidate expiry (08.6.1-T3) is wired in V2 | M | V1 | M3 | 02.10.1-T2, 02.1.2-T2, 02.8.1-T1, 12.3.1-T4 |
+
+**Epic 02.10 total: 4.5**
 ## 10. Dependencies
 
 - **01** (`01.4.1-T1` `Evidgate.Migrator`/DbUp runner, `01.4.2-T1` `ITenantScope`/`set_config` infrastructure, `01.3.1-T1` contracts pipeline, `01.1.2-T1` api/worker boot): SQL migration runner, `contracts/` generation, local PostgreSQL.
@@ -281,15 +302,16 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | 02.1 Tenant core | 5.0 | 0 | 0 | 5.0 |
 | 02.2 Roles and permissions as data | 3.0 | 0 | 0 | 3.0 |
 | 02.3 Human login (OIDC / OAuth2) | 4.5 | 0 | 3.0 | 7.5 |
-| 02.4 CI authentication | 6.0 | 0 | 0 | 6.0 |
+| 02.4 CI authentication | 8.0 | 0 | 0 | 8.0 |
 | 02.5 Agent service identity | 0 | 2.0 | 0 | 2.0 |
 | 02.6 Tenant isolation (RLS) | 4.5 | 0 | 0 | 4.5 |
 | 02.7 Audit core | 2.5 | 0 | 0 | 2.5 |
 | 02.8 Support access | 2.0 | 0 | 0 | 2.0 |
 | 02.9 Cross-tenant isolation suite | 3.0 | 0 | 0 | 3.0 |
-| **Total** | **30.5** | **2.0** | **3.0** | **35.5** |
+| 02.10 Transactional notifications | 4.5 | 0 | 0 | 4.5 |
+| **Total** | **37.0** | **2.0** | **3.0** | **42.0** |
 
-→ with 20 % buffer **42.6** person-days
+→ with 20 % buffer **50.4** person-days
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: CR-1 → 00 §5.4.1; CR-2 → 00 §8.9; CR-3 → 00 §9.3; CR-4 → 00 §2; CR-5 confirmed (ids resolve).

@@ -213,22 +213,22 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | M1 | 7 | 05.1.1, 11.8.1 | 15 |
 | M1 | 8 | 05.1.2 | 1.5 |
 | M1 | 9 | [04.1.1 + 04.1.2 + 05.2.1 + 05.3.3] | 16 |
-| M1 | 10 | 04.2.2, 04.6.1, 05.3.1 | 6.5 |
+| M1 | 10 | 04.2.2, 04.6.1, 05.2.2, 05.3.1 | 9 |
 | M1 | 11 | 04.4.1 | 6.5 |
 | M1 | 12 | 03.1.2, [05.3.2 — bundle 05.3.2 + 06.5.1 + 07.2.1 + 07.2.2 + 07.5.1] | 8 |
 | M1 | 13 | 04.2.3 | 2.5 |
-| M1 | 15 | 04.3.3 | 2 |
-| M1 | 16 | [11.2.1 — bundle 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.3 + 11.2.1] | 7.5 |
+| M1 | 15 | 04.3.3, 05.5.2 | 5.5 |
+| M1 | 16 | [11.2.1 — bundle 04.9.1 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.3 + 11.2.1] | 7.5 |
 | M1 | 17 | 11.6.1 | 4.5 |
 | M1 | 19 | 12.2.1 | 5.5 |
 | M2 | 4 | 10.5.1 | 5 |
 | M2 | 5 | 01.10.1, 02.7.1, 06.1.1, 09.1.1, 10.4.1, 10.6.1, 10.7.1, 10.9.1, 10.10.1 | 31.5 |
-| M2 | 6 | 02.4.2, 02.8.1, 06.2.2, 06.3.1, 06.4.1 | 6.5 |
+| M2 | 6 | 02.4.2, 02.4.3, 02.8.1, 06.2.2, 06.3.1, 06.4.1 | 8.5 |
 | M2 | 7 | 03.4.1, 04.2.1, 06.3.2, 06.3.3, 06.4.2, 11.5.1 | 14 |
 | M2 | 8 | 06.2.1, 06.3.4, 06.4.3, 11.7.1 | 11.5 |
 | M2 | 9 | 06.4.5 | 0.5 |
 | M2 | 10 | [04.8.1 + 06.5.2 + 12.3.1], 06.1.2, 07.1.1 | 17 |
-| M2 | 11 | 05.4.1, 06.1.3, 06.2.3, 07.3.1 | 6 |
+| M2 | 11 | 02.10.1, 05.4.1, 06.1.3, 06.2.3, 07.3.1 | 10.5 |
 | M2 | 12 | 03.5.1, [06.5.1 + 07.2.1 + 07.2.2 + 07.5.1 — bundle 05.3.2 + 06.5.1 + 07.2.1 + 07.2.2 + 07.5.1], 11.3.1 | 18.25 |
 | M2 | 13 | 03.3.1, 04.4.2, 05.6.1, 05.10.1, 07.3.2, 07.4.1, 07.5.2, 07.6.2 | 15 |
 | M2 | 14 | 04.2.4, 05.5.1, 07.4.2, 09.7.1 | 15.5 |
@@ -241,8 +241,8 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | M3 | 11 | 12.4.1 | 4.5 |
 | M3 | 13 | 08.1.1 | 2.5 |
 | M3 | 14 | 07.5.3, 07.6.1, 08.1.2, 08.2.2 | 13.5 |
-| M3 | 15 | 08.2.1 | 2.5 |
-| M3 | 16 | [08.3.1 + 08.3.2 + 08.4.3 + 08.6.3 — bundle 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.3 + 11.2.1] | 12.5 |
+| M3 | 15 | 04.9.2, 08.2.1 | 5.5 |
+| M3 | 16 | [04.9.1 + 08.3.1 + 08.3.2 + 08.4.3 + 08.6.3 — bundle 04.9.1 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.3 + 11.2.1] | 17 |
 | M3 | 17 | 08.4.1 | 7 |
 | M3 | 18 | 08.4.2, 09.4.1 | 12.5 |
 | M3 | 19 | 09.5.1 | 4 |
@@ -257,7 +257,7 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | M4 | 13 | 05.7.5, 05.7.6, 06.3.5 | 3.5 |
 | M4 | 14 | [03.4.2 + 03.6.1] | 6 |
 | M4 | 15 | 07.5.4 | 0.5 |
-| M4 | 16 | [08.5.1 — bundle 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.3 + 11.2.1] | 4 |
+| M4 | 16 | [08.5.1 — bundle 04.9.1 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.3 + 11.2.1] | 4 |
 | M4 | 17 | 08.5.2, 08.5.3, 08.6.1 | 14 |
 | M4 | 18 | 08.5.4, 08.6.2, 11.4.1 | 11 |
 | M4 | 19 | 03.7.1, 08.7.1, 08.8.1 | 10.75 |
@@ -274,9 +274,9 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | Up to | Work in this milestone (raw d) | Longest dependency chain from start (d) | Chain |
 |---|---|---|---|
 | M0 | 10.5 | 4.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.3.1-T1 |
-| M1 | 142 | 26 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.3-T1 → 05.3.3-T2 → 04.1.1-T1 → 04.1.1-T2 → 04.2.3-T1 |
-| M2 | 157.25 | 29 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 06.1.2-T1 → 06.1.2-T2 → 06.5.1-T1 → 06.5.1-T2 → 05.3.2-T2 → 05.3.2-T3 → 07.5.1-T1 → 07.5.1-T2 → 06.5.1-T3 → 04.4.2-T1 |
-| M3 | 123.5 | 40.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.4.1-T1 → 08.4.2-T1 → 08.4.2-T2 |
+| M1 | 143.5 | 26 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.3-T1 → 05.3.3-T2 → 04.1.1-T1 → 04.1.1-T2 → 04.2.3-T1 |
+| M2 | 164.75 | 29 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 06.1.2-T1 → 06.1.2-T2 → 06.5.1-T1 → 06.5.1-T2 → 05.3.2-T2 → 05.3.2-T3 → 07.5.1-T1 → 07.5.1-T2 → 06.5.1-T3 → 04.4.2-T1 |
+| M3 | 134.5 | 40.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.4.1-T1 → 08.4.2-T1 → 09.5.1-T2 |
 | M4 | 113.75 | 51.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 |
 | M5 | 13.25 | 57.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 → 08.8.3-T2 → 08.9.1-T1 → 08.9.1-T2 → 08.9.2-T1 → 08.9.2-T2 |
 
@@ -292,8 +292,8 @@ Reading [INFERENCE] (arithmetic over the graph): the longest dependency chain to
 | 03.4.2 + 03.6.1 | 6 | 03.6.1-T1, 03.6.1-T2 → 03.4.2-T1 → 03.6.1-T3 → 03.6.1-T4 |
 | 04.1.1 + 04.1.2 + 05.2.1 + 05.3.3 | 16 | 04.1.2-T4 → 05.2.1-T1 → 05.2.1-T2, 05.2.1-T3, 05.2.1-T4, 05.2.1-T5, 05.3.3-T1 → 05.3.3-T2 → 04.1.1-T1 → 04.1.1-T2, 04.1.1-T3, 04.1.1-T4, 04.1.2-T5 → 04.1.2-T1, 04.1.2-T2, 04.1.2-T3 |
 | 04.8.1 + 06.5.2 + 12.3.1 | 11.5 | 06.5.2-T1, 12.3.1-T1 → 04.8.1-T1, 06.5.2-T2, 12.3.1-T3, 12.3.1-T5 → 04.8.1-T2, 12.3.1-T2, 12.3.1-T6 → 12.3.1-T4 |
+| 04.9.1 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.3 + 11.2.1 | 28.5 | 04.9.1-T1, 08.6.3-T1, 11.2.1-T1, 11.2.1-T2, 11.2.1-T3, 11.2.1-T7 → 04.9.1-T3, 04.9.1-T4, 08.3.1-T1 → 08.3.2-T1 → 08.3.2-T2, 08.3.2-T3, 08.4.3-T1 → 11.2.1-T6 → 04.9.1-T2, 08.4.3-T2, 11.2.1-T4 → 08.4.3-T3, 11.2.1-T5 → 08.5.1-T1 → 08.5.1-T3, 08.6.3-T2 → 08.6.3-T3 |
 | 05.3.2 + 06.5.1 + 07.2.1 + 07.2.2 + 07.5.1 | 14.75 | 05.3.2-T1 → 05.3.2-T5 → 06.5.1-T1 → 06.5.1-T2, 07.2.1-T1 → 05.3.2-T2, 07.2.1-T2 → 05.3.2-T3, 05.3.2-T4, 07.2.2-T1, 07.2.2-T2 → 07.2.2-T3, 07.2.2-T4, 07.5.1-T1 → 07.5.1-T2 → 06.5.1-T3 |
-| 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.3 + 11.2.1 | 24 | 08.6.3-T1, 11.2.1-T1, 11.2.1-T2, 11.2.1-T3, 11.2.1-T7 → 08.3.1-T1 → 08.3.2-T1 → 08.3.2-T2, 08.3.2-T3, 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2, 11.2.1-T4 → 08.4.3-T3, 11.2.1-T5 → 08.5.1-T1 → 08.5.1-T3, 08.6.3-T2 → 08.6.3-T3 |
 
 ### 5.4 Owner-decision gates (DECISIONS §8)
 
@@ -369,26 +369,28 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [01.3.2](01-foundation/01.3.2-generated-sdk-validators-and-contract-tests.md) | Generated SDK, validators and contract tests | M1 | 3 | — | 6 | 01.1.1, 01.3.1 | 01.5.1, 09.1.1 |
 | [01.4.1](01-foundation/01.4.1-migrations-roles-and-rls.md) | Migrations, roles and RLS | M1 | 2 | — | 6 | 01.1.1 | 01.4.2, 01.6.1, 02.1.1, 03.1.1, 04.1.2, 06.1.1, 07.1.1, 10.2.2 |
 | [01.4.2](01-foundation/01.4.2-tenant-scope-data-access-and-pipeline.md) | Tenant scope, data access and pipeline | M1 | 4 | yes | 6.5 | 01.4.1, 01.5.1 | 01.5.1, 02.6.2, 05.1.2 |
-| [01.5.1](01-foundation/01.5.1-durable-internal-tasks.md) | Durable internal tasks | M1 | 4 | yes | 7 | 01.3.2, 01.4.2 | 01.4.2, 03.3.1, 05.2.1, 06.2.3, 06.4.2, 06.5.2, 07.2.2, 07.6.2, 10.7.1 |
+| [01.5.1](01-foundation/01.5.1-durable-internal-tasks.md) | Durable internal tasks | M1 | 4 | yes | 7 | 01.3.2, 01.4.2 | 01.4.2, 02.10.1, 03.3.1, 05.2.1, 06.2.3, 06.4.2, 06.5.2, 07.2.2, 07.6.2, 10.7.1 |
 | [01.6.1](01-foundation/01.6.1-integration-harness-and-fixtures.md) | Integration harness and fixtures | M1 | 3 | — | 5 | 01.1.1, 01.4.1 | 01.7.1 |
-| [01.7.1](01-foundation/01.7.1-evidgate-s-own-pipeline.md) | Evidgate's own pipeline | M1 | 4 | — | 4.5 | 01.6.1 | 01.10.1, 04.6.1, 11.6.1, 11.7.1 |
+| [01.7.1](01-foundation/01.7.1-evidgate-s-own-pipeline.md) | Evidgate's own pipeline | M1 | 4 | — | 4.5 | 01.6.1 | 01.10.1, 04.6.1, 04.9.2, 11.6.1, 11.7.1 |
 | [01.8.1](01-foundation/01.8.1-one-command-local-stack.md) | One-command local stack | M1 | 1 | — | 2.5 | — | — |
 | [01.9.1](01-foundation/01.9.1-decision-records.md) | Decision records | M0 | 1 | — | 2 | — | — |
 | [01.10.1](01-foundation/01.10.1-evidgate-gates-evidgate.md) | Evidgate gates Evidgate | M2 | 5 | — | 3.5 | 01.7.1 | — |
-| [02.1.1](02-identity-tenancy/02.1.1-org-and-project-registry.md) | Org and project registry | M1 | 3 | yes | 2.5 | 01.4.1, 02.2.1 | 02.1.2, 02.2.1, 02.4.1, 02.6.1, 02.9.1, 03.1.1, 03.4.1, 09.7.1, 11.1.1, 12.3.1 |
-| [02.1.2](02-identity-tenancy/02.1.2-membership-and-invites.md) | Membership and invites | M1 | 4 | yes | 2.5 | 02.1.1, 02.3.1, 02.3.2 | 02.3.1, 02.3.3, 02.8.1, 09.7.1 |
+| [02.1.1](02-identity-tenancy/02.1.1-org-and-project-registry.md) | Org and project registry | M1 | 3 | yes | 2.5 | 01.4.1, 02.2.1 | 02.1.2, 02.2.1, 02.4.1, 02.4.3, 02.6.1, 02.9.1, 03.1.1, 03.4.1, 09.7.1, 11.1.1, 12.3.1 |
+| [02.1.2](02-identity-tenancy/02.1.2-membership-and-invites.md) | Membership and invites | M1 | 4 | yes | 2.5 | 02.1.1, 02.3.1, 02.3.2 | 02.3.1, 02.3.3, 02.8.1, 02.10.1, 09.7.1 |
 | [02.2.1](02-identity-tenancy/02.2.1-permission-catalogue-and-enforcement.md) | Permission catalogue and enforcement | M1 | 3 | yes | 3 | 02.1.1 | 02.1.1, 02.4.1, 02.5.1, 02.7.1, 02.9.1, 03.7.1, 06.2.1, 06.4.1, 07.3.1, 07.5.2, 09.7.1 |
 | [02.3.1](02-identity-tenancy/02.3.1-federated-login.md) | Federated login | M1 | 4 | yes | 3 | 01.1.2, 02.1.2 | 02.1.2, 02.3.2, 09.1.1 |
 | [02.3.2](02-identity-tenancy/02.3.2-sessions-and-revocation.md) | Sessions and revocation | M1 | 4 | yes | 1.5 | 02.3.1 | 02.1.2, 02.3.3 |
 | [02.3.3](02-identity-tenancy/02.3.3-enterprise-saml.md) | Enterprise SAML | M5 | 5 | — | 3 | 02.1.2, 02.3.2 | — |
-| [02.4.1](02-identity-tenancy/02.4.1-github-oidc-exchange.md) | GitHub OIDC exchange | M1 | 5 | — | 5 | 02.1.1, 02.2.1, 02.6.1 | 02.4.2, 02.5.1, 04.2.1, 07.6.1, 09.2.1, 11.2.1 |
+| [02.4.1](02-identity-tenancy/02.4.1-github-oidc-exchange.md) | GitHub OIDC exchange | M1 | 5 | — | 5 | 02.1.1, 02.2.1, 02.6.1 | 02.4.2, 02.4.3, 02.5.1, 04.2.1, 05.2.2, 07.6.1, 09.2.1, 11.2.1 |
 | [02.4.2](02-identity-tenancy/02.4.2-non-github-ci-ingest-tokens.md) | Non-GitHub CI ingest tokens | M2 | 6 | — | 1 | 02.4.1 | 04.2.1, 09.2.1, 09.7.1, 11.2.1, 11.3.1 |
+| [02.4.3](02-identity-tenancy/02.4.3-github-app-installation.md) | GitHub App installation | M2 | 6 | — | 2 | 02.1.1, 02.4.1 | 05.5.2 |
 | [02.5.1](02-identity-tenancy/02.5.1-agent-identity-per-tenant-and-pool.md) | Agent identity per tenant and pool | M4 | 10 | — | 2 | 02.2.1, 02.4.1, 05.7.3, 10.7.1 | 05.7.4 |
 | [02.6.1](02-identity-tenancy/02.6.1-database-enforced-isolation.md) | Database-enforced isolation | M1 | 4 | — | 3.5 | 02.1.1 | 02.4.1, 02.6.2, 02.7.1, 02.9.1, 06.1.1, 07.1.1, 11.1.1, 11.2.1 |
 | [02.6.2](02-identity-tenancy/02.6.2-tenant-context.md) | Tenant context | M1 | 5 | — | 1 | 01.4.2, 02.6.1 | 02.8.1, 02.9.1 |
 | [02.7.1](02-identity-tenancy/02.7.1-audit-trail.md) | Audit trail | M2 | 5 | — | 2.5 | 02.2.1, 02.6.1 | 02.8.1, 03.6.1, 09.7.1, 11.1.1, 11.5.1 |
-| [02.8.1](02-identity-tenancy/02.8.1-time-boxed-operator-access.md) | Time-boxed operator access | M2 | 6 | — | 2 | 02.1.2, 02.6.2, 02.7.1 | 06.4.4, 11.5.1 |
+| [02.8.1](02-identity-tenancy/02.8.1-time-boxed-operator-access.md) | Time-boxed operator access | M2 | 6 | — | 2 | 02.1.2, 02.6.2, 02.7.1 | 02.10.1, 06.4.4, 11.5.1 |
 | [02.9.1](02-identity-tenancy/02.9.1-isolation-suite.md) | Isolation suite | M1 | 6 | — | 3 | 02.1.1, 02.2.1, 02.6.1, 02.6.2 | 11.7.1 |
+| [02.10.1](02-identity-tenancy/02.10.1-one-outbound-email-channel.md) | One outbound email channel | M2 | 11 | — | 4.5 | 01.5.1, 02.1.2, 02.8.1, 12.3.1 | — |
 | [03.1.1](03-catalog-authoring/03.1.1-stable-case-identity.md) | Stable case identity | M1 | 4 | — | 2.5 | 01.4.1, 02.1.1 | 03.1.2, 03.1.3, 03.4.1, 03.5.1, 04.3.2, 09.2.1 |
 | [03.1.2](03-catalog-authoring/03.1.2-imported-identity-and-mapping.md) | Imported identity and mapping | M1 | 12 | — | 2 | 03.1.1, 04.3.2, 04.4.1 | 09.2.1 |
 | [03.1.3](03-catalog-authoring/03.1.3-immutable-test-revisions.md) | Immutable test revisions | M1 | 5 | — | 1 | 03.1.1 | 03.2.1, 03.7.1, 04.3.2, 05.1.1 |
@@ -401,11 +403,11 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [03.7.1](03-catalog-authoring/03.7.1-ai-assisted-drafts.md) | AI-assisted drafts | M4 | 19 | — | 3.5 | 02.2.1, 03.1.3, 03.6.1, 11.4.1 | 03.8.1, 09.6.1 |
 | [03.8.1](03-catalog-authoring/03.8.1-regression-candidates-from-confirmed-bugs.md) | Regression candidates from confirmed bugs | M4 | 20 | — | 3 | 03.7.1, 06.1.2, 07.2.1, 08.2.2 | — |
 | [04.1.1](04-ingestion-adapters/04.1.1-atomic-batch-ingest-with-per-event.md) | Atomic batch ingest with per-event ack | M1 | 9 | yes | 5 | 01.3.1, 05.3.3 | 04.1.2, 04.2.3, 04.3.3, 04.6.1, 04.8.1, 11.3.1 |
-| [04.1.2](04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md) | Quota, epochs and observability | M1 | 9 | yes | 4 | 01.4.1, 04.1.1 | 05.2.1, 06.1.2 |
+| [04.1.2](04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md) | Quota, epochs and observability | M1 | 9 | yes | 4 | 01.4.1, 04.1.1 | 05.2.1, 05.5.2, 06.1.2 |
 | [04.2.1](04-ingestion-adapters/04.2.1-authenticate-from-ci.md) | Authenticate from CI | M2 | 7 | — | 1 | 02.4.1, 02.4.2 | 04.2.4, 07.6.1 |
 | [04.2.2](04-ingestion-adapters/04.2.2-manifest-and-run.md) | Manifest and run | M1 | 10 | — | 1 | 05.1.1, 05.2.1 | — |
-| [04.2.3](04-ingestion-adapters/04.2.3-spool-send-and-finalize.md) | Spool, send and finalize | M1 | 13 | — | 2.5 | 04.1.1, 05.3.2 | 04.2.4 |
-| [04.2.4](04-ingestion-adapters/04.2.4-artifacts-and-quickstart.md) | Artifacts and quickstart | M2 | 14 | — | 2.5 | 04.2.1, 04.2.3, 04.6.1, 06.1.1, 06.1.2 | 04.3.3 |
+| [04.2.3](04-ingestion-adapters/04.2.3-spool-send-and-finalize.md) | Spool, send and finalize | M1 | 13 | — | 2.5 | 04.1.1, 05.3.2 | 04.2.4, 04.9.1, 05.5.2 |
+| [04.2.4](04-ingestion-adapters/04.2.4-artifacts-and-quickstart.md) | Artifacts and quickstart | M2 | 14 | — | 2.5 | 04.2.1, 04.2.3, 04.6.1, 06.1.1, 06.1.2 | 04.3.3, 04.9.2 |
 | [04.3.1](04-ingestion-adapters/04.3.1-custom-reporter-bound-to-the-documented.md) | Custom reporter bound to the documented API | M1 | 4 | — | 1 | 04.7.1 | 03.5.1, 05.7.6 |
 | [04.3.2](04-ingestion-adapters/04.3.2-identity-retries-and-skips.md) | Identity, retries and skips | M1 | 6 | — | 3 | 03.1.1, 03.1.3 | 03.1.2 |
 | [04.3.3](04-ingestion-adapters/04.3.3-shards-and-attachments.md) | Shards and attachments | M1 | 15 | — | 2 | 04.1.1, 04.2.4 | — |
@@ -415,14 +417,18 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [04.6.1](04-ingestion-adapters/04.6.1-per-producer-golden-set.md) | Per-producer golden set | M1 | 10 | — | 3.5 | 01.7.1, 04.1.1 | 04.2.4, 04.5.1 |
 | [04.7.1](04-ingestion-adapters/04.7.1-protocol-v1-contract.md) | Protocol v1 contract | M1 | 3 | — | 2.5 | 01.3.1 | 04.3.1, 04.4.1, 04.5.1, 05.7.1, 05.7.3, 06.2.2 |
 | [04.8.1](04-ingestion-adapters/04.8.1-idempotent-billing-key.md) | Idempotent billing key | M2 | 10 | yes | 1.5 | 04.1.1, 12.3.1 | 12.3.1 |
+| [04.9.1](04-ingestion-adapters/04.9.1-customer-side-replay-step-o10-option.md) | Customer-side replay step (O10 option a) | M3 | 16 | yes | 4.5 | 04.2.3, 05.2.1, 11.2.1 | 08.4.3 |
+| [04.9.2](04-ingestion-adapters/04.9.2-cli-sdk-release-compatibility-and-customer.md) | CLI/SDK release, compatibility and customer docs | M3 | 15 | — | 3 | 01.7.1, 04.2.4 | — |
 | [05.1.1](05-runs-orchestration/05.1.1-verified-manifest.md) | Verified manifest | M1 | 7 | — | 6 | 01.3.1, 03.1.3, 03.2.1 | 04.2.2, 05.1.2, 05.2.1 |
 | [05.1.2](05-runs-orchestration/05.1.2-environment-revisions.md) | Environment revisions | M1 | 8 | — | 1.5 | 01.4.2, 05.1.1 | 05.2.1, 05.7.3 |
-| [05.2.1](05-runs-orchestration/05.2.1-one-transaction-run-creation.md) | One-transaction run creation | M1 | 9 | yes | 5 | 01.5.1, 04.1.2, 05.1.1, 05.1.2 | 04.2.2, 05.3.1, 05.3.2, 05.3.3, 05.6.1, 06.1.2, 07.1.1, 07.2.2, 08.1.1, 08.4.3, 09.3.1 |
+| [05.2.1](05-runs-orchestration/05.2.1-one-transaction-run-creation.md) | One-transaction run creation | M1 | 9 | yes | 5 | 01.5.1, 04.1.2, 05.1.1, 05.1.2 | 04.2.2, 04.9.1, 05.2.2, 05.3.1, 05.3.2, 05.3.3, 05.5.2, 05.6.1, 06.1.2, 07.1.1, 07.2.2, 08.1.1, 08.4.3, 09.3.1 |
+| [05.2.2](05-runs-orchestration/05.2.2-branch-pr-and-commit-identity-of.md) | Branch, PR and commit identity of a run | M1 | 10 | — | 2.5 | 02.4.1, 05.2.1 | — |
 | [05.3.1](05-runs-orchestration/05.3.1-run-state-machine.md) | Run state machine | M1 | 10 | — | 2 | 05.2.1 | 05.4.1, 09.3.1 |
 | [05.3.2](05-runs-orchestration/05.3.2-finalize-and-reconciliation.md) | Finalize and reconciliation | M1 | 12 | yes | 6 | 05.2.1, 06.5.1, 07.1.1 | 04.2.3, 04.4.2, 05.5.1, 05.10.1, 06.5.1, 07.2.1, 07.5.1, 08.1.1, 09.3.1 |
 | [05.3.3](05-runs-orchestration/05.3.3-case-attempts.md) | Case attempts | M1 | 9 | yes | 2 | 05.2.1 | 04.1.1, 06.5.1, 07.4.1, 07.4.2 |
 | [05.4.1](05-runs-orchestration/05.4.1-durable-cancel.md) | Durable cancel | M2 | 11 | — | 2.5 | 05.3.1 | 09.3.1 |
-| [05.5.1](05-runs-orchestration/05.5.1-rerun-with-parent-and-scope.md) | Rerun with parent and scope | M2 | 14 | — | 2 | 05.3.2, 07.4.1 | 09.3.1 |
+| [05.5.1](05-runs-orchestration/05.5.1-rerun-with-parent-and-scope.md) | Rerun with parent and scope | M2 | 14 | — | 2 | 05.3.2, 07.4.1 | 05.5.2, 09.3.1 |
+| [05.5.2](05-runs-orchestration/05.5.2-ci-re-run-semantics-and-trigger.md) | CI re-run semantics and trigger | M1 | 15 | — | 3.5 | 02.4.3, 04.1.2, 04.2.3, 05.2.1, 05.5.1 | — |
 | [05.6.1](05-runs-orchestration/05.6.1-digest-bound-release.md) | Digest-bound release | M2 | 13 | — | 3 | 05.2.1, 07.2.1 | 07.5.3 |
 | [05.7.1](05-runs-orchestration/05.7.1-immutable-jobspec.md) | Immutable JobSpec | M4 | 4 | — | 2 | 04.7.1 | 05.7.2 |
 | [05.7.2](05-runs-orchestration/05.7.2-leasing-with-epoch-fencing.md) | Leasing with epoch fencing | M4 | 5 | — | 3 | 05.7.1 | 05.7.4, 05.10.1 |
@@ -476,7 +482,7 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [08.3.3](08-healing-learning/08.3.3-shadow-only-operation-and-measurement.md) | Shadow-only operation and measurement | M3 | 21 | — | 3.5 | 07.2.2, 08.3.1, 08.6.3, 12.5.1 | — |
 | [08.4.1](08-healing-learning/08.4.1-ast-allowlist-validator-for-playwright-ts.md) | AST allowlist validator for Playwright TS | M3 | 17 | — | 7 | 08.3.1 | 08.4.2, 08.5.4, 09.5.1 |
 | [08.4.2](08-healing-learning/08.4.2-assertion-hash-semantic-checks-and-negative.md) | Assertion hash, semantic checks and negative control | M3 | 18 | — | 5 | 08.1.2, 08.4.1 | 08.8.1, 09.5.1 |
-| [08.4.3](08-healing-learning/08.4.3-sandbox-replay.md) | Sandbox replay | M3 | 16 | yes | 3.5 | 05.2.1, 08.3.2, 11.2.1 | 08.5.1, 08.5.4, 08.6.1, 08.8.1, 11.2.1 |
+| [08.4.3](08-healing-learning/08.4.3-sandbox-replay.md) | Sandbox replay | M3 | 16 | yes | 3.5 | 04.9.1, 05.2.1, 08.3.2, 11.2.1 | 08.5.1, 08.5.4, 08.6.1, 08.8.1, 11.2.1 |
 | [08.5.1](08-healing-learning/08.5.1-llm-gateway.md) | LLM gateway | M4 | 16 | yes | 4 | 08.2.2, 08.4.3, 12.3.1 | 08.5.2, 08.5.3, 08.6.3, 08.7.2, 11.4.1 |
 | [08.5.2](08-healing-learning/08.5.2-untrusted-context-injection-containment-and-tenant.md) | Untrusted context, injection containment and tenant filter | M4 | 17 | — | 3 | 08.2.1, 08.5.1 | 11.4.1 |
 | [08.5.3](08-healing-learning/08.5.3-redaction-and-per-tenant-opt-in.md) | Redaction and per-tenant opt-in | M4 | 17 | — | 5 | 08.5.1 | 11.4.1 |
@@ -512,7 +518,7 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [10.9.1](10-operations/10.9.1-unit-economics.md) | Unit economics | M2 | 5 | — | 1.5 | 10.3.1 | — |
 | [10.10.1](10-operations/10.10.1-trigger-and-spike.md) | Trigger and spike | M2 | 5 | — | 1.5 | 10.3.1 | — |
 | [11.1.1](11-security-compliance/11.1.1-a-living-threat-model-acceptance-v1.md) | A living threat model - acceptance: v1 covers every module and boundary, each threat maps to a control or a written acceptance, and it is re-reviewed at each milestone exit. | M1 | 6 | — | 4 | 02.1.1, 02.6.1, 02.7.1 | 06.3.3, 11.5.1, 11.7.1 |
-| [11.2.1](11-security-compliance/11.2.1-a-fork-pull-request-cannot-reach.md) | A fork pull request cannot reach our credentials - acceptance: the published recipe and the fork-PR test prove no Evidgate credential is reachable from an untrusted workflow context. | M1 | 16 | yes | 7.5 | 02.4.1, 02.4.2, 02.6.1, 03.4.1, 05.7.4, 08.4.3 | 05.9.2, 08.4.3, 11.6.1 |
+| [11.2.1](11-security-compliance/11.2.1-a-fork-pull-request-cannot-reach.md) | A fork pull request cannot reach our credentials - acceptance: the published recipe and the fork-PR test prove no Evidgate credential is reachable from an untrusted workflow context. | M1 | 16 | yes | 7.5 | 02.4.1, 02.4.2, 02.6.1, 03.4.1, 05.7.4, 08.4.3 | 04.9.1, 05.9.2, 08.4.3, 11.6.1 |
 | [11.3.1](11-security-compliance/11.3.1-secrets-never-leave-a-reference-acceptance.md) | Secrets never leave a reference - acceptance: no secret value is stored in the database, logged, or visible in an error envelope; leak response is rehearsed. | M2 | 12 | — | 6 | 02.4.2, 04.1.1, 06.2.2, 06.2.3, 10.1.1, 10.5.1, 10.7.1 | 03.3.1, 11.4.1 |
 | [11.4.1](11-security-compliance/11.4.1-a-model-cannot-change-the-product.md) | A model cannot change the product's mind - acceptance: the injection corpus produces zero policy/approval/permission/decision effects, and every outbound request is opt-in, redacted and audited. | M4 | 18 | — | 6 | 08.5.1, 08.5.2, 08.5.3, 11.3.1, 11.8.1 | 03.7.1 |
 | [11.5.1](11-security-compliance/11.5.1-who-saw-what-provably-acceptance-audit.md) | Who saw what, provably - acceptance: audit rows are append-only with before/after hashes, and any operator access is scoped, expiring, tenant-visible and audited. | M2 | 7 | — | 4.5 | 02.7.1, 02.8.1, 09.1.1, 11.1.1 | 09.7.1, 11.9.1 |
@@ -522,7 +528,7 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 | [11.9.1](11-security-compliance/11.9.1-deletion-and-breach-are-runnable-procedures.md) | Deletion and breach are runnable procedures - acceptance: a deletion request produces a verifiable report, and a breach rehearsal completes the processor→controller notice inside the runbook's target. | M3 | 21 | — | 6 | 06.4.4, 06.4.5, 11.5.1, 11.8.1 | — |
 | [12.1.1](12-pilot-commercial/12.1.1-real-problems-real-reports-acceptance-5.md) | Real problems, real reports - acceptance: 5+ interviews recorded, real reports and failure samples collected with permission, and the CI/engine choice (O1) signed off by named teams. | M0 | 1 | — | 5 | — | — |
 | [12.2.1](12-pilot-commercial/12.2.1-a-pilot-that-can-be-measured.md) | A pilot that can be measured and paid for - acceptance: agreement + DPA signed before any upload, baseline captured for two sprints, weekly reviews held, support hours metered. | M1 | 19 | — | 5.5 | 09.2.1, 11.8.1, 12.3.1 | 12.5.1 |
-| [12.3.1](12-pilot-commercial/12.3.1-every-billed-unit-is-a-row.md) | Every billed unit is a row - acceptance: each metered metric produces exactly one ledger row per source with the applied price, and quota enforcement warns then blocks without losing data. | M2 | 10 | yes | 8.5 | 02.1.1, 04.8.1, 06.5.2 | 04.8.1, 05.10.1, 06.5.2, 08.5.1, 09.7.1, 12.2.1, 12.4.1, 12.5.1 |
+| [12.3.1](12-pilot-commercial/12.3.1-every-billed-unit-is-a-row.md) | Every billed unit is a row - acceptance: each metered metric produces exactly one ledger row per source with the applied price, and quota enforcement warns then blocks without losing data. | M2 | 10 | yes | 8.5 | 02.1.1, 04.8.1, 06.5.2 | 02.10.1, 04.8.1, 05.10.1, 06.5.2, 08.5.1, 09.7.1, 12.2.1, 12.4.1, 12.5.1 |
 | [12.4.1](12-pilot-commercial/12.4.1-cost-is-known-before-price-is.md) | Cost is known before price is set - acceptance: measured cost per tenant, a pricing hypothesis pack, and manual invoices that reconcile to the ledger. | M3 | 11 | — | 4.5 | 10.3.1, 10.6.1, 12.3.1 | — |
 | [12.5.1](12-pilot-commercial/12.5.1-prove-the-value-or-stop-acceptance.md) | Prove the value or stop - acceptance: the M3 exit review reports every metric with its method, and a go/no-go for V2 with named conditions. | M3 | 20 | — | 4.5 | 08.2.2, 12.2.1, 12.3.1 | 08.3.3 |
 | [12.6.1](12-pilot-commercial/12.6.1-evidgate-is-ours-to-use-acceptance.md) | "Evidgate" is ours to use - acceptance: a search is done in classes 9/42, a VN application is filed before public launch, and the international decision is recorded. | M1 | 1 | — | 3.5 | — | — |
