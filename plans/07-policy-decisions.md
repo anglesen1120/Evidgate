@@ -290,7 +290,7 @@
 - **08 healing:** shadow results excluded from the evaluator; `healing.candidate_changed` webhook is V2.
 - **09/10/11/12:** decision display and waiver rendering (`09.7.1-T4`, 09); deploy canary + shadow comparison (`10.2.2-T3`), decision-latency SLI and dead letters (`10.3.1-T3`, `01.5.1-T4`) (10); authority model, webhook secrets, audit review (11); pilot acceptance ("missing evidence never yields PASS"), enforcement timing, value measurement (12).
 
-Sibling story ids referenced above are ⚠️ pending confirmation: `plans/` contained only `00-overview.md` when this plan was written; ids follow 00 §6 and are reconciled during integration.
+Sibling story ids referenced above were checked against `scripts/plan_graph.py` on 2026-10-02 (open-items OI-07-02): all exist.
 
 ## 11. Open questions
 

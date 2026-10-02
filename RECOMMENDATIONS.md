@@ -29,7 +29,7 @@
 | 02 | Q1 identity provider | Both GitHub and Google Workspace are already built in V1 (FR-02-3, 02.3.1-T1); M0 interviews only confirm which one the pilot uses. |
 | 02 | Q2 `ci_producer` TTL | 60 min is already decided (02 D7). Open part: no refresh endpoint; long jobs re-exchange the OIDC token. |
 | 02 | Q3 custom roles | Built-in roles only in V1. |
-| 02 | Q4 `scrypt` parameters | Tokens are random (≥ 128 bit), so moderate `scrypt` parameters **plus** rate limiting. |
+| 02 | Q4 token hashing (superseded) | 02 D6 replaced `scrypt` with `HMAC-SHA256` + a versioned server pepper (tokens are random ≥ 128 bit, so a slow KDF adds nothing). Pepper custody and rotation: `plans/open-items/01-core-identity.md` OI-02-03. |
 | 02 | Q5 support-access scope | Per project. |
 | 02 | Q6 email-only invite | Only if a pilot has testers without GitHub accounts (ask in M0). |
 | 03 | Q1 sidecar manifest | Precedence is already decided (00 §7: both present and different = conflict). Open part: filename `evidgate.cases.yaml` next to the test file, YAML (reviewable in PRs). |
