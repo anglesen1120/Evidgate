@@ -122,6 +122,16 @@
 
 Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, headers); the viewer application and its iframe/CSP behaviour stay in 06.3.3-T1, which already lists the 10 DNS/TLS dependency. Static hosting for `apps/web` is settled by T41: the Angular build is a static bundle on object storage + CDN (closes 09 §11 #3).
 
+#### Story 10.1.2 Secrets inventory, scanning and break-glass — acceptance: every secret has an owner, a store and a rotation cadence in one checked inventory, pushes containing secrets are blocked, a documented break-glass path exists, and built images are scanned for known vulnerabilities.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 10.1.2-T1 | Secret inventory (name, owner, store, rotation cadence, break-glass holder) as a machine-readable file; CI check that every secret in `infra/config-matrix.json` appears in it | M | V1 | M1 | 10.1.1-T2 |
+| 10.1.2-T2 | Enable repository secret scanning and push protection and record the setting and who can bypass it | XS | V1 | M1 | 01.7.1-T1 |
+| 10.1.2-T3 | Break-glass procedure for secrets: sealed offline copy, who may open it, forced rotation after use, audit row | S | V1 | M2 | 10.1.2-T1, 10.7.1-T4 |
+| 10.1.2-T4 | Image vulnerability scan on built images in CI with a severity gate and a documented exception list (tool licence checked per DECISIONS §4 ⚠️) | M | V1 | M2 | 10.2.1-T1 |
+
+**Story 10.1.2 total: 2.75** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4. Triage SLA and base-image refresh cadence stay in 11.6.1-T4.
+
 ### Epic 10.2 Images, registry and deployment (M1-M2)
 
 #### Story 10.2.1 Images and provenance — acceptance: one image per app built once, pinned by digest, promoted unchanged; `latest` never reachable in a deploy file
@@ -144,10 +154,19 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 10.3.1-T1 | OpenTelemetry instrumentation in `Evidgate.Api` and `Evidgate.Worker`: traces, metrics, logs with `request_id`/`run_id`/`job_id`/`trace_id`, sampling policy, resource attributes (service, env, version); browser web-vitals are emitted by 09's telemetry (09.1.1-T9) and only recorded here (T39) | L | V1 | M1 | 10.1.1-T1 |
-| 10.3.1-T2 | Collector deployment and exporters with retention, batching and redaction of secrets (00 §11) | M | V1 | M1 | 10.3.1-T1 |
+| 10.3.1-T2 | Collector deployment and exporters with retention, batching and redaction of secrets (00 §11) | M | V1 | M1 | 10.3.1-T1, 10.3.2-T1 |
 | 10.3.1-T3 | Metrics catalogue: `task`-queue age, `outbox` dispatch lag, lease loss, dead-letter depth (own queue tables, 00 §5.3), incomplete rate, parser errors, artifact failures, healing false-positive rate, ingest p95, decision p95, .NET runtime metrics (GC heap/gen-2/LOH collections, thread-pool worker counts and starvation, Npgsql pool occupancy/wait, EF Core command durations), plus per-unit cost counters (10.9.1-T1) (F-10-3/F-10-4) | M | V1 | M1 | 10.3.1-T2 |
 | 10.3.1-T4 | Dashboards: service health, ingest/decision SLI, queue and lease state, tenant-neutral cost view | M | V1 | M2 | 10.3.1-T3 |
 | 10.3.1-T5 | Alert rules with thresholds, owners and runbook links, routing to the on-call channel; consumed by 01.5.1-T4 (dead-letter hook) and 10.2.2-T2 (rollback trigger) | L | V1 | M2 | 10.3.1-T3 |
+
+#### Story 10.3.2 Observability backend and external probe — acceptance: the telemetry backend is decided before the collector lands, availability is measured from outside the service network, and log retention is tied to deletion promises.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 10.3.2-T1 | ADR: observability backend for M1 (compose-local stack now, managed OTLP after O3) with the retention and cost limits; unblocks 10.3.1-T2 | S | V1 | M1 | 10.3.1-T1 |
+| 10.3.2-T2 | External synthetic probe: a scheduled check from outside the service network against health and a canary ingest-to-decision path on a dedicated tenant, feeding the availability SLI (probe location depends on O3) | M | V1 | M2 | 10.4.1-T1, 10.3.1-T3 |
+| 10.3.2-T3 | Log and trace retention per signal, no customer content in logs beyond ids, purge path on tenant deletion verified against 11.9.1-T1 | S | V1 | M3 | 10.3.1-T2, 11.9.1-T1 |
+
+**Story 10.3.2 total: 2** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 
 ### Epic 10.4 SLIs, SLOs and error budget (M2)
 
@@ -269,9 +288,9 @@ Task sizes use the shared units (XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-d
 
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
-| 10.1 Environments and configuration | 5.0 | 0 | 0 | 5.0 |
+| 10.1 Environments and configuration | 7.75 | 0 | 0 | 7.75 |
 | 10.2 Images, registry and deployment | 10.0 | 0 | 0 | 10.0 |
-| 10.3 Instrumentation, dashboards and alerts | 7.0 | 0 | 0 | 7.0 |
+| 10.3 Instrumentation, dashboards and alerts | 9.0 | 0 | 0 | 9.0 |
 | 10.4 SLIs, SLOs and error budget | 2.0 | 0 | 0 | 2.0 |
 | 10.5 Backup, PITR and restore drills | 7.5 | 0 | 0 | 7.5 |
 | 10.6 Load, performance and capacity | 4.0 | 1.0 | 0 | 5.0 |
@@ -280,9 +299,9 @@ Task sizes use the shared units (XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-d
 | 10.9 Cost monitoring | 0.5 | 1.0 | 0 | 1.5 |
 | 10.10 Temporal re-evaluation trigger | 0.5 | 0 | 1.0 | 1.5 |
 | 10.11 Edge and abuse limits | 2.0 | 0 | 0 | 2.0 |
-| **Total** | **48.5** | **2.0** | **1.0** | **51.5** |
+| **Total** | **53.25** | **2.0** | **1.0** | **56.25** |
 
-→ with 20 % buffer **61.8** person-days
+→ with 20 % buffer **67.5** person-days
 
 ## 13. Contract change requests
 

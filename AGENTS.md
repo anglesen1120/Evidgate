@@ -13,7 +13,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 | `DECISIONS.md` | Name, locked architecture (A1–A10), stack + versions (§4), safe-healing rules (§5), verified facts (§6), open owner decisions (§8), review deltas vs the source (§9) |
 | `RECOMMENDATIONS.md` | Working recommendations for open decisions (O1–O10) and plan §11 questions; not decisions |
 | `plans/00-overview.md` | Shared contracts: glossary, milestones, architecture, IDs, state machines, API, NFRs, feature-plan process, estimate roll-up |
-| `plans/01`–`12` | High-level area plans (epics → stories → tasks with sizes); 563 tasks, 606.5 raw / 727.8 buffered person-days (00 §14, after CR-D-1 and the 2026-10-02 review additions) |
+| `plans/01`–`12` | High-level area plans (epics → stories → tasks with sizes); 570 tasks, 611.25 raw / 733.5 buffered person-days (00 §14, after CR-D-1 and the 2026-10-02 review additions) |
 | `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T101), findings register (`REVIEW-2026-09-25.md`), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
 | `docs/source/` | Original Vietnamese system design (working name "ReleaseHub") and its .docx |
 
