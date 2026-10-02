@@ -14,7 +14,7 @@ Updated 2026-10-02. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | M0/M1 tasks | 56 done · 78 open (of 134; 10.2.1-T1 counted open until T1.4) |
 | Plan checks | `plan_graph.py` errors 0 · 524 tasks · 580.25 raw / 696.3 buffered person-days (+22 tasks / +20 d from the 2026-10-02 review: 02.4.3, 02.10.1, 04.9.1, 04.9.2, 05.2.2, 05.5.2) |
 | CI | `.github/workflows/ci.yml` runs every `verify.sh` stage (01.7.1-T1); interim `docker-tests.yml` deleted in wave 5 |
-| Owner decisions | Decided 2026-09-26: O1 engine = Playwright (UI), customer CI = per-project input. Open before M1: O1 pilot names, O2 (owner note recorded, reading unconfirmed). Open before 08.5 DoR: O4 (owner note "tự build hệ thống riêng", model-or-not unconfirmed) — DECISIONS §8 |
+| Owner decisions | Decided 2026-10-02 (chat): O1 interviews waived (pilot profile in `docs/decisions/O1-pilot-profile.md`), O2 team = the owner alone, O4 = Evidgate-provided AI credit through an Evidgate-controlled gateway, O10 = (a). O3 still open. Decided 2026-09-26: O1 engine = Playwright (UI), customer CI = per-project input. Open before M1: O1 pilot names, O2 (owner note recorded, reading unconfirmed). Open before 08.5 DoR: O4 (owner note "tự build hệ thống riêng", model-or-not unconfirmed) — DECISIONS §8 |
 
 ## 2. Done
 
