@@ -6,12 +6,16 @@
   --index           markdown for README §7 (one row per story)
   --critical        task-level critical chain per milestone (README §5.2)
 """
-import json, re, subprocess, sys
+import glob, json, re, subprocess, sys
 from collections import defaultdict
 g = json.loads(subprocess.check_output([sys.executable, "scripts/plan_graph.py", "--json"]))
 S, T = g["stories"], g["tasks"]
 SIZE = {"XS": .25, "S": .5, "M": 1, "L": 2, "XL": 3}
 def key(s): return [int(x) for x in s.split(".")]
+def _path(area, sid, title):
+    """The existing feature file when there is exactly one, else the slug the writer should use."""
+    found = glob.glob(f"plans/features/{area}/{sid}-*.md")
+    return found[0] if len(found) == 1 else f"plans/features/{area}/{sid}-{slug(title)}.md"
 def slug(title):
     t = re.sub(r"`", "", title.lower()); t = re.sub(r"[^a-z0-9]+", "-", t).strip("-")
     return "-".join(t.split("-")[:6])
@@ -54,7 +58,7 @@ for s in sorted(S, key=key):
     d = S[s]; area = d["file"].split("/")[1][:-3]
     vers = sorted({T[t]["ver"] for t in d["tasks"]})
     ms = sorted({T[t]["ms"] for t in d["tasks"]})
-    rows.append(dict(id=s, title=d["title"], area=area, path=f"plans/features/{area}/{s}-{slug(d['title'])}.md",
+    rows.append(dict(id=s, title=d["title"], area=area, path=_path(area, s, d["title"]),
                      ms=d["ms"], milestones=ms, versions=vers, wave=cwave[comp[s]], bundle=comp[s] if "+" in comp[s] else "", size=d["size"],
                      deps=sorted(d["deps"], key=key), blocks=sorted(blocks[s], key=key),
                      tasks=[dict(id=t, size=T[t]["size"], ver=T[t]["ver"], ms=T[t]["ms"], deps=T[t]["deps"]) for t in d["tasks"]]))
