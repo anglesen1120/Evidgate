@@ -195,7 +195,7 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 | 10.7.1-T2 | Stuck run runbook: detect runs past the collection deadline, inspect lease/epoch state (00 §5.3), reconcile or cancel without inventing evidence | M | V1 | M2 | 10.3.1-T3 |
 | 10.7.1-T3 | Orphan artifact runbook: objects without `ready`, `pending_upload` past TTL, retention sweep failures (00 §8.4) | S | V1 | M2 | 10.5.1-T2 |
 | 10.7.1-T4 | Key rotation runbook: ingest tokens, CI OIDC trust, JWT signing keys, webhook secrets, database credentials, provider keys, and the ingest/API token HMAC pepper — a new `pepper_vN` signs new tokens while old versions verify until their last token expires (T5) — rotation without downtime or lost events | M | V1 | M2 | 10.1.1-T2 |
-| 10.7.1-T5 | Kill switch runbook + drill: system → tenant → project healing availability (00 §8.7, DECISIONS §5.9) flipped while ingest, runs and gates continue | M | V1 | M2 | 10.3.1-T5 |
+| 10.7.1-T5 | Kill switch runbook + drill: system → tenant → project healing availability (00 §8.7, DECISIONS §5.9) flipped while ingest, runs and gates continue | M | V1 | M3 | 10.3.1-T5, 08.6.3-T1 |
 | 10.7.1-T6 | Incident process: severity ladder, on-call expectation for the pilot, communication, postmortem template with a follow-up task rule | M | V1 | M3 | 10.7.1-T1 |
 
 #### Story 10.7.2 Paging and on-call at the first alert — acceptance: every alert in 10.3.1-T5 reaches a named destination and a person, including out of hours.

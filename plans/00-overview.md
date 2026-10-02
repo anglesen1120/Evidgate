@@ -446,23 +446,23 @@ Recomputed by `scripts/plan_graph.py` from every task row of 01-12 (sizes per §
 | Plan | Tasks | V1 | V2 | V3 | Total raw | Total buffered |
 |---|---|---|---|---|---|---|
 | `01-foundation.md` | 52 | 56 | 0.5 | 0.25 | 56.75 | 68.1 |
-| `02-identity-tenancy.md` | 42 | 37 | 2 | 3 | 42 | 50.4 |
+| `02-identity-tenancy.md` | 42 | 36.5 | 2 | 3 | 41.5 | 49.8 |
 | `03-catalog-authoring.md` | 40 | 25 | 13 | 0 | 38 | 45.6 |
-| `04-ingestion-adapters.md` | 52 | 47 | 5 | 0 | 52 | 62.4 |
+| `04-ingestion-adapters.md` | 53 | 47 | 5 | 0 | 52 | 62.4 |
 | `05-runs-orchestration.md` | 53 | 37.5 | 22 | 2 | 61.5 | 73.8 |
 | `06-evidence-artifacts.md` | 36 | 30.5 | 1 | 0 | 31.5 | 37.8 |
 | `07-policy-decisions.md` | 33 | 23.75 | 1 | 0 | 24.75 | 29.7 |
-| `08-healing-learning.md` | 66 | 41 | 43.25 | 6 | 90.25 | 108.3 |
+| `08-healing-learning.md` | 66 | 43 | 41.25 | 6 | 90.25 | 108.3 |
 | `09-web-ui.md` | 60 | 53.5 | 18.5 | 0 | 72 | 86.4 |
 | `10-operations.md` | 47 | 48.5 | 2 | 1 | 51.5 | 61.8 |
-| `11-security-compliance.md` | 51 | 49 | 9 | 1 | 59 | 70.8 |
+| `11-security-compliance.md` | 51 | 45.25 | 9 | 1 | 55.25 | 66.3 |
 | `12-pilot-commercial.md` | 30 | 29.5 | 2 | 0 | 31.5 | 37.8 |
-| **Total** | **562** | **478.25** | **119.25** | **13.25** | **610.75** | **732.9** |
-| Buffered (× 1.2) | | 573.9 | 143.1 | 15.9 | | |
+| **Total** | **563** | **476** | **117.25** | **13.25** | **606.5** | **727.8** |
+| Buffered (× 1.2) | | 571.2 | 140.7 | 15.9 | | |
 
-By milestone (raw): M0 10.5 · M1 145 · M2 177.75 · M3 145 · M4 119.25 · M5 13.25. Every V1 task sits in M0-M3, every V2 task in M4, every V3 task in M5; no task depends on a task in a later milestone and the task dependency graph has no cycles (`scripts/plan_graph.py`, 2026-09-25, after CR-D-1 and the TL review rulings).
+By milestone (raw): M0 10.5 · M1 145.75 · M2 172.75 · M3 147 · M4 117.25 · M5 13.25. Every V1 task sits in M0-M3, every V2 task in M4, every V3 task in M5; no task depends on a task in a later milestone and the task dependency graph has no cycles (`scripts/plan_graph.py`, 2026-09-25, after CR-D-1 and the TL review rulings).
 
-**Calendar check [INFERENCE] (arithmetic, not a forecast):** buffered V1 is 573.9 person-days (499.8 before CR-D-1 and the TL review). At 5 working days per week and full parallelism, that is ≈ 57.4 weeks for 2 engineers and ≈ 38.3 weeks for 3, against the source's M0-M3 = 12 weeks (§4). V2 buffered (143.1 d) is ≈ 14.3 / 9.5 weeks against M4 = 6 weeks. **The source calendar does not fit this scope with 2-3 engineers.** Options for the owner (O8): (a) cut V1 to the M3 pilot's critical path (ingest → evidence → decision for one engine; UI screens, cost model and ASVS mapping trimmed), (b) keep scope and treat §4 weeks as sequence only (source §1 already says milestones are priority order, not a commitment), or (c) add engineers. **O8 decided 2026-09-25: option (b)** — scope is kept and milestones are ordering and exit gates, not dates; the §4 weeks column is the source's sequence. Calendar dates are set after O2 (team size). A V1 cut was simulated and does not reach 12 weeks (DECISIONS O8).
+**Calendar check [INFERENCE] (arithmetic, not a forecast):** buffered V1 is 571.2 person-days (499.8 before CR-D-1 and the TL review). At 5 working days per week and full parallelism, that is ≈ 57.1 weeks for 2 engineers and ≈ 38.1 weeks for 3, against the source's M0-M3 = 12 weeks (§4). V2 buffered (140.7 d) is ≈ 14.1 / 9.4 weeks against M4 = 6 weeks. **The source calendar does not fit this scope with 2-3 engineers.** Options for the owner (O8): (a) cut V1 to the M3 pilot's critical path (ingest → evidence → decision for one engine; UI screens, cost model and ASVS mapping trimmed), (b) keep scope and treat §4 weeks as sequence only (source §1 already says milestones are priority order, not a commitment), or (c) add engineers. **O8 decided 2026-09-25: option (b)** — scope is kept and milestones are ordering and exit gates, not dates; the §4 weeks column is the source's sequence. Calendar dates are set after O2 (team size). A V1 cut was simulated and does not reach 12 weeks (DECISIONS O8).
 
 **Not in these numbers:** hiring, device farm, legal counsel for the DPA/transfer dossiers, pen-test vendor fees, trademark fees, platform/vendor waiting time.
 
@@ -495,3 +495,4 @@ By milestone (raw): M0 10.5 · M1 145 · M2 177.75 · M3 145 · M4 119.25 · M5 
 | 2026-10-02 | **Owner decisions in chat, no endpoint/schema change:** O1 interviews waived, pilot profile + acceptance sheet in `docs/decisions/O1-pilot-profile.md`; O2 team = the owner alone (one developer = Tech Lead = QA/PO); O4 AI = Evidgate-provided credit through an Evidgate-controlled LLM gateway (00 §5.1 stays; a CR for credit metering, opt-in and spend caps is due before the 08.5 DoR); O10 = option (a), already in plan as 04.9.1. See DECISIONS §8 | Owner |
 | 2026-10-02 | **Owner decisions in chat (round 2), no endpoint/schema change:** O3 deferred until after the first demo decision point and before any real customer data; reviews may be done by others/AI from a standard plan + spec; O4 turned into plan content — story 08.5.5 AI credits and spend control (credit account/ledger metric `ai_credit`, idempotent consumption `ai:<call_id>`, Evidgate-held provider key, per-tenant and global caps, provider evaluation); `plans/features/SOLO-PATH.md` replaces the multi-lane schedule for one developer. §14 recomputed | Owner (via Tech Lead) |
 | 2026-10-02 | **Review gap items accepted into the plan (no endpoint/schema change yet):** stories 03.1.4, 03.9.1, 03.9.2, 04.1.3, 06.3.6, 06.4.6, 10.5.2, 10.7.2, 10.11.1, 11.5.2, 11.9.2 (+33 tasks, +25.0 PD) cover history/baseline and import, retention and partitioning, report caps, parser sandbox, ingress limits, object restore, paging, audit-chain checkpoint, data-subject requests, requirement link, taxonomy and the coverage definition; M4 entry gate added to §4. Pending contract edits are listed as `[OPEN]` in each feature plan and are made at the story's DoR; §14 recomputed. |
+| 2026-10-02 | **Plan de-duplication and ordering (no endpoint/schema change):** 02.6.2-T1, 11.6.1-T1/T2/T3, 11.9.1-T5 and 11.7.1-T1 shrunk to what 01.4.2, 01.7.1, 06.4.5 and 01.6.1/02.9.1 did not already cover (−4.25 PD); redaction ownership fixed (08.5.3-T1 pipeline, 08.5.1-T1 refuses requests without its report hash, 11.4.1-T3 owns opt-in/allowlist/audit); new 04.2.1-T2 CLI skeleton (M1) so 04.2.2/04.2.3 have a base; 02.7.1-T1/T2 and 02.6.1-T2 moved to M1; 10.7.1-T5 kill-switch drill moved to M3 behind 08.6.3-T1; 08.8.1-T1 corpus moved to V1/M3 so the M4 entry gate can be checked. §14 recomputed. |

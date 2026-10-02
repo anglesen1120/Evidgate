@@ -226,7 +226,7 @@ Epic 11.3 total: 6.0
 |---|---|---|---|---|---|
 | 11.4.1-T1 | AI permission boundary spec + enforcement review (structured I/O, no shell/merge/policy, tenant-filtered retrieval) | M | V2 | M4 | 08.5.1-T1, 08.5.2-T1 |
 | 11.4.1-T2 | Prompt-injection corpus and harness: DOM/log/document payloads with assertions on state and security logging; the injection-attempt events it produces join the security-event set from V2 (11.5.1-T5) | L | V2 | M4 | 08.5.2-T1 |
-| 11.4.1-T3 | Outbound context control: per-tenant opt-in record, redaction step, provider allowlist, per-request audit | L | V2 | M4 | 08.5.3-T1, 11.3.1-T5 |
+| 11.4.1-T3 | Outbound context control: per-tenant opt-in record, provider allowlist, per-request audit; uses the redaction pipeline of 08.5.3-T1 and the source redaction of 11.3.1-T5, no third redaction implementation | L | V2 | M4 | 08.5.3-T1, 11.3.1-T5 |
 | 11.4.1-T4 | LLM provider due diligence: DPA, sub-processor entry, residency input for O4, retention terms | M | V2 | M4 | 11.8.1-T1 |
 
 Epic 11.4 total: 6.0
@@ -258,25 +258,25 @@ Epic 11.5 total: 7
 #### Story 11.6.1 Every dependency is a decision - acceptance: licence allowlist and lockfile enforced in CI, actions pinned, SBOM produced per release.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.6.1-T1 | Dual-ecosystem lockfile enforcement: `package-lock.json` + `npm ci` for CLI/adapters/web; `packages.lock.json` + `dotnet restore --locked-mode` for server/worker; dependency review on PRs; licence allowlist automation for npm and NuGet (DECISIONS §4 rule; NuGet licence tool chosen + licence-checked in 01.9.1 ⚠️) (T40) | L | V1 | M1 | 01.1.1-T2, 01.7.1-T1 |
-| 11.6.1-T2 | Pin all our GitHub Actions to full commit SHAs, minimal permissions, document the same for customers; dependency-update automation (e.g. Dependabot) covers npm and NuGet manifests (T40) | S | V1 | M1 | 11.2.1-T1 |
-| 11.6.1-T3 | CycloneDX SBOM per release covering both ecosystems — NuGet and npm (tool licence-checked against DECISIONS §4 here ⚠️, T40) + provenance/attestation for published packages (CLI, adapters, SDK) | M | V1 | M3 | 01.7.1-T1 |
+| 11.6.1-T1 | Gap check on top of 01.7.1-T2/T4 (licence gate, lockfiles, audit gates already shipped): confirm lockfile enforcement and PR dependency review cover both ecosystems and close any gap; no second licence tool (T40) | S | V1 | M1 | 01.1.1-T2, 01.7.1-T1, 01.7.1-T2, 01.7.1-T4 |
+| 11.6.1-T2 | Document the SHA-pinning and least-privilege rules for customers; our own pinning and Dependabot are 01.7.1-T4 (T40) | XS | V1 | M1 | 11.2.1-T1 |
+| 11.6.1-T3 | Attach the CycloneDX SBOM from 01.7.1-T4 to each release and the provenance of 04.9.2-T1 for published packages; no second SBOM generator (T40) | S | V1 | M3 | 01.7.1-T1, 01.7.1-T4 |
 | 11.6.1-T4 | Vulnerability triage SLA, patch cadence, base-image refresh schedule | M | V1 | M3 | 10.2.1-T1, 10.2.1-T2 |
 
-Epic 11.6 total: 4.5
+Epic 11.6 total: 2.25
 
 ### Epic 11.7 - Application security verification and pen test (M2-M4)
 
 #### Story 11.7.1 Proved against isolation, not asserted - acceptance: the tenant-isolation red-team suite is green in CI, and an external pen test report exists with criticals/highs closed before pilot exit.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.7.1-T1 | Tenant isolation red-team suite: API, FK, RLS, views, search, presigned URLs, artifact ids — covering both server data paths: EF Core write-model commands and Dapper read-model queries over module views (a Dapper query missing the tenant setting must still return zero foreign rows) (F-11-4) | L | V1 | M2 | 02.9.1-T1, 06.3.3-T1 |
+| 11.7.1-T1 | Tenant isolation red-team suite: adds only attack classes not in 01.6.1-T4, 02.9.1-T1..T3 (views, search, presigned URLs, artifact ids, Dapper read-model queries missing the tenant setting must still return zero foreign rows) (F-11-4); no re-implementation of those suites | M | V1 | M2 | 02.9.1-T1, 06.3.3-T1, 01.6.1-T4, 02.9.1-T3 |
 | 11.7.1-T2 | SAST/DAST baseline: CodeQL for C# and TypeScript, Roslyn security analyzers on the .NET solution, ESLint on `apps/web`/`packages/*`, plus a staging DAST scan, with triage loop (T40, F-11-4) | M | V1 | M3 | 01.7.1-T1 |
 | 11.7.1-T3 | External pen test: scope, vendor selection, execution window | L | V1 | M3 | 10.1.1-T3, 10.2.2-T4 |
 | 11.7.1-T4 | Pen-test remediation, retest of criticals, customer-facing summary | M | V1 | M3 | 11.7.1-T3 |
 | 11.7.1-T5 | ASVS L2 walkthrough with evidence and a published gap list | M | V2 | M4 | 11.1.1-T3, 11.7.1-T4 |
 
-Epic 11.7 total: 7.0
+Epic 11.7 total: 6.0
 
 ### Epic 11.8 - PDPL compliance program (M1-M3, V1)
 
@@ -301,7 +301,7 @@ Epic 11.8 total: 9.0
 | 11.9.1-T2 | Breach runbook with the 72 h clock (Art. 23.1 ✅), prompt processor→controller notice, evidence pack, regulator-support steps | L | V1 | M3 | 11.5.1-T1 |
 | 11.9.1-T3 | Tabletop exercise + timed rehearsal of the breach notification path | S | V1 | M3 | 11.9.1-T2 |
 | 11.9.1-T4 | Sub-processor change process: notification, objection window, versioned list | S | V1 | M3 | 11.8.1-T1 |
-| 11.9.1-T5 | Retention/deletion verification against plan 06 artifact states (`pending_delete → deleted` with proof) | M | V1 | M3 | 11.9.1-T1 |
+| 11.9.1-T5 | Customer-facing proof that `pending_delete → deleted` converged; the verification run itself is 06.4.5-T1 and this task consumes its report | S | V1 | M3 | 11.9.1-T1 |
 
 #### Story 11.9.2 Data-subject requests (PDPL) — acceptance: a data-subject request for access, correction, deletion or restriction is handled by a runnable procedure with a recorded outcome.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -312,7 +312,7 @@ Epic 11.8 total: 9.0
 
 **Story 11.9.2 total: 2** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 
-Epic 11.9 total: 8
+Epic 11.9 total: 7.5
 
 ## 10. Dependencies
 
@@ -351,13 +351,13 @@ Epic 11.9 total: 8
 | 11.3 Secrets and key management | 6.0 | 0 | 0 | 6.0 |
 | 11.4 AI security and prompt injection | 0 | 6.0 | 0 | 6.0 |
 | 11.5 Audit, support access, monitoring | 7.0 | 0 | 0 | 7.0 |
-| 11.6 Supply chain and dependency controls | 4.5 | 0 | 0 | 4.5 |
-| 11.7 AppSec verification and pen test | 6.0 | 1.0 | 0 | 7.0 |
+| 11.6 Supply chain and dependency controls | 2.25 | 0 | 0 | 2.25 |
+| 11.7 AppSec verification and pen test | 5.0 | 1.0 | 0 | 6.0 |
 | 11.8 PDPL compliance program | 9.0 | 0 | 0 | 9.0 |
-| 11.9 Data protection operations | 8.0 | 0 | 0 | 8.0 |
-| **Total** | **49.0** | **9.0** | **1.0** | **59.0** |
+| 11.9 Data protection operations | 7.5 | 0 | 0 | 7.5 |
+| **Total** | **45.25** | **9.0** | **1.0** | **55.25** |
 
-→ with 20 % buffer **70.8** person-days (sizes XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals are the sum of their task rows)
+→ with 20 % buffer **66.3** person-days (sizes XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals are the sum of their task rows)
 
 ## 13. Contract change requests
 

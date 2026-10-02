@@ -237,20 +237,20 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 02.6.1-T1 | Role split (`evidgate_owner` / `evidgate_app` / `evidgate_operator`), `evidgate.current_org_id()`/`current_project_id()` helpers (T2), policy template, policies for all M1 tables | L | V1 | M1 | 02.1.1-T1 |
-| 02.6.1-T2 | RLS lint in CI: new table without `org_id`, a policy or `unique (org_id, id)` fails (T3), checked against the §4.5 exception list (`user`, `user_identity`, `session`, `permission`, built-in `role`/`role_permission`, built-in `template`, `organization`, `report_parser`, and 01's `schema_migration`/`task`); boot-time policy self-check | S | V1 | M2 | 02.6.1-T1 |
+| 02.6.1-T2 | RLS lint in CI: new table without `org_id`, a policy or `unique (org_id, id)` fails (T3), checked against the §4.5 exception list (`user`, `user_identity`, `session`, `permission`, built-in `role`/`role_permission`, built-in `template`, `organization`, `report_parser`, and 01's `schema_migration`/`task`); boot-time policy self-check | S | V1 | M1 | 02.6.1-T1 |
 | 02.6.1-T3 | `evidgate_resolve` schema + owner-owned SECURITY DEFINER functions (`member_orgs`, ci-binding resolver, ingest-token resolver) returning `(org_id, project_id, binding_id, status)`; app role `EXECUTE` only; every call audited (T1, T4) | M | V1 | M1 | 02.6.1-T1 |
 **Story 02.6.1 total: 3.5**
 #### Story 02.6.2 Tenant context — acceptance: every request, job and background task opens its transaction via `ITenantScope.BeginAsync` (parameterised `set_config`, C3); a missing setting yields zero rows, never an error or all rows (platform-scoped identity tables and platform catalogue rows excepted, §4.5).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.6.2-T1 | `ITenantScope` tenant transaction (parameterised `set_config(…, true)`, C3) + tenant-context helpers; entry points for API requests and `task`-queue workers | M | V1 | M1 | 02.6.1-T1, 01.4.2-T1 |
-**Epic 02.6 total: 4.5**
+| 02.6.2-T1 | Entry points only: API request and `task`-queue worker call `ITenantScope` from 01.4.2-T1 (shipped); adds tenant-context helpers and the W7-SEC-06 follow-up, no second scope implementation | S | V1 | M1 | 02.6.1-T1, 01.4.2-T1 |
+**Epic 02.6 total: 4.0**
 ### Epic 02.7 Audit core
 #### Story 02.7.1 Audit trail — acceptance: every permission-checked mutation appends one audit row in the same transaction with actor, action, object, before/after hash and `request_id`; the app role cannot update or delete audit rows; a broken chain is detectable by a verification job.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.7.1-T1 | `audit_log` schema, append-only grants, per-org hash chain + `seq` serialised by `pg_advisory_xact_lock` before commit (T8), indexes by `(org_id, created_at)` | M | V1 | M2 | 02.6.1-T1 |
-| 02.7.1-T2 | Audit writer used by the Mediator authorization behaviour and by command handlers; `actor_type` for user / ci_producer / agent / operator / system | M | V1 | M2 | 02.7.1-T1, 02.2.1-T2 |
+| 02.7.1-T1 | `audit_log` schema, append-only grants, per-org hash chain + `seq` serialised by `pg_advisory_xact_lock` before commit (T8), indexes by `(org_id, created_at)` | M | V1 | M1 | 02.6.1-T1 |
+| 02.7.1-T2 | Audit writer used by the Mediator authorization behaviour and by command handlers; `actor_type` for user / ci_producer / agent / operator / system | M | V1 | M1 | 02.7.1-T1, 02.2.1-T2 |
 | 02.7.1-T3 | Audit read API + export (JSONL/CSV) + periodic chain-verification task walking `seq` (Cronos schedule, unique fire key, 00 §5.3) (T8) | S | V1 | M2 | 02.7.1-T2 |
 **Epic 02.7 total: 2.5**
 ### Epic 02.8 Support access
@@ -266,7 +266,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 |---|---|---|---|---|---|
 | 02.9.1-T1 | API suite: other-tenant id → 404, token/project scope mismatch → 403, list endpoints never leak counts | M | V1 | M1 | 02.1.1-T2, 02.2.1-T2 |
 | 02.9.1-T2 | Composite FK suite: cross-org inserts rejected on every tenant table | M | V1 | M1 | 02.1.1-T1 |
-| 02.9.1-T3 | RLS suite: unset GUC → 0 rows, set GUC → exact rows, `relforcerowsecurity` true, app role has no `BYPASSRLS` (platform catalogue rows asserted separately per §4.5; platform-scoped identity tables excluded) | M | V1 | M1 | 02.6.1-T1, 02.6.2-T1 |
+| 02.9.1-T3 | RLS suite: unset GUC → 0 rows, set GUC → exact rows, `relforcerowsecurity` true, app role has no `BYPASSRLS` (platform catalogue rows asserted separately per §4.5; platform-scoped identity tables excluded) | M | V1 | M1 | 02.6.1-T1, 02.6.2-T1, 02.6.1-T2 |
 **Epic 02.9 total: 3.0**
 
 ### Epic 02.10 Transactional notifications [PROPOSAL review 2026-10-02 P4]
@@ -304,14 +304,14 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | 02.3 Human login (OIDC / OAuth2) | 4.5 | 0 | 3.0 | 7.5 |
 | 02.4 CI authentication | 8.0 | 0 | 0 | 8.0 |
 | 02.5 Agent service identity | 0 | 2.0 | 0 | 2.0 |
-| 02.6 Tenant isolation (RLS) | 4.5 | 0 | 0 | 4.5 |
+| 02.6 Tenant isolation (RLS) | 4.0 | 0 | 0 | 4.0 |
 | 02.7 Audit core | 2.5 | 0 | 0 | 2.5 |
 | 02.8 Support access | 2.0 | 0 | 0 | 2.0 |
 | 02.9 Cross-tenant isolation suite | 3.0 | 0 | 0 | 3.0 |
 | 02.10 Transactional notifications | 4.5 | 0 | 0 | 4.5 |
-| **Total** | **37.0** | **2.0** | **3.0** | **42.0** |
+| **Total** | **36.5** | **2.0** | **3.0** | **41.5** |
 
-→ with 20 % buffer **50.4** person-days
+→ with 20 % buffer **49.8** person-days
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: CR-1 → 00 §5.4.1; CR-2 → 00 §8.9; CR-3 → 00 §9.3; CR-4 → 00 §2; CR-5 confirmed (ids resolve).

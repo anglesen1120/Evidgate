@@ -200,7 +200,7 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 #### Story 08.5.1 LLM gateway — acceptance: provider adapter interface, JSON-schema-constrained output, per-call timeout, per-tenant/project budget with hard stop, model/prompt versions recorded; model triage is a hypothesis (`label_source = model`).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.5.1-T1 | Gateway: typed `HttpClient` provider adapter with resilience (timeout, bounded retry) + JSON-schema output + redaction before egress + per-tenant/project budget with hard stop + `healing_llm_call` metering incl. `project_id`/`incident_id`/`candidate_id` (T30) | XL | V2 | M4 | 08.4.3-T3, 12.3.1-T2 |
+| 08.5.1-T1 | Gateway: typed `HttpClient` provider adapter with resilience (timeout, bounded retry) + JSON-schema output + refuses any request without a redaction report hash from 08.5.3-T1 (redaction itself is 08.5.3-T1) + per-tenant/project budget with hard stop + `healing_llm_call` metering incl. `project_id`/`incident_id`/`candidate_id` (T30) | XL | V2 | M4 | 08.4.3-T3, 12.3.1-T2 |
 | 08.5.1-T3 | Rule/model/prompt version registry + model triage as hypothesis | M | V2 | M4 | 08.5.1-T1, 08.2.2-T1 |
 #### Story 08.5.2 Untrusted context, injection containment and tenant filter — acceptance: DOM, logs and retrieved records are delimited data with no tool, shell, secret, policy or merge capability; an injection corpus cannot produce a forbidden patch; retrieval is tenant-filtered.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -263,7 +263,7 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 #### Story 08.8.1 Evaluation set and holdout — acceptance: the corpus covers real locator breaks, real product bugs, business UI changes, duplicate names, locales, network errors and data errors; the holdout is split by time or project and adjudicated independently; the named rejection tests are included.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.8.1-T1 | Corpus construction for the seven categories | L | V2 | M4 | 08.4.3-T3 |
+| 08.8.1-T1 | Corpus construction for the seven categories; labelling starts from shadow candidates at M3 so the M4 entry gate (00 §4) can be checked | L | V1 | M3 | 08.4.3-T3 |
 | 08.8.1-T2 | Named rejection tests (`reject-pay-button-save-order`, assertion weakening, skip injection, force click, stale context, duplicate name, cross-tenant record) | M | V2 | M4 | 08.8.1-T1, 08.4.2-T2 |
 | 08.8.1-T3 | Holdout split (time/project) + adjudication + independent reviewer | M | V2 | M4 | 08.8.1-T1 |
 #### Story 08.8.2 Metrics and reporting — acceptance: candidate precision, false-heal rate (adjudicated denominator, `unknown` separate), missed-bug rate, review rate, rollback rate and cost per accepted fix are reported; 0 failures in `n` samples is reported as ≈ 3/`n`, never as LLM confidence.
@@ -318,11 +318,11 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 | 08.5 LLM gateway, privacy and healer generator | - | 19.5 | - | 19.5 |
 | 08.6 Apply: PR, approval, canary, revoke, kill switches | 1 | 11 | - | 12 |
 | 08.7 Knowledge, feedback and lineage | - | 5.25 | - | 5.25 |
-| 08.8 Evaluation, metrics and phase gates | - | 7.5 | 1 | 8.5 |
+| 08.8 Evaluation, metrics and phase gates | 2 | 5.5 | 1 | 8.5 |
 | 08.9 V3 narrow reuse and mobile healing | - | - | 5 | 5 |
-| **Total** | **41** | **43.25** | **6** | **90.25** |
+| **Total** | **43** | **41.25** | **6** | **90.25** |
 
-→ with 20 % buffer **108.3** person-days (V1 49.2 · V2 51.9 · V3 7.2).
+→ with 20 % buffer **108.3** person-days (V1 51.6 · V2 49.5 · V3 7.2).
 
 ## 13. Contract change requests
 

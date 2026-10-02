@@ -169,17 +169,18 @@
 #### Story 04.2.1 Authenticate from CI — acceptance: the CLI exchanges an OIDC JWT or ingest token for a scoped `ci_producer` token, caches it, refreshes before expiry and fails loudly on 403.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.2.1-T1 | CLI skeleton, `EVIDGATE_*` config, OIDC/ingest-token exchange, token cache + refresh, exit codes | M | V1 | M2 | 02.4.1, 02.4.2 |
+| 04.2.1-T1 | OIDC/ingest-token exchange, token cache + refresh on top of the CLI skeleton (04.2.1-T2) | S | V1 | M2 | 02.4.1, 02.4.2, 04.2.1-T2 |
+| 04.2.1-T2 | CLI skeleton, `EVIDGATE_*` config, exit codes and a dev-token auth path (no OIDC) so the M1 commands 04.2.2/04.2.3 have a base; replaced by 04.2.1-T1 auth at M2 | S | V1 | M1 | 01.1.1-T3 |
 #### Story 04.2.2 Manifest and run — acceptance: `evidgate run create` is idempotent for the same key and payload, prints the run id, and returns 409 on a different payload.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.2.2-T1 | `manifests upload` (upload, verify, print `manifest_hash`) | S | V1 | M1 | 05.1.1-T4 |
-| 04.2.2-T2 | `runs create` with `Idempotency-Key`, `--json`, policy/suite/env flags | S | V1 | M1 | 05.2.1-T1 |
+| 04.2.2-T1 | `manifests upload` (upload, verify, print `manifest_hash`) | S | V1 | M1 | 05.1.1-T4, 04.2.1-T2 |
+| 04.2.2-T2 | `runs create` with `Idempotency-Key`, `--json`, policy/suite/env flags | S | V1 | M1 | 05.2.1-T1, 04.2.1-T2 |
 #### Story 04.2.3 Spool, send and finalize — acceptance: with the API down for 10 minutes the CLI spools within its size cap, then delivers every event with `duplicate` acks ignored, and never re-runs tests.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.2.3-T1 | Disk spool with size cap, batching, deadline-bounded retry with jitter, resume after process restart | L | V1 | M1 | 04.1.1-T2 |
-| 04.2.3-T2 | `finalize` command (producer, shard, `last_sequence`, `count`, `manifest_hash`); surfaces 403 `producer_slot_taken` / 422 `unknown_producer` (T9) | S | V1 | M1 | 05.3.2-T1 |
+| 04.2.3-T1 | Disk spool with size cap, batching, deadline-bounded retry with jitter, resume after process restart | L | V1 | M1 | 04.1.1-T2, 04.2.1-T2 |
+| 04.2.3-T2 | `finalize` command (producer, shard, `last_sequence`, `count`, `manifest_hash`); surfaces 403 `producer_slot_taken` / 422 `unknown_producer` (T9) | S | V1 | M1 | 05.3.2-T1, 04.2.1-T2 |
 #### Story 04.2.4 Artifacts and quickstart — acceptance: a trace and a screenshot upload through presigned URLs and reach `ready`; `evidgate quickstart` produces a working CI recipe.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|

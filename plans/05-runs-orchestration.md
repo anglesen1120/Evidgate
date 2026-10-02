@@ -195,7 +195,7 @@
 #### Story 05.3.1 Run state machine — acceptance: only the transitions of 00 §8.1 are accepted, each writes audit + outbox, and a stale `version` write fails 412.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.3.1-T1 | State machine with guarded transitions, audit and outbox emission; `GET /v1/runs/{r}` | L | V1 | M1 | 05.2.1-T1 |
+| 05.3.1-T1 | State machine with guarded transitions, audit and outbox emission; `GET /v1/runs/{r}` | L | V1 | M1 | 05.2.1-T1, 02.7.1-T2 |
 #### Story 05.3.2 Finalize and reconciliation — acceptance: a fully-reported run becomes `complete` with `missing[] = []`; any missing shard, count mismatch, unknown status or missing required artifact yields `incomplete` with reasons.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
