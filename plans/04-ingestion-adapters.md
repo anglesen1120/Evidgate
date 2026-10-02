@@ -170,7 +170,7 @@
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 04.2.1-T1 | OIDC/ingest-token exchange, token cache + refresh on top of the CLI skeleton (04.2.1-T2) | S | V1 | M2 | 02.4.1, 02.4.2, 04.2.1-T2 |
-| 04.2.1-T2 | CLI skeleton, `EVIDGATE_*` config, exit codes and a dev-token auth path (no OIDC) so the M1 commands 04.2.2/04.2.3 have a base; replaced by 04.2.1-T1 auth at M2 | S | V1 | M1 | 01.1.1-T3 |
+| 04.2.1-T2 | CLI skeleton, `EVIDGATE_*` config, exit codes and a dev auth path: `EVIDGATE_DEV_TOKEN` carries an ingest token minted by `seed-dev` (01.8.1-T4), no OIDC; the M1 commands 04.2.2/04.2.3 build on it; OIDC exchange is 04.2.1-T1 | S | V1 | M1 | 01.1.1-T3 |
 #### Story 04.2.2 Manifest and run — acceptance: `evidgate run create` is idempotent for the same key and payload, prints the run id, and returns 409 on a different payload.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|

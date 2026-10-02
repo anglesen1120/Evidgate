@@ -12,7 +12,7 @@ Updated 2026-10-02. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | Open PRs | none |
 | Active branch | `develop` — plan review follow-ups (`plans/REVIEW-2026-10-02.md`); wave 7 (§3.7) is merged |
 | M0/M1 tasks | 56 done · 78 open (of 134; 10.2.1-T1 counted open until T1.4) |
-| Plan checks | `plan_graph.py` errors 0 · 591 tasks · 627.75 raw / 753.3 buffered person-days (+55 tasks / +45 d from the 2026-10-02 review incl. gap stories 03.1.4, 03.9.x, 04.1.3, 06.3.6, 06.4.6, 10.5.2, 10.7.2, 10.11.1, 11.5.2, 11.9.2: 02.4.3, 02.10.1, 04.9.1, 04.9.2, 05.2.2, 05.5.2) |
+| Plan checks | `plan_graph.py` errors 0 · 592 tasks · 628.25 raw / 753.9 buffered person-days (+55 tasks / +45 d from the 2026-10-02 review incl. gap stories 03.1.4, 03.9.x, 04.1.3, 06.3.6, 06.4.6, 10.5.2, 10.7.2, 10.11.1, 11.5.2, 11.9.2: 02.4.3, 02.10.1, 04.9.1, 04.9.2, 05.2.2, 05.5.2) |
 | CI | `.github/workflows/ci.yml` runs every `verify.sh` stage (01.7.1-T1); interim `docker-tests.yml` deleted in wave 5 |
 | Owner decisions | Decided 2026-10-02 (chat): O1 interviews waived (pilot profile in `docs/decisions/O1-pilot-profile.md`), O2 team = the owner alone, O4 = Evidgate-provided AI credit through an Evidgate-controlled gateway, O10 = (a). O3 still open. Decided 2026-09-26: O1 engine = Playwright (UI), customer CI = per-project input. Open before M1: O1 pilot names, O2 (owner note recorded, reading unconfirmed). Open before 08.5 DoR: O4 (owner note "tự build hệ thống riêng", model-or-not unconfirmed) — DECISIONS §8 |
 
@@ -109,7 +109,7 @@ Pre-merge review (2026-09-27, commit `5cfcc28`): an independent authz and RLS-ma
 
 Outcome (2026-09-27): all 21 `verify.sh` stages green (`/tmp/w6-verify3.log`) — 9 .NET test assemblies incl. Contract.Tests (60), Foundation.IntegrationTests (34), Isolation.Tests (13); vitest 119 tests across workspaces; licence-scan 693 packages (0 deny, 2 MPL warns covered by ADR-0002); audit-deps 0 findings; SBOMs npm 598 + nuget 133 components. QA found and the wave fixed: TS loader duplicate-key hole, drift-gate precondition wording, `licence-report.json` missing `--report`, unwritten filter tests. Reviews found and the wave fixed: O(n²) error dedup + 100-row `truncated` marker (both runtimes, CWE-770), self-leaf composite keywords (`not`/`contains`/`propertyNames`/…) no longer dropped to `IsValid=true`, `Flag`-before-`Detailed` accept path (13.8 MB→48 B per 1 MiB body), schema dir resolved by upward search not content root, `JsonSchema` compiled with `allowFileSystemAndHttpResolution:false` end to end, `sbom.sh -dpr` (19 s→0.9 s, no unlocked lockfile rewrite) + vacuous-BOM refusal, licence/audit empty-inventory fail-closed + ADR-id format+existence on exception keys, `.config/dotnet-tools.json` now an ADR-matrix source, flow-style/quoted `uses:`/`run:` keys rejected in the pin and parity gates, `persist-credentials:false` + `npm ci --ignore-scripts` everywhere in ci.yml. Recorded deviations: `packages/sdk/gen` compiles strict minus `exactOptionalPropertyTypes` (generator-side TS2379, noted in the 01.3.2 plan §11); TS fixture loader uses a raw-text scanner for duplicate-key parity.
 
-## 3.7. Wave 7 (delivered on `feature/m1-wave7`; open PR #12)
+## 3.7. Wave 7 (delivered on `feature/m1-wave7`; merged PR #12)
 
 Scope (STATUS §5 ready + `plan_graph.py` deps verified): **02.2.1-T1** permission catalogue (M); **02.6.1-T1** RLS role/helper/policy assertions + boot self-check + `contracts/rls-exceptions.txt` (L; roles, helpers and the org/project policies already landed in 01.4.1/02.1.1); **04.7.1-T1** adapter protocol schemas + corpus (M); **05.1.1-T1** manifest schema + corpus (L); **10.1.1-T1** environment model + config matrix (M); **10.2.1-T1.1–T1.3** container images + SBOM (T1.4 web bundle/CDN needs 09.1.1 and object-storage publishing — carried); **10.8.1-T1** provider criteria memo (S); **11.1.1-T2** DoR security checklist (S); **02.9.1-T2** composite FK suite (M); then **02.1.2-T1** membership (M) and **02.2.1-T2** authorization evaluator (M). Not in this wave: 03.1.1-T1 (T1.4 needs 02.2.1-T2 — next wave), 04.1.2-T4 (FK to 04.1.x `producer_slot` parent not in graph), 02.4.1-T2, 11.2.1-T1, 11.8.1-T1/T2, 12.x.
 
@@ -172,25 +172,29 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met, not started)
 
-Recomputed from `plan_graph.py` deps after wave 7.
+Recomputed 2026-10-02 from `plan_graph.py` after the review additions, de-duplication and ordering fixes. Order follows Stage A of `plans/features/SOLO-PATH.md`; open items that must be settled first are in `plans/open-items/`.
+
+**Stage A, ready now (build order):**
 
 | Task | Size | Milestone | Note |
 |---|---|---|---|
-| 01.7.1-T3 | S | M1 | T3.2 shipped (wave 6); T3.1 branch protection owner-blocked (§6) |
-| 01.8.1-T3 | M | M1 | Dev stack follow-up |
-| 02.1.1-T2, 02.2.1-T3, 02.4.1-T2 | M each | M1 | Identity area |
-| 02.3.1-T1 | L | M1 | |
-| 02.6.1-T3, 02.6.2-T1 | M each | M1 | Isolation follow-ups; 02.6.2 also owns W7-SEC-06 |
+| 02.4.1-T2 | M | M1 | `ci_binding` model + admin API; unblocks the `seed-dev` bootstrap (01.8.1-T3) |
+| 02.1.1-T2 | M | M1 | Org/project API; slug regex decision first (open items) |
+| 02.6.1-T2, 02.6.1-T3, 02.6.2-T1 | S, M, S | M1 | RLS lint now M1; 02.6.2-T1 is entry points only (reuses 01.4.2-T1) |
+| 02.7.1-T1 | M | M1 | Audit log moved to M1 (05.3.1 writes audit rows) |
 | 03.1.1-T1 | L | M1 | Stable case identity (critical chain) |
-| 04.1.2-T4, 04.3.1-T1, 04.7.1-T2 | M each | M1 | Ingestion area |
-| 04.4.1-T1 | L | M1 | |
-| 05.1.1-T3 | M | M1 | |
-| 10.1.1-T2 | M | M1 | `ISecretProvider` + no-secret-literals scan |
-| 10.3.1-T1 | L | M1 | Telemetry |
-| 11.1.1-T1, 11.6.1-T1, 11.8.1-T1 | L each | M1 | Security area |
-| 11.2.1-T1, 11.8.1-T2 | M each | M1 | Security area |
-| 12.1.1-T1, 12.1.1-T2 | L, M | M0 | Customer interviews (owner) |
-| 12.2.1-T2, 12.6.1-T1 | M, M | M1 | Commercial area |
+| 05.1.1-T3 | M | M1 | Manifest |
+| 04.1.2-T4 | M | M1 | `producer_slot` |
+| 04.2.1-T2 | S | M1 | New: CLI skeleton + `EVIDGATE_DEV_TOKEN` dev path |
+| 04.3.1-T1, 04.7.1-T2 | M each | M1 | Playwright reporter, adapter protocol |
+| 07.1.1-T1, 07.3.1-T1 | M each | M2 | Policy revision, waiver/quarantine tables |
+| 06.1.1-T1 | M | M2 | Artifact record |
+
+**Next after Stage A starts (blocked only by the rows above):** 01.8.1-T3 `seed-dev` (needs 02.4.1-T2) · 02.3.1-T1 login (ready, but Stage B) · 01.7.1-T3 (T3.1 branch protection owner-blocked, §6).
+
+**Ready but outside Stage A (do not start before the Stage B decision point unless needed):** 02.2.1-T3 · 02.10.1-T1 · 04.4.1-T1 · 08.6.3-T1 · 09.1.1-T1/T2/T6 · 09.7.1-T1/T2 (Stage B) · 10.1.1-T2/T4 · 10.1.2-T2 (push protection, XS, a setting) · 10.2.1-T1 rest after T1.1–T1.3 · 10.3.1-T1 · 10.7.1-T1 · 10.8.1-T2 and 10.11.1-T3 (O3 deferred) · 11.1.1-T1 · 11.2.1-T1 · 11.6.1-T1/T3 (now S) · 11.7.1-T2 · 11.8.1-T1/T2 (counsel) · 12.2.1-T2 · 12.3.1-T1 · 12.6.1-T1 · 01.10.1-T1 · V2/V3: 01.1.1-T4, 04.5.1-T1, 05.7.1-T1.
+
+**Waived:** 12.1.1-T1/T2 customer interviews (O1 decided 2026-10-02: pilot profile in `docs/decisions/O1-pilot-profile.md`; real reports come from pilot zero, the owner's own pipeline).
 
 ## 6. Blocked / carried items
 

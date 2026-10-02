@@ -232,7 +232,7 @@
 #### Story 07.6.1 CI delivery: GitHub and the CLI gate — acceptance: PASS/FAIL/INCONCLUSIVE map to `success`/`failure`/`neutral`, a re-post is idempotent, and `evidgate gate` exits 0/1/2/3 with a deadline that yields 2, never 0.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.6.1-T1 | GitHub App check-run/commit-status delivery + `ci_delivery` records + retry | M | V1 | M3 | 07.2.2-T1, 02.4.1-T2 |
+| 07.6.1-T1 | GitHub App check-run/commit-status delivery + `ci_delivery` records + retry | M | V1 | M3 | 07.2.2-T1, 02.4.1-T2, 02.4.3-T2 |
 | 07.6.1-T2 | `evidgate gate` semantics (exit codes, `--wait` deadline, JSON output) with 04 | M | V1 | M3 | 07.5.2-T1, 04.2.1-T1 |
 
 #### Story 07.6.2 Outbound webhooks and delivery operations — acceptance: 00 §9.5 headers and signature pass the reference receiver, retries last 24 h with backoff, and dead letters are replayable by `event_id`.

@@ -230,7 +230,8 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 |---|---|---|---|---|---|
 | 01.8.1-T1 | S3 emulator licence check and decision: SeaweedFS (Apache-2.0 ✅) chosen; MinIO rejected (AGPL-3.0 ✅); Scality CloudServer (Apache-2.0 ✅) fallback, LocalStack rejected (archived; free tier non-commercial); acceptance = presigned PUT/GET via `AWSSDK.S3` with SigV4, checksum header **and signed `Content-Length`** (oversize PUT rejected, T18) matching the provider path 06 uses; ADR-0004 | S | V1 | M1 | — |
 | 01.8.1-T2 | Compose dev stack: PostgreSQL 18 (digest-pinned) + emulator; Api/Worker via `dotnet watch`, web via `ng serve`; healthchecks, named volumes | M | V1 | M1 | 01.8.1-T1 |
-| 01.8.1-T3 | Dev seed as `Evidgate.Migrator seed-dev` (refuses non-dev environments): one org, one project, memberships from the 02 roles catalogue, one sample policy revision; `scripts/dev/up.sh` + `docs/dev-setup.md` quickstart | M | V1 | M1 | 01.8.1-T2 |
+| 01.8.1-T3 | Dev seed as `Evidgate.Migrator seed-dev` (refuses non-dev environments, idempotent): one org, one project, a dev user with `tenant_admin` + `release_approver` memberships from the 02 roles catalogue, one CI binding for the dev repository; `scripts/dev/up.sh` + `docs/dev-setup.md` quickstart. This is the Stage A bootstrap: no login is needed to reach a first run | M | V1 | M1 | 01.8.1-T2, 02.1.2-T1, 02.4.1-T2 |
+| 01.8.1-T4 | Seed part 2: mint one dev ingest token (printed once; the CLI dev path of 04.2.1-T2 reads it from `EVIDGATE_DEV_TOKEN`) and one sample policy revision | S | V1 | M2 | 01.8.1-T3, 02.4.2-T1, 07.1.1-T1 |
 
 ### Epic 01.9 ADRs and engineering docs (M0-M1)
 
@@ -280,12 +281,12 @@ Units: person-days of one senior full-stack .NET + Angular developer (00 §6, CR
 | 01.5 Outbox and task queue | 7.0 | 0 | 0 | 7.0 |
 | 01.6 Test harness | 5.0 | 0 | 0 | 5.0 |
 | 01.7 CI and licence gate | 4.5 | 0 | 0 | 4.5 |
-| 01.8 Local dev stack | 2.5 | 0 | 0 | 2.5 |
+| 01.8 Local dev stack | 3.0 | 0 | 0 | 3.0 |
 | 01.9 ADRs and engineering docs | 2.0 | 0 | 0 | 2.0 |
 | 01.10 Dogfooding | 3.0 | 0.5 | 0 | 3.5 |
-| **Total** | **56.0** | **0.5** | **0.25** | **56.75** |
+| **Total** | **56.5** | **0.5** | **0.25** | **57.25** |
 
-→ with 20 % buffer **68.1** person-days
+→ with 20 % buffer **68.7** person-days
 
 ## 13. Contract change requests
 
