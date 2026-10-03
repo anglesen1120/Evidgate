@@ -1,5 +1,8 @@
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Canonicalization;
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -19,13 +22,20 @@ using Mediator;
 namespace Evidgate.Modules.Orchestrator.Application.Manifests;
 
 /// <summary>
-/// Upload a manifest (<c>POST /v1/projects/{p}/manifests</c>, 05.1.1 §5). <paramref name="Body"/> already matches
-/// <c>manifest.v1.json</c>: the route validates it before anything binds (00 §5.5 edge).
+/// Upload a manifest (<c>POST /v1/projects/{p}/manifests</c>, 05.1.1 §5). The raw body travels unparsed: it is parsed and
+/// checked against <c>manifest.v1.json</c> by the handler, after the C2 pipeline authorized the caller, so an anonymous or
+/// unauthorized request costs no parse and no schema run (review finding). The idempotency record hashes
+/// <paramref name="BodySha256"/>, never the body itself.
 /// </summary>
 /// <param name="ProjectId">The project from the route.</param>
-/// <param name="Body">The schema-valid manifest.</param>
+/// <param name="Body">The raw UTF-8 body, at most 256 KiB.</param>
+/// <param name="BodySha256">Hex SHA-256 of <paramref name="Body"/>: the request identity the idempotency store compares.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>.</param>
-internal sealed record UploadManifestCommand(Guid ProjectId, JsonElement Body, string IdempotencyKey)
+internal sealed record UploadManifestCommand(
+    Guid ProjectId,
+    [property: JsonIgnore] ReadOnlyMemory<byte> Body,
+    string BodySha256,
+    string IdempotencyKey)
     : ICommand<Result<ManifestAccepted>>, IIdempotentCommand;
 
 /// <summary>
@@ -42,6 +52,7 @@ internal sealed class UploadManifestCommandHandler(
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant,
     ICatalogContracts catalog,
+    Lazy<ContractSchemaSet> schemas,
     IAuditTrail audit)
     : ICommandHandler<UploadManifestCommand, Result<ManifestAccepted>>
 {
@@ -49,6 +60,7 @@ internal sealed class UploadManifestCommandHandler(
     internal const string UnknownSuiteRevision = "unknown_suite_revision";
     internal const string UnknownEnvironmentRevision = "unknown_environment_revision";
     internal const string InvalidValue = "invalid_value";
+    internal const string InvalidJson = "invalid_json";
 
     /// <inheritdoc />
     public async ValueTask<Result<ManifestAccepted>> Handle(UploadManifestCommand command, CancellationToken cancellationToken)
@@ -60,12 +72,34 @@ internal sealed class UploadManifestCommandHandler(
             return Result.Failure<ManifestAccepted>(mismatch);
         }
 
-        if (ManifestVerifier.HasNul(command.Body))
+        JsonDocument document;
+        try
         {
+            document = JsonDocument.Parse(command.Body);
+        }
+        catch (JsonException)
+        {
+            return Refuse(InvalidJson, [new ErrorDetail(string.Empty, InvalidJson)]);
+        }
+
+        using var parsed = document;
+        var body = parsed.RootElement;
+        if (JsonBody.HasUnstorableText(body))
+        {
+            // A lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.
             return Refuse(InvalidValue, [new ErrorDetail(string.Empty, InvalidValue)]);
         }
 
-        var (facts, refusal) = ManifestVerifier.Verify(command.Body);
+        var verdict = schemas.Value.Validate(ContractSchemaKeys.Manifest, body);
+        if (!verdict.IsValid)
+        {
+            EvidgateTelemetry.RecordManifestRejected("schema");
+            return Result.Failure<ManifestAccepted>(OrchestratorErrors.ManifestInvalid(
+                "the manifest does not match manifest.v1",
+                [.. verdict.Errors.Select(error => new ErrorDetail(JsonBody.SafePath(error), error.Reason, error.Index))]));
+        }
+
+        var (facts, refusal) = ManifestVerifier.Verify(body);
         if (refusal is not null)
         {
             return Refuse(refusal.Reason, refusal.Details);
@@ -74,11 +108,11 @@ internal sealed class UploadManifestCommandHandler(
         string hash;
         try
         {
-            hash = CanonicalHash.Compute(command.Body);
+            // One canonicalisation, straight from the received bytes.
+            hash = CanonicalHash.Compute(command.Body.Span);
         }
         catch (Exception exception) when (exception is JsonCanonicalizationException or ArgumentException)
         {
-            // A string the canonical form (and jsonb) cannot carry: a lone surrogate, a NUL.
             return Refuse(InvalidValue, [new ErrorDetail(string.Empty, InvalidValue)]);
         }
 
@@ -128,7 +162,6 @@ internal sealed class UploadManifestCommandHandler(
 
         var orgId = scopes.Require().OrgId;
         var actor = AuditActorResolver.From(principals.Current);
-        var body = command.Body;
         var insertedId = await db.ScalarAsync<Guid?>(
             OrchestratorSql.InsertManifest,
             new
@@ -143,7 +176,7 @@ internal sealed class UploadManifestCommandHandler(
                 matrix = body.GetProperty("matrix").GetRawText(),
                 env_needs = body.GetProperty("env_needs").GetRawText(),
                 planned_count = facts.PlannedCount,
-                document = body.GetRawText(),
+                document = Encoding.UTF8.GetString(command.Body.Span),
                 verified_by = $"{actor.Type}:{actor.Id}",
             },
             cancellationToken).ConfigureAwait(false);

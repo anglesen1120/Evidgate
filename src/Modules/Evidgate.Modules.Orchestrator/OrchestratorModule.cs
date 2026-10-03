@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.Modules.Orchestrator.Domain;
 using Evidgate.Modules.Orchestrator.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Evidgate.Modules.Orchestrator;
 
@@ -21,6 +22,9 @@ internal static class OrchestratorModule
         // 05.1.1/05.1.2: the manifest and environment-revision routes validate their bodies against the contract schema
         // set, which is compiled on first use (the routes resolve it per request, never at start-up).
         services.TryAddEvidgateContractValidation();
+
+        // Handlers are resolved eagerly by Mediator at start-up: they receive a Lazy, so the schema set compiles on first use.
+        services.TryAddSingleton(provider => new Lazy<ContractSchemaSet>(() => provider.GetRequiredService<ContractSchemaSet>()));
 
         return services;
     }

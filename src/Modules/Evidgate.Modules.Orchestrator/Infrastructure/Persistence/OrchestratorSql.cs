@@ -42,17 +42,18 @@ internal static class OrchestratorSql
           from public.environment e
           join public.project p on p.org_id = e.org_id and p.id = e.project_id and p.status <> 'deleted'
          where e.project_id = @project_id and e.environment_key = @environment_key
-           for update of e
+           for no key update of e
         """;
 
     /// <summary>Dedupe and numbering in one round trip.</summary>
     internal const string RevisionSlot = """
-        select (select id from public.environment_revision
-                 where org_id = @org_id and environment_id = @environment_id and revision_hash = @revision_hash) as existing_id,
-               (select revision_no from public.environment_revision
-                 where org_id = @org_id and environment_id = @environment_id and revision_hash = @revision_hash) as existing_no,
+        select same.id as existing_id, same.revision_no as existing_no,
                (select coalesce(max(revision_no), 0) + 1 from public.environment_revision
                  where org_id = @org_id and environment_id = @environment_id) as next_no
+          from (select 1) as one
+          left join lateral (
+                select id, revision_no from public.environment_revision
+                 where org_id = @org_id and environment_id = @environment_id and revision_hash = @revision_hash) as same on true
         """;
 
     internal const string InsertRevision = """
@@ -77,6 +78,7 @@ internal static class OrchestratorSql
                array_to_json(r.secret_refs)::text as secret_refs, r.created_at
           from public.environment_revision r
           join public.environment e on e.org_id = r.org_id and e.id = r.environment_id
+          join public.project p on p.org_id = r.org_id and p.id = r.project_id and p.status <> 'deleted'
          where r.id = @revision_id
         """;
 }

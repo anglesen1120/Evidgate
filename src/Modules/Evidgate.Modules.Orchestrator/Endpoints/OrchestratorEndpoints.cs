@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Manifests;
@@ -25,11 +26,6 @@ public static class OrchestratorEndpoints
 
     /// <summary>The environment-revision transport cap (the schema's <c>x-max-bytes</c>).</summary>
     internal const int MaxEnvironmentBytes = 64 * 1024;
-
-    private static readonly JsonSerializerOptions RequestJson = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    };
 
     /// <summary>Maps the routes and returns the <c>/v1</c> group so the host can apply its filters (00 §5.5 C8).</summary>
     public static RouteGroupBuilder MapOrchestratorEndpoints(this IEndpointRouteBuilder routes)
@@ -59,9 +55,17 @@ public static class OrchestratorEndpoints
     private static async Task<Result<ManifestAccepted>> UploadManifestAsync(
         Guid p,
         HttpContext context,
+        IRequestPrincipalAccessor principals,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // Nothing of the body is read for a caller who is nobody; parsing and the schema run in the handler, after the
+        // pipeline's permission check.
+        if (principals.Current is null)
+        {
+            return Result.Failure<ManifestAccepted>(Unauthenticated);
+        }
+
         var (bytes, tooLarge) = await ReadBodyAsync(context, MaxManifestBytes, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
         {
@@ -69,20 +73,7 @@ public static class OrchestratorEndpoints
             return Result.Failure<ManifestAccepted>(tooLarge);
         }
 
-        var schemas = context.RequestServices.GetRequiredService<ContractSchemaSet>();
-        var verdict = schemas.Validate(ContractSchemaKeys.Manifest, bytes);
-        if (!verdict.IsValid)
-        {
-            var reason = verdict.Errors[0].Reason;
-            EvidgateTelemetry.RecordManifestRejected(reason == ContractValidationError.InvalidJsonReason ? reason : "schema");
-            return Result.Failure<ManifestAccepted>(Error.Unprocessable(
-                ApiErrorCode.ManifestInvalid,
-                "the manifest does not match manifest.v1",
-                [.. verdict.Errors.Select(error => new ErrorDetail(SafePath(error), error.Reason, error.Index))]));
-        }
-
-        using var document = JsonDocument.Parse(bytes);
-        var result = await mediator.Send(new UploadManifestCommand(p, document.RootElement.Clone(), IdempotencyKey(context)), cancellationToken)
+        var result = await mediator.Send(new UploadManifestCommand(p, bytes, Sha256(bytes), IdempotencyKey(context)), cancellationToken)
             .ConfigureAwait(false);
         if (result.IsSuccess && result.SuccessValue is ManifestAccepted uploaded)
         {
@@ -96,27 +87,22 @@ public static class OrchestratorEndpoints
         Guid p,
         string e,
         HttpContext context,
+        IRequestPrincipalAccessor principals,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        if (principals.Current is null)
+        {
+            return Result.Failure<EnvironmentRevisionCreated>(Unauthenticated);
+        }
+
         var (bytes, tooLarge) = await ReadBodyAsync(context, MaxEnvironmentBytes, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
         {
             return Result.Failure<EnvironmentRevisionCreated>(tooLarge);
         }
 
-        var schemas = context.RequestServices.GetRequiredService<ContractSchemaSet>();
-        var verdict = schemas.Validate(ContractSchemaKeys.EnvironmentRevision, bytes);
-        if (!verdict.IsValid)
-        {
-            return Result.Failure<EnvironmentRevisionCreated>(Error.Unprocessable(
-                ApiErrorCode.EnvironmentRevisionInvalid,
-                "the body does not match environment-revision.v1",
-                [.. verdict.Errors.Select(error => new ErrorDetail(SafePath(error), error.Reason, error.Index))]));
-        }
-
-        var request = JsonSerializer.Deserialize<CreateEnvironmentRevisionRequest>(bytes.Span, RequestJson)!;
-        var result = await mediator.Send(new CreateEnvironmentRevisionCommand(p, e, request, IdempotencyKey(context)), cancellationToken)
+        var result = await mediator.Send(new CreateEnvironmentRevisionCommand(p, e, bytes, Sha256(bytes), IdempotencyKey(context)), cancellationToken)
             .ConfigureAwait(false);
         if (result.IsSuccess && result.SuccessValue is EnvironmentRevisionCreated created)
         {
@@ -125,6 +111,10 @@ public static class OrchestratorEndpoints
 
         return result;
     }
+
+    private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
+
+    private static string Sha256(ReadOnlyMemory<byte> bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes.Span));
 
     private static async Task<Result> GetEnvironmentRevisionAsync(
         Guid id,
@@ -138,10 +128,11 @@ public static class OrchestratorEndpoints
             return result;
         }
 
-        // A revision never changes: its hash is its ETag, it caches privately for good, and a matching If-None-Match is 304.
+        // A revision never changes: its hash is its ETag, a matching If-None-Match is 304, and it caches privately for an
+        // hour (bounded, so a revoked reader does not keep it for good).
         var tag = $"\"{result.Value.RevisionHash}\"";
         context.Response.Headers.ETag = tag;
-        context.Response.Headers.CacheControl = "private, immutable";
+        context.Response.Headers.CacheControl = "private, max-age=3600, immutable";
         var presented = context.Request.Headers.IfNoneMatch.ToString();
         var matches = presented.Length > 0 && presented.Split(',')
             .Select(candidate => candidate.Trim())
@@ -184,20 +175,6 @@ public static class OrchestratorEndpoints
         }
 
         return length > limit ? (default, tooLarge) : (buffer.AsMemory(0, length), null);
-    }
-
-    /// <summary>An <c>additional_properties</c> path ends in the unknown member's name, which may be anything the caller sent: it is cut.</summary>
-    private static string SafePath(ContractValidationError error)
-    {
-        var path = error.Path.Length > 200 ? error.Path[..200] : error.Path;
-        if (!string.Equals(error.Reason, "additional_properties", StringComparison.Ordinal))
-        {
-            return path;
-        }
-
-        var cut = path.LastIndexOf('/');
-
-        return cut <= 0 ? string.Empty : path[..cut];
     }
 
     private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();

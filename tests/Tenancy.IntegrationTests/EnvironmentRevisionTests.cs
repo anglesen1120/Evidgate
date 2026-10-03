@@ -134,6 +134,87 @@ public sealed class EnvironmentRevisionTests
     }
 
     [Fact]
+    public async Task AStaleRevisionNo_Is409_EvenForContentAlreadyStored_AndTheHeadDoesNotMove()
+    {
+        await using var world = await StartAsync();
+        var first = await CreateAsync(world, Config());
+        var second = await CreateAsync(world, Config(postgres: "19.0"));
+
+        var stale = await CreateAsync(world, Config(revisionNo: 2));
+
+        stale.Status.ShouldBe(HttpStatusCode.Conflict);
+        (await _fixture.ScalarAsync<Guid>(world.Database, "select current_revision_id from public.environment")).ShouldBe(second.Id("revision_id"));
+        (await CreateAsync(world, Config(revisionNo: 3))).Id("revision_id").ShouldBe(first.Id("revision_id"));
+    }
+
+    [Fact]
+    public async Task CreateEnvironmentRevision_RefusesUnstorableText_AndNeedsACaller()
+    {
+        await using var world = await StartAsync();
+
+        using (var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/projects/{world.Project}/environments/staging/revisions"))
+        {
+            world.Admin(request.Headers);
+            request.Headers.Add("Idempotency-Key", NewKey());
+            request.Content = new StringContent("""{"base_urls":{},"dependency_versions":{"pg":"18\ud800"}}""", System.Text.Encoding.UTF8, "application/json");
+            using var response = await world.Client.SendAsync(request, TestContext.Current.CancellationToken);
+            response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+            (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldContain("invalid_value");
+        }
+
+        (await CreateAsync(world, Config(), caller: _ => { })).Status.ShouldBe(HttpStatusCode.Unauthorized);
+        var stranger = TenancyApiFactory.Resolved(user: Guid.CreateVersion7(), orgHeader: world.Org);
+        (await CreateAsync(world, new { garbage = true }, caller: stranger)).Status.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task ConcurrentFirstCreates_OfANewEnvironment_MakeOneEnvironment()
+    {
+        await using var world = await StartAsync();
+
+        var answers = await Task.WhenAll(Enumerable.Range(0, 6).Select(i => CreateAsync(world, Config(postgres: $"18.{i}"), environment: "fresh")));
+
+        answers.ShouldAllBe(answer => answer.Status == HttpStatusCode.Created);
+        answers.Select(answer => answer.Body.GetProperty("revision_no").GetInt32()).Order().ShouldBe(Enumerable.Range(1, 6));
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.environment")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task CreateRevision_CommandCounter()
+    {
+        await using var world = await StartAsync();
+        (await CreateAsync(world, Config())).Status.ShouldBe(HttpStatusCode.Created);
+        world.Api.Statements.Clear();
+
+        (await CreateAsync(world, Config(postgres: "19.0"))).Status.ShouldBe(HttpStatusCode.Created);
+
+        var statements = world.Api.Statements.Snapshot().Where(statement => statement.Contains("environment", StringComparison.Ordinal)).ToList();
+        statements.Count.ShouldBeLessThanOrEqualTo(5, string.Join(Environment.NewLine, statements));
+    }
+
+    [Fact]
+    public async Task ARevision_BelongsToAnEnvironmentOfItsOwnProject_AtTheDatabase()
+    {
+        await using var world = await StartAsync();
+        var created = await CreateAsync(world, Config());
+        var other = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
+        var environment = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.environment");
+
+        (await Should.ThrowAsync<PostgresException>(async () => await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            insert into public.environment_revision (id, org_id, project_id, environment_id, revision_no, base_urls, dependency_versions, revision_hash, created_by)
+            values ('{Guid.CreateVersion7()}', '{world.Org}', '{other}', '{environment}', 9, jsonb_build_object(), jsonb_build_object(), 'sha256:{new string('e', 64)}', 'x')
+            """)))
+            .MessageText.ShouldContain("cross_project_reference");
+        (await Should.ThrowAsync<PostgresException>(async () => await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.project set default_environment_id = '{environment}' where id = '{other}'")))
+            .MessageText.ShouldContain("cross_project_reference");
+        created.Status.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Fact]
     public async Task CreateEnvironmentRevision_SameKeySameResult_DifferentPayload409()
     {
         await using var world = await StartAsync();
@@ -171,6 +252,7 @@ public sealed class EnvironmentRevisionTests
         read.Status.ShouldBe(HttpStatusCode.OK);
         read.ETag.ShouldBe($"\"{created.Text("revision_hash")}\"");
         read.Headers.CacheControl!.ToString().ShouldContain("immutable");
+        read.Headers.CacheControl!.MaxAge.ShouldBe(TimeSpan.FromHours(1));
         read.Text("environment_key").ShouldBe("staging");
         read.Body.GetProperty("base_urls").GetProperty("web").GetString().ShouldBe("https://staging.example.test");
         read.Body.GetProperty("secret_refs")[0].GetString().ShouldBe("secret:db_password");

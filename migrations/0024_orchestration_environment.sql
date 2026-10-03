@@ -67,8 +67,9 @@ create table if not exists public.environment_revision (
   constraint environment_revision_created_by_check check (char_length(created_by) between 1 and 128)
 );
 
--- The environment's revisions newest first (the diff and the head walk).
-create index if not exists environment_revision_env_idx on public.environment_revision (org_id, environment_id, revision_no desc);
+-- The referencing side of the project FK (a project or tenant delete). The environment FK is served by the prefix of
+-- `environment_revision_no_key`, which a backward scan also serves newest first.
+create index if not exists environment_revision_project_idx on public.environment_revision (org_id, project_id);
 
 create or replace function evidgate.orchestration_environment_revision_immutable() returns trigger
   language plpgsql
@@ -134,6 +135,55 @@ alter table public.manifest
 
 create index if not exists project_default_environment_idx on public.project (org_id, default_environment_id) where default_environment_id is not null;
 create index if not exists manifest_environment_revision_idx on public.manifest (org_id, environment_revision_id) where environment_revision_id is not null;
+
+-- Project scope. Every tenant FK is (org_id, <id>) -> (org_id, id) (00 §5.4.1/§5.4.6), which keeps a row inside its org but not
+-- inside its project; these triggers add the project half: a revision belongs to an environment of its own project, a project's
+-- default environment is one of its own, and a manifest pins an environment revision of its own project. A referenced row that
+-- does not exist, or a row whose own project is not in its org (another org's, invisible here), is left to the foreign keys.
+create or replace function evidgate.orchestration_same_project() returns trigger
+  language plpgsql
+  as $$
+  begin
+    if tg_table_name = 'environment_revision' then
+      if exists (select 1 from public.environment e
+                  where e.org_id = new.org_id and e.id = new.environment_id and e.project_id <> new.project_id)
+         and exists (select 1 from public.project p where p.org_id = new.org_id and p.id = new.project_id) then
+        raise exception 'cross_project_reference: the environment belongs to another project' using errcode = '23514';
+      end if;
+    elsif tg_table_name = 'manifest' then
+      if exists (select 1 from public.environment_revision r
+                  where r.org_id = new.org_id and r.id = new.environment_revision_id and r.project_id <> new.project_id)
+         and exists (select 1 from public.project p where p.org_id = new.org_id and p.id = new.project_id) then
+        raise exception 'cross_project_reference: the environment revision belongs to another project' using errcode = '23514';
+      end if;
+    elsif tg_table_name = 'project' then
+      if new.default_environment_id is distinct from old.default_environment_id
+         and exists (select 1 from public.environment e
+                      where e.org_id = new.org_id and e.id = new.default_environment_id and e.project_id <> new.id) then
+        raise exception 'cross_project_reference: the default environment belongs to another project' using errcode = '23514';
+      end if;
+    end if;
+
+    return new;
+  end
+  $$;
+
+revoke all on function evidgate.orchestration_same_project() from public;
+
+drop trigger if exists environment_revision_same_project on public.environment_revision;
+create trigger environment_revision_same_project
+  before insert on public.environment_revision
+  for each row execute function evidgate.orchestration_same_project();
+
+drop trigger if exists manifest_same_project on public.manifest;
+create trigger manifest_same_project
+  before insert on public.manifest
+  for each row execute function evidgate.orchestration_same_project();
+
+drop trigger if exists project_default_environment_same_project on public.project;
+create trigger project_default_environment_same_project
+  before update of default_environment_id on public.project
+  for each row execute function evidgate.orchestration_same_project();
 
 alter table public.environment enable row level security;
 alter table public.environment force row level security;

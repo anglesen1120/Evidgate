@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -21,9 +23,15 @@ namespace Evidgate.Modules.Orchestrator.Application.Manifests;
 /// <summary>Append an environment revision (<c>POST /v1/projects/{p}/environments/{e}/revisions</c>, 05.1.2 §5).</summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="EnvironmentKey">The environment key from the route (<c>{e}</c>).</param>
-/// <param name="Body">The body, already valid against <c>environment-revision.v1.json</c>.</param>
+/// <param name="Body">The raw UTF-8 body (≤ 64 KiB), parsed and schema-checked by the handler after authorization.</param>
+/// <param name="BodySha256">Hex SHA-256 of <paramref name="Body"/>: what the idempotency store compares.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>.</param>
-internal sealed record CreateEnvironmentRevisionCommand(Guid ProjectId, string EnvironmentKey, CreateEnvironmentRevisionRequest Body, string IdempotencyKey)
+internal sealed record CreateEnvironmentRevisionCommand(
+    Guid ProjectId,
+    string EnvironmentKey,
+    [property: JsonIgnore] ReadOnlyMemory<byte> Body,
+    string BodySha256,
+    string IdempotencyKey)
     : ICommand<Result<EnvironmentRevisionCreated>>, IIdempotentCommand;
 
 /// <summary>
@@ -38,6 +46,7 @@ internal sealed partial class CreateEnvironmentRevisionCommandHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant,
+    Lazy<ContractSchemaSet> schemas,
     IAuditTrail audit)
     : ICommandHandler<CreateEnvironmentRevisionCommand, Result<EnvironmentRevisionCreated>>
 {
@@ -58,15 +67,21 @@ internal sealed partial class CreateEnvironmentRevisionCommandHandler(
                 [new ErrorDetail("e", "invalid_format")]));
         }
 
-        var name = command.Body.Name?.Trim();
-        if (name is { Length: 0 } || (name is not null && name.Any(char.IsControl)))
+        if (Parse(command.Body, schemas.Value) is { } bodyError)
+        {
+            return Result.Failure<EnvironmentRevisionCreated>(bodyError);
+        }
+
+        var request = JsonSerializer.Deserialize<CreateEnvironmentRevisionRequest>(command.Body.Span, RequestJson)!;
+        var name = request.Name?.Trim();
+        if (name is { Length: 0 } || (name is not null && (name.Any(char.IsControl) || Evidgate.BuildingBlocks.SharedKernel.Security.SecretShape.ValueLooksSecret(name))))
         {
             return Result.Failure<EnvironmentRevisionCreated>(OrchestratorErrors.EnvironmentRevisionInvalid(
-                "the name must be printable text",
+                "the name must be printable, secret-free text",
                 [new ErrorDetail("/name", "invalid_value")]));
         }
 
-        var (configuration, details) = EnvironmentRevisionRules.Check(command.Body);
+        var (configuration, details) = EnvironmentRevisionRules.Check(request);
         if (configuration is null)
         {
             return Result.Failure<EnvironmentRevisionCreated>(OrchestratorErrors.EnvironmentRevisionInvalid(
@@ -75,15 +90,16 @@ internal sealed partial class CreateEnvironmentRevisionCommandHandler(
         }
 
         var orgId = scopes.Require().OrgId;
-        await db.ExecuteAsync(
-            OrchestratorSql.EnsureEnvironment,
-            new { id = Guid.CreateVersion7(), org_id = orgId, project_id = command.ProjectId, environment_key = command.EnvironmentKey, name = name ?? command.EnvironmentKey },
-            cancellationToken).ConfigureAwait(false);
 
+        // A bounded wait for every lock below, the unique-key wait of a concurrent first create included.
         await db.ExecuteAsync(OrchestratorSql.LockTimeout, null, cancellationToken).ConfigureAwait(false);
         EnvironmentRow? environment;
         try
         {
+            await db.ExecuteAsync(
+                OrchestratorSql.EnsureEnvironment,
+                new { id = Guid.CreateVersion7(), org_id = orgId, project_id = command.ProjectId, environment_key = command.EnvironmentKey, name = name ?? command.EnvironmentKey },
+                cancellationToken).ConfigureAwait(false);
             environment = await db.QuerySingleOrDefaultAsync<EnvironmentRow>(
                 OrchestratorSql.EnvironmentForUpdate,
                 new { project_id = command.ProjectId, environment_key = command.EnvironmentKey },
@@ -104,6 +120,13 @@ internal sealed partial class CreateEnvironmentRevisionCommandHandler(
             new { org_id = orgId, environment_id = environment.Id, revision_hash = configuration.RevisionHash },
             cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("the revision slot query returned no row");
 
+        // The optimistic check comes first: a caller whose view is stale must not move the pointer, not even back to content
+        // that is already stored (review finding).
+        if (request.RevisionNo is { } expected && expected != slot.NextNo)
+        {
+            return Result.Failure<EnvironmentRevisionCreated>(OrchestratorErrors.RevisionConflict(slot.NextNo));
+        }
+
         if (slot.ExistingId is { } existingId)
         {
             // Identical content is the same revision: it becomes the current one again (a revert is visible), nothing is stored.
@@ -114,11 +137,6 @@ internal sealed partial class CreateEnvironmentRevisionCommandHandler(
             audit.Describe(new AuditObject("environment_revision", existingId.ToString("D")));
 
             return Result.Success(new EnvironmentRevisionCreated(existingId, slot.ExistingNo!.Value, configuration.RevisionHash, false));
-        }
-
-        if (command.Body.RevisionNo is { } expected && expected != slot.NextNo)
-        {
-            return Result.Failure<EnvironmentRevisionCreated>(OrchestratorErrors.RevisionConflict(slot.NextNo));
         }
 
         var revisionId = Guid.CreateVersion7();
@@ -147,6 +165,41 @@ internal sealed partial class CreateEnvironmentRevisionCommandHandler(
         audit.Describe(new AuditObject("environment_revision", revisionId.ToString("D")));
 
         return Result.Success(new EnvironmentRevisionCreated(revisionId, slot.NextNo, configuration.RevisionHash, true), 201);
+    }
+
+    private static readonly JsonSerializerOptions RequestJson = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    };
+
+    /// <summary>Null when the body is JSON the schema accepts and every string in it is storable, else the 422.</summary>
+    private static Error? Parse(ReadOnlyMemory<byte> body, ContractSchemaSet schemas)
+    {
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(body);
+        }
+        catch (JsonException)
+        {
+            return OrchestratorErrors.EnvironmentRevisionInvalid("the body is not JSON", [new ErrorDetail(string.Empty, "invalid_json")]);
+        }
+
+        using (document)
+        {
+            if (JsonBody.HasUnstorableText(document.RootElement))
+            {
+                return OrchestratorErrors.EnvironmentRevisionInvalid("the body carries a string that cannot be stored", [new ErrorDetail(string.Empty, "invalid_value")]);
+            }
+
+            var verdict = schemas.Validate(ContractSchemaKeys.EnvironmentRevision, document.RootElement);
+
+            return verdict.IsValid
+                ? null
+                : OrchestratorErrors.EnvironmentRevisionInvalid(
+                    "the body does not match environment-revision.v1",
+                    [.. verdict.Errors.Select(error => new ErrorDetail(JsonBody.SafePath(error), error.Reason, error.Index))]);
+        }
     }
 
     [GeneratedRegex("^[a-z0-9][a-z0-9_-]{0,63}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]

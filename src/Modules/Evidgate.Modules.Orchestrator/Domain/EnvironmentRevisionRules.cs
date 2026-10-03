@@ -130,6 +130,14 @@ internal static partial class EnvironmentRevisionRules
             return SecretValueDetected;
         }
 
+        foreach (var label in uri.Host.Split('.'))
+        {
+            if (SecretShape.ValueLooksSecret(label))
+            {
+                return SecretValueDetected;
+            }
+        }
+
         foreach (var segment in uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries))
         {
             if (SecretShape.ValueLooksSecret(Uri.UnescapeDataString(segment)))

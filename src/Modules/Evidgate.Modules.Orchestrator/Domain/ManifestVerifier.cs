@@ -37,6 +37,7 @@ internal static partial class ManifestVerifier
 
     internal const string SecretInVariantParams = "secret_in_variant_params";
     internal const string MatrixNotCovered = "matrix_not_covered";
+    internal const string SecretValueDetected = "secret_value_detected";
 
     /// <summary>Checks <paramref name="root"/>; exactly one of the two results is non-null.</summary>
     /// <param name="root">A document the manifest schema accepted.</param>
@@ -46,9 +47,10 @@ internal static partial class ManifestVerifier
         var matrix = root.GetProperty("matrix");
 
         var secrets = SecretDetails(planned, matrix);
+        SecretRefDetails(root, secrets);
         if (secrets.Count > 0)
         {
-            return (null, new ManifestRefusal(SecretInVariantParams, secrets));
+            return (null, new ManifestRefusal(secrets[0].Reason, secrets));
         }
 
         var coverage = CoverageDetails(root, planned, matrix, out var caseIds, out var plannedCases);
@@ -111,6 +113,46 @@ internal static partial class ManifestVerifier
         }
     }
 
+    /// <summary>
+    /// The other free text of a manifest that must not carry a secret: <c>env_needs</c> references (the schema fixes their
+    /// shape, not whether the name is a token) and shard <c>producer_hint</c>s.
+    /// </summary>
+    private static void SecretRefDetails(JsonElement root, List<ErrorDetail> details)
+    {
+        var need = 0;
+        foreach (var entry in root.GetProperty("env_needs").GetProperty("target_envs").EnumerateArray())
+        {
+            if (entry.TryGetProperty("secret_refs", out var refs))
+            {
+                var position = 0;
+                foreach (var reference in refs.EnumerateArray())
+                {
+                    if (details.Count < MaxDetails && IsSecret("ref", reference.GetString()!))
+                    {
+                        details.Add(new ErrorDetail(string.Create(CultureInfo.InvariantCulture, $"/env_needs/target_envs/{need}/secret_refs/{position}"), SecretValueDetected));
+                    }
+
+                    position++;
+                }
+            }
+
+            need++;
+        }
+
+        var shard = 0;
+        foreach (var entry in root.GetProperty("shard_plan").GetProperty("shards").EnumerateArray())
+        {
+            if (details.Count < MaxDetails
+                && entry.TryGetProperty("producer_hint", out var hint)
+                && SecretShape.ValueLooksSecret(hint.GetString()!))
+            {
+                details.Add(new ErrorDetail(string.Create(CultureInfo.InvariantCulture, $"/shard_plan/shards/{shard}/producer_hint"), SecretValueDetected));
+            }
+
+            shard++;
+        }
+    }
+
     /// <summary>The 1-based positions of the secret-shaped parameters of one params object.</summary>
     internal static int[] SecretPositions(JsonElement parameters)
     {
@@ -154,7 +196,16 @@ internal static partial class ManifestVerifier
         var envs = matrix.GetProperty("target_envs").EnumerateArray().Select(env => env.GetString()!).ToList();
         plannedCases = new List<Guid>(planned.GetArrayLength());
 
-        var caseSet = caseIds.ToHashSet();
+        var caseSet = new HashSet<Guid>();
+        for (var i = 0; i < caseIds.Count; i++)
+        {
+            // The schema leaves uniqueness to this linear check (its pairwise uniqueItems would be quadratic).
+            if (!caseSet.Add(caseIds[i]))
+            {
+                Add(details, string.Create(CultureInfo.InvariantCulture, $"/matrix/case_revision_ids/{i}"), null);
+            }
+        }
+
         var variantSet = variants.ToHashSet(StringComparer.Ordinal);
         var envSet = envs.ToHashSet(StringComparer.Ordinal);
 
@@ -256,23 +307,6 @@ internal static partial class ManifestVerifier
         }
     }
 
-    /// <summary>
-    /// True when a member name or a string anywhere in <paramref name="element"/> holds U+0000, which PostgreSQL's jsonb cannot
-    /// store. Only documents whose text contains the escape are walked.
-    /// </summary>
-    internal static bool HasNul(JsonElement element)
-    {
-        return element.GetRawText().Contains("\\u0000", StringComparison.OrdinalIgnoreCase) && Walk(element);
-
-        static bool Walk(JsonElement element) => element.ValueKind switch
-        {
-            JsonValueKind.String => element.GetString()!.Contains('\0', StringComparison.Ordinal),
-            JsonValueKind.Array => element.EnumerateArray().Any(Walk),
-            JsonValueKind.Object => element.EnumerateObject().Any(member => member.Name.Contains('\0', StringComparison.Ordinal) || Walk(member.Value)),
-            _ => false,
-        };
-    }
-
     /// <summary>An order-independent identity of a params object (the schema allows string values only).</summary>
     internal static string VariantKey(JsonElement parameters)
     {
@@ -282,7 +316,9 @@ internal static partial class ManifestVerifier
         var key = new StringBuilder();
         foreach (var (name, value) in pairs)
         {
-            key.Append(name).Append('\u0000').Append(value).Append('\u0001');
+            // Length-prefixed, so no character inside a name or a value can make two different sets read the same.
+            key.Append(name.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(name)
+                .Append(value.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(value);
         }
 
         return key.ToString();

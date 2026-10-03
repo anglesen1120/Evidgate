@@ -822,6 +822,9 @@ export type ManifestV1 = {
     environment_revision_id?: string | null;
     planned_executions: Array<PlannedExecution>;
     matrix: {
+        /**
+         * Distinct ids; duplicates are matrix_not_covered (05.1.1-T2.4, a linear check). Deliberately no uniqueItems: the validators compare items pairwise, so 10000 ids would cost seconds per request.
+         */
         case_revision_ids: Array<string>;
         /**
          * The variant axis; planned_executions must equal case_revision_ids × variants × target_envs (05.1.1-T2.4)

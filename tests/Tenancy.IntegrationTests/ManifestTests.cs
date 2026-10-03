@@ -387,6 +387,70 @@ public sealed class ManifestTests
             .SqlState.ShouldBe("42501");
     }
 
+    // ------------------------------------------------------------------ review fixes (05.1.1 §8a)
+
+    [Fact]
+    public async Task NoBodyWork_BeforeTheCallerIsKnownAndAllowed()
+    {
+        await using var world = await StartAsync(_fixture);
+        using var listener = RejectionListener(out var reasons);
+
+        // Anonymous: 401 even for a body that is not JSON at all.
+        (await UploadAsync(world, "{ not json", _ => { })).Status.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // A member without run:create: 403, not the 422 the body would earn — the schema never ran.
+        var stranger = TenancyApiFactory.Resolved(user: Guid.CreateVersion7(), orgHeader: world.Org);
+        (await UploadAsync(world, "{ not json", stranger)).Status.ShouldBe(HttpStatusCode.Forbidden);
+        (await UploadAsync(world, """{"schema_version":2}""", stranger)).Status.ShouldBe(HttpStatusCode.Forbidden);
+        reasons.ShouldNotContain("schema");
+    }
+
+    [Fact]
+    public async Task ALoneSurrogate_Is422InvalidValue_NotA500()
+    {
+        await using var world = await StartAsync(_fixture);
+        var body = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "PLACEHOLDER" }], ["staging"])
+            .ToJsonString()
+            .Replace("PLACEHOLDER", "x\\ud800y", StringComparison.Ordinal);
+
+        var answer = await UploadAsync(world, body);
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("manifest_invalid");
+        Details(answer).Single().GetProperty("reason").GetString().ShouldBe("invalid_value");
+    }
+
+    [Fact]
+    public async Task AnEnvironmentRevisionOfAnotherProject_CannotBePinned_EvenByTheOwner()
+    {
+        await using var world = await StartAsync(_fixture);
+        var other = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
+        var foreign = await world.Client.SendAsync(
+            HttpMethod.Post,
+            $"/v1/projects/{other}/environments/staging/revisions",
+            world.Admin,
+            new { base_urls = new { web = "https://other.example.test" }, dependency_versions = new { } },
+            NewKey());
+        foreign.Status.ShouldBe(HttpStatusCode.Created, foreign.ErrorMessage);
+
+        var manifest = Manifest(world);
+        manifest["environment_revision_id"] = foreign.Id("revision_id").ToString();
+        Details(await UploadAsync(world, manifest.ToJsonString())).Single().GetProperty("reason").GetString().ShouldBe("unknown_environment_revision");
+
+        (await UploadAsync(world, Manifest(world).ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
+        (await Should.ThrowAsync<PostgresException>(async () => await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.manifest set environment_revision_id = '{foreign.Id("revision_id")}'")))
+            .MessageText.ShouldContain("manifest_immutable");
+        (await Should.ThrowAsync<PostgresException>(async () => await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, verified_by)
+            values ('{Guid.CreateVersion7()}', '{world.Org}', '{world.Project}', 'sha256:{new string('b', 64)}', 1, '{world.SuiteRevision}', '{foreign.Id("revision_id")}', jsonb_build_object(), jsonb_build_object(), jsonb_build_object(), 0, jsonb_build_object(), 'x')
+            """)))
+            .MessageText.ShouldContain("cross_project_reference");
+    }
+
     // ------------------------------------------------------------------ P3
 
     [Fact]
@@ -403,7 +467,7 @@ public sealed class ManifestTests
         }
 
         var small = await CountAsync(1);
-        var large = await CountAsync(25);
+        var large = await CountAsync(40); // 1 600 planned executions, about 200 KiB: near the 256 KiB cap
 
         large.ShouldBe(small);
         small.ShouldBeLessThanOrEqualTo(12, string.Join(Environment.NewLine, world.Api.Statements.Snapshot()));

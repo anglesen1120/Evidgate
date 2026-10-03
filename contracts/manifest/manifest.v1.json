@@ -42,11 +42,11 @@
         "case_revision_ids": {
           "type": "array",
           "maxItems": 10000,
-          "uniqueItems": true,
           "items": {
             "type": "string",
             "format": "uuid"
-          }
+          },
+          "description": "Distinct ids; duplicates are matrix_not_covered (05.1.1-T2.4, a linear check). Deliberately no uniqueItems: the validators compare items pairwise, so 10000 ids would cost seconds per request."
         },
         "variants": {
           "type": "array",

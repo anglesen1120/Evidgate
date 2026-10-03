@@ -241,15 +241,63 @@ public sealed class ManifestUnitTests
     }
 
     [Fact]
-    public void ANulCharacter_IsDetected_OnlyWhereItReallyIs()
+    public void UnstorableText_IsDetected_OnlyWhereItReallyIs()
     {
         using var nul = JsonDocument.Parse("""{"a":["x","b\u0000"]}""");
+        using var lone = JsonDocument.Parse("""{"a":"x\ud800y"}""");
+        using var loneKey = JsonDocument.Parse("""{"\udc00":"x"}""");
         using var escaped = JsonDocument.Parse("""{"a":"\\u0000 is text"}""");
-        using var clean = JsonDocument.Parse("""{"a":"b"}""");
+        using var pair = JsonDocument.Parse("""{"a":"\ud83d\ude00"}""");
 
-        ManifestVerifier.HasNul(nul.RootElement).ShouldBeTrue();
-        ManifestVerifier.HasNul(escaped.RootElement).ShouldBeFalse();
-        ManifestVerifier.HasNul(clean.RootElement).ShouldBeFalse();
+        JsonBody.HasUnstorableText(nul.RootElement).ShouldBeTrue();
+        JsonBody.HasUnstorableText(lone.RootElement).ShouldBeTrue();
+        JsonBody.HasUnstorableText(loneKey.RootElement).ShouldBeTrue();
+        JsonBody.HasUnstorableText(escaped.RootElement).ShouldBeFalse();
+        JsonBody.HasUnstorableText(pair.RootElement).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("/planned_executions/0/variant/params/ghp_abcdefghijklmnop", "type", "/planned_executions/0/variant/params/*")]
+    [InlineData("/dependency_versions/AKIAABCDEFGHIJKLMNOP", "max_length", "/dependency_versions/*")]
+    [InlineData("/base_urls/web", "type", "/base_urls/*")]
+    [InlineData("/password", "additional_properties", "")]
+    [InlineData("/planned_executions/3/target_env", "required", "/planned_executions/3/target_env")]
+    public void SchemaErrorPaths_NeverNameCallerKeys(string path, string reason, string expected) =>
+        JsonBody.SafePath(new Evidgate.BuildingBlocks.Contracts.Validation.ContractValidationError(null, path, reason)).ShouldBe(expected);
+
+    [Fact]
+    public void SecretsInEnvNeedsRefs_AndProducerHints_AreRefused()
+    {
+        const string token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+        var manifest = Golden();
+        manifest["env_needs"]!["target_envs"]![0]!["secret_refs"] = new JsonArray("secret:fine", $"secret:{token}");
+        manifest["shard_plan"]!["shards"]![1]!["producer_hint"] = token;
+
+        var refusal = Verify(manifest).Refusal!;
+
+        refusal.Reason.ShouldBe("secret_value_detected");
+        refusal.Details.Select(detail => detail.Path).ShouldBe(["/env_needs/target_envs/0/secret_refs/1", "/shard_plan/shards/1/producer_hint"]);
+        JsonSerializer.Serialize(refusal).ShouldNotContain(token);
+    }
+
+    [Fact]
+    public void ADuplicateMatrixCase_IsNotCovered()
+    {
+        var manifest = Build(Suite, [CaseA, CaseA], [new() { ["browser"] = "x" }], ["staging"]);
+
+        var refusal = Verify(manifest).Refusal!;
+
+        refusal.Reason.ShouldBe("matrix_not_covered");
+        refusal.Details.Select(detail => detail.Path).ShouldContain("/matrix/case_revision_ids/1");
+    }
+
+    [Fact]
+    public void VariantKeys_CannotCollide_ThroughSeparatorCharacters()
+    {
+        using var a = JsonDocument.Parse("""{"a":"x\u0001b","c":"y"}""");
+        using var b = JsonDocument.Parse("""{"a":"x","b":"\u0001c"}""");
+
+        ManifestVerifier.VariantKey(a.RootElement).ShouldNotBe(ManifestVerifier.VariantKey(b.RootElement));
     }
 
     // ------------------------------------------------------------------ environment revisions
@@ -298,6 +346,7 @@ public sealed class ManifestUnitTests
     [InlineData("https://staging.example.test/?api_key=abc")]
     [InlineData("https://staging.example.test/ghp_abcdefghijklmnopqrstuvwxyz0123456789/x")]
     [InlineData("https://staging.example.test/#access_token=abc")]
+    [InlineData("https://ghp_abcdefghijklmnopqrstuvwxyz0123456789.example.test/")]
     [InlineData("ghp_abcdefghijklmnopqrstuvwxyz0123456789")]
     public void ASecretInABaseUrl_IsDetected_WithoutEcho(string url)
     {
