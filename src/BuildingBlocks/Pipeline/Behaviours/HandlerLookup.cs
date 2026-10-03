@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Mediator;
@@ -23,8 +24,7 @@ internal static class HandlerLookup
     /// authorization stage).
     /// </summary>
     internal static string? PermissionOf(IServiceProvider services, Type messageType, Type responseType) =>
-        HandlerTypeOf(services, messageType, responseType)
-            ?.GetCustomAttribute<PermissionAttribute>(inherit: true)?.Permission;
+        GateOf(services, messageType, responseType).Permission;
 
     /// <summary>
     /// Whether the handler of <paramref name="messageType"/> is one of the
@@ -32,8 +32,38 @@ internal static class HandlerLookup
     /// (02.1.1 <c>POST /v1/orgs</c>). False when no handler resolves.
     /// </summary>
     internal static bool IsAuthenticatedMemberOnly(IServiceProvider services, Type messageType, Type responseType) =>
-        HandlerTypeOf(services, messageType, responseType)
-            ?.GetCustomAttribute<AuthenticatedMemberAttribute>(inherit: false) is not null;
+        GateOf(services, messageType, responseType).AuthenticatedMember;
+
+    /// <summary>
+    /// The gate a (message, response) pair's handler declares, read by reflection once
+    /// per pair and cached (02.1.1 performance review: the attribute lookup allocated on
+    /// every request). Handler types are fixed by Mediator's generated registrations; a
+    /// pair whose handler did not resolve is not cached, so it is re-checked next time.
+    /// </summary>
+    private static (string? Permission, bool AuthenticatedMember) GateOf(
+        IServiceProvider services,
+        Type messageType,
+        Type responseType)
+    {
+        if (Gates.TryGetValue((messageType, responseType), out var cached))
+        {
+            return cached;
+        }
+
+        var handler = HandlerTypeOf(services, messageType, responseType);
+        if (handler is null)
+        {
+            return (null, false);
+        }
+
+        var gate = (
+            handler.GetCustomAttribute<PermissionAttribute>(inherit: true)?.Permission,
+            handler.GetCustomAttribute<AuthenticatedMemberAttribute>(inherit: false) is not null);
+
+        return Gates.GetOrAdd((messageType, responseType), gate);
+    }
+
+    private static readonly ConcurrentDictionary<(Type Message, Type Response), (string? Permission, bool AuthenticatedMember)> Gates = new();
 
     private static Type? HandlerTypeOf(IServiceProvider services, Type messageType, Type responseType)
     {

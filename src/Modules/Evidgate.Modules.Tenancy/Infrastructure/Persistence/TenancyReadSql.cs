@@ -129,9 +129,12 @@ internal static class TenancyReadSql
 
     /// <summary>
     /// First half of the project-create gate of 02.1.1-T3.2: the org's status and
-    /// <c>max_projects</c>, taking the org row lock (<c>FOR UPDATE</c>). Two concurrent
-    /// creates in one org are serialised on this lock; creates in different orgs never
-    /// contend.
+    /// <c>max_projects</c>, taking the org row lock. Two concurrent creates in one org are
+    /// serialised on this lock; creates in different orgs never contend. The lock is
+    /// <c>FOR NO KEY UPDATE</c>, not <c>FOR UPDATE</c>: the latter conflicts with the
+    /// <c>FOR KEY SHARE</c> every FK check on <c>organization</c> takes, so it blocked
+    /// membership and project inserts in the same org for the whole create (measured in
+    /// the 02.1.1 performance review); <c>NO KEY UPDATE</c> still conflicts with itself.
     /// </summary>
     /// <remarks>
     /// The count is deliberately <b>not</b> part of this statement. Under READ COMMITTED a
@@ -146,19 +149,23 @@ internal static class TenancyReadSql
                max_projects
           from public.organization
          where id = @org_id
-           for update
+           for no key update
         """;
 
     /// <summary>
     /// Second half of the gate: the org's projects that are not <c>deleted</c>, run only
     /// when a limit is set and only after <see cref="ProjectCreateGate"/> holds the lock.
-    /// Served by <c>project_org_status_created_id_idx</c>.
+    /// Bounded by <c>@max_projects</c>: the gate only needs "is the count at the limit",
+    /// so the cost is O(limit) rather than O(projects) while the lock is held (an
+    /// unbounded count seq-scanned 45 000 rows, ~10 ms, in the performance review).
     /// </summary>
     internal const string ActiveProjectCount = """
         select count(*)
-          from public.project
-         where org_id = @org_id
-           and status <> 'deleted'
+          from (select 1
+                  from public.project
+                 where org_id = @org_id
+                   and status <> 'deleted'
+                 limit @max_projects) as counted
         """;
 
     /// <summary>The status of the request's org, for the mutation guard of 02.1.1 §6 (<c>org_suspended</c>).</summary>

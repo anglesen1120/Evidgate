@@ -140,6 +140,69 @@ public static class ArchitectureRules
     /// a malformed argument is reported as a violation instead of throwing.
     /// </summary>
     /// <summary>
+    /// The only types outside the pipeline building block that may take an
+    /// <c>IRequestTenantContextSetter</c> (02.1.1 security review): publishing the request
+    /// tenant decides which org every later stage — RLS included — runs in, and a service
+    /// token is not bound to an org, so a route that published <c>{o}</c> from the URL
+    /// would let such a token act in any org. Only host entry points (02.6.2) and the
+    /// pre-tenant <c>POST /v1/orgs</c>, which publishes an id derived from the caller,
+    /// may do it.
+    /// </summary>
+    public static readonly IReadOnlySet<string> TenantContextSetterAllowlist = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Evidgate.Modules.Tenancy.Endpoints.TenancyEndpoints",
+    };
+
+    /// <summary>
+    /// Every type (outside <c>Evidgate.BuildingBlocks.Pipeline</c>, which defines and
+    /// registers it) that takes <c>IRequestTenantContextSetter</c> as a constructor or
+    /// method parameter, field or property and is not in
+    /// <see cref="TenantContextSetterAllowlist"/>.
+    /// </summary>
+    public static IReadOnlyList<string> OnlyAllowlistedTypesPublishTheTenant(IEnumerable<Type> types)
+    {
+        const string SetterName = "Evidgate.BuildingBlocks.Pipeline.Tenancy.IRequestTenantContextSetter";
+        const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+        var violations = new List<string>();
+
+        foreach (var type in Enumerate(types).OrderBy(t => t.FullName, StringComparer.Ordinal))
+        {
+            if (type.Namespace?.StartsWith("Evidgate.BuildingBlocks.Pipeline", StringComparison.Ordinal) == true)
+            {
+                continue;
+            }
+
+            var outer = type;
+            while (outer.DeclaringType is not null)
+            {
+                outer = outer.DeclaringType;
+            }
+
+            if (TenantContextSetterAllowlist.Contains(outer.FullName ?? string.Empty))
+            {
+                continue;
+            }
+
+            var uses = type.GetConstructors(All).SelectMany(c => c.GetParameters()).Select(p => p.ParameterType)
+                .Concat(type.GetMethods(All).SelectMany(m => m.GetParameters()).Select(p => p.ParameterType))
+                .Concat(type.GetFields(All).Select(f => f.FieldType))
+                .Concat(type.GetProperties(All).Select(p => p.PropertyType))
+                .Any(t => t.FullName == SetterName);
+
+            if (uses)
+            {
+                violations.Add(
+                    $"{type.FullName} takes IRequestTenantContextSetter; only host entry points and " +
+                    "ArchitectureRules.TenantContextSetterAllowlist may publish the request tenant");
+            }
+        }
+
+        return violations;
+    }
+
+    /// <summary>
     /// The only handlers allowed to carry <see cref="AuthenticatedMemberAttribute"/>:
     /// the ones that create the tenant the caller will then be a member of (02.1.1 §5).
     /// </summary>

@@ -117,3 +117,10 @@ internal sealed class HandlerWithBothGates : ICommandHandler<CreateSampleCommand
     public ValueTask<Guid> Handle(CreateSampleCommand command, CancellationToken cancellationToken) =>
         ValueTask.FromResult(Guid.Empty);
 }
+
+/// <summary>Seeded violation fixture (02.1.1): a non-allowlisted type taking the tenant setter.</summary>
+internal static class TenantPublishingFixture
+{
+    internal static void Publish(Evidgate.BuildingBlocks.Pipeline.Tenancy.IRequestTenantContextSetter setter) =>
+        setter.Publish(Guid.Empty, projectId: null).Dispose();
+}

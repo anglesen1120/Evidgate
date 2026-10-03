@@ -195,6 +195,19 @@ public sealed class RegistryEndpointTests
             NewKey());
         blank.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
+        // Control and format characters are a 422, not a PostgreSQL 22021 surfacing as
+        // 500 (NUL) or a spoofed display name (bidi override) — 02.1.1 security review.
+        foreach (var name in new[] { "web\u0000shop", "web\u202Eshop" })
+        {
+            var controlled = await client.SendAsync(
+                HttpMethod.Post,
+                $"/v1/orgs/{org}/projects",
+                TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7()),
+                new { name, slug = "web" },
+                NewKey());
+            controlled.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        }
+
         (await CreateOrgAsync(client, "trailing-")).Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await _fixture.ScalarAsync<long>(database, "select count(*) from public.project")).ShouldBe(0);
     }

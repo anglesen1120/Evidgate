@@ -35,9 +35,16 @@ internal static partial class TenancyRules
     /// <summary>True when <paramref name="slug"/> matches the D-A1 grammar.</summary>
     internal static bool IsSlug(string? slug) => slug is not null && Slug().IsMatch(slug);
 
-    /// <summary>True when <paramref name="name"/> is 1–128 characters after trimming.</summary>
+    /// <summary>
+    /// True when <paramref name="name"/> is 1–128 characters after trimming and holds no
+    /// control or format characters (U+0000 would otherwise reach PostgreSQL as a 22021
+    /// and surface as a 500; bidi overrides would spoof the name in the UI).
+    /// </summary>
     internal static bool IsName(string? name) =>
-        name is not null && name.Trim().Length is > 0 and <= MaxNameLength;
+        name is not null
+        && name.Trim().Length is > 0 and <= MaxNameLength
+        && !name.Any(character => char.IsControl(character)
+            || char.GetUnicodeCategory(character) == System.Globalization.UnicodeCategory.Format);
 
     /// <summary>A lowercase DNS name with at least one dot (an allowlist entry, FR-02-3).</summary>
     internal static bool IsDomain(string? domain) =>

@@ -62,6 +62,20 @@ public class PipelineTests
         ArchitectureRules.AuthenticatedMemberAllowlist.Count.ShouldBe(1);
     }
 
+    /// <summary>02.1.1 security review: only allowlisted code publishes the request tenant.</summary>
+    [Fact]
+    public void Only_Allowlisted_Types_Publish_The_Request_Tenant()
+    {
+        ArchitectureRules
+            .OnlyAllowlistedTypesPublishTheTenant(SolutionLayout.EvidgateTypes())
+            .ShouldBeEmpty();
+
+        // Non-vacuity: the rule sees a setter parameter on a non-allowlisted type.
+        ArchitectureRules
+            .OnlyAllowlistedTypesPublishTheTenant([typeof(Evidgate.Modules.Sample.Domain.TenantPublishingFixture)])
+            .ShouldHaveSingleItem();
+    }
+
     [Fact]
     public void Real_Solution_Handlers_All_Declare_Permission()
     {

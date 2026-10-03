@@ -38,6 +38,17 @@ internal sealed class OrganizationFounder(
 
         await using var context = contexts.Create();
 
+        // Defence in depth (02.1.1 security review): a founder exists only for an org
+        // that has no member yet. Today the org INSERT runs first and fails on an
+        // existing id, but a later refactor must not turn this into "become
+        // tenant_admin of any org whose id the caller can make the tenant".
+        if (await context.Memberships.AnyAsync(membership => membership.OrgId == orgId, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            throw new InvalidOperationException(
+                "GrantFounderAsync refused: the organization already has members");
+        }
+
         var roles = await context.Roles
             .Where(role => role.IsBuiltin && FounderRoleCodes.Contains(role.Code))
             .Select(role => role.Id)

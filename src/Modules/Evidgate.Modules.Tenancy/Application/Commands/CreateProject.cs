@@ -92,7 +92,7 @@ internal sealed class CreateProjectCommandHandler(
             // snapshot sees every create that committed while this one waited.
             var count = await db.ScalarAsync<long>(
                 TenancyReadSql.ActiveProjectCount,
-                new { org_id = orgId },
+                new { org_id = orgId, max_projects = limit },
                 cancellationToken).ConfigureAwait(false);
 
             if (count >= limit)

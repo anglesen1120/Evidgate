@@ -9,6 +9,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Tenancy.Contracts;
 using Evidgate.Modules.Tenancy.Domain;
+using Evidgate.Modules.Tenancy.Endpoints;
 using Evidgate.Modules.Tenancy.Infrastructure.Persistence;
 using FluentValidation;
 using Mediator;
@@ -72,17 +73,19 @@ internal sealed class CreateOrganizationCommandHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Tenancy, nameof(CreateOrganizationCommand));
 
-        if (command.OrgId != scopes.Require().OrgId)
-        {
-            // The endpoint publishes exactly this id as the tenant; any other pairing
-            // is a wiring bug, and writing outside the scope is never the answer.
-            return Result.Failure<OrganizationDto>(TenancyErrors.OrgNotFound);
-        }
-
         if (principals.Current is not { UserId: { } userId, VerifiedEmail: { Length: > 0 } email })
         {
             return Result.Failure<OrganizationDto>(Error.Forbidden(
                 "creating an organization needs a signed-in user with a verified email (02.1.1 AC8)"));
+        }
+
+        // The id must be the one derived from this caller and key, and the scope must be
+        // that id: the command never creates (or founds) an org in a tenant the caller
+        // did not derive (02.1.1 security review, defence in depth).
+        if (command.OrgId != OrganizationIds.For(userId, command.IdempotencyKey)
+            || command.OrgId != scopes.Require().OrgId)
+        {
+            return Result.Failure<OrganizationDto>(TenancyErrors.OrgNotFound);
         }
 
         await using var context = contexts.Create();
