@@ -36,7 +36,7 @@ export const exchangeCiToken = <ThrowOnError extends boolean = false>(options?: 
 /**
  * Upload and verify a run manifest
  *
- * Uploads + verifies the manifest and returns `manifest_id` and `manifest_hash` (00 §9.3). The request body is `contracts/manifest/manifest.v1.json` — the schema file is authoritative, the same file both validators load (server Corvus, CLI Ajv, T42). Body ≤ 256 KiB → `413`.
+ * Uploads + verifies the manifest and returns `manifest_id` and `manifest_hash` (00 §9.3). The request body is `contracts/manifest/manifest.v1.json` — the schema file is authoritative, the same file both validators load (server Corvus, CLI Ajv, T42). Body ≤ 256 KiB → `413`. Every refusal is 422 `manifest_invalid` whose `details[]` carry `index` (the planned execution, when there is one), `path` and `reason`: a schema keyword, `secret_in_variant_params`, `matrix_not_covered`, `unknown_case_revision`, `unknown_suite_revision`, `unknown_environment_revision` or `invalid_value`; no submitted value is echoed (a parameter is named by position, `#n`). `manifest_hash` is `sha256:` over the RFC 8785 canonical body; the same canonical content in the same project answers 201 with the stored `manifest_id` (05.1.1 AC6). `ETag` is the hash.
  */
 export const createManifest = <ThrowOnError extends boolean = false>(options: Options<CreateManifestData, ThrowOnError>): RequestResult<CreateManifestResponses, CreateManifestErrors, ThrowOnError> => (options.client ?? client).post<CreateManifestResponses, CreateManifestErrors, ThrowOnError>({
     security: [{
@@ -215,7 +215,7 @@ export const rerunRun = <ThrowOnError extends boolean = false>(options: Options<
 /**
  * Create an immutable, secret-free, hashed environment revision
  *
- * Immutable, secret-free, hashed; referenced revision → 409 on change (05.1.2-T1).
+ * Appends a revision to environment `{e}` of the project, creating the environment on its first revision (05.1.2-T1). The body is `contracts/schemas/environment-revision.v1.json` (≤ 64 KiB → `413`). `revision_hash` is `sha256:` over the RFC 8785 canonical `{base_urls, dependency_versions, secret_refs (sorted)}`; content already stored answers 200 with that revision (which becomes current again), new content 201 with the next `revision_no`. A secret value anywhere — `secret_refs` entries that are not `secret:<name>`, credentials or token-shaped strings in a URL or a version — is 422 `environment_revision_invalid`, reason `secret_value_detected`, with the member's position and never its value. `revision_no` in the body is an optional optimistic check: any other next number is 409 `revision_conflict`. A revision is never edited (05.1.2 AC5).
  */
 export const createEnvironmentRevision = <ThrowOnError extends boolean = false>(options: Options<CreateEnvironmentRevisionData, ThrowOnError>): RequestResult<CreateEnvironmentRevisionResponses, CreateEnvironmentRevisionErrors, ThrowOnError> => (options.client ?? client).post<CreateEnvironmentRevisionResponses, CreateEnvironmentRevisionErrors, ThrowOnError>({
     security: [{
@@ -231,6 +231,9 @@ export const createEnvironmentRevision = <ThrowOnError extends boolean = false>(
     }
 });
 
+/**
+ * One environment revision (05.1.2 AC4). `ETag` is the revision hash and the body is `Cache-Control: private, immutable`; a matching `If-None-Match` is 304. Another tenant's (or, for a project-scoped credential, another project's) revision is 404.
+ */
 export const getEnvironmentRevision = <ThrowOnError extends boolean = false>(options: Options<GetEnvironmentRevisionData, ThrowOnError>): RequestResult<GetEnvironmentRevisionResponses, GetEnvironmentRevisionErrors, ThrowOnError> => (options.client ?? client).get<GetEnvironmentRevisionResponses, GetEnvironmentRevisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',

@@ -324,6 +324,38 @@ export type CaseRevisionListResponse = {
     next_cursor: string | null;
 };
 
+export type ManifestAccepted = {
+    manifest_id: string;
+    manifest_hash: string;
+};
+
+export type EnvironmentRevisionCreated = {
+    revision_id: string;
+    revision_no: number;
+    revision_hash: string;
+    /**
+     * False when identical content was already stored (200).
+     */
+    created: boolean;
+};
+
+export type EnvironmentRevisionDto = {
+    revision_id: string;
+    environment_id: string;
+    environment_key: string;
+    project_id: string;
+    revision_no: number;
+    revision_hash: string;
+    base_urls: {
+        [key: string]: string;
+    };
+    dependency_versions: {
+        [key: string]: string;
+    };
+    secret_refs: Array<string>;
+    created_at: string;
+};
+
 /**
  * Any JSON value. The served document names the .NET `JsonElement` this way; the members that use it (variant `params`, the three strategy documents) say what they hold in their own description.
  */
@@ -857,6 +889,32 @@ export type Variant = {
     params: Params;
 };
 
+/**
+ * Environment revision v1
+ *
+ * The body of POST /v1/projects/{p}/environments/{e}/revisions (05.1.2-T1, 00 §9.3): the secret-free configuration of one target environment — base URLs and the dependency versions that affect results — plus secret references (never values). The server hashes base_urls, dependency_versions and the sorted secret_refs into revision_hash (sha256 over RFC 8785). Secret detection in values is the server's semantic check (reason secret_value_detected), not this schema's: a schema rule would not catch a token-shaped value either. The transport cap is 64 KiB.
+ */
+export type EnvironmentRevisionV1 = {
+    /**
+     * Display name; used when the call creates the environment, and renames it otherwise; null is the same as absent
+     */
+    name?: string | null;
+    /**
+     * Optional optimistic check: the number the caller expects this revision to get; any other next number is 409 revision_conflict; null is the same as absent
+     */
+    revision_no?: number | null;
+    base_urls: {
+        [key: string]: string;
+    };
+    dependency_versions: {
+        [key: string]: string;
+    };
+    /**
+     * References of the form secret:<name>; anything else is refused as a secret value (secret_value_detected) without being echoed
+     */
+    secret_refs?: Array<string>;
+};
+
 export type Event = unknown & {
     schema_version: 1;
     event_id: string;
@@ -1086,12 +1144,9 @@ export type CreateManifestError = CreateManifestErrors[keyof CreateManifestError
 
 export type CreateManifestResponses = {
     /**
-     * Manifest accepted
+     * Manifest accepted (or the stored manifest of the same canonical content)
      */
-    201: {
-        manifest_id: string;
-        manifest_hash: string;
-    };
+    201: ManifestAccepted;
 };
 
 export type CreateManifestResponse = CreateManifestResponses[keyof CreateManifestResponses];
@@ -1685,12 +1740,7 @@ export type RerunRunResponses = {
 export type RerunRunResponse = RerunRunResponses[keyof RerunRunResponses];
 
 export type CreateEnvironmentRevisionData = {
-    /**
-     * Environment revision payload (05); secret-free, hashed server-side.
-     */
-    body: {
-        [key: string]: unknown;
-    };
+    body: EnvironmentRevisionV1;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -1727,6 +1777,10 @@ export type CreateEnvironmentRevisionErrors = {
      */
     409: ErrorEnvelope;
     /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
      */
     422: ErrorEnvelope;
@@ -1744,12 +1798,13 @@ export type CreateEnvironmentRevisionError = CreateEnvironmentRevisionErrors[key
 
 export type CreateEnvironmentRevisionResponses = {
     /**
+     * The same configuration is already stored; that revision is returned
+     */
+    200: EnvironmentRevisionCreated;
+    /**
      * Revision created
      */
-    201: {
-        revision_id: string;
-        revision_hash: string;
-    };
+    201: EnvironmentRevisionCreated;
 };
 
 export type CreateEnvironmentRevisionResponse = CreateEnvironmentRevisionResponses[keyof CreateEnvironmentRevisionResponses];
@@ -1792,10 +1847,7 @@ export type GetEnvironmentRevisionResponses = {
     /**
      * Environment revision (secret-free)
      */
-    200: {
-        revision_id: string;
-        revision_hash: string;
-    };
+    200: EnvironmentRevisionDto;
 };
 
 export type GetEnvironmentRevisionResponse = GetEnvironmentRevisionResponses[keyof GetEnvironmentRevisionResponses];

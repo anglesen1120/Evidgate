@@ -306,6 +306,34 @@ public sealed class TenantGucTests
             ("org_id", orgId),
             ("suite_revision_id", suiteRevisionId),
             ("member_id", memberId));
+        var environmentId = Guid.CreateVersion7();
+        var environmentRevisionId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            "insert into public.environment (id, org_id, project_id, environment_key, name) values (@id, @org_id, @project_id, 'staging', 'Staging')",
+            ("id", environmentId),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.environment_revision (id, org_id, project_id, environment_id, revision_no, base_urls, dependency_versions, revision_hash, created_by)
+            values (@id, @org_id, @project_id, @environment_id, 1, '{}', '{}', @hash, 'probe')
+            """,
+            ("id", environmentRevisionId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("environment_id", environmentId),
+            ("hash", "sha256:" + new string('c', 64)));
+        await scope.ExecuteAsync(
+            """
+            insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, verified_by)
+            values (@id, @org_id, @project_id, @hash, 1, @suite_revision_id, @environment_revision_id, '{}', '{}', '{}', 0, '{}', 'probe')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("hash", "sha256:" + new string('d', 64)),
+            ("suite_revision_id", suiteRevisionId),
+            ("environment_revision_id", environmentRevisionId));
         var membershipId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             "insert into public.membership (id, org_id, invited_email) values (@id, @org_id, @invited_email)",

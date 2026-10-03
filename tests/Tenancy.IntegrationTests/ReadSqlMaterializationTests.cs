@@ -93,10 +93,14 @@ public sealed class ReadSqlMaterializationTests
             await seeding.ExecuteAsync(
                 "insert into public.organization (id, name, slug) values (@id, 'Acme', 'acme')",
                 ("id", orgId));
+            // project <-> environment is a foreign-key cycle (0024): one statement inserts both, and the
+            // non-deferred checks run at its end.
             await seeding.ExecuteAsync(
-                "insert into public.project "
+                "with p as (insert into public.project "
                 + "(id, org_id, name, slug, status, default_environment_id, created_at, updated_at, version) "
-                + "values (@id, @org_id, 'Checkout', 'checkout', 'suspended', @environment_id, @created_at, @updated_at, 4)",
+                + "values (@id, @org_id, 'Checkout', 'checkout', 'suspended', @environment_id, @created_at, @updated_at, 4) returning id) "
+                + "insert into public.environment (id, org_id, project_id, environment_key, name) "
+                + "select @environment_id, @org_id, p.id, 'staging', 'Staging' from p",
                 ("id", projectId),
                 ("org_id", orgId),
                 ("environment_id", environmentId),

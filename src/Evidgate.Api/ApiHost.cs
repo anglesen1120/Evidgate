@@ -16,6 +16,7 @@ using Evidgate.Modules.Identity.Endpoints;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
 using Evidgate.Modules.Catalog.Endpoints;
+using Evidgate.Modules.Orchestrator.Endpoints;
 using Evidgate.Modules.Tenancy;
 using Evidgate.Modules.Tenancy.Endpoints;
 using Mediator;
@@ -130,6 +131,8 @@ public static partial class ApiHost
         // 02.1.1-T2.2 (00 §5.5 C8): the org/project registry routes, same filter.
         app.MapTenancyEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         app.MapCatalogEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // 05.1.1/05.1.2: manifests and environment revisions, same filters.
+        app.MapOrchestratorEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.7.1-T3.1: the audit list and export, same filters.
         app.MapAuditEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.4.1/02.4.2: CI bindings and ingest tokens (admin), and the pre-tenant credential exchange, which

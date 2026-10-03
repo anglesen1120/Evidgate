@@ -29,6 +29,8 @@
     <!-- 03.1.1: the catalog routes and the case-identity service run through the same host and database. -->
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Orchestrator\Evidgate.Modules.Orchestrator.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
     <!-- 02.1.1-T2: the endpoint suites drive Program (ApiHost) through WebApplicationFactory. -->
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />

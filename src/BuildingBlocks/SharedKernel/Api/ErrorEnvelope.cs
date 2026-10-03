@@ -164,6 +164,9 @@ public static class ApiErrorCode
     /// <summary>422: an environment revision carries a secret value or a malformed member (05.1.2 AC3).</summary>
     public const string EnvironmentRevisionInvalid = "environment_revision_invalid";
 
+    /// <summary>409: the environment's next revision number is not the <c>revision_no</c> the request expected (05.1.2 AC5).</summary>
+    public const string RevisionConflict = "revision_conflict";
+
     /// <summary>An unexpected failure; carries no internal detail (00 §5.5 C8).</summary>
     public const string InternalError = "internal_error";
 

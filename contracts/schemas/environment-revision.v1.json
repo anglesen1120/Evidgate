@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "environment-revision.v1.json",
+  "title": "Environment revision v1",
+  "description": "The body of POST /v1/projects/{p}/environments/{e}/revisions (05.1.2-T1, 00 §9.3): the secret-free configuration of one target environment — base URLs and the dependency versions that affect results — plus secret references (never values). The server hashes base_urls, dependency_versions and the sorted secret_refs into revision_hash (sha256 over RFC 8785). Secret detection in values is the server's semantic check (reason secret_value_detected), not this schema's: a schema rule would not catch a token-shaped value either. The transport cap is 64 KiB.",
+  "x-max-bytes": 65536,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["base_urls", "dependency_versions"],
+  "properties": {
+    "name": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Display name; used when the call creates the environment, and renames it otherwise; null is the same as absent"
+    },
+    "revision_no": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "maximum": 2147483647,
+      "description": "Optional optimistic check: the number the caller expects this revision to get; any other next number is 409 revision_conflict; null is the same as absent"
+    },
+    "base_urls": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      }
+    },
+    "dependency_versions": {
+      "type": "object",
+      "maxProperties": 128,
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9@][A-Za-z0-9@/._+-]{0,127}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "secret_refs": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "description": "References of the form secret:<name>; anything else is refused as a secret value (secret_value_detected) without being echoed",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    }
+  }
+}

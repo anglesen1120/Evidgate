@@ -10,7 +10,7 @@ Updated 2026-10-03. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | `develop` head | `db4eb44` (PR #12 merged) |
 | Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 · #11 M1 wave 6 · #12 M1 wave 7 |
 | Open PRs | none |
-| Active branch | `develop` — Stage A started 2026-10-03: stories 02.1.1, 02.6.1 + 02.6.2, 02.7.1, 02.4.1 + 02.4.2 and 03.1.1 + 03.1.3 + 03.2.1 complete (on `develop`, §2); wave 7 (§3.7) is merged |
+| Active branch | `develop` — Stage A started 2026-10-03: stories 02.1.1, 02.6.1 + 02.6.2, 02.7.1, 02.4.1 + 02.4.2, 03.1.1 + 03.1.3 + 03.2.1 and 05.1.1 + 05.1.2 complete (on `develop`, §2); wave 7 (§3.7) is merged |
 | M0/M1 tasks | 57 done · 77 open (of 134; 10.2.1-T1 counted open until T1.4); plus 02.1.1-T3 (M2) done |
 | Plan checks | `plan_graph.py` errors 0 · 592 tasks · 628.25 raw / 753.9 buffered person-days (+55 tasks / +45 d from the 2026-10-02 review incl. gap stories 03.1.4, 03.9.x, 04.1.3, 06.3.6, 06.4.6, 10.5.2, 10.7.2, 10.11.1, 11.5.2, 11.9.2: 02.4.3, 02.10.1, 04.9.1, 04.9.2, 05.2.2, 05.5.2) |
 | CI | `.github/workflows/ci.yml` runs every `verify.sh` stage (01.7.1-T1); interim `docker-tests.yml` deleted in wave 5 |
@@ -40,6 +40,7 @@ Updated 2026-10-03. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 02.7.1 | T1, T2, T3 | `develop` (Stage A, no PR) | `audit_log` chain (migration 0015, chain-guard trigger), `IAuditTrail` + `[AuditedAction]` in the C2 pipeline (every Identity/Tenancy mutation), `GET /v1/orgs/{o}/audit` + `/audit/export`, `audit.verify_chain` task; 706 .NET tests |
 | 02.4.1, 02.4.2, 01.8.1 | 02.4.1-T1/T2/T3/T4, 02.4.2-T1/T2, 01.8.1-T3.1 | `develop` (Stage A, no PR) | `ci_binding`/`ci_token_issue`/`ingest_token` (migrations 0016-0018), GitHub OIDC validator + JWKS client, `POST /v1/ci/token` (OIDC and ingest-token grants), `ci_producer` minting + authenticator, binding/ingest-token admin API, replay purge task, `Migrator seed-dev`; 812 .NET tests, security + performance review recorded (02.4.1 §8a), migration 0019 |
 | 03.1.1, 03.1.3, 03.2.1 | 03.1.1-T1–T3, 03.1.3-T1–T3, 03.2.1-T1–T4 | `develop` (Stage A, no PR) | Catalog module: `test_case`/identity sources/rename history (0020), append-only `test_revision` with fail-closed assertion hash (0021), `suite`/`suite_revision`/`variant`/`suite_member`/`case_dependency` with insert and head guards (0022); annotation + sidecar discovery, registration service, case and suite routes, revision diff and dry-run, `ICatalogContracts` (incl. manifest lookups for 05.1.1); shared `SecretShape`; 1096 .NET tests, security + performance reviews recorded (03.1.1/03.1.3/03.2.1 §8a, leftovers OI-03-15) |
+| 05.1.1, 05.1.2 | 05.1.1-T2/T3/T4, 05.1.2-T1/T2 | `develop` (Stage A, no PR) | `manifest` (0023) and `environment`/`environment_revision` (0024) with immutability triggers and FORCE RLS; `POST /v1/projects/{p}/manifests` (schema at the edge, secret-free variants, matrix + shard coverage, catalogue checks, content-addressed dedupe), environment revisions (`environment-revision.v1` schema, secret-value detection, numbering under a row lock, 200 on identical content) and `GET /v1/environment-revisions/{id}`; 1169 .NET tests |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -184,7 +185,6 @@ Recomputed 2026-10-02 from `plan_graph.py` after the review additions, de-duplic
 | Task | Size | Milestone | Note |
 |---|---|---|---|
 | 02.9.1-T1 | M | M1 | Newly ready 2026-10-03: API isolation suite over the registry routes |
-| 05.1.1-T3 | M | M1 | Manifest |
 | 04.1.2-T4 | M | M1 | `producer_slot` |
 | 04.2.1-T2 | S | M1 | New: CLI skeleton + `EVIDGATE_DEV_TOKEN` dev path |
 | 04.3.1-T1, 04.7.1-T2 | M each | M1 | Playwright reporter, adapter protocol |

@@ -136,6 +136,13 @@ public sealed class CompositeFkTests : HarnessTest
                 await using var scope = await TenantScope.BeginAsync(Fixture.AppConnectionString, OrgA);
                 var factory = new TenantRowFactory(scan.Schema, (sql, parameters) => scope.ExecuteAsync(sql, parameters));
 
+                // A nullable key is left null in a valid row (it may close a cycle, project <-> environment),
+                // so its parent is created explicitly for the org the corrupt row will point at.
+                if (tenantParent.Columns.Any(column => !scan.Schema.ColumnsOf(table).Single(c => c.Name == column).NotNull))
+                {
+                    await factory.CreateAsync(tenantParent.PrincipalTable, OrgA, Token);
+                }
+
                 // A valid row for each org, so the corrupt row below differs from a
                 // row the database accepts only in which org's parent it points at.
                 await factory.CreateAsync(table, OrgA, Token);

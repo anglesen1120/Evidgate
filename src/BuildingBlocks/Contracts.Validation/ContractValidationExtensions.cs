@@ -30,6 +30,12 @@ public static class ContractSchemaKeys
     /// request body (05.1.1-T1.1), referenced from <c>contracts/openapi.yaml</c>.
     /// </summary>
     public const string Manifest = "manifest.v1";
+
+    /// <summary>
+    /// <c>contracts/schemas/environment-revision.v1.json</c> — the <c>POST /v1/projects/{p}/environments/{e}/revisions</c>
+    /// request body (05.1.2-T1).
+    /// </summary>
+    public const string EnvironmentRevision = "environment-revision.v1";
 }
 
 /// <summary>

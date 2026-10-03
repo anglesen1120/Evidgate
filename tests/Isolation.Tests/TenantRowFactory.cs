@@ -102,6 +102,9 @@ internal sealed class GeneratedRow
 /// </summary>
 internal sealed class TenantRowFactory
 {
+    // A fresh number per generated revision: corrupting one key reuses the row's other parents, so a constant would collide.
+    private static int _revisionNo;
+
     private readonly TenantSchema _schema;
     private readonly TenantInsertExecutor _insert;
     private readonly Dictionary<(string Table, Guid Org), GeneratedRow> _created = [];
@@ -211,14 +214,16 @@ internal sealed class TenantRowFactory
 
         foreach (var foreignKey in _schema.ForeignKeysOf(table))
         {
-            // A nullable self-reference (ingest_token.rotated_to_id) is left null: following it would create
-            // the same table again, forever.
+            // A nullable reference is left null unless it is the key under test: following it could loop forever, through
+            // a self-reference (ingest_token.rotated_to_id) or a cycle of tables (project.default_environment_id ->
+            // environment -> project).
             var corrupted = corruptedForeignKey is null || string.Equals(corruptedForeignKey, foreignKey.Name, StringComparison.Ordinal);
-            if (string.Equals(foreignKey.PrincipalTable, table, StringComparison.Ordinal)
-                && !(corruptedForeignKey is not null && corrupted)
-                && foreignKey.Columns
-                    .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
-                    .All(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
+            var ownColumns = foreignKey.Columns
+                .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
+                .ToArray();
+            if (!(corruptedForeignKey is not null && corrupted)
+                && ownColumns.Length > 0
+                && ownColumns.All(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
             {
                 continue;
             }
@@ -312,7 +317,7 @@ internal sealed class TenantRowFactory
             return "system";
         }
 
-        // Columns whose CHECK constraints name a closed vocabulary or a shape (migrations 0016-0018).
+        // Columns whose CHECK constraints name a closed vocabulary or a shape (migrations 0016-0024).
         var special = (table, column.Name) switch
         {
             ("public.ci_binding", "provider") or ("public.ci_token_issue", "provider") => "github_actions",
@@ -324,6 +329,9 @@ internal sealed class TenantRowFactory
             ("public.test_revision", "revision_hash" or "content_sha256" or "assertion_hash") => "sha256:" + new string('a', 64),
             ("public.suite_revision", "revision_hash") or ("public.variant", "variant_hash") => "sha256:" + new string('a', 64),
             ("public.suite", "slug") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
+            ("public.environment_revision", "revision_no") => Interlocked.Increment(ref _revisionNo),
+            ("public.manifest", "manifest_hash") or ("public.environment_revision", "revision_hash") =>
+                "sha256:" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
             _ => (object?)null,
         };
 

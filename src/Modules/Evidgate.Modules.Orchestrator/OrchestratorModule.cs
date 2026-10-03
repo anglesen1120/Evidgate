@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.Modules.Orchestrator.Domain;
 using Evidgate.Modules.Orchestrator.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,10 @@ internal static class OrchestratorModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<IRunRegistry, InMemoryRunRegistry>();
+
+        // 05.1.1/05.1.2: the manifest and environment-revision routes validate their bodies against the contract schema
+        // set, which is compiled on first use (the routes resolve it per request, never at start-up).
+        services.TryAddEvidgateContractValidation();
 
         return services;
     }

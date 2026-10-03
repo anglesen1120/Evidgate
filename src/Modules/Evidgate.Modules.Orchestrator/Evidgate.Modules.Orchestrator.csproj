@@ -5,6 +5,10 @@
   <ItemGroup>
     <PackageReference Include="Mediator.Abstractions" />
   </ItemGroup>
+  <!-- 05.1.1/05.1.2: the manifest and environment-revision routes (00 §5.5 `Endpoints/`). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
   <ItemGroup>
     <!-- 00 §5.5: another module's .Contracts only; the architecture test fails any other module edge. -->
     <ProjectReference Include="..\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
@@ -12,11 +16,17 @@
     <ProjectReference Include="..\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <!-- 05.1.1/05.1.2: tenant transaction (Dapper), the C2 pipeline seams, the Corvus schema set and RFC 8785 hashing. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
   </ItemGroup>
   <!-- 01.1.2-T2.1: internal implementation, opened to the two composition roots and the tests. -->
   <ItemGroup>
     <InternalsVisibleTo Include="Evidgate.Api" />
     <InternalsVisibleTo Include="Evidgate.Worker" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
+    <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
   </ItemGroup>
 </Project>

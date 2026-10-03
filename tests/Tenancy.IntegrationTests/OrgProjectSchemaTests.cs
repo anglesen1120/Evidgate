@@ -121,6 +121,7 @@ public sealed class OrgProjectSchemaTests
             "c:project_retention_days_check",
             "c:project_slug_format_check",
             "c:project_status_check",
+            "f:project_default_env_fk",
             "f:project_organization_fk",
             "p:project_pkey",
             "u:project_org_id_key",
@@ -129,6 +130,7 @@ public sealed class OrgProjectSchemaTests
 
         (await _fixture.IndexesAsync(database, "project")).ShouldBe(
         [
+            "project_default_environment_idx:CREATE INDEX project_default_environment_idx ON public.project USING btree (org_id, default_environment_id) WHERE (default_environment_id IS NOT NULL)",
             "project_org_id_key:CREATE UNIQUE INDEX project_org_id_key ON public.project USING btree (org_id, id)",
             "project_org_slug_key:CREATE UNIQUE INDEX project_org_slug_key ON public.project USING btree (org_id, slug)",
             "project_org_status_created_id_idx:CREATE INDEX project_org_status_created_id_idx ON public.project USING btree (org_id, status, created_at, id)",

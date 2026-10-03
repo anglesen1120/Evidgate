@@ -123,7 +123,15 @@ paths:
         `manifest_hash` (00 §9.3). The request body is
         `contracts/manifest/manifest.v1.json` — the schema file is authoritative,
         the same file both validators load (server Corvus, CLI Ajv, T42). Body ≤
-        256 KiB → `413`.
+        256 KiB → `413`. Every refusal is 422 `manifest_invalid` whose `details[]`
+        carry `index` (the planned execution, when there is one), `path` and
+        `reason`: a schema keyword, `secret_in_variant_params`, `matrix_not_covered`,
+        `unknown_case_revision`, `unknown_suite_revision`,
+        `unknown_environment_revision` or `invalid_value`; no submitted value is
+        echoed (a parameter is named by position, `#n`). `manifest_hash` is
+        `sha256:` over the RFC 8785 canonical body; the same canonical content in
+        the same project answers 201 with the stored `manifest_id` (05.1.1 AC6).
+        `ETag` is the hash.
       x-permission: run:create
       x-version: v1
       parameters:
@@ -138,22 +146,16 @@ paths:
               $ref: './manifest/manifest.v1.json'
       responses:
         '201':
-          description: Manifest accepted
+          description: Manifest accepted (or the stored manifest of the same canonical content)
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
-                type: object
-                required: [manifest_id, manifest_hash]
-                properties:
-                  manifest_id:
-                    type: string
-                    format: uuid
-                  manifest_hash:
-                    type: string
-                    pattern: '^sha256:[0-9a-f]{64}$'
+                $ref: '#/components/schemas/ManifestAccepted'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -642,7 +644,20 @@ paths:
       operationId: createEnvironmentRevision
       tags: [environments]
       summary: Create an immutable, secret-free, hashed environment revision
-      description: Immutable, secret-free, hashed; referenced revision → 409 on change (05.1.2-T1).
+      description: >-
+        Appends a revision to environment `{e}` of the project, creating the
+        environment on its first revision (05.1.2-T1). The body is
+        `contracts/schemas/environment-revision.v1.json` (≤ 64 KiB → `413`).
+        `revision_hash` is `sha256:` over the RFC 8785 canonical
+        `{base_urls, dependency_versions, secret_refs (sorted)}`; content already
+        stored answers 200 with that revision (which becomes current again), new
+        content 201 with the next `revision_no`. A secret value anywhere —
+        `secret_refs` entries that are not `secret:<name>`, credentials or
+        token-shaped strings in a URL or a version — is 422
+        `environment_revision_invalid`, reason `secret_value_detected`, with the
+        member's position and never its value. `revision_no` in the body is an
+        optional optimistic check: any other next number is 409
+        `revision_conflict`. A revision is never edited (05.1.2 AC5).
       x-permission: environment:write
       x-version: v1
       parameters:
@@ -655,26 +670,30 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: Environment revision payload (05); secret-free, hashed server-side.
+              $ref: './schemas/environment-revision.v1.json'
       responses:
+        '200':
+          description: The same configuration is already stored; that revision is returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentRevisionCreated'
         '201':
           description: Revision created
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
-                type: object
-                required: [revision_id, revision_hash]
-                properties:
-                  revision_id:
-                    type: string
-                    format: uuid
-                  revision_hash:
-                    type: string
-                    pattern: '^sha256:[0-9a-f]{64}$'
+                $ref: '#/components/schemas/EnvironmentRevisionCreated'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -683,6 +702,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -693,6 +714,11 @@ paths:
     get:
       operationId: getEnvironmentRevision
       tags: [environments]
+      description: >-
+        One environment revision (05.1.2 AC4). `ETag` is the revision hash and the
+        body is `Cache-Control: private, immutable`; a matching `If-None-Match` is
+        304. Another tenant's (or, for a project-scoped credential, another
+        project's) revision is 404.
       x-permission: run:read
       x-version: v1
       parameters:
@@ -703,18 +729,17 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
-                type: object
-                required: [revision_id, revision_hash]
-                properties:
-                  revision_id:
-                    type: string
-                    format: uuid
-                  revision_hash:
-                    type: string
-                    pattern: '^sha256:[0-9a-f]{64}$'
+                $ref: '#/components/schemas/EnvironmentRevisionDto'
+        '304':
+          description: The caller already holds this revision
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4166,6 +4191,53 @@ components:
             $ref: '#/components/schemas/CaseRevisionDto'
         next_cursor:
           type: [string, 'null']
+    ManifestAccepted:
+      type: object
+      required: [manifest_id, manifest_hash]
+      properties:
+        manifest_id: { type: string, format: uuid }
+        manifest_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    EnvironmentRevisionCreated:
+      type: object
+      required: [revision_id, revision_no, revision_hash, created]
+      properties:
+        revision_id: { type: string, format: uuid }
+        revision_no: { type: integer, minimum: 1 }
+        revision_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        created:
+          { type: boolean, description: 'False when identical content was already stored (200).' }
+    EnvironmentRevisionDto:
+      type: object
+      required:
+        [
+          revision_id,
+          environment_id,
+          environment_key,
+          project_id,
+          revision_no,
+          revision_hash,
+          base_urls,
+          dependency_versions,
+          secret_refs,
+          created_at,
+        ]
+      properties:
+        revision_id: { type: string, format: uuid }
+        environment_id: { type: string, format: uuid }
+        environment_key: { type: string }
+        project_id: { type: string, format: uuid }
+        revision_no: { type: integer, minimum: 1 }
+        revision_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        base_urls:
+          type: object
+          additionalProperties: { type: string }
+        dependency_versions:
+          type: object
+          additionalProperties: { type: string }
+        secret_refs:
+          type: array
+          items: { type: string, pattern: '^secret:[A-Za-z0-9_.-]{1,64}$' }
+        created_at: { type: string, format: date-time }
     JsonElement:
       description: >-
         Any JSON value. The served document names the .NET `JsonElement` this way; the members that use it (variant
