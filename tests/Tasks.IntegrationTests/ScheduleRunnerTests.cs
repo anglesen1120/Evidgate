@@ -149,7 +149,7 @@ public sealed class ScheduleRunnerTests
         await using var host = TasksTestHost.Start(_fixture, database);
 
         var schedules = host.Schedules.Schedules;
-        schedules.Count.ShouldBe(2);
+        schedules.Count.ShouldBe(3);
 
         var purge = schedules.Single(schedule => schedule.Name == EvidgateSweeps.IdempotencyPurgeSchedule);
         purge.Cron.ShouldBe(EvidgateSweeps.IdempotencyPurgeCron);
@@ -164,7 +164,7 @@ public sealed class ScheduleRunnerTests
         // The registered schedules are exactly the types the worker has handlers for,
         // so a fire is always claimable by the worker that made it.
         host.Handlers.TaskTypes.ShouldBe(
-            [EvidgateSweeps.IdempotencyPurgeTaskType, EvidgateSweeps.TaskSweepTaskType, TaskHandlerTypes.Recording, TaskHandlerTypes.Tenant],
+            [EvidgateSweeps.IdempotencyPurgeTaskType, EvidgateSweeps.TaskSweepTaskType, Evidgate.BuildingBlocks.Persistence.Audit.AuditSweeps.VerifyChainTaskType, TaskHandlerTypes.Recording, TaskHandlerTypes.Tenant],
             ignoreOrder: true);
     }
 

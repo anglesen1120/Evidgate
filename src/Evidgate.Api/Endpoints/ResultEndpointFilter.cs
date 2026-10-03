@@ -49,6 +49,12 @@ public static class ResultHttpExtensions
 
         if (result.IsSuccess)
         {
+            // A route that streams (e.g. the audit export) carries its own IResult.
+            if (result.SuccessValue is IResult custom)
+            {
+                return custom;
+            }
+
             // Results.Json resolves the app's configured JsonOptions, which put the
             // source-generated contexts first — the snake_case wire stays.
             return result.SuccessValue is { } body

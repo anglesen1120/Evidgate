@@ -40,7 +40,10 @@ internal static class HandlerLookup
     /// every request). Handler types are fixed by Mediator's generated registrations; a
     /// pair whose handler did not resolve is not cached, so it is re-checked next time.
     /// </summary>
-    private static (string? Permission, bool AuthenticatedMember) GateOf(
+    internal static string? AuditActionOf(IServiceProvider services, Type messageType, Type responseType) =>
+        GateOf(services, messageType, responseType).AuditAction;
+
+    private static (string? Permission, bool AuthenticatedMember, string? AuditAction) GateOf(
         IServiceProvider services,
         Type messageType,
         Type responseType)
@@ -53,17 +56,18 @@ internal static class HandlerLookup
         var handler = HandlerTypeOf(services, messageType, responseType);
         if (handler is null)
         {
-            return (null, false);
+            return (null, false, null);
         }
 
         var gate = (
             handler.GetCustomAttribute<PermissionAttribute>(inherit: true)?.Permission,
-            handler.GetCustomAttribute<AuthenticatedMemberAttribute>(inherit: false) is not null);
+            handler.GetCustomAttribute<AuthenticatedMemberAttribute>(inherit: false) is not null,
+            handler.GetCustomAttribute<AuditedActionAttribute>(inherit: false)?.Action);
 
         return Gates.GetOrAdd((messageType, responseType), gate);
     }
 
-    private static readonly ConcurrentDictionary<(Type Message, Type Response), (string? Permission, bool AuthenticatedMember)> Gates = new();
+    private static readonly ConcurrentDictionary<(Type Message, Type Response), (string? Permission, bool AuthenticatedMember, string? AuditAction)> Gates = new();
 
     private static Type? HandlerTypeOf(IServiceProvider services, Type messageType, Type responseType)
     {

@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -90,13 +91,15 @@ internal sealed class InviteMemberCommandValidator : AbstractValidator<InviteMem
 /// why the check is here rather than in the query the tenant can see through.
 /// </para>
 /// </summary>
+[AuditedAction("membership.invite")]
 [Permission(Permissions.Membership.Write)]
 internal sealed class InviteMemberCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
-    ICallerPermissionSet permissions)
+    ICallerPermissionSet permissions,
+    IAuditTrail audit)
     : ICommandHandler<InviteMemberCommand, Result<MembershipView>>
 {
     /// <inheritdoc />
@@ -213,6 +216,8 @@ internal sealed class InviteMemberCommandHandler(
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 $"the membership {membership.Id} was inserted in this transaction yet cannot be read back");
+
+        audit.Describe(new AuditObject("membership", view.Id.ToString("D")));
 
         return Result.Success(view, status: 201);
     }

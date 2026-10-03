@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
@@ -68,12 +69,14 @@ internal sealed class UpdateProjectCommandValidator : AbstractValidator<UpdatePr
 /// <c>project_scope_mismatch</c>); a project the tenant cannot see is 404 (AC3); then
 /// 412 on a stale version (AC5), 409 <c>org_suspended</c> and 409 <c>slug_taken</c>.
 /// </summary>
+[AuditedAction("project.update")]
 [Permission(Permissions.Project.Write)]
 internal sealed class UpdateProjectCommandHandler(
     ITenantDbContextFactory<TenancyDbContext> contexts,
     ITenantDb db,
     IRequestPrincipalAccessor principals,
-    IRequestTenantContextAccessor tenant)
+    IRequestTenantContextAccessor tenant,
+    IAuditTrail audit)
     : ICommandHandler<UpdateProjectCommand, Result<ProjectDto>>
 {
     /// <inheritdoc />
@@ -151,6 +154,8 @@ internal sealed class UpdateProjectCommandHandler(
         var view = await TenancyReader.ProjectAsync(db, command.ProjectId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 $"the project {command.ProjectId} was updated in this transaction yet cannot be read back");
+
+        audit.Describe(new AuditObject("project", command.ProjectId.ToString("D")));
 
         return Result.Success(view);
     }

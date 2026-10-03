@@ -72,6 +72,7 @@ const EXPECTED = [
   ['/projects/{p}/ci-bindings', 'post', 'ci_binding:write', 'v1'],
   ['/projects/{p}/ingest-tokens', 'post', 'ingest_token:write', 'v1'],
   ['/orgs/{o}/audit', 'get', 'audit:read', 'v1'],
+  ['/orgs/{o}/audit/export', 'get', 'audit:read', 'v1'],
   ['/support-grants', 'post', 'support:grant', 'v1'],
   ['/support-grants/{g}/approve', 'post', 'support:approve', 'v1'],
   ['/support-grants/{g}/revoke', 'post', 'support:approve', 'v1'],

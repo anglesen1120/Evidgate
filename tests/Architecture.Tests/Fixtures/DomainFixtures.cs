@@ -98,6 +98,15 @@ internal sealed class HandlerReturningResult : ICommandHandler<CommandReturningR
         ValueTask.FromResult(Result.Success(Guid.Empty));
 }
 
+/// <summary>Clean fixture for the audit rule (02.7.1-T2.1): a Result-returning mutation with its audited action.</summary>
+[Permission("run:create")]
+[AuditedAction("run.create")]
+internal sealed class AuditedHandlerReturningResult : ICommandHandler<CommandReturningResult, Result<Guid>>
+{
+    public ValueTask<Result<Guid>> Handle(CommandReturningResult command, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(Result.Success(Guid.Empty));
+}
+
 /// <summary>
 /// Seeded violation fixture (02.1.1): [AuthenticatedMember] on a handler that is not
 /// in the allowlist — the hole in 00 §5.7 S2 must stay closed by name.

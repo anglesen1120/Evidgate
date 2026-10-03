@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
@@ -41,11 +42,13 @@ internal sealed record RemoveMemberCommand(Guid OrgId, Guid MembershipId, string
 /// does not exist yet (02.3.2-T1), so the call is recorded as deferred in the feature
 /// plan §3 rather than stubbed.
 /// </remarks>
+[AuditedAction("membership.remove")]
 [Permission(Permissions.Membership.Write)]
 internal sealed class RemoveMemberCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
-    ITenantScopeAccessor scopes)
+    ITenantScopeAccessor scopes,
+    IAuditTrail audit)
     : ICommandHandler<RemoveMemberCommand, Result>
 {
     /// <inheritdoc />
@@ -75,6 +78,9 @@ internal sealed class RemoveMemberCommandHandler(
 
         if (string.Equals(membership.Status, MembershipStatus.Removed, StringComparison.Ordinal))
         {
+            // Already removed: nothing changed, so no audit row.
+            audit.Suppress();
+
             return Result.Success(StatusCodes.Status204NoContent);
         }
 
@@ -118,6 +124,8 @@ internal sealed class RemoveMemberCommandHandler(
                     $"a {current.Status} membership cannot be removed")),
             };
         }
+
+        audit.Describe(new AuditObject("membership", membership.Id.ToString("D")));
 
         return Result.Success(StatusCodes.Status204NoContent);
     }

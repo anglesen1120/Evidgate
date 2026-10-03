@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
@@ -45,11 +46,13 @@ internal sealed class RevokeRoleCommandValidator : AbstractValidator<RevokeRoleC
 /// <c>tenant_admin</c> grant can trip the last-admin guard: a pending or removed row
 /// grants nothing, so revoking from it is harmless.
 /// </summary>
+[AuditedAction("membership.role_revoke")]
 [Permission(Permissions.Membership.Write)]
 internal sealed class RevokeRoleCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
-    ITenantScopeAccessor scopes)
+    ITenantScopeAccessor scopes,
+    IAuditTrail audit)
     : ICommandHandler<RevokeRoleCommand, Result>
 {
     /// <inheritdoc />
@@ -130,6 +133,8 @@ internal sealed class RevokeRoleCommandHandler(
                 : Result.Failure(Error.PreconditionFailed(
                     "the role grant changed since it was read; re-read the membership and retry"));
         }
+
+        audit.Describe(new AuditObject("membership", membership.Id.ToString("D"), Metadata: new Dictionary<string, string> { ["role_id"] = command.RoleId.ToString("D") }));
 
         return Result.Success(StatusCodes.Status204NoContent);
     }

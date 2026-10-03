@@ -1870,29 +1870,85 @@ paths:
     get:
       operationId: listAudit
       tags: [audit]
-      summary: Cursor list of tenant-visible audit events (support-grant actions included)
+      summary: Cursor page of the org's audit events, newest first (02.7.1)
+      description: >-
+        One statement per page, keyset-ordered on `(created_at, id)` descending and served by
+        `audit_log_org_created_id_idx`. Rows carry the per-org hash chain (`seq`, `prev_hash`,
+        `entry_hash`) so a client can re-verify it. Another org's id is 404.
       x-permission: audit:read
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/OrgId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/AuditActorType'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditObjectType'
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
       responses:
         '200':
-          description: Page of audit events (02, 11)
+          description: Page of audit events (02.7.1)
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CursorList'
+                $ref: '#/components/schemas/AuditListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/audit/export:
+    get:
+      operationId: exportAudit
+      tags: [audit]
+      summary: Stream the filtered audit events as JSONL or CSV; the export is itself audited (02.7.1)
+      description: >-
+        The range defaults to the last 30 days and may span at most 92 days, otherwise 422
+        `export_range_too_large`; so does a range holding more than 100 000 events. The export
+        writes an `audit.export` audit row in the same transaction. CSV cells that start with a
+        formula character are prefixed with a quote.
+      x-permission: audit:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/AuditExportFormat'
+        - $ref: '#/components/parameters/AuditActorType'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditObjectType'
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+      responses:
+        '200':
+          description: The events, oldest first, one JSON object per line or CSV rows
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/AuditEntryDto'
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -2746,6 +2802,51 @@ components:
       name: X-Hub-Signature-256
       description: HMAC signature on inbound GitHub webhook deliveries (00 §9.3).
   parameters:
+    AuditExportFormat:
+      name: format
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [jsonl, csv]
+        default: jsonl
+    AuditActorType:
+      name: actor_type
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [user, ci_producer, agent, platform_operator, system]
+    AuditAction:
+      name: action
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+    AuditObjectType:
+      name: object_type
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+    AuditFrom:
+      name: from
+      in: query
+      required: false
+      description: Inclusive lower bound on `created_at` (ISO 8601).
+      schema:
+        type: string
+        format: date-time
+    AuditTo:
+      name: to
+      in: query
+      required: false
+      description: Exclusive upper bound on `created_at` (ISO 8601).
+      schema:
+        type: string
+        format: date-time
     Cursor:
       name: cursor
       in: query
@@ -3320,6 +3421,58 @@ components:
         next_cursor:
           type: [string, 'null']
           description: Opaque cursor of the next page, or null on the last page.
+    AuditEntryDto:
+      type: object
+      description: One audit event with its place in the org's hash chain; hashes are lowercase hex.
+      required: [id, seq, actor_type, actor_id, action, prev_hash, entry_hash, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+          format: int64
+        actor_type:
+          type: string
+          enum: [user, ci_producer, agent, platform_operator, system]
+        actor_id:
+          type: string
+        action:
+          type: string
+        object_type:
+          type: [string, 'null']
+        object_id:
+          type: [string, 'null']
+        before_hash:
+          type: [string, 'null']
+        after_hash:
+          type: [string, 'null']
+        request_id:
+          type: [string, 'null']
+        trace_id:
+          type: [string, 'null']
+        metadata:
+          type: [object, 'null']
+          additionalProperties:
+            type: string
+        prev_hash:
+          type: string
+        entry_hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    AuditListResponse:
+      type: object
+      description: 00 §9.1 cursor page of `AuditEntryDto`, newest first.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntryDto'
+        next_cursor:
+          type: [string, 'null']
     OrganizationSummaryDto:
       type: object
       description: One organization in `GET /v1/orgs`.

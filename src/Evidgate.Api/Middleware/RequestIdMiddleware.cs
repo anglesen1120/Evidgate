@@ -45,6 +45,8 @@ public sealed class RequestIdMiddleware
         context.Items[ItemsKey] = requestId;
         context.Response.Headers[HeaderName] = requestId;
         Activity.Current?.SetTag("evidgate.request_id", requestId);
+        // 02.7.1: audit rows carry the request id; baggage flows to the pipeline with the async context.
+        Activity.Current?.AddBaggage(Evidgate.BuildingBlocks.Persistence.Audit.AuditTrail.RequestIdBaggage, requestId);
 
         await _next(context);
     }

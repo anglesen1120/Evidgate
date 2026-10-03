@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
@@ -70,11 +71,13 @@ internal sealed class UpdateMembershipCommandValidator : AbstractValidator<Updat
 /// deferred in the feature plan §3, because the <c>session</c> table it revokes is
 /// 02.3.2-T1's and does not exist in this build.
 /// </remarks>
+[AuditedAction("membership.update")]
 [Permission(Permissions.Membership.Write)]
 internal sealed class UpdateMembershipCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
-    ITenantScopeAccessor scopes)
+    ITenantScopeAccessor scopes,
+    IAuditTrail audit)
     : ICommandHandler<UpdateMembershipCommand, Result<MembershipView>>
 {
     /// <inheritdoc />
@@ -110,6 +113,8 @@ internal sealed class UpdateMembershipCommandHandler(
         if (string.Equals(membership.Status, MembershipStatus.Removed, StringComparison.Ordinal))
         {
             // Already in the requested state: the retry is a no-op, not a conflict.
+            audit.Suppress();
+
             var current = await MembershipReader.ReadAsync(db, orgId, membership.Id, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -150,6 +155,8 @@ internal sealed class UpdateMembershipCommandHandler(
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 $"the membership {membership.Id} was updated in this transaction yet cannot be read back");
+
+        audit.Describe(new AuditObject("membership", membership.Id.ToString("D"), Metadata: new Dictionary<string, string> { ["status"] = command.Status }));
 
         return Result.Success(view);
     }

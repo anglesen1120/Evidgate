@@ -224,6 +224,37 @@ export type ProjectListResponse = {
 };
 
 /**
+ * One audit event with its place in the org's hash chain; hashes are lowercase hex.
+ */
+export type AuditEntryDto = {
+    id: string;
+    seq: number;
+    actor_type: 'user' | 'ci_producer' | 'agent' | 'platform_operator' | 'system';
+    actor_id: string;
+    action: string;
+    object_type?: string | null;
+    object_id?: string | null;
+    before_hash?: string | null;
+    after_hash?: string | null;
+    request_id?: string | null;
+    trace_id?: string | null;
+    metadata?: {
+        [key: string]: string;
+    } | null;
+    prev_hash: string;
+    entry_hash: string;
+    created_at: string;
+};
+
+/**
+ * 00 §9.1 cursor page of `AuditEntryDto`, newest first.
+ */
+export type AuditListResponse = {
+    items: Array<AuditEntryDto>;
+    next_cursor: string | null;
+};
+
+/**
  * One organization in `GET /v1/orgs`.
  */
 export type OrganizationSummaryDto = {
@@ -493,6 +524,24 @@ export type Event = unknown & {
         schema: string;
     };
 };
+
+export type AuditExportFormat = 'jsonl' | 'csv';
+
+export type AuditActorType = 'user' | 'ci_producer' | 'agent' | 'platform_operator' | 'system';
+
+export type AuditAction = string;
+
+export type AuditObjectType = string;
+
+/**
+ * Inclusive lower bound on `created_at` (ISO 8601).
+ */
+export type AuditFrom = string;
+
+/**
+ * Exclusive upper bound on `created_at` (ISO 8601).
+ */
+export type AuditTo = string;
 
 /**
  * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
@@ -2928,6 +2977,17 @@ export type ListAuditData = {
          */
         cursor?: string;
         limit?: number;
+        actor_type?: 'user' | 'ci_producer' | 'agent' | 'platform_operator' | 'system';
+        action?: string;
+        object_type?: string;
+        /**
+         * Inclusive lower bound on `created_at` (ISO 8601).
+         */
+        from?: string;
+        /**
+         * Exclusive upper bound on `created_at` (ISO 8601).
+         */
+        to?: string;
     };
     url: '/orgs/{o}/audit';
 };
@@ -2946,6 +3006,10 @@ export type ListAuditErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
@@ -2959,12 +3023,72 @@ export type ListAuditError = ListAuditErrors[keyof ListAuditErrors];
 
 export type ListAuditResponses = {
     /**
-     * Page of audit events (02, 11)
+     * Page of audit events (02.7.1)
      */
-    200: CursorList;
+    200: AuditListResponse;
 };
 
 export type ListAuditResponse = ListAuditResponses[keyof ListAuditResponses];
+
+export type ExportAuditData = {
+    body?: never;
+    path: {
+        o: string;
+    };
+    query?: {
+        format?: 'jsonl' | 'csv';
+        actor_type?: 'user' | 'ci_producer' | 'agent' | 'platform_operator' | 'system';
+        action?: string;
+        object_type?: string;
+        /**
+         * Inclusive lower bound on `created_at` (ISO 8601).
+         */
+        from?: string;
+        /**
+         * Exclusive upper bound on `created_at` (ISO 8601).
+         */
+        to?: string;
+    };
+    url: '/orgs/{o}/audit/export';
+};
+
+export type ExportAuditErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ExportAuditError = ExportAuditErrors[keyof ExportAuditErrors];
+
+export type ExportAuditResponses = {
+    /**
+     * The events, oldest first, one JSON object per line or CSV rows
+     */
+    200: AuditEntryDto;
+};
+
+export type ExportAuditResponse = ExportAuditResponses[keyof ExportAuditResponses];
 
 export type RequestSupportGrantData = {
     body: {

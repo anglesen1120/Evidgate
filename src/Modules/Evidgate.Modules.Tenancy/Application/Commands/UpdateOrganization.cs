@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
@@ -79,11 +80,13 @@ internal sealed class UpdateOrganizationCommandValidator : AbstractValidator<Upd
 /// for a suspended org, 409 <c>slug_taken</c> when the new slug is used (AC2). A body
 /// that changes nothing answers the current row without a write (no version bump).
 /// </summary>
+[AuditedAction("organization.update")]
 [Permission(Permissions.Organization.Write)]
 internal sealed class UpdateOrganizationCommandHandler(
     ITenantDbContextFactory<TenancyDbContext> contexts,
     ITenantDb db,
-    ITenantScopeAccessor scopes)
+    ITenantScopeAccessor scopes,
+    IAuditTrail audit)
     : ICommandHandler<UpdateOrganizationCommand, Result<OrganizationDto>>
 {
     /// <inheritdoc />
@@ -163,6 +166,8 @@ internal sealed class UpdateOrganizationCommandHandler(
         var view = await TenancyReader.OrganizationAsync(db, command.OrgId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 $"the organization {command.OrgId} was updated in this transaction yet cannot be read back");
+
+        audit.Describe(new AuditObject("organization", command.OrgId.ToString("D")));
 
         return Result.Success(view);
     }

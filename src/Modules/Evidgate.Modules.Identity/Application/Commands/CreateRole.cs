@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -110,6 +111,7 @@ internal sealed class CreateRoleCommandValidator : AbstractValidator<CreateRoleC
 /// the route's 403 response, recorded as a [DECISION] in both feature plans.
 /// </para>
 /// </summary>
+[AuditedAction("role.create")]
 [Permission(Permissions.Role.Write)]
 internal sealed class CreateRoleCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
@@ -117,7 +119,8 @@ internal sealed class CreateRoleCommandHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     ICallerPermissionSet permissions,
-    IOptions<IdentityOptions> options)
+    IOptions<IdentityOptions> options,
+    IAuditTrail audit)
     : ICommandHandler<CreateRoleCommand, Result<RoleView>>
 {
     /// <inheritdoc />
@@ -206,6 +209,8 @@ internal sealed class CreateRoleCommandHandler(
                 ApiErrorCode.RoleCodeTaken,
                 "the org already has a role with that code"));
         }
+
+        audit.Describe(new AuditObject("role", granted.Id.ToString("D")));
 
         return Result.Success(
             new RoleView(

@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -57,13 +58,15 @@ internal sealed class GrantRoleCommandValidator : AbstractValidator<GrantRoleCom
 /// hold, 00 §2).
 /// </para>
 /// </summary>
+[AuditedAction("membership.role_grant")]
 [Permission(Permissions.Membership.Write)]
 internal sealed class GrantRoleCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
-    ICallerPermissionSet permissions)
+    ICallerPermissionSet permissions,
+    IAuditTrail audit)
     : ICommandHandler<GrantRoleCommand, Result<MembershipView>>
 {
     /// <inheritdoc />
@@ -162,6 +165,8 @@ internal sealed class GrantRoleCommandHandler(
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 $"the membership {membership.Id} was updated in this transaction yet cannot be read back");
+
+        audit.Describe(new AuditObject("membership", membership.Id.ToString("D"), Metadata: new Dictionary<string, string> { ["role_id"] = command.RoleId.ToString("D") }));
 
         return Result.Success(view);
     }

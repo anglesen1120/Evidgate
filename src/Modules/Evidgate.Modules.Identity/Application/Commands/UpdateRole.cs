@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -85,6 +86,7 @@ internal sealed class UpdateRoleCommandValidator : AbstractValidator<UpdateRoleC
 /// <c>forbidden</c> (W7-SEC-02: adding grants to a role is handing out access, so the
 /// same subset rule as <c>CreateRole</c> applies to every added code).
 /// </summary>
+[AuditedAction("role.update")]
 [Permission(Permissions.Role.Write)]
 internal sealed class UpdateRoleCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
@@ -92,7 +94,8 @@ internal sealed class UpdateRoleCommandHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     ICallerPermissionSet permissions,
-    IOptions<IdentityOptions> options)
+    IOptions<IdentityOptions> options,
+    IAuditTrail audit)
     : ICommandHandler<UpdateRoleCommand, Result<RoleView>>
 {
     /// <inheritdoc />
@@ -195,6 +198,8 @@ internal sealed class UpdateRoleCommandHandler(
             return Result.Failure<RoleView>(Error.PreconditionFailed(
                 "the role changed since it was read; re-read it and retry"));
         }
+
+        audit.Describe(new AuditObject("role", role.Id.ToString("D")));
 
         return Result.Success(new RoleView(
             role.Id,

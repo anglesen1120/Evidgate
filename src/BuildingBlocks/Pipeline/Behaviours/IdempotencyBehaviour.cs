@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Idempotency;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -23,7 +24,7 @@ namespace Evidgate.BuildingBlocks.Pipeline.Behaviours;
 /// <typeparamref name="TMessage"/> shape — deterministic per command type.
 /// </para>
 /// </summary>
-public sealed class IdempotencyBehaviour<TMessage, TResponse>(IIdempotencyStore store)
+public sealed class IdempotencyBehaviour<TMessage, TResponse>(IIdempotencyStore store, IAuditTrail audit)
     : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
@@ -84,6 +85,9 @@ public sealed class IdempotencyBehaviour<TMessage, TResponse>(IIdempotencyStore 
                     var replay = await store.ReplayAsync(operation, key, cancellationToken).ConfigureAwait(false)
                         ?? throw new InvalidOperationException(
                             $"idempotency key '{key}' was reported as replayed by the store, yet no completed record exists");
+
+                    // A replay changed nothing: the original request already wrote its audit row.
+                    audit.Suppress();
 
                     return ResultFactory.Revive<TResponse>(replay.ResponseStatus, replay.ResponseBody);
                 }

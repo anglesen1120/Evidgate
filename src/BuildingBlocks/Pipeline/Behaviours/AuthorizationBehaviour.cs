@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -28,7 +29,8 @@ public sealed class AuthorizationBehaviour<TMessage, TResponse>(
     IServiceProvider services,
     IPermissionEvaluator permissions,
     IRequestTenantContextAccessor tenant,
-    IRequestPrincipalAccessor principals)
+    IRequestPrincipalAccessor principals,
+    IAuditTrail audit)
     : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
@@ -54,7 +56,7 @@ public sealed class AuthorizationBehaviour<TMessage, TResponse>(
             _ = tenant.Require();
 
             return principals.Current is { Kind: PrincipalKind.Member, UserId: not null }
-                ? await next(message, cancellationToken).ConfigureAwait(false)
+                ? await RunAuditedAsync(message, next, cancellationToken).ConfigureAwait(false)
                 : ResultFactory.Failure<TResponse>(Error.Forbidden(
                     "only an authenticated user may create an organization (02.1.1 §5)"));
         }
@@ -75,7 +77,28 @@ public sealed class AuthorizationBehaviour<TMessage, TResponse>(
             : await permissions.EvaluateAsync(permission, principal, context, cancellationToken).ConfigureAwait(false);
 
         return decision.IsGranted
-            ? await next(message, cancellationToken).ConfigureAwait(false)
+            ? await RunAuditedAsync(message, next, cancellationToken).ConfigureAwait(false)
             : ResultFactory.Failure<TResponse>(decision.ToError());
+    }
+
+    /// <summary>
+    /// Runs the rest of the pipeline; when the handler is <c>[AuditedAction]</c> and the result is
+    /// a success, queues the audit entry in the same unit of work (02.7.1-T2.1). A failure
+    /// queues nothing, and the tenant stage rolls the transaction back.
+    /// </summary>
+    private async ValueTask<TResponse> RunAuditedAsync(
+        TMessage message,
+        MessageHandlerDelegate<TMessage, TResponse> next,
+        CancellationToken cancellationToken)
+    {
+        var response = await next(message, cancellationToken).ConfigureAwait(false);
+
+        if (!ResultFactory.TryGetFailure(response, out _)
+            && HandlerLookup.AuditActionOf(services, typeof(TMessage), typeof(TResponse)) is { } action)
+        {
+            audit.Record(action, AuditActorResolver.From(principals.Current));
+        }
+
+        return response;
     }
 }

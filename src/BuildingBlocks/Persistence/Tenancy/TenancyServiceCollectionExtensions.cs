@@ -53,6 +53,7 @@ public static class TenancyServiceCollectionExtensions
         services.TryAddSingleton<ITenantScopeAccessor>(provider =>
             provider.GetRequiredService<ITenantScopeFactory>());
         services.TryAddSingleton<ITenantDb, TenantDb>();
+        services.TryAddSingleton<Audit.IAuditTrail, Audit.AuditTrail>();
         services.TryAddSingleton<TenantCommandInterceptor>();
 
         return services;

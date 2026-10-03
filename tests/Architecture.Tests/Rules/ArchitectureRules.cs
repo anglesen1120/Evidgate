@@ -206,6 +206,50 @@ public static class ArchitectureRules
     }
 
     /// <summary>
+    /// 02.7.1-T2.1: every command handler that answers a <c>Result</c> (a pipeline-managed
+    /// mutation) carries <c>[AuditedAction]</c>, so a new mutation cannot ship without its
+    /// audit row. Queries are read-only and exempt; the sprint-1 skeleton slice does not
+    /// answer <c>Result</c> and is outside the C2 stages.
+    /// </summary>
+    public static IReadOnlyList<string> EveryMutationDeclaresAnAuditedAction(IEnumerable<Type> types)
+    {
+        var violations = new List<string>();
+
+        foreach (var type in Enumerate(types).OrderBy(t => t.FullName, StringComparer.Ordinal))
+        {
+            if (type.IsAbstract || type.IsInterface)
+            {
+                continue;
+            }
+
+            var answersResult = type
+                .GetInterfaces()
+                .Any(i => i.Namespace == "Mediator"
+                    && i.Name.StartsWith("ICommandHandler", StringComparison.Ordinal)
+                    && i.GetGenericArguments().LastOrDefault() is { } response
+                    && (response.Name == "Result" || response.Name.StartsWith("Result`", StringComparison.Ordinal)));
+
+            if (!answersResult)
+            {
+                continue;
+            }
+
+            var audited = type
+                .GetCustomAttributesData()
+                .Any(a => a.AttributeType.FullName == typeof(AuditedActionAttribute).FullName);
+
+            if (!audited)
+            {
+                violations.Add(
+                    $"{type.FullName} is a mutation handler without [AuditedAction]; " +
+                    "every permission-checked mutation appends one audit_log row (02.7.1-T2.1)");
+            }
+        }
+
+        return violations;
+    }
+
+    /// <summary>
     /// The only handlers allowed to carry <see cref="AuthenticatedMemberAttribute"/>:
     /// the ones that create the tenant the caller will then be a member of (02.1.1 §5).
     /// </summary>

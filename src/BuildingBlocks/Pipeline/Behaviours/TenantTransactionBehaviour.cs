@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -29,7 +30,9 @@ namespace Evidgate.BuildingBlocks.Pipeline.Behaviours;
 /// </summary>
 public sealed class TenantTransactionBehaviour<TMessage, TResponse>(
     ITenantScopeFactory scopes,
-    IRequestTenantContextAccessor tenant)
+    IRequestTenantContextAccessor tenant,
+    IAuditTrail audit,
+    ITenantDb db)
     : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
@@ -51,6 +54,8 @@ public sealed class TenantTransactionBehaviour<TMessage, TResponse>(
             .BeginAsync(context.OrgId, context.ProjectId, readOnly, cancellationToken)
             .ConfigureAwait(false);
 
+        using var auditUnit = audit.BeginUnit();
+
         var response = await next(message, cancellationToken).ConfigureAwait(false);
 
         if (ResultFactory.TryGetFailure(response, out _))
@@ -59,6 +64,10 @@ public sealed class TenantTransactionBehaviour<TMessage, TResponse>(
             // scope disposes uncommitted.
             return response;
         }
+
+        // 02.7.1: the audit rows go in last, under the org's advisory lock, in the same
+        // transaction as the business change (AC1, AC3).
+        await audit.FlushAsync(context.OrgId, db, cancellationToken).ConfigureAwait(false);
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
         return response;

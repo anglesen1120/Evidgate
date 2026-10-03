@@ -76,6 +76,24 @@ public class PipelineTests
             .ShouldHaveSingleItem();
     }
 
+    /// <summary>02.7.1-T2.1: a mutation without [AuditedAction] fails the rule; the real solution is clean.</summary>
+    [Fact]
+    public void Every_Mutation_Declares_An_Audited_Action()
+    {
+        ArchitectureRules.EveryMutationDeclaresAnAuditedAction(SolutionLayout.EvidgateTypes()).ShouldBeEmpty();
+
+        // Non-vacuity: a Result-returning command handler with no [AuditedAction] is reported,
+        // one with it is not, and a query/DTO handler is out of scope.
+        var violations = ArchitectureRules.EveryMutationDeclaresAnAuditedAction(
+        [
+            typeof(Evidgate.Modules.Sample.Domain.HandlerReturningResult),
+            typeof(Evidgate.Modules.Sample.Domain.AuditedHandlerReturningResult),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerReturningDto),
+        ]);
+
+        violations.ShouldHaveSingleItem().ShouldContain(nameof(Evidgate.Modules.Sample.Domain.HandlerReturningResult));
+    }
+
     [Fact]
     public void Real_Solution_Handlers_All_Declare_Permission()
     {

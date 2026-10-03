@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -57,13 +58,15 @@ internal sealed class CreateOrganizationCommandValidator : AbstractValidator<Cre
 /// principal's verified email — a caller without one is refused (403), because the
 /// membership row cannot exist without an address (0011).
 /// </summary>
+[AuditedAction("organization.create")]
 [AuthenticatedMember]
 internal sealed class CreateOrganizationCommandHandler(
     ITenantDbContextFactory<TenancyDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
-    IOrganizationFounder founder)
+    IOrganizationFounder founder,
+    IAuditTrail audit)
     : ICommandHandler<CreateOrganizationCommand, Result<OrganizationDto>>
 {
     /// <inheritdoc />
@@ -125,6 +128,8 @@ internal sealed class CreateOrganizationCommandHandler(
         var created = await TenancyReader.OrganizationAsync(db, command.OrgId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 $"the organization {command.OrgId} was inserted in this transaction yet cannot be read back");
+
+        audit.Describe(new AuditObject("organization", command.OrgId.ToString("D")));
 
         return Result.Success(created, status: 201);
     }

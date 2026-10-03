@@ -437,6 +437,7 @@ public sealed class SchemaConventionAllowListTests
                 ("public.schema_migration", SchemaRule.All),
                 ("public.outbox", SchemaRule.RowLevelSecurity | SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.task", SchemaRule.TenantKey | SchemaRule.CompositeForeignKey | SchemaRule.RowLevelSecurity),
+                ("public.audit_log", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.rls_probe", SchemaRule.VersionTrigger),
                 ("public.role_permission", SchemaRule.CompositeForeignKey),
             ]);

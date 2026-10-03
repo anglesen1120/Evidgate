@@ -60,6 +60,9 @@ public interface IRequestPrincipal
     /// input; 02.1.1's org creation binds the creator's membership to it (T98).
     /// </summary>
     string? VerifiedEmail { get; }
+
+    /// <summary>The token id (<c>jti</c>) of a service credential; the audit actor id (02.7.1). Null for other kinds.</summary>
+    string? CredentialId { get; }
 }
 
 /// <summary>
@@ -77,13 +80,15 @@ public sealed class RequestPrincipal : IRequestPrincipal
         Guid? userId,
         Guid? projectScope,
         IReadOnlyCollection<string> claimedPermissions,
-        string? verifiedEmail = null)
+        string? verifiedEmail = null,
+        string? credentialId = null)
     {
         Kind = kind;
         UserId = userId;
         ProjectScope = projectScope;
         ClaimedPermissions = claimedPermissions;
         VerifiedEmail = verifiedEmail;
+        CredentialId = credentialId;
     }
 
     /// <summary>A human member of the org the request runs as.</summary>
@@ -94,11 +99,11 @@ public sealed class RequestPrincipal : IRequestPrincipal
     /// A service identity: the permission set its token carries, optionally scoped
     /// to exactly one project.
     /// </summary>
-    public static RequestPrincipal Service(Guid? projectScope, IReadOnlyCollection<string> claimedPermissions)
+    public static RequestPrincipal Service(Guid? projectScope, IReadOnlyCollection<string> claimedPermissions, string? credentialId = null)
     {
         ArgumentNullException.ThrowIfNull(claimedPermissions);
 
-        return new RequestPrincipal(PrincipalKind.ServicePrincipal, userId: null, projectScope, claimedPermissions);
+        return new RequestPrincipal(PrincipalKind.ServicePrincipal, userId: null, projectScope, claimedPermissions, credentialId: credentialId);
     }
 
     /// <summary>
@@ -122,4 +127,6 @@ public sealed class RequestPrincipal : IRequestPrincipal
 
     /// <inheritdoc />
     public string? VerifiedEmail { get; }
+
+    public string? CredentialId { get; }
 }

@@ -205,6 +205,13 @@ public sealed class TenantGucTests
             ("operation", "project:create"),
             ("key", "k-1"),
             ("request_hash", "sha256:0"));
+        await scope.ExecuteAsync(
+            """
+            insert into public.audit_log (id, org_id, seq, actor_type, actor_id, action, prev_hash, entry_hash)
+            values (@id, @org_id, 1, 'system', 'system', 'probe.seed', decode(repeat('00', 32), 'hex'), decode(repeat('01', 32), 'hex'))
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId));
         var membershipId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             "insert into public.membership (id, org_id, invited_email) values (@id, @org_id, @invited_email)",

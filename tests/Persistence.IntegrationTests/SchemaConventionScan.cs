@@ -44,6 +44,10 @@ internal static class SchemaConventionScan
             SchemaRule.TenantKey | SchemaRule.CompositeForeignKey | SchemaRule.RowLevelSecurity,
             "Mechanism table (01.5.1 §3/§4): org_id is nullable for platform tasks, so the tenant key and composite-FK rules cannot hold, and there is no RLS policy because the claim query scans every org by design. Audit columns and the version trigger are NOT exempt: a task row is read-modify-written on every claim, so it carries all three plus the shared trigger."),
         new SchemaExemption(
+            "public.audit_log",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only audit trail (02.7.1-T1.1): a row is never updated, so it keeps created_at only — no updated_at/version and no version trigger. Its tenant key and RLS are NOT exempt."),
+        new SchemaExemption(
             "public.rls_probe",
             SchemaRule.VersionTrigger,
             "The tenancy template of migration 0003 predates the shared trigger function (0004, M1W3-01) and 0003 is checksum-locked, so the trigger cannot be added there; 0004/0005 are the copy source for module tables."),

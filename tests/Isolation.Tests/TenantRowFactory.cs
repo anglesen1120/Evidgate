@@ -289,8 +289,16 @@ internal sealed class TenantRowFactory
             return id;
         }
 
+        // audit_log.actor_type is constrained to a closed list (migration 0015).
+        if (string.Equals(table, "public.audit_log", StringComparison.Ordinal)
+            && string.Equals(column.Name, "actor_type", StringComparison.Ordinal))
+        {
+            return "system";
+        }
+
         return column.StoreType switch
         {
+            "bytea" => new byte[32],
             "uuid" => Guid.CreateVersion7(),
             "text" or "character varying" => "probe" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8],
             "jsonb" => "{}",

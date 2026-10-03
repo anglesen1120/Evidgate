@@ -34,6 +34,7 @@ from pathlib import Path
 # here is a review decision, so each entry carries its reason.
 DEFINER_AUDIT_EXEMPT = {
     "evidgate.purge_expired_idempotency": "T80 sweep: bounded delete of expired rows, observed via the task row",
+    "evidgate.audit_org_ids": "T80 sweep: lists org ids for the chain-verification task, which records its own findings",
 }
 
 # Roles a definer function may be granted EXECUTE to.

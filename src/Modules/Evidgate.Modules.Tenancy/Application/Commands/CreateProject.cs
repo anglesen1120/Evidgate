@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
@@ -47,11 +48,13 @@ internal sealed class CreateProjectCommandValidator : AbstractValidator<CreatePr
 /// statement after the lock is held, which makes the check and the insert one
 /// serialised step per org; a suspended org is 409 <c>org_suspended</c>.
 /// </summary>
+[AuditedAction("project.create")]
 [Permission(Permissions.Project.Create)]
 internal sealed class CreateProjectCommandHandler(
     ITenantDbContextFactory<TenancyDbContext> contexts,
     ITenantDb db,
-    ITenantScopeAccessor scopes)
+    ITenantScopeAccessor scopes,
+    IAuditTrail audit)
     : ICommandHandler<CreateProjectCommand, Result<ProjectDto>>
 {
     /// <summary>The <c>error.details</c> path and message noun of the project limit.</summary>
@@ -125,6 +128,8 @@ internal sealed class CreateProjectCommandHandler(
         var created = await TenancyReader.ProjectAsync(db, project.Id, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 $"the project {project.Id} was inserted in this transaction yet cannot be read back");
+
+        audit.Describe(new AuditObject("project", project.Id.ToString("D")));
 
         return Result.Success(created, status: 201);
     }
