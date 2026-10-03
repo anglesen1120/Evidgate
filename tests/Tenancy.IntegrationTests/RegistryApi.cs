@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Shouldly;
 using Xunit;
 
 namespace Tenancy.IntegrationTests;
@@ -66,6 +67,26 @@ internal static class RegistryApi
         using var document = JsonDocument.Parse(string.IsNullOrEmpty(text) ? "{}" : text);
 
         return new ApiAnswer(response.StatusCode, document.RootElement.Clone(), response.Headers);
+    }
+
+    /// <summary>Creates an org as <paramref name="user"/> (the founder) through the real route; returns its id.</summary>
+    internal static async Task<Guid> CreateOrgAsync(HttpClient client, Guid user, string slug)
+    {
+        var created = await client.SendAsync(
+            HttpMethod.Post, "/v1/orgs", TenancyApiFactory.Resolved(user: user, email: $"{slug}@example.test"), new { name = slug, slug }, NewKey());
+        created.Status.ShouldBe(HttpStatusCode.Created);
+
+        return created.Id();
+    }
+
+    /// <summary>Creates a project in <paramref name="org"/> as <paramref name="user"/>; returns its id.</summary>
+    internal static async Task<Guid> CreateProjectAsync(HttpClient client, Guid user, Guid org, string slug)
+    {
+        var created = await client.SendAsync(
+            HttpMethod.Post, $"/v1/orgs/{org}/projects", TenancyApiFactory.Resolved(user: user), new { name = slug, slug }, NewKey());
+        created.Status.ShouldBe(HttpStatusCode.Created);
+
+        return created.Id();
     }
 
     /// <summary>A fresh <c>Idempotency-Key</c>.</summary>

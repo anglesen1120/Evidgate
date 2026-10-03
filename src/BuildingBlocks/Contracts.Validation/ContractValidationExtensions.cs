@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Evidgate.BuildingBlocks.Contracts.Validation;
@@ -54,6 +55,26 @@ public static class ContractValidationServiceExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractsDirectory);
         return services.AddSingleton(ContractSchemaSet.Load(contractsDirectory));
+    }
+
+    /// <summary>
+    /// Registers the compiled <see cref="ContractSchemaSet"/> as a singleton that is built <em>on first use</em>
+    /// (the host's content root seeds the same directory search as the eager overload), unless a set is already
+    /// registered. For modules that read a contract document occasionally (the catalog's sidecar, 03.1.1) and
+    /// must not make every host start pay for compiling all schemas.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    public static IServiceCollection TryAddEvidgateContractValidation(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.TryAddSingleton(provider =>
+        {
+            var environment = provider.GetRequiredService<IHostEnvironment>();
+
+            return ContractSchemaSet.Load(LocateContractsDirectory(environment.ContentRootPath, AppContext.BaseDirectory));
+        });
+
+        return services;
     }
 
     /// <summary>

@@ -359,6 +359,7 @@ Draft: `draft → dry_running → dry_passed | dry_failed → pr_open → merged
 | `POST /v1/support-grants`, `POST /v1/support-grants/{g}/approve\|revoke` | `support:grant` / `support:approve` | Operator access with scope + expiry; approver is a `tenant_admin` of the target org ≠ requester (02) |
 | `GET /v1/orgs/{o}/security-events` | `security_event:read` (`tenant_admin`) | Filter by project/type/severity/time: auth failures and support access in V1, injection attempts from V2 (11.5.1-T5, 11.4.1-T2; view 09.7.1-T9) |
 | `GET /v1/projects/{p}/cases`, `POST /v1/suites/{s}/revisions`, `GET /v1/suite-revisions/{r}/diff` | `case:read` / `suite:write` / `suite:read` | Catalog read and suite versioning (03) |
+| `GET,PATCH /v1/cases/{c}`, `GET /v1/cases/{c}/revisions` | `case:read` / `case:write` / `case:read` | One case with its identity trail; PATCH changes name, owner, status, labels under `If-Match`, identity members are 422 `case_field_immutable` (03.1.1, 03.1.3) |
 | `POST /v1/webhooks/github` | `X-Hub-Signature-256`, no session | Replay-safe by `delivery_id`; forged signature → 401 (03) |
 | `POST /v1/drafts/{d}/dry-run`, `POST /v1/drafts/{d}/pull-request` (V2) | `draft:dry_run` / `draft:merge_request` | Sandbox dry run; PR idempotent by `(branch, commit)` (03) |
 | `GET /v1/projects/{p}/incidents`, `GET /v1/incidents/{i}`, `POST /v1/incidents/{i}/label` | `healing:triage` | Human label is the only ground truth (08) |

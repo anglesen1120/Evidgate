@@ -35,7 +35,7 @@ public sealed class ContractSchemaSet
     /// The <c>contracts/</c> sub-directories holding JSON Schema documents, each
     /// searched recursively (01.3.2-T2, extended by 04.7.1-T1.2/05.1.1-T1.1).
     /// </summary>
-    private static readonly string[] SchemaRoots = ["schemas", "adapter", "manifest"];
+    private static readonly string[] SchemaRoots = ["schemas", "adapter", "manifest", "catalog"];
 
     private readonly IReadOnlyDictionary<string, ContractSchema> _schemas;
 

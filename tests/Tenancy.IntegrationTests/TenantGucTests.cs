@@ -238,6 +238,26 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("project_id", projectId));
+        var caseId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.test_case (id, org_id, project_id, annotation_id, name, framework, first_seen_commit)
+            values (@id, @org_id, @project_id, @annotation_id, 'probe', 'playwright', 'abcdef0')
+            """,
+            ("id", caseId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("annotation_id", Guid.CreateVersion7()));
+        await scope.ExecuteAsync(
+            "insert into public.case_identity_source (id, org_id, case_id, source, raw_key, commit_sha) values (@id, @org_id, @case_id, 'annotation', 'k', 'abcdef0')",
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("case_id", caseId));
+        await scope.ExecuteAsync(
+            "insert into public.case_rename_history (id, org_id, case_id, from_path, to_path, commit_sha) values (@id, @org_id, @case_id, 'a', 'b', 'abcdef0')",
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("case_id", caseId));
         var membershipId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             "insert into public.membership (id, org_id, invited_email) values (@id, @org_id, @invited_email)",

@@ -26,6 +26,10 @@
     <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy.Contracts\Evidgate.Modules.Tenancy.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy\Evidgate.Modules.Tenancy.csproj" />
+    <!-- 03.1.1: the catalog routes and the case-identity service run through the same host and database. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
     <!-- 02.1.1-T2: the endpoint suites drive Program (ApiHost) through WebApplicationFactory. -->
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
   </ItemGroup>

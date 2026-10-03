@@ -1,6 +1,14 @@
+using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Catalog.Application;
+using Evidgate.Modules.Catalog.Application.Commands;
 using Evidgate.Modules.Catalog.Contracts;
+using Evidgate.Modules.Catalog.Domain;
 using Evidgate.Modules.Catalog.Infrastructure;
+using Evidgate.Modules.Catalog.Infrastructure.Persistence;
+using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Evidgate.Modules.Catalog;
 
@@ -10,12 +18,25 @@ namespace Evidgate.Modules.Catalog;
 /// </summary>
 internal static class CatalogModule
 {
-    /// <summary>Registers the module's slice services in the calling host.</summary>
+    /// <summary>Registers the module's services in the calling host.</summary>
     public static IServiceCollection AddCatalogModule(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        // The sprint-1 skeleton read of published suite revisions; 03.2.1 replaces it with the real catalog.
         services.AddSingleton<ICatalog, InMemorySuiteCatalog>();
+
+        // 03.1.1: the EF write model of the catalog (00 §5.5 C4).
+        services.AddEvidgateDbContext<CatalogDbContext>(typeof(CatalogDbContext).Assembly);
+
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<UpdateCaseCommand>, UpdateCaseCommandValidator>());
+
+        // The sidecar reader validates against contracts/catalog/sidecar.v1.json; the compiled set is built on first
+        // use, so a host that never syncs a tree pays nothing at start-up.
+        services.TryAddEvidgateContractValidation();
+        services.TryAddSingleton<SidecarManifestReader>();
+        services.TryAddSingleton<CaseDiscovery>();
+        services.TryAddScoped<ICaseIdentityService, CaseIdentityService>();
 
         return services;
     }

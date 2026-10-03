@@ -224,6 +224,99 @@ export type ProjectListResponse = {
 };
 
 /**
+ * A test case (03.1.1). Its identity (`annotation_id`, `first_seen_commit`) never changes.
+ */
+export type CaseDto = {
+    id: string;
+    org_id: string;
+    project_id: string;
+    /**
+     * The durable `evidgate.id`; the case's identity inside the project.
+     */
+    annotation_id: string;
+    name: string;
+    framework: string;
+    language?: string | null;
+    /**
+     * Current repository path; moves with a rename.
+     */
+    file_path?: string | null;
+    status: 'active' | 'missing' | 'archived';
+    owner_membership_id?: string | null;
+    labels: Array<string>;
+    first_seen_commit: string;
+    last_seen_commit?: string | null;
+    created_at: string;
+    updated_at: string;
+    /**
+     * Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+     */
+    version: number;
+};
+
+export type CaseIdentitySourceDto = {
+    source: 'annotation' | 'sidecar' | 'imported';
+    raw_key: string;
+    commit_sha: string;
+    created_at: string;
+};
+
+export type CaseRenameDto = {
+    from_path: string;
+    to_path: string;
+    commit_sha: string;
+    detected_at: string;
+};
+
+/**
+ * A case plus its identity trail, so a duplicate-id mistake is diagnosable.
+ */
+export type CaseDetailDto = {
+    case: CaseDto;
+    identity_sources: Array<CaseIdentitySourceDto>;
+    renames: Array<CaseRenameDto>;
+};
+
+/**
+ * 00 §9.1 cursor page of `CaseDto`, keyset-ordered on `(created_at, id)`.
+ */
+export type CaseListResponse = {
+    items: Array<CaseDto>;
+    next_cursor: string | null;
+};
+
+/**
+ * Omitted members are unchanged. Any other member is rejected (identity members with `case_field_immutable`).
+ */
+export type UpdateCaseRequest = {
+    name?: string;
+    owner_membership_id?: string;
+    status?: 'active' | 'archived';
+    labels?: Array<string>;
+};
+
+export type CaseRevisionDto = {
+    id: string;
+    case_id: string;
+    /**
+     * `sha256:` over the canonical content descriptor (00 §7).
+     */
+    revision_hash: string;
+    commit_sha: string;
+    file_path: string;
+    framework: string;
+    language?: string | null;
+    content_sha256: string;
+    assertion_hash: string;
+    created_at: string;
+};
+
+export type CaseRevisionListResponse = {
+    items: Array<CaseRevisionDto>;
+    next_cursor: string | null;
+};
+
+/**
  * A CI binding as listed and read; never carries the challenge or its hash.
  */
 export type CiBindingView = {
@@ -703,6 +796,12 @@ export type EnvironmentSlug = string;
 export type SupportGrantId = string;
 
 export type SuiteId = string;
+
+export type CaseStatusFilter = 'active' | 'missing' | 'archived';
+
+export type CaseFrameworkFilter = string;
+
+export type CaseId = string;
 
 export type SuiteRevisionId = string;
 
@@ -3755,11 +3854,60 @@ export type ListCasesData = {
          */
         cursor?: string;
         limit?: number;
+        status?: 'active' | 'missing' | 'archived';
+        framework?: string;
     };
     url: '/projects/{p}/cases';
 };
 
 export type ListCasesErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListCasesError = ListCasesErrors[keyof ListCasesErrors];
+
+export type ListCasesResponses = {
+    /**
+     * Page of cases
+     */
+    200: CaseListResponse;
+};
+
+export type ListCasesResponse = ListCasesResponses[keyof ListCasesResponses];
+
+export type GetCaseData = {
+    body?: never;
+    path: {
+        c: string;
+    };
+    query?: never;
+    url: '/cases/{c}';
+};
+
+export type GetCaseErrors = {
     /**
      * 401 unauthenticated (00 §9.2)
      */
@@ -3782,16 +3930,138 @@ export type ListCasesErrors = {
     503: ErrorEnvelope;
 };
 
-export type ListCasesError = ListCasesErrors[keyof ListCasesErrors];
+export type GetCaseError = GetCaseErrors[keyof GetCaseErrors];
 
-export type ListCasesResponses = {
+export type GetCaseResponses = {
     /**
-     * Page of cases
+     * The case
      */
-    200: CursorList;
+    200: CaseDetailDto;
 };
 
-export type ListCasesResponse = ListCasesResponses[keyof ListCasesResponses];
+export type GetCaseResponse = GetCaseResponses[keyof GetCaseResponses];
+
+export type UpdateCaseData = {
+    body: UpdateCaseRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        c: string;
+    };
+    query?: never;
+    url: '/cases/{c}';
+};
+
+export type UpdateCaseErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateCaseError = UpdateCaseErrors[keyof UpdateCaseErrors];
+
+export type UpdateCaseResponses = {
+    /**
+     * The case in its new state
+     */
+    200: CaseDto;
+};
+
+export type UpdateCaseResponse = UpdateCaseResponses[keyof UpdateCaseResponses];
+
+export type ListCaseRevisionsData = {
+    body?: never;
+    path: {
+        c: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/cases/{c}/revisions';
+};
+
+export type ListCaseRevisionsErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListCaseRevisionsError = ListCaseRevisionsErrors[keyof ListCaseRevisionsErrors];
+
+export type ListCaseRevisionsResponses = {
+    /**
+     * Page of revisions
+     */
+    200: CaseRevisionListResponse;
+};
+
+export type ListCaseRevisionsResponse = ListCaseRevisionsResponses[keyof ListCaseRevisionsResponses];
 
 export type CreateSuiteRevisionData = {
     /**

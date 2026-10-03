@@ -48,6 +48,14 @@ internal static class SchemaConventionScan
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only audit trail (02.7.1-T1.1): a row is never updated, so it keeps created_at only — no updated_at/version and no version trigger. Its tenant key and RLS are NOT exempt."),
         new SchemaExemption(
+            "public.case_identity_source",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only identity trail (03.1.1-T1.1): a row is never updated (the guard trigger and the revoked UPDATE say so), so it keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FK and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.case_rename_history",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only move log (03.1.1-T1.1): its timestamp is `detected_at` (when the sync noticed the move), it is never updated, so there is no created_at/updated_at/version and no version trigger. Its tenant key, composite FK and RLS are NOT exempt."),
+        new SchemaExemption(
             "public.rls_probe",
             SchemaRule.VersionTrigger,
             "The tenancy template of migration 0003 predates the shared trigger function (0004, M1W3-01) and 0003 is checksum-locked, so the trigger cannot be added there; 0004/0005 are the copy source for module tables."),

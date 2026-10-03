@@ -47,10 +47,158 @@
           "OpenTelemetry.Api.ProviderBuilderExtensions": "[1.19.0, 2.0.0)"
         }
       },
+      "CommunityToolkit.HighPerformance": {
+        "type": "Transitive",
+        "resolved": "8.3.0",
+        "contentHash": "2zc0Wfr9OtEbLqm6J1Jycim/nKmYv+v12CytJ3tZGNzw7n3yjh1vNCMX0kIBaFBk3sw8g0pMR86QJGXGlArC+A=="
+      },
+      "Corvus.HighPerformance": {
+        "type": "Transitive",
+        "resolved": "1.0.4",
+        "contentHash": "ZSGaQQA3TosSth7bJd/pqMr+LipUiqT1/c0gxli1tI9Rn3JyxHvobnkaBLT42Mwmc49J5HEIogCn+B0+ee4k2w=="
+      },
+      "Corvus.Json.CodeGeneration": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "2qM0MgWmoEIjM1fZSOH3VFw3JvcRL5MpFARYXol/xpYSBGNh9blisf2i+HGFOZYOdewn0KzIaE/WGSZF5fZWUQ==",
+        "dependencies": {
+          "Corvus.Json.JsonReference": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.201909": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "SWyt0C6uAG2I0UP4lM6Wtw+mTIxEm2r6qbn+zm0t/W8xkrzyZ32T8vSBBljDGrNnxisLHUgPBe4JuXKe21MGUg==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.202012": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "MtJqHLkmvcsdd/Dgm2RC2rWhQy+SF2F/L4Uxm+kR4twZAH+18Tol7eMOz9EXwPa4Bo4XjihR9NhnVhZNnBkW2A==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.4": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "T0QZIw3jENSJliD/Ap0rjwOzYrIJEoCq48wA1NlPDbMOprpdZyXZh6lOxx6q+MpvCVedg0u8ayFIIacR3QOKIg==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.6": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "SB1KBqXdhvLUwlGK28jtFj+mUR5ctG/DCB2HLTr6ssKzxerupBKppabhqLMsDfG53qTs+lxpyyYvQThqZepwTQ==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.7": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "SbDBo9OCYoju1ytDZ9WQXGUScuPtTMRL5Qow7GwbJ08Is5FU27ekn8E0btB/CvgkWJOXvWup/qrfPB/SMFhKdw==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.CorvusVocabulary": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "xmTOsHC9Mjo//XvXB1YGBfqMZQOZsO0yM1+nZpoLyd8f6H5vWvBSSm2FxtUU1NuOjf9Xw3z3BNtiRB6aP6XGyg==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.CSharp": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "BVBLkoV9tzRrL389qodxk+ITSs3KzNS6yfK3ll8cmldSLDO/mVYNJsLb6RQ/diJjxOO+xVsDGJDnqfgXJ1LF/Q==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1",
+          "Microsoft.CodeAnalysis.CSharp": "5.3.0"
+        }
+      },
+      "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "98+UcG6FIfNQzdh7wP45Yqr/k9s8JzlZoosZLtZHLCqZS6SiqgJGddHBUyz1gmusxc3CSWys5zbC8whBBfXu+Q==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.OpenApi20": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "g+CZ7hOEcSWQC3a8ohm3RmncrRa/lzofYhr1f72FVBd8RNhtUbNooNaPLJb7kHjLT20AZwS3klg7HsYFpLF8cg==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.OpenApi30": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "FBAuTm/R3TRuKbpogmVratg1a0o+tANM/CeTs5rnC6bZqalUisUYPdmgatB52b9TzyiSlj+1md3ZgSLdnZGyYw==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.ExtendedTypes": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "0I1jJAva6RNDMd8FI5MbvddF7YenbvmLtbpHEBIywKYCscRVP6lo42/0y49KUTVQv7BD3hJcayTdOX236yK7Ew==",
+        "dependencies": {
+          "Corvus.Json.JsonReference": "5.6.1",
+          "Corvus.UriTemplates": "2.3.2",
+          "NodaTime": "3.3.1"
+        }
+      },
+      "Corvus.Json.JsonReference": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "mRWP8gkrePcdUBC244E5WQdTqJRAIrptCALQber4cmBOAo9vLal78/bPlgVJQT5wFfEARR0/MEwyneVBxQgcRQ==",
+        "dependencies": {
+          "Corvus.HighPerformance": "1.0.4"
+        }
+      },
+      "Corvus.UriTemplates": {
+        "type": "Transitive",
+        "resolved": "2.3.2",
+        "contentHash": "XAhHr0F6IOhunpIHFzG0HQSj+/X8L1lSJAExYQl9OEIZGAUZ81pbqWtxuIHL080y1u2dEmw796D7XmM44Je2gw==",
+        "dependencies": {
+          "CommunityToolkit.HighPerformance": "8.3.0",
+          "Corvus.HighPerformance": "1.0.0"
+        }
+      },
       "Microsoft.Bcl.Cryptography": {
         "type": "Transitive",
         "resolved": "10.0.2",
         "contentHash": "LG9Yll3B5aNpxv0+D47g6LiOiKBIlodhcHdQwcYzo8VeexFLGqx5ymetmA2aBRyo9cCcWsQWrFsdbsr8LvmWDw=="
+      },
+      "Microsoft.CodeAnalysis.Analyzers": {
+        "type": "Transitive",
+        "resolved": "5.3.0-2.25625.1",
+        "contentHash": "4Yhh2fnu3G+J0J1lDc8WZVgMjgbynSeTfkl5IFJMFrmiIO0sc7Tjx+f3sFVV8Sd35PrIUWfof0RWc3lAMl7Azg=="
+      },
+      "Microsoft.CodeAnalysis.Common": {
+        "type": "Transitive",
+        "resolved": "5.3.0",
+        "contentHash": "uC0qk3jzTQY7i90ehfnCqaOZpBUGJyPMiHJ3c0jOb8yaPBjWzIhVdNxPbeVzI74DB0C+YgBKPLqUkgFZzua5Mg==",
+        "dependencies": {
+          "Microsoft.CodeAnalysis.Analyzers": "5.3.0-2.25625.1"
+        }
+      },
+      "Microsoft.CodeAnalysis.CSharp": {
+        "type": "Transitive",
+        "resolved": "5.3.0",
+        "contentHash": "SQFNGQF4f7UfDXKxMzzGNMr3fjrPDIjLfmRvvVgDCw+dyvEHDaRfHuKA5q0Pr0/JW0Gcw89TxrxrS/MjwBvluQ==",
+        "dependencies": {
+          "Microsoft.CodeAnalysis.Analyzers": "5.3.0-2.25625.1",
+          "Microsoft.CodeAnalysis.Common": "[5.3.0]"
+        }
       },
       "Microsoft.EntityFrameworkCore.Abstractions": {
         "type": "Transitive",
@@ -61,6 +209,11 @@
         "type": "Transitive",
         "resolved": "10.0.12",
         "contentHash": "Kd4o2oO1A6dfKxjz5LS16QyLtpCFTUiFWwmBABETAXRsSImBdRdWeKjSgbbRhAMiV3a3/nWr95ZtzClT4uaADQ=="
+      },
+      "Microsoft.Extensions.DependencyModel": {
+        "type": "Transitive",
+        "resolved": "10.0.7",
+        "contentHash": "gCglFg/9Chu3lyJNytRuQAYM3mXQKNs1i01Cz2bc545QaHQ+LbBb4O5UCfu968Gro3ZVSOZ/ktilmPcaUSGSZA=="
       },
       "Microsoft.IdentityModel.Abstractions": {
         "type": "Transitive",
@@ -89,6 +242,11 @@
         "resolved": "2.12.0",
         "contentHash": "0xB/be+f6qYOhvQPUrVsLrau+fkowYv6gt9RIkajMhwT7sZnqtcA797yW3bS5kgSje+AQW4xZgyLnW641YFioQ=="
       },
+      "NodaTime": {
+        "type": "Transitive",
+        "resolved": "3.3.1",
+        "contentHash": "7zkTEqmakybTTuDuifpnzl5s8MkmpAdyvoqIPIO2+M2ThF8ixavPcPt1afPfFyCI+A6t3ySujgpGq/5iWc4/RQ=="
+      },
       "OpenTelemetry": {
         "type": "Transitive",
         "resolved": "1.19.1",
@@ -112,6 +270,13 @@
       },
       "evidgate.buildingblocks.canonicalization": {
         "type": "Project"
+      },
+      "evidgate.buildingblocks.contracts.validation": {
+        "type": "Project",
+        "dependencies": {
+          "Corvus.Json.Validator": "[5.6.1, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
+        }
       },
       "evidgate.buildingblocks.observability": {
         "type": "Project",
@@ -159,10 +324,17 @@
       "evidgate.modules.catalog": {
         "type": "Project",
         "dependencies": {
+          "Evidgate.BuildingBlocks.Contracts.Validation": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Catalog.Contracts": "[1.0.0, )",
-          "Mediator.Abstractions": "[3.0.2, )"
+          "FluentValidation": "[12.1.1, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )",
+          "YamlDotNet": "[18.1.0, )"
         }
       },
       "evidgate.modules.catalog.contracts": {
@@ -286,6 +458,28 @@
       "evidgate.modules.usage.contracts": {
         "type": "Project"
       },
+      "Corvus.Json.Validator": {
+        "type": "CentralTransitive",
+        "requested": "[5.6.1, )",
+        "resolved": "5.6.1",
+        "contentHash": "oBtvuhNdbQ62qTye7q5U49GSCe3oxzcW68e7t6mhXYYKYLzVfH9dmcla8dh54apy7udTo94wETMPXA84roIbwA==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1",
+          "Corvus.Json.CodeGeneration.201909": "5.6.1",
+          "Corvus.Json.CodeGeneration.202012": "5.6.1",
+          "Corvus.Json.CodeGeneration.4": "5.6.1",
+          "Corvus.Json.CodeGeneration.6": "5.6.1",
+          "Corvus.Json.CodeGeneration.7": "5.6.1",
+          "Corvus.Json.CodeGeneration.CSharp": "5.6.1",
+          "Corvus.Json.CodeGeneration.CorvusVocabulary": "5.6.1",
+          "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": "5.6.1",
+          "Corvus.Json.CodeGeneration.OpenApi20": "5.6.1",
+          "Corvus.Json.CodeGeneration.OpenApi30": "5.6.1",
+          "Corvus.Json.ExtendedTypes": "5.6.1",
+          "Microsoft.CodeAnalysis.CSharp": "5.3.0",
+          "Microsoft.Extensions.DependencyModel": "10.0.7"
+        }
+      },
       "Cronos": {
         "type": "CentralTransitive",
         "requested": "[0.13.0, )",
@@ -366,6 +560,12 @@
         "dependencies": {
           "OpenTelemetry": "1.19.1"
         }
+      },
+      "YamlDotNet": {
+        "type": "CentralTransitive",
+        "requested": "[18.1.0, )",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
       }
     },
     "net10.0/linux-arm64": {},

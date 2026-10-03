@@ -318,6 +318,8 @@ internal sealed class TenantRowFactory
             ("public.ci_binding", "provider") or ("public.ci_token_issue", "provider") => "github_actions",
             ("public.ingest_token", "prefix") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
             ("public.ingest_token", "scopes") => new[] { "run:create" },
+            ("public.test_case", "first_seen_commit") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
+            ("public.case_identity_source", "source") => "annotation",
             _ => (object?)null,
         };
 

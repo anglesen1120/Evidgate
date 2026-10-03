@@ -342,7 +342,7 @@ export function canonicalUri(schemaKey: string): string {
 }
 
 /** `contracts/` sub-directories holding JSON Schema documents, each searched recursively. */
-const schemaRoots = ['schemas', 'adapter', 'manifest'] as const;
+const schemaRoots = ['schemas', 'adapter', 'manifest', 'catalog'] as const;
 
 /** One loaded schema file: its path (for the duplicate-key message) and raw text. */
 interface SchemaDocument {

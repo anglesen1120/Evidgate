@@ -1,0 +1,5 @@
+{
+  "schema": "sidecar.v1",
+  "valid": false,
+  "errors": [{ "index": null, "path": "/cases/0/extra", "reason": "additional_properties" }]
+}

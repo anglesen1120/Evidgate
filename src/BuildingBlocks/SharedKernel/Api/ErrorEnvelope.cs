@@ -143,6 +143,24 @@ public static class ApiErrorCode
     /// <summary>The request body exceeds the endpoint's limit (00 §9.2: 413 too large).</summary>
     public const string PayloadTooLarge = "payload_too_large";
 
+    /// <summary>422: a PATCH named an identity field of a test case (<c>annotation_id</c>, <c>file_path</c>, …) that never changes (03.1.1 §5).</summary>
+    public const string CaseFieldImmutable = "case_field_immutable";
+
+    /// <summary>422: a suite member's case revision belongs to another project or does not exist (03.2.1 AC2).</summary>
+    public const string CrossProjectMember = "cross_project_member";
+
+    /// <summary>422: the suite's dependency edges form a cycle; the path is in <c>details</c> (03.2.1 AC3).</summary>
+    public const string DependencyCycle = "dependency_cycle";
+
+    /// <summary>422: a variant's params or the environment requirements carry a secret-shaped key or value (03.2.1 AC4, AC8).</summary>
+    public const string VariantNotSecretFree = "variant_not_secret_free";
+
+    /// <summary>409: the suite revision is published (referenced by a run) and cannot be edited (03.2.1 AC6).</summary>
+    public const string RevisionFrozen = "revision_frozen";
+
+    /// <summary>409: the suite slug is already used in this project (03.2.1 §5).</summary>
+    public const string SuiteSlugTaken = "suite_slug_taken";
+
     /// <summary>An unexpected failure; carries no internal detail (00 §5.5 C8).</summary>
     public const string InternalError = "internal_error";
 

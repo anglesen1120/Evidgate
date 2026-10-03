@@ -2300,13 +2300,19 @@ paths:
     get:
       operationId: listCases
       tags: [catalog]
-      summary: Case catalog read (03)
+      summary: Cursor page of a project's test cases (03.1.1)
+      description: >-
+        Keyset-ordered on `(created_at, id)` per 00 §9.1 and served by `test_case_list_idx`.
+        Without `status` archived cases are left out. A project of another org is the same 404
+        as a missing one; a credential scoped to another project is 403 `project_scope_mismatch`.
       x-permission: case:read
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/CaseStatusFilter'
+        - $ref: '#/components/parameters/CaseFrameworkFilter'
       responses:
         '200':
           description: Page of cases
@@ -2316,13 +2322,133 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CursorList'
+                $ref: '#/components/schemas/CaseListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cases/{c}:
+    get:
+      operationId: getCase
+      tags: [catalog]
+      summary: One test case with its identity trail (03.1.1)
+      description: >-
+        Another org's case id is the same 404 as a missing one. The trail lists where the id came
+        from (annotation or sidecar) and every detected move, newest first (at most 50 of each).
+      x-permission: case:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: The case
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseDetailDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      operationId: updateCase
+      tags: [catalog]
+      summary: Change a case's name, owner, status or labels under If-Match (03.1.1)
+      description: >-
+        Omitted members are unchanged. An identity member (`annotation_id`, `file_path`,
+        `first_seen_commit`, …) is 422 `case_field_immutable`; a stale `If-Match` is 412 with the
+        current `version`; `active | missing → archived` and `archived → active` are the only status
+        moves (409 `invalid_transition`).
+      x-permission: case:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCaseRequest'
+      responses:
+        '200':
+          description: The case in its new state
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cases/{c}/revisions:
+    get:
+      operationId: listCaseRevisions
+      tags: [catalog]
+      summary: Stored versions of a case, newest first (03.1.3)
+      description: Empty until the first sync appends a revision.
+      x-permission: case:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of revisions
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseRevisionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -3185,6 +3311,26 @@ components:
       schema:
         type: string
         format: uuid
+    CaseStatusFilter:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [active, missing, archived]
+    CaseFrameworkFilter:
+      name: framework
+      in: query
+      required: false
+      schema:
+        type: string
+    CaseId:
+      name: c
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     SuiteRevisionId:
       name: r
       in: path
@@ -3636,6 +3782,196 @@ components:
         next_cursor:
           type: [string, 'null']
           description: Opaque cursor of the next page, or null on the last page.
+    CaseDto:
+      type: object
+      description: A test case (03.1.1). Its identity (`annotation_id`, `first_seen_commit`) never changes.
+      required:
+        [
+          id,
+          org_id,
+          project_id,
+          annotation_id,
+          name,
+          framework,
+          status,
+          labels,
+          first_seen_commit,
+          created_at,
+          updated_at,
+          version,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        annotation_id:
+          type: string
+          format: uuid
+          description: The durable `evidgate.id`; the case's identity inside the project.
+        name:
+          type: string
+          maxLength: 512
+        framework:
+          type: string
+          maxLength: 64
+        language:
+          type: [string, 'null']
+        file_path:
+          type: [string, 'null']
+          description: Current repository path; moves with a rename.
+        status:
+          type: string
+          enum: [active, missing, archived]
+        owner_membership_id:
+          type: [string, 'null']
+          format: uuid
+        labels:
+          type: array
+          maxItems: 32
+          items:
+            type: string
+            maxLength: 64
+        first_seen_commit:
+          type: string
+        last_seen_commit:
+          type: [string, 'null']
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          description: Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+    CaseIdentitySourceDto:
+      type: object
+      required: [source, raw_key, commit_sha, created_at]
+      properties:
+        source:
+          type: string
+          enum: [annotation, sidecar, imported]
+        raw_key:
+          type: string
+        commit_sha:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    CaseRenameDto:
+      type: object
+      required: [from_path, to_path, commit_sha, detected_at]
+      properties:
+        from_path:
+          type: string
+        to_path:
+          type: string
+        commit_sha:
+          type: string
+        detected_at:
+          type: string
+          format: date-time
+    CaseDetailDto:
+      type: object
+      description: A case plus its identity trail, so a duplicate-id mistake is diagnosable.
+      required: [case, identity_sources, renames]
+      properties:
+        case:
+          $ref: '#/components/schemas/CaseDto'
+        identity_sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseIdentitySourceDto'
+        renames:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseRenameDto'
+    CaseListResponse:
+      type: object
+      description: 00 §9.1 cursor page of `CaseDto`, keyset-ordered on `(created_at, id)`.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseDto'
+        next_cursor:
+          type: [string, 'null']
+    UpdateCaseRequest:
+      type: object
+      description: Omitted members are unchanged. Any other member is rejected (identity members with `case_field_immutable`).
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 512
+        owner_membership_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, archived]
+        labels:
+          type: array
+          maxItems: 32
+          items:
+            type: string
+            maxLength: 64
+    CaseRevisionDto:
+      type: object
+      required:
+        [
+          id,
+          case_id,
+          revision_hash,
+          commit_sha,
+          file_path,
+          framework,
+          content_sha256,
+          assertion_hash,
+          created_at,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        case_id:
+          type: string
+          format: uuid
+        revision_hash:
+          type: string
+          description: '`sha256:` over the canonical content descriptor (00 §7).'
+        commit_sha:
+          type: string
+        file_path:
+          type: string
+        framework:
+          type: string
+        language:
+          type: [string, 'null']
+        content_sha256:
+          type: string
+        assertion_hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    CaseRevisionListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseRevisionDto'
+        next_cursor:
+          type: [string, 'null']
     CiBindingView:
       type: object
       description: A CI binding as listed and read; never carries the challenge or its hash.
