@@ -86,15 +86,15 @@ internal sealed class ExportAuditCommandHandler(ITenantDb db, ITenantScopeAccess
                 },
                 cancellationToken).ConfigureAwait(false);
 
-            rows.AddRange(page.Select(row => row.ToDto()));
-
-            if (rows.Count > MaxRows)
+            if (rows.Count + page.Count > MaxRows)
             {
                 return Result.Failure<AuditExportFile>(Error.Unprocessable(
                     "export_range_too_large",
                     $"the range holds more than {MaxRows} events; narrow it",
                     [new ErrorDetail("from", "too_many_rows")]));
             }
+
+            rows.AddRange(page.Select(row => row.ToDto()));
 
             if (page.Count < PageSize)
             {

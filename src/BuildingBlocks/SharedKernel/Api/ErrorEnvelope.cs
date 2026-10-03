@@ -55,6 +55,9 @@ public static class ApiErrorCode
     /// <summary>No authenticated principal could be resolved (00 §9.2: 401 unauthenticated).</summary>
     public const string Unauthenticated = "unauthenticated";
 
+    /// <summary>503: a dependency or lock is busy; the request is retryable (00 §9.2, always with <c>Retry-After</c>).</summary>
+    public const string Unavailable = "unavailable";
+
     /// <summary>The principal does not hold the operation's permission (00 §9.2: 403 forbidden).</summary>
     public const string Forbidden = "forbidden";
 

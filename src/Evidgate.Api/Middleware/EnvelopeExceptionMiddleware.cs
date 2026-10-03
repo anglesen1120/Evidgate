@@ -63,6 +63,15 @@ public sealed partial class EnvelopeExceptionMiddleware
                 ApiErrorCode.Unauthenticated,
                 "the request is not authenticated");
         }
+        catch (Evidgate.BuildingBlocks.Persistence.Audit.AuditBusyException) when (!context.Response.HasStarted)
+        {
+            context.Response.Headers.RetryAfter = "1";
+            await ErrorEnvelopeWriter.WriteAsync(
+                context,
+                StatusCodes.Status503ServiceUnavailable,
+                ApiErrorCode.Unavailable,
+                "the audit chain is busy; retry");
+        }
         catch (Exception exception) when (!context.Response.HasStarted)
         {
             LogUnhandled(exception);

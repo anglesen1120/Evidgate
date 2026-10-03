@@ -19,8 +19,8 @@
 -- share one implementation.
 --
 -- Deliberately absent: `updated_at` / `version` (a row is never updated) and any
--- `TO evidgate_operator` policy (02.8.1's grant-gated form, TL T76). The owner may only
--- SELECT and INSERT: an expand/contract backfill never rewrites audit history.
+-- `TO evidgate_operator` policy (02.8.1's grant-gated form, TL T76). The owner has only
+-- SELECT and INSERT policies: an expand/contract backfill never rewrites audit history.
 
 create table if not exists public.audit_log (
   id uuid not null,
@@ -78,6 +78,49 @@ create policy audit_log_owner_insert on public.audit_log
   to evidgate_owner
   with check (true);
 
+-- Known limit (OI-02-32): TRUNCATE ignores row level security and the owner keeps it, because
+-- the shared test harness resets every table as the owner. The owner is the migration role,
+-- not a runtime role; detecting tail loss needs an anchor outside this table.
+
+-- Even with INSERT, the app role can only extend the chain honestly: the next seq, linked to
+-- the previous row's hash, never earlier in time than it. (It could still compute a valid
+-- unkeyed hash for forged CONTENT; keying the hash is OI-02-32.) Runs as the invoker, so it
+-- reads the tip under the caller's own tenant policy.
+create or replace function evidgate.audit_log_chain_guard() returns trigger
+  language plpgsql
+  set search_path = ''
+  as $$
+  declare
+    tip_seq bigint;
+    tip_hash bytea;
+    tip_at timestamptz;
+  begin
+    select a.seq, a.entry_hash, a.created_at
+      into tip_seq, tip_hash, tip_at
+      from public.audit_log a
+     where a.org_id = new.org_id
+     order by a.seq desc
+     limit 1;
+
+    if tip_seq is null then
+      if new.seq <> 1 or new.prev_hash <> decode(repeat('00', 32), 'hex') then
+        raise exception 'audit_log: the first row of an org must be seq 1 with the genesis prev_hash'
+          using errcode = '23514';
+      end if;
+    elsif new.seq <> tip_seq + 1 or new.prev_hash <> tip_hash or new.created_at < tip_at then
+      raise exception 'audit_log: a row must extend the chain (seq %, prev_hash of the tip, created_at not earlier)', tip_seq + 1
+        using errcode = '23514';
+    end if;
+
+    return new;
+  end
+  $$;
+
+drop trigger if exists audit_log_chain_guard on public.audit_log;
+create trigger audit_log_chain_guard
+  before insert on public.audit_log
+  for each row execute function evidgate.audit_log_chain_guard();
+
 revoke update, delete, truncate on public.audit_log from evidgate_app;
 revoke all on public.audit_log from evidgate_worker_sched;
 grant select on public.audit_log to evidgate_operator;
@@ -92,11 +135,11 @@ create or replace function evidgate.audit_org_ids(p_after uuid, p_limit integer)
   security definer
   set search_path = ''
   as $$
-    select a.org_id
-      from public.audit_log a
-     where a.org_id > coalesce(p_after, '00000000-0000-0000-0000-000000000000'::uuid)
-     group by a.org_id
-     order by a.org_id
+    select o.id
+      from public.organization o
+     where o.id > coalesce(p_after, '00000000-0000-0000-0000-000000000000'::uuid)
+       and exists (select 1 from public.audit_log a where a.org_id = o.id)
+     order by o.id
      limit least(greatest(coalesce(p_limit, 100), 1), 1000)
   $$;
 

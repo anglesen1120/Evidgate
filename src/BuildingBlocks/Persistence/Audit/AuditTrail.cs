@@ -122,8 +122,18 @@ public sealed class AuditTrail : IAuditTrail
         }
 
         // The lock comes after every business statement and before the chain read: it is held
-        // from here to the commit, i.e. for about the length of these inserts (T8, P5).
-        await db.ExecuteAsync(AuditSql.AdvisoryLock, new { org = orgId.ToString("D") }, cancellationToken).ConfigureAwait(false);
+        // from here to the commit, i.e. for about the length of these inserts (T8, P5). A bounded
+        // wait keeps a burst on one org from parking every pooled connection behind the lock.
+        await db.ExecuteAsync(AuditSql.LockTimeout, null, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            await db.ExecuteAsync(AuditSql.AdvisoryLock, new { org = orgId.ToString("D") }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Npgsql.PostgresException exception) when (exception.SqlState == Npgsql.PostgresErrorCodes.LockNotAvailable)
+        {
+            throw new AuditBusyException(exception);
+        }
 
         var tip = await db.QuerySingleOrDefaultAsync<ChainTip>(AuditSql.ChainTip, new { org_id = orgId }, cancellationToken)
             .ConfigureAwait(false);
@@ -131,9 +141,19 @@ public sealed class AuditTrail : IAuditTrail
         var seq = tip?.Seq ?? 0;
         var prev = tip?.EntryHash ?? AuditHashing.Genesis;
 
+        // created_at never runs backwards against seq, even across API nodes with skewed clocks.
+        var floor = tip?.CreatedAt ?? DateTimeOffset.MinValue;
+
         foreach (var entry in unit.Entries)
         {
             seq++;
+            var createdAt = AuditHashing.Truncate(DateTimeOffset.UtcNow);
+            if (createdAt < floor)
+            {
+                createdAt = floor;
+            }
+
+            floor = createdAt;
             var row = new AuditRow(
                 Guid.CreateVersion7(),
                 orgId,
@@ -150,7 +170,7 @@ public sealed class AuditTrail : IAuditTrail
                 entry.Subject?.Metadata,
                 prev,
                 [],
-                AuditHashing.Truncate(DateTimeOffset.UtcNow));
+                createdAt);
             var entryHash = AuditHashing.EntryHash(prev, row);
 
             await db.ExecuteAsync(
@@ -185,7 +205,7 @@ public sealed class AuditTrail : IAuditTrail
         return written;
     }
 
-    private sealed record ChainTip(long Seq, byte[] EntryHash);
+    private sealed record ChainTip(long Seq, byte[] EntryHash, DateTimeOffset CreatedAt);
 
     private sealed class Unit
     {
@@ -220,10 +240,12 @@ public sealed class AuditTrail : IAuditTrail
 /// <summary>SQL of the audit writer, verifier and read API. Parameters only; no dynamic SQL (00 §5.7 S1).</summary>
 internal static class AuditSql
 {
+    internal const string LockTimeout = "select set_config('lock_timeout', '2000', true)";
+
     internal const string AdvisoryLock = "select pg_advisory_xact_lock(hashtext('audit:' || @org))";
 
     internal const string ChainTip =
-        "select seq as Seq, entry_hash as EntryHash from public.audit_log where org_id = @org_id order by seq desc limit 1";
+        "select seq as Seq, entry_hash as EntryHash, created_at as CreatedAt from public.audit_log where org_id = @org_id order by seq desc limit 1";
 
     internal const string Insert =
         """
@@ -245,3 +267,7 @@ internal static class AuditSql
          limit @limit
         """;
 }
+
+/// <summary>The org's audit lock could not be taken in time; the request is retryable (503).</summary>
+public sealed class AuditBusyException(Exception inner)
+    : Exception("the audit chain of this organization is busy; retry", inner);

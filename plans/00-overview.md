@@ -318,7 +318,7 @@ Draft: `draft → dry_running → dry_passed | dry_failed → pr_open → merged
 { "error": { "code": "manifest_invalid", "message": "…", "request_id": "…", "retryable": false, "details": [ { "index": 3, "path": "/events/3/sequence", "reason": "duplicate_different_payload" } ] } }
 ```
 
-401 unauthenticated · 403 forbidden · 404 not found (also for other-tenant ids) · 409 conflict · 412 precondition failed · 413 too large · 422 schema/manifest invalid · 429 with `Retry-After` (`rate_limited` for bursts, `quota_exceeded` for a tenant/project limit; never a silent drop) · 503 with `Retry-After`. Registry conflicts (02.1.1): 409 `slug_taken` (slug key), 409 `org_suspended` (mutation of a suspended org's registry). Details never contain secrets. Clients use timeout + jittered backoff and never blindly retry side-effecting calls without the same idempotency key.
+401 unauthenticated · 403 forbidden · 404 not found (also for other-tenant ids) · 409 conflict · 412 precondition failed · 413 too large · 422 schema/manifest invalid · 429 with `Retry-After` (`rate_limited` for bursts, `quota_exceeded` for a tenant/project limit; never a silent drop) · 503 `unavailable` with `Retry-After`. Registry conflicts (02.1.1): 409 `slug_taken` (slug key), 409 `org_suspended` (mutation of a suspended org's registry). Details never contain secrets. Clients use timeout + jittered backoff and never blindly retry side-effecting calls without the same idempotency key.
 
 ### 9.3 Core endpoints (V1 unless tagged)
 

@@ -201,6 +201,41 @@ public sealed class AuditTrailTests
     }
 
     [Fact]
+    public async Task AppRole_CanOnlyExtendTheChainHonestly()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        using var client = api.CreateClient();
+        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), "acme");
+
+        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+
+        foreach (var (seq, prev) in new[] { (99, "repeat('00', 32)"), (2, "repeat('ab', 32)"), (1, "repeat('00', 32)") })
+        {
+            await using var transaction = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await using (var set = new NpgsqlCommand("select set_config('evidgate.org_id', @org, true)", connection, transaction))
+            {
+                set.Parameters.AddWithValue("org", org.ToString("D"));
+                await set.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            }
+
+            await using var forge = new NpgsqlCommand(
+                $"""
+                insert into public.audit_log (id, org_id, seq, actor_type, actor_id, action, prev_hash, entry_hash)
+                values (gen_random_uuid(), '{org}', {seq}, 'user', 'forged', 'forged.action', decode({prev}, 'hex'), decode(repeat('ff', 32), 'hex'))
+                """,
+                connection,
+                transaction);
+            var failure = await Should.ThrowAsync<PostgresException>(() => forge.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+            failure.SqlState.ShouldBeOneOf("23514", "23505");
+            await transaction.RollbackAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await RowsAsync(database, org)).Count.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task OtherOrgsRows_AreInvisible()
     {
         var database = await _fixture.CreateDatabaseAsync();

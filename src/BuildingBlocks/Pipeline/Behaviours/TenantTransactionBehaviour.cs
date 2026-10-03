@@ -54,7 +54,7 @@ public sealed class TenantTransactionBehaviour<TMessage, TResponse>(
             .BeginAsync(context.OrgId, context.ProjectId, readOnly, cancellationToken)
             .ConfigureAwait(false);
 
-        using var auditUnit = audit.BeginUnit();
+        using var auditUnit = readOnly ? null : audit.BeginUnit();
 
         var response = await next(message, cancellationToken).ConfigureAwait(false);
 

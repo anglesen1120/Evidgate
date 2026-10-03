@@ -4,11 +4,11 @@
 
 | File | Areas | Rows | Stage A blockers |
 |---|---|---|---|
-| [`01-core-identity.md`](01-core-identity.md) | DECISIONS, RECOMMENDATIONS, 00, 01, 02 | 58 | 7 |
+| [`01-core-identity.md`](01-core-identity.md) | DECISIONS, RECOMMENDATIONS, 00, 01, 02 | 59 | 7 |
 | [`02-catalog-ingest-runs-evidence.md`](02-catalog-ingest-runs-evidence.md) | 03, 04, 05, 06 | 56 | 16 |
 | [`03-policy-healing-web.md`](03-policy-healing-web.md) | 07, 08, 09 | 58 | 2 |
 | [`04-ops-security-commercial.md`](04-ops-security-commercial.md) | 10, 11, 12, O1 pilot profile (includes the **counsel brief**) | 51 | 3 |
-| **Total** | | **223** | **28** |
+| **Total** | | **224** | **28** |
 
 ## 1. How to use it
 
