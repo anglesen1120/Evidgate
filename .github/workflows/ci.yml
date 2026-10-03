@@ -95,7 +95,7 @@ jobs:
       # Contract drift gate (AC1/§9, 01.3.2-T1.3): regenerates packages/sdk and
       # fails on any diff — the spec is the only thing humans edit.
       - name: 'Contract drift gate'
-        run: ./scripts/verify.sh --stage check-codegen-drift --stage check-permissions-drift
+        run: ./scripts/verify.sh --stage check-codegen-drift --stage check-permissions-drift --stage check-rls
       # Web build (AC1): `apps/web` gains a build script in 09.1.1; until then
       # --if-present keeps this step a no-op instead of a failure.
       - name: 'Web build — activates with apps/web build script (09.1.1)'

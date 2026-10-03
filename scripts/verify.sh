@@ -38,6 +38,7 @@ ALL_STAGES=(
   check-action-pins
   check-codegen-drift
   check-permissions-drift
+  check-rls
   image-pins
   images
   licence-scan
@@ -175,6 +176,13 @@ run_stage() {
     # 02.2.1-T1: Permissions.g.cs is regenerated from contracts/permissions.json.
     stage "check-permissions-drift"
     scripts/check-permissions-drift.sh
+    ;;
+  check-rls)
+    # 02.6.1-T2: every migrated table is tenant-isolated or on the exception list,
+    # every SECURITY DEFINER function is hardened; the lint's negative fixtures run too.
+    stage "check-rls"
+    python3 scripts/check-rls.py
+    python3 -m unittest scripts/tests/test_check_rls.py
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three

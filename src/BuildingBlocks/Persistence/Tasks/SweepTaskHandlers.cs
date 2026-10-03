@@ -21,6 +21,9 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 /// </remarks>
 public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<IdempotencyPurgePayload>
 {
+    /// <inheritdoc />
+    public bool RequiresTenant => false;
+
     /// <summary>The one call this handler makes, as the frozen 01.5.1-T6.1 signature.</summary>
     internal const string PurgeFunctionCall = "select evidgate.purge_expired_idempotency(@limit)";
 
@@ -100,6 +103,9 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
 /// </remarks>
 public sealed partial class TaskSweepTaskHandler : ITaskHandler<TaskSweepPayload>
 {
+    /// <inheritdoc />
+    public bool RequiresTenant => false;
+
     /// <summary>
     /// The retention delete. `state` and `created_at` are the predicate of
     /// `task_terminal_idx`, and the bounded `for update skip locked` batch keeps the

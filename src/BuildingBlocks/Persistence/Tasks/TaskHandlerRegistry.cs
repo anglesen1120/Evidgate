@@ -23,6 +23,9 @@ public sealed class TaskHandlerAdapter<TPayload> : ITaskHandlerInvoker
     public string TaskType => _handler.TaskType;
 
     /// <inheritdoc />
+    public bool RequiresTenant => _handler.RequiresTenant;
+
+    /// <inheritdoc />
     public ValueTask InvokeAsync(string payloadJson, ITenantScope? scope, CancellationToken cancellationToken) =>
         _handler.HandleAsync(TaskPayloadSerializer.Deserialize<TPayload>(payloadJson), scope, cancellationToken);
 }

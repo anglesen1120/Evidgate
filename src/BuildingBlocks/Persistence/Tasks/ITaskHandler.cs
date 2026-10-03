@@ -12,6 +12,15 @@ public interface ITaskHandler
 {
     /// <summary>The <c>task_type</c> this handler consumes; unique per process.</summary>
     string TaskType { get; }
+
+    /// <summary>
+    /// Whether the handler works on one tenant's rows. The default is true, so a
+    /// handler is tenant-bound unless it says otherwise: a claimed row without an
+    /// <c>org_id</c> is then dead-lettered as <c>missing_tenant</c> instead of being
+    /// run unscoped (02.6.2 AC3). Only the mechanism's own cross-org sweeps override
+    /// this with false.
+    /// </summary>
+    bool RequiresTenant => true;
 }
 
 /// <summary>
@@ -64,6 +73,9 @@ public interface ITaskHandlerInvoker
 {
     /// <summary>The <c>task_type</c> this invoker dispatches.</summary>
     string TaskType { get; }
+
+    /// <summary>Whether the wrapped handler needs a tenant scope (see <see cref="ITaskHandler.RequiresTenant"/>).</summary>
+    bool RequiresTenant { get; }
 
     /// <summary>Binds <paramref name="payloadJson"/> to the handler's payload type and runs it.</summary>
     ValueTask InvokeAsync(string payloadJson, ITenantScope? scope, CancellationToken cancellationToken);

@@ -1006,6 +1006,40 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
   /orgs:
+    get:
+      operationId: listMyOrganizations
+      tags: [identity]
+      summary: The organizations the caller is an active member of (02)
+      description: >-
+        A pre-tenant route (02.6.2 §3): it lists the signed-in user's orgs across tenants
+        through `evidgate_resolve.member_organizations`, never a membership join under
+        RLS. The set is bounded (at most 200 orgs per user, ordered by id), so the body
+        carries no cursor. A service token or an operator is 403.
+      x-permission: authenticated
+      x-auth: user_session
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: The caller's organizations (02.6.1-T3)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     post:
       operationId: createOrganization
       tags: [identity]
@@ -3286,6 +3320,30 @@ components:
         next_cursor:
           type: [string, 'null']
           description: Opaque cursor of the next page, or null on the last page.
+    OrganizationSummaryDto:
+      type: object
+      description: One organization in `GET /v1/orgs`.
+      required: [id, slug, name, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended]
+    OrganizationListResponse:
+      type: object
+      description: Body of `GET /v1/orgs`; bounded by the resolver, so no cursor.
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationSummaryDto'
     CreateOrganizationRequest:
       type: object
       description: Body of `POST /v1/orgs` (02.1.1 §5).

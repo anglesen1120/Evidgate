@@ -1,4 +1,5 @@
 using System.Globalization;
+using Evidgate.BuildingBlocks.Persistence.Resolve;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -49,7 +50,13 @@ public static class TenancyEndpoints
         group.MapPost("/orgs", CreateOrganizationAsync)
             .Produces<OrganizationDto>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status200OK)
+            .WithMetadata(TenantlessEndpointMetadata.Instance)
             .WithSummary("Create an organization; the caller becomes tenant_admin and release_approver (02)");
+
+        group.MapGet("/orgs", ListMyOrganizationsAsync)
+            .Produces<OrganizationListResponse>(StatusCodes.Status200OK)
+            .WithMetadata(TenantlessEndpointMetadata.Instance)
+            .WithSummary("The organizations the caller is an active member of (02)");
 
         group.MapGet("/orgs/{o}", GetOrganizationAsync)
             .Produces<OrganizationDto>(StatusCodes.Status200OK)
@@ -106,6 +113,33 @@ public static class TenancyEndpoints
             cancellationToken).ConfigureAwait(false);
 
         return WithETag(context, result, organization => organization.Version);
+    }
+
+    private static async Task<Result<OrganizationListResponse>> ListMyOrganizationsAsync(
+        HttpContext context,
+        IRequestPrincipalAccessor principals,
+        IMemberOrgResolver resolver,
+        CancellationToken cancellationToken)
+    {
+        // A pre-tenant route (02.6.2 §3): there is no tenant scope, so the list comes
+        // from the evidgate_resolve function keyed by the authenticated user, never from
+        // a membership join under RLS (which could only ever show the current org).
+        if (principals.Current is not { Kind: PrincipalKind.Member, UserId: { } userId })
+        {
+            return Result.Failure<OrganizationListResponse>(principals.Current is null
+                ? new Error(ApiErrorCode.Unauthenticated, "sign in to list your organizations", StatusCodes.Status401Unauthorized)
+                : Error.Forbidden("only a signed-in user has organizations"));
+        }
+
+        if (LimitError(context.Request.Query["limit"], out var limit) is { } error)
+        {
+            return Result.Failure<OrganizationListResponse>(error);
+        }
+
+        var rows = await resolver.MemberOrganizationsAsync(userId, limit, cancellationToken).ConfigureAwait(false);
+
+        return Result.Success(new OrganizationListResponse(
+            [.. rows.Select(row => new OrganizationSummaryDto(row.OrgId, row.Slug, row.Name, row.Status))]));
     }
 
     private static async Task<Result<OrganizationDto>> GetOrganizationAsync(

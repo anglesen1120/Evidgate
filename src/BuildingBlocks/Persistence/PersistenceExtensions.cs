@@ -66,6 +66,7 @@ public static class PersistenceExtensions
             return NpgsqlDataSource.Create(builder);
         });
 
+        services.AddSingleton<Resolve.IMemberOrgResolver, Resolve.NpgsqlMemberOrgResolver>();
         services.AddSingleton<ReadinessProbe>();
 
         // 02.6.1-T1.4 (AC5): the boot-time isolation self-check. The exception list

@@ -73,6 +73,9 @@ public sealed class RecordingTaskHandler : ITaskHandler<RecordingPayload>
     public string TaskType => TaskHandlerTypes.Recording;
 
     /// <inheritdoc />
+    public bool RequiresTenant => false;
+
+    /// <inheritdoc />
     public ValueTask HandleAsync(RecordingPayload payload, ITenantScope? scope, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(payload);

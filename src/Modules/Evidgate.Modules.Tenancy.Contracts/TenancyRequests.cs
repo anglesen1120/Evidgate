@@ -41,3 +41,17 @@ public sealed record UpdateProjectRequest(string? Name, string? Slug, int? Reten
 /// <param name="Items">The page, ordered by <c>(created_at, id)</c>.</param>
 /// <param name="NextCursor">Opaque cursor of the next page, or null on the last page.</param>
 public sealed record ProjectListResponse(IReadOnlyList<ProjectDto> Items, string? NextCursor);
+
+/// <summary>One organization in <c>GET /v1/orgs</c>: enough to pick an org before any tenant is selected.</summary>
+/// <param name="Id">The org id.</param>
+/// <param name="Slug">The org's slug.</param>
+/// <param name="Name">The org's display name.</param>
+/// <param name="Status">The org's status (<c>active</c> or <c>suspended</c>).</param>
+public sealed record OrganizationSummaryDto(Guid Id, string Slug, string Name, string Status);
+
+/// <summary>
+/// Body of <c>GET /v1/orgs</c>. The set is bounded by the resolver (at most 200 orgs per
+/// user, ordered by id), so it carries no cursor.
+/// </summary>
+/// <param name="Items">The caller's orgs.</param>
+public sealed record OrganizationListResponse(IReadOnlyList<OrganizationSummaryDto> Items);

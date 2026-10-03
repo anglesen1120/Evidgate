@@ -221,6 +221,34 @@ public sealed class EvaluatorTests : CatalogueTestBase
     }
 
     /// <summary>
+    /// 02.6.2 AC6 / W7-SEC-06: a service token never holds a staff-only code. A claim of
+    /// <c>billing:*</c> or <c>support:*</c> is denied, and it invalidates the token's
+    /// other claims too (a malformed token holds nothing), on both the decision path and
+    /// the permission-set path.
+    /// </summary>
+    [Fact]
+    public async Task ServicePrincipal_StaffOnlyCode_Denied()
+    {
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+
+        await using var scope = await Fixture.BeginTenantScopeAsync(org, cancellationToken: Token);
+        var evaluator = new PermissionEvaluator(Fixture.Db);
+
+        foreach (var staffCode in new[] { Permissions.Billing.Read, Permissions.Billing.Write, Permissions.Support.Grant })
+        {
+            var token = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create, staffCode]);
+
+            (await EvaluateAsync(evaluator, org, token, staffCode)).DenyCode.ShouldBe(ApiErrorCode.Forbidden);
+            (await EvaluateAsync(evaluator, org, token, Permissions.Run.Create)).DenyCode.ShouldBe(ApiErrorCode.Forbidden);
+            (await evaluator.ResolveAsync(org, token, Token)).ShouldBeEmpty();
+        }
+
+        // The tenant-facing codes of the service roles are unaffected.
+        var producer = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create]);
+        (await EvaluateAsync(evaluator, org, producer, Permissions.Run.Create)).IsGranted.ShouldBeTrue();
+    }
+
+    /// <summary>
     /// 00 §9.1 / FR-02-2: the project dimension is evaluated against the token's
     /// claim, and a request outside it is <c>project_scope_mismatch</c>.
     /// </summary>

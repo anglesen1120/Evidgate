@@ -224,6 +224,23 @@ export type ProjectListResponse = {
 };
 
 /**
+ * One organization in `GET /v1/orgs`.
+ */
+export type OrganizationSummaryDto = {
+    id: string;
+    slug: string;
+    name: string;
+    status: 'active' | 'suspended';
+};
+
+/**
+ * Body of `GET /v1/orgs`; bounded by the resolver, so no cursor.
+ */
+export type OrganizationListResponse = {
+    items: Array<OrganizationSummaryDto>;
+};
+
+/**
  * Body of `POST /v1/orgs` (02.1.1 §5).
  */
 export type CreateOrganizationRequest = {
@@ -1718,6 +1735,49 @@ export type GetArtifactDownloadUrlResponses = {
 };
 
 export type GetArtifactDownloadUrlResponse = GetArtifactDownloadUrlResponses[keyof GetArtifactDownloadUrlResponses];
+
+export type ListMyOrganizationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+    };
+    url: '/orgs';
+};
+
+export type ListMyOrganizationsErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListMyOrganizationsError = ListMyOrganizationsErrors[keyof ListMyOrganizationsErrors];
+
+export type ListMyOrganizationsResponses = {
+    /**
+     * The caller's organizations (02.6.1-T3)
+     */
+    200: OrganizationListResponse;
+};
+
+export type ListMyOrganizationsResponse = ListMyOrganizationsResponses[keyof ListMyOrganizationsResponses];
 
 export type CreateOrganizationData = {
     body: CreateOrganizationRequest;

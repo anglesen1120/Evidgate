@@ -16,6 +16,10 @@ internal sealed record ApiAnswer(HttpStatusCode Status, JsonElement Body, HttpRe
     public string? ErrorCode =>
         Body.TryGetProperty("error", out var error) ? error.GetProperty("code").GetString() : null;
 
+    /// <summary>The 00 §9.2 <c>error.message</c>, or null on success.</summary>
+    public string? ErrorMessage =>
+        Body.TryGetProperty("error", out var error) ? error.GetProperty("message").GetString() : null;
+
     /// <summary>The response <c>ETag</c> value, quotes included.</summary>
     public string? ETag => Headers.ETag?.Tag;
 

@@ -129,7 +129,11 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
             return PermissionDecision.Denied(ApiErrorCode.ProjectScopeMismatch);
         }
 
-        var claimsAreCatalogueCodes = principal.ClaimedPermissions.All(Permissions.IsKnown);
+        // W7-SEC-06 / 02.6.2 AC6: a service token is bound to the service roles
+        // (ci_producer, agent), so a claim that names a staff-only code makes the token
+        // malformed — it holds nothing, not the rest of its claims.
+        var claimsAreCatalogueCodes = principal.ClaimedPermissions.All(code =>
+            Permissions.IsKnown(code) && !IsStaffOnly(code));
 
         return claimsAreCatalogueCodes
             && Permissions.IsKnown(permission)
@@ -145,6 +149,15 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
     /// named, so the deferral is visible in the code rather than an implicit
     /// fall-through (02.2.1 §5, and the feature plan's recorded deferral).
     /// </summary>
+    /// <summary>
+    /// The staff-only families (<c>billing:*</c>, <c>support:*</c>): held by
+    /// <c>platform_operator</c> and <c>billing_operator</c> and never by a tenant
+    /// credential, whatever a token claims.
+    /// </summary>
+    internal static bool IsStaffOnly(string code) =>
+        code.StartsWith("billing:", StringComparison.Ordinal)
+        || code.StartsWith("support:", StringComparison.Ordinal);
+
     private static PermissionDecision OperatorWithoutSupportGrant() =>
         PermissionDecision.Denied(ApiErrorCode.Forbidden);
 
@@ -185,7 +198,7 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
             case PrincipalKind.ServicePrincipal:
                 // Same bound as Service(): one claim outside the catalogue makes the
                 // token malformed, so it holds nothing rather than the rest of its claims.
-                return principal.ClaimedPermissions.All(Permissions.IsKnown)
+                return principal.ClaimedPermissions.All(code => Permissions.IsKnown(code) && !IsStaffOnly(code))
                     ? principal.ClaimedPermissions.ToHashSet(StringComparer.Ordinal)
                     : NoPermissions;
 

@@ -50,6 +50,7 @@ const EXPECTED = [
   ['/releases/{id}/runs', 'post', 'run:create', 'v1'],
   ['/releases/{id}/decision', 'get', 'decision:read', 'v1'],
   ['/artifacts/{a}/download-url', 'get', 'artifact:read', 'v1'],
+  ['/orgs', 'get', 'authenticated', 'v1'],
   ['/orgs', 'post', 'authenticated', 'v1'],
   ['/orgs/{o}', 'get', 'organization:read', 'v1'],
   ['/orgs/{o}', 'patch', 'organization:write', 'v1'],

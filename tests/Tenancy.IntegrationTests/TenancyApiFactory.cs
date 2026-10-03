@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
+using Evidgate.Api.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Microsoft.AspNetCore.Builder;
@@ -38,15 +39,18 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     private const string UserHeader = "X-Test-User";
     private const string EmailHeader = "X-Test-Email";
     private const string ServiceScopeHeader = "X-Test-Service-Scope";
+    private const string ServiceOrgHeader = "X-Test-Service-Org";
     private const string ServicePermissionsHeader = "X-Test-Service-Permissions";
 
     private readonly string _connectionString;
     private readonly bool _realEvaluator;
+    private readonly bool _realResolver;
 
-    private TenancyApiFactory(string connectionString, bool realEvaluator)
+    private TenancyApiFactory(string connectionString, bool realEvaluator, bool realResolver = false)
     {
         _connectionString = connectionString;
         _realEvaluator = realEvaluator;
+        _realResolver = realResolver;
     }
 
     /// <summary>Every command Npgsql executed for this host, whitespace-normalised, in order.</summary>
@@ -59,6 +63,55 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     public static TenancyApiFactory RealEvaluator(string appConnectionString) => new(appConnectionString, realEvaluator: true);
 
     /// <summary>The request headers of one caller.</summary>
+    /// <summary>
+    /// The real tenant resolution of 02.6.2: no test middleware publishes a tenant. A
+    /// header authenticator stands in for the session/token authenticators of 02.3.x/02.4.x,
+    /// so membership, the project scope and the service claims all go through the
+    /// production <c>TenantResolutionFilter</c> and the real evaluator.
+    /// </summary>
+    public static TenancyApiFactory RealResolver(string appConnectionString) =>
+        new(appConnectionString, realEvaluator: true, realResolver: true);
+
+    /// <summary>Headers for <see cref="RealResolver"/>: a user, optionally naming an org by header.</summary>
+    public static Action<HttpRequestHeaders> Resolved(
+        Guid? user = null,
+        string? email = null,
+        Guid? orgHeader = null,
+        Guid? serviceOrg = null,
+        Guid? serviceProject = null,
+        IReadOnlyCollection<string>? servicePermissions = null) => headers =>
+    {
+        if (user is { } u)
+        {
+            headers.Add(UserHeader, u.ToString());
+        }
+
+        if (email is not null)
+        {
+            headers.Add(EmailHeader, email);
+        }
+
+        if (orgHeader is { } o)
+        {
+            headers.Add("X-Evidgate-Org", o.ToString());
+        }
+
+        if (servicePermissions is not null)
+        {
+            headers.Add(ServicePermissionsHeader, string.Join(',', servicePermissions));
+        }
+
+        if (serviceOrg is { } so)
+        {
+            headers.Add(ServiceOrgHeader, so.ToString());
+        }
+
+        if (serviceProject is { } sp)
+        {
+            headers.Add(ServiceScopeHeader, sp.ToString());
+        }
+    };
+
     public static Action<HttpRequestHeaders> Caller(
         Guid? org = null,
         Guid? user = null,
@@ -110,7 +163,14 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
-            services.AddSingleton<IStartupFilter>(new RequestContextStartupFilter());
+            if (_realResolver)
+            {
+                services.AddSingleton<ICallerAuthenticator, HeaderAuthenticator>();
+            }
+            else
+            {
+                services.AddSingleton<IStartupFilter>(new RequestContextStartupFilter());
+            }
 
             // The same app-role data source, with a logger that records each command.
             services.RemoveAll<NpgsqlDataSource>();
@@ -177,6 +237,35 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>Grants every permission; used where authorization is not the rule under test.</summary>
+    /// <summary>The stand-in credential authenticator: headers become an <see cref="AuthenticatedCaller"/>.</summary>
+    private sealed class HeaderAuthenticator : ICallerAuthenticator
+    {
+        public ValueTask<AuthenticatedCaller?> AuthenticateAsync(HttpContext context, CancellationToken cancellationToken)
+        {
+            var headers = context.Request.Headers;
+
+            if (Guid.TryParse(headers[UserHeader], out var user))
+            {
+                var email = headers[EmailHeader].ToString();
+
+                return ValueTask.FromResult<AuthenticatedCaller?>(new AuthenticatedCaller(
+                    RequestPrincipal.Member(user, string.IsNullOrEmpty(email) ? null : email)));
+            }
+
+            if (headers.TryGetValue(ServicePermissionsHeader, out var claimed))
+            {
+                Guid? bound = Guid.TryParse(headers[ServiceOrgHeader], out var org) ? org : null;
+                Guid? project = Guid.TryParse(headers[ServiceScopeHeader], out var p) ? p : null;
+                var permissions = claimed.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+                return ValueTask.FromResult<AuthenticatedCaller?>(
+                    new AuthenticatedCaller(RequestPrincipal.Service(project, permissions), bound, project));
+            }
+
+            return ValueTask.FromResult<AuthenticatedCaller?>(null);
+        }
+    }
+
     private sealed class GrantAllEvaluator : IPermissionEvaluator
     {
         /// <inheritdoc />

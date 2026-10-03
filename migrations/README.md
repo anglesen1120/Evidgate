@@ -25,7 +25,8 @@ The playbook for changing a table without breaking the running version is
   catalogue — 01.5.1-T4 shipped its operator read path without a migration, so
   its `0010` reservation lapsed — and `0011` is 02.1.2-T1's `membership` /
   `membership_role` tables, `0012` is 02.1.1-T2's slug grammar (DECISIONS §8.1
-  D-A1) and `0013` is 02.1.1-T3's tenant limit columns); a gap means two branches
+  D-A1), `0013` is 02.1.1-T3's tenant limit columns and `0014` is 02.6.1-T3's first
+  `evidgate_resolve` resolvers); a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and

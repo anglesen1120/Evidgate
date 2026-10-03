@@ -307,6 +307,9 @@ internal sealed class DeadLetterChainHandler(DeadLetterChainRecorder recorder) :
     public string TaskType => DeadLetterChainHandler.HandlerTaskType;
 
     /// <inheritdoc />
+    public bool RequiresTenant => false;
+
+    /// <inheritdoc />
     public ValueTask HandleAsync(
         DeadLetterChainPayload payload,
         ITenantScope? scope,

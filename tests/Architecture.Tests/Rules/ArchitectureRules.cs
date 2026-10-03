@@ -151,6 +151,9 @@ public static class ArchitectureRules
     public static readonly IReadOnlySet<string> TenantContextSetterAllowlist = new HashSet<string>(StringComparer.Ordinal)
     {
         "Evidgate.Modules.Tenancy.Endpoints.TenancyEndpoints",
+
+        // 02.6.2-T1.1: the host's entry point that resolves the tenant per request.
+        "Evidgate.Api.Tenancy.TenantResolutionFilter",
     };
 
     /// <summary>

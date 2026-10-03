@@ -1,6 +1,7 @@
 using Evidgate.Api.Endpoints;
 using Evidgate.Api.Json;
 using Evidgate.Api.Middleware;
+using Evidgate.Api.Tenancy;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Health;
@@ -50,6 +51,10 @@ public static partial class ApiHost
 
         builder.Services.AddHealthChecks()
             .AddCheck<ReadinessHealthCheck>(ReadinessHealthCheck.Name, tags: [ReadinessHealthCheck.Name]);
+
+        // 02.6.2-T1.1: pre-tenant resolution; credential authenticators (02.3.2, 02.4.x)
+        // register ICallerAuthenticator, none exists yet so a deployed host authenticates nobody.
+        builder.Services.AddSingleton<TenantResolver>();
 
         builder.Services.AddMediator();
 
@@ -117,12 +122,12 @@ public static partial class ApiHost
         app.MapOperatorEndpoints();
         // 02.2.1-T1.2 (00 §5.5 C8): the module maps its /v1 read routes and the host
         // applies the envelope filter, so a Result becomes the 00 §9.2 body once.
-        app.MapIdentityEndpoints().AddEndpointFilter<ResultEndpointFilter>();
+        app.MapIdentityEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.1.2-T1.2 (00 §5.5 C8): the membership routes of 02.1.2 and the same
         // single Result → 00 §9.2 envelope filter.
-        app.MapMembershipEndpoints().AddEndpointFilter<ResultEndpointFilter>();
+        app.MapMembershipEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.1.1-T2.2 (00 §5.5 C8): the org/project registry routes, same filter.
-        app.MapTenancyEndpoints().AddEndpointFilter<ResultEndpointFilter>();
+        app.MapTenancyEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         app.MapOpenApi();
 
         return app;

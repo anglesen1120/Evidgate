@@ -24,6 +24,9 @@ public sealed partial class TaskConsumer
     private readonly ITaskClaimer _claimer;
     private readonly ITaskLeaseWriter _leases;
     private readonly ITaskHandlerRegistry _handlers;
+    /// <summary>The <c>last_error</c> of a tenant-handler row that carries no <c>org_id</c> (02.6.2 AC3).</summary>
+    public const string MissingTenantReason = "missing_tenant: the task row has no org_id but its handler is tenant-bound";
+
     private readonly ITenantScopeFactory _scopes;
     private readonly ITaskAlertSink _alerts;
     private readonly TasksOptions _options;
@@ -259,6 +262,15 @@ public sealed partial class TaskConsumer
                     $"no handler is registered for the claimed task_type '{claim.TaskType}' (task {claim.Id})");
             }
 
+            if (claim.OrgId is null && invoker.RequiresTenant)
+            {
+                // 02.6.2 AC3: a tenant handler never runs unscoped. The row cannot
+                // become valid by retrying, so it goes straight to the dead letter.
+                await DeadLetterMissingTenantAsync(claim).ConfigureAwait(false);
+
+                return true;
+            }
+
             if (claim.OrgId is { } orgId)
             {
                 await using var scope = await _scopes
@@ -291,6 +303,47 @@ public sealed partial class TaskConsumer
         await MarkFailedAsync(claim, failure).ConfigureAwait(false);
 
         return true;
+    }
+
+    /// <summary>
+    /// `active → dead_letter` with reason <c>missing_tenant</c>, skipping the retry
+    /// budget (02.6.2 AC3). The alert hook fires like any other dead letter.
+    /// </summary>
+    private async Task DeadLetterMissingTenantAsync(TaskClaim claim)
+    {
+        using var budget = new CancellationTokenSource(TransitionWriteBudget);
+
+        try
+        {
+            if (await _leases.MarkDeadLetterAsync(claim, MissingTenantReason, budget.Token).ConfigureAwait(false))
+            {
+                LogDeadLetter(claim.Id, claim.TaskType, claim.Attempts, MissingTenantReason);
+
+                await TaskAlertNotifier
+                    .NotifySafelyAsync(
+                        _alerts,
+                        _logger,
+                        new TaskDeadLetterAlert(
+                            TaskId: claim.Id,
+                            Queue: claim.Queue,
+                            TaskType: claim.TaskType,
+                            OrgId: claim.OrgId,
+                            Attempts: claim.Attempts,
+                            MaxAttempts: claim.MaxAttempts,
+                            LastError: MissingTenantReason,
+                            Source: TaskDeadLetterSource.Consumer),
+                        budget.Token)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                LogLeaseLost(claim.Id, claim.TaskType);
+            }
+        }
+        catch (Exception transitionFailure)
+        {
+            LogTransitionFailed(claim.Id, transitionFailure);
+        }
     }
 
     private async Task MarkDoneAsync(TaskClaim claim)

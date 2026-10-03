@@ -404,6 +404,34 @@ public sealed class TaskConsumerTests
     }
 
     /// <summary>
+    /// 02.6.2 AC3 <c>Dispatcher_RowWithoutOrgId_DeadLetters</c>: a tenant-bound handler
+    /// never runs on a row that carries no `org_id`; the row goes straight to
+    /// `dead_letter` (no retry budget spent) with the reason `missing_tenant`.
+    /// </summary>
+    [Fact]
+    public async Task Dispatcher_RowWithoutOrgId_DeadLetters()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        var owner = _fixture.OwnerConnectionString(database);
+
+        await TaskSql.SeedTaskAsync(
+            owner,
+            Queue,
+            TaskHandlerTypes.Tenant,
+            payload: """{"marker":"orphan"}""",
+            orgId: null,
+            idempotencyKey: "orphan");
+
+        await using var host = TasksTestHost.Start(_fixture, database);
+
+        (await host.Consumer.PollOnceAsync(Queue, Token)).ShouldBe(1);
+
+        host.Recorder.TenantRuns.ShouldBe(0);
+        (await TaskSql.ScalarAsync<string>(owner, "select state from public.task where idempotency_key = 'orphan'")).ShouldBe("dead_letter");
+        (await TaskSql.ScalarAsync<string>(owner, "select last_error from public.task where idempotency_key = 'orphan'"))!.ShouldStartWith("missing_tenant");
+    }
+
+    /// <summary>
     /// Polls the assertion until it holds or the deadline passes; the concurrency test
     /// watches the database rather than sleeping a fixed time.
     /// </summary>
