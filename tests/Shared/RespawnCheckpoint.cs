@@ -1,6 +1,4 @@
 using Npgsql;
-using Respawn;
-using Respawn.Graph;
 
 namespace Evidgate.Testing;
 
@@ -31,23 +29,24 @@ namespace Evidgate.Testing;
 /// </summary>
 public sealed class RespawnCheckpoint
 {
-    /// <summary>The migration journal Respawn must never touch (01.1.2-T1.3).</summary>
-    private static readonly Table[] Preserved = [new Table("public", "schema_migration")];
-
-    private readonly Respawner _respawner;
+    private readonly string _truncate;
     private readonly string _connectionString;
 
-    private RespawnCheckpoint(Respawner respawner, string connectionString)
+    private RespawnCheckpoint(string truncate, string connectionString)
     {
-        _respawner = respawner;
+        _truncate = truncate;
         _connectionString = connectionString;
     }
 
     /// <summary>
-    /// Reads the reset plan once (every non-system schema, journal ignored) and
-    /// returns a checkpoint that only replays it. Called once per assembly, so the
-    /// catalog round trips are not paid per test.
+    /// Reads the table list once (every non-system schema, journal excluded) and returns a checkpoint that only replays one
+    /// <c>truncate table … cascade</c>. Called once per assembly, so the catalog round trips are not paid per test.
     /// </summary>
+    /// <remarks>
+    /// Respawn itself is no longer used: with a circular foreign-key pair (<c>project</c> ↔ <c>environment</c>, 05.1.2) it
+    /// falls back to <c>alter table … disable trigger all</c>, which only a superuser may run. One TRUNCATE naming every
+    /// table is cycle-proof, needs only table ownership, and is what Respawn's single-statement path already did.
+    /// </remarks>
     public static async Task<RespawnCheckpoint> CreateAsync(
         string ownerConnectionString,
         CancellationToken cancellationToken = default)
@@ -59,16 +58,30 @@ public sealed class RespawnCheckpoint
 
         var schemas = await SchemasAsync(connection, cancellationToken).ConfigureAwait(false);
 
-        var respawner = await Respawner.CreateAsync(
-            connection,
-            new RespawnerOptions
+        var tables = new List<string>();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                select quote_ident(schemaname) || '.' || quote_ident(tablename)
+                  from pg_catalog.pg_tables
+                 where schemaname = any(@schemas)
+                   and not (schemaname = 'public' and tablename = 'schema_migration')
+                 order by schemaname, tablename
+                """;
+            command.Parameters.AddWithValue("schemas", schemas.ToArray());
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                DbAdapter = DbAdapter.Postgres,
-                SchemasToInclude = [.. schemas],
-                TablesToIgnore = [.. Preserved],
-            }).ConfigureAwait(false);
+                tables.Add(reader.GetString(0));
+            }
+        }
 
-        return new RespawnCheckpoint(respawner, ownerConnectionString);
+        if (tables.Count == 0)
+        {
+            throw new InvalidOperationException("the harness database has no application table to reset");
+        }
+
+        return new RespawnCheckpoint($"truncate table {string.Join(", ", tables)} cascade", ownerConnectionString);
     }
 
     /// <summary>Empties every application table, leaving the migration journal alone.</summary>
@@ -76,7 +89,9 @@ public sealed class RespawnCheckpoint
     {
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await _respawner.ResetAsync(connection).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = _truncate;
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -69,13 +69,15 @@ public sealed record CreateSuiteRevisionRequest(
 /// <param name="Status"><c>draft</c> or <c>published</c>; <c>preview</c> for a preview of new content.</param>
 /// <param name="Created">True only when this call inserted the revision; identical content returns the existing one.</param>
 /// <param name="Warnings">Non-blocking observations (an empty revision, …).</param>
+/// <param name="HeadMoved">True when the suite's head now points at this revision because of this call (a new revision, or a revert to older content).</param>
 public sealed record SuiteRevisionHead(
     Guid? SuiteRevisionId,
     int RevisionNo,
     string RevisionHash,
     string Status,
     bool Created,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    bool HeadMoved = false);
 
 /// <summary>A member of a stored revision.</summary>
 /// <param name="Id">Member id (the edge endpoints).</param>

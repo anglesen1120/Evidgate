@@ -284,6 +284,11 @@ internal sealed class PreviewSuiteRevisionQueryHandler(
             return Result.Failure<SuiteRevisionHead>(SuiteErrors.SuiteNotFound);
         }
 
+        if (suite.Status != "active")
+        {
+            return Result.Failure<SuiteRevisionHead>(SuiteErrors.Archived);
+        }
+
         var planned = await planner.PlanAsync(db, suite.ProjectId, query.Body, cancellationToken).ConfigureAwait(false);
         if (!planned.IsSuccess)
         {

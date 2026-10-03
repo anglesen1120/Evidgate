@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Contracts.Validation;
@@ -44,6 +45,9 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
     internal const int MaxMembers = 10_000;
     internal const int MaxEdges = 50_000;
 
+    /// <summary>The database refuses larger requirements (<c>suite_revision_json_check</c>); checked here so a row never reaches an error message.</summary>
+    internal const int MaxEnvironmentBytes = 16_000;
+
     private const string ShardKey = "shard-strategy.v1";
     private const string RetryKey = "retry-policy.v1";
     private const string EnvironmentKey = "environment-requirements.v1";
@@ -70,6 +74,11 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
         var members = request.Members ?? [];
         var edges = request.Edges ?? [];
 
+        if (members.Any(member => member is null) || edges.Any(edge => edge is null))
+        {
+            return Fail(SuiteErrors.Invalid("members and edges cannot contain null", new ErrorDetail(members.Any(member => member is null) ? "/members" : "/edges", "null_element")));
+        }
+
         if (members.Count > MaxMembers || edges.Count > MaxEdges)
         {
             return Fail(SuiteErrors.Invalid(
@@ -89,12 +98,18 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
             {
                 return Fail(SuiteErrors.Invalid(
                     $"{name} does not match {key}",
-                    [.. verdict.Errors.Take(20).Select(error => new ErrorDetail($"/{name}{error.Path}", error.Reason))]));
+                    [.. verdict.Errors.Take(20).Select(error => new ErrorDetail($"/{name}{SafePath(error)}", error.Reason))]));
             }
         }
 
+        var sizes = new[] { shard.GetRawText(), retry.GetRawText(), environment.GetRawText() };
+        if (System.Text.Encoding.UTF8.GetByteCount(sizes[2]) > MaxEnvironmentBytes)
+        {
+            return Fail(SuiteErrors.Invalid("environment_requirements is larger than 16000 bytes", new ErrorDetail("/environment_requirements", "too_large")));
+        }
+
         var secretDetails = new List<ErrorDetail>();
-        CollectEnvironmentSecrets(environment, secretDetails);
+        CheckEnvironment(environment, secretDetails);
         if (secretDetails.Count > 0)
         {
             return Fail(SuiteErrors.NotSecretFree(secretDetails));
@@ -104,10 +119,11 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
         var refs = new HashSet<string>(StringComparer.Ordinal);
         var planned = new List<PlannedMember>(members.Count);
         var problems = new List<VariantProblem>();
+        var seenVariants = new Dictionary<string, NormalizedVariant>(StringComparer.Ordinal);
         for (var index = 0; index < members.Count; index++)
         {
             var member = members[index];
-            var reference = string.IsNullOrEmpty(member.Ref) ? "m" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) : member.Ref;
+            var reference = string.IsNullOrEmpty(member.Ref) ? "_" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) : member.Ref;
 
             if (!RefShape.IsMatch(reference) || !refs.Add(reference))
             {
@@ -121,7 +137,17 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
                 return Fail(SuiteErrors.Invalid("a member needs a case_revision_id", new ErrorDetail($"/members/{index}/case_revision_id", "required")));
             }
 
-            var variant = VariantNormalizer.Normalize(member.Params, $"/members/{index}/params", problems);
+            // Suites repeat a handful of parameter sets thousands of times: normalise each distinct text once.
+            var rawParams = member.Params is { ValueKind: not (JsonValueKind.Null or JsonValueKind.Undefined) } element ? element.GetRawText() : "{}";
+            if (!seenVariants.TryGetValue(rawParams, out var variant))
+            {
+                variant = VariantNormalizer.Normalize(member.Params, $"/members/{index}/params", problems);
+                if (variant is not null)
+                {
+                    seenVariants[rawParams] = variant;
+                }
+            }
+
             if (variant is not null)
             {
                 planned.Add(new PlannedMember(reference, member.CaseRevisionId, variant, member.Required ?? true));
@@ -176,33 +202,41 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
             pairs.Add((parent, child));
         }
 
-        var edgeList = pairs.OrderBy(pair => pair.Item1).ThenBy(pair => pair.Item2).ToList();
+        var edgeList = pairs.OrderBy(pair => ((long)pair.Item1 << 32) | (uint)pair.Item2).ToList();
         var graph = DependencyGraph.Analyse(ordered.Count, edgeList);
         if (graph.Cycle.Count > 0)
         {
-            return Fail(SuiteErrors.Cycle([.. graph.Cycle.Select((node, position) => new ErrorDetail($"/cycle/{position}", ordered[node].Ref))]));
+            return Fail(SuiteErrors.Cycle([.. graph.Cycle.Take(50).Select((node, position) => new ErrorDetail($"/cycle/{position}", ordered[node].Ref))]));
         }
 
-        var shardJson = shard.GetRawText();
-        var retryJson = retry.GetRawText();
-        var environmentJson = environment.GetRawText();
+        var shardJson = sizes[0];
+        var retryJson = sizes[1];
+        var environmentJson = sizes[2];
         var warnings = new List<string>();
         if (ordered.Count == 0)
         {
             warnings.Add("the revision has no members");
         }
 
-        return Result.Success(new SuiteRevisionPlan(
-            ordered,
-            edgeList,
-            shardJson,
-            retryJson,
-            environmentJson,
-            Hash(ordered, edgeList, shardJson, retryJson, environmentJson),
-            warnings));
+        string revisionHash;
+        try
+        {
+            revisionHash = Hash(ordered, edgeList, shardJson, retryJson, environmentJson);
+        }
+        catch (JsonCanonicalizationException)
+        {
+            // A strategy document with duplicate member names, or a number RFC 8785 cannot represent.
+            return Fail(SuiteErrors.Invalid("a strategy document cannot be canonicalised (duplicate member names or an unrepresentable number)", new ErrorDetail("/", "not_canonicalisable")));
+        }
+
+        return Result.Success(new SuiteRevisionPlan(ordered, edgeList, shardJson, retryJson, environmentJson, revisionHash, warnings));
     }
 
-    /// <summary>The content identity: canonical members (sorted), edges (sorted) and the three strategy documents. Suite id and ordinals are not part of it.</summary>
+    /// <summary>
+    /// The content identity: the members in canonical order (case revision, required flag, variant hash), the edges as pairs of
+    /// indexes into that order (the order is itself content, so the pairs are unambiguous and the document stays small), and the
+    /// three strategy documents. The suite id, row ids and ordinals are not part of it.
+    /// </summary>
     internal static string Hash(
         IReadOnlyList<PlannedMember> members,
         IReadOnlyList<(int Parent, int Child)> edges,
@@ -210,8 +244,8 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
         string retryJson,
         string environmentJson)
     {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(members.Count * 160 + edges.Count * 14 + 512);
+        using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartObject();
             writer.WriteStartArray("members");
@@ -219,8 +253,8 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
             {
                 writer.WriteStartObject();
                 writer.WriteString("case_revision_id", member.CaseRevisionId);
-                writer.WriteString("variant_hash", member.Variant.Hash);
                 writer.WriteBoolean("required", member.Required);
+                writer.WriteString("variant_hash", member.Variant.Hash);
                 writer.WriteEndObject();
             }
 
@@ -228,16 +262,10 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
             writer.WriteStartArray("edges");
             foreach (var (parent, child) in edges)
             {
-                writer.WriteStartObject();
-                writer.WriteStartObject("parent");
-                writer.WriteString("case_revision_id", members[parent].CaseRevisionId);
-                writer.WriteString("variant_hash", members[parent].Variant.Hash);
-                writer.WriteEndObject();
-                writer.WriteStartObject("child");
-                writer.WriteString("case_revision_id", members[child].CaseRevisionId);
-                writer.WriteString("variant_hash", members[child].Variant.Hash);
-                writer.WriteEndObject();
-                writer.WriteEndObject();
+                writer.WriteStartArray();
+                writer.WriteNumberValue(parent);
+                writer.WriteNumberValue(child);
+                writer.WriteEndArray();
             }
 
             writer.WriteEndArray();
@@ -250,47 +278,122 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
             writer.WriteEndObject();
         }
 
-        return CanonicalHash.Compute(stream.ToArray());
+        return CanonicalHash.Compute(buffer.WrittenSpan);
     }
 
     /// <summary>
-    /// Values of the requirements must not look like secrets; <c>secrets[]</c> holds names and is exempt from the value rule
-    /// (its shape is fixed by the schema), but map keys are checked like variant keys.
+    /// The secret-free rules of 03.2.1 AC8 over an environment document that already passed its schema. Typed, not a generic
+    /// walk: a base URL must be a plain http(s) URL without userinfo, query or fragment (a credential hides in all three),
+    /// map keys are held to the same key and value shapes as variant keys, and the names in <c>secrets[]</c> must look like
+    /// names, not like the secrets themselves. A rejected key is never echoed.
     /// </summary>
-    private static void CollectEnvironmentSecrets(JsonElement environment, List<ErrorDetail> details)
+    private static void CheckEnvironment(JsonElement environment, List<ErrorDetail> details)
     {
-        foreach (var member in environment.EnumerateObject())
-        {
-            if (member.Name == "secrets")
-            {
-                continue;
-            }
+        const string root = "/environment_requirements";
 
-            Walk(member.Value, "/environment_requirements/" + member.Name, details);
+        if (environment.TryGetProperty("base_urls", out var urls))
+        {
+            var position = 0;
+            foreach (var entry in urls.EnumerateObject())
+            {
+                position++;
+                CheckKey(entry.Name, $"{root}/base_urls/#{position}", details);
+                var path = $"{root}/base_urls/#{position}";
+                var text = SafeString(entry.Value);
+                if (text is null || !Uri.TryCreate(text, UriKind.Absolute, out var uri)
+                    || uri.Scheme is not ("http" or "https")
+                    || !string.IsNullOrEmpty(uri.UserInfo)
+                    || !string.IsNullOrEmpty(uri.Query)
+                    || !string.IsNullOrEmpty(uri.Fragment)
+                    || text.Contains('@', StringComparison.Ordinal)
+                    || !TextRules.IsClean(text))
+                {
+                    details.Add(new ErrorDetail(path, "secret_value"));
+                }
+                else if (SecretShape.ValueLooksSecret(text))
+                {
+                    details.Add(new ErrorDetail(path, "secret_value"));
+                }
+            }
+        }
+
+        if (environment.TryGetProperty("dependency_versions", out var versions))
+        {
+            var position = 0;
+            foreach (var entry in versions.EnumerateObject())
+            {
+                position++;
+                var path = $"{root}/dependency_versions/#{position}";
+                CheckKey(entry.Name, path, details);
+                var text = SafeString(entry.Value);
+                if (text is null || !TextRules.IsClean(text) || SecretShape.ValueLooksSecret(text))
+                {
+                    details.Add(new ErrorDetail(path, "secret_value"));
+                }
+            }
+        }
+
+        if (environment.TryGetProperty("warm_up", out var warm) && warm.TryGetProperty("path", out var warmPath))
+        {
+            var text = SafeString(warmPath);
+            if (text is null || !text.StartsWith('/') || text.AsSpan().IndexOfAny('?', '#', '@') >= 0 || !TextRules.IsClean(text) || SecretShape.ValueLooksSecret(text))
+            {
+                details.Add(new ErrorDetail($"{root}/warm_up/path", "secret_value"));
+            }
+        }
+
+        if (environment.TryGetProperty("secrets", out var names))
+        {
+            var position = 0;
+            foreach (var name in names.EnumerateArray())
+            {
+                var text = SafeString(name);
+                if (text is null || SecretShape.SecretNameLooksLikeValue(text))
+                {
+                    details.Add(new ErrorDetail($"{root}/secrets/{position}", "secret_value"));
+                }
+
+                position++;
+            }
         }
     }
 
-    private static void Walk(JsonElement value, string path, List<ErrorDetail> details)
+    private static void CheckKey(string key, string path, List<ErrorDetail> details)
     {
-        switch (value.ValueKind)
+        if (!TextRules.IsClean(key) || SecretShape.KeyLooksSecret(key) || SecretShape.ValueLooksSecret(key))
         {
-            case JsonValueKind.Object:
-                foreach (var member in value.EnumerateObject())
-                {
-                    var child = path + "/" + TextRules.Brief(member.Name, 64);
-                    if (SecretShape.KeyLooksSecret(member.Name))
-                    {
-                        details.Add(new ErrorDetail(child, "secret_key"));
-                    }
-
-                    Walk(member.Value, child, details);
-                }
-
-                break;
-            case JsonValueKind.String when SecretShape.ValueLooksSecret(value.GetString()!):
-                details.Add(new ErrorDetail(path, "secret_value"));
-                break;
+            details.Add(new ErrorDetail(path, "secret_key"));
         }
+    }
+
+    private static string? SafeString(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        try
+        {
+            return value.GetString();
+        }
+        catch (InvalidOperationException)
+        {
+            return null; // an escaped lone surrogate
+        }
+    }
+
+    /// <summary>A schema error path without the offending instance key: an <c>additionalProperties</c> violation names the key it refused, and that key may be the secret.</summary>
+    private static string SafePath(ContractValidationError error)
+    {
+        if (!string.Equals(error.Reason, "additional_properties", StringComparison.Ordinal))
+        {
+            return TextRules.Brief(error.Path, 120);
+        }
+
+        var cut = error.Path.LastIndexOf('/');
+
+        return cut <= 0 ? string.Empty : TextRules.Brief(error.Path[..cut], 120);
     }
 
     private static Result<SuiteRevisionPlan> Fail(Error error) => Result.Failure<SuiteRevisionPlan>(error);

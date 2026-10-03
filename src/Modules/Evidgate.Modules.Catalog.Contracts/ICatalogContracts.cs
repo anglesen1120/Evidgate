@@ -14,6 +14,21 @@ public interface ICatalogContracts
     /// <param name="cancellationToken">Cancellation.</param>
     ValueTask<bool> PublishSuiteRevisionAsync(Guid suiteRevisionId, CancellationToken cancellationToken);
 
+    /// <summary>True when <paramref name="suiteRevisionId"/> is a revision of a suite of <paramref name="projectId"/> visible to the tenant (05.1.1-T2.2).</summary>
+    /// <param name="projectId">The project.</param>
+    /// <param name="suiteRevisionId">The revision.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<bool> SuiteRevisionExistsAsync(Guid projectId, Guid suiteRevisionId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Which of <paramref name="caseRevisionIds"/> are test revisions of cases of <paramref name="projectId"/> (05.1.1-T2.2): one
+    /// statement however many ids; ids that are unknown, or belong to another project or tenant, are simply absent from the answer.
+    /// </summary>
+    /// <param name="projectId">The project.</param>
+    /// <param name="caseRevisionIds">The ids to look up.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlySet<Guid>> FindCaseRevisionsAsync(Guid projectId, IReadOnlyCollection<Guid> caseRevisionIds, CancellationToken cancellationToken);
+
     /// <summary>
     /// The <c>data_isolation</c> the revision's environment requirements declare (<c>isolated</c> when omitted), or null
     /// when the revision does not exist for this tenant. The single isolation source (00 §15).

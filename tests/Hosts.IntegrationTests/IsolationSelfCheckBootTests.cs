@@ -616,6 +616,10 @@ public sealed class IsolationSelfCheckBootTests
             {
                 // Not listening yet.
             }
+            catch (TaskCanceledException) when (!TestContext.Current.CancellationToken.IsCancellationRequested)
+            {
+                // One attempt outlived the per-request timeout (a busy machine while the host boots): try again until the deadline.
+            }
 
             await Task.Delay(250, TestContext.Current.CancellationToken);
         }

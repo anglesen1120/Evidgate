@@ -8,7 +8,7 @@ internal static class SuiteReadSql
                h.revision_no as head_revision_no, s.created_at, s.updated_at, s.version
         """;
 
-    /// <summary>One suite with its head's number; the head falls back to the highest revision when the column is empty.</summary>
+    /// <summary>One suite with its head's number (null before the first revision).</summary>
     internal const string SuiteById = $"""
         select {SuiteColumns}
           from public.suite s
@@ -41,13 +41,21 @@ internal static class SuiteReadSql
 
     /// <summary>The suite row a revision write locks (serialising revision_no allocation).</summary>
     internal const string SuiteForUpdate = """
-        select id, project_id, status
+        select id, project_id, status, head_revision_id
           from public.suite
          where id = @suite_id
            for update
         """;
 
-    internal const string SuiteForRead = "select id, project_id, status from public.suite where id = @suite_id";
+    internal const string SuiteForRead = "select id, project_id, status, head_revision_id from public.suite where id = @suite_id";
+
+    /// <summary>The cheap pre-read of a revision: its hash (the ETag) and the project of its suite, no members or edges.</summary>
+    internal const string RevisionHash = """
+        select r.revision_hash, s.project_id
+          from public.suite_revision r
+          join public.suite s on s.org_id = r.org_id and s.id = r.suite_id
+         where r.id = @revision_id
+        """;
 
     internal const string ExistingByHash = """
         select id, revision_no, status

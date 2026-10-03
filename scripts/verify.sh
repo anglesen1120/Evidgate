@@ -81,11 +81,11 @@ run_stage() {
     # 8 means an assembly holds only Docker tests, so none ran there.
     if [[ "${EVIDGATE_VERIFY_SKIP_DOCKER:-}" == "1" ]]; then
       stage "dotnet test (unit + architecture; Docker integration tests skipped)"
-      dotnet test --no-build -c Release Evidgate.slnx \
+      dotnet test --no-build -c Release --solution Evidgate.slnx \
         --filter-not-trait "Category=Docker" --ignore-exit-code 8
     else
       stage "dotnet test (unit, architecture, Docker integration)"
-      dotnet test --no-build -c Release Evidgate.slnx
+      dotnet test --no-build -c Release --solution Evidgate.slnx
     fi
     ;;
   tsc-build)

@@ -29,6 +29,9 @@ public static class EvidgateTelemetry
     /// <summary>Counter of module operations, tagged by <see cref="ModuleTag"/>.</summary>
     public const string ModuleOperationCounterName = "evidgate.module.operations";
 
+    /// <summary>Counter of manifests refused at upload, tagged by reason (05.1.1 §11).</summary>
+    public const string ManifestRejectedMetricName = "evidgate_manifest_rejected_total";
+
     /// <summary>Histogram of pipeline-handler durations in milliseconds (01.4.2-T4.1, the C2 telemetry stage).</summary>
     public const string PipelineDurationMetricName = "evidgate.pipeline.duration";
 
@@ -46,6 +49,11 @@ public static class EvidgateTelemetry
         ModuleOperationCounterName,
         unit: "{operation}",
         description: "Module operations started, tagged by evidgate.module.");
+
+    private static readonly Counter<long> ManifestRejections = Meter.CreateCounter<long>(
+        ManifestRejectedMetricName,
+        unit: "{manifest}",
+        description: "Manifests refused at upload, by reason (05.1.1). Never labelled with a manifest value, case name or hash.");
 
     private static readonly Histogram<double> PipelineDurations = Meter.CreateHistogram<double>(
         PipelineDurationMetricName,
@@ -81,6 +89,11 @@ public static class EvidgateTelemetry
 
         return activity;
     }
+
+    /// <summary>Counts one manifest refused for <paramref name="reason"/> (a closed vocabulary: <c>schema</c>, <c>unknown_case_revision</c>, …).</summary>
+    /// <param name="reason">The reason token; never a value from the manifest.</param>
+    public static void RecordManifestRejected(string reason) =>
+        ManifestRejections.Add(1, new KeyValuePair<string, object?>("reason", reason));
 
     /// <summary>
     /// Records the handler duration of one pipeline message, tagged with the

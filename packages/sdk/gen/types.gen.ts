@@ -355,7 +355,7 @@ export type CreateSuiteRequest = {
 
 export type SuiteMemberInput = {
     /**
-     * Name used by edges; defaults to m<index>.
+     * Name used by edges; defaults to _<index>.
      */
     ref?: string;
     case_revision_id: string;
@@ -402,6 +402,10 @@ export type SuiteRevisionHead = {
     revision_hash: string;
     status: 'draft' | 'published' | 'preview';
     created: boolean;
+    /**
+     * True when the call moved the suite head (a new revision, or the content of an older one re-submitted).
+     */
+    head_moved?: boolean;
     warnings: Array<string>;
 };
 

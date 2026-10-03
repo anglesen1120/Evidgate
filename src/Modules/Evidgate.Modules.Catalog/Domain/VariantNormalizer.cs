@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -25,6 +26,12 @@ internal static partial class VariantNormalizer
 {
     /// <summary>Keys allowed per variant.</summary>
     internal const int MaxKeys = 32;
+
+    /// <summary>The largest integer a double (and so RFC 8785) represents exactly: 2^53 − 1.</summary>
+    private const long MaxExactInteger = 9_007_199_254_740_991;
+
+    /// <summary>The database refuses larger parameter sets (<c>variant_params_check</c>); checked here so a row never reaches an error message.</summary>
+    private const int MaxParamsBytes = 8000;
 
     private const int MaxStringChars = 256;
     private const int MaxArrayItems = 32;
@@ -71,18 +78,21 @@ internal static partial class VariantNormalizer
                     break;
                 }
 
-                var path = basePath + "/" + TextRules.Brief(member.Name, 64);
+                // A rejected key is named by its position, never echoed: it may itself be the secret.
+                var path = basePath + "/#" + count.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 if (!KeyShape().IsMatch(member.Name) || !TextRules.IsClean(member.Name))
                 {
                     problems.Add(new VariantProblem(path, "invalid_key"));
                     continue;
                 }
 
-                if (SecretShape.KeyLooksSecret(member.Name))
+                if (SecretShape.KeyLooksSecret(member.Name) || SecretShape.ValueLooksSecret(member.Name))
                 {
                     problems.Add(new VariantProblem(path, "secret_key"));
                     continue;
                 }
+
+                path = basePath + "/" + member.Name;
 
                 if (member.Name.StartsWith('_') || NonIdentifying.Contains(member.Name))
                 {
@@ -103,8 +113,23 @@ internal static partial class VariantNormalizer
         }
 
         var json = JsonSerializer.Serialize(result);
+        if (System.Text.Encoding.UTF8.GetByteCount(json) > MaxParamsBytes)
+        {
+            problems.Add(new VariantProblem(basePath, "too_large"));
 
-        return new NormalizedVariant(CanonicalHash.Compute(json), json);
+            return null;
+        }
+
+        try
+        {
+            return new NormalizedVariant(CanonicalHash.Compute(json), json);
+        }
+        catch (JsonCanonicalizationException)
+        {
+            problems.Add(new VariantProblem(basePath, "invalid_value"));
+
+            return null;
+        }
     }
 
     private static JsonNode? Scalar(JsonElement value, string key, string path, List<VariantProblem> problems)
@@ -118,9 +143,41 @@ internal static partial class VariantNormalizer
             case JsonValueKind.False:
                 return JsonValue.Create(false);
             case JsonValueKind.Number:
-                return JsonNode.Parse(value.GetRawText());
+                {
+                    // Canonical JSON hashes numbers as IEEE doubles: refuse what a double cannot hold exactly, so two
+                    // different integers can never share a variant hash.
+                    var raw = value.GetRawText();
+                    if (!value.TryGetDouble(out var number)
+                        || !double.IsFinite(number)
+                        || (raw.AsSpan().IndexOfAny('.', 'e', 'E') < 0 && (!long.TryParse(raw, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out var whole) || Math.Abs(whole) > MaxExactInteger)))
+                    {
+                        problems.Add(new VariantProblem(path, "invalid_value"));
+
+                        return null;
+                    }
+
+                    // Stored as the number the hash sees: an exact integer or the double itself, never the author's spelling.
+                    return raw.AsSpan().IndexOfAny('.', 'e', 'E') < 0 ? JsonValue.Create(long.Parse(raw, System.Globalization.CultureInfo.InvariantCulture)) : JsonValue.Create(number);
+                }
+
             case JsonValueKind.String:
-                return StringValue(value.GetString()!, key, path, problems);
+                {
+                    string text;
+                    try
+                    {
+                        text = value.GetString()!;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // An escaped lone surrogate cannot be decoded.
+                        problems.Add(new VariantProblem(path, "invalid_value"));
+
+                        return null;
+                    }
+
+                    return StringValue(text, key, path, problems);
+                }
+
             case JsonValueKind.Array:
                 {
                     if (value.GetArrayLength() > MaxArrayItems)

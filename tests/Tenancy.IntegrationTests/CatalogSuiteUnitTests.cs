@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using System.Text.Json;
 using Evidgate.Modules.Catalog.Domain;
 using Shouldly;
@@ -112,8 +113,8 @@ public sealed class CatalogSuiteUnitTests
         variant.ShouldBeNull();
         problems.Select(problem => (problem.Path, problem.Reason)).ShouldBe(
         [
-            ("/params/api_token", "secret_key"),
-            ("/params/note_key", "secret_key"),
+            ("/params/#1", "secret_key"),
+            ("/params/#2", "secret_key"),
             ("/params/mode", "secret_value"),
             ("/params/list/1", "secret_value"),
         ]);

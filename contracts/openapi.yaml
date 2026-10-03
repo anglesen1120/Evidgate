@@ -4208,7 +4208,7 @@ components:
           {
             type: string,
             pattern: '^[A-Za-z0-9_.-]{1,64}$',
-            description: 'Name used by edges; defaults to m<index>.',
+            description: 'Name used by edges; defaults to _<index>.',
           }
         case_revision_id: { type: string, format: uuid }
         params:
@@ -4252,6 +4252,11 @@ components:
         revision_hash: { type: string }
         status: { type: string, enum: [draft, published, preview] }
         created: { type: boolean }
+        head_moved:
+          {
+            type: boolean,
+            description: 'True when the call moved the suite head (a new revision, or the content of an older one re-submitted).',
+          }
         warnings:
           type: array
           items: { type: string }

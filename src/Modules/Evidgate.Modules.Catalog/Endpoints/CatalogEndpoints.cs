@@ -96,7 +96,12 @@ public static class CatalogEndpoints
     {
         var result = await mediator.Send(new CreateSuiteCommand(p, request.Name, request.Slug, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
 
-        return WithETag(context, result, suite => suite.HeadRevisionNo ?? 0);
+        if (result.IsSuccess && result.SuccessValue is SuiteDto created)
+        {
+            context.Response.Headers.ETag = string.Create(CultureInfo.InvariantCulture, $"\"{created.HeadRevisionNo ?? 0}-{created.Version}\"");
+        }
+
+        return result;
     }
 
     private static async Task<Result<SuiteListResponse>> ListSuitesAsync(
@@ -125,14 +130,15 @@ public static class CatalogEndpoints
             return result;
         }
 
-        var etag = string.Create(CultureInfo.InvariantCulture, $"\"{result.Value.HeadRevisionNo ?? 0}\"");
+        var tagText = string.Create(CultureInfo.InvariantCulture, $"{result.Value.HeadRevisionNo ?? 0}-{result.Value.Version}");
+        var etag = $"\"{tagText}\"";
         context.Response.Headers.ETag = etag;
 
         // 304 when the caller already holds this head: the suite row itself is cheap, the saving is the body and the client's parse.
         var presented = context.Request.Headers.IfNoneMatch.ToString();
 
         return !string.IsNullOrEmpty(presented)
-            && presented.Split(',').Select(tag => tag.Trim().Trim('"')).Any(tag => tag == "*" || tag == (result.Value.HeadRevisionNo ?? 0).ToString(CultureInfo.InvariantCulture))
+            && presented.Split(',').Select(tag => tag.Trim()).Any(tag => tag == "*" || (tag.StartsWith("W/", StringComparison.Ordinal) ? tag[2..] : tag).Trim('"') == tagText)
             ? Result.Success(StatusCodes.Status304NotModified)
             : result;
     }
@@ -162,7 +168,13 @@ public static class CatalogEndpoints
                 [new ErrorDetail(Domain.TextRules.Brief(exception.Path ?? string.Empty, 128), "invalid")]));
         }
 
-        var dryRun = string.Equals(context.Request.Query["dry_run"], "true", StringComparison.OrdinalIgnoreCase);
+        var dryRunText = context.Request.Query["dry_run"].ToString();
+        if (dryRunText.Length > 0 && !bool.TryParse(dryRunText, out _))
+        {
+            return Result.Failure<SuiteRevisionHead>(Error.BadRequest("dry_run must be true or false", [new ErrorDetail("dry_run", "invalid")]));
+        }
+
+        var dryRun = dryRunText.Length > 0 && bool.Parse(dryRunText);
         var result = dryRun
             ? await mediator.Send(new PreviewSuiteRevisionQuery(s, request), cancellationToken).ConfigureAwait(false)
             : await mediator.Send(new CreateSuiteRevisionCommand(s, request, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
@@ -172,9 +184,20 @@ public static class CatalogEndpoints
 
     private static async Task<Result<SuiteRevisionDto>> GetSuiteRevisionAsync(
         Guid r,
+        HttpContext context,
         IMediator mediator,
-        CancellationToken cancellationToken) =>
-        await mediator.Send(new GetSuiteRevisionQuery(r), cancellationToken).ConfigureAwait(false);
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetSuiteRevisionQuery(r), cancellationToken).ConfigureAwait(false);
+        if (result.IsSuccess && result.SuccessValue is SuiteRevisionDto revision)
+        {
+            // A revision never changes: its hash is its ETag and it caches privately for good.
+            context.Response.Headers.ETag = $"\"{revision.RevisionHash}\"";
+            context.Response.Headers.CacheControl = "private, immutable";
+        }
+
+        return result;
+    }
 
     private static async Task<Result<SuiteRevisionDiff>> GetSuiteRevisionDiffAsync(
         Guid r,

@@ -104,9 +104,11 @@ create table if not exists public.suite_member (
   constraint suite_member_ordinal_check check (ordinal >= 0)
 );
 
+-- Index economy (03.2.1 performance review): a revision can hold 10 000 members and 50 000 edges, and members, edges and
+-- variants are never updated or deleted, so the indexes that only speed the parent side of a foreign-key check on delete
+-- (case revision, variant, parent/child member) and the prefix of the unique key are not created. The unique keys serve
+-- the reads: members by (suite_revision_id, ordinal); edges by (suite_revision_id, parent, child).
 create index if not exists suite_member_order_idx on public.suite_member (suite_revision_id, ordinal);
-create index if not exists suite_member_case_revision_idx on public.suite_member (org_id, case_revision_id);
-create index if not exists suite_member_variant_idx on public.suite_member (org_id, variant_id);
 
 create table if not exists public.case_dependency (
   id uuid not null,
@@ -123,9 +125,6 @@ create table if not exists public.case_dependency (
   constraint case_dependency_child_fk foreign key (org_id, child_member_id) references public.suite_member (org_id, id)
 );
 
-create index if not exists case_dependency_revision_idx on public.case_dependency (suite_revision_id);
-create index if not exists case_dependency_parent_idx on public.case_dependency (org_id, parent_member_id);
-create index if not exists case_dependency_child_idx on public.case_dependency (org_id, child_member_id);
 
 -- The version trigger on the one table that is edited (name, status, head).
 drop trigger if exists suite_set_updated_at_and_version on public.suite;
@@ -177,6 +176,80 @@ drop trigger if exists case_dependency_immutable on public.case_dependency;
 create trigger case_dependency_immutable
   before update or delete on public.case_dependency
   for each row execute function evidgate.catalog_suite_immutable();
+
+-- A revision is sealed when the transaction that creates it ends: members and edges may be inserted only while their
+-- revision is still a draft created by this very transaction (a revision row's created_at is the transaction start, and so
+-- is now()). Later inserts — a bug, an injection — cannot add to a revision whose hash was computed over its content.
+create or replace function evidgate.catalog_suite_insert_guard() returns trigger
+  language plpgsql
+  as $$
+  begin
+    -- A parent that does not exist is the foreign key's to refuse; a parent that exists but is not being created now is sealed.
+    if exists (
+         select 1
+           from public.suite_revision r
+          where r.org_id = new.org_id
+            and r.id = new.suite_revision_id)
+       and not exists (
+         select 1
+           from public.suite_revision r
+          where r.org_id = new.org_id
+            and r.id = new.suite_revision_id
+            and r.status = 'draft'
+            and r.created_at = now()) then
+      raise exception 'revision_immutable: % rows may only be added while their revision is being created', tg_table_name
+        using errcode = '23514';
+    end if;
+
+    return new;
+  end
+  $$;
+
+revoke all on function evidgate.catalog_suite_insert_guard() from public;
+
+drop trigger if exists suite_member_insert_guard on public.suite_member;
+create trigger suite_member_insert_guard
+  before insert on public.suite_member
+  for each row execute function evidgate.catalog_suite_insert_guard();
+
+drop trigger if exists case_dependency_insert_guard on public.case_dependency;
+create trigger case_dependency_insert_guard
+  before insert on public.case_dependency
+  for each row execute function evidgate.catalog_suite_insert_guard();
+
+-- The suite's identity never changes, and its head can only name one of its own revisions (the head has no foreign key, so
+-- this trigger is its integrity).
+create or replace function evidgate.catalog_suite_guard() returns trigger
+  language plpgsql
+  as $$
+  begin
+    if (new.id, new.org_id, new.project_id) is distinct from (old.id, old.org_id, old.project_id) then
+      raise exception 'suite: id, org_id and project_id never change'
+        using errcode = '23514';
+    end if;
+
+    if new.head_revision_id is not null
+       and new.head_revision_id is distinct from old.head_revision_id
+       and not exists (
+         select 1
+           from public.suite_revision r
+          where r.org_id = new.org_id
+            and r.suite_id = new.id
+            and r.id = new.head_revision_id) then
+      raise exception 'suite: the head must be a revision of this suite'
+        using errcode = '23514';
+    end if;
+
+    return new;
+  end
+  $$;
+
+revoke all on function evidgate.catalog_suite_guard() from public;
+
+drop trigger if exists suite_guard on public.suite;
+create trigger suite_guard
+  before update on public.suite
+  for each row execute function evidgate.catalog_suite_guard();
 
 -- RLS: the standard tenant policy plus the owner policy FORCE needs for backfills.
 alter table public.suite enable row level security;

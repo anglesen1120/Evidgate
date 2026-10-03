@@ -48,6 +48,7 @@ NuGet packages (Central Package Management, `Directory.Packages.props`):
 | xunit.v3 | 4.0.1 | nuspec dep groups net8.0, net472 | Apache-2.0 | https://api.nuget.org/v3-flatcontainer/xunit.v3/4.0.1/xunit.v3.nuspec |
 | xunit.runner.visualstudio | 4.0.0 | nuspec dep groups net8.0, net472 | Apache-2.0 | https://api.nuget.org/v3-flatcontainer/xunit.runner.visualstudio/4.0.0/xunit.runner.visualstudio.nuspec |
 | Shouldly | 4.3.0 | nuspec dep groups net8.0, net9.0, netstandard2.0 | BSD-3-Clause | https://api.nuget.org/v3-flatcontainer/shouldly/4.3.0/shouldly.nuspec |
+| YamlDotNet | 18.1.0 | nuspec dep groups incl. net10.0, net8.0, netstandard2.0 | MIT | https://api.nuget.org/v3-flatcontainer/yamldotnet/18.1.0/yamldotnet.nuspec |
 | NSubstitute | 6.2.0 | nuspec dep groups net8.0, netstandard2.0 | BSD-3-Clause | https://api.nuget.org/v3-flatcontainer/nsubstitute/6.2.0/nsubstitute.nuspec |
 | Testcontainers.PostgreSQL | 4.15.0 | nuspec dep groups incl. net10.0 | MIT | https://api.nuget.org/v3-flatcontainer/testcontainers.postgresql/4.15.0/testcontainers.postgresql.nuspec |
 | Respawn | 7.0.0 | nuspec dep group netstandard2.1 | Apache-2.0 | https://api.nuget.org/v3-flatcontainer/respawn/7.0.0/respawn.nuspec |

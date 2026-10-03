@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Shouldly;
 using Xunit;

@@ -99,7 +99,7 @@ public sealed class CatalogSuiteTests
         var read = await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{world.Suite}", world.Admin);
         read.Status.ShouldBe(HttpStatusCode.OK);
         read.Text("slug").ShouldBe("smoke");
-        read.ETag.ShouldBe("\"0\"");
+        read.ETag.ShouldBe("\"0-1\""); // head number - row version
 
         var list = await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/suites", world.Admin);
         list.Body.GetProperty("items").EnumerateArray().Single().GetProperty("id").GetGuid().ShouldBe(world.Suite);
@@ -107,13 +107,15 @@ public sealed class CatalogSuiteTests
         (await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) } })).Status.ShouldBe(HttpStatusCode.Created);
 
         var again = await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{world.Suite}", world.Admin);
-        again.ETag.ShouldBe("\"1\"");
+        again.ETag.ShouldStartWith("\"1-");
+        var headTag = again.ETag!;
+        headTag.ShouldNotBe(read.ETag);
         again.Body.GetProperty("head_revision_no").GetInt32().ShouldBe(1);
 
         // If-None-Match with the current head: nothing to send.
         using var conditional = new HttpRequestMessage(HttpMethod.Get, $"/v1/suites/{world.Suite}");
         world.Admin(conditional.Headers);
-        conditional.Headers.TryAddWithoutValidation("If-None-Match", "\"1\"");
+        conditional.Headers.TryAddWithoutValidation("If-None-Match", "W/" + headTag);
         using var response = await world.Client.SendAsync(conditional, TestContext.Current.CancellationToken);
         response.StatusCode.ShouldBe(HttpStatusCode.NotModified);
         (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
@@ -306,15 +308,20 @@ public sealed class CatalogSuiteTests
         var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         var foreign = (await SeedCasesAsync(world.Api, otherOrg, otherProject, world.Database, 1, 200))[0];
-        var revision = await CreateRevisionAsync(world, new { });
         var variant = Guid.CreateVersion7();
-        await _fixture.ExecuteAsync(world.Database, $"insert into public.variant (id, org_id, project_id, variant_hash, params) values ('{variant}', '{world.Org}', '{world.Project}', 'sha256:{new string('c', 64)}', '{{}}')");
+        var revision = Guid.CreateVersion7();
 
+        // One statement batch = one transaction, so the revision is still draft-and-new when its member arrives and the
+        // insert guard lets it through; only the composite foreign key can then refuse the other org's case revision.
         var error = await Should.ThrowAsync<PostgresException>(async () => await _fixture.ExecuteAsync(
             world.Database,
-            $"insert into public.suite_member (id, org_id, suite_revision_id, case_revision_id, variant_id, ordinal) values ('{Guid.CreateVersion7()}', '{world.Org}', '{revision.Id("suite_revision_id")}', '{foreign}', '{variant}', 0)"));
+            $"""
+            insert into public.variant (id, org_id, project_id, variant_hash, params) values ('{variant}', '{world.Org}', '{world.Project}', 'sha256:{new string('c', 64)}', jsonb_build_object());
+            insert into public.suite_revision (id, org_id, suite_id, revision_no, revision_hash, shard_strategy, retry_policy) values ('{revision}', '{world.Org}', '{world.Suite}', 99, 'sha256:{new string('d', 64)}', jsonb_build_object(), jsonb_build_object());
+            insert into public.suite_member (id, org_id, suite_revision_id, case_revision_id, variant_id, ordinal) values ('{Guid.CreateVersion7()}', '{world.Org}', '{revision}', '{foreign}', '{variant}', 0);
+            """));
 
-        error.ConstraintName.ShouldBe("suite_member_case_revision_fk");
+        error.ConstraintName.ShouldBe("suite_member_case_revision_fk", error.MessageText);
     }
 
     // ------------------------------------------------------------------ AC3 DAG
@@ -691,7 +698,7 @@ public sealed class CatalogSuiteTests
 
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var writes = world.Api.Statements.Snapshot().Where(statement => statement.Contains("public.", StringComparison.Ordinal)).ToList();
-        writes.Count.ShouldBeLessThanOrEqualTo(14, string.Join(Environment.NewLine, writes));
+        writes.Count.ShouldBeLessThanOrEqualTo(15, string.Join(Environment.NewLine, writes));
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_member")).ShouldBe(500);
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.case_dependency")).ShouldBe(499);
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.variant")).ShouldBe(7);
@@ -716,5 +723,64 @@ public sealed class CatalogSuiteTests
             }
         }
 
+
+    }
+
+    // ------------------------------------------------------------------ review fixes (03.2.1 §8a)
+
+    [Fact]
+    public async Task Resubmitting_AnOlderRevisionsContent_MovesTheHeadBack()
+    {
+        await using var world = await StartAsync();
+        var first = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0], null, "a") } });
+        var second = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0], null, "a"), Member(world.Revisions[1], null, "b") } });
+        first.Status.ShouldBe(HttpStatusCode.Created);
+        second.Status.ShouldBe(HttpStatusCode.Created);
+
+        var revert = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0], null, "a") } });
+
+        revert.Status.ShouldBe(HttpStatusCode.OK);
+        revert.Body.GetProperty("head_moved").GetBoolean().ShouldBeTrue();
+        revert.Id("suite_revision_id").ShouldBe(first.Id("suite_revision_id"));
+        var read = await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{world.Suite}", world.Admin);
+        read.Body.GetProperty("head_revision_no").GetInt32().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task DryRun_MustBeABoolean()
+    {
+        await using var world = await StartAsync();
+
+        var answer = await CreateRevisionAsync(world, new { }, "?dry_run=maybe");
+
+        answer.Status.ShouldBe(HttpStatusCode.BadRequest);
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_revision")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Revision_IsServedWithItsHashAsETag_AndCachesPrivately()
+    {
+        await using var world = await StartAsync();
+        var created = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) } });
+
+        var read = await world.Client.SendAsync(HttpMethod.Get, $"/v1/suite-revisions/{created.Id("suite_revision_id")}", world.Admin);
+
+        read.ETag.ShouldBe($"\"{read.Text("revision_hash")}\"");
+        read.Headers.CacheControl!.ToString().ShouldContain("immutable");
+    }
+
+    [Fact]
+    public async Task Database_RefusesAMemberAddedToAnOlderRevision()
+    {
+        await using var world = await StartAsync();
+        var created = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) } });
+        var variant = Guid.CreateVersion7();
+        await _fixture.ExecuteAsync(world.Database, $"insert into public.variant (id, org_id, project_id, variant_hash, params) values ('{variant}', '{world.Org}', '{world.Project}', 'sha256:{new string('e', 64)}', jsonb_build_object())");
+
+        var error = await Should.ThrowAsync<PostgresException>(async () => await _fixture.ExecuteAsync(
+            world.Database,
+            $"insert into public.suite_member (id, org_id, suite_revision_id, case_revision_id, variant_id, ordinal) values ('{Guid.CreateVersion7()}', '{world.Org}', '{created.Id("suite_revision_id")}', '{world.Revisions[1]}', '{variant}', 5)"));
+
+        error.SqlState.ShouldBe("23514");
     }
 }
