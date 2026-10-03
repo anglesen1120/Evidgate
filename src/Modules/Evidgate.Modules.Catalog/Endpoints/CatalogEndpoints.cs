@@ -54,7 +54,140 @@ public static class CatalogEndpoints
             .Produces<CaseRevisionListResponse>(StatusCodes.Status200OK)
             .WithSummary("Stored versions of a case, newest first (03)");
 
+        group.MapPost("/projects/{p}/suites", CreateSuiteAsync)
+            .Accepts<CreateSuiteRequest>("application/json")
+            .Produces<SuiteDto>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
+            .WithSummary("Create a suite in a project (03)");
+
+        group.MapGet("/projects/{p}/suites", ListSuitesAsync)
+            .Produces<SuiteListResponse>(StatusCodes.Status200OK)
+            .WithSummary("Cursor page of a project's suites (03)");
+
+        group.MapGet("/suites/{s}", GetSuiteAsync)
+            .Produces<SuiteDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status304NotModified)
+            .WithSummary("One suite; ETag is the head revision number, If-None-Match honours 304 (03)");
+
+        // The delegate reads the raw JSON (strict, capped) so unknown members are refused; the documented body is the DTO.
+        group.MapPost("/suites/{s}/revisions", CreateSuiteRevisionAsync)
+            .Accepts<CreateSuiteRevisionRequest>("application/json")
+            .Produces<SuiteRevisionHead>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
+            .WithSummary("Create an immutable suite revision, or preview it with dry_run=true (03)");
+
+        group.MapGet("/suite-revisions/{r}", GetSuiteRevisionAsync)
+            .Produces<SuiteRevisionDto>(StatusCodes.Status200OK)
+            .WithSummary("The full pinned content of a suite revision (03)");
+
+        group.MapGet("/suite-revisions/{r}/diff", GetSuiteRevisionDiffAsync)
+            .Produces<SuiteRevisionDiff>(StatusCodes.Status200OK)
+            .WithSummary("What changed from another revision of the same suite (03)");
+
         return group;
+    }
+
+    private static async Task<Result<SuiteDto>> CreateSuiteAsync(
+        Guid p,
+        CreateSuiteRequest request,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new CreateSuiteCommand(p, request.Name, request.Slug, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
+
+        return WithETag(context, result, suite => suite.HeadRevisionNo ?? 0);
+    }
+
+    private static async Task<Result<SuiteListResponse>> ListSuitesAsync(
+        Guid p,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (LimitError(context.Request.Query["limit"], out var limit) is { } error)
+        {
+            return Result.Failure<SuiteListResponse>(error);
+        }
+
+        return await mediator.Send(new ListSuitesQuery(p, Blank(context.Request.Query["cursor"]), limit), cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<Result> GetSuiteAsync(
+        Guid s,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetSuiteQuery(s), cancellationToken).ConfigureAwait(false);
+        if (!result.IsSuccess)
+        {
+            return result;
+        }
+
+        var etag = string.Create(CultureInfo.InvariantCulture, $"\"{result.Value.HeadRevisionNo ?? 0}\"");
+        context.Response.Headers.ETag = etag;
+
+        // 304 when the caller already holds this head: the suite row itself is cheap, the saving is the body and the client's parse.
+        var presented = context.Request.Headers.IfNoneMatch.ToString();
+
+        return !string.IsNullOrEmpty(presented)
+            && presented.Split(',').Select(tag => tag.Trim().Trim('"')).Any(tag => tag == "*" || tag == (result.Value.HeadRevisionNo ?? 0).ToString(CultureInfo.InvariantCulture))
+            ? Result.Success(StatusCodes.Status304NotModified)
+            : result;
+    }
+
+    private static async Task<Result> CreateSuiteRevisionAsync(
+        Guid s,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var (body, readError) = await ReadObjectAsync(context, MaxRevisionBodyBytes, cancellationToken).ConfigureAwait(false);
+        if (readError is not null)
+        {
+            return Result.Failure<SuiteRevisionHead>(readError);
+        }
+
+        CreateSuiteRevisionRequest request;
+        try
+        {
+            request = body.Deserialize<CreateSuiteRevisionRequest>(RequestJson)
+                ?? new CreateSuiteRevisionRequest(null, null, null, null, null);
+        }
+        catch (JsonException exception)
+        {
+            return Result.Failure<SuiteRevisionHead>(Error.Invalid(
+                "the body does not match the suite revision shape",
+                [new ErrorDetail(Domain.TextRules.Brief(exception.Path ?? string.Empty, 128), "invalid")]));
+        }
+
+        var dryRun = string.Equals(context.Request.Query["dry_run"], "true", StringComparison.OrdinalIgnoreCase);
+        var result = dryRun
+            ? await mediator.Send(new PreviewSuiteRevisionQuery(s, request), cancellationToken).ConfigureAwait(false)
+            : await mediator.Send(new CreateSuiteRevisionCommand(s, request, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
+
+        return result;
+    }
+
+    private static async Task<Result<SuiteRevisionDto>> GetSuiteRevisionAsync(
+        Guid r,
+        IMediator mediator,
+        CancellationToken cancellationToken) =>
+        await mediator.Send(new GetSuiteRevisionQuery(r), cancellationToken).ConfigureAwait(false);
+
+    private static async Task<Result<SuiteRevisionDiff>> GetSuiteRevisionDiffAsync(
+        Guid r,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(context.Request.Query["against"], out var against))
+        {
+            return Result.Failure<SuiteRevisionDiff>(Error.Invalid("against must be the id of another revision of the same suite", [new ErrorDetail("against", "required")]));
+        }
+
+        return await mediator.Send(new GetSuiteRevisionDiffQuery(r, against), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Result<CaseListResponse>> ListCasesAsync(
@@ -97,7 +230,7 @@ public static class CatalogEndpoints
             return Result.Failure<CaseDto>(ifMatch);
         }
 
-        var (body, readError) = await ReadObjectAsync(context, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await ReadObjectAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<CaseDto>(readError);
@@ -142,10 +275,13 @@ public static class CatalogEndpoints
 
     private const int MaxBodyBytes = 16 * 1024;
 
+    /// <summary>A revision of 10 000 members with parameters stays well under this (00 §5.7 P8).</summary>
+    private const int MaxRevisionBodyBytes = 4 * 1024 * 1024;
+
     /// <summary>The raw JSON body, capped at 16 KiB (P8), so identity members can be named in a precise 422.</summary>
-    private static async Task<(JsonElement Body, Error? Error)> ReadObjectAsync(HttpContext context, CancellationToken cancellationToken)
+    private static async Task<(JsonElement Body, Error? Error)> ReadObjectAsync(HttpContext context, int limit, CancellationToken cancellationToken)
     {
-        if (context.Request.ContentLength > MaxBodyBytes)
+        if (context.Request.ContentLength > limit)
         {
             return (default, new Error(ApiErrorCode.PayloadTooLarge, "the request body is too large", StatusCodes.Status413PayloadTooLarge));
         }
@@ -158,7 +294,7 @@ public static class CatalogEndpoints
             while ((read = await context.Request.Body.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
             {
                 await limited.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                if (limited.Length > MaxBodyBytes)
+                if (limited.Length > limit)
                 {
                     return (default, new Error(ApiErrorCode.PayloadTooLarge, "the request body is too large", StatusCodes.Status413PayloadTooLarge));
                 }

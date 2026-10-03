@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, DisableCiBindingData, DisableCiBindingErrors, DisableCiBindingResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, ExportAuditData, ExportAuditErrors, ExportAuditResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetCaseData, GetCaseErrors, GetCaseResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCaseRevisionsData, ListCaseRevisionsErrors, ListCaseRevisionsResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListCiBindingsData, ListCiBindingsErrors, ListCiBindingsResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListIngestTokensData, ListIngestTokensErrors, ListIngestTokensResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListMyOrganizationsData, ListMyOrganizationsErrors, ListMyOrganizationsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeIngestTokenData, RevokeIngestTokenErrors, RevokeIngestTokenResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, RotateIngestTokenData, RotateIngestTokenErrors, RotateIngestTokenResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, UpdateCaseData, UpdateCaseErrors, UpdateCaseResponses, UpdateCiBindingData, UpdateCiBindingErrors, UpdateCiBindingResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
+import type { ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteData, CreateSuiteErrors, CreateSuiteResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, DisableCiBindingData, DisableCiBindingErrors, DisableCiBindingResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, ExportAuditData, ExportAuditErrors, ExportAuditResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetCaseData, GetCaseErrors, GetCaseResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteData, GetSuiteErrors, GetSuiteResponses, GetSuiteRevisionData, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetSuiteRevisionErrors, GetSuiteRevisionResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCaseRevisionsData, ListCaseRevisionsErrors, ListCaseRevisionsResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListCiBindingsData, ListCiBindingsErrors, ListCiBindingsResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListIngestTokensData, ListIngestTokensErrors, ListIngestTokensResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListMyOrganizationsData, ListMyOrganizationsErrors, ListMyOrganizationsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, ListSuitesData, ListSuitesErrors, ListSuitesResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeIngestTokenData, RevokeIngestTokenErrors, RevokeIngestTokenResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, RotateIngestTokenData, RotateIngestTokenErrors, RotateIngestTokenResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, UpdateCaseData, UpdateCaseErrors, UpdateCaseResponses, UpdateCiBindingData, UpdateCiBindingErrors, UpdateCiBindingResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -946,7 +946,56 @@ export const listCaseRevisions = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
- * Publish an immutable suite revision (03)
+ * Cursor page of a project's suites (03.2.1)
+ */
+export const listSuites = <ThrowOnError extends boolean = false>(options: Options<ListSuitesData, ThrowOnError>): RequestResult<ListSuitesResponses, ListSuitesErrors, ThrowOnError> => (options.client ?? client).get<ListSuitesResponses, ListSuitesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/suites',
+    ...options
+});
+
+/**
+ * Create a suite in a project (03.2.1)
+ *
+ * A suite is the named, project-scoped line of immutable revisions. 409 `suite_slug_taken` when the slug is used in the project; another org's project is the same 404 as a missing one.
+ */
+export const createSuite = <ThrowOnError extends boolean = false>(options: Options<CreateSuiteData, ThrowOnError>): RequestResult<CreateSuiteResponses, CreateSuiteErrors, ThrowOnError> => (options.client ?? client).post<CreateSuiteResponses, CreateSuiteErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/suites',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * One suite; ETag is the head revision number (03.2.1)
+ *
+ * `ETag: "<head revision_no>"` (`"0"` before the first revision); `If-None-Match` with that value answers 304.
+ */
+export const getSuite = <ThrowOnError extends boolean = false>(options: Options<GetSuiteData, ThrowOnError>): RequestResult<GetSuiteResponses, GetSuiteErrors, ThrowOnError> => (options.client ?? client).get<GetSuiteResponses, GetSuiteErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/suites/{s}',
+    ...options
+});
+
+/**
+ * Create an immutable suite revision, or preview it with dry_run=true (03.2.1)
+ *
+ * Members, variants, dependency edges and strategies are written in one transaction; `revision_no` is allocated per suite (concurrent creates get n and n+1). Identical content returns the existing revision (200, `created: false`). `dry_run=true` computes the hash and the number the revision would get and writes nothing. 422: `cross_project_member`, `dependency_cycle` (the members along the cycle in `details`), `variant_not_secret_free`, `request_invalid` (shape, unknown ref, bad strategy document).
  */
 export const createSuiteRevision = <ThrowOnError extends boolean = false>(options: Options<CreateSuiteRevisionData, ThrowOnError>): RequestResult<CreateSuiteRevisionResponses, CreateSuiteRevisionErrors, ThrowOnError> => (options.client ?? client).post<CreateSuiteRevisionResponses, CreateSuiteRevisionErrors, ThrowOnError>({
     security: [{
@@ -963,7 +1012,22 @@ export const createSuiteRevision = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * Diff between suite revisions (03)
+ * The full pinned content of a suite revision (03.2.1)
+ */
+export const getSuiteRevision = <ThrowOnError extends boolean = false>(options: Options<GetSuiteRevisionData, ThrowOnError>): RequestResult<GetSuiteRevisionResponses, GetSuiteRevisionErrors, ThrowOnError> => (options.client ?? client).get<GetSuiteRevisionResponses, GetSuiteRevisionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/suite-revisions/{r}',
+    ...options
+});
+
+/**
+ * What changed from another revision of the same suite (03.2.1)
+ *
+ * Both revisions must belong to one suite; members are compared by case revision and variant, never by row id.
  */
 export const getSuiteRevisionDiff = <ThrowOnError extends boolean = false>(options: Options<GetSuiteRevisionDiffData, ThrowOnError>): RequestResult<GetSuiteRevisionDiffResponses, GetSuiteRevisionDiffErrors, ThrowOnError> => (options.client ?? client).get<GetSuiteRevisionDiffResponses, GetSuiteRevisionDiffErrors, ThrowOnError>({
     security: [{

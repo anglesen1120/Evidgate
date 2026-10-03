@@ -325,6 +325,153 @@ export type CaseRevisionListResponse = {
 };
 
 /**
+ * Any JSON value. The served document names the .NET `JsonElement` this way; the members that use it (variant `params`, the three strategy documents) say what they hold in their own description.
+ */
+export type JsonElement = unknown;
+
+export type SuiteDto = {
+    id: string;
+    org_id: string;
+    project_id: string;
+    name: string;
+    slug: string;
+    status: 'active' | 'archived';
+    head_revision_id?: string | null;
+    head_revision_no?: number | null;
+    created_at: string;
+    updated_at: string;
+    version: number;
+};
+
+export type SuiteListResponse = {
+    items: Array<SuiteDto>;
+    next_cursor: string | null;
+};
+
+export type CreateSuiteRequest = {
+    name: string;
+    slug: string;
+};
+
+export type SuiteMemberInput = {
+    /**
+     * Name used by edges; defaults to m<index>.
+     */
+    ref?: string;
+    case_revision_id: string;
+    /**
+     * Flat, secret-free variant parameters (scalars and short arrays of scalars).
+     */
+    params?: {
+        [key: string]: unknown;
+    } | null;
+    required?: boolean;
+};
+
+export type SuiteEdgeInput = {
+    parent: string;
+    child: string;
+};
+
+export type CreateSuiteRevisionRequest = {
+    members?: Array<SuiteMemberInput>;
+    edges?: Array<SuiteEdgeInput>;
+    /**
+     * contracts/catalog/shard-strategy.v1.json; default {"kind":"none"}.
+     */
+    shard_strategy?: {
+        [key: string]: unknown;
+    };
+    /**
+     * contracts/catalog/retry-policy.v1.json; default {"max_retries":0}.
+     */
+    retry_policy?: {
+        [key: string]: unknown;
+    };
+    /**
+     * contracts/catalog/environment-requirements.v1.json; secret-free, default {}.
+     */
+    environment_requirements?: {
+        [key: string]: unknown;
+    };
+};
+
+export type SuiteRevisionHead = {
+    suite_revision_id?: string | null;
+    revision_no: number;
+    revision_hash: string;
+    status: 'draft' | 'published' | 'preview';
+    created: boolean;
+    warnings: Array<string>;
+};
+
+export type SuiteMemberDto = {
+    id: string;
+    case_revision_id: string;
+    variant_hash: string;
+    params: JsonElement;
+    required: boolean;
+    ordinal: number;
+};
+
+export type SuiteEdgeDto = {
+    parent_member_id: string;
+    child_member_id: string;
+};
+
+export type SuiteRevisionDto = {
+    id: string;
+    suite_id: string;
+    revision_no: number;
+    revision_hash: string;
+    status: 'draft' | 'published';
+    shard_strategy: {
+        [key: string]: unknown;
+    };
+    retry_policy: {
+        [key: string]: unknown;
+    };
+    environment_requirements: {
+        [key: string]: unknown;
+    };
+    created_at: string;
+    members: Array<SuiteMemberDto>;
+    edges: Array<SuiteEdgeDto>;
+};
+
+export type SuiteMemberKey = {
+    case_revision_id: string;
+    variant_hash: string;
+};
+
+export type SuiteEdgeKey = {
+    parent: SuiteMemberKey;
+    child: SuiteMemberKey;
+};
+
+export type SuiteDelta = {
+    from: {
+        [key: string]: unknown;
+    };
+    to: {
+        [key: string]: unknown;
+    };
+};
+
+export type SuiteRevisionDiff = {
+    revision_id: string;
+    against_id: string;
+    members_added: Array<SuiteMemberKey>;
+    members_removed: Array<SuiteMemberKey>;
+    required_changed: Array<SuiteMemberKey>;
+    edges_added: Array<SuiteEdgeKey>;
+    edges_removed: Array<SuiteEdgeKey>;
+    shard_strategy?: SuiteDelta | null;
+    retry_policy?: SuiteDelta | null;
+    environment_requirements?: SuiteDelta | null;
+};
+
+/**
  * A CI binding as listed and read; never carries the challenge or its hash.
  */
 export type CiBindingView = {
@@ -810,6 +957,13 @@ export type CaseStatusFilter = 'active' | 'missing' | 'archived';
 export type CaseFrameworkFilter = string;
 
 export type CaseId = string;
+
+/**
+ * When true, nothing is written; the response previews the revision.
+ */
+export type DryRun = boolean;
+
+export type AgainstRevision = string;
 
 export type SuiteRevisionId = string;
 
@@ -4071,13 +4225,165 @@ export type ListCaseRevisionsResponses = {
 
 export type ListCaseRevisionsResponse = ListCaseRevisionsResponses[keyof ListCaseRevisionsResponses];
 
-export type CreateSuiteRevisionData = {
-    /**
-     * Suite revision payload; immutable once published (00 §8.10).
-     */
-    body: {
-        [key: string]: unknown;
+export type ListSuitesData = {
+    body?: never;
+    path: {
+        p: string;
     };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/suites';
+};
+
+export type ListSuitesErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListSuitesError = ListSuitesErrors[keyof ListSuitesErrors];
+
+export type ListSuitesResponses = {
+    /**
+     * Page of suites
+     */
+    200: SuiteListResponse;
+};
+
+export type ListSuitesResponse = ListSuitesResponses[keyof ListSuitesResponses];
+
+export type CreateSuiteData = {
+    body: CreateSuiteRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/suites';
+};
+
+export type CreateSuiteErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateSuiteError = CreateSuiteErrors[keyof CreateSuiteErrors];
+
+export type CreateSuiteResponses = {
+    /**
+     * The suite
+     */
+    201: SuiteDto;
+};
+
+export type CreateSuiteResponse = CreateSuiteResponses[keyof CreateSuiteResponses];
+
+export type GetSuiteData = {
+    body?: never;
+    path: {
+        s: string;
+    };
+    query?: never;
+    url: '/suites/{s}';
+};
+
+export type GetSuiteErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetSuiteError = GetSuiteErrors[keyof GetSuiteErrors];
+
+export type GetSuiteResponses = {
+    /**
+     * The suite
+     */
+    200: SuiteDto;
+};
+
+export type GetSuiteResponse = GetSuiteResponses[keyof GetSuiteResponses];
+
+export type CreateSuiteRevisionData = {
+    body: CreateSuiteRevisionRequest;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -4091,7 +4397,12 @@ export type CreateSuiteRevisionData = {
     path: {
         s: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * When true, nothing is written; the response previews the revision.
+         */
+        dry_run?: boolean;
+    };
     url: '/suites/{s}/revisions';
 };
 
@@ -4130,21 +4441,27 @@ export type CreateSuiteRevisionError = CreateSuiteRevisionErrors[keyof CreateSui
 
 export type CreateSuiteRevisionResponses = {
     /**
+     * Existing revision with identical content, or a dry-run preview
+     */
+    200: SuiteRevisionHead;
+    /**
      * Suite revision created
      */
-    201: unknown;
+    201: SuiteRevisionHead;
 };
 
-export type GetSuiteRevisionDiffData = {
+export type CreateSuiteRevisionResponse = CreateSuiteRevisionResponses[keyof CreateSuiteRevisionResponses];
+
+export type GetSuiteRevisionData = {
     body?: never;
     path: {
         r: string;
     };
     query?: never;
-    url: '/suite-revisions/{r}/diff';
+    url: '/suite-revisions/{r}';
 };
 
-export type GetSuiteRevisionDiffErrors = {
+export type GetSuiteRevisionErrors = {
     /**
      * 401 unauthenticated (00 §9.2)
      */
@@ -4167,14 +4484,65 @@ export type GetSuiteRevisionDiffErrors = {
     503: ErrorEnvelope;
 };
 
+export type GetSuiteRevisionError = GetSuiteRevisionErrors[keyof GetSuiteRevisionErrors];
+
+export type GetSuiteRevisionResponses = {
+    /**
+     * The revision with its members and edges
+     */
+    200: SuiteRevisionDto;
+};
+
+export type GetSuiteRevisionResponse = GetSuiteRevisionResponses[keyof GetSuiteRevisionResponses];
+
+export type GetSuiteRevisionDiffData = {
+    body?: never;
+    path: {
+        r: string;
+    };
+    query: {
+        against: string;
+    };
+    url: '/suite-revisions/{r}/diff';
+};
+
+export type GetSuiteRevisionDiffErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
 export type GetSuiteRevisionDiffError = GetSuiteRevisionDiffErrors[keyof GetSuiteRevisionDiffErrors];
 
 export type GetSuiteRevisionDiffResponses = {
     /**
      * Suite revision diff
      */
-    200: unknown;
+    200: SuiteRevisionDiff;
 };
+
+export type GetSuiteRevisionDiffResponse = GetSuiteRevisionDiffResponses[keyof GetSuiteRevisionDiffResponses];
 
 export type ReceiveGithubWebhookData = {
     body?: never;

@@ -2453,15 +2453,18 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
-  /suites/{s}/revisions:
+  /projects/{p}/suites:
     post:
-      operationId: createSuiteRevision
+      operationId: createSuite
       tags: [catalog]
-      summary: Publish an immutable suite revision (03)
+      summary: Create a suite in a project (03.2.1)
+      description: >-
+        A suite is the named, project-scoped line of immutable revisions. 409 `suite_slug_taken` when the slug is used
+        in the project; another org's project is the same 404 as a missing one.
       x-permission: suite:write
       x-version: v1
       parameters:
-        - $ref: '#/components/parameters/SuiteId'
+        - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/XsrfToken'
       requestBody:
@@ -2469,14 +2472,19 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: Suite revision payload; immutable once published (00 §8.10).
+              $ref: '#/components/schemas/CreateSuiteRequest'
       responses:
         '201':
-          description: Suite revision created
+          description: The suite
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteDto'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2491,18 +2499,63 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
-  /suite-revisions/{r}/diff:
     get:
-      operationId: getSuiteRevisionDiff
+      operationId: listSuites
       tags: [catalog]
-      summary: Diff between suite revisions (03)
+      summary: Cursor page of a project's suites (03.2.1)
       x-permission: suite:read
       x-version: v1
       parameters:
-        - $ref: '#/components/parameters/SuiteRevisionId'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
       responses:
         '200':
-          description: Suite revision diff
+          description: Page of suites
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /suites/{s}:
+    get:
+      operationId: getSuite
+      tags: [catalog]
+      summary: One suite; ETag is the head revision number (03.2.1)
+      description: >-
+        `ETag: "<head revision_no>"` (`"0"` before the first revision); `If-None-Match` with that value answers 304.
+      x-permission: suite:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/SuiteId'
+      responses:
+        '200':
+          description: The suite
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteDto'
+        '304':
+          description: The caller already holds this head revision
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -2512,6 +2565,125 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /suites/{s}/revisions:
+    post:
+      operationId: createSuiteRevision
+      tags: [catalog]
+      summary: Create an immutable suite revision, or preview it with dry_run=true (03.2.1)
+      description: >-
+        Members, variants, dependency edges and strategies are written in one transaction; `revision_no` is allocated per
+        suite (concurrent creates get n and n+1). Identical content returns the existing revision (200,
+        `created: false`). `dry_run=true` computes the hash and the number the revision would get and writes nothing.
+        422: `cross_project_member`, `dependency_cycle` (the members along the cycle in `details`),
+        `variant_not_secret_free`, `request_invalid` (shape, unknown ref, bad strategy document).
+      x-permission: suite:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/SuiteId'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSuiteRevisionRequest'
+      responses:
+        '200':
+          description: Existing revision with identical content, or a dry-run preview
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteRevisionHead'
+        '201':
+          description: Suite revision created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteRevisionHead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /suite-revisions/{r}:
+    get:
+      operationId: getSuiteRevision
+      tags: [catalog]
+      summary: The full pinned content of a suite revision (03.2.1)
+      x-permission: suite:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/SuiteRevisionId'
+      responses:
+        '200':
+          description: The revision with its members and edges
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteRevisionDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /suite-revisions/{r}/diff:
+    get:
+      operationId: getSuiteRevisionDiff
+      tags: [catalog]
+      summary: What changed from another revision of the same suite (03.2.1)
+      description: Both revisions must belong to one suite; members are compared by case revision and variant, never by row id.
+      x-permission: suite:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/SuiteRevisionId'
+        - $ref: '#/components/parameters/AgainstRevision'
+      responses:
+        '200':
+          description: Suite revision diff
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteRevisionDiff'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -3331,6 +3503,20 @@ components:
       schema:
         type: string
         format: uuid
+    DryRun:
+      name: dry_run
+      in: query
+      required: false
+      schema:
+        type: boolean
+      description: When true, nothing is written; the response previews the revision.
+    AgainstRevision:
+      name: against
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uuid
     SuiteRevisionId:
       name: r
       in: path
@@ -3980,6 +4166,185 @@ components:
             $ref: '#/components/schemas/CaseRevisionDto'
         next_cursor:
           type: [string, 'null']
+    JsonElement:
+      description: >-
+        Any JSON value. The served document names the .NET `JsonElement` this way; the members that use it (variant
+        `params`, the three strategy documents) say what they hold in their own description.
+    SuiteDto:
+      type: object
+      required: [id, org_id, project_id, name, slug, status, created_at, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        name: { type: string, maxLength: 128 }
+        slug: { type: string, pattern: '^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$' }
+        status: { type: string, enum: [active, archived] }
+        head_revision_id: { type: [string, 'null'], format: uuid }
+        head_revision_no: { type: [integer, 'null'] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+    SuiteListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SuiteDto' }
+        next_cursor: { type: [string, 'null'] }
+    CreateSuiteRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name: { type: string, maxLength: 128 }
+        slug: { type: string, pattern: '^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$' }
+    SuiteMemberInput:
+      type: object
+      required: [case_revision_id]
+      additionalProperties: false
+      properties:
+        ref:
+          {
+            type: string,
+            pattern: '^[A-Za-z0-9_.-]{1,64}$',
+            description: 'Name used by edges; defaults to m<index>.',
+          }
+        case_revision_id: { type: string, format: uuid }
+        params:
+          type: [object, 'null']
+          description: Flat, secret-free variant parameters (scalars and short arrays of scalars).
+        required: { type: boolean, default: true }
+    SuiteEdgeInput:
+      type: object
+      required: [parent, child]
+      additionalProperties: false
+      properties:
+        parent: { type: string }
+        child: { type: string }
+    CreateSuiteRevisionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        members:
+          type: array
+          maxItems: 10000
+          items: { $ref: '#/components/schemas/SuiteMemberInput' }
+        edges:
+          type: array
+          maxItems: 50000
+          items: { $ref: '#/components/schemas/SuiteEdgeInput' }
+        shard_strategy:
+          type: object
+          description: contracts/catalog/shard-strategy.v1.json; default {"kind":"none"}.
+        retry_policy:
+          type: object
+          description: contracts/catalog/retry-policy.v1.json; default {"max_retries":0}.
+        environment_requirements:
+          type: object
+          description: contracts/catalog/environment-requirements.v1.json; secret-free, default {}.
+    SuiteRevisionHead:
+      type: object
+      required: [revision_no, revision_hash, status, created, warnings]
+      properties:
+        suite_revision_id: { type: [string, 'null'], format: uuid }
+        revision_no: { type: integer }
+        revision_hash: { type: string }
+        status: { type: string, enum: [draft, published, preview] }
+        created: { type: boolean }
+        warnings:
+          type: array
+          items: { type: string }
+    SuiteMemberDto:
+      type: object
+      required: [id, case_revision_id, variant_hash, params, required, ordinal]
+      properties:
+        id: { type: string, format: uuid }
+        case_revision_id: { type: string, format: uuid }
+        variant_hash: { type: string }
+        params: { $ref: '#/components/schemas/JsonElement' }
+        required: { type: boolean }
+        ordinal: { type: integer }
+    SuiteEdgeDto:
+      type: object
+      required: [parent_member_id, child_member_id]
+      properties:
+        parent_member_id: { type: string, format: uuid }
+        child_member_id: { type: string, format: uuid }
+    SuiteRevisionDto:
+      type: object
+      required:
+        [
+          id,
+          suite_id,
+          revision_no,
+          revision_hash,
+          status,
+          shard_strategy,
+          retry_policy,
+          environment_requirements,
+          created_at,
+          members,
+          edges,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        suite_id: { type: string, format: uuid }
+        revision_no: { type: integer }
+        revision_hash: { type: string }
+        status: { type: string, enum: [draft, published] }
+        shard_strategy: { type: object }
+        retry_policy: { type: object }
+        environment_requirements: { type: object }
+        created_at: { type: string, format: date-time }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/SuiteMemberDto' }
+        edges:
+          type: array
+          items: { $ref: '#/components/schemas/SuiteEdgeDto' }
+    SuiteMemberKey:
+      type: object
+      required: [case_revision_id, variant_hash]
+      properties:
+        case_revision_id: { type: string, format: uuid }
+        variant_hash: { type: string }
+    SuiteEdgeKey:
+      type: object
+      required: [parent, child]
+      properties:
+        parent: { $ref: '#/components/schemas/SuiteMemberKey' }
+        child: { $ref: '#/components/schemas/SuiteMemberKey' }
+    SuiteDelta:
+      type: object
+      required: [from, to]
+      properties:
+        from: { type: object }
+        to: { type: object }
+    SuiteRevisionDiff:
+      type: object
+      required:
+        [
+          revision_id,
+          against_id,
+          members_added,
+          members_removed,
+          required_changed,
+          edges_added,
+          edges_removed,
+        ]
+      properties:
+        revision_id: { type: string, format: uuid }
+        against_id: { type: string, format: uuid }
+        members_added: { type: array, items: { $ref: '#/components/schemas/SuiteMemberKey' } }
+        members_removed: { type: array, items: { $ref: '#/components/schemas/SuiteMemberKey' } }
+        required_changed: { type: array, items: { $ref: '#/components/schemas/SuiteMemberKey' } }
+        edges_added: { type: array, items: { $ref: '#/components/schemas/SuiteEdgeKey' } }
+        edges_removed: { type: array, items: { $ref: '#/components/schemas/SuiteEdgeKey' } }
+        shard_strategy: { oneOf: [{ $ref: '#/components/schemas/SuiteDelta' }, { type: 'null' }] }
+        retry_policy: { oneOf: [{ $ref: '#/components/schemas/SuiteDelta' }, { type: 'null' }] }
+        environment_requirements:
+          { oneOf: [{ $ref: '#/components/schemas/SuiteDelta' }, { type: 'null' }] }
     CiBindingView:
       type: object
       description: A CI binding as listed and read; never carries the challenge or its hash.

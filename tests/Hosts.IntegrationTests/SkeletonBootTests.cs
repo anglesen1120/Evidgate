@@ -55,10 +55,21 @@ public sealed class SkeletonBootTests
 
             // T3.3: the Worker's consumer runs the same command chain once ready
             // and logs the run_id — read the line while the process is alive.
-            var workerLog = await WaitForLineAsync(
-                worker.StandardOutput,
-                "Slice chain complete: run_id ",
-                TimeSpan.FromSeconds(30));
+            string workerLog;
+            try
+            {
+                workerLog = await WaitForLineAsync(
+                    worker.StandardOutput,
+                    "Slice chain complete: run_id ",
+                    TimeSpan.FromSeconds(30));
+            }
+            catch (InvalidOperationException exception)
+            {
+                // The stream ended: say why (the worker's own error output) instead of only that it ended.
+                var errors = worker.HasExited ? await worker.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken) : string.Empty;
+
+                throw new InvalidOperationException($"{exception.Message}; worker exit {(worker.HasExited ? worker.ExitCode : -1)}; stderr: {errors}", exception);
+            }
             Assert.Contains("run_id", workerLog, StringComparison.Ordinal);
         }
         finally
@@ -101,13 +112,16 @@ public sealed class SkeletonBootTests
     private static async Task<string> WaitForLineAsync(StreamReader reader, string contains, TimeSpan timeout)
     {
         using var deadline = new CancellationTokenSource(timeout);
+        var seen = new List<string>();
         while (true)
         {
             var line = await reader.ReadLineAsync(deadline.Token);
             if (line is null)
             {
-                throw new InvalidOperationException($"process output ended before '{contains}' appeared");
+                throw new InvalidOperationException($"process output ended before '{contains}' appeared; it said: {string.Join(" | ", seen.TakeLast(20))}");
             }
+
+            seen.Add(line);
 
             if (line.Contains(contains, StringComparison.Ordinal))
             {

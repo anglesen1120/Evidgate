@@ -30,14 +30,21 @@ internal static class CatalogModule
         services.AddEvidgateDbContext<CatalogDbContext>(typeof(CatalogDbContext).Assembly);
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<UpdateCaseCommand>, UpdateCaseCommandValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateSuiteCommand>, CreateSuiteCommandValidator>());
 
         // The sidecar reader validates against contracts/catalog/sidecar.v1.json; the compiled set is built on first
         // use, so a host that never syncs a tree pays nothing at start-up.
         services.TryAddEvidgateContractValidation();
+
+        // Handlers are resolved eagerly by Mediator at start-up, so nothing they depend on may compile the schemas:
+        // they receive a Lazy that builds the set the first time a sidecar or a revision is validated.
+        services.TryAddSingleton(provider => new Lazy<ContractSchemaSet>(() => provider.GetRequiredService<ContractSchemaSet>()));
         services.TryAddSingleton<SidecarManifestReader>();
         services.TryAddSingleton<CaseDiscovery>();
         services.TryAddScoped<ICaseIdentityService, CaseIdentityService>();
         services.TryAddScoped<ITestRevisionStore, TestRevisionStore>();
+        services.TryAddSingleton<SuiteRevisionPlanner>();
+        services.TryAddScoped<ICatalogContracts, CatalogContracts>();
 
         return services;
     }

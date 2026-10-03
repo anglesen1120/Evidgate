@@ -33,7 +33,7 @@ internal sealed record SidecarReadResult(IReadOnlyList<SidecarEntry> Entries, IR
 /// no entry at all; a valid one contributes one entry per mapping and one problem per entry that names an
 /// unusable path.
 /// </summary>
-internal sealed class SidecarManifestReader(ContractSchemaSet schemas)
+internal sealed class SidecarManifestReader(Lazy<ContractSchemaSet> schemaSet)
 {
     /// <summary>The file name that marks a sidecar.</summary>
     internal const string FileName = "evidgate.cases.yaml";
@@ -74,7 +74,7 @@ internal sealed class SidecarManifestReader(ContractSchemaSet schemas)
         }
 
         using var parsed = JsonDocument.Parse(document.ToJsonString());
-        var verdict = schemas.Validate(SchemaKey, parsed.RootElement);
+        var verdict = schemaSet.Value.Validate(SchemaKey, parsed.RootElement);
         if (!verdict.IsValid)
         {
             var first = verdict.Errors[0];

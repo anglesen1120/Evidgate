@@ -130,7 +130,7 @@ public sealed class CatalogUnitTests
     // ------------------------------------------------------------------ SidecarManifestReader
 
     private static SidecarReadResult Read(string yaml, string path = "tests/evidgate.cases.yaml") =>
-        new SidecarManifestReader(Schemas).Read(path, yaml);
+        new SidecarManifestReader(new Lazy<ContractSchemaSet>(Schemas)).Read(path, yaml);
 
     [Fact]
     public void Sidecar_ValidManifest_ResolvesPathsRelativeToItsDirectory()
@@ -236,7 +236,7 @@ public sealed class CatalogUnitTests
             "version: 1\ncases:\n" + string.Concat(cases.Select(c => $"  - file: {c.File}\n    evidgate.id: {c.Id}\n")));
 
     private static DiscoveryResult Discover(params SourceFile[] files) =>
-        new CaseDiscovery(new SidecarManifestReader(Schemas)).Discover(files);
+        new CaseDiscovery(new SidecarManifestReader(new Lazy<ContractSchemaSet>(Schemas))).Discover(files);
 
     [Fact]
     public void Discovery_AnnotatedFile_BecomesACase_NamedAfterItsStem()
