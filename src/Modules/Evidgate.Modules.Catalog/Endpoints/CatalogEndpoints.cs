@@ -197,7 +197,9 @@ public static class CatalogEndpoints
 
             if (!Mutable.Contains(member.Name, StringComparer.Ordinal))
             {
-                return Error.Invalid($"'{member.Name}' is not a field of a test case", [new ErrorDetail(member.Name, "unknown_field")]);
+                var shown = Domain.TextRules.Brief(member.Name, 64);
+
+                return Error.Invalid($"'{shown}' is not a field of a test case", [new ErrorDetail(shown, "unknown_field")]);
             }
         }
 

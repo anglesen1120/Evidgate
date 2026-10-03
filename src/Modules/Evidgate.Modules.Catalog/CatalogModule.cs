@@ -37,6 +37,7 @@ internal static class CatalogModule
         services.TryAddSingleton<SidecarManifestReader>();
         services.TryAddSingleton<CaseDiscovery>();
         services.TryAddScoped<ICaseIdentityService, CaseIdentityService>();
+        services.TryAddScoped<ITestRevisionStore, TestRevisionStore>();
 
         return services;
     }

@@ -67,4 +67,31 @@ internal static class CatalogReadSql
           from public.test_case c
          where c.id = @case_id
         """;
+
+    private const string RevisionColumns = """
+               id, case_id, revision_hash, commit_sha, file_path, framework, language, content_sha256, assertion_hash, created_at
+        """;
+
+    /// <summary>First page of a case's revisions, newest first; the index is scanned backwards.</summary>
+    internal const string RevisionsFirstPage = $"""
+        select {RevisionColumns}
+          from public.test_revision
+         where org_id = @org_id
+           and case_id = @case_id
+         order by created_at desc,
+                  id desc
+         limit @limit
+        """;
+
+    /// <summary>The next page: the row comparison runs the other way because the order is descending.</summary>
+    internal const string RevisionsNextPage = $"""
+        select {RevisionColumns}
+          from public.test_revision
+         where org_id = @org_id
+           and case_id = @case_id
+           and (created_at, id) < (@cursor_created_at::timestamptz, @cursor_id::uuid)
+         order by created_at desc,
+                  id desc
+         limit @limit
+        """;
 }

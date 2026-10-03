@@ -19,12 +19,9 @@ internal static class RepoPath
             return false;
         }
 
-        foreach (var character in path)
+        if (path.Contains('\\', StringComparison.Ordinal) || !TextRules.IsClean(path))
         {
-            if (character == '\\' || char.IsControl(character))
-            {
-                return false;
-            }
+            return false;
         }
 
         foreach (var segment in path.Split('/'))

@@ -10,16 +10,19 @@ namespace Evidgate.Modules.Catalog.Domain;
 /// <param name="Name">Display name (sidecar <c>name</c>, else the file's stem).</param>
 /// <param name="Framework">Framework from the caller.</param>
 /// <param name="Language">Language from the caller.</param>
-internal sealed record DiscoveredCase(string Path, Guid Id, string Source, string RawKey, string Name, string Framework, string? Language);
+/// <param name="Content">The file text, carried so the revision store can hash it; it is never stored.</param>
+internal sealed record DiscoveredCase(string Path, Guid Id, string Source, string RawKey, string Name, string Framework, string? Language, string Content);
 
 /// <summary>What a tree held, before it is matched against the database.</summary>
 /// <param name="Cases">One row per file whose id was resolved, in path order.</param>
 /// <param name="Problems">Warnings and source conflicts, in path order.</param>
 /// <param name="HeldIds">Ids that appear in a conflict: their cases are neither registered nor marked missing.</param>
+/// <param name="HeldDirectories">Directory prefixes (<c>dir/</c>, empty for the root) of sidecars that were refused or lost entries: the cases under them keep their state this sync.</param>
 internal sealed record DiscoveryResult(
     IReadOnlyList<DiscoveredCase> Cases,
     IReadOnlyList<CaseSyncEntry> Problems,
-    IReadOnlySet<Guid> HeldIds);
+    IReadOnlySet<Guid> HeldIds,
+    IReadOnlyList<string> HeldDirectories);
 
 /// <summary>
 /// Turns a tree snapshot into resolved cases (03.1.1-T1.2/T1.3, AC3–AC5): annotation and sidecar are equivalent
@@ -28,6 +31,9 @@ internal sealed record DiscoveryResult(
 /// </summary>
 internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
 {
+    /// <summary>Problems kept in one report; a tree of broken files must not produce an unbounded answer.</summary>
+    internal const int MaxProblems = 2000;
+
     /// <summary>Resolves <paramref name="files"/>.</summary>
     /// <param name="files">The tree.</param>
     public DiscoveryResult Discover(IReadOnlyList<SourceFile> files)
@@ -36,6 +42,7 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
 
         var problems = new List<CaseSyncEntry>();
         var held = new HashSet<Guid>();
+        var heldDirectories = new HashSet<string>(StringComparer.Ordinal);
 
         var testFiles = new List<SourceFile>();
         var sidecarFiles = new List<SourceFile>();
@@ -72,6 +79,14 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
             foreach (var problem in read.Problems)
             {
                 problems.Add(Warning(problem.Path, CaseSyncCodes.InvalidSidecarEntry, problem.Message));
+            }
+
+            // A refused sidecar (or one that lost an entry) can no longer vouch for the files it used to identify:
+            // fail safe and keep every case under its directory as it is.
+            if (read.Problems.Count > 0)
+            {
+                var directory = RepoPath.DirectoryOf(sidecarFile.Path);
+                heldDirectories.Add(directory.Length == 0 ? string.Empty : directory + "/");
             }
 
             foreach (var entry in read.Entries)
@@ -151,6 +166,7 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
 
         // The same id on two files of one commit: neither writes anything (AC2), and the id is held.
         var duplicates = resolved.GroupBy(found => found.Id).Where(group => group.Count() > 1).ToArray();
+        var duplicateIds = duplicates.Select(group => group.Key).ToHashSet();
         foreach (var group in duplicates)
         {
             held.Add(group.Key);
@@ -162,7 +178,7 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
 
         // An id that a conflicting source also claims is not registered from the clean file either.
         var keep = new List<DiscoveredCase>();
-        foreach (var found in resolved.Where(found => !duplicates.Any(group => group.Key == found.Id)))
+        foreach (var found in resolved.Where(found => !duplicateIds.Contains(found.Id)))
         {
             if (held.Contains(found.Id))
             {
@@ -176,8 +192,9 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
 
         return new DiscoveryResult(
             [.. keep.OrderBy(found => found.Path, StringComparer.Ordinal)],
-            [.. problems.OrderBy(problem => problem.Path, StringComparer.Ordinal).ThenBy(problem => problem.Code, StringComparer.Ordinal)],
-            held);
+            [.. problems.OrderBy(problem => problem.Path, StringComparer.Ordinal).ThenBy(problem => problem.Code, StringComparer.Ordinal).Take(MaxProblems)],
+            held,
+            [.. heldDirectories.Order(StringComparer.Ordinal)]);
     }
 
     private static void HoldAnnotationIds(string? raw, HashSet<Guid> held)
@@ -193,9 +210,13 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
 
     private static DiscoveredCase Build(SourceFile file, Guid id, string source, string rawKey, string? sidecarName)
     {
-        var name = sidecarName ?? Stem(file.Path);
+        var name = TextRules.IsClean(sidecarName) ? sidecarName! : Stem(file.Path);
+        var framework = TextRules.IsClean(file.Framework) && !string.IsNullOrWhiteSpace(file.Framework)
+            ? TextRules.Truncate(file.Framework, 64)
+            : "unknown";
+        var language = file.Language is { } l && TextRules.IsClean(l) && l.Length is > 0 and <= 64 ? l : null;
 
-        return new DiscoveredCase(file.Path, id, source, rawKey, name.Length > 512 ? name[..512] : name, Truncate(file.Framework, 64), file.Language);
+        return new DiscoveredCase(file.Path, id, source, rawKey, TextRules.Truncate(name, 512), framework, language, file.Content);
     }
 
     private static string Stem(string path)
@@ -205,8 +226,6 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
 
         return dot > 0 ? name[..dot] : name;
     }
-
-    private static string Truncate(string value, int length) => string.IsNullOrWhiteSpace(value) ? "unknown" : value.Length <= length ? value : value[..length];
 
     private static CaseSyncEntry Warning(string path, string code, string message) =>
         new(path, CaseSyncResults.Warning, null, code, message);

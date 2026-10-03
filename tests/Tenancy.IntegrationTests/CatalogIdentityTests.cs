@@ -262,13 +262,13 @@ public sealed class CatalogIdentityTests
     public async Task Register_ReturnAtANewPath_IsReactivatedAndRenamed()
     {
         await using var world = await StartAsync();
-        await RegisterAsync(world, Commit1, Annotated("old.spec.ts", IdA));
-        await RegisterAsync(world, Commit2);
+        await RegisterAsync(world, Commit1, Annotated("old.spec.ts", IdA), Annotated("stay.spec.ts", IdB));
+        await RegisterAsync(world, Commit2, Annotated("stay.spec.ts", IdB));
 
-        var report = await RegisterAsync(world, Commit3, Annotated("new.spec.ts", IdA));
+        var report = await RegisterAsync(world, Commit3, Annotated("new.spec.ts", IdA), Annotated("stay.spec.ts", IdB));
 
         (report.Reactivated, report.Renamed).ShouldBe((1, 1));
-        (await _fixture.ScalarAsync<string>(world.Database, "select status || '|' || file_path from public.test_case")).ShouldBe("active|new.spec.ts");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select status || '|' || file_path from public.test_case where annotation_id = '{IdA}'")).ShouldBe("active|new.spec.ts");
     }
 
     [Fact]
@@ -298,16 +298,104 @@ public sealed class CatalogIdentityTests
     }
 
     [Fact]
-    public async Task Register_AnEmptyTree_MarksEveryActiveCaseMissing_AndLeavesArchivedAlone()
+    public async Task Register_AnEmptyTree_IsRefused_WhileTheProjectHasActiveCases()
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA), Annotated("b.spec.ts", IdB));
-        await _fixture.ExecuteAsync(world.Database, $"update public.test_case set status = 'archived' where annotation_id = '{IdB}'");
 
-        var report = await RegisterAsync(world, Commit2);
+        var outcome = await TryRegisterAsync(world, Commit2);
 
-        report.Missing.ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, $"select status from public.test_case where annotation_id = '{IdB}'")).ShouldBe("archived");
+        (outcome.Succeeded, outcome.Failure).ShouldBe((false, "empty_tree"));
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.test_case where status = 'active'")).ShouldBe(2);
+
+        // A project with nothing active can sync an empty tree.
+        var empty = await StartAsync();
+        await using var _ = empty;
+        (await TryRegisterAsync(empty, Commit1)).Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Register_ATreeThatWouldMakeMostCasesMissing_IsRefused_AsTruncated()
+    {
+        await using var world = await StartAsync();
+        var full = Enumerable.Range(0, 20).Select(i => Annotated($"t/{i}.spec.ts", $"018f2f0e-8a52-7c4b-9d3e-{i:D12}")).ToArray();
+        await RegisterAsync(world, Commit1, full);
+
+        var halfPlusOne = await TryRegisterAsync(world, Commit2, full[..9]);
+        (halfPlusOne.Succeeded, halfPlusOne.Failure).ShouldBe((false, "incomplete_tree"));
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.test_case where status = 'active'")).ShouldBe(20);
+
+        // Exactly half may vanish (a big cleanup is legitimate); under ten cases the guard does not apply.
+        (await TryRegisterAsync(world, Commit2, full[..10])).Report!.Missing.ShouldBe(10);
+        await using var small = await StartAsync();
+        await RegisterAsync(small, Commit1, Annotated("a.spec.ts", IdA), Annotated("b.spec.ts", IdB), Annotated("c.spec.ts", IdC));
+        (await TryRegisterAsync(small, Commit2, Annotated("a.spec.ts", IdA))).Report!.Missing.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Register_ARefusedSidecar_KeepsEveryCaseItIdentified_Active()
+    {
+        await using var world = await StartAsync();
+        var good = new SourceFile("tests/evidgate.cases.yaml", $"version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: {IdA}\n  - file: b.spec.ts\n    evidgate.id: {IdB}\n");
+        var plain = new SourceFile("other/c.spec.ts", $"// evidgate.id: {IdC}", "playwright");
+        await RegisterAsync(world, Commit1, new SourceFile("tests/a.spec.ts", "x", "playwright"), new SourceFile("tests/b.spec.ts", "x", "playwright"), good, plain);
+
+        // Someone breaks the YAML: the files are still there but nothing vouches for their ids any more.
+        var broken = good with { Content = "version: 2\ncases: []\n" };
+        var report = await RegisterAsync(world, Commit2, new SourceFile("tests/a.spec.ts", "x", "playwright"), new SourceFile("tests/b.spec.ts", "x", "playwright"), broken, plain);
+
+        (report.Warnings, report.Missing).ShouldBe((1, 0));
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.test_case where status = 'active'")).ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task Register_NamesAndPathsWithBrokenUnicode_AreWarnings_NotAFailedSync()
+    {
+        await using var world = await StartAsync();
+        var sidecar = new SourceFile(
+            "evidgate.cases.yaml",
+            $"version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: {IdA}\n    name: \"bad\\u0000name\"\n");
+
+        var report = await RegisterAsync(
+            world,
+            Commit1,
+            new SourceFile("a.spec.ts", "x", "playwright"),
+            new SourceFile("b\u202Egnp.spec.ts", $"// evidgate.id: {IdB}", "playwright"),
+            new SourceFile("c\uD800.spec.ts", $"// evidgate.id: {IdC}", "playwright"),
+            sidecar);
+
+        report.Registered.ShouldBe(0);
+        report.Warnings.ShouldBeGreaterThanOrEqualTo(3);
+        (await CountAsync(world, "test_case")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Register_TwoSyncsOfOneProject_RunOneAfterTheOther_NoFailure()
+    {
+        await using var world = await StartAsync();
+        var tree = Enumerable.Range(0, 200).Select(i => Annotated($"t/{i}.spec.ts", $"018f2f0e-8a52-7c4b-9d3e-{i:D12}")).ToArray();
+
+        var runs = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => RegisterAsync(world, Commit1, tree)));
+
+        runs.Sum(run => run.Registered).ShouldBe(200);
+        runs.Count(run => run.Registered == 200).ShouldBe(1);
+        (await CountAsync(world, "test_case")).ShouldBe(200);
+        (await CountAsync(world, "test_revision")).ShouldBe(200);
+    }
+
+    private static async Task<CaseSyncOutcome> TryRegisterAsync(World world, string commit, params SourceFile[] files)
+    {
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
+        await using var scope = await scopes.BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
+        var outcome = await services.ServiceProvider.GetRequiredService<ICaseIdentityService>()
+            .RegisterDiscoveredAsync(world.Project, commit, files, TestContext.Current.CancellationToken);
+        if (outcome.Succeeded)
+        {
+            await scope.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        return outcome;
     }
 
     [Fact]
@@ -338,7 +426,7 @@ public sealed class CatalogIdentityTests
         (await CountAsync(world, "test_case")).ShouldBe(2);
 
         // Vanishing from one project's tree never touches the other project's cases.
-        await RegisterAsync(world.Api, world.Org, second, Commit2);
+        await RegisterAsync(world.Api, world.Org, second, Commit2, Annotated("other.spec.ts", IdB));
         (await _fixture.ScalarAsync<string>(world.Database, $"select status from public.test_case where project_id = '{world.Project}'")).ShouldBe("active");
     }
 
@@ -587,7 +675,7 @@ public sealed class CatalogIdentityTests
     }
 
     [Fact]
-    public async Task Revisions_AreEmpty_UntilTheFirstSyncAppendsOne()
+    public async Task Revisions_HoldTheOneVersionTheFirstSyncAppended()
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
@@ -596,7 +684,7 @@ public sealed class CatalogIdentityTests
         var answer = await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseId}/revisions", world.Admin);
 
         answer.Status.ShouldBe(HttpStatusCode.OK);
-        answer.Body.GetProperty("items").GetArrayLength().ShouldBe(0);
+        answer.Body.GetProperty("items").GetArrayLength().ShouldBe(1);
         (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseId}/revisions?limit=0", world.Admin)).Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 

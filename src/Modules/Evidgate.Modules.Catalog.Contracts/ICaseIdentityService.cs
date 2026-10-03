@@ -11,7 +11,11 @@ public interface ICaseIdentityService
     /// <em>complete</em> set of test files and <c>evidgate.cases.yaml</c> sidecars of the project's tree at that
     /// commit: a case whose id is absent from it becomes <c>missing</c>. Must run inside the caller's tenant
     /// transaction (the 03.4.1 <c>catalog_sync</c> task). Per-file problems are reported, never thrown:
-    /// a conflicting file writes nothing and the other files are still processed (AC2, AC4, AC5).
+    /// a conflicting file writes nothing and the other files are still processed (AC2, AC4, AC5). Syncs of one
+    /// project are serialised by a transaction-scoped advisory lock, and the caller must feed commits in order:
+    /// nothing here stops an older commit from being applied after a newer one (03.4.1 owns that cursor).
+    /// <c>last_seen_commit</c> records the commit of the last <em>change</em> to a case (move, return, vanish), not
+    /// every sync that saw it unchanged.
     /// </summary>
     /// <param name="projectId">The project whose tree this is; another tenant's id is a not-found failure.</param>
     /// <param name="commitSha">Lower-case hex commit id (7–64 characters).</param>
@@ -39,6 +43,9 @@ public static class CaseSyncResults
 
     /// <summary>The case moved: its path changed and a rename row was written.</summary>
     public const string Renamed = "renamed";
+
+    /// <summary>A case that was missing is back (at the path it had).</summary>
+    public const string Reactivated = "reactivated";
 
     /// <summary>The case is already registered at this path.</summary>
     public const string Unchanged = "unchanged";
@@ -86,6 +93,7 @@ public sealed record CaseSyncEntry(string Path, string Result, Guid? CaseId = nu
 /// <param name="Warnings">Malformed annotations or sidecar entries.</param>
 /// <param name="Missing">Cases newly marked <c>missing</c>.</param>
 /// <param name="Reactivated">Cases that came back from <c>missing</c>.</param>
+/// <param name="Revisions">New test revisions appended (03.1.3); content already stored adds none.</param>
 public sealed record CaseSyncReport(
     IReadOnlyList<CaseSyncEntry> Entries,
     int Registered,
@@ -94,11 +102,16 @@ public sealed record CaseSyncReport(
     int Conflicts,
     int Warnings,
     int Missing,
-    int Reactivated);
+    int Reactivated,
+    int Revisions = 0);
 
 /// <summary>Outcome of <see cref="ICaseIdentityService.RegisterDiscoveredAsync"/>: a report, or why it could not run.</summary>
 /// <param name="Report">The report, null on failure.</param>
-/// <param name="Failure">A short code (<c>project_not_found</c>), null on success.</param>
+/// <param name="Failure">
+/// A short code, null on success: <c>project_not_found</c>; <c>empty_tree</c> (no test file at all while the project has
+/// active cases) or <c>incomplete_tree</c> (the sweep would mark more than half of at least ten active cases missing) —
+/// both refuse a tree that looks truncated; the caller fails the sync and rolls back.
+/// </param>
 public sealed record CaseSyncOutcome(CaseSyncReport? Report, string? Failure)
 {
     /// <summary>True when the registration ran.</summary>

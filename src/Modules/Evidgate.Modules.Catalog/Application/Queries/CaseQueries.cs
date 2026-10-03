@@ -136,16 +136,20 @@ internal sealed class GetCaseQueryHandler(
     }
 }
 
-/// <summary>Revisions of a case (<c>GET /v1/cases/{c}/revisions</c>); the page is empty until 03.1.3 appends rows.</summary>
+/// <summary>Revisions of a case, newest first (<c>GET /v1/cases/{c}/revisions</c>, 03.1.3 AC5).</summary>
 /// <param name="CaseId">The case from the route.</param>
 /// <param name="Cursor">The opaque cursor, or null.</param>
 /// <param name="Limit">Page size, 1–200.</param>
 internal sealed record GetCaseRevisionsQuery(Guid CaseId, string? Cursor, int Limit) : IQuery<Result<CaseRevisionListResponse>>;
 
-/// <summary>Handler of <see cref="GetCaseRevisionsQuery"/>: 404 for a case the tenant cannot see.</summary>
+/// <summary>
+/// Handler of <see cref="GetCaseRevisionsQuery"/>: 404 for a case the tenant cannot see; otherwise one case check and
+/// one page statement (descending keyset on <c>test_revision_case_idx</c>, one extra row decides the next page).
+/// </summary>
 [Permission(Permissions.Case.Read)]
 internal sealed class GetCaseRevisionsQueryHandler(
     ITenantDb db,
+    ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
     : IQueryHandler<GetCaseRevisionsQuery, Result<CaseRevisionListResponse>>
@@ -157,8 +161,41 @@ internal sealed class GetCaseRevisionsQueryHandler(
 
         var found = await CaseReader.CaseAsync(db, query.CaseId, cancellationToken).ConfigureAwait(false);
 
-        return found is null || CatalogScope.Project(found.ProjectId, principals, tenant) is not null
-            ? Result.Failure<CaseRevisionListResponse>(CatalogErrors.CaseNotFound)
-            : Result.Success(new CaseRevisionListResponse([], null));
+        if (found is null || CatalogScope.Project(found.ProjectId, principals, tenant) is not null)
+        {
+            return Result.Failure<CaseRevisionListResponse>(CatalogErrors.CaseNotFound);
+        }
+
+        var orgId = scopes.Require().OrgId;
+        IReadOnlyList<CaseRevisionDto> rows;
+
+        if (query.Cursor is null)
+        {
+            rows = await db.QueryAsync<CaseRevisionDto>(
+                CatalogReadSql.RevisionsFirstPage,
+                new { org_id = orgId, case_id = query.CaseId, limit = query.Limit + 1 },
+                cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            if (!KeysetCursor.TryDecode(query.Cursor, out var cursorCreatedAt, out var cursorId))
+            {
+                return Result.Failure<CaseRevisionListResponse>(Error.Invalid(
+                    "the cursor is not a value this endpoint issued",
+                    [new ErrorDetail("cursor", "malformed")]));
+            }
+
+            rows = await db.QueryAsync<CaseRevisionDto>(
+                CatalogReadSql.RevisionsNextPage,
+                new { org_id = orgId, case_id = query.CaseId, cursor_created_at = cursorCreatedAt, cursor_id = cursorId, limit = query.Limit + 1 },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        var hasMore = rows.Count > query.Limit;
+        IReadOnlyList<CaseRevisionDto> page = hasMore ? [.. rows.Take(query.Limit)] : rows;
+
+        return Result.Success(new CaseRevisionListResponse(
+            page,
+            hasMore ? KeysetCursor.Encode(page[^1].CreatedAt, page[^1].Id) : null));
     }
 }

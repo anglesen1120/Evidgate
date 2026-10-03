@@ -320,6 +320,8 @@ internal sealed class TenantRowFactory
             ("public.ingest_token", "scopes") => new[] { "run:create" },
             ("public.test_case", "first_seen_commit") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
             ("public.case_identity_source", "source") => "annotation",
+            ("public.test_revision", "commit_sha") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
+            ("public.test_revision", "revision_hash" or "content_sha256" or "assertion_hash") => "sha256:" + new string('a', 64),
             _ => (object?)null,
         };
 

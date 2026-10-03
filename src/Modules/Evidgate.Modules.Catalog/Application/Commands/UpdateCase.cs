@@ -52,7 +52,7 @@ internal sealed class UpdateCaseCommandValidator : AbstractValidator<UpdateCaseC
     public UpdateCaseCommandValidator()
     {
         RuleFor(command => command.Name)
-            .Must(name => !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= MaxNameLength && !name.Any(char.IsControl))
+            .Must(name => !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= MaxNameLength && TextRules.IsClean(name))
             .WithErrorCode("invalid_length")
             .When(command => command.Name is not null);
 
@@ -72,7 +72,7 @@ internal sealed class UpdateCaseCommandValidator : AbstractValidator<UpdateCaseC
             .When(command => command.Labels is not null);
 
         RuleForEach(command => command.Labels)
-            .Must(label => !string.IsNullOrWhiteSpace(label) && label.Length <= MaxLabelLength && !label.Any(char.IsControl))
+            .Must(label => !string.IsNullOrWhiteSpace(label) && label.Length <= MaxLabelLength && TextRules.IsClean(label))
             .WithErrorCode("invalid_length")
             .When(command => command.Labels is not null);
 

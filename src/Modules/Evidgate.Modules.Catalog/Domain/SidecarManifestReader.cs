@@ -105,7 +105,14 @@ internal sealed class SidecarManifestReader(ContractSchemaSet schemas)
                 continue;
             }
 
-            entries.Add(new SidecarEntry(full, guid, item["name"]?.GetValue<string>(), file));
+            var name = item["name"]?.GetValue<string>();
+            if (name is not null && !TextRules.IsClean(name))
+            {
+                problems.Add(new SidecarProblem(full, "the name of this entry has control, format or malformed Unicode characters"));
+                continue;
+            }
+
+            entries.Add(new SidecarEntry(full, guid, name, file));
         }
 
         return new SidecarReadResult(entries, problems);
@@ -114,7 +121,7 @@ internal sealed class SidecarManifestReader(ContractSchemaSet schemas)
     private static SidecarReadResult Refused(string manifestPath, string message) =>
         new([], [new SidecarProblem(manifestPath, message)]);
 
-    private static string Brief(string text) => text.Length <= 120 ? text : text[..120] + "…";
+    private static string Brief(string text) => TextRules.Brief(text);
 
     private static JsonNode? ToJson(string yaml)
     {

@@ -54,6 +54,12 @@ internal static partial class AnnotationParser
             return new AnnotationResult(AnnotationOutcome.None, null, null);
         }
 
+        // Every spelling contains the literal; almost every file does not.
+        if (content.AsSpan().IndexOf("evidgate.id", StringComparison.Ordinal) < 0)
+        {
+            return new AnnotationResult(AnnotationOutcome.None, null, null);
+        }
+
         var values = new List<string>();
 
         try
@@ -61,16 +67,28 @@ internal static partial class AnnotationParser
             foreach (Match match in Comment().Matches(content))
             {
                 values.Add(match.Groups["v"].Value);
+                if (values.Count >= 16)
+                {
+                    break;
+                }
             }
 
             foreach (Match match in Decorator().Matches(content))
             {
                 values.Add(match.Groups["v"].Value);
+                if (values.Count >= 16)
+                {
+                    break;
+                }
             }
 
             foreach (Match match in PlaywrightObject().Matches(content))
             {
                 values.Add(match.Groups["v"].Value);
+                if (values.Count >= 16)
+                {
+                    break;
+                }
             }
         }
         catch (RegexMatchTimeoutException)
@@ -86,7 +104,7 @@ internal static partial class AnnotationParser
 
         if (values.Count > 1)
         {
-            return new AnnotationResult(AnnotationOutcome.Multiple, null, string.Join(',', values));
+            return new AnnotationResult(AnnotationOutcome.Multiple, null, string.Join(',', values.Take(8)));
         }
 
         return IsCanonicalUuid(values[0], out var id)
@@ -101,7 +119,7 @@ internal static partial class AnnotationParser
         && id != Guid.Empty;
 
     [GeneratedRegex(
-        @"(?://|#|/\*|\*|--)[ \t]*@?evidgate\.id[ \t]*[:=]?[ \t]*\(?[ \t]*['""]?(?<v>[^\s'"")*/]{1,64})",
+        @"(?<![\w'""`])(?://|#|/\*|\*|--)[ \t]*@?evidgate\.id[ \t]*[:=]?[ \t]*\(?[ \t]*['""]?(?<v>[^\s'"")*/]{1,64})",
         RegexOptions.CultureInvariant,
         matchTimeoutMilliseconds: 250)]
     private static partial Regex Comment();
