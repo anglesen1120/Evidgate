@@ -22,7 +22,20 @@ internal static class HandlerLookup
     /// null when no handler resolves or none is declared (both denied by the C2
     /// authorization stage).
     /// </summary>
-    internal static string? PermissionOf(IServiceProvider services, Type messageType, Type responseType)
+    internal static string? PermissionOf(IServiceProvider services, Type messageType, Type responseType) =>
+        HandlerTypeOf(services, messageType, responseType)
+            ?.GetCustomAttribute<PermissionAttribute>(inherit: true)?.Permission;
+
+    /// <summary>
+    /// Whether the handler of <paramref name="messageType"/> is one of the
+    /// tenant-creating handlers marked <see cref="AuthenticatedMemberAttribute"/>
+    /// (02.1.1 <c>POST /v1/orgs</c>). False when no handler resolves.
+    /// </summary>
+    internal static bool IsAuthenticatedMemberOnly(IServiceProvider services, Type messageType, Type responseType) =>
+        HandlerTypeOf(services, messageType, responseType)
+            ?.GetCustomAttribute<AuthenticatedMemberAttribute>(inherit: false) is not null;
+
+    private static Type? HandlerTypeOf(IServiceProvider services, Type messageType, Type responseType)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -34,9 +47,7 @@ internal static class HandlerLookup
 
         var face = open.MakeGenericType(messageType, responseType);
 
-        return services.GetService(face) is { } handler
-            ? handler.GetType().GetCustomAttribute<PermissionAttribute>(inherit: true)?.Permission
-            : null;
+        return services.GetService(face)?.GetType();
     }
 
     private static Type? HandlerInterfaceFor(Type messageType) =>

@@ -60,7 +60,11 @@ Every operation declares:
 - `x-permission` — its 00 §9.3 permission (T51). The literal `none` is
   reserved for the two non-permission routes, `POST /v1/ci/token` and
   `POST /v1/webhooks/github`; those must set `x-auth` naming the credential
-  (`github_oidc_jwt_or_ingest_token`, `github_webhook_signature`).
+  (`github_oidc_jwt_or_ingest_token`, `github_webhook_signature`). The literal
+  `authenticated` is reserved for `POST /v1/orgs` (02.1.1 §5): any signed-in
+  user may create an org, because no tenant permission can exist before the
+  tenant does; it sets `x-auth: user_session`. The server side is the
+  allowlisted `[AuthenticatedMember]` handler gate (`Architecture.Tests`).
 - `x-version` — `v1` or `v2`, matching the 00 §9.3 V2 tag.
 
 Shared `components/parameters` carry the 00 §9.1 conventions: `cursor` and

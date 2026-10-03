@@ -8,6 +8,7 @@ using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Identity;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
+using Evidgate.Modules.Tenancy;
 using Evidgate.Worker.Health;
 using Evidgate.Worker.Options;
 using Evidgate.Worker.Slice;
@@ -70,6 +71,8 @@ public static class WorkerHost
         builder.Services.AddOrchestratorModule();
         // 02.2.1-T1.2: both entry points compose the same module set (00 §5.1 A1).
         builder.Services.AddIdentityModule(builder.Configuration);
+        // 02.1.1-T2: the registry module, so every handler the Api composes resolves here too.
+        builder.Services.AddTenancyModule();
 
         // 01.5.1-T1.2/T1.4: the durable task queue — claim loops per queue and the
         // cron schedule runner. Both are registered in every worker; the unique fire

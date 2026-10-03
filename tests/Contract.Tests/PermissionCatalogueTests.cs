@@ -54,7 +54,12 @@ public sealed class PermissionCatalogueTests
     private static readonly string[] NonAssignable =
         ["billing:read", "billing:write", "event:write", "job:claim", "job:execute", "support:grant"];
 
-    /// <summary>Every <c>x-permission</c> the spec declares is a catalogue code (or the reserved literal <c>none</c>).</summary>
+    /// <summary>
+    /// Every <c>x-permission</c> the spec declares is a catalogue code, or one of the two
+    /// reserved literals: <c>none</c> (no caller resolved, e.g. the token exchange) and
+    /// <c>authenticated</c> (any signed-in user, no tenant permission yet — only
+    /// <c>POST /v1/orgs</c>, 02.1.1 §5).
+    /// </summary>
     [Fact]
     public void Every_Spec_Permission_Is_In_The_Catalogue()
     {
@@ -73,9 +78,12 @@ public sealed class PermissionCatalogueTests
         Assert.Contains("healing:triage", declared);
         Assert.Contains("role:read", declared);
         Assert.Contains("none", declared);
+        Assert.Contains("authenticated", declared);
         Assert.True(declared.Count > 25, "the spec declares one x-permission per operation");
 
-        var missing = declared.Where(permission => permission != "none" && !codes.Contains(permission)).ToList();
+        var missing = declared
+            .Where(permission => permission is not ("none" or "authenticated") && !codes.Contains(permission))
+            .ToList();
 
         Assert.Empty(missing);
     }
@@ -188,7 +196,7 @@ public sealed class PermissionCatalogueTests
     /// </summary>
     private static IReadOnlyList<string> SpecPermissions()
     {
-        var pattern = new Regex(@"^\s+x-permission:\s*(?<value>[A-Za-z_]+:[A-Za-z_]+|none)\s*$", RegexOptions.Compiled);
+        var pattern = new Regex(@"^\s+x-permission:\s*(?<value>[A-Za-z_]+:[A-Za-z_]+|none|authenticated)\s*$", RegexOptions.Compiled);
         var path = Path.Combine(ContractPaths.ContractsDirectory, "openapi.yaml");
 
         return

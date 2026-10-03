@@ -21,10 +21,10 @@ public sealed class SchemaBoundaryTests
     public SchemaBoundaryTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
     /// <summary>
-    /// The plan §4 slug grammar <c>^[a-z0-9][a-z0-9-]{1,62}$</c>: lowercase
-    /// alphanumerics and interior hyphens only, 2–63 characters. Uppercase,
-    /// a leading hyphen, underscores, spaces, punctuation and non-ASCII must all
-    /// be a 422 at the edge, not a stored row — and must not reach a 409.
+    /// The D-A1 slug grammar <c>^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$</c> (0012):
+    /// lowercase alphanumerics and interior hyphens only, 2–63 characters. Uppercase,
+    /// a leading or trailing hyphen, underscores, spaces, punctuation and non-ASCII
+    /// must all be a 422 at the edge, not a stored row — and must not reach a 409.
     /// </summary>
     [Fact]
     public async Task SlugGrammarBoundaries()
@@ -35,6 +35,7 @@ public sealed class SchemaBoundaryTests
         {
             "ab",
             "a-2",
+            "a--b",
             "0000",
             new string('a', 63),
         };
@@ -45,6 +46,8 @@ public sealed class SchemaBoundaryTests
             "AB",
             "aB",
             "-ab",
+            "ab-",
+            "a-",
             "a_b",
             "a b",
             "ab!",

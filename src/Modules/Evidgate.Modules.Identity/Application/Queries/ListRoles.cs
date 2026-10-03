@@ -39,7 +39,7 @@ internal sealed class ListRolesQueryHandler(ITenantDb db)
 
         if (query.Cursor is { } cursor)
         {
-            if (!ReadCursor.TryDecode(cursor, out var decodedCreatedAt, out var decodedId))
+            if (!KeysetCursor.TryDecode(cursor, out var decodedCreatedAt, out var decodedId))
             {
                 return Result.Failure<RoleListResponse>(Error.Invalid(
                     "the cursor is not a value this endpoint issued",
@@ -60,6 +60,6 @@ internal sealed class ListRolesQueryHandler(ITenantDb db)
 
         return Result.Success(new RoleListResponse(
             items,
-            hasMore && items.Count > 0 ? ReadCursor.Encode(items[^1].CreatedAt, items[^1].Id) : null));
+            hasMore && items.Count > 0 ? KeysetCursor.Encode(items[^1].CreatedAt, items[^1].Id) : null));
     }
 }

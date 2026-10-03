@@ -26,7 +26,8 @@ internal sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
     {
         builder.ToTable("project", "public", table =>
         {
-            table.HasCheckConstraint("project_slug_format_check", "slug ~ '^[a-z0-9][a-z0-9-]{1,62}$'");
+            // D-A1 grammar (0012 replaced the 0005 check).
+            table.HasCheckConstraint("project_slug_format_check", "slug ~ '^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$'");
             table.HasCheckConstraint("project_status_check", "status in ('active', 'suspended', 'deleted')");
         });
 
@@ -84,5 +85,12 @@ internal sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasColumnName("version")
             .HasDefaultValue(1)
             .IsConcurrencyToken();
+
+        // 02.1.1-T3 (0013): per-project overrides and limits; null = inherit / no limit.
+        builder.Property(project => project.RetentionDays)
+            .HasColumnName("retention_days");
+
+        builder.Property(project => project.MonthlyRunQuota)
+            .HasColumnName("monthly_run_quota");
     }
 }

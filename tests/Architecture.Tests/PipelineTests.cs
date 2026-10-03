@@ -38,6 +38,30 @@ public class PipelineTests
             !v.Contains(nameof(Evidgate.Modules.Sample.Domain.CreateSampleHandler)));
     }
 
+    /// <summary>
+    /// 02.1.1: <c>[AuthenticatedMember]</c> replaces <c>[Permission]</c> only on the
+    /// allowlisted tenant-creating handler; anywhere else, or next to a permission, it
+    /// is a violation.
+    /// </summary>
+    [Fact]
+    public void Authenticated_Member_Gate_Is_Closed_By_The_Allowlist()
+    {
+        var violations = ArchitectureRules.EveryHandlerDeclaresPermission(
+        [
+            typeof(Evidgate.Modules.Sample.Domain.HandlerWithUnlistedAuthenticatedMember),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerWithBothGates),
+        ]);
+
+        violations.Count.ShouldBe(3);
+        violations.ShouldContain(v =>
+            v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithUnlistedAuthenticatedMember))
+                && v.Contains("AuthenticatedMemberAllowlist"));
+        violations.ShouldContain(v =>
+            v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithBothGates))
+                && v.Contains("exactly one gate"));
+        ArchitectureRules.AuthenticatedMemberAllowlist.Count.ShouldBe(1);
+    }
+
     [Fact]
     public void Real_Solution_Handlers_All_Declare_Permission()
     {

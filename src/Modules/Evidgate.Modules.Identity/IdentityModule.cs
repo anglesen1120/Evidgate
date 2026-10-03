@@ -96,6 +96,10 @@ internal static class IdentityModule
         services.TryAddSingleton<IMembership>(
             provider => provider.GetRequiredService<MembershipDirectory>());
 
+        // 02.1.1-T2 (AC8, T98): the org creator's founder membership, written by
+        // Tenancy's CreateOrganization through this contract in the same transaction.
+        services.TryAddSingleton<IOrganizationFounder, OrganizationFounder>();
+
         return services;
     }
 }

@@ -53,6 +53,13 @@ public interface IRequestPrincipal
     /// the catalogue: a claim the catalogue does not declare denies the request.
     /// </summary>
     IReadOnlyCollection<string> ClaimedPermissions { get; }
+
+    /// <summary>
+    /// The provider-verified email of a <see cref="PrincipalKind.Member"/>, when the
+    /// entry point resolved one (02.3.1 login), else null. Never taken from request
+    /// input; 02.1.1's org creation binds the creator's membership to it (T98).
+    /// </summary>
+    string? VerifiedEmail { get; }
 }
 
 /// <summary>
@@ -69,17 +76,19 @@ public sealed class RequestPrincipal : IRequestPrincipal
         PrincipalKind kind,
         Guid? userId,
         Guid? projectScope,
-        IReadOnlyCollection<string> claimedPermissions)
+        IReadOnlyCollection<string> claimedPermissions,
+        string? verifiedEmail = null)
     {
         Kind = kind;
         UserId = userId;
         ProjectScope = projectScope;
         ClaimedPermissions = claimedPermissions;
+        VerifiedEmail = verifiedEmail;
     }
 
     /// <summary>A human member of the org the request runs as.</summary>
-    public static RequestPrincipal Member(Guid userId) =>
-        new(PrincipalKind.Member, userId, projectScope: null, NoPermissions);
+    public static RequestPrincipal Member(Guid userId, string? verifiedEmail = null) =>
+        new(PrincipalKind.Member, userId, projectScope: null, NoPermissions, verifiedEmail);
 
     /// <summary>
     /// A service identity: the permission set its token carries, optionally scoped
@@ -110,4 +119,7 @@ public sealed class RequestPrincipal : IRequestPrincipal
 
     /// <inheritdoc />
     public IReadOnlyCollection<string> ClaimedPermissions { get; }
+
+    /// <inheritdoc />
+    public string? VerifiedEmail { get; }
 }

@@ -41,7 +41,9 @@ internal static class TenancyReadSql
                allowed_email_domains,
                created_at,
                updated_at,
-               version
+               version,
+               max_projects,
+               max_seats
           from public.organization
          where id = @org_id
         """;
@@ -61,7 +63,9 @@ internal static class TenancyReadSql
                default_environment_id,
                created_at,
                updated_at,
-               version
+               version,
+               retention_days,
+               monthly_run_quota
           from public.project
          where id = @project_id
         """;
@@ -82,7 +86,9 @@ internal static class TenancyReadSql
                default_environment_id,
                created_at,
                updated_at,
-               version
+               version,
+               retention_days,
+               monthly_run_quota
           from public.project
          where org_id = @org_id
            and status = @status
@@ -109,7 +115,9 @@ internal static class TenancyReadSql
                default_environment_id,
                created_at,
                updated_at,
-               version
+               version,
+               retention_days,
+               monthly_run_quota
           from public.project
          where org_id = @org_id
            and status = @status
@@ -117,5 +125,68 @@ internal static class TenancyReadSql
          order by created_at,
                   id
          limit @limit
+        """;
+
+    /// <summary>
+    /// First half of the project-create gate of 02.1.1-T3.2: the org's status and
+    /// <c>max_projects</c>, taking the org row lock (<c>FOR UPDATE</c>). Two concurrent
+    /// creates in one org are serialised on this lock; creates in different orgs never
+    /// contend.
+    /// </summary>
+    /// <remarks>
+    /// The count is deliberately <b>not</b> part of this statement. Under READ COMMITTED a
+    /// statement reads from the snapshot taken when it started — before it waited for the
+    /// lock — so a count in the same statement misses the project the lock holder just
+    /// committed, and N concurrent creates all pass a limit (measured: 8 of 8 passed
+    /// <c>max_projects = 3</c>). <see cref="ActiveProjectCount"/> runs after the lock is
+    /// held and so gets a snapshot that includes every committed create.
+    /// </remarks>
+    internal const string ProjectCreateGate = """
+        select status,
+               max_projects
+          from public.organization
+         where id = @org_id
+           for update
+        """;
+
+    /// <summary>
+    /// Second half of the gate: the org's projects that are not <c>deleted</c>, run only
+    /// when a limit is set and only after <see cref="ProjectCreateGate"/> holds the lock.
+    /// Served by <c>project_org_status_created_id_idx</c>.
+    /// </summary>
+    internal const string ActiveProjectCount = """
+        select count(*)
+          from public.project
+         where org_id = @org_id
+           and status <> 'deleted'
+        """;
+
+    /// <summary>The status of the request's org, for the mutation guard of 02.1.1 §6 (<c>org_suspended</c>).</summary>
+    internal const string OrganizationStatus = """
+        select status
+          from public.organization
+         where id = @org_id
+        """;
+
+    /// <summary>The limit surface of <c>ITenantLimits</c> for the request's org (02.1.1-T3.1).</summary>
+    internal const string OrganizationLimits = """
+        select max_projects,
+               max_seats,
+               retention_default_days
+          from public.organization
+         where id = @org_id
+        """;
+
+    /// <summary>
+    /// The limit surface of <c>ITenantLimits</c> for one project: the project override
+    /// wins over the org default for retention (02.1.1 §4).
+    /// </summary>
+    internal const string ProjectLimits = """
+        select p.monthly_run_quota,
+               coalesce(p.retention_days, o.retention_default_days) as effective_retention_days
+          from public.project p
+          join public.organization o
+            on o.id = p.org_id
+         where p.id = @project_id
         """;
 }

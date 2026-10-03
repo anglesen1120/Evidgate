@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
+import type { ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -353,7 +353,75 @@ export const getArtifactDownloadUrl = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
+ * Create an organization; the caller becomes tenant_admin and release_approver (02)
+ *
+ * Open to any signed-in user (no tenant permission can exist before the org does, 02.1.1 §5); a service token or an operator is 403. The caller becomes the first member with both `tenant_admin` and `release_approver` in the same transaction (AC8, T98), bound to the caller's verified email. The org id is derived from the caller and the `Idempotency-Key`, so a retry with the same key and body replays the original response and a changed body is 409 `idempotency_conflict` (AC6). Slugs are global: a taken slug is 409 `slug_taken` (AC2).
+ */
+export const createOrganization = <ThrowOnError extends boolean = false>(options: Options<CreateOrganizationData, ThrowOnError>): RequestResult<CreateOrganizationResponses, CreateOrganizationErrors, ThrowOnError> => (options.client ?? client).post<CreateOrganizationResponses, CreateOrganizationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * One organization; another org's id is 404 (02)
+ */
+export const getOrganization = <ThrowOnError extends boolean = false>(options: Options<GetOrganizationData, ThrowOnError>): RequestResult<GetOrganizationResponses, GetOrganizationErrors, ThrowOnError> => (options.client ?? client).get<GetOrganizationResponses, GetOrganizationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs/{o}',
+    ...options
+});
+
+/**
+ * Change an organization's settings under If-Match (02)
+ *
+ * Omitted fields are unchanged. A stale `If-Match` is 412 with the current `version` in `error.details` (AC5); a suspended org is 409 `org_suspended`; a taken slug is 409 `slug_taken`. Status transitions are not part of this route.
+ */
+export const updateOrganization = <ThrowOnError extends boolean = false>(options: Options<UpdateOrganizationData, ThrowOnError>): RequestResult<UpdateOrganizationResponses, UpdateOrganizationErrors, ThrowOnError> => (options.client ?? client).patch<UpdateOrganizationResponses, UpdateOrganizationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs/{o}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Cursor page of the org's active projects (02)
+ *
+ * Keyset-ordered on `(created_at, id)` per 00 §9.1 and served by `project_org_status_created_id_idx`, one statement per page.
+ */
+export const listProjects = <ThrowOnError extends boolean = false>(options: Options<ListProjectsData, ThrowOnError>): RequestResult<ListProjectsResponses, ListProjectsErrors, ThrowOnError> => (options.client ?? client).get<ListProjectsResponses, ListProjectsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/orgs/{o}/projects',
+    ...options
+});
+
+/**
  * Provision a project (02)
+ *
+ * Slug unique per org (409 `slug_taken`, AC2; the same slug in another org is fine). The org's `max_projects` reached is 429 `quota_exceeded` with `Retry-After` (02.1.1-T3); a suspended org is 409 `org_suspended`.
  */
 export const createProject = <ThrowOnError extends boolean = false>(options: Options<CreateProjectData, ThrowOnError>): RequestResult<CreateProjectResponses, CreateProjectErrors, ThrowOnError> => (options.client ?? client).post<CreateProjectResponses, CreateProjectErrors, ThrowOnError>({
     security: [{
@@ -362,6 +430,40 @@ export const createProject = <ThrowOnError extends boolean = false>(options: Opt
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/projects',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * One project; another org's id is 404 (02, AC3)
+ *
+ * Another org's project id is the same 404 as a missing one (AC3); a credential scoped to a different project is 403 `project_scope_mismatch` (AC4).
+ */
+export const getProject = <ThrowOnError extends boolean = false>(options: Options<GetProjectData, ThrowOnError>): RequestResult<GetProjectResponses, GetProjectErrors, ThrowOnError> => (options.client ?? client).get<GetProjectResponses, GetProjectErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}',
+    ...options
+});
+
+/**
+ * Change a project's settings under If-Match (02, AC4/AC5)
+ *
+ * Omitted fields are unchanged. 403 `project_scope_mismatch` for a credential scoped to another project (AC4), 412 with the current `version` for a stale `If-Match` (AC5), 409 `slug_taken` / `org_suspended`.
+ */
+export const updateProject = <ThrowOnError extends boolean = false>(options: Options<UpdateProjectData, ThrowOnError>): RequestResult<UpdateProjectResponses, UpdateProjectErrors, ThrowOnError> => (options.client ?? client).patch<UpdateProjectResponses, UpdateProjectErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}',
     ...options,
     headers: {
         'Content-Type': 'application/json',

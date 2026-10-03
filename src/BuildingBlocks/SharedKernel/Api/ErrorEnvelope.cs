@@ -92,6 +92,15 @@ public static class ApiErrorCode
     /// <summary>The membership's current status does not allow the requested transition (02.1.2 §6: 409).</summary>
     public const string InvalidTransition = "invalid_transition";
 
+    /// <summary>The slug is already used by another organization, or by another project of the same org (02.1.1 AC2: 409).</summary>
+    public const string SlugTaken = "slug_taken";
+
+    /// <summary>A tenant limit such as <c>organization.max_projects</c> is reached (02.1.1-T3: 429).</summary>
+    public const string QuotaExceeded = "quota_exceeded";
+
+    /// <summary>The organization is suspended, so tenant mutations are refused (02.1.1 §6: 409).</summary>
+    public const string OrgSuspended = "org_suspended";
+
     /// <summary>The route exists but not for this HTTP method (00 §9.2 does not name 405).</summary>
     public const string MethodNotAllowed = "method_not_allowed";
 

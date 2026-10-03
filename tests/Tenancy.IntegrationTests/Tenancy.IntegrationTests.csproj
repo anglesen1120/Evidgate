@@ -14,6 +14,8 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- 02.1.1-T2: the registry routes run through the real Api composition. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
   </ItemGroup>
   <ItemGroup>
     <!-- The suite bootstraps as superuser and applies the real migrations through the
@@ -24,6 +26,8 @@
     <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy.Contracts\Evidgate.Modules.Tenancy.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy\Evidgate.Modules.Tenancy.csproj" />
+    <!-- 02.1.1-T2: the endpoint suites drive Program (ApiHost) through WebApplicationFactory. -->
+    <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />

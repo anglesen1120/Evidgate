@@ -22,8 +22,8 @@ public sealed class OrgProjectSchemaTests
 
     /// <summary>
     /// T1.1: the <c>organization</c> shape (plan §4 + 00 §7 columns), <c>unique (slug)</c>,
-    /// the T4 policy on <c>id</c> and the role grants. The quota columns
-    /// (<c>max_projects</c>, <c>max_seats</c>) belong to 02.1.1-T3 and are absent here.
+    /// the T4 policy on <c>id</c> and the role grants, plus 02.1.1-T3's limit columns
+    /// (<c>max_projects</c>, <c>max_seats</c>, migration 0013).
     /// </summary>
     [Fact]
     public async Task OrganizationShape()
@@ -41,6 +41,8 @@ public sealed class OrgProjectSchemaTests
             "created_at:timestamp with time zone:timestamptz:NO:now()",
             "updated_at:timestamp with time zone:timestamptz:NO:now()",
             "version:integer:int4:NO:1",
+            "max_projects:integer:int4:YES:-",
+            "max_seats:integer:int4:YES:-",
         ]);
 
         var constraints = await _fixture.ConstraintsAsync(database, "organization");
@@ -49,6 +51,8 @@ public sealed class OrgProjectSchemaTests
         (await _fixture.ConstraintNamesAsync(database, "organization")).ShouldBe(
         [
             "c:organization_email_domains_check",
+            "c:organization_max_projects_check",
+            "c:organization_max_seats_check",
             "c:organization_name_length_check",
             "c:organization_slug_format_check",
             "c:organization_status_check",
@@ -101,6 +105,8 @@ public sealed class OrgProjectSchemaTests
             "created_at:timestamp with time zone:timestamptz:NO:now()",
             "updated_at:timestamp with time zone:timestamptz:NO:now()",
             "version:integer:int4:NO:1",
+            "retention_days:integer:int4:YES:-",
+            "monthly_run_quota:integer:int4:YES:-",
         ]);
 
         var constraints = await _fixture.ConstraintsAsync(database, "project");
@@ -110,7 +116,9 @@ public sealed class OrgProjectSchemaTests
         constraints.ShouldContain("f:project_organization_fk:FOREIGN KEY (org_id) REFERENCES organization(id)");
         (await _fixture.ConstraintNamesAsync(database, "project")).ShouldBe(
         [
+            "c:project_monthly_run_quota_check",
             "c:project_name_length_check",
+            "c:project_retention_days_check",
             "c:project_slug_format_check",
             "c:project_status_check",
             "f:project_organization_fk",

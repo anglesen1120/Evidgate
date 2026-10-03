@@ -24,7 +24,8 @@ internal sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organ
     {
         builder.ToTable("organization", "public", table =>
         {
-            table.HasCheckConstraint("organization_slug_format_check", "slug ~ '^[a-z0-9][a-z0-9-]{1,62}$'");
+            // D-A1 grammar (0012 replaced the 0004 check).
+            table.HasCheckConstraint("organization_slug_format_check", "slug ~ '^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$'");
             table.HasCheckConstraint("organization_status_check", "status in ('active', 'suspended', 'deleted')");
         });
 
@@ -70,5 +71,12 @@ internal sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organ
             .HasColumnName("version")
             .HasDefaultValue(1)
             .IsConcurrencyToken();
+
+        // 02.1.1-T3 (0013): tenant limits read by ITenantLimits; null = no limit.
+        builder.Property(organization => organization.MaxProjects)
+            .HasColumnName("max_projects");
+
+        builder.Property(organization => organization.MaxSeats)
+            .HasColumnName("max_seats");
     }
 }

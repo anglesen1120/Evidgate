@@ -32,7 +32,9 @@ internal static class IsolationProbeSql
                default_environment_id,
                created_at,
                updated_at,
-               version
+               version,
+               retention_days,
+               monthly_run_quota
           from public.project
          where id = @project_id
         """;

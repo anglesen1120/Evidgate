@@ -869,8 +869,13 @@
       "evidgate.modules.tenancy": {
         "type": "Project",
         "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Identity.Contracts": "[1.0.0, )",
           "Evidgate.Modules.Tenancy.Contracts": "[1.0.0, )",
+          "FluentValidation": "[12.1.1, )",
           "Mediator.Abstractions": "[3.0.2, )",
           "Microsoft.EntityFrameworkCore": "[10.0.12, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )"

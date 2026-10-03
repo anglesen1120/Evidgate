@@ -45,6 +45,20 @@ public sealed class AuthorizationBehaviour<TMessage, TResponse>(
 
         var permission = HandlerLookup.PermissionOf(services, typeof(TMessage), typeof(TResponse));
 
+        if (permission is null
+            && HandlerLookup.IsAuthenticatedMemberOnly(services, typeof(TMessage), typeof(TResponse)))
+        {
+            // 02.1.1 POST /v1/orgs: the tenant is being created, so no membership can
+            // hold a permission yet. Only a resolved member (a user, never a service
+            // token or an operator) may run it; everything else stays denied.
+            _ = tenant.Require();
+
+            return principals.Current is { Kind: PrincipalKind.Member, UserId: not null }
+                ? await next(message, cancellationToken).ConfigureAwait(false)
+                : ResultFactory.Failure<TResponse>(Error.Forbidden(
+                    "only an authenticated user may create an organization (02.1.1 §5)"));
+        }
+
         if (permission is null)
         {
             return ResultFactory.Failure<TResponse>(Error.Forbidden(

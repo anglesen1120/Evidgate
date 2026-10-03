@@ -14,6 +14,8 @@ using Evidgate.Modules.Identity;
 using Evidgate.Modules.Identity.Endpoints;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
+using Evidgate.Modules.Tenancy;
+using Evidgate.Modules.Tenancy.Endpoints;
 using Mediator;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Metrics;
@@ -68,6 +70,9 @@ public static partial class ApiHost
         // the flagged custom-role writes and the C2 permission evaluator, which
         // replaces the pipeline's fail-closed default.
         builder.Services.AddIdentityModule(builder.Configuration);
+        // 02.1.1-T2/T3: the org/project registry — write model, validators and the
+        // ITenantLimits read surface plan 12 consumes.
+        builder.Services.AddTenancyModule();
 
         // 00 §5.5 edge: snake_case JSON through the source-generated context;
         // reflection stays enabled as a fallback for framework types.
@@ -116,6 +121,8 @@ public static partial class ApiHost
         // 02.1.2-T1.2 (00 §5.5 C8): the membership routes of 02.1.2 and the same
         // single Result → 00 §9.2 envelope filter.
         app.MapMembershipEndpoints().AddEndpointFilter<ResultEndpointFilter>();
+        // 02.1.1-T2.2 (00 §5.5 C8): the org/project registry routes, same filter.
+        app.MapTenancyEndpoints().AddEndpointFilter<ResultEndpointFilter>();
         app.MapOpenApi();
 
         return app;

@@ -40,4 +40,10 @@ internal sealed class Project
 
     /// <summary>Optimistic concurrency token (00 §7, 00 §5.5 C4); starts at 1.</summary>
     public int Version { get; set; } = 1;
+
+    /// <summary>Overrides <c>organization.retention_default_days</c>; null = inherit (02.1.1-T3, 0013).</summary>
+    public int? RetentionDays { get; set; }
+
+    /// <summary>Runs per calendar month; null = no limit (02.1.1-T3, enforced by plan 12).</summary>
+    public int? MonthlyRunQuota { get; set; }
 }

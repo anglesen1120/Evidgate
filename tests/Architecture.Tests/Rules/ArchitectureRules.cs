@@ -139,6 +139,15 @@ public static class ArchitectureRules
     /// resource:action string. CustomAttributeData is used (not instantiation) so
     /// a malformed argument is reported as a violation instead of throwing.
     /// </summary>
+    /// <summary>
+    /// The only handlers allowed to carry <see cref="AuthenticatedMemberAttribute"/>:
+    /// the ones that create the tenant the caller will then be a member of (02.1.1 §5).
+    /// </summary>
+    public static readonly IReadOnlySet<string> AuthenticatedMemberAllowlist = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Evidgate.Modules.Tenancy.Application.Commands.CreateOrganizationCommandHandler",
+    };
+
     public static IReadOnlyList<string> EveryHandlerDeclaresPermission(IEnumerable<Type> types)
     {
         var violations = new List<string>();
@@ -163,6 +172,31 @@ public static class ArchitectureRules
             var permissionAttribute = type
                 .GetCustomAttributesData()
                 .SingleOrDefault(a => a.AttributeType.FullName == typeof(PermissionAttribute).FullName);
+
+            var authenticatedMember = type
+                .GetCustomAttributesData()
+                .Any(a => a.AttributeType.FullName == typeof(AuthenticatedMemberAttribute).FullName);
+
+            if (authenticatedMember)
+            {
+                // 02.1.1: the tenant-creating handler cannot be gated by a tenant
+                // permission. The exception is closed by name, and never combined with
+                // [Permission] (two gates would leave the reader guessing which wins).
+                if (!AuthenticatedMemberAllowlist.Contains(type.FullName ?? string.Empty))
+                {
+                    violations.Add(
+                        $"{type.FullName} carries [AuthenticatedMember] but is not in " +
+                        "ArchitectureRules.AuthenticatedMemberAllowlist; tenant handlers declare a permission (00 §5.7 S2)");
+                }
+
+                if (permissionAttribute is not null)
+                {
+                    violations.Add(
+                        $"{type.FullName} carries both [AuthenticatedMember] and [Permission]; declare exactly one gate");
+                }
+
+                continue;
+            }
 
             if (permissionAttribute is null)
             {

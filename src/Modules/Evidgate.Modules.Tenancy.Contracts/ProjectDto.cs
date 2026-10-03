@@ -5,11 +5,9 @@ namespace Evidgate.Modules.Tenancy.Contracts;
 /// <c>TenancyReadSql</c> and serialized snake_case by the API.
 /// </summary>
 /// <remarks>
-/// <c>contracts/openapi.yaml</c> describes the create response as
-/// <c>{project_id}</c> only and has no <c>Project</c> component schema, so this
-/// DTO follows the field list of the feature plan §4; the same note as
-/// <see cref="OrganizationDto"/> applies. <c>retention_days</c> and
-/// <c>monthly_run_quota</c> belong to 02.1.1-T3's <c>ITenantLimits</c>.
+/// Published as the <c>Project</c> schema of <c>contracts/openapi.yaml</c>
+/// (02.1.1-T2); the field set is the feature plan §4 column list, and
+/// <c>retention_days</c>/<c>monthly_run_quota</c> are 02.1.1-T3's limit columns.
 /// </remarks>
 /// <param name="Id">Project id (UUIDv7); globally unique, addressed by <c>/v1/projects/{p}</c>.</param>
 /// <param name="OrgId">Owning organization (composite tenant key).</param>
@@ -20,6 +18,8 @@ namespace Evidgate.Modules.Tenancy.Contracts;
 /// <param name="CreatedAt">Row creation, UTC.</param>
 /// <param name="UpdatedAt">Last write, UTC.</param>
 /// <param name="Version">Optimistic concurrency token (ETag source, 00 §9.1).</param>
+/// <param name="RetentionDays">Overrides the org's <c>retention_default_days</c>; null = inherit (02.1.1-T3).</param>
+/// <param name="MonthlyRunQuota">Runs per calendar month; null = no limit (02.1.1-T3, enforced by plan 12).</param>
 public sealed record ProjectDto(
     Guid Id,
     Guid OrgId,
@@ -29,4 +29,6 @@ public sealed record ProjectDto(
     Guid? DefaultEnvironmentId,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    int Version);
+    int Version,
+    int? RetentionDays,
+    int? MonthlyRunQuota);

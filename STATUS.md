@@ -1,6 +1,6 @@
 # Evidgate — delivery status
 
-Updated 2026-10-02. Source of truth for tasks: `plans/01`–`12` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
+Updated 2026-10-03. Source of truth for tasks: `plans/01`–`12` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
 
 ## 1. Snapshot
 
@@ -10,8 +10,8 @@ Updated 2026-10-02. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | `develop` head | `db4eb44` (PR #12 merged) |
 | Merged PRs | #1 plans + stack (CR-D-1) · #2 M0 foundation · #3 M1 wave 1–2 · #4, #5 plan notes (Docker on runner) · #6 M1 wave 3 · #7 owner decisions · #8 owner decisions → develop · #9 M1 wave 4 · #10 M1 wave 5 · #11 M1 wave 6 · #12 M1 wave 7 |
 | Open PRs | none |
-| Active branch | `develop` — plan review follow-ups (`plans/REVIEW-2026-10-02.md`); wave 7 (§3.7) is merged |
-| M0/M1 tasks | 56 done · 78 open (of 134; 10.2.1-T1 counted open until T1.4) |
+| Active branch | `develop` — Stage A started 2026-10-03: story 02.1.1 complete (T2/T3 on `develop`, §2); wave 7 (§3.7) is merged |
+| M0/M1 tasks | 57 done · 77 open (of 134; 10.2.1-T1 counted open until T1.4); plus 02.1.1-T3 (M2) done |
 | Plan checks | `plan_graph.py` errors 0 · 592 tasks · 628.25 raw / 753.9 buffered person-days (+55 tasks / +45 d from the 2026-10-02 review incl. gap stories 03.1.4, 03.9.x, 04.1.3, 06.3.6, 06.4.6, 10.5.2, 10.7.2, 10.11.1, 11.5.2, 11.9.2: 02.4.3, 02.10.1, 04.9.1, 04.9.2, 05.2.2, 05.5.2) |
 | CI | `.github/workflows/ci.yml` runs every `verify.sh` stage (01.7.1-T1); interim `docker-tests.yml` deleted in wave 5 |
 | Owner decisions | Decided 2026-10-02 (chat): O1 interviews waived (pilot profile in `docs/decisions/O1-pilot-profile.md`), O2 team = the owner alone, O4 = Evidgate-provided AI credit through an Evidgate-controlled gateway, O10 = (a). O3 still open. Decided 2026-09-26: O1 engine = Playwright (UI), customer CI = per-project input. Open before M1: O1 pilot names, O2 (owner note recorded, reading unconfirmed). Open before 08.5 DoR: O4 (owner note "tự build hệ thống riêng", model-or-not unconfirmed) — DECISIONS §8 |
@@ -35,6 +35,7 @@ Updated 2026-10-02. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 01.4.2, 01.5.1, 01.7.1 | 01.4.2-T4, 01.5.1-T3/T4/T5, 01.7.1-T1 | #10 | C2 Mediator pipeline + Result→§9.2 filter, outbox dispatcher (migration 0009), retry/dead-letter + `/internal/operator` routes, AC1–AC7 suites, real `ci.yml` — see §3.5 |
 | 01.3.2, 01.6.1, 01.7.1 | 01.3.2-T1/T2/T3, 01.6.1-T3/T4, 01.7.1-T2/T3.2/T4 | #11 | Generated TS SDK + drift gate, Corvus/Ajv dual-runtime validators + parity corpus + endpoint filter, contract tests + served-doc diff, `fixtures/` + loaders, tenant-isolation suite, licence/audit/SBOM/dependabot gates — see §3.6 |
 | 02.1.2, 02.2.1, 02.6.1, 02.9.1, 04.7.1, 05.1.1, 10.1.1, 10.2.1, 10.8.1, 11.1.1 | 02.1.2-T1, 02.2.1-T1/T2, 02.6.1-T1, 02.9.1-T2, 04.7.1-T1, 05.1.1-T1, 10.1.1-T1, 10.2.1-T1.1–T1.3, 10.8.1-T1, 11.1.1-T2 | #12 | Permission catalogue + evaluator, membership API, RLS assertions + boot self-check, composite FK suite, adapter/manifest schemas, environment matrix, container images + SBOM, provider memo, DoR checklist — see §3.7 |
+| 02.1.1 | T2, T3 | `develop` (Stage A, no PR) | Org/project registry API (`POST /v1/orgs`, `GET,PATCH /v1/orgs/{o}`, `GET,POST /v1/orgs/{o}/projects`, `GET,PATCH /v1/projects/{p}`), founder membership (T98), migrations 0012 (D-A1 slug) + 0013 (quota columns), `ITenantLimits`, `[AuthenticatedMember]` gate; 19 new tests — feature plan 02.1.1 §3/§8a/§9 |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -160,9 +161,9 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | Note | Owner |
 |---|---|
 | `organization`/`project` deliberately carry **no** `TO evidgate_operator` policy (0004:100-105, 0005:73-76): a permissive org-scoped read policy OR-combines with T76's grant-gated one and would defeat the support-grant gate, so the operator's `select` grant reads zero rows until the grant-gated `evidgate.operator_grant_ok` form lands | 02.8.1-T1.1 |
-| Org creation must seed the new UUIDv7 as `evidgate.org_id` **before** the `CreateOrganization` insert: 0004's app policy is `for all … using (id = evidgate.current_org_id()) with check (id = evidgate.current_org_id())`, so an insert as `evidgate_app` passes the check only under a scope opened for the id being inserted | 02.1.1-T2 |
-| `contracts/openapi.yaml` has no `Organization`/`Project` component schemas **and no `POST /orgs` at all**; `createProject` (1005-1040) sends an inline `{name}` with no `slug` — although `project.slug` is NOT NULL with `project_slug_format_check` — and answers inline `{project_id}`, not the `ProjectDto` shape, so the contract cannot see either DTO | 02.1.1-T2 |
-| Slug grammar `[OPEN]`: the shipped check `^[a-z0-9][a-z0-9-]{1,62}$` accepts a trailing hyphen (`ab-`); the owner decides whether to tighten it before the validator pins it | 02.1.1-T2 (owner) |
+| Org creation must seed the new UUIDv7 as `evidgate.org_id` **before** the `CreateOrganization` insert: 0004's app policy is `for all … using (id = evidgate.current_org_id()) with check (id = evidgate.current_org_id())`, so an insert as `evidgate_app` passes the check only under a scope opened for the id being inserted | **Resolved 2026-10-03** (02.1.1-T2) |
+| `contracts/openapi.yaml` has no `Organization`/`Project` component schemas **and no `POST /orgs` at all**; `createProject` (1005-1040) sends an inline `{name}` with no `slug` — although `project.slug` is NOT NULL with `project_slug_format_check` — and answers inline `{project_id}`, not the `ProjectDto` shape, so the contract cannot see either DTO | **Resolved 2026-10-03** (02.1.1-T2) |
+| Slug grammar `[OPEN]`: the shipped check `^[a-z0-9][a-z0-9-]{1,62}$` accepts a trailing hyphen (`ab-`); the owner decides whether to tighten it before the validator pins it | **Resolved 2026-10-03** (02.1.1-T2) |
 | Node 26.10.0 can mis-decode control-escape member names in a warm `JSON.parse` (ADR-0002 WARN row). The CLI's self-consistency guard withholds 64–78 of 27,146 generated documents as a partial mitigation; a `jsCanonical` recorded in a long-lived process must be recomputed in a fresh one before it is trusted | Node upgrade / 01.3.2 |
 | Keyset split **landed**: `TenancyReadSql.ProjectsFirstPage` carries no cursor predicate and `ProjectsNextPage` compares `(created_at, id) > (@cursor_created_at::timestamptz, @cursor_id::uuid)` with both parameters required, so the comparison stays an `Index Cond`; the single `@cursor_created_at is null or …` statement it replaced showed a residual `Filter` under a generic plan (measured 110x: 2.93 ms → 0.026 ms at 25 000 rows in on 50 000). The 02.1.1 plan §"Recorded" note still describes the residual-Filter shape | 02.1.1-T2 statement budget |
 | Canonicalizer cost **landed** and still to be recorded in the plans: duplicate detection now compares each sorted name with its predecessor and the per-object `HashSet` with its `char[]`/string copies is gone (`JsonCanonicalizer.cs:198`) — the perf review measured 12.5 MB/op → 8.3 MB/op for a 1 MiB record doc and 35.8 MB → 19.1 MB for 100 000 single-member objects on that variant. Nested member values are still re-parsed once per enclosing level (3.0x the flat cost: 0.92 MB in 47.8 ms vs 16.0 ms — a deliberate CPU-for-memory trade), hashing a `JsonElement` re-materialises the text (+3.1 MB per MiB) and the CLI round-trip guard costs 2.44x (8.26 → 20.15 ms) | 01.3.2 §8 |
@@ -172,15 +173,16 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met, not started)
 
-Recomputed 2026-10-02 from `plan_graph.py` after the review additions, de-duplication and ordering fixes. Order follows Stage A of `plans/features/SOLO-PATH.md`; open items that must be settled first are in `plans/open-items/`.
+Recomputed 2026-10-02 from `plan_graph.py` after the review additions, de-duplication and ordering fixes; 2026-10-03: 02.1.1-T2 removed (done), 02.4.1-T1 and 02.9.1-T1 added. 02.6.2-T1 must exempt `POST /v1/orgs` from tenant resolution (the endpoint publishes the new org's id itself, 02.1.1 §3), and 02.6.1-T3 maps `GET /v1/orgs`. Order follows Stage A of `plans/features/SOLO-PATH.md`; open items that must be settled first are in `plans/open-items/`.
 
 **Stage A, ready now (build order):**
 
 | Task | Size | Milestone | Note |
 |---|---|---|---|
 | 02.4.1-T2 | M | M1 | `ci_binding` model + admin API; unblocks the `seed-dev` bootstrap (01.8.1-T3) |
-| 02.1.1-T2 | M | M1 | Org/project API; slug grammar decided (DECISIONS §8.1 D-A1) |
 | 02.6.1-T2, 02.6.1-T3, 02.6.2-T1 | S, M, S | M1 | RLS lint now M1; 02.6.2-T1 is entry points only (reuses 01.4.2-T1) |
+| 02.4.1-T1 | L | M1 | Newly ready 2026-10-03 (02.1.1-T2 done): GitHub OIDC JWT validator |
+| 02.9.1-T1 | M | M1 | Newly ready 2026-10-03: API isolation suite over the registry routes |
 | 02.7.1-T1 | M | M1 | Audit log moved to M1 (05.3.1 writes audit rows) |
 | 03.1.1-T1 | L | M1 | Stable case identity (critical chain) |
 | 05.1.1-T3 | M | M1 | Manifest |

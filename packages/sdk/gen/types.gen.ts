@@ -152,6 +152,113 @@ export type UpdateRoleRequest = {
 };
 
 /**
+ * One organization (02.1.1 §4). `organization` is the T4 exception: its own `id` is the tenant key. Limit columns are null when no limit is set (02.1.1-T3).
+ */
+export type OrganizationDto = {
+    id: string;
+    name: string;
+    /**
+     * Globally unique (DECISIONS §8.1 D-A1).
+     */
+    slug: string;
+    status: 'active' | 'suspended' | 'deleted';
+    retention_default_days: number | null;
+    allowed_email_domains: Array<string> | null;
+    created_at: string;
+    updated_at: string;
+    /**
+     * Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+     */
+    version: number;
+    /**
+     * Projects that are not `deleted` the org may hold; null = no limit.
+     */
+    max_projects: number | null;
+    /**
+     * Active memberships the org may hold; null = no limit (enforced by plan 12).
+     */
+    max_seats: number | null;
+};
+
+/**
+ * One project (02.1.1 §4); `unique (org_id, slug)`.
+ */
+export type ProjectDto = {
+    id: string;
+    org_id: string;
+    name: string;
+    /**
+     * Unique within the org (DECISIONS §8.1 D-A1).
+     */
+    slug: string;
+    status: 'active' | 'suspended' | 'deleted';
+    /**
+     * Null until 05.1.2-T1 adds the environment table.
+     */
+    default_environment_id: string | null;
+    created_at: string;
+    updated_at: string;
+    /**
+     * Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+     */
+    version: number;
+    /**
+     * Overrides the org's `retention_default_days`; null = inherit.
+     */
+    retention_days: number | null;
+    /**
+     * Runs per calendar month; null = no limit (enforced by plan 12).
+     */
+    monthly_run_quota: number | null;
+};
+
+/**
+ * 00 §9.1 cursor page of `ProjectDto`, keyset-ordered on `(created_at, id)`.
+ */
+export type ProjectListResponse = {
+    items: Array<ProjectDto>;
+    /**
+     * Opaque cursor of the next page, or null on the last page.
+     */
+    next_cursor: string | null;
+};
+
+/**
+ * Body of `POST /v1/orgs` (02.1.1 §5).
+ */
+export type CreateOrganizationRequest = {
+    name: string;
+    slug: string;
+};
+
+/**
+ * Body of `PATCH /v1/orgs/{o}` (02.1.1 §5); an omitted field is unchanged.
+ */
+export type UpdateOrganizationRequest = {
+    name?: string | null;
+    slug?: string | null;
+    retention_default_days?: number | null;
+    allowed_email_domains?: Array<string> | null;
+};
+
+/**
+ * Body of `POST /v1/orgs/{o}/projects` (02.1.1 §5).
+ */
+export type CreateProjectRequest = {
+    name: string;
+    slug: string;
+};
+
+/**
+ * Body of `PATCH /v1/projects/{p}` (02.1.1 §5); an omitted field is unchanged.
+ */
+export type UpdateProjectRequest = {
+    name?: string | null;
+    slug?: string | null;
+    retention_days?: number | null;
+};
+
+/**
  * One membership of an org (02.1.2 §4) with the roles it currently holds.
  */
 export type MembershipView = {
@@ -1612,10 +1719,228 @@ export type GetArtifactDownloadUrlResponses = {
 
 export type GetArtifactDownloadUrlResponse = GetArtifactDownloadUrlResponses[keyof GetArtifactDownloadUrlResponses];
 
-export type CreateProjectData = {
-    body: {
-        name: string;
+export type CreateOrganizationData = {
+    body: CreateOrganizationRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
     };
+    path?: never;
+    query?: never;
+    url: '/orgs';
+};
+
+export type CreateOrganizationErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateOrganizationError = CreateOrganizationErrors[keyof CreateOrganizationErrors];
+
+export type CreateOrganizationResponses = {
+    /**
+     * Organization created; the caller is its first member
+     */
+    201: OrganizationDto;
+};
+
+export type CreateOrganizationResponse = CreateOrganizationResponses[keyof CreateOrganizationResponses];
+
+export type GetOrganizationData = {
+    body?: never;
+    path: {
+        o: string;
+    };
+    query?: never;
+    url: '/orgs/{o}';
+};
+
+export type GetOrganizationErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetOrganizationError = GetOrganizationErrors[keyof GetOrganizationErrors];
+
+export type GetOrganizationResponses = {
+    /**
+     * The organization
+     */
+    200: OrganizationDto;
+};
+
+export type GetOrganizationResponse = GetOrganizationResponses[keyof GetOrganizationResponses];
+
+export type UpdateOrganizationData = {
+    body: UpdateOrganizationRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        o: string;
+    };
+    query?: never;
+    url: '/orgs/{o}';
+};
+
+export type UpdateOrganizationErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateOrganizationError = UpdateOrganizationErrors[keyof UpdateOrganizationErrors];
+
+export type UpdateOrganizationResponses = {
+    /**
+     * The organization in its new state
+     */
+    200: OrganizationDto;
+};
+
+export type UpdateOrganizationResponse = UpdateOrganizationResponses[keyof UpdateOrganizationResponses];
+
+export type ListProjectsData = {
+    body?: never;
+    path: {
+        o: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/orgs/{o}/projects';
+};
+
+export type ListProjectsErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListProjectsError = ListProjectsErrors[keyof ListProjectsErrors];
+
+export type ListProjectsResponses = {
+    /**
+     * Page of projects (02.1.1)
+     */
+    200: ProjectListResponse;
+};
+
+export type ListProjectsResponse = ListProjectsResponses[keyof ListProjectsResponses];
+
+export type CreateProjectData = {
+    body: CreateProjectRequest;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -1647,6 +1972,10 @@ export type CreateProjectErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
      */
     422: ErrorEnvelope;
@@ -1666,12 +1995,122 @@ export type CreateProjectResponses = {
     /**
      * Project created
      */
-    201: {
-        project_id: string;
-    };
+    201: ProjectDto;
 };
 
 export type CreateProjectResponse = CreateProjectResponses[keyof CreateProjectResponses];
+
+export type GetProjectData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}';
+};
+
+export type GetProjectErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetProjectError = GetProjectErrors[keyof GetProjectErrors];
+
+export type GetProjectResponses = {
+    /**
+     * The project
+     */
+    200: ProjectDto;
+};
+
+export type GetProjectResponse = GetProjectResponses[keyof GetProjectResponses];
+
+export type UpdateProjectData = {
+    body: UpdateProjectRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}';
+};
+
+export type UpdateProjectErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateProjectError = UpdateProjectErrors[keyof UpdateProjectErrors];
+
+export type UpdateProjectResponses = {
+    /**
+     * The project in its new state
+     */
+    200: ProjectDto;
+};
+
+export type UpdateProjectResponse = UpdateProjectResponses[keyof UpdateProjectResponses];
 
 export type ListMembershipsData = {
     body?: never;

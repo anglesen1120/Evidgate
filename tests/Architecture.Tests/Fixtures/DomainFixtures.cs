@@ -97,3 +97,23 @@ internal sealed class HandlerReturningResult : ICommandHandler<CommandReturningR
     public ValueTask<Result<Guid>> Handle(CommandReturningResult command, CancellationToken cancellationToken) =>
         ValueTask.FromResult(Result.Success(Guid.Empty));
 }
+
+/// <summary>
+/// Seeded violation fixture (02.1.1): [AuthenticatedMember] on a handler that is not
+/// in the allowlist — the hole in 00 §5.7 S2 must stay closed by name.
+/// </summary>
+[AuthenticatedMember]
+internal sealed class HandlerWithUnlistedAuthenticatedMember : ICommandHandler<CreateSampleCommand, Guid>
+{
+    public ValueTask<Guid> Handle(CreateSampleCommand command, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(Guid.Empty);
+}
+
+/// <summary>Seeded violation fixture (02.1.1): both gates on one handler.</summary>
+[AuthenticatedMember]
+[Permission("run:create")]
+internal sealed class HandlerWithBothGates : ICommandHandler<CreateSampleCommand, Guid>
+{
+    public ValueTask<Guid> Handle(CreateSampleCommand command, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(Guid.Empty);
+}

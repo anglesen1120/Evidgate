@@ -35,11 +35,13 @@ public sealed class DtoContractTests
             ["acme.example"],
             Timestamp,
             Timestamp,
-            3);
+            3,
+            10,
+            25);
 
         JsonSerializer.Serialize(dto, SnakeCase).ShouldBe(
             """
-            {"id":"018f0000-0000-7000-8000-000000000001","name":"Acme","slug":"acme","status":"active","retention_default_days":30,"allowed_email_domains":["acme.example"],"created_at":"2026-09-26T12:30:00+00:00","updated_at":"2026-09-26T12:30:00+00:00","version":3}
+            {"id":"018f0000-0000-7000-8000-000000000001","name":"Acme","slug":"acme","status":"active","retention_default_days":30,"allowed_email_domains":["acme.example"],"created_at":"2026-09-26T12:30:00+00:00","updated_at":"2026-09-26T12:30:00+00:00","version":3,"max_projects":10,"max_seats":25}
             """);
 
         // The optional columns carry null, never a sentinel value (plan §4: both
@@ -63,11 +65,13 @@ public sealed class DtoContractTests
             Guid.Parse("018f0000-0000-7000-8000-000000000003"),
             Timestamp,
             Timestamp,
-            1);
+            1,
+            90,
+            1000);
 
         JsonSerializer.Serialize(dto, SnakeCase).ShouldBe(
             """
-            {"id":"018f0000-0000-7000-8000-000000000002","org_id":"018f0000-0000-7000-8000-000000000001","name":"Checkout","slug":"checkout","status":"active","default_environment_id":"018f0000-0000-7000-8000-000000000003","created_at":"2026-09-26T12:30:00+00:00","updated_at":"2026-09-26T12:30:00+00:00","version":1}
+            {"id":"018f0000-0000-7000-8000-000000000002","org_id":"018f0000-0000-7000-8000-000000000001","name":"Checkout","slug":"checkout","status":"active","default_environment_id":"018f0000-0000-7000-8000-000000000003","created_at":"2026-09-26T12:30:00+00:00","updated_at":"2026-09-26T12:30:00+00:00","version":1,"retention_days":90,"monthly_run_quota":1000}
             """);
 
         // default_environment_id is null until 05.1.2-T1 adds the FK target.

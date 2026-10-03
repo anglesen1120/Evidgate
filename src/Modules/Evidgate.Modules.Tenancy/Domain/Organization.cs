@@ -19,7 +19,7 @@ internal sealed class Organization
     /// <summary>Display name, ≤ 128 chars (input limit, 00 §5.7 S3).</summary>
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>Globally unique onboarding key; <c>^[a-z0-9][a-z0-9-]{1,62}$</c>.</summary>
+    /// <summary>Globally unique onboarding key; <c>^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$</c> (D-A1, 0012).</summary>
     public string Slug { get; set; } = string.Empty;
 
     /// <summary>One of <see cref="TenancyStatus"/>.</summary>
@@ -39,4 +39,10 @@ internal sealed class Organization
 
     /// <summary>Optimistic concurrency token (00 §7, 00 §5.5 C4); starts at 1.</summary>
     public int Version { get; set; } = 1;
+
+    /// <summary>Projects the org may hold that are not <c>deleted</c>; null = no limit (02.1.1-T3, 0013).</summary>
+    public int? MaxProjects { get; set; }
+
+    /// <summary>Active memberships the org may hold; null = no limit (02.1.1-T3, enforced by plan 12).</summary>
+    public int? MaxSeats { get; set; }
 }
