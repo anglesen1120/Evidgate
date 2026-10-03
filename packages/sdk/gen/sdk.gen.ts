@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, ExportAuditData, ExportAuditErrors, ExportAuditResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListMyOrganizationsData, ListMyOrganizationsErrors, ListMyOrganizationsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
+import type { ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, DisableCiBindingData, DisableCiBindingErrors, DisableCiBindingResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, ExportAuditData, ExportAuditErrors, ExportAuditResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListCiBindingsData, ListCiBindingsErrors, ListCiBindingsResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListIngestTokensData, ListIngestTokensErrors, ListIngestTokensResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListMyOrganizationsData, ListMyOrganizationsErrors, ListMyOrganizationsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeIngestTokenData, RevokeIngestTokenErrors, RevokeIngestTokenResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, RotateIngestTokenData, RotateIngestTokenErrors, RotateIngestTokenResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, UpdateCiBindingData, UpdateCiBindingErrors, UpdateCiBindingResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -19,17 +19,17 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 };
 
 /**
- * Exchange a GitHub OIDC JWT or project ingest token for a `ci_producer` token
+ * Exchange a GitHub OIDC JWT or project ingest token for a `ci_producer` token (02.4)
  *
- * Issues a short-lived `ci_producer` token scoped to one project (00 §9.3, 02). Not a permission-checked route: `x-permission: none`; the credential is the presented token (`x-auth`). Idempotency-Key exempt (stateless exchange, README).
+ * A pre-tenant route (00 §5.4.8, TL T1): there is no session, the credential is the request. Send a GitHub Actions OIDC token as `Authorization: Bearer …`, or an ingest token as `{"ingest_token": "egt_…"}`. The first exchange of a binding that is still `pending_verification` also carries `binding_challenge`. The reply is a short-lived (at most 60 minutes) `ci_producer` token scoped to exactly one project. Failures: 401 `token_invalid` / `token_replayed` / `token_unknown` / `token_revoked` / `token_expired`; 403 `binding_mismatch` / `binding_pending` / `binding_disabled`; 409 `binding_conflict`; 429 `rate_limited` (with `Retry-After`); 503 `unavailable` when the deployment has no signing key or the issuer's keys cannot be fetched. Idempotency-Key exempt: `jti` single-use is the arbiter (README).
  */
-export const exchangeCiToken = <ThrowOnError extends boolean = false>(options: Options<ExchangeCiTokenData, ThrowOnError>): RequestResult<ExchangeCiTokenResponses, ExchangeCiTokenErrors, ThrowOnError> => (options.client ?? client).post<ExchangeCiTokenResponses, ExchangeCiTokenErrors, ThrowOnError>({
+export const exchangeCiToken = <ThrowOnError extends boolean = false>(options?: Options<ExchangeCiTokenData, ThrowOnError>): RequestResult<ExchangeCiTokenResponses, ExchangeCiTokenErrors, ThrowOnError> => (options?.client ?? client).post<ExchangeCiTokenResponses, ExchangeCiTokenErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/ci/token',
     ...options,
     headers: {
         'Content-Type': 'application/json',
-        ...options.headers
+        ...options?.headers
     }
 });
 
@@ -670,7 +670,22 @@ export const updateRole = <ThrowOnError extends boolean = false>(options: Option
 });
 
 /**
- * Create a CI binding (02)
+ * Cursor page of a project's CI bindings (02.4.1)
+ */
+export const listCiBindings = <ThrowOnError extends boolean = false>(options: Options<ListCiBindingsData, ThrowOnError>): RequestResult<ListCiBindingsResponses, ListCiBindingsErrors, ThrowOnError> => (options.client ?? client).get<ListCiBindingsResponses, ListCiBindingsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/ci-bindings',
+    ...options
+});
+
+/**
+ * Bind a repository to a project; the response carries the one-time challenge (02.4.1)
+ *
+ * Creates the binding `pending_verification` and returns `binding_challenge` once. Set it as the repository variable `EVIDGATE_BINDING_CHALLENGE`; the first OIDC exchange that presents it activates the binding (T70). The challenge is stored only as an HMAC and the response is never replayed, so this route takes no `Idempotency-Key` (README). Without an `X-Evidgate-Org` header the org is the caller's only choice, so send it.
  */
 export const createCiBinding = <ThrowOnError extends boolean = false>(options: Options<CreateCiBindingData, ThrowOnError>): RequestResult<CreateCiBindingResponses, CreateCiBindingErrors, ThrowOnError> => (options.client ?? client).post<CreateCiBindingResponses, CreateCiBindingErrors, ThrowOnError>({
     security: [{
@@ -687,7 +702,52 @@ export const createCiBinding = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Issue an ingest token; plaintext returned once (02)
+ * Disable a CI binding (02.4.1)
+ */
+export const disableCiBinding = <ThrowOnError extends boolean = false>(options: Options<DisableCiBindingData, ThrowOnError>): RequestResult<DisableCiBindingResponses, DisableCiBindingErrors, ThrowOnError> => (options.client ?? client).delete<DisableCiBindingResponses, DisableCiBindingErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/ci-bindings/{b}',
+    ...options
+});
+
+/**
+ * Edit allowlists, disable or re-enable a binding under If-Match (02.4.1)
+ */
+export const updateCiBinding = <ThrowOnError extends boolean = false>(options: Options<UpdateCiBindingData, ThrowOnError>): RequestResult<UpdateCiBindingResponses, UpdateCiBindingErrors, ThrowOnError> => (options.client ?? client).patch<UpdateCiBindingResponses, UpdateCiBindingErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/ci-bindings/{b}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Cursor page of a project's ingest tokens, metadata only (02.4.2)
+ */
+export const listIngestTokens = <ThrowOnError extends boolean = false>(options: Options<ListIngestTokensData, ThrowOnError>): RequestResult<ListIngestTokensResponses, ListIngestTokensErrors, ThrowOnError> => (options.client ?? client).get<ListIngestTokensResponses, ListIngestTokensErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/ingest-tokens',
+    ...options
+});
+
+/**
+ * Issue an ingest token; the plaintext is returned once (02.4.2)
+ *
+ * The secret is shown only in this response; the database keeps the prefix and an HMAC (T5). The response is never replayed, so this route takes no `Idempotency-Key` (README).
  */
 export const createIngestToken = <ThrowOnError extends boolean = false>(options: Options<CreateIngestTokenData, ThrowOnError>): RequestResult<CreateIngestTokenResponses, CreateIngestTokenErrors, ThrowOnError> => (options.client ?? client).post<CreateIngestTokenResponses, CreateIngestTokenErrors, ThrowOnError>({
     security: [{
@@ -701,6 +761,34 @@ export const createIngestToken = <ThrowOnError extends boolean = false>(options:
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Mint a successor; the old token keeps verifying for 24 h (02.4.2)
+ *
+ * The successor's plaintext is returned once (no `Idempotency-Key`, README). A revoked token is 409 `token_revoked`; one already rotated or expired is 409 `invalid_transition`.
+ */
+export const rotateIngestToken = <ThrowOnError extends boolean = false>(options: Options<RotateIngestTokenData, ThrowOnError>): RequestResult<RotateIngestTokenResponses, RotateIngestTokenErrors, ThrowOnError> => (options.client ?? client).post<RotateIngestTokenResponses, RotateIngestTokenErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/ingest-tokens/{t}/rotate',
+    ...options
+});
+
+/**
+ * Revoke an ingest token immediately (02.4.2)
+ */
+export const revokeIngestToken = <ThrowOnError extends boolean = false>(options: Options<RevokeIngestTokenData, ThrowOnError>): RequestResult<RevokeIngestTokenResponses, RevokeIngestTokenErrors, ThrowOnError> => (options.client ?? client).delete<RevokeIngestTokenResponses, RevokeIngestTokenErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/ingest-tokens/{t}',
+    ...options
 });
 
 /**

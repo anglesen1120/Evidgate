@@ -6,6 +6,12 @@
 var IDEMPOTENCY_EXEMPT = {
   'post /ci/token':
     'Idempotency-Key not required — no side effect beyond ci_token_issue; jti single-use rejects replays (02 §4 endpoint table, FR-02-6/02.4.1)',
+  'post /projects/{p}/ci-bindings':
+    'the response carries a one-time challenge and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.1)',
+  'post /projects/{p}/ingest-tokens':
+    'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.2)',
+  'post /ingest-tokens/{t}/rotate':
+    'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.2)',
   'post /webhooks/github': 'replay-safe by provider delivery_id dedupe (00 §9.3)',
   'post /runs/{r}/events':
     'per-event event_id dedupe is the arbiter; a batch-level key cannot cover per-event acks (00 §9.4)',

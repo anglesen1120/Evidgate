@@ -130,6 +130,10 @@ public static partial class ApiHost
         app.MapTenancyEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.7.1-T3.1: the audit list and export, same filters.
         app.MapAuditEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // 02.4.1/02.4.2: CI bindings and ingest tokens (admin), and the pre-tenant credential exchange, which
+        // resolves its own tenant (no TenantResolutionFilter: there is no caller yet).
+        app.MapCiAdminEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        app.MapCiTokenEndpoints().AddEndpointFilter<ResultEndpointFilter>();
         app.MapOpenApi();
 
         return app;

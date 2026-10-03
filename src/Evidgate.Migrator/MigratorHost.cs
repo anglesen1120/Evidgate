@@ -9,6 +9,7 @@ public static class MigratorHost
 {
     private const string StatusArgument = "--status";
     private const string DryRunArgument = "--dry-run";
+    private const string SeedDevArgument = "seed-dev";
     private const string HelpArgument = "--help";
     private const string HelpShortArgument = "-h";
 
@@ -17,11 +18,13 @@ public static class MigratorHost
         $"""
         evidgate-migrator — applies plain-SQL migrations as the owner role, journalled in {MigratorOptions.JournalTableName} (00 §5.2, ADR-0003).
 
-        usage: Evidgate.Migrator [--status | --dry-run | --help]
+        usage: Evidgate.Migrator [--status | --dry-run | seed-dev | --help]
 
           (no arguments)  apply every pending migration, one transaction per file
           --status        print applied, pending and drifted files; exit {MigratorExitCodes.ChecksumMismatch} on drift, applies nothing
           --dry-run       print the pending files without applying anything
+          seed-dev        write the synthetic dev tenant (org, project, dev user + roles, CI binding); idempotent;
+                          refuses unless DOTNET_ENVIRONMENT=Development and the database host is local (01.8.1-T3)
 
         environment:
           {MigratorOptions.ConnectionStringVariable}   (required) owner-role connection string
@@ -77,6 +80,11 @@ public static class MigratorHost
             return MigratorExitCodes.InvalidInvocation;
         }
 
+        if (command == MigrationCommand.SeedDev)
+        {
+            return DevSeed.Run(options, environment, output, error);
+        }
+
         return MigratorRunner.Run(options, command.Value, output).ExitCode;
     }
 
@@ -104,6 +112,9 @@ public static class MigratorHost
                 return true;
             case DryRunArgument:
                 command = MigrationCommand.DryRun;
+                return true;
+            case SeedDevArgument:
+                command = MigrationCommand.SeedDev;
                 return true;
             case HelpArgument:
             case HelpShortArgument:

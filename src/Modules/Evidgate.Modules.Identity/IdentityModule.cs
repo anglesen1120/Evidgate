@@ -1,7 +1,9 @@
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.Modules.Identity.Application.Commands;
 using Evidgate.Modules.Identity.Authorization;
+using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Identity.Infrastructure.Persistence;
 using Evidgate.Modules.Identity.Options;
@@ -9,6 +11,7 @@ using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Identity;
 
@@ -99,6 +102,51 @@ internal static class IdentityModule
         // 02.1.1-T2 (AC8, T98): the org creator's founder membership, written by
         // Tenancy's CreateOrganization through this contract in the same transaction.
         services.TryAddSingleton<IOrganizationFounder, OrganizationFounder>();
+
+        services.AddCiAuthentication(configuration);
+
+        // 02.4.1-T4.1: the daily purge of the OIDC replay cache. Registered in both hosts like every module
+        // piece; only the Worker runs a consumer and a schedule runner.
+        services.AddTaskHandler<CiTokenIssuePurgePayload, CiTokenIssuePurgeTaskHandler>();
+        services.AddTaskSchedule(CiTokenIssueSweeps.Purge);
+
+        return services;
+    }
+
+    /// <summary>02.4.1/02.4.2: key material, token minting and validation, the GitHub OIDC validator and the pre-tenant resolvers.</summary>
+    private static IServiceCollection AddCiAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        services
+            .AddOptions<CiAuthOptions>()
+            .Bind(configuration.GetSection(CiAuthOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<CiAuthOptions>, CiAuthOptionsValidator>());
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<CiSecrets>();
+        services.TryAddSingleton<CiProducerTokens>();
+        services.TryAddSingleton<ExchangeRateLimiter>();
+        services.TryAddSingleton<ICiResolver, NpgsqlCiResolver>();
+        services.TryAddSingleton<GitHubOidcValidator>();
+
+        // The JWKS client: a typed HttpClient with a hard timeout and a bounded response (S4, P6).
+        services.AddHttpClient<IGitHubJwksProvider, HttpGitHubJwksProvider>(client => client.Timeout = TimeSpan.FromSeconds(5))
+            .AddTypedClient<IGitHubJwksProvider>((http, provider) =>
+                new HttpGitHubJwksProvider(http, provider.GetRequiredService<IOptions<CiAuthOptions>>(), provider.GetRequiredService<TimeProvider>()));
+
+        // `ci_producer` bearer tokens authenticate service callers for the tenant routes.
+        services.AddSingleton<ICallerAuthenticator, CiProducerAuthenticator>();
+
+        foreach (var validator in new (Type Message, Type Impl)[]
+                 {
+                     (typeof(CreateCiBindingCommand), typeof(CreateCiBindingCommandValidator)),
+                     (typeof(UpdateCiBindingCommand), typeof(UpdateCiBindingCommandValidator)),
+                     (typeof(CreateIngestTokenCommand), typeof(CreateIngestTokenCommandValidator)),
+                 })
+        {
+            services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IValidator<>).MakeGenericType(validator.Message), validator.Impl));
+        }
 
         return services;
     }

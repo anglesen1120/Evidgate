@@ -61,6 +61,18 @@ public sealed class AuthorizationBehaviour<TMessage, TResponse>(
                     "only an authenticated user may create an organization (02.1.1 §5)"));
         }
 
+        if (permission is null
+            && HandlerLookup.IsCredentialAuthenticated(services, typeof(TMessage), typeof(TResponse)))
+        {
+            // 02.4.1/02.4.2: the endpoint verified a CI credential before the pipeline and published the tenant and
+            // a service principal from it. Nothing else may reach these handlers.
+            _ = tenant.Require();
+
+            return principals.Current is { Kind: PrincipalKind.ServicePrincipal }
+                ? await RunAuditedAsync(message, next, cancellationToken).ConfigureAwait(false)
+                : ResultFactory.Failure<TResponse>(Error.Forbidden("a verified CI credential is required"));
+        }
+
         if (permission is null)
         {
             return ResultFactory.Failure<TResponse>(Error.Forbidden(

@@ -154,6 +154,10 @@ public static class ArchitectureRules
 
         // 02.6.2-T1.1: the host's entry point that resolves the tenant per request.
         "Evidgate.Api.Tenancy.TenantResolutionFilter",
+
+        // 02.4.1/02.4.2: the credential exchange verifies the CI credential, then publishes the tenant
+        // it resolved (pre-tenant resolution, TL T1).
+        "Evidgate.Modules.Identity.Endpoints.CiTokenEndpoints",
     };
 
     /// <summary>
@@ -258,6 +262,16 @@ public static class ArchitectureRules
         "Evidgate.Modules.Tenancy.Application.Commands.CreateOrganizationCommandHandler",
     };
 
+    /// <summary>
+    /// 02.4.1/02.4.2: the only handlers that may carry <c>[CredentialAuthenticated]</c> instead of a permission — the two
+    /// credential exchanges, whose endpoint verifies the credential before the pipeline runs.
+    /// </summary>
+    public static readonly IReadOnlySet<string> CredentialAuthenticatedAllowlist = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Evidgate.Modules.Identity.Application.Commands.ExchangeGitHubTokenCommandHandler",
+        "Evidgate.Modules.Identity.Application.Commands.ExchangeIngestTokenCommandHandler",
+    };
+
     public static IReadOnlyList<string> EveryHandlerDeclaresPermission(IEnumerable<Type> types)
     {
         var violations = new List<string>();
@@ -286,6 +300,27 @@ public static class ArchitectureRules
             var authenticatedMember = type
                 .GetCustomAttributesData()
                 .Any(a => a.AttributeType.FullName == typeof(AuthenticatedMemberAttribute).FullName);
+
+            var credentialAuthenticated = type
+                .GetCustomAttributesData()
+                .Any(a => a.AttributeType.FullName == typeof(CredentialAuthenticatedAttribute).FullName);
+
+            if (credentialAuthenticated)
+            {
+                if (!CredentialAuthenticatedAllowlist.Contains(type.FullName ?? string.Empty))
+                {
+                    violations.Add(
+                        $"{type.FullName} carries [CredentialAuthenticated] but is not in " +
+                        "ArchitectureRules.CredentialAuthenticatedAllowlist; tenant handlers declare a permission (00 §5.7 S2)");
+                }
+
+                if (permissionAttribute is not null || authenticatedMember)
+                {
+                    violations.Add($"{type.FullName} carries [CredentialAuthenticated] and another gate; declare exactly one gate");
+                }
+
+                continue;
+            }
 
             if (authenticatedMember)
             {

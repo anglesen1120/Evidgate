@@ -126,9 +126,22 @@ needs no dev-stack endpoint; to point the same assertions at the dev bucket, use
 
 - **web** — `apps/web` is the 00 §5.2 placeholder; `ng serve` arrives with 09.1.1,
   and `up.sh` says so instead of pretending to start it.
-- **`Evidgate.Migrator seed-dev`** (01.8.1-T3.1) — the tables it seeds (org,
-  project, membership, policy revision) are created by 02.1.1, 02.1.2 and 07.1.1.
-  Until those land there is nothing to seed and no seed command.
+- **Seed part 2** (01.8.1-T4) — the dev ingest token (`seed-dev --with-token`) and the
+  sample policy revision need the ingest-token command of 02.4.2 wired into the seed
+  and the policy tables of 07.1.1. Until then, create a token with
+  `POST /v1/projects/{p}/ingest-tokens` once a session exists (02.3.x), or use the
+  seeded CI binding with a GitHub OIDC token.
+
+## The dev tenant (`seed-dev`)
+
+`scripts/dev/db-init.sh` runs `Evidgate.Migrator seed-dev` after the migrations
+(skip it with `EVIDGATE_DB_INIT_SEED=0`). It writes, idempotently and in one
+transaction as the owner role, a synthetic tenant: org `dev-org`, project
+`dev-project`, a dev user (`0198a000-0000-7000-8000-00000000d003`, no login exists
+yet) holding `tenant_admin` and `release_approver`, and one **active** CI binding for
+the synthetic repository id `1000001` (`evidgate-dev/sample`). It refuses, writing
+nothing, unless `DOTNET_ENVIRONMENT=Development` and the database host is local or a
+bare compose service name. The data is fully synthetic.
 
 ## Troubleshooting
 

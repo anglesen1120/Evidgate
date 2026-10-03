@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
-using Evidgate.Api.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.Modules.Identity.Ci;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -45,13 +45,30 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     private readonly string _connectionString;
     private readonly bool _realEvaluator;
     private readonly bool _realResolver;
+    private readonly bool _ci;
 
-    private TenancyApiFactory(string connectionString, bool realEvaluator, bool realResolver = false)
+    private TenancyApiFactory(string connectionString, bool realEvaluator, bool realResolver = false, bool ci = false)
     {
         _connectionString = connectionString;
         _realEvaluator = realEvaluator;
         _realResolver = realResolver;
+        _ci = ci;
     }
+
+    /// <summary>The GitHub OIDC stand-in (a local RSA keypair) when built with <see cref="Ci"/>.</summary>
+    public TestJwks Jwks { get; } = new();
+
+    /// <summary>The configured CI key material, for tests that mint or check tokens.</summary>
+    public static CiTestKeys Keys { get; } = new();
+
+    /// <summary>
+    /// <see cref="RealResolver"/> plus CI authentication: signing key and peppers configured, the real
+    /// <c>ci_producer</c> authenticator in place, and GitHub's JWKS served from <see cref="Jwks"/>.
+    /// </summary>
+    public static TenancyApiFactory Ci(string appConnectionString, IReadOnlyDictionary<string, string?>? overrides = null) =>
+        new(appConnectionString, realEvaluator: true, realResolver: true, ci: true) { _overrides = overrides };
+
+    private IReadOnlyDictionary<string, string?>? _overrides;
 
     /// <summary>Every command Npgsql executed for this host, whitespace-normalised, in order.</summary>
     public StatementLog Statements { get; } = new();
@@ -161,11 +178,31 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
                 ["EVIDGATE:Identity:CustomRolesEnabled"] = "false",
             }));
 
+        if (_ci)
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(Keys.Configuration);
+                if (_overrides is not null)
+                {
+                    configuration.AddInMemoryCollection(_overrides);
+                }
+            });
+        }
+
         builder.ConfigureTestServices(services =>
         {
             if (_realResolver)
             {
+                // In CI mode only the production ci_producer authenticator identifies service callers;
+                // the header stand-in still identifies members.
                 services.AddSingleton<ICallerAuthenticator, HeaderAuthenticator>();
+            }
+
+            if (_ci)
+            {
+                services.RemoveAll<IGitHubJwksProvider>();
+                services.AddSingleton<IGitHubJwksProvider>(Jwks);
             }
             else
             {
@@ -240,23 +277,21 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     /// <summary>The stand-in credential authenticator: headers become an <see cref="AuthenticatedCaller"/>.</summary>
     private sealed class HeaderAuthenticator : ICallerAuthenticator
     {
-        public ValueTask<AuthenticatedCaller?> AuthenticateAsync(HttpContext context, CancellationToken cancellationToken)
+        public ValueTask<AuthenticatedCaller?> AuthenticateAsync(ICallerRequest request, CancellationToken cancellationToken)
         {
-            var headers = context.Request.Headers;
-
-            if (Guid.TryParse(headers[UserHeader], out var user))
+            if (Guid.TryParse(request.Header(UserHeader), out var user))
             {
-                var email = headers[EmailHeader].ToString();
+                var email = request.Header(EmailHeader);
 
                 return ValueTask.FromResult<AuthenticatedCaller?>(new AuthenticatedCaller(
                     RequestPrincipal.Member(user, string.IsNullOrEmpty(email) ? null : email)));
             }
 
-            if (headers.TryGetValue(ServicePermissionsHeader, out var claimed))
+            if (request.Header(ServicePermissionsHeader) is { } claimed)
             {
-                Guid? bound = Guid.TryParse(headers[ServiceOrgHeader], out var org) ? org : null;
-                Guid? project = Guid.TryParse(headers[ServiceScopeHeader], out var p) ? p : null;
-                var permissions = claimed.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
+                Guid? bound = Guid.TryParse(request.Header(ServiceOrgHeader), out var org) ? org : null;
+                Guid? project = Guid.TryParse(request.Header(ServiceScopeHeader), out var p) ? p : null;
+                var permissions = claimed.Split(',', StringSplitOptions.RemoveEmptyEntries);
 
                 return ValueTask.FromResult<AuthenticatedCaller?>(
                     new AuthenticatedCaller(RequestPrincipal.Service(project, permissions), bound, project));

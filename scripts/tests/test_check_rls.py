@@ -135,6 +135,13 @@ class DefinerRules(unittest.TestCase):
         findings = run(GOOD_DEFINER.replace("from public.membership m", "from membership m"))
         self.assertEqual(rules(findings), {"definer_unqualified"})
 
+    def test_a_cte_name_is_not_an_unqualified_relation(self):
+        sql = GOOD_DEFINER.replace(
+            "select m.org_id from public.membership m where m.invite_secret_prefix = p_key",
+            "with hit as (select m.org_id from public.membership m) select h.org_id from hit h",
+        )
+        self.assertEqual(run(sql), [])
+
     def test_missing_audit_row(self):
         findings = run(GOOD_DEFINER.replace("insert into public.audit_log (k) values (p_key);", ""))
         self.assertEqual(rules(findings), {"definer_audit"})

@@ -14,6 +14,9 @@
          version is the solution's single pinned one (Directory.Packages.props); the
          pipeline already uses it, so no licence is added. -->
     <PackageReference Include="FluentValidation" />
+    <!-- 02.4.1-T1/T3.3: GitHub OIDC validation and the minted ci_producer JWT (D7). Already
+         pinned in Directory.Packages.props; MIT. -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
   </ItemGroup>
   <!--
     02.2.1-T1.2: this module owns public minimal-API routes (00 §5.5 `Endpoints/`,
@@ -50,5 +53,7 @@
     <InternalsVisibleTo Include="Evidgate.Worker" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
     <InternalsVisibleTo Include="Identity.IntegrationTests" />
+    <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
+    <InternalsVisibleTo Include="Tasks.IntegrationTests" />
   </ItemGroup>
 </Project>

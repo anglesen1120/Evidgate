@@ -66,30 +66,29 @@ paths:
     post:
       operationId: exchangeCiToken
       tags: [ci]
-      summary: Exchange a GitHub OIDC JWT or project ingest token for a `ci_producer` token
+      summary: Exchange a GitHub OIDC JWT or project ingest token for a `ci_producer` token (02.4)
       description: >-
-        Issues a short-lived `ci_producer` token scoped to one project (00 §9.3, 02).
-        Not a permission-checked route: `x-permission: none`; the credential is the
-        presented token (`x-auth`). Idempotency-Key exempt (stateless exchange, README).
+        A pre-tenant route (00 §5.4.8, TL T1): there is no session, the credential is the
+        request. Send a GitHub Actions OIDC token as `Authorization: Bearer …`, or an ingest
+        token as `{"ingest_token": "egt_…"}`. The first exchange of a binding that is still
+        `pending_verification` also carries `binding_challenge`. The reply is a short-lived
+        (at most 60 minutes) `ci_producer` token scoped to exactly one project. Failures:
+        401 `token_invalid` / `token_replayed` / `token_unknown` / `token_revoked` /
+        `token_expired`; 403 `binding_mismatch` / `binding_pending` / `binding_disabled`;
+        409 `binding_conflict`; 429 `rate_limited` (with `Retry-After`); 503 `unavailable`
+        when the deployment has no signing key or the issuer's keys cannot be fetched.
+        Idempotency-Key exempt: `jti` single-use is the arbiter (README).
       x-permission: none
       x-auth: github_oidc_jwt_or_ingest_token
       x-version: v1
       security:
         - bearerToken: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              type: object
-              required: [credential, project_id]
-              properties:
-                credential:
-                  type: string
-                  description: GitHub OIDC JWT or project ingest token
-                project_id:
-                  type: string
-                  format: uuid
+              $ref: '#/components/schemas/CiTokenRequest'
       responses:
         '200':
           description: Short-lived `ci_producer` token
@@ -99,18 +98,15 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [token, expires_at]
-                properties:
-                  token:
-                    type: string
-                  expires_at:
-                    type: string
-                    format: date-time
+                $ref: '#/components/schemas/CiTokenResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -1790,26 +1786,68 @@ paths:
     post:
       operationId: createCiBinding
       tags: [ci-admin]
-      summary: Create a CI binding (02)
+      summary: Bind a repository to a project; the response carries the one-time challenge (02.4.1)
+      description: >-
+        Creates the binding `pending_verification` and returns `binding_challenge` once. Set it
+        as the repository variable `EVIDGATE_BINDING_CHALLENGE`; the first OIDC exchange that
+        presents it activates the binding (T70). The challenge is stored only as an HMAC and the
+        response is never replayed, so this route takes no `Idempotency-Key` (README).
+        Without an `X-Evidgate-Org` header the org is the caller's only choice, so send it.
       x-permission: ci_binding:write
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/XsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              description: CI binding payload (02).
+              $ref: '#/components/schemas/CreateCiBindingRequest'
       responses:
         '201':
           description: CI binding created
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CiBindingCreatedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listCiBindings
+      tags: [ci-admin]
+      summary: Cursor page of a project's CI bindings (02.4.1)
+      x-permission: project:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of bindings; the challenge is never listed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CiBindingListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1822,15 +1860,16 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
-  /projects/{p}/ingest-tokens:
-    post:
-      operationId: createIngestToken
+  /ci-bindings/{b}:
+    patch:
+      operationId: updateCiBinding
       tags: [ci-admin]
-      summary: Issue an ingest token; plaintext returned once (02)
-      x-permission: ingest_token:write
+      summary: Edit allowlists, disable or re-enable a binding under If-Match (02.4.1)
+      x-permission: ci_binding:write
       x-version: v1
       parameters:
-        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/BindingId'
+        - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/XsrfToken'
       requestBody:
@@ -1838,8 +1877,80 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: Ingest token creation payload (02).
+              $ref: '#/components/schemas/UpdateCiBindingRequest'
+      responses:
+        '200':
+          description: The binding in its new state
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CiBindingView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: disableCiBinding
+      tags: [ci-admin]
+      summary: Disable a CI binding (02.4.1)
+      x-permission: ci_binding:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/BindingId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: Binding disabled
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/ingest-tokens:
+    post:
+      operationId: createIngestToken
+      tags: [ci-admin]
+      summary: Issue an ingest token; the plaintext is returned once (02.4.2)
+      description: >-
+        The secret is shown only in this response; the database keeps the prefix and an HMAC
+        (T5). The response is never replayed, so this route takes no `Idempotency-Key` (README).
+      x-permission: ingest_token:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIngestTokenRequest'
       responses:
         '201':
           description: Token issued; plaintext returned once
@@ -1849,11 +1960,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [token]
-                properties:
-                  token:
-                    type: string
+                $ref: '#/components/schemas/IngestTokenCreatedResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1862,6 +1969,100 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listIngestTokens
+      tags: [ci-admin]
+      summary: Cursor page of a project's ingest tokens, metadata only (02.4.2)
+      x-permission: ingest_token:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of tokens; never the secret or its hash
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestTokenListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /ingest-tokens/{t}/rotate:
+    post:
+      operationId: rotateIngestToken
+      tags: [ci-admin]
+      summary: Mint a successor; the old token keeps verifying for 24 h (02.4.2)
+      description: >-
+        The successor's plaintext is returned once (no `Idempotency-Key`, README). A revoked
+        token is 409 `token_revoked`; one already rotated or expired is 409 `invalid_transition`.
+      x-permission: ingest_token:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IngestTokenId'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: Successor issued; `overlap_ends_at` is when the old token stops verifying
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestTokenCreatedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /ingest-tokens/{t}:
+    delete:
+      operationId: revokeIngestToken
+      tags: [ci-admin]
+      summary: Revoke an ingest token immediately (02.4.2)
+      x-permission: ingest_token:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IngestTokenId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: Token revoked
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -2802,6 +3003,20 @@ components:
       name: X-Hub-Signature-256
       description: HMAC signature on inbound GitHub webhook deliveries (00 §9.3).
   parameters:
+    BindingId:
+      name: b
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IngestTokenId:
+      name: t
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     AuditExportFormat:
       name: format
       in: query
@@ -3421,6 +3636,222 @@ components:
         next_cursor:
           type: [string, 'null']
           description: Opaque cursor of the next page, or null on the last page.
+    CiBindingView:
+      type: object
+      description: A CI binding as listed and read; never carries the challenge or its hash.
+      required:
+        [
+          id,
+          project_id,
+          provider,
+          repository_id,
+          repository_full_name,
+          allowed_ref_patterns,
+          allowed_workflow_refs,
+          status,
+          created_at,
+          version,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum: [github_actions]
+        repository_id:
+          type: integer
+          format: int64
+        repository_full_name:
+          type: string
+        allowed_ref_patterns:
+          type: array
+          items:
+            type: string
+        allowed_workflow_refs:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [pending_verification, active, disabled]
+        activated_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    CiBindingCreatedResponse:
+      type: object
+      required: [binding, binding_challenge]
+      properties:
+        binding:
+          $ref: '#/components/schemas/CiBindingView'
+        binding_challenge:
+          type: string
+          description: Shown once. Set as the repository variable `EVIDGATE_BINDING_CHALLENGE`.
+    CiBindingListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CiBindingView'
+        next_cursor:
+          type: [string, 'null']
+    CreateCiBindingRequest:
+      type: object
+      required:
+        [provider, repository_id, repository_full_name, allowed_ref_patterns, allowed_workflow_refs]
+      properties:
+        provider:
+          type: string
+          enum: [github_actions]
+        repository_id:
+          type: integer
+          format: int64
+          minimum: 1
+        repository_full_name:
+          type: string
+          description: '`owner/repo`'
+        allowed_ref_patterns:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+          description: 'Git refs allowed to mint, e.g. `refs/heads/main`, `refs/tags/v*` (`*` is the only wildcard).'
+        allowed_workflow_refs:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+          description: 'Allowed `job_workflow_ref` values, e.g. `acme/web/.github/workflows/ci.yml@refs/heads/main`.'
+    UpdateCiBindingRequest:
+      type: object
+      properties:
+        allowed_ref_patterns:
+          type: [array, 'null']
+          maxItems: 32
+          items:
+            type: string
+        allowed_workflow_refs:
+          type: [array, 'null']
+          maxItems: 32
+          items:
+            type: string
+        status:
+          type: [string, 'null']
+          enum: [disabled, active, null]
+    IngestTokenView:
+      type: object
+      description: An ingest token's metadata; never the secret or its hash.
+      required: [id, project_id, name, prefix, status, scopes, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        prefix:
+          type: string
+        status:
+          type: string
+          enum: [active, rotated, expired, revoked]
+        scopes:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+        overlap_ends_at:
+          type: [string, 'null']
+          format: date-time
+        last_used_at:
+          type: [string, 'null']
+          format: date-time
+        rotated_to_id:
+          type: [string, 'null']
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+    IngestTokenCreatedResponse:
+      type: object
+      required: [token, secret]
+      properties:
+        token:
+          $ref: '#/components/schemas/IngestTokenView'
+        secret:
+          type: string
+          description: The full `egt_…` string. Shown once; it is not stored and cannot be read again.
+        overlap_ends_at:
+          type: [string, 'null']
+          format: date-time
+    IngestTokenListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngestTokenView'
+        next_cursor:
+          type: [string, 'null']
+    CreateIngestTokenRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        scopes:
+          type: [array, 'null']
+          minItems: 1
+          maxItems: 3
+          items:
+            type: string
+          description: Subset of the permission codes `event:write`, `artifact:write` and `run:create`; default all three.
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+    CiTokenRequest:
+      type: object
+      properties:
+        ingest_token:
+          type: [string, 'null']
+          description: The `egt_…` token (the GitHub grant sends its OIDC JWT as a bearer instead).
+        binding_challenge:
+          type: [string, 'null']
+          description: The one-time challenge, presented by the first exchange of a pending binding.
+    CiTokenResponse:
+      type: object
+      required: [token, expires_at, project_id, permission_set]
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        project_id:
+          type: string
+          format: uuid
+        permission_set:
+          type: array
+          items:
+            type: string
     AuditEntryDto:
       type: object
       description: One audit event with its place in the org's hash chain; hashes are lowercase hex.

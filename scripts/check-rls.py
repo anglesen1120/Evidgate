@@ -34,6 +34,7 @@ from pathlib import Path
 # here is a review decision, so each entry carries its reason.
 DEFINER_AUDIT_EXEMPT = {
     "evidgate.purge_expired_idempotency": "T80 sweep: bounded delete of expired rows, observed via the task row",
+    "evidgate.purge_expired_ci_token_issue": "T7 sweep: bounded delete of expired replay-cache rows, observed via the task row",
     "evidgate.audit_org_ids": "T80 sweep: lists org ids for the chain-verification task, which records its own findings",
 }
 
@@ -235,8 +236,9 @@ def lint_definers(schema: Schema, raws: dict[str, str]) -> list[Finding]:
                     g = grantee.split()[0].lower()
                     if g not in ALLOWED_GRANTEES and g != "public":
                         findings.append(Finding(gfile, short, "definer_grantee", f"EXECUTE granted to unexpected role {g}"))
+        ctes = {name.lower() for name in re.findall(r"\b([a-z_]\w*)\s+as\s+(?:not\s+)?(?:materialized\s*)?\(", body, re.I)}
         for relation in RELATION.findall(body):
-            if relation.lower() not in SQL_WORDS and not relation.lower().startswith(("batch", "removed")):
+            if relation.lower() not in SQL_WORDS and relation.lower() not in ctes and not relation.lower().startswith(("batch", "removed")):
                 findings.append(Finding(fname, short, "definer_unqualified", f"relation `{relation}` is not schema-qualified"))
         audited = re.search(r"insert\s+into\s+\S*audit", body, re.I)
         if not audited and func not in DEFINER_AUDIT_EXEMPT and func not in deferrals.get(fname, set()):

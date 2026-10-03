@@ -187,6 +187,8 @@ public sealed class ResolverTests
                      "evidgate_resolve.member_orgs(uuid)",
                      "evidgate_resolve.member_org(uuid, uuid)",
                      "evidgate_resolve.member_organizations(uuid, integer)",
+                     "evidgate_resolve.resolve_ci_binding(text, bigint, bytea[])",
+                     "evidgate_resolve.resolve_ingest_token(text)",
                  })
         {
             (await _fixture.ScalarAsync<bool>(database, $"select has_function_privilege('evidgate_app', '{signature}', 'execute')"))

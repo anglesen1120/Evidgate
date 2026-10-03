@@ -82,6 +82,12 @@ agent job routes) must not (T38). All error responses reference
 - `POST /v1/ci/token` — `Idempotency-Key` not required: no side effect beyond
   the `ci_token_issue` row; `jti` single-use already rejects replays
   (02 §4 endpoint table, FR-02-6/02.4.1).
+- `POST /v1/projects/{p}/ci-bindings`, `POST /v1/projects/{p}/ingest-tokens`,
+  `POST /v1/ingest-tokens/{t}/rotate` — the response carries a one-time secret
+  (a binding challenge or an ingest token). The idempotency store persists
+  response bodies, and a secret must never be stored in the clear (00 §5.7 S3), so
+  these responses are never replayed and no key is honoured; a retried create makes
+  a second secret the admin can revoke (02.4.1, 02.4.2).
 - `POST /v1/webhooks/github` — replay-safe by provider `delivery_id` dedupe
   (00 §9.3).
 - `POST /v1/runs/{r}/events` — per-event `event_id` dedupe is the arbiter; a

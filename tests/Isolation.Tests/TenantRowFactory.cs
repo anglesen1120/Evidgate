@@ -296,6 +296,20 @@ internal sealed class TenantRowFactory
             return "system";
         }
 
+        // Columns whose CHECK constraints name a closed vocabulary or a shape (migrations 0016-0018).
+        var special = (table, column.Name) switch
+        {
+            ("public.ci_binding", "provider") or ("public.ci_token_issue", "provider") => "github_actions",
+            ("public.ingest_token", "prefix") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
+            ("public.ingest_token", "scopes") => new[] { "run:create" },
+            _ => (object?)null,
+        };
+
+        if (special is not null)
+        {
+            return special;
+        }
+
         return column.StoreType switch
         {
             "bytea" => new byte[32],

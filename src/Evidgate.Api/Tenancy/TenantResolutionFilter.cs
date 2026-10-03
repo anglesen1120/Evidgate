@@ -74,7 +74,7 @@ public sealed class TenantResolutionFilter(
     {
         foreach (var authenticator in authenticators)
         {
-            if (await authenticator.AuthenticateAsync(http, http.RequestAborted).ConfigureAwait(false) is { } caller)
+            if (await authenticator.AuthenticateAsync(new HttpCallerRequest(http), http.RequestAborted).ConfigureAwait(false) is { } caller)
             {
                 return caller;
             }
@@ -103,5 +103,18 @@ public sealed class TenantResolutionFilter(
         }
 
         return Guid.TryParse(header, out var headerOrg) ? (headerOrg, true) : null;
+    }
+}
+
+/// <summary>Adapts an <see cref="HttpContext"/> to the host-neutral <see cref="ICallerRequest"/>.</summary>
+/// <param name="context">The request.</param>
+internal sealed class HttpCallerRequest(HttpContext context) : ICallerRequest
+{
+    /// <inheritdoc />
+    public string? Header(string name)
+    {
+        var value = context.Request.Headers[name];
+
+        return value.Count == 0 ? null : value[0];
     }
 }

@@ -11,4 +11,7 @@ public enum MigrationCommand
 
     /// <summary>Print the pending files without touching the database. Applies nothing.</summary>
     DryRun,
+
+    /// <summary>Write the synthetic dev tenant (01.8.1-T3.1).</summary>
+    SeedDev,
 }

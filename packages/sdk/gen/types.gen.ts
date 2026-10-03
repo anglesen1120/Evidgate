@@ -224,6 +224,117 @@ export type ProjectListResponse = {
 };
 
 /**
+ * A CI binding as listed and read; never carries the challenge or its hash.
+ */
+export type CiBindingView = {
+    id: string;
+    project_id: string;
+    provider: 'github_actions';
+    repository_id: number;
+    repository_full_name: string;
+    allowed_ref_patterns: Array<string>;
+    allowed_workflow_refs: Array<string>;
+    status: 'pending_verification' | 'active' | 'disabled';
+    activated_at?: string | null;
+    created_at: string;
+    version: number;
+};
+
+export type CiBindingCreatedResponse = {
+    binding: CiBindingView;
+    /**
+     * Shown once. Set as the repository variable `EVIDGATE_BINDING_CHALLENGE`.
+     */
+    binding_challenge: string;
+};
+
+export type CiBindingListResponse = {
+    items: Array<CiBindingView>;
+    next_cursor: string | null;
+};
+
+export type CreateCiBindingRequest = {
+    provider: 'github_actions';
+    repository_id: number;
+    /**
+     * `owner/repo`
+     */
+    repository_full_name: string;
+    /**
+     * Git refs allowed to mint, e.g. `refs/heads/main`, `refs/tags/v*` (`*` is the only wildcard).
+     */
+    allowed_ref_patterns: Array<string>;
+    /**
+     * Allowed `job_workflow_ref` values, e.g. `acme/web/.github/workflows/ci.yml@refs/heads/main`.
+     */
+    allowed_workflow_refs: Array<string>;
+};
+
+export type UpdateCiBindingRequest = {
+    allowed_ref_patterns?: Array<string> | null;
+    allowed_workflow_refs?: Array<string> | null;
+    status?: 'disabled' | 'active' | null;
+};
+
+/**
+ * An ingest token's metadata; never the secret or its hash.
+ */
+export type IngestTokenView = {
+    id: string;
+    project_id: string;
+    name: string;
+    prefix: string;
+    status: 'active' | 'rotated' | 'expired' | 'revoked';
+    scopes: Array<string>;
+    expires_at?: string | null;
+    overlap_ends_at?: string | null;
+    last_used_at?: string | null;
+    rotated_to_id?: string | null;
+    created_at: string;
+};
+
+export type IngestTokenCreatedResponse = {
+    token: IngestTokenView;
+    /**
+     * The full `egt_…` string. Shown once; it is not stored and cannot be read again.
+     */
+    secret: string;
+    overlap_ends_at?: string | null;
+};
+
+export type IngestTokenListResponse = {
+    items: Array<IngestTokenView>;
+    next_cursor: string | null;
+};
+
+export type CreateIngestTokenRequest = {
+    name: string;
+    /**
+     * Subset of the permission codes `event:write`, `artifact:write` and `run:create`; default all three.
+     */
+    scopes?: Array<string> | null;
+    expires_at?: string | null;
+};
+
+export type CiTokenRequest = {
+    /**
+     * The `egt_…` token (the GitHub grant sends its OIDC JWT as a bearer instead).
+     */
+    ingest_token?: string | null;
+    /**
+     * The one-time challenge, presented by the first exchange of a pending binding.
+     */
+    binding_challenge?: string | null;
+};
+
+export type CiTokenResponse = {
+    token: string;
+    expires_at: string;
+    project_id: string;
+    permission_set: Array<string>;
+};
+
+/**
  * One audit event with its place in the org's hash chain; hashes are lowercase hex.
  */
 export type AuditEntryDto = {
@@ -525,6 +636,10 @@ export type Event = unknown & {
     };
 };
 
+export type BindingId = string;
+
+export type IngestTokenId = string;
+
 export type AuditExportFormat = 'jsonl' | 'csv';
 
 export type AuditActorType = 'user' | 'ci_producer' | 'agent' | 'platform_operator' | 'system';
@@ -600,13 +715,7 @@ export type JobId = string;
 export type CandidateId = string;
 
 export type ExchangeCiTokenData = {
-    body: {
-        /**
-         * GitHub OIDC JWT or project ingest token
-         */
-        credential: string;
-        project_id: string;
-    };
+    body?: CiTokenRequest;
     path?: never;
     query?: never;
     url: '/ci/token';
@@ -621,6 +730,14 @@ export type ExchangeCiTokenErrors = {
      * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
      */
     403: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
     /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
      */
@@ -641,10 +758,7 @@ export type ExchangeCiTokenResponses = {
     /**
      * Short-lived `ci_producer` token
      */
-    200: {
-        token: string;
-        expires_at: string;
-    };
+    200: CiTokenResponse;
 };
 
 export type ExchangeCiTokenResponse = ExchangeCiTokenResponses[keyof ExchangeCiTokenResponses];
@@ -2842,31 +2956,22 @@ export type UpdateRoleResponses = {
 
 export type UpdateRoleResponse = UpdateRoleResponses[keyof UpdateRoleResponses];
 
-export type CreateCiBindingData = {
-    /**
-     * CI binding payload (02).
-     */
-    body: {
-        [key: string]: unknown;
-    };
-    headers: {
-        /**
-         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
-         */
-        'Idempotency-Key': string;
-        /**
-         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
-         */
-        'X-XSRF-TOKEN'?: string;
-    };
+export type ListCiBindingsData = {
+    body?: never;
     path: {
         p: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
     url: '/projects/{p}/ci-bindings';
 };
 
-export type CreateCiBindingErrors = {
+export type ListCiBindingsErrors = {
     /**
      * 401 unauthenticated (00 §9.2)
      */
@@ -2893,27 +2998,252 @@ export type CreateCiBindingErrors = {
     503: ErrorEnvelope;
 };
 
+export type ListCiBindingsError = ListCiBindingsErrors[keyof ListCiBindingsErrors];
+
+export type ListCiBindingsResponses = {
+    /**
+     * Page of bindings; the challenge is never listed
+     */
+    200: CiBindingListResponse;
+};
+
+export type ListCiBindingsResponse = ListCiBindingsResponses[keyof ListCiBindingsResponses];
+
+export type CreateCiBindingData = {
+    body: CreateCiBindingRequest;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/ci-bindings';
+};
+
+export type CreateCiBindingErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
 export type CreateCiBindingError = CreateCiBindingErrors[keyof CreateCiBindingErrors];
 
 export type CreateCiBindingResponses = {
     /**
      * CI binding created
      */
-    201: unknown;
+    201: CiBindingCreatedResponse;
 };
 
-export type CreateIngestTokenData = {
-    /**
-     * Ingest token creation payload (02).
-     */
-    body: {
-        [key: string]: unknown;
-    };
+export type CreateCiBindingResponse = CreateCiBindingResponses[keyof CreateCiBindingResponses];
+
+export type DisableCiBindingData = {
+    body?: never;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
          */
         'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        b: string;
+    };
+    query?: never;
+    url: '/ci-bindings/{b}';
+};
+
+export type DisableCiBindingErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DisableCiBindingError = DisableCiBindingErrors[keyof DisableCiBindingErrors];
+
+export type DisableCiBindingResponses = {
+    /**
+     * Binding disabled
+     */
+    204: void;
+};
+
+export type DisableCiBindingResponse = DisableCiBindingResponses[keyof DisableCiBindingResponses];
+
+export type UpdateCiBindingData = {
+    body: UpdateCiBindingRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        b: string;
+    };
+    query?: never;
+    url: '/ci-bindings/{b}';
+};
+
+export type UpdateCiBindingErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateCiBindingError = UpdateCiBindingErrors[keyof UpdateCiBindingErrors];
+
+export type UpdateCiBindingResponses = {
+    /**
+     * The binding in its new state
+     */
+    200: CiBindingView;
+};
+
+export type UpdateCiBindingResponse = UpdateCiBindingResponses[keyof UpdateCiBindingResponses];
+
+export type ListIngestTokensData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/ingest-tokens';
+};
+
+export type ListIngestTokensErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListIngestTokensError = ListIngestTokensErrors[keyof ListIngestTokensErrors];
+
+export type ListIngestTokensResponses = {
+    /**
+     * Page of tokens; never the secret or its hash
+     */
+    200: IngestTokenListResponse;
+};
+
+export type ListIngestTokensResponse = ListIngestTokensResponses[keyof ListIngestTokensResponses];
+
+export type CreateIngestTokenData = {
+    body: CreateIngestTokenRequest;
+    headers?: {
         /**
          * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
          */
@@ -2959,12 +3289,116 @@ export type CreateIngestTokenResponses = {
     /**
      * Token issued; plaintext returned once
      */
-    201: {
-        token: string;
-    };
+    201: IngestTokenCreatedResponse;
 };
 
 export type CreateIngestTokenResponse = CreateIngestTokenResponses[keyof CreateIngestTokenResponses];
+
+export type RotateIngestTokenData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        t: string;
+    };
+    query?: never;
+    url: '/ingest-tokens/{t}/rotate';
+};
+
+export type RotateIngestTokenErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RotateIngestTokenError = RotateIngestTokenErrors[keyof RotateIngestTokenErrors];
+
+export type RotateIngestTokenResponses = {
+    /**
+     * Successor issued; `overlap_ends_at` is when the old token stops verifying
+     */
+    200: IngestTokenCreatedResponse;
+};
+
+export type RotateIngestTokenResponse = RotateIngestTokenResponses[keyof RotateIngestTokenResponses];
+
+export type RevokeIngestTokenData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        t: string;
+    };
+    query?: never;
+    url: '/ingest-tokens/{t}';
+};
+
+export type RevokeIngestTokenErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RevokeIngestTokenError = RevokeIngestTokenErrors[keyof RevokeIngestTokenErrors];
+
+export type RevokeIngestTokenResponses = {
+    /**
+     * Token revoked
+     */
+    204: void;
+};
+
+export type RevokeIngestTokenResponse = RevokeIngestTokenResponses[keyof RevokeIngestTokenResponses];
 
 export type ListAuditData = {
     body?: never;

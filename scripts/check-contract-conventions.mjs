@@ -70,7 +70,13 @@ const EXPECTED = [
   ['/roles', 'post', 'role:write', 'v1'],
   ['/roles/{r}', 'patch', 'role:write', 'v1'],
   ['/projects/{p}/ci-bindings', 'post', 'ci_binding:write', 'v1'],
+  ['/projects/{p}/ci-bindings', 'get', 'project:read', 'v1'],
+  ['/ci-bindings/{b}', 'patch', 'ci_binding:write', 'v1'],
+  ['/ci-bindings/{b}', 'delete', 'ci_binding:write', 'v1'],
   ['/projects/{p}/ingest-tokens', 'post', 'ingest_token:write', 'v1'],
+  ['/projects/{p}/ingest-tokens', 'get', 'ingest_token:read', 'v1'],
+  ['/ingest-tokens/{t}/rotate', 'post', 'ingest_token:write', 'v1'],
+  ['/ingest-tokens/{t}', 'delete', 'ingest_token:write', 'v1'],
   ['/orgs/{o}/audit', 'get', 'audit:read', 'v1'],
   ['/orgs/{o}/audit/export', 'get', 'audit:read', 'v1'],
   ['/support-grants', 'post', 'support:grant', 'v1'],
@@ -162,9 +168,14 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // single-use (02 §4 endpoint table, FR-02-6); webhooks/github = delivery_id
 // dedupe (00 §9.3); events = per-event event_id dedupe (00 §9.4);
 // pull-request = idempotent by (branch, commit) (00 §9.3); heartbeat =
-// extends only the current epoch (00 §9.3).
+// extends only the current epoch (00 §9.3); ci-bindings/ingest-tokens/rotate = the
+// response carries a one-time secret, and the replay store persists response bodies,
+// so they are never replayed (02.4.1, 02.4.2, 00 §5.7 S3).
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
+  'post /projects/{p}/ci-bindings',
+  'post /projects/{p}/ingest-tokens',
+  'post /ingest-tokens/{t}/rotate',
   'post /webhooks/github',
   'post /runs/{r}/events',
   'post /drafts/{d}/pull-request',

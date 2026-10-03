@@ -71,6 +71,298 @@
       "note": "the custom-role write flag of 02.2.1-T2.2 (RECOMMENDATIONS 02-Q3): off in V1, where built-in roles are the only roles, so POST/PATCH /v1/roles answer 403 `forbidden`; on, the flagged commands may add a role to the caller's org (422 `unknown_permission` / `permission_not_assignable` still apply, and a built-in role stays immutable, 409). Nothing about an existing tenant is read differently while it is off, so no environment sets it."
     },
     {
+      "key": "EVIDGATE__CI__SIGNINGKEY",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "base64 HS256 key (at least 32 bytes) that signs the `ci_producer` tokens minted by POST /v1/ci/token (02.4.1-T3.3, D7). Absent: the exchange answers 503 `unavailable` and no ci_producer bearer authenticates."
+    },
+    {
+      "key": "EVIDGATE__CI__ISSUER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`iss` of the minted ci_producer token (02.4.1); default `evidgate`."
+    },
+    {
+      "key": "EVIDGATE__CI__AUDIENCE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`aud` of the minted ci_producer token, which every ingest endpoint expects (02.4.1); default `evidgate`."
+    },
+    {
+      "key": "EVIDGATE__CI__TOKENLIFETIMEMINUTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 60
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "lifetime of a minted ci_producer token in minutes, at most 60 (02.4.1 AC6); default 60."
+    },
+    {
+      "key": "EVIDGATE__CI__PEPPER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "base64 current pepper (at least 32 bytes) behind the HMAC of ingest tokens and binding challenges (TL T5, DECISIONS D-A4). Absent: creating a binding or ingest token answers 503 `unavailable`."
+    },
+    {
+      "key": "EVIDGATE__CI__PEPPERVERSION",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "version stored beside every HMAC made with the current pepper; bump it when the pepper rotates (02.4.2); default 1."
+    },
+    {
+      "key": "EVIDGATE__CI__PREVIOUSPEPPER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "base64 previous pepper, kept while tokens made with it are still valid (rotation overlap, D-A4/D-A5)."
+    },
+    {
+      "key": "EVIDGATE__CI__PREVIOUSPEPPERVERSION",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "version of the previous pepper; must differ from the current one; default 1."
+    },
+    {
+      "key": "EVIDGATE__CI__GITHUBOIDCISSUER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "expected `iss` of a GitHub Actions OIDC token (02.4.1-T1.1); default https://token.actions.githubusercontent.com."
+    },
+    {
+      "key": "EVIDGATE__CI__GITHUBOIDCAUDIENCE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "expected `aud` of a GitHub Actions OIDC token, which the workflow requests (02.4.1); default `evidgate`."
+    },
+    {
+      "key": "EVIDGATE__CI__GITHUBJWKSURI",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "JWKS document of the GitHub issuer; the boot refuses anything that is not https on the issuer's host (S4 allowlist, 02.4.1-T1.2)."
+    },
+    {
+      "key": "EVIDGATE__CI__MAXSKEWSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 0,
+        "max": 300
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "clock skew tolerated on exp/nbf of a GitHub OIDC token (02.4.1-T4.2); default 60."
+    },
+    {
+      "key": "EVIDGATE__CI__EXCHANGEBURSTLIMIT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 10000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "exchange attempts allowed per key (client address, repository id, token prefix) within the window (02.4.1 AC8); default 30."
+    },
+    {
+      "key": "EVIDGATE__CI__EXCHANGEWINDOWSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3600
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "length of the exchange rate-limit window in seconds (02.4.1 AC8); default 60."
+    },
+    {
       "key": "EVIDGATE__ISOLATION__SELFCHECK",
       "scope": "runtime",
       "consumers": ["api", "worker"],

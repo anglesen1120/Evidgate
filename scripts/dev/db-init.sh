@@ -167,6 +167,15 @@ EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
 EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
   dotnet run --project "$ROOT/src/Evidgate.Migrator"
 
+# 2b. The synthetic dev tenant (01.8.1-T3.1): org, project, dev user with its roles and a
+#     CI binding. Idempotent; the command itself refuses anything but a local Development
+#     database, and `--no-seed` skips it.
+if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ]; then
+  printf 'db-init: seeding the dev tenant (seed-dev)\n'
+  DOTNET_ENVIRONMENT=Development EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
+    dotnet run --project "$ROOT/src/Evidgate.Migrator" -- seed-dev
+fi
+
 # 3. Credentials for the application roles created by migration 0001: LOGIN +
 #    password are granted here, by the superuser bootstrap, never in a migration
 #    (00 §5.7 S3).
