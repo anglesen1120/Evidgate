@@ -75,6 +75,29 @@ class TableRules(unittest.TestCase):
         sql = GOOD_TABLE.split("create policy")[0]
         self.assertEqual(rules(run(sql)), {"missing_policy"})
 
+    def test_helper_in_another_statement_does_not_satisfy_the_policy(self):
+        sql = GOOD_TABLE.replace("evidgate.current_org_id()", "true") + (
+            "create policy other on public.gadget using (org_id = evidgate.current_org_id());"
+        )
+        self.assertIn("missing_policy", rules(run(sql)))
+
+    def test_open_policy_for_app_is_refused(self):
+        sql = GOOD_TABLE + "create policy wide on public.widget for all using (true);"
+        self.assertIn("open_policy", rules(run(sql)))
+
+    def test_open_policy_for_owner_only_is_allowed(self):
+        sql = GOOD_TABLE + "create policy owner_all on public.widget for all to evidgate_owner using (true) with check (true);"
+        self.assertEqual(run(sql), [])
+
+    def test_a_later_disable_or_no_force_is_detected(self):
+        self.assertEqual(rules(run(GOOD_TABLE + "alter table public.widget no force row level security;")), {"missing_rls"})
+        self.assertEqual(rules(run(GOOD_TABLE + "alter table public.widget disable row level security;")), {"missing_rls"})
+
+    def test_unqualified_table_is_linted_as_public(self):
+        sql = GOOD_TABLE.replace("public.widget", "widget")
+        self.assertEqual(run(sql), [])
+        self.assertIn("missing_rls", rules(run(sql.split("alter table")[0])))
+
     def test_policy_without_the_helper_is_not_a_tenant_policy(self):
         sql = GOOD_TABLE.replace("evidgate.current_org_id()", "current_setting('evidgate.org_id')::uuid")
         self.assertEqual(rules(run(sql)), {"missing_policy"})
@@ -88,7 +111,7 @@ class TableRules(unittest.TestCase):
         self.assertEqual(mechanism, [])
 
     def test_comments_do_not_satisfy_the_lint(self):
-        sql = GOOD_TABLE.replace("force row level security;", "-- force row level security;")
+        sql = GOOD_TABLE.replace("alter table public.widget force row level security;", "-- alter table public.widget force row level security;")
         self.assertEqual(rules(run(sql)), {"missing_rls"})
 
 
@@ -117,10 +140,24 @@ class DefinerRules(unittest.TestCase):
         self.assertEqual(rules(findings), {"definer_audit"})
 
     def test_documented_deferral_excuses_the_audit_row(self):
-        sql = "-- lint: audit-deferred 02.7.1-T2.2\n" + GOOD_DEFINER.replace(
+        sql = "-- lint: audit-deferred 02.7.1-T2.2 evidgate_resolve.lookup\n" + GOOD_DEFINER.replace(
             "insert into public.audit_log (k) values (p_key);", ""
         )
         self.assertEqual(run(sql), [])
+
+    def test_deferral_is_per_function(self):
+        sql = "-- lint: audit-deferred 02.7.1-T2.2 evidgate_resolve.other\n" + GOOD_DEFINER.replace(
+            "insert into public.audit_log (k) values (p_key);", ""
+        )
+        self.assertEqual(rules(run(sql)), {"definer_audit"})
+
+    def test_generic_dollar_tag_cannot_hide_a_definer(self):
+        sql = GOOD_DEFINER.replace("$$", "$fn$").replace("set search_path = ''", "")
+        self.assertEqual(rules(run(sql)), {"definer_search_path"})
+
+    def test_unqualified_function_name_is_still_linted(self):
+        sql = GOOD_DEFINER.replace("evidgate_resolve.lookup", "lookup").replace("set search_path = ''", "")
+        self.assertIn("definer_search_path", rules(run(sql)))
 
     def test_invoker_functions_are_not_linted(self):
         sql = "create function public.f() returns int language sql as $$ select 1 $$;"

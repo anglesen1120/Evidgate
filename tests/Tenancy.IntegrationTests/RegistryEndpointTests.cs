@@ -387,7 +387,9 @@ public sealed class RegistryEndpointTests
             projectB = (await CreateProjectAsync(setupClient, org, "bb")).Id();
         }
 
-        await using var api = TenancyApiFactory.RealEvaluator(_fixture.AppConnectionString(database));
+        // The evaluator is bypassed on purpose: since 02.6.2 AC6 a service token can no longer
+        // hold project:read/write, so this isolates the handler-side ScopeGuard (AC4).
+        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var token = TenancyApiFactory.Caller(
             org: org,

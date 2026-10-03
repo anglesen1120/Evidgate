@@ -130,10 +130,9 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
         }
 
         // W7-SEC-06 / 02.6.2 AC6: a service token is bound to the service roles
-        // (ci_producer, agent), so a claim that names a staff-only code makes the token
+        // (ci_producer, agent), so a claim outside their permissions makes the token
         // malformed — it holds nothing, not the rest of its claims.
-        var claimsAreCatalogueCodes = principal.ClaimedPermissions.All(code =>
-            Permissions.IsKnown(code) && !IsStaffOnly(code));
+        var claimsAreCatalogueCodes = principal.ClaimedPermissions.All(IsServiceClaim);
 
         return claimsAreCatalogueCodes
             && Permissions.IsKnown(permission)
@@ -150,13 +149,21 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
     /// fall-through (02.2.1 §5, and the feature plan's recorded deferral).
     /// </summary>
     /// <summary>
-    /// The staff-only families (<c>billing:*</c>, <c>support:*</c>): held by
-    /// <c>platform_operator</c> and <c>billing_operator</c> and never by a tenant
-    /// credential, whatever a token claims.
+    /// The permissions of the <c>kind: service</c> roles (<c>ci_producer</c>, <c>agent</c>)
+    /// in <c>contracts/permissions.json</c>: the most a service token may ever claim.
+    /// <c>ServiceRoleCeiling_MatchesTheCatalogue</c> pins this set to the file.
     /// </summary>
-    internal static bool IsStaffOnly(string code) =>
-        code.StartsWith("billing:", StringComparison.Ordinal)
-        || code.StartsWith("support:", StringComparison.Ordinal);
+    internal static readonly IReadOnlySet<string> ServiceRoleCeiling = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Permissions.Artifact.Write,
+        Permissions.Event.Write,
+        Permissions.Run.Create,
+        Permissions.Job.Claim,
+        Permissions.Job.Execute,
+    };
+
+    private static bool IsServiceClaim(string code) =>
+        Permissions.IsKnown(code) && ServiceRoleCeiling.Contains(code);
 
     private static PermissionDecision OperatorWithoutSupportGrant() =>
         PermissionDecision.Denied(ApiErrorCode.Forbidden);
@@ -198,7 +205,7 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
             case PrincipalKind.ServicePrincipal:
                 // Same bound as Service(): one claim outside the catalogue makes the
                 // token malformed, so it holds nothing rather than the rest of its claims.
-                return principal.ClaimedPermissions.All(code => Permissions.IsKnown(code) && !IsStaffOnly(code))
+                return principal.ClaimedPermissions.All(IsServiceClaim)
                     ? principal.ClaimedPermissions.ToHashSet(StringComparer.Ordinal)
                     : NoPermissions;
 

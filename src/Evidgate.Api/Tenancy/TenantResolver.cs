@@ -12,7 +12,7 @@ public sealed record ResolvedTenant(Guid OrgId, Guid? ProjectId);
 
 /// <summary>
 /// The resolution matrix of 02.6.2 §5. It never trusts a tenant the caller merely names:
-/// a member's org is accepted only if <c>evidgate_resolve.member_orgs</c> lists it
+/// a member's org is accepted only if <c>evidgate_resolve.member_org</c> confirms an active membership
 /// (read per request, no cache), and a service token only ever runs in the org its claims
 /// fix. The scope opens strictly after this answers (T1).
 /// </summary>
@@ -61,11 +61,11 @@ public sealed class TenantResolver(IMemberOrgResolver members)
                 [new ErrorDetail(OrgHeader, "required")]));
         }
 
-        var orgs = await members.MemberOrgsAsync(userId, cancellationToken).ConfigureAwait(false);
+        var membership = await members.MemberOrgAsync(userId, org, cancellationToken).ConfigureAwait(false);
 
         // 403 for a non-member, whether or not the org exists: the answer must not
         // tell a caller which org ids are real (AC5).
-        return orgs.Any(candidate => candidate.OrgId == org)
+        return membership is not null
             ? Result.Success(new ResolvedTenant(org, ProjectId: null))
             : Result.Failure<ResolvedTenant>(Error.Forbidden("no active membership in this organization"));
     }

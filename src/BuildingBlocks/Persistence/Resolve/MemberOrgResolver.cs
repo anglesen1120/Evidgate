@@ -32,6 +32,15 @@ public interface IMemberOrgResolver
     /// <returns>At most 200 orgs, ordered by id.</returns>
     ValueTask<IReadOnlyList<MemberOrg>> MemberOrgsAsync(Guid userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The hot-path check: the user's active membership in one org, or null. One row at
+    /// most, so a member of any number of orgs is never truncated.
+    /// </summary>
+    /// <param name="userId">The authenticated user.</param>
+    /// <param name="orgId">The org the request names.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<MemberOrg?> MemberOrgAsync(Guid userId, Guid orgId, CancellationToken cancellationToken);
+
     /// <summary>The caller's orgs with slug and name, for <c>GET /v1/orgs</c>.</summary>
     /// <param name="userId">The authenticated user.</param>
     /// <param name="limit">Requested page size; the function clamps it to 1–200.</param>
@@ -49,6 +58,9 @@ internal sealed class NpgsqlMemberOrgResolver(NpgsqlDataSource dataSource) : IMe
     private const string MemberOrgsSql =
         "select org_id as OrgId, status as Status from evidgate_resolve.member_orgs(@user_id)";
 
+    private const string MemberOrgSql =
+        "select org_id as OrgId, status as Status from evidgate_resolve.member_org(@user_id, @org_id)";
+
     private const string MemberOrganizationsSql =
         "select org_id as OrgId, slug as Slug, name as Name, status as Status "
         + "from evidgate_resolve.member_organizations(@user_id, @limit)";
@@ -62,7 +74,17 @@ internal sealed class NpgsqlMemberOrgResolver(NpgsqlDataSource dataSource) : IMe
             new CommandDefinition(MemberOrgsSql, new { user_id = userId }, cancellationToken: cancellationToken))
             .ConfigureAwait(false);
 
-        return [.. rows];
+        return rows.AsList();
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<MemberOrg?> MemberOrgAsync(Guid userId, Guid orgId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+        return await connection.QuerySingleOrDefaultAsync<MemberOrg>(
+            new CommandDefinition(MemberOrgSql, new { user_id = userId, org_id = orgId }, cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -77,6 +99,6 @@ internal sealed class NpgsqlMemberOrgResolver(NpgsqlDataSource dataSource) : IMe
             new CommandDefinition(MemberOrganizationsSql, new { user_id = userId, limit }, cancellationToken: cancellationToken))
             .ConfigureAwait(false);
 
-        return [.. rows];
+        return rows.AsList();
     }
 }

@@ -53,6 +53,36 @@ public sealed class ResolverTests
     }
 
     [Fact]
+    public async Task MemberOrg_PointLookup_IsNotTruncatedByTheListLimit()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        var user = Guid.CreateVersion7();
+        var other = Guid.CreateVersion7();
+
+        // 205 memberships: the list function caps at 200, the point lookup must not.
+        await _fixture.ExecuteAsync(
+            database,
+            $"""
+            insert into public.organization (id, name, slug)
+              select gen_random_uuid(), 'o' || i, 'org-' || i from generate_series(1, 205) i;
+            insert into public.membership (id, org_id, user_id, invited_email, status)
+              select gen_random_uuid(), o.id, '{user}', 'u@example.test', 'active' from public.organization o;
+            """);
+
+        var orgs = await _fixture.ColumnAsync<Guid>(database, "select id from public.organization order by id");
+        (await QueryAppAsync(database, "select * from evidgate_resolve.member_orgs(@u)", ("u", user))).Count.ShouldBe(200);
+
+        foreach (var org in new[] { orgs[0], orgs[204] })
+        {
+            (await QueryAppAsync(database, "select org_id, status from evidgate_resolve.member_org(@u, @o)", ("u", user), ("o", org)))
+                .ShouldHaveSingleItem()[0].ShouldBe(org);
+        }
+
+        (await QueryAppAsync(database, "select * from evidgate_resolve.member_org(@u, @o)", ("u", other), ("o", orgs[0])))
+            .ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task MemberOrgs_UnknownUser_ReturnsNothing()
     {
         var database = await _fixture.CreateDatabaseAsync();
@@ -155,6 +185,7 @@ public sealed class ResolverTests
         foreach (var signature in new[]
                  {
                      "evidgate_resolve.member_orgs(uuid)",
+                     "evidgate_resolve.member_org(uuid, uuid)",
                      "evidgate_resolve.member_organizations(uuid, integer)",
                  })
         {

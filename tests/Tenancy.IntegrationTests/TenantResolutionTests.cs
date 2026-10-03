@@ -23,6 +23,7 @@ public sealed class TenantResolutionTests
 {
     private static readonly string[] ProjectRead = ["project:read"];
     private static readonly string[] BillingRead = ["billing:read"];
+    private static readonly string[] RunCreate = ["run:create"];
 
     private readonly PostgresTenancyFixture _fixture;
 
@@ -151,26 +152,6 @@ public sealed class TenantResolutionTests
     }
 
     [Fact]
-    public async Task CiProducer_OtherProject_403ProjectScopeMismatch()
-    {
-        var database = await _fixture.CreateDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        using var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var bound = await CreateProjectAsync(client, user, org, "bound");
-        var other = await CreateProjectAsync(client, user, org, "other");
-
-        var token = TenancyApiFactory.Resolved(serviceOrg: org, serviceProject: bound, servicePermissions: ProjectRead);
-
-        (await client.SendAsync(HttpMethod.Get, $"/v1/projects/{bound}", token)).Status.ShouldBe(HttpStatusCode.OK);
-
-        var mismatch = await client.SendAsync(HttpMethod.Get, $"/v1/projects/{other}", token);
-        mismatch.Status.ShouldBe(HttpStatusCode.Forbidden);
-        mismatch.ErrorCode.ShouldBe("project_scope_mismatch");
-    }
-
-    [Fact]
     public async Task ServiceToken_RunsOnlyInItsOwnOrg_AndNeedsAnOrgClaim()
     {
         var database = await _fixture.CreateDatabaseAsync();
@@ -179,14 +160,42 @@ public sealed class TenantResolutionTests
         var org = await CreateOrgAsync(client, Guid.CreateVersion7(), "acme");
         var elsewhere = await CreateOrgAsync(client, Guid.CreateVersion7(), "elsewhere");
 
-        var token = TenancyApiFactory.Resolved(serviceOrg: org, servicePermissions: ["organization:read"]);
+        var token = TenancyApiFactory.Resolved(serviceOrg: org, servicePermissions: RunCreate);
 
-        (await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}", token)).Status.ShouldBe(HttpStatusCode.OK);
+        // Another org is 404 before authorization; the org's own route reaches the
+        // evaluator, which refuses a ci_producer the tenant read it never held.
         (await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{elsewhere}", token)).Status.ShouldBe(HttpStatusCode.NotFound);
+        (await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}", token)).Status.ShouldBe(HttpStatusCode.Forbidden);
 
-        var noOrgClaim = await client.SendAsync(
-            HttpMethod.Get, $"/v1/orgs/{org}", TenancyApiFactory.Resolved(servicePermissions: ["organization:read"]));
-        noOrgClaim.Status.ShouldBe(HttpStatusCode.Unauthorized);
+        (await client.SendAsync(
+                HttpMethod.Get,
+                $"/v1/orgs/{org}",
+                TenancyApiFactory.Resolved(servicePermissions: RunCreate)))
+            .Status.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // The org header is a member's selector: a service token ignores it.
+        (await client.SendAsync(
+                HttpMethod.Get,
+                $"/v1/orgs/{org}",
+                TenancyApiFactory.Resolved(orgHeader: elsewhere, serviceOrg: org, servicePermissions: RunCreate)))
+            .Status.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task ServiceToken_ClaimingTenantAdminCodes_IsDenied_ByTheServiceRoleCeiling()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        using var client = api.CreateClient();
+        var user = Guid.CreateVersion7();
+        var org = await CreateOrgAsync(client, user, "acme");
+        var project = await CreateProjectAsync(client, user, org, "checkout");
+
+        var token = TenancyApiFactory.Resolved(serviceOrg: org, serviceProject: project, servicePermissions: ProjectRead);
+
+        var answer = await client.SendAsync(HttpMethod.Get, $"/v1/projects/{project}", token);
+        answer.Status.ShouldBe(HttpStatusCode.Forbidden);
+        answer.ErrorCode.ShouldBe("forbidden");
     }
 
     [Fact]
@@ -200,7 +209,7 @@ public sealed class TenantResolutionTests
         var answer = await client.SendAsync(
             HttpMethod.Get,
             $"/v1/orgs/{org}",
-            TenancyApiFactory.Resolved(serviceOrg: org, servicePermissions: ["organization:read", .. BillingRead]));
+            TenancyApiFactory.Resolved(serviceOrg: org, servicePermissions: ["run:create", .. BillingRead]));
 
         answer.Status.ShouldBe(HttpStatusCode.Forbidden);
     }

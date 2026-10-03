@@ -81,7 +81,7 @@ public sealed class DenyPathTests(DatabaseFixture fixture) : HarnessTest(fixture
             new IdentityHostSetup(
                 org,
                 ProjectId: project,
-                Principal: RequestPrincipal.Service(ScopedProject, [Permissions.Role.Read])));
+                Principal: RequestPrincipal.Service(ScopedProject, [Permissions.Run.Create])));
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/v1/permissions", Token);

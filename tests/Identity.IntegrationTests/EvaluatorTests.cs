@@ -220,6 +220,21 @@ public sealed class EvaluatorTests : CatalogueTestBase
         counting.Statements.ShouldBe(0);
     }
 
+    /// <summary>The evaluator's service ceiling is exactly the union of the catalogue's service roles.</summary>
+    [Fact]
+    public void ServiceRoleCeiling_MatchesTheCatalogue()
+    {
+        var catalogue = PermissionCatalogueFile.Load().Document;
+        var union = catalogue.Roles
+            .Where(role => role.Kind == "service")
+            .SelectMany(role => role.Permissions)
+            .Distinct()
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        PermissionEvaluator.ServiceRoleCeiling.Order(StringComparer.Ordinal).ToList().ShouldBe(union);
+    }
+
     /// <summary>
     /// 02.6.2 AC6 / W7-SEC-06: a service token never holds a staff-only code. A claim of
     /// <c>billing:*</c> or <c>support:*</c> is denied, and it invalidates the token's
@@ -243,6 +258,19 @@ public sealed class EvaluatorTests : CatalogueTestBase
             (await evaluator.ResolveAsync(org, token, Token)).ShouldBeEmpty();
         }
 
+        // 02.6.2 AC6: nothing outside the service roles either — a service token cannot
+        // claim tenant-admin codes, even though they are valid catalogue codes.
+        foreach (var tenantCode in new[]
+                 {
+                     Permissions.Membership.Write, Permissions.Role.Write, Permissions.Organization.Write, Permissions.Project.Read,
+                 })
+        {
+            var overreach = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create, tenantCode]);
+
+            (await EvaluateAsync(evaluator, org, overreach, tenantCode)).DenyCode.ShouldBe(ApiErrorCode.Forbidden);
+            (await EvaluateAsync(evaluator, org, overreach, Permissions.Run.Create)).DenyCode.ShouldBe(ApiErrorCode.Forbidden);
+        }
+
         // The tenant-facing codes of the service roles are unaffected.
         var producer = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create]);
         (await EvaluateAsync(evaluator, org, producer, Permissions.Run.Create)).IsGranted.ShouldBeTrue();
@@ -256,13 +284,13 @@ public sealed class EvaluatorTests : CatalogueTestBase
     public async Task Cross_Project_Is_Denied()
     {
         var (org, project) = await Fixture.SeedProjectAsync(cancellationToken: Token);
-        var token = RequestPrincipal.Service(OtherProject, [Permissions.Project.Read]);
+        var token = RequestPrincipal.Service(OtherProject, [Permissions.Run.Create]);
 
         await using var scope = await Fixture.BeginTenantScopeAsync(org, projectId: project, cancellationToken: Token);
         var evaluator = new PermissionEvaluator(Fixture.Db);
 
         var mismatched = await evaluator.EvaluateAsync(
-            Permissions.Project.Read,
+            Permissions.Run.Create,
             token,
             new RequestTenantContext(org, project),
             Token);
@@ -270,8 +298,8 @@ public sealed class EvaluatorTests : CatalogueTestBase
         mismatched.DenyCode.ShouldBe(ApiErrorCode.ProjectScopeMismatch);
 
         var matching = await evaluator.EvaluateAsync(
-            Permissions.Project.Read,
-            RequestPrincipal.Service(project, [Permissions.Project.Read]),
+            Permissions.Run.Create,
+            RequestPrincipal.Service(project, [Permissions.Run.Create]),
             new RequestTenantContext(org, project),
             Token);
 

@@ -51,7 +51,7 @@ public sealed class TenantResolutionFilter(
             return await next(context).ConfigureAwait(false);
         }
 
-        if (RequestedOrg(http) is not { } requested)
+        if (RequestedOrg(http, allowHeader: caller.Principal.Kind == PrincipalKind.Member) is not { } requested)
         {
             // An org named but not a uuid: leave it to the framework's own 400.
             return await next(context).ConfigureAwait(false);
@@ -87,14 +87,15 @@ public sealed class TenantResolutionFilter(
     /// The org the request names: the route's <c>{o}</c>, else the org header.
     /// Returns null (not "no org") when a value is present but is not a uuid.
     /// </summary>
-    private static (Guid? Org, bool Named)? RequestedOrg(HttpContext http)
+    private static (Guid? Org, bool Named)? RequestedOrg(HttpContext http, bool allowHeader)
     {
         if (http.Request.RouteValues.TryGetValue("o", out var route))
         {
             return Guid.TryParse(route?.ToString(), out var routeOrg) ? (routeOrg, true) : null;
         }
 
-        var header = http.Request.Headers[TenantResolver.OrgHeader].ToString();
+        // Only a member picks an org by header; a service token's org is its claim.
+        var header = allowHeader ? http.Request.Headers[TenantResolver.OrgHeader].ToString() : string.Empty;
 
         if (string.IsNullOrEmpty(header))
         {

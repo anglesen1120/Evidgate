@@ -27,7 +27,7 @@
 -- schema-qualified references only, so an object the caller creates in `public`
 -- cannot shadow a table or operator; no dynamic SQL; PUBLIC has no EXECUTE.
 --
--- lint: audit-deferred 02.7.1-T2.2
+-- lint: audit-deferred 02.7.1-T2.2 evidgate_resolve.member_orgs, evidgate_resolve.member_org, evidgate_resolve.member_organizations
 -- The per-call audit stub of 02.6.1 AC6 is not written here: `audit_log` is 02.7.1-T1's
 -- table and does not exist at 0014. 02.7.1-T2.2 replaces these functions with
 -- audited versions (a new migration, never an edit of this file).
@@ -70,6 +70,27 @@ as $$
    limit least(greatest(coalesce(p_limit, 50), 1), 200)
 $$;
 
+-- The hot path: one point lookup per request, so a member of more than 200 orgs is
+-- never truncated out of the list. Returns the org's status, or no row when the
+-- user holds no active membership in that (non-deleted) org.
+create or replace function evidgate_resolve.member_org(p_user_id uuid, p_org_id uuid)
+returns table (org_id uuid, project_id uuid, binding_id uuid, status text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select m.org_id, null::uuid, null::uuid, o.status
+    from public.membership m
+    join public.organization o on o.id = m.org_id
+   where m.user_id = p_user_id
+     and m.org_id = p_org_id
+     and m.status = 'active'
+     and o.status <> 'deleted'
+$$;
+
+revoke all on function evidgate_resolve.member_org(uuid, uuid) from public;
+grant execute on function evidgate_resolve.member_org(uuid, uuid) to evidgate_app;
 revoke all on function evidgate_resolve.member_orgs(uuid) from public;
 revoke all on function evidgate_resolve.member_organizations(uuid, integer) from public;
 grant execute on function evidgate_resolve.member_orgs(uuid) to evidgate_app;
