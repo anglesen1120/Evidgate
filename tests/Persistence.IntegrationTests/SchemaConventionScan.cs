@@ -60,6 +60,22 @@ internal static class SchemaConventionScan
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only test versions (03.1.3-T1.1): a revision is never updated or deleted (trigger and revoked grants), so it keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FK and RLS are NOT exempt."),
         new SchemaExemption(
+            "public.suite_revision",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "A suite revision is immutable (draft -> published is its only edit, and carries no version): it keeps created_at only (03.2.1-T1.1; migration 0022), so there is no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.variant",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Content-addressed, shared parameter sets are append-only (03.2.1-T1.1; migration 0022), so there is no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.suite_member",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "A member row lives and dies with its immutable revision (03.2.1-T1.1; migration 0022), so there is no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.case_dependency",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "An edge row lives and dies with its immutable revision (03.2.1-T1.1; migration 0022), so there is no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
+        new SchemaExemption(
             "public.rls_probe",
             SchemaRule.VersionTrigger,
             "The tenancy template of migration 0003 predates the shared trigger function (0004, M1W3-01) and 0003 is checksum-locked, so the trigger cannot be added there; 0004/0005 are the copy source for module tables."),

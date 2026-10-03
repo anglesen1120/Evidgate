@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "shard-strategy.v1.json",
+  "title": "Suite shard strategy v1",
+  "description": "How a suite revision is split across CI shards (03.2.1-T4.1). `none` runs everything in one shard; `count` splits into `count` shards, optionally balanced by recorded duration or by case count.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind"],
+  "properties": {
+    "kind": { "enum": ["none", "count"] },
+    "count": { "type": "integer", "minimum": 1, "maximum": 256 },
+    "balance_by": { "enum": ["duration", "count"] }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "count" } } },
+      "then": { "required": ["count"] },
+      "else": { "not": { "anyOf": [{ "required": ["count"] }, { "required": ["balance_by"] }] } }
+    }
+  ]
+}

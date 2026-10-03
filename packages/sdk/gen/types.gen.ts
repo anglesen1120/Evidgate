@@ -309,6 +309,14 @@ export type CaseRevisionDto = {
     content_sha256: string;
     assertion_hash: string;
     created_at: string;
+    /**
+     * False when the framework is not understood; `assertion_hash` then changes with any edit.
+     */
+    assertions_extracted: boolean;
+    /**
+     * False when the scan could not follow the file to its end; treat `assertion_hash` as "content changed".
+     */
+    assertions_reliable: boolean;
 };
 
 export type CaseRevisionListResponse = {

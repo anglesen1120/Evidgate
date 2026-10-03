@@ -88,6 +88,8 @@ public sealed record UpdateCaseRequest(string? Name, Guid? OwnerMembershipId, st
 /// <param name="ContentSha256">Hash of the file content.</param>
 /// <param name="AssertionHash">Hash of the extracted assertion descriptors.</param>
 /// <param name="CreatedAt">When the revision was first stored.</param>
+/// <param name="AssertionsExtracted">False when the framework is not understood: <c>assertion_hash</c> then changes with any edit.</param>
+/// <param name="AssertionsReliable">False when the scan could not follow the file to its end: treat <c>assertion_hash</c> as "content changed".</param>
 public sealed record CaseRevisionDto(
     Guid Id,
     Guid CaseId,
@@ -98,7 +100,9 @@ public sealed record CaseRevisionDto(
     string? Language,
     string ContentSha256,
     string AssertionHash,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool AssertionsExtracted,
+    bool AssertionsReliable);
 
 /// <summary>Cursor page of <c>GET /v1/cases/{c}/revisions</c>.</summary>
 /// <param name="Items">Revisions, newest first.</param>

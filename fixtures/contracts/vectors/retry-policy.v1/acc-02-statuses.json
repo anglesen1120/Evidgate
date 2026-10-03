@@ -1,0 +1,1 @@
+{ "max_retries": 2, "only_on_status": ["failed", "timed_out"] }

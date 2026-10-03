@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "retry-policy.v1.json",
+  "title": "Suite retry policy v1",
+  "description": "How often a failed attempt is retried and for which statuses (03.2.1-T4.1). A retry is a new attempt; it never replaces the first result (00 §8).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["max_retries"],
+  "properties": {
+    "max_retries": { "type": "integer", "minimum": 0, "maximum": 5 },
+    "only_on_status": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "enum": ["failed", "error", "timed_out"] }
+    }
+  }
+}

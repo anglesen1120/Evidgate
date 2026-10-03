@@ -322,6 +322,8 @@ internal sealed class TenantRowFactory
             ("public.case_identity_source", "source") => "annotation",
             ("public.test_revision", "commit_sha") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
             ("public.test_revision", "revision_hash" or "content_sha256" or "assertion_hash") => "sha256:" + new string('a', 64),
+            ("public.suite_revision", "revision_hash") or ("public.variant", "variant_hash") => "sha256:" + new string('a', 64),
+            ("public.suite", "slug") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
             _ => (object?)null,
         };
 

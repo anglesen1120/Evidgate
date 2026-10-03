@@ -11,7 +11,7 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 public sealed class CatalogRevisionUnitTests
 {
-    private static IReadOnlyList<string> Assertions(string framework, string source) => AssertionExtractor.Extract(framework, source).Descriptors;
+    private static IReadOnlyList<string> Assertions(string framework, string source, string? language = null) => AssertionExtractor.Extract(framework, source, language).Descriptors;
 
     // ------------------------------------------------------------------ AssertionExtractor (script family)
 
@@ -85,7 +85,8 @@ public sealed class CatalogRevisionUnitTests
     public void Script_UnbalancedOrPathologicalSource_NeverThrows_AndStaysBounded()
     {
         Assertions("jest", "expect(((((").ShouldBeEmpty();
-        Assertions("jest", "expect(a).toBe(").ShouldBe(["expect:::toBe:"]);
+        Assertions("jest", "expect(a).toBe(").ShouldBeEmpty();
+        AssertionExtractor.Extract("jest", "expect(a).toBe(").Reliable.ShouldBeFalse();
         Assertions("jest", "expect").ShouldBeEmpty();
         Assertions("jest", "expect(a).").ShouldBeEmpty();
         Assertions("jest", "expect(a);").ShouldBe(["expect:::?:"]);
@@ -110,6 +111,97 @@ public sealed class CatalogRevisionUnitTests
         first.ShouldContain(":h:");
         first.Length.ShouldBeLessThan(80);
         first.ShouldNotBe(second);
+    }
+
+    [Fact]
+    public void Script_AssertionsInsideASubject_AreExtracted()
+    {
+        const string source = "await expect(async () => { expect(a).toBe(1); expect(b).not.toBeNull(); }).toPass();";
+
+        Assertions("playwright", source).ShouldBe(["in:expect:::toBe:1", "in:expect::not:toBeNull:", "expect:::toPass:"]);
+    }
+
+    [Fact]
+    public void Script_ChaiChains_KeepTheMeaningfulWordsAndArguments()
+    {
+        Assertions("mocha", "expect(a).to.be.deep.equal({ x: 1 });").ShouldBe(["expect:::equal:{ x: 1 }"]);
+        Assertions("mocha", "expect(a).to.equal(1);").ShouldNotBe(Assertions("mocha", "expect(a).to.equal(2);"));
+        Assertions("mocha", "expect(a).to.be.true;").ShouldNotBe(Assertions("mocha", "expect(a).to.be.false;"));
+    }
+
+    [Fact]
+    public void Script_NodeAndChaiAssertCalls_AreExtracted()
+    {
+        Assertions("mocha", "assert.strictEqual(a, 1); assert(ok);").ShouldBe(["assert:strictEqual:a, 1", "assert::ok"]);
+    }
+
+    [Fact]
+    public void Script_ALineCommentInArguments_CannotSwallowWhatFollows()
+    {
+        var withBreak = Assertions("jest", "expect(a).toEqual(\n  x, // note\n  y\n);").Single();
+        var swallowed = Assertions("jest", "expect(a).toEqual(\n  x, // note y\n);").Single();
+
+        withBreak.ShouldNotBe(swallowed);
+    }
+
+    [Theory]
+    [InlineData("const re = /[\"']/; expect(a).toBe(1);")]
+    [InlineData("const s = 'unterminated;\nexpect(a).toBe(1);")]
+    [InlineData("/* never closed\nexpect(a).toBe(1);")]
+    [InlineData("expect(a).toBe(")]
+    public void Script_WhatTheScannerCannotFollow_IsMarkedUnreliable(string source)
+    {
+        AssertionExtractor.Extract("jest", source).Reliable.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Script_ACleanFile_IsReliable_AndAFileWithoutAssertionsToo()
+    {
+        AssertionExtractor.Extract("jest", "expect(a).toBe(1);").Reliable.ShouldBeTrue();
+        AssertionExtractor.Extract("jest", "const x = 1;").Reliable.ShouldBeTrue();
+        AssertionExtractor.Extract("jest", "const x = 1;").Descriptors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Python_CommentsInsideAMultiLineAssert_DoNotHideTheClausesAfterThem()
+    {
+        const string source = "assert (\n  r.status == 200  # ok\n  and body['x'] == 1\n)\n";
+
+        Assertions("pytest", source).Single().ShouldContain("body['x'] == 1");
+    }
+
+    [Fact]
+    public void Python_OneLineBlocks_AndPlaywrightExpect_AreAssertions()
+    {
+        Assertions("pytest", "if ready: assert value == 1\nexpect(page).to_have_title('Home')\n").ShouldBe(
+            ["assert::value == 1", "expect:::to_have_title:'Home'"]);
+        Assertions("playwright", "assert x == 2\n", "python").ShouldBe(["assert::x == 2"]);
+    }
+
+    [Fact]
+    public void FailClosed_UnsupportedAndUnreliableFiles_GetAHashThatChangesWithAnyEdit()
+    {
+        string Hash(string framework, string source) => RevisionHasher.Describe(framework, "x", source).AssertionHash;
+
+        // Unsupported framework: editing the file changes the assertion hash (it is not a constant).
+        Hash("junit", "assertEquals(1, a);").ShouldNotBe(Hash("junit", "// removed"));
+        Hash("junit", "assertEquals(1, a);").ShouldBe(Hash("junit", "assertEquals(1, a);"));
+
+        // Unreliable scan: same.
+        Hash("jest", "const s = 'oops;\nexpect(a).toBe(1);").ShouldNotBe(Hash("jest", "const s = 'oops;\n"));
+
+        // A supported, understood file keeps the descriptor-only hash (a comment edit leaves it alone).
+        Hash("jest", "expect(a).toBe(1);").ShouldBe(Hash("jest", "expect(a).toBe(1); // new comment"));
+
+        RevisionHasher.Describe("junit", null, "x").MetadataJson.ShouldContain("\"assertions_reliable\":false");
+        RevisionHasher.Describe("jest", null, "expect(a).toBe(1);").MetadataJson.ShouldContain("\"assertions_reliable\":true");
+    }
+
+    [Fact]
+    public void TextRules_IsWellFormed_AllowsSourceCodeCharacters_ButNotLoneSurrogates()
+    {
+        TextRules.IsWellFormed("tab\tand\nnewline and 😀").ShouldBeTrue();
+        TextRules.IsWellFormed("x" + (char)0xD800).ShouldBeFalse();
     }
 
     // ------------------------------------------------------------------ AssertionExtractor (python)
@@ -167,7 +259,7 @@ public sealed class CatalogRevisionUnitTests
 
         // The hash is the digest of exactly {content_sha256, framework, language, assertion_hash, metadata}.
         var document = $$"""
-            {"metadata":{"assertions_extracted":true,"assertion_count":1},"language":"typescript","framework":"playwright","assertion_hash":"{{first.AssertionHash}}","content_sha256":"{{first.ContentSha256}}"}
+            {"metadata":{"assertions_reliable":true,"assertions_extracted":true,"assertion_count":1},"language":"typescript","framework":"playwright","assertion_hash":"{{first.AssertionHash}}","content_sha256":"{{first.ContentSha256}}"}
             """;
         first.RevisionHash.ShouldBe(CanonicalHash.Compute(document));
     }

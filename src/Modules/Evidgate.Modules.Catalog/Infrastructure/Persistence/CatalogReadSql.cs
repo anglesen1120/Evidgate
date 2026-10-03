@@ -69,7 +69,9 @@ internal static class CatalogReadSql
         """;
 
     private const string RevisionColumns = """
-               id, case_id, revision_hash, commit_sha, file_path, framework, language, content_sha256, assertion_hash, created_at
+               id, case_id, revision_hash, commit_sha, file_path, framework, language, content_sha256, assertion_hash, created_at,
+               coalesce((metadata->>'assertions_extracted')::boolean, false) as assertions_extracted,
+               coalesce((metadata->>'assertions_reliable')::boolean, false) as assertions_reliable
         """;
 
     /// <summary>First page of a case's revisions, newest first; the index is scanned backwards.</summary>

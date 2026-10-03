@@ -1,0 +1,5 @@
+{
+  "schema": "retry-policy.v1",
+  "valid": false,
+  "errors": [{ "index": null, "path": "/only_on_status/0", "reason": "enum" }]
+}

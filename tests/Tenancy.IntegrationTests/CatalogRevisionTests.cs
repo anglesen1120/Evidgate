@@ -324,4 +324,72 @@ public sealed class CatalogRevisionTests
         (await RevisionCount(world)).ShouldBe(2000);
         world.Api.Statements.Snapshot().Count(statement => statement.Contains("insert into public.test_revision", StringComparison.Ordinal)).ShouldBe(1);
     }
+
+    [Fact]
+    public async Task Revisions_FlagFilesWhoseAssertionsCouldNotBeTrusted()
+    {
+        await using var world = await StartAsync();
+        await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA), new SourceFile("b_spec.rb", $"# evidgate.id: {IdB}\nit 'x' do end", "rspec", "ruby"));
+
+        var caseA = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where annotation_id = '{IdA}'");
+        var caseB = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where annotation_id = '{IdB}'");
+
+        var a = (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseA}/revisions", world.Admin)).Body.GetProperty("items")[0];
+        var b = (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseB}/revisions", world.Admin)).Body.GetProperty("items")[0];
+
+        (a.GetProperty("assertions_extracted").GetBoolean(), a.GetProperty("assertions_reliable").GetBoolean()).ShouldBe((true, true));
+        (b.GetProperty("assertions_extracted").GetBoolean(), b.GetProperty("assertions_reliable").GetBoolean()).ShouldBe((false, false));
+    }
+
+    [Fact]
+    public async Task Store_RefusesMalformedContent_BeforeTouchingTheDatabase()
+    {
+        await using var world = await StartAsync();
+        await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA));
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
+        await using var scope = await scopes.BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
+        var store = services.ServiceProvider.GetRequiredService<ITestRevisionStore>();
+        var good = new TestRevisionContent(Commit2, "a.spec.ts", "playwright", "typescript", "x");
+
+        foreach (var bad in new List<TestRevisionContent>
+        {
+            good with { CommitSha = "NOT-HEX" },
+            good with { FilePath = "../escape.ts" },
+            good with { FilePath = "a\u202E.ts" },
+            good with { Framework = "bad\0name" },
+            good with { Language = new string('x', 65) },
+            good with { Source = "lone" + (char)0xD800 },
+        })
+        {
+            await Should.ThrowAsync<ArgumentException>(async () => await store.AppendAsync(caseId, bad, TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
+    public async Task Sync_ANewerSyncsRevisionsAreNeverOrderedBeforeAnOlderOnes()
+    {
+        await using var world = await StartAsync();
+        await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA, "expect(a).toBe(1);"));
+        await RegisterAsync(world, Commit2, Test("a.spec.ts", IdA, "expect(a).toBe(2);"));
+
+        // Written with clock_timestamp(), after the project lock: the later sync's row has the later timestamp.
+        (await _fixture.ScalarAsync<string>(world.Database, "select commit_sha from public.test_revision order by created_at desc, id desc limit 1")).ShouldBe(Commit2);
+    }
+
+    [Fact]
+    public async Task Sync_AFileWithBrokenText_IsAWarning_AndTheOthersStillSync()
+    {
+        await using var world = await StartAsync();
+
+        var report = await RegisterAsync(
+            world,
+            Commit1,
+            Test("good.spec.ts", IdA),
+            new SourceFile("bad.spec.ts", $"// evidgate.id: {IdB}\n" + (char)0xD800, "playwright", "typescript"));
+
+        (report.Registered, report.Warnings, report.Revisions).ShouldBe((1, 1, 1));
+    }
 }

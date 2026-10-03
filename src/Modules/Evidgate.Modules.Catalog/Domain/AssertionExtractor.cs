@@ -6,16 +6,23 @@ namespace Evidgate.Modules.Catalog.Domain;
 /// <summary>The assertion descriptors found in one test file.</summary>
 /// <param name="Extracted">False when the framework is not one this extractor understands (the descriptor list is empty then).</param>
 /// <param name="Descriptors">One short, normalised text per assertion, in source order.</param>
-internal sealed record AssertionExtraction(bool Extracted, IReadOnlyList<string> Descriptors);
+/// <param name="Reliable">
+/// False when the scan could not follow the file to its end (an unterminated string or comment, an unbalanced call, the
+/// descriptor cap): the list may be missing assertions, so the hash derived from it must not be trusted to notice a change.
+/// </param>
+internal sealed record AssertionExtraction(bool Extracted, IReadOnlyList<string> Descriptors, bool Reliable = true);
 
 /// <summary>
 /// Extracts assertion descriptors from test source (03.1.3-T1.2). A descriptor keeps what makes an assertion
 /// <em>this</em> assertion — the matcher, a negation, and the expected-value arguments — and drops its subject, so
 /// healing a locator (<c>expect(page.locator('#a')).toBeVisible()</c> → <c>'#b'</c>) leaves the hash alone while a
-/// removed, weakened or re-targeted assertion changes it. Comments and string literals are skipped; the scan is one
-/// linear pass with bounded nesting, and a file with more than <see cref="MaxDescriptors"/> assertions is truncated
-/// deterministically. Frameworks: JavaScript/TypeScript (Playwright, Jest, Vitest, Mocha, Jasmine, Cypress) and
-/// Python (pytest, unittest); any other framework yields an empty, flagged extraction.
+/// removed, weakened or re-targeted assertion changes it. Assertions <em>inside</em> a subject
+/// (<c>expect(async () =&gt; { expect(a).toBe(1) }).toPass()</c>) are extracted too. Comments and string literals are
+/// skipped; the scan is one linear pass with bounded nesting. The scan never guesses: whatever it cannot follow sets
+/// <see cref="AssertionExtraction.Reliable"/> to false, and an unsupported framework is not extracted at all — in both
+/// cases <see cref="RevisionHasher"/> falls back to a hash that changes with <em>any</em> edit (fail closed).
+/// Frameworks: JavaScript/TypeScript (Playwright, Jest, Vitest, Mocha, Jasmine, Cypress, with Chai chains and
+/// <c>assert.*</c>) and Python (pytest, unittest, pytest-playwright's <c>expect</c>).
 /// </summary>
 internal static class AssertionExtractor
 {
@@ -36,6 +43,12 @@ internal static class AssertionExtractor
         "pytest", "unittest",
     };
 
+    /// <summary>Chai-style words that carry no meaning of their own: <c>expect(a).to.be.equal(1)</c>.</summary>
+    private static readonly HashSet<string> Filler = new(StringComparer.Ordinal)
+    {
+        "to", "be", "been", "is", "that", "which", "and", "has", "have", "with", "at", "of", "same", "but", "does", "still", "also", "deep", "nested", "own", "ordered", "any", "all",
+    };
+
     /// <summary>Whether <paramref name="framework"/> is understood.</summary>
     /// <param name="framework">The framework name.</param>
     public static bool Supports(string framework) => ScriptFrameworks.Contains(framework) || PythonFrameworks.Contains(framework);
@@ -43,38 +56,60 @@ internal static class AssertionExtractor
     /// <summary>Scans <paramref name="source"/>.</summary>
     /// <param name="framework">The framework of the file.</param>
     /// <param name="source">The test source.</param>
-    public static AssertionExtraction Extract(string framework, string source)
+    /// <param name="language">The language when known; <c>python</c> selects the Python scanner whatever the framework.</param>
+    public static AssertionExtraction Extract(string framework, string source, string? language = null)
     {
         ArgumentNullException.ThrowIfNull(framework);
         ArgumentNullException.ThrowIfNull(source);
 
-        var text = source.Length > MaxSourceChars ? source[..MaxSourceChars] : source;
-        var found = new List<string>();
-
-        if (ScriptFrameworks.Contains(framework))
+        var python = string.Equals(language, "python", StringComparison.OrdinalIgnoreCase)
+            || (PythonFrameworks.Contains(framework) && !string.Equals(language, "typescript", StringComparison.OrdinalIgnoreCase));
+        if (!python && !ScriptFrameworks.Contains(framework))
         {
-            ScanScript(text, found);
+            return new AssertionExtraction(false, [], Reliable: false);
         }
-        else if (PythonFrameworks.Contains(framework))
+
+        var state = new ScanState { Truncated = source.Length > MaxSourceChars };
+        var text = state.Truncated ? source[..MaxSourceChars] : source;
+
+        // Almost every non-test file, and every test without an assertion, ends here.
+        if (text.AsSpan().IndexOf("expect", StringComparison.Ordinal) < 0
+            && text.AsSpan().IndexOf("assert", StringComparison.Ordinal) < 0
+            && text.AsSpan().IndexOf("should", StringComparison.Ordinal) < 0
+            && text.AsSpan().IndexOf("raises", StringComparison.Ordinal) < 0)
         {
-            ScanPython(text, found);
+            return new AssertionExtraction(true, [], !state.Truncated);
+        }
+
+        if (python)
+        {
+            ScanPython(text, state);
         }
         else
         {
-            return new AssertionExtraction(false, []);
+            ScanScript(text, state);
         }
 
-        return new AssertionExtraction(true, found);
+        return new AssertionExtraction(true, state.Found, !state.Degraded && !state.Truncated && state.Found.Count < MaxDescriptors);
+    }
+
+    private sealed class ScanState
+    {
+        public List<string> Found { get; } = [];
+
+        public bool Truncated { get; init; }
+
+        public bool Degraded { get; set; }
     }
 
     // ------------------------------------------------------------------ JavaScript / TypeScript
 
-    private static void ScanScript(string s, List<string> found)
+    private static void ScanScript(string s, ScanState state)
     {
         var i = 0;
-        while (i < s.Length && found.Count < MaxDescriptors)
+        while (i < s.Length && state.Found.Count < MaxDescriptors)
         {
-            if (SkipScriptTrivia(s, ref i))
+            if (SkipScriptTrivia(s, ref i, state))
             {
                 continue;
             }
@@ -83,12 +118,15 @@ internal static class AssertionExtractor
             if (c == '.')
             {
                 var j = i + 1;
-                var name = ReadIdentifier(s, ref j);
-                if (name is "should" or "and" && TryArgs(s, ref j, out var arguments))
+                if (Is(s, j, "should") || Is(s, j, "and"))
                 {
-                    found.Add($"{name}::{Normalize(arguments)}");
-                    i = j;
-                    continue;
+                    var name = ReadIdentifier(s, ref j);
+                    if (name is "should" or "and" && TryArgs(s, ref j, out var arguments, state))
+                    {
+                        state.Found.Add($"{name}::{Normalize(arguments)}");
+                        i = j;
+                        continue;
+                    }
                 }
 
                 i++;
@@ -98,10 +136,19 @@ internal static class AssertionExtractor
             if (IsIdentifierStart(c) && (i == 0 || !IsIdentifierPart(s[i - 1])))
             {
                 var j = i;
-                var word = ReadIdentifier(s, ref j);
-                if (word == "expect" && ParseExpect(s, ref j) is { } descriptor)
+                if (Is(s, i, "expect") && IsBoundary(s, i + 6))
                 {
-                    found.Add(descriptor);
+                    j = i + 6;
+                    ParseExpect(s, ref j, state, depth: 0);
+                }
+                else if (Is(s, i, "assert") && IsBoundary(s, i + 6))
+                {
+                    j = i + 6;
+                    ParseAssertCall(s, ref j, state);
+                }
+                else
+                {
+                    ReadIdentifierEnd(s, ref j);
                 }
 
                 i = Math.Max(j, i + 1);
@@ -112,8 +159,27 @@ internal static class AssertionExtractor
         }
     }
 
-    /// <summary>Parses <c>expect[.soft|.poll](subject)[.not|.resolves|.rejects]*.matcher(args)</c> after the word <c>expect</c>.</summary>
-    private static string? ParseExpect(string s, ref int j)
+    /// <summary>Parses <c>assert(x)</c> and <c>assert.equal(a, b)</c> (node:assert, chai assert) after the word <c>assert</c>.</summary>
+    private static void ParseAssertCall(string s, ref int j, ScanState state)
+    {
+        var k = j;
+        var name = string.Empty;
+        if (k < s.Length && s[k] == '.')
+        {
+            var m = k + 1;
+            name = ReadIdentifier(s, ref m);
+            k = m;
+        }
+
+        if (TryArgs(s, ref k, out var arguments, state))
+        {
+            state.Found.Add($"assert:{name}:{Normalize(arguments)}");
+            j = k;
+        }
+    }
+
+    /// <summary>Parses <c>expect[.soft|.poll](subject)[.not|.resolves|.rejects|chai words]*.matcher(args)</c> after the word <c>expect</c>.</summary>
+    private static void ParseExpect(string s, ref int j, ScanState state, int depth)
     {
         var modifier = string.Empty;
         var k = SkipSpace(s, j);
@@ -129,9 +195,30 @@ internal static class AssertionExtractor
             }
         }
 
-        if (k >= s.Length || s[k] != '(' || SkipBalanced(s, ref k) is null)
+        if (k >= s.Length || s[k] != '(')
         {
-            return null;
+            return;
+        }
+
+        var subject = SkipBalanced(s, ref k, state);
+        if (subject is null)
+        {
+            state.Degraded = true;
+
+            return;
+        }
+
+        // Assertions nested in the subject (expect(async () => { expect(a).toBe(1) }).toPass()) count as assertions too.
+        if (depth < 4 && subject.AsSpan().IndexOf("expect", StringComparison.Ordinal) >= 0)
+        {
+            var nested = new ScanState();
+            ScanScript(subject, nested);
+            foreach (var inner in nested.Found)
+            {
+                state.Found.Add("in:" + inner);
+            }
+
+            state.Degraded |= nested.Degraded;
         }
 
         var negated = false;
@@ -142,8 +229,9 @@ internal static class AssertionExtractor
             if (k >= s.Length || s[k] != '.')
             {
                 j = k;
+                state.Found.Add($"expect:{modifier}:{(negated ? "not" : string.Empty)}{chain}:?:");
 
-                return $"expect:{modifier}:{(negated ? "not" : string.Empty)}{chain}:?:";
+                return;
             }
 
             var m = k + 1;
@@ -151,8 +239,9 @@ internal static class AssertionExtractor
             if (word.Length == 0)
             {
                 j = k;
+                state.Degraded = true;
 
-                return null;
+                return;
             }
 
             if (word == "not")
@@ -169,27 +258,45 @@ internal static class AssertionExtractor
                 continue;
             }
 
-            string arguments = string.Empty;
+            // Chai chains: only the words after the filler carry meaning (expect(a).to.be.deep.equal(1)).
+            var after = SkipSpace(s, m);
+            if (Filler.Contains(word) && after < s.Length && s[after] == '.')
+            {
+                k = m;
+                continue;
+            }
+
+            var arguments = string.Empty;
             var open = SkipSpace(s, m);
             if (open < s.Length && s[open] == '(')
             {
                 var close = open;
-                arguments = SkipBalanced(s, ref close) ?? string.Empty;
+                var inner = SkipBalanced(s, ref close, state);
+                if (inner is null)
+                {
+                    state.Degraded = true;
+                    j = m;
+
+                    return;
+                }
+
+                arguments = inner;
                 m = close;
             }
 
             j = m;
+            state.Found.Add($"expect:{modifier}:{(negated ? "not" : string.Empty)}{chain}:{word}:{Normalize(arguments)}");
 
-            return $"expect:{modifier}:{(negated ? "not" : string.Empty)}{chain}:{word}:{Normalize(arguments)}";
+            return;
         }
     }
 
-    private static bool SkipScriptTrivia(string s, ref int i)
+    private static bool SkipScriptTrivia(string s, ref int i, ScanState state)
     {
         var c = s[i];
         if (c is '\'' or '"' or '`')
         {
-            i = EndOfString(s, i);
+            i = EndOfString(s, i, state);
 
             return true;
         }
@@ -209,6 +316,11 @@ internal static class AssertionExtractor
             if (s[i + 1] == '*')
             {
                 var end = s.IndexOf("*/", i + 2, StringComparison.Ordinal);
+                if (end < 0)
+                {
+                    state.Degraded = true;
+                }
+
                 i = end < 0 ? s.Length : end + 2;
 
                 return true;
@@ -220,11 +332,11 @@ internal static class AssertionExtractor
 
     // ------------------------------------------------------------------ Python
 
-    private static void ScanPython(string s, List<string> found)
+    private static void ScanPython(string s, ScanState state)
     {
         var i = 0;
         var lineStart = true;
-        while (i < s.Length && found.Count < MaxDescriptors)
+        while (i < s.Length && state.Found.Count < MaxDescriptors)
         {
             var c = s[i];
             if (c == '#')
@@ -239,7 +351,7 @@ internal static class AssertionExtractor
 
             if (c is '\'' or '"')
             {
-                i = EndOfPythonString(s, i);
+                i = EndOfPythonString(s, i, state);
                 lineStart = false;
                 continue;
             }
@@ -251,9 +363,10 @@ internal static class AssertionExtractor
                 continue;
             }
 
-            if (c is ' ' or '\t' or '\r' or ';')
+            if (c is ' ' or '\t' or '\r' or '\f' or ';' or ':')
             {
-                lineStart = lineStart || c == ';';
+                // A statement may follow a semicolon or the colon of a one-line block (if c: assert x).
+                lineStart = lineStart || c is ';' or ':';
                 i++;
                 continue;
             }
@@ -261,16 +374,26 @@ internal static class AssertionExtractor
             if (IsIdentifierStart(c) && (i == 0 || !IsIdentifierPart(s[i - 1])))
             {
                 var j = i;
-                var word = ReadIdentifier(s, ref j);
-                if (word == "assert" && lineStart)
+                if (lineStart && Is(s, i, "assert") && IsBoundary(s, i + 6))
                 {
-                    var end = EndOfLogicalLine(s, j);
-                    found.Add("assert::" + Normalize(StripPythonComment(s[j..end])));
+                    j = i + 6;
+                    var end = EndOfLogicalLine(s, j, state);
+                    state.Found.Add("assert::" + Normalize(StripPythonComments(s[j..end])));
                     i = end;
                     lineStart = false;
                     continue;
                 }
 
+                if (Is(s, i, "expect") && IsBoundary(s, i + 6))
+                {
+                    j = i + 6;
+                    ParseExpect(s, ref j, state, depth: 0);
+                    i = Math.Max(j, i + 1);
+                    lineStart = false;
+                    continue;
+                }
+
+                ReadIdentifierEnd(s, ref j);
                 lineStart = false;
                 i = Math.Max(j, i + 1);
 
@@ -281,9 +404,9 @@ internal static class AssertionExtractor
             {
                 var j = i + 1;
                 var name = ReadIdentifier(s, ref j);
-                if ((name.StartsWith("assert", StringComparison.Ordinal) || name is "raises" or "warns" or "approx") && TryArgs(s, ref j, out var arguments))
+                if ((name.StartsWith("assert", StringComparison.Ordinal) || name is "raises" or "warns" or "approx") && TryArgs(s, ref j, out var arguments, state))
                 {
-                    found.Add($"{name}::{Normalize(arguments)}");
+                    state.Found.Add($"{name}::{Normalize(StripPythonComments(arguments))}");
                     i = j;
                     lineStart = false;
                     continue;
@@ -295,7 +418,7 @@ internal static class AssertionExtractor
         }
     }
 
-    private static int EndOfLogicalLine(string s, int from)
+    private static int EndOfLogicalLine(string s, int from, ScanState state)
     {
         var depth = 0;
         var i = from;
@@ -304,7 +427,7 @@ internal static class AssertionExtractor
             var c = s[i];
             if (c is '\'' or '"')
             {
-                i = EndOfPythonString(s, i);
+                i = EndOfPythonString(s, i, state);
                 continue;
             }
 
@@ -342,45 +465,66 @@ internal static class AssertionExtractor
         return s.Length;
     }
 
-    private static string StripPythonComment(string expression)
+    /// <summary>Removes <c>#</c> comments (to the end of their physical line, keeping the line break) outside string literals.</summary>
+    private static string StripPythonComments(string text)
     {
-        var i = 0;
-        while (i < expression.Length)
+        if (text.IndexOf('#', StringComparison.Ordinal) < 0)
         {
-            if (expression[i] is '\'' or '"')
+            return text;
+        }
+
+        var builder = new StringBuilder(text.Length);
+        var i = 0;
+        var scratch = new ScanState();
+        while (i < text.Length)
+        {
+            var c = text[i];
+            if (c is '\'' or '"')
             {
-                i = EndOfPythonString(expression, i);
+                var end = EndOfPythonString(text, i, scratch);
+                builder.Append(text, i, end - i);
+                i = end;
                 continue;
             }
 
-            if (expression[i] == '#')
+            if (c == '#')
             {
-                return expression[..i];
+                while (i < text.Length && text[i] != '\n')
+                {
+                    i++;
+                }
+
+                continue;
             }
 
+            builder.Append(c);
             i++;
         }
 
-        return expression;
+        return builder.ToString();
     }
 
-    private static int EndOfPythonString(string s, int start)
+    private static int EndOfPythonString(string s, int start, ScanState state)
     {
         var quote = s[start];
         if (start + 2 < s.Length && s[start + 1] == quote && s[start + 2] == quote)
         {
             var end = s.IndexOf(new string(quote, 3), start + 3, StringComparison.Ordinal);
+            if (end < 0)
+            {
+                state.Degraded = true;
+            }
 
             return end < 0 ? s.Length : end + 3;
         }
 
-        return EndOfString(s, start);
+        return EndOfString(s, start, state);
     }
 
     // ------------------------------------------------------------------ shared scanning
 
     /// <summary>Index just past the string literal that starts at <paramref name="start"/> (single-line for ' and ", multi-line for backticks).</summary>
-    private static int EndOfString(string s, int start)
+    private static int EndOfString(string s, int start, ScanState state)
     {
         var quote = s[start];
         var i = start + 1;
@@ -400,24 +544,34 @@ internal static class AssertionExtractor
 
             if (c == '\n' && quote != '`')
             {
+                // A regex literal such as /["']/ or a stray quote: the scan cannot tell, so it says so.
+                state.Degraded = true;
+
                 return i;
             }
 
             i++;
         }
 
+        state.Degraded = true;
+
         return s.Length;
     }
 
-    private static bool TryArgs(string s, ref int j, out string arguments)
+    private static bool TryArgs(string s, ref int j, out string arguments, ScanState state)
     {
         var k = SkipSpace(s, j);
-        if (k < s.Length && s[k] == '(' && SkipBalanced(s, ref k) is { } inner)
+        if (k < s.Length && s[k] == '(')
         {
-            arguments = inner;
-            j = k;
+            if (SkipBalanced(s, ref k, state) is { } inner)
+            {
+                arguments = inner;
+                j = k;
 
-            return true;
+                return true;
+            }
+
+            state.Degraded = true;
         }
 
         arguments = string.Empty;
@@ -426,7 +580,7 @@ internal static class AssertionExtractor
     }
 
     /// <summary>With <c>s[pos] == '('</c>, returns the text between the parentheses and moves <paramref name="pos"/> past the closing one; null when unbalanced or too deep.</summary>
-    private static string? SkipBalanced(string s, ref int pos)
+    private static string? SkipBalanced(string s, ref int pos, ScanState state)
     {
         var start = pos + 1;
         var depth = 0;
@@ -436,7 +590,7 @@ internal static class AssertionExtractor
             var c = s[i];
             if (c is '\'' or '"' or '`')
             {
-                i = EndOfString(s, i);
+                i = EndOfString(s, i, state);
                 continue;
             }
 
@@ -482,6 +636,10 @@ internal static class AssertionExtractor
         return null;
     }
 
+    private static bool Is(string s, int at, string word) => string.CompareOrdinal(s, at, word, 0, word.Length) == 0;
+
+    private static bool IsBoundary(string s, int at) => at >= s.Length || !IsIdentifierPart(s[at]);
+
     private static int SkipSpace(string s, int i)
     {
         while (i < s.Length && char.IsWhiteSpace(s[i]))
@@ -492,13 +650,18 @@ internal static class AssertionExtractor
         return i;
     }
 
-    private static string ReadIdentifier(string s, ref int i)
+    private static void ReadIdentifierEnd(string s, ref int i)
     {
-        var start = i;
         while (i < s.Length && IsIdentifierPart(s[i]))
         {
             i++;
         }
+    }
+
+    private static string ReadIdentifier(string s, ref int i)
+    {
+        var start = i;
+        ReadIdentifierEnd(s, ref i);
 
         return s[start..i];
     }
@@ -509,12 +672,14 @@ internal static class AssertionExtractor
 
     /// <summary>
     /// Collapses whitespace <em>outside</em> string literals so formatting never changes a descriptor while the text
-    /// of an expected value always does; very long arguments are replaced by their digest.
+    /// of an expected value always does; a line comment keeps its line break so it cannot swallow what follows it;
+    /// very long arguments are replaced by their digest.
     /// </summary>
     private static string Normalize(string text)
     {
         var builder = new StringBuilder(text.Length);
         var space = false;
+        var scratch = new ScanState();
         var i = 0;
         while (i < text.Length)
         {
@@ -534,8 +699,18 @@ internal static class AssertionExtractor
 
             if (c is '\'' or '"' or '`')
             {
-                var end = EndOfString(text, i);
+                var end = EndOfString(text, i, scratch);
                 builder.Append(text, i, end - i);
+                i = end;
+                continue;
+            }
+
+            if (c == '/' && i + 1 < text.Length && text[i + 1] == '/')
+            {
+                // Keep the comment and mark its end, so `a, // c\n b` and `a, // c b` stay different.
+                var end = text.IndexOf('\n', i);
+                end = end < 0 ? text.Length : end;
+                builder.Append(text, i, end - i).Append('\n');
                 i = end;
                 continue;
             }

@@ -38,6 +38,23 @@ internal static class TextRules
         return true;
     }
 
+    /// <summary>True when <paramref name="text"/> is well-formed UTF-16 (no unpaired surrogate); control and format characters are allowed, as in source code.</summary>
+    /// <param name="text">The candidate.</param>
+    public static bool IsWellFormed(string text)
+    {
+        for (var i = 0; i < text.Length;)
+        {
+            if (!Rune.TryGetRuneAt(text, i, out var rune))
+            {
+                return false;
+            }
+
+            i += rune.Utf16SequenceLength;
+        }
+
+        return true;
+    }
+
     /// <summary>The longest prefix of <paramref name="text"/> with at most <paramref name="maxChars"/> UTF-16 units that ends on a rune boundary.</summary>
     /// <param name="text">The text.</param>
     /// <param name="maxChars">The limit.</param>

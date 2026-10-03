@@ -25,6 +25,8 @@ internal sealed partial class CaseIdentityService(
     /// <summary>A sweep marking more than this share of the active cases missing (and at least <see cref="MassMissingFloor"/>) is refused.</summary>
     internal const int MassMissingFloor = 10;
 
+    private const string LockTimeoutSql = "select set_config('lock_timeout', '10000', true)";
+
     private const string LockSql = "select pg_advisory_xact_lock(hashtextextended('catalog_sync:' || @project_id, 0))";
 
     private const string ExistingSql = """
@@ -114,6 +116,11 @@ internal sealed partial class CaseIdentityService(
 
         var orgId = scopes.Require().OrgId;
 
+        // The pure CPU work — parsing, hashing, assertion extraction — runs before the transaction takes the project
+        // lock, in parallel, so the lock is held for statements only.
+        var found = discovery.Discover(files);
+        var described = found.Cases.AsParallel().AsOrdered().Select(item => RevisionHasher.Describe(item.Framework, item.Language, item.Content)).ToArray();
+
         var exists = await db.ScalarAsync<int?>(CatalogReadSql.ProjectExists, new { project_id = projectId }, cancellationToken)
             .ConfigureAwait(false);
         if (exists is null)
@@ -121,10 +128,18 @@ internal sealed partial class CaseIdentityService(
             return new CaseSyncOutcome(null, "project_not_found");
         }
 
-        // One sync of a project at a time; the lock is released with the caller's transaction.
-        await db.ExecuteAsync(LockSql, new { project_id = projectId.ToString("D") }, cancellationToken).ConfigureAwait(false);
+        // One sync of a project at a time; the lock is released with the caller's transaction. A sync that waits longer
+        // than the timeout fails as busy instead of holding a pooled connection for ever.
+        try
+        {
+            await db.ExecuteAsync(LockTimeoutSql, null, cancellationToken).ConfigureAwait(false);
+            await db.ExecuteAsync(LockSql, new { project_id = projectId.ToString("D") }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Npgsql.PostgresException exception) when (exception.SqlState == Npgsql.PostgresErrorCodes.LockNotAvailable)
+        {
+            return new CaseSyncOutcome(null, "sync_busy");
+        }
 
-        var found = discovery.Discover(files);
         var entries = new List<CaseSyncEntry>(found.Problems);
 
         var existing = found.Cases.Count == 0
@@ -141,8 +156,9 @@ internal sealed partial class CaseIdentityService(
         var moves = new List<MoveRow>();
         var revisions = new List<RevisionRow>();
 
-        foreach (var item in found.Cases)
+        for (var index = 0; index < found.Cases.Count; index++)
         {
+            var item = found.Cases[index];
             Guid caseId;
             if (!existing.TryGetValue(item.Id, out var row))
             {
@@ -188,7 +204,7 @@ internal sealed partial class CaseIdentityService(
                 }
             }
 
-            var descriptor = RevisionHasher.Describe(item.Framework, item.Language, item.Content);
+            var descriptor = described[index];
             revisions.Add(new RevisionRow(
                 Guid.CreateVersion7(),
                 caseId,

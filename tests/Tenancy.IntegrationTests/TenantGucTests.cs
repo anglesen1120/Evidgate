@@ -267,6 +267,45 @@ public sealed class TenantGucTests
             ("org_id", orgId),
             ("case_id", caseId),
             ("hash", "sha256:" + new string('a', 64)));
+        var suiteId = Guid.CreateVersion7();
+        var suiteRevisionId = Guid.CreateVersion7();
+        var variantId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            "insert into public.suite (id, org_id, project_id, name, slug) values (@id, @org_id, @project_id, 'probe', 'probe-suite')",
+            ("id", suiteId),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.suite_revision (id, org_id, suite_id, revision_no, revision_hash, shard_strategy, retry_policy)
+            values (@id, @org_id, @suite_id, 1, @hash, '{"kind":"none"}', '{"max_retries":0}')
+            """,
+            ("id", suiteRevisionId),
+            ("org_id", orgId),
+            ("suite_id", suiteId),
+            ("hash", "sha256:" + new string('a', 64)));
+        await scope.ExecuteAsync(
+            "insert into public.variant (id, org_id, project_id, variant_hash, params) values (@id, @org_id, @project_id, @hash, '{}')",
+            ("id", variantId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("hash", "sha256:" + new string('b', 64)));
+        await scope.ExecuteAsync(
+            """
+            insert into public.suite_member (id, org_id, suite_revision_id, case_revision_id, variant_id, ordinal)
+            select @id, @org_id, @suite_revision_id, r.id, @variant_id, 0 from public.test_revision r limit 1
+            """,
+            ("id", memberId),
+            ("org_id", orgId),
+            ("suite_revision_id", suiteRevisionId),
+            ("variant_id", variantId));
+        await scope.ExecuteAsync(
+            "insert into public.case_dependency (id, org_id, suite_revision_id, parent_member_id, child_member_id) values (@id, @org_id, @suite_revision_id, @member_id, @member_id)",
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("suite_revision_id", suiteRevisionId),
+            ("member_id", memberId));
         var membershipId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             "insert into public.membership (id, org_id, invited_email) values (@id, @org_id, @invited_email)",

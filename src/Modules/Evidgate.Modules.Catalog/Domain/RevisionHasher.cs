@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -29,17 +30,23 @@ internal static class RevisionHasher
         ArgumentNullException.ThrowIfNull(framework);
         ArgumentNullException.ThrowIfNull(source);
 
-        var contentHash = Sha256(Encoding.UTF8.GetBytes(source));
-        var extraction = AssertionExtractor.Extract(framework, source);
-        var assertionHash = CanonicalHash.Compute(JsonSerializer.Serialize(extraction.Descriptors));
-        var metadata = JsonSerializer.Serialize(new SortedDictionary<string, object>(StringComparer.Ordinal)
-        {
-            ["assertion_count"] = extraction.Descriptors.Count,
-            ["assertions_extracted"] = extraction.Extracted,
-        });
+        var contentHash = Sha256(source);
+        var extraction = AssertionExtractor.Extract(framework, source, language);
+
+        // Fail closed: a file the extractor cannot follow (unsupported framework, a scan it could not finish) must not
+        // keep one fixed assertion hash whatever happens to it, or an edit that removes every assertion would be
+        // invisible to the tamper check. Its assertion hash therefore covers the whole content.
+        var assertionHash = extraction.Extracted && extraction.Reliable
+            ? CanonicalHash.Compute(JsonSerializer.Serialize(extraction.Descriptors))
+            : CanonicalHash.Compute(JsonSerializer.Serialize(new[] { "unreliable", contentHash }));
+        var metadata = string.Create(
+            CultureInfo.InvariantCulture,
+            $"{{\"assertion_count\":{extraction.Descriptors.Count},\"assertions_extracted\":{Flag(extraction.Extracted)},\"assertions_reliable\":{Flag(extraction.Extracted && extraction.Reliable)}}}");
 
         return new RevisionDescriptor(contentHash, assertionHash, metadata, RevisionHash(contentHash, framework, language, assertionHash, metadata));
     }
+
+    private static string Flag(bool value) => value ? "true" : "false";
 
     /// <summary>The revision hash of the five identity members.</summary>
     /// <param name="contentSha256">Hash of the source.</param>
@@ -49,7 +56,6 @@ internal static class RevisionHasher
     /// <param name="metadataJson">The metadata object as JSON.</param>
     public static string RevisionHash(string contentSha256, string framework, string? language, string assertionHash, string metadataJson)
     {
-        using var metadata = JsonDocument.Parse(metadataJson);
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
@@ -67,12 +73,26 @@ internal static class RevisionHasher
 
             writer.WriteString("assertion_hash", assertionHash);
             writer.WritePropertyName("metadata");
-            metadata.RootElement.WriteTo(writer);
+            writer.WriteRawValue(metadataJson);
             writer.WriteEndObject();
         }
 
         return CanonicalHash.Compute(stream.ToArray());
     }
 
-    private static string Sha256(byte[] bytes) => CanonicalHash.Prefix + Convert.ToHexStringLower(SHA256.HashData(bytes));
+    private static string Sha256(string source)
+    {
+        // Pooled buffer: no per-file copy of the source for the hash.
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(source.Length));
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(source, buffer);
+
+            return CanonicalHash.Prefix + Convert.ToHexStringLower(SHA256.HashData(buffer.AsSpan(0, written)));
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
 }

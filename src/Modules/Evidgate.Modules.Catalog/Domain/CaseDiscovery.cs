@@ -34,6 +34,9 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
     /// <summary>Problems kept in one report; a tree of broken files must not produce an unbounded answer.</summary>
     internal const int MaxProblems = 2000;
 
+    /// <summary>Directory holds kept before the whole tree is held instead.</summary>
+    internal const int MaxHeldDirectories = 200;
+
     /// <summary>Resolves <paramref name="files"/>.</summary>
     /// <param name="files">The tree.</param>
     public DiscoveryResult Discover(IReadOnlyList<SourceFile> files)
@@ -117,6 +120,12 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
 
         foreach (var file in testFiles)
         {
+            if (!TextRules.IsWellFormed(file.Content))
+            {
+                problems.Add(Warning(file.Path, CaseSyncCodes.InvalidAnnotation, "the file is not well-formed text (an unpaired surrogate)"));
+                continue;
+            }
+
             if (file.Content.Length > AnnotationParser.MaxContentChars)
             {
                 problems.Add(Warning(file.Path, CaseSyncCodes.InvalidAnnotation, "the file is larger than 2 MiB and was not scanned"));
@@ -194,7 +203,8 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
             [.. keep.OrderBy(found => found.Path, StringComparer.Ordinal)],
             [.. problems.OrderBy(problem => problem.Path, StringComparer.Ordinal).ThenBy(problem => problem.Code, StringComparer.Ordinal).Take(MaxProblems)],
             held,
-            [.. heldDirectories.Order(StringComparer.Ordinal)]);
+            // Past the cap a coarse hold is safer and cheaper than thousands of prefixes: the root holds everything.
+            heldDirectories.Count > MaxHeldDirectories ? [string.Empty] : [.. heldDirectories.Order(StringComparer.Ordinal)]);
     }
 
     private static void HoldAnnotationIds(string? raw, HashSet<Guid> held)

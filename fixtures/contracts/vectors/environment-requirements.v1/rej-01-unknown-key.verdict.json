@@ -1,0 +1,5 @@
+{
+  "schema": "environment-requirements.v1",
+  "valid": false,
+  "errors": [{ "index": null, "path": "/password", "reason": "additional_properties" }]
+}

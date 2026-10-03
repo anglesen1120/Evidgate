@@ -3936,6 +3936,8 @@ components:
           content_sha256,
           assertion_hash,
           created_at,
+          assertions_extracted,
+          assertions_reliable,
         ]
       properties:
         id:
@@ -3962,6 +3964,12 @@ components:
         created_at:
           type: string
           format: date-time
+        assertions_extracted:
+          type: boolean
+          description: False when the framework is not understood; `assertion_hash` then changes with any edit.
+        assertions_reliable:
+          type: boolean
+          description: False when the scan could not follow the file to its end; treat `assertion_hash` as "content changed".
     CaseRevisionListResponse:
       type: object
       required: [items, next_cursor]
