@@ -57,6 +57,12 @@ internal sealed class CiAuthOptions
     [Range(0, 300)]
     public int MaxSkewSeconds { get; init; } = 60;
 
+    /// <summary>
+    /// Comma-separated GitHub <c>event_name</c> values refused at the exchange. <c>pull_request_target</c> runs in the base
+    /// repository's context while it may execute untrusted fork code, so its token must not mint evidence credentials.
+    /// </summary>
+    public string DeniedEventNames { get; init; } = "pull_request_target";
+
     /// <summary>Exchange attempts allowed per key within <see cref="ExchangeWindowSeconds"/> (AC8).</summary>
     [Range(1, 10000)]
     public int ExchangeBurstLimit { get; init; } = 30;

@@ -75,6 +75,6 @@ internal static partial class IngestTokenFormat
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    [GeneratedRegex("^egt_([A-Za-z0-9]{12})_([A-Za-z0-9_-]{43})$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
+    [GeneratedRegex("^egt_([A-Za-z0-9]{12})_([A-Za-z0-9_-]{43})\\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex Shape();
 }

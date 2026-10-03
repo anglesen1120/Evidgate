@@ -26,7 +26,15 @@ internal sealed class ExchangeRateLimiter(IOptions<CiAuthOptions> options, TimeP
         var length = TimeSpan.FromSeconds(settings.ExchangeWindowSeconds);
         var now = clock.GetUtcNow();
 
-        Sweep(now, length);
+        var hasRoom = Sweep(now, length);
+
+        // Full of live windows (a spraying client): fail closed for new keys; the keys already tracked keep their budgets.
+        if (!hasRoom && !_windows.ContainsKey(key))
+        {
+            retryAfterSeconds = (int)length.TotalSeconds;
+
+            return false;
+        }
 
         var window = _windows.GetOrAdd(key, _ => new Window(now));
         lock (window)
@@ -51,22 +59,54 @@ internal sealed class ExchangeRateLimiter(IOptions<CiAuthOptions> options, TimeP
         }
     }
 
-    /// <summary>Drops expired windows now and then so an address-spraying client cannot grow the map without bound.</summary>
-    private void Sweep(DateTimeOffset now, TimeSpan length)
+    /// <summary>
+    /// The limiter key of a client address: an IPv6 address is reduced to its /64, because one subscriber
+    /// routinely holds a whole /64 and could otherwise rotate keys for free.
+    /// </summary>
+    /// <param name="address">The socket address (behind a proxy, configure forwarded headers with known proxies first).</param>
+    public static string ClientKey(System.Net.IPAddress? address)
     {
-        if (_windows.Count < MaxKeys && now.UtcTicks - Interlocked.Read(ref _sweptAtTicks) < length.Ticks)
+        if (address is null)
         {
-            return;
+            return "none";
         }
 
-        Interlocked.Exchange(ref _sweptAtTicks, now.UtcTicks);
-        foreach (var (key, window) in _windows)
+        if (address.IsIPv4MappedToIPv6)
         {
-            if (now - window.Start >= length)
+            address = address.MapToIPv4();
+        }
+
+        if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            return address.ToString();
+        }
+
+        Span<byte> bytes = stackalloc byte[16];
+        address.TryWriteBytes(bytes, out _);
+        bytes[8..].Clear();
+
+        return new System.Net.IPAddress(bytes).ToString() + "/64";
+    }
+
+    /// <summary>
+    /// Drops expired windows at most once per window length (a compare-and-swap, so concurrent callers do not each scan),
+    /// and reports whether there is room for another key.
+    /// </summary>
+    private bool Sweep(DateTimeOffset now, TimeSpan length)
+    {
+        var last = Interlocked.Read(ref _sweptAtTicks);
+        if (now.UtcTicks - last >= length.Ticks && Interlocked.CompareExchange(ref _sweptAtTicks, now.UtcTicks, last) == last)
+        {
+            foreach (var (key, window) in _windows)
             {
-                _windows.TryRemove(key, out _);
+                if (now - window.Start >= length)
+                {
+                    _windows.TryRemove(key, out _);
+                }
             }
         }
+
+        return _windows.Count < MaxKeys;
     }
 
     private sealed class Window(DateTimeOffset start)

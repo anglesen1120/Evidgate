@@ -212,19 +212,20 @@ internal sealed class ExchangeIngestTokenCommandHandler(
             return Unauthorized(ApiErrorCode.TokenUnknown, "no such token");
         }
 
+        // The secret is proven first: a holder of only the public prefix learns nothing about the token's state.
+        // A retired pepper version no longer verifies (T5): it fails exactly like an unknown token.
+        var expected = secrets.HashWithVersion(token.PepperVersion, CiSecrets.Bytes(command.Secret));
+        if (expected is null || !CryptographicOperations.FixedTimeEquals(expected, token.TokenHmac))
+        {
+            return Unauthorized(ApiErrorCode.TokenUnknown, "no such token");
+        }
+
         switch (token.StatusAt(now))
         {
             case "revoked":
                 return Unauthorized(ApiErrorCode.TokenRevoked, "this token was revoked");
             case "expired":
                 return Unauthorized(ApiErrorCode.TokenExpired, "this token expired");
-        }
-
-        // A retired pepper version no longer verifies (T5): it fails exactly like an unknown token.
-        var expected = secrets.HashWithVersion(token.PepperVersion, CiSecrets.Bytes(command.Secret));
-        if (expected is null || !CryptographicOperations.FixedTimeEquals(expected, token.TokenHmac))
-        {
-            return Unauthorized(ApiErrorCode.TokenUnknown, "no such token");
         }
 
         var minted = tokens.Mint(new CiProducerRequest(
@@ -236,7 +237,11 @@ internal sealed class ExchangeIngestTokenCommandHandler(
             Guid.CreateVersion7().ToString("D"),
             Run: null));
 
-        await db.ExecuteAsync(TouchSql, new { id = token.Id }, cancellationToken).ConfigureAwait(false);
+        // The statement re-checks the age, but a recently used token skips the round trip altogether.
+        if (token.LastUsedAt is null || now - token.LastUsedAt >= TimeSpan.FromSeconds(60))
+        {
+            await db.ExecuteAsync(TouchSql, new { id = token.Id }, cancellationToken).ConfigureAwait(false);
+        }
 
         audit.Describe(new AuditObject("ingest_token", token.Id.ToString("D")));
 

@@ -238,6 +238,37 @@ public sealed class CiUnitTests
         limiter.TryAcquire("fresh", out _).ShouldBeTrue();
     }
 
+    [Fact]
+    public void RateLimiter_ClientKey_GroupsAnIpv6SubscriberBySlash64_AndUnwrapsMappedIpv4()
+    {
+        ExchangeRateLimiter.ClientKey(System.Net.IPAddress.Parse("2001:db8:1:2:aaaa:bbbb:cccc:dddd"))
+            .ShouldBe(ExchangeRateLimiter.ClientKey(System.Net.IPAddress.Parse("2001:db8:1:2::1")));
+        ExchangeRateLimiter.ClientKey(System.Net.IPAddress.Parse("2001:db8:1:3::1"))
+            .ShouldNotBe(ExchangeRateLimiter.ClientKey(System.Net.IPAddress.Parse("2001:db8:1:2::1")));
+        ExchangeRateLimiter.ClientKey(System.Net.IPAddress.Parse("::ffff:203.0.113.9")).ShouldBe("203.0.113.9");
+        ExchangeRateLimiter.ClientKey(null).ShouldBe("none");
+    }
+
+    [Fact]
+    public void RateLimiter_WhenFullOfLiveWindows_RefusesNewKeys_ButKeepsServingTrackedOnes()
+    {
+        var clock = new FakeClock(DateTimeOffset.UtcNow);
+        var limiter = new ExchangeRateLimiter(
+            Microsoft.Extensions.Options.Options.Create(new CiAuthOptions { ExchangeBurstLimit = 5, ExchangeWindowSeconds = 60 }), clock);
+
+        for (var i = 0; i < 50_000; i++)
+        {
+            limiter.TryAcquire("k" + i, out _).ShouldBeTrue();
+        }
+
+        limiter.TryAcquire("sprayed", out var retryAfter).ShouldBeFalse();
+        retryAfter.ShouldBeGreaterThan(0);
+        limiter.TryAcquire("k0", out _).ShouldBeTrue();
+
+        clock.Advance(TimeSpan.FromSeconds(61));
+        limiter.TryAcquire("sprayed", out _).ShouldBeTrue();
+    }
+
     // ------------------------------------------------------------ JWKS provider
 
     private sealed class CountingHandler(Func<HttpResponseMessage> respond) : HttpMessageHandler
@@ -297,6 +328,50 @@ public sealed class CiUnitTests
     public async Task JwksProvider_FailsClosed_WhenTheEndpointFails()
     {
         var handler = new CountingHandler(() => new HttpResponseMessage(HttpStatusCode.BadGateway));
+        using var provider = new HttpGitHubJwksProvider(
+            new HttpClient(handler), Microsoft.Extensions.Options.Options.Create(new CiAuthOptions()), TimeProvider.System);
+
+        await Should.ThrowAsync<HttpRequestException>(async () => await provider.GetKeyAsync("k1", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task JwksProvider_ServesStaleKeysDuringAnOutage_AndBacksOffInsteadOfQueueing()
+    {
+        var clock = new FakeClock(new DateTimeOffset(2026, 10, 3, 12, 0, 0, TimeSpan.Zero));
+        var healthy = true;
+        var handler = new CountingHandler(() => healthy
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Jwks("k1")) }
+            : new HttpResponseMessage(HttpStatusCode.BadGateway));
+        using var provider = new HttpGitHubJwksProvider(new HttpClient(handler), Microsoft.Extensions.Options.Options.Create(new CiAuthOptions()), clock);
+        var ct = TestContext.Current.CancellationToken;
+
+        (await provider.GetKeyAsync("k1", ct)).ShouldNotBeNull();
+        healthy = false;
+        clock.Advance(HttpGitHubJwksProvider.CacheTtl + TimeSpan.FromSeconds(1));
+
+        // The TTL passed and GitHub is down: the old key still verifies, and a burst costs one failed fetch, not one each.
+        for (var i = 0; i < 20; i++)
+        {
+            (await provider.GetKeyAsync("k1", ct)).ShouldNotBeNull();
+        }
+
+        handler.Calls.ShouldBe(2);
+
+        clock.Advance(HttpGitHubJwksProvider.FailureBackoff + TimeSpan.FromSeconds(1));
+        (await provider.GetKeyAsync("k1", ct)).ShouldNotBeNull();
+        handler.Calls.ShouldBe(3);
+
+        // Past the grace window nothing is trusted: the outage surfaces as keys-unavailable.
+        clock.Advance(HttpGitHubJwksProvider.StaleGrace);
+        await Should.ThrowAsync<HttpRequestException>(async () => await provider.GetKeyAsync("k1", ct));
+        await Should.ThrowAsync<HttpRequestException>(async () => await provider.GetKeyAsync("k1", ct));
+        handler.Calls.ShouldBe(4);
+    }
+
+    [Fact]
+    public async Task JwksProvider_RefusesAnOversizedBody()
+    {
+        var handler = new CountingHandler(() => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(new string('x', 300 * 1024)) });
         using var provider = new HttpGitHubJwksProvider(
             new HttpClient(handler), Microsoft.Extensions.Options.Options.Create(new CiAuthOptions()), TimeProvider.System);
 

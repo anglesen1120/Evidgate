@@ -51,7 +51,7 @@ public sealed class CiTokenIssuePurgeTaskTests
         (await host.Runner.RunOnceAsync(at, Token)).ShouldBe(0);
         (await TaskSql.ScalarAsync<long>(
             owner, "select count(*) from public.task where schedule_name = @n", ("n", CiTokenIssueSweeps.TaskType))).ShouldBe(1);
-        CiTokenIssueSweeps.Cron.ShouldBe("20 3 * * *");
+        CiTokenIssueSweeps.Cron.ShouldBe("20 * * * *");
     }
 
     private TasksTestHost Start(string database) =>

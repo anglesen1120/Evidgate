@@ -39,7 +39,7 @@ public static class DevSeed
     public static readonly Guid BindingId = Guid.Parse("0198a000-0000-7000-8000-00000000d005");
 
     /// <summary>The synthetic repository id of the dev binding.</summary>
-    public const long DevRepositoryId = 1000001;
+    public const long DevRepositoryId = 9_000_000_000_001;
 
     private const string Sql =
         """
@@ -137,11 +137,20 @@ public static class DevSeed
         }
     }
 
-    /// <summary>Loopback, <c>localhost</c>, or a bare name with no dots (a compose service such as <c>postgres</c>).</summary>
+    /// <summary>Compose service names the dev stack uses for its database.</summary>
+    private static readonly string[] ComposeHosts = ["postgres", "db"];
+
+    /// <summary>
+    /// Loopback, <c>localhost</c>, a unix-socket directory, or a known compose service name. Multi-host strings
+    /// (<c>a,b</c>) and any other bare name are refused: an alias, tunnel or search-domain name may reach a shared database.
+    /// </summary>
     /// <param name="host">The host of the connection string.</param>
     public static bool IsLocalHost(string? host) =>
         !string.IsNullOrWhiteSpace(host)
+        && !host.Contains(',', StringComparison.Ordinal)
+        && !host.Contains(';', StringComparison.Ordinal)
         && (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-            || (System.Net.IPAddress.TryParse(host, out var address) && System.Net.IPAddress.IsLoopback(address))
-            || (!host.Contains('.', StringComparison.Ordinal) && !host.Contains(':', StringComparison.Ordinal)));
+            || host.StartsWith('/')
+            || ComposeHosts.Contains(host, StringComparer.OrdinalIgnoreCase)
+            || (System.Net.IPAddress.TryParse(host, out var address) && System.Net.IPAddress.IsLoopback(address)));
 }

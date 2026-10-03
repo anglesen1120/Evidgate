@@ -56,6 +56,9 @@ internal sealed class GitHubOidcValidator(IOptions<CiAuthOptions> options, IGitH
 
     private readonly CiAuthOptions _options = options.Value;
 
+    private readonly HashSet<string> _denied = new(
+        options.Value.DeniedEventNames.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal);
+
     /// <summary>Validates <paramref name="token"/>.</summary>
     /// <param name="token">The compact JWT from the <c>Authorization: Bearer</c> header.</param>
     /// <param name="cancellationToken">Cancellation.</param>
@@ -127,6 +130,12 @@ internal sealed class GitHubOidcValidator(IOptions<CiAuthOptions> options, IGitH
             return OidcResult.Fail(OidcFailure.Invalid);
         }
 
+        if (jwt.TryGetPayloadValue<string>("event_name", out var eventName)
+            && _denied.Contains(eventName))
+        {
+            return OidcResult.Fail(OidcFailure.Invalid);
+        }
+
         return Extract(jwt) is { } claims ? OidcResult.Ok(claims) : OidcResult.Fail(OidcFailure.Invalid);
     }
 
@@ -157,7 +166,7 @@ internal sealed class GitHubOidcValidator(IOptions<CiAuthOptions> options, IGitH
     {
         value = string.Empty;
 
-        if (!jwt.TryGetPayloadValue<string>(name, out var found) || string.IsNullOrWhiteSpace(found) || found.Length > 512)
+        if (!jwt.TryGetPayloadValue<string>(name, out var found) || string.IsNullOrWhiteSpace(found) || found.Length > (name == "jti" ? 256 : 512))
         {
             return false;
         }
@@ -196,21 +205,29 @@ internal sealed class HttpGitHubJwksProvider(
     IOptions<CiAuthOptions> options,
     TimeProvider clock) : IGitHubJwksProvider, IDisposable
 {
-    /// <summary>How long a fetched document is trusted.</summary>
+    /// <summary>How long a fetched document is trusted without a refresh attempt.</summary>
     internal static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
 
     /// <summary>The soonest an unknown kid may force another fetch.</summary>
     internal static readonly TimeSpan MinRefreshInterval = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long expired keys keep serving while GitHub is unreachable (keys rotate rarely).</summary>
+    internal static readonly TimeSpan StaleGrace = TimeSpan.FromHours(24);
+
+    /// <summary>After a failed fetch, callers fail fast for this long instead of queueing behind the timeout.</summary>
+    internal static readonly TimeSpan FailureBackoff = TimeSpan.FromSeconds(15);
+
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private Dictionary<string, SecurityKey> _keys = new(StringComparer.Ordinal);
-    private DateTimeOffset _fetchedAt = DateTimeOffset.MinValue;
+
+    // One immutable snapshot published through a volatile reference: readers never see a torn pair.
+    private volatile Snapshot _snapshot = Snapshot.Empty;
 
     /// <inheritdoc />
     public async ValueTask<SecurityKey?> GetKeyAsync(string keyId, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
-        if (now - _fetchedAt < CacheTtl && _keys.TryGetValue(keyId, out var cached))
+        var snap = _snapshot;
+        if (now - snap.FetchedAt < CacheTtl && snap.Keys.TryGetValue(keyId, out var cached))
         {
             return cached;
         }
@@ -219,20 +236,46 @@ internal sealed class HttpGitHubJwksProvider(
         try
         {
             now = clock.GetUtcNow();
-            var fresh = now - _fetchedAt < CacheTtl;
+            snap = _snapshot;
+            var fresh = now - snap.FetchedAt < CacheTtl;
 
-            if (fresh && _keys.TryGetValue(keyId, out var winner))
+            if (fresh && snap.Keys.TryGetValue(keyId, out var winner))
             {
                 return winner;
             }
 
-            // Stale document, or a kid we have not seen. A flood of random kids is throttled to one refetch per interval.
-            if (!fresh || now - _fetchedAt >= MinRefreshInterval)
+            // A recent failure: do not queue every caller behind another timeout; serve what we still trust.
+            var backingOff = now - snap.LastFailureAt < FailureBackoff;
+            var throttled = fresh && now - snap.FetchedAt < MinRefreshInterval;
+            if (!backingOff && !throttled)
             {
-                await RefreshAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    snap = await RefreshAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException or JsonException or InvalidOperationException)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+
+                    snap = snap with { LastFailureAt = clock.GetUtcNow() };
+                    _snapshot = snap;
+                    if (now - snap.FetchedAt >= StaleGrace)
+                    {
+                        throw;
+                    }
+                }
             }
 
-            return _keys.TryGetValue(keyId, out var refreshed) ? refreshed : null;
+            if (now - snap.FetchedAt >= StaleGrace)
+            {
+                throw new HttpRequestException("no usable JWKS document (the fetch is backing off)");
+            }
+
+            // Within the grace window an expired document still verifies signatures (GitHub keys rotate rarely).
+            return now - snap.FetchedAt < StaleGrace && snap.Keys.TryGetValue(keyId, out var refreshed) ? refreshed : null;
         }
         finally
         {
@@ -243,7 +286,7 @@ internal sealed class HttpGitHubJwksProvider(
     /// <inheritdoc />
     public void Dispose() => _gate.Dispose();
 
-    private async Task RefreshAsync(CancellationToken cancellationToken)
+    private async Task<Snapshot> RefreshAsync(CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(5));
@@ -252,12 +295,12 @@ internal sealed class HttpGitHubJwksProvider(
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
-        if (json.Length > 256 * 1024)
+        if (response.Content.Headers.ContentLength is > MaxDocumentBytes)
         {
             throw new HttpRequestException("the JWKS document is unreasonably large");
         }
 
+        var json = await ReadCappedAsync(response.Content, timeout.Token).ConfigureAwait(false);
         var set = new JsonWebKeySet(json);
         var keys = new Dictionary<string, SecurityKey>(StringComparer.Ordinal);
         foreach (var key in set.GetSigningKeys())
@@ -268,7 +311,36 @@ internal sealed class HttpGitHubJwksProvider(
             }
         }
 
-        _keys = keys;
-        _fetchedAt = clock.GetUtcNow();
+        var snapshot = new Snapshot(keys, clock.GetUtcNow(), DateTimeOffset.MinValue);
+        _snapshot = snapshot;
+
+        return snapshot;
+    }
+
+    private const int MaxDocumentBytes = 256 * 1024;
+
+    /// <summary>Reads at most <see cref="MaxDocumentBytes"/>; a longer body is refused before it is all buffered.</summary>
+    private static async Task<string> ReadCappedAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8192];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxDocumentBytes)
+            {
+                throw new HttpRequestException("the JWKS document is unreasonably large");
+            }
+
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+        }
+
+        return System.Text.Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+    }
+
+    private sealed record Snapshot(Dictionary<string, SecurityKey> Keys, DateTimeOffset FetchedAt, DateTimeOffset LastFailureAt)
+    {
+        public static readonly Snapshot Empty = new(new Dictionary<string, SecurityKey>(StringComparer.Ordinal), DateTimeOffset.MinValue, DateTimeOffset.MinValue);
     }
 }

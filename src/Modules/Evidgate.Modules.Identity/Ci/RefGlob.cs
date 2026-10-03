@@ -71,12 +71,12 @@ internal static partial class CiBindingShapes
     /// <summary><c>owner/repo</c> as GitHub spells it.</summary>
     public static bool IsRepositoryFullName(string value) => FullName().IsMatch(value);
 
-    [GeneratedRegex(@"^refs/(heads|tags)/[A-Za-z0-9._/*+@-]{1,200}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
+    [GeneratedRegex(@"^refs/(heads|tags)/[A-Za-z0-9._/*+@-]{1,200}\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex RefPattern();
 
-    [GeneratedRegex(@"^[A-Za-z0-9._*-]{1,100}/[A-Za-z0-9._*-]{1,100}/\.github/workflows/[A-Za-z0-9._*-]{1,100}@refs/(heads|tags)/[A-Za-z0-9._/*+@-]{1,200}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
+    [GeneratedRegex(@"^[A-Za-z0-9._*-]{1,100}/[A-Za-z0-9._*-]{1,100}/\.github/workflows/[A-Za-z0-9._*-]{1,100}@refs/(heads|tags)/[A-Za-z0-9._/*+@-]{1,200}\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex WorkflowPattern();
 
-    [GeneratedRegex(@"^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
+    [GeneratedRegex(@"^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex FullName();
 }

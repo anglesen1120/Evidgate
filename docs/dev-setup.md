@@ -139,7 +139,7 @@ needs no dev-stack endpoint; to point the same assertions at the dev bucket, use
 transaction as the owner role, a synthetic tenant: org `dev-org`, project
 `dev-project`, a dev user (`0198a000-0000-7000-8000-00000000d003`, no login exists
 yet) holding `tenant_admin` and `release_approver`, and one **active** CI binding for
-the synthetic repository id `1000001` (`evidgate-dev/sample`). It refuses, writing
+the synthetic repository id `9000000000001` (`evidgate-dev/sample`). It refuses, writing
 nothing, unless `DOTNET_ENVIRONMENT=Development` and the database host is local or a
 bare compose service name. The data is fully synthetic.
 

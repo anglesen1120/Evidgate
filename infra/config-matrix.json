@@ -340,6 +340,26 @@
       "note": "exchange attempts allowed per key (client address, repository id, token prefix) within the window (02.4.1 AC8); default 30."
     },
     {
+      "key": "EVIDGATE__CI__DENIEDEVENTNAMES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "comma-separated GitHub event_name values refused at the exchange (02.4.1 review); default pull_request_target, which runs in the base repository context while it may execute fork code."
+    },
+    {
       "key": "EVIDGATE__CI__EXCHANGEWINDOWSECONDS",
       "scope": "runtime",
       "consumers": ["api", "worker"],

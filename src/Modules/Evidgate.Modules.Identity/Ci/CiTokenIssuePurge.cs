@@ -14,10 +14,10 @@ internal static class CiTokenIssueSweeps
 {
     public const string TaskType = "ci_token_issue.purge";
 
-    /// <summary>Daily, off the hour, after the platform sweeps (03:00, 03:15).</summary>
-    public const string Cron = "20 3 * * *";
+    /// <summary>Hourly, off the hour: a busy org mints more than one daily batch (50k) of replay records.</summary>
+    public const string Cron = "20 * * * *";
 
-    public const int BatchSize = 1000;
+    public const int BatchSize = 10_000;
 
     public const int MaxBatchesPerFire = 50;
 
@@ -26,7 +26,7 @@ internal static class CiTokenIssueSweeps
         cron: Cron,
         queue: EvidgateSweeps.MaintenanceQueue,
         taskType: TaskType,
-        payloadFactory: _ => "{\"limit\":1000}");
+        payloadFactory: _ => "{\"limit\":10000}");
 }
 
 /// <summary>

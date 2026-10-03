@@ -52,6 +52,11 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
 
     private readonly CiAuthOptions _options = options.Value;
 
+    // Built once: the key's thumbprint and the parameter object are not recomputed per ingest request.
+    private readonly Lazy<SymmetricSecurityKey?> _securityKey = new(() => secrets.SigningKey is { } key ? new SymmetricSecurityKey(key) : null);
+
+    private TokenValidationParameters? _validation;
+
     /// <summary>Whether a signing key is configured (otherwise the exchange is off).</summary>
     public bool Enabled => secrets.SigningKey is not null;
 
@@ -96,11 +101,27 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
             NotBefore = now.UtcDateTime,
             Expires = expires.UtcDateTime,
             Claims = claims,
-            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256),
+            SigningCredentials = new SigningCredentials(_securityKey.Value!, SecurityAlgorithms.HmacSha256),
         };
 
         return new MintedCiToken(Handler.CreateToken(descriptor), expires);
     }
+
+    private TokenValidationParameters Validation() => _validation ??= new TokenValidationParameters
+    {
+        ValidIssuer = _options.Issuer,
+        ValidAudience = _options.Audience,
+        IssuerSigningKey = _securityKey.Value,
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        RequireExpirationTime = true,
+        RequireSignedTokens = true,
+        ClockSkew = TimeSpan.FromSeconds(30),
+        LifetimeValidator = (notBefore, expires, _, parameters) =>
+            LifetimeCheck.IsWithin(clock.GetUtcNow(), notBefore, expires, parameters.ClockSkew),
+    };
 
     /// <summary>
     /// Validates a presented token as one of ours. Returns the caller, or null for anything else
@@ -114,21 +135,7 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
             return null;
         }
 
-        var result = await Handler.ValidateTokenAsync(token, new TokenValidationParameters
-        {
-            ValidIssuer = _options.Issuer,
-            ValidAudience = _options.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
-            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            RequireExpirationTime = true,
-            RequireSignedTokens = true,
-            ClockSkew = TimeSpan.FromSeconds(30),
-            LifetimeValidator = (notBefore, expires, _, parameters) =>
-                LifetimeCheck.IsWithin(clock.GetUtcNow(), notBefore, expires, parameters.ClockSkew),
-        }).ConfigureAwait(false);
+        var result = await Handler.ValidateTokenAsync(token, Validation()).ConfigureAwait(false);
 
         if (!result.IsValid)
         {

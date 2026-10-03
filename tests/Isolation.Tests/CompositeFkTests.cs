@@ -142,7 +142,7 @@ public sealed class CompositeFkTests : HarnessTest
                 await scope.SetAsync(TenantSetting, OrgB.ToString("D", CultureInfo.InvariantCulture));
                 await factory.CreateAsync(table, OrgB, Token);
 
-                var corrupted = await factory.PrepareForeignOrgRowAsync(table, OrgB, OrgA, Token);
+                var corrupted = await factory.PrepareForeignOrgRowAsync(table, OrgB, OrgA, tenantParent.Name, Token);
                 var error = await scope.CaptureErrorAsync(corrupted.InsertSql, corrupted.Parameters);
 
                 error.SqlState.ShouldBe(

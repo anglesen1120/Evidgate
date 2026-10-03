@@ -210,6 +210,8 @@ public sealed class CiAuthTests
             ("HS256 confusion", api.Jwks.Mint(RepoId, (_, o) => o.Algorithm = SecurityAlgorithms.RsaSsaPssSha256)),
             ("missing repository_id", api.Jwks.Mint(RepoId, (c, _) => c.Remove("repository_id"))),
             ("non-numeric run_id", api.Jwks.Mint(RepoId, (c, _) => c["run_id"] = "abc")),
+            ("pull_request_target", api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "pull_request_target")),
+            ("jti beyond the column", api.Jwks.Mint(RepoId, (c, _) => c["jti"] = new string('j', 300))),
             ("garbage", "not.a.jwt"),
         };
 
@@ -415,6 +417,7 @@ public sealed class CiAuthTests
         var secret = (await CreateTokenAsync(client, user, org, project)).Text("secret")!;
 
         (await ExchangeIngestAsync(client, secret)).Status.ShouldBe(HttpStatusCode.OK);
+        var version = await _fixture.ScalarAsync<int>(_database!, "select version from public.ingest_token");
         var first = await _fixture.ScalarAsync<DateTime>(_database!, "select last_used_at from public.ingest_token");
         (await ExchangeIngestAsync(client, secret)).Status.ShouldBe(HttpStatusCode.OK);
         (await _fixture.ScalarAsync<DateTime>(_database!, "select last_used_at from public.ingest_token")).ShouldBe(first);
@@ -422,6 +425,9 @@ public sealed class CiAuthTests
         await _fixture.ExecuteAsync(_database!, "update public.ingest_token set last_used_at = now() - interval '2 minutes'");
         (await ExchangeIngestAsync(client, secret)).Status.ShouldBe(HttpStatusCode.OK);
         (await _fixture.ScalarAsync<DateTime>(_database!, "select last_used_at from public.ingest_token")).ShouldBeGreaterThan(DateTime.UtcNow.AddMinutes(-1));
+
+        // Bookkeeping is not an edit: a concurrent rotate/revoke with If-Match must not see a spurious version bump.
+        (await _fixture.ScalarAsync<int>(_database!, "select version from public.ingest_token")).ShouldBe(version);
     }
 
     [Fact]
@@ -439,6 +445,9 @@ public sealed class CiAuthTests
         var after = await ExchangeIngestAsync(client, secret);
         after.Status.ShouldBe(HttpStatusCode.Unauthorized);
         after.ErrorCode.ShouldBe("token_revoked");
+
+        // Only the holder of the secret learns the state: a wrong secret on a revoked token looks like any unknown token.
+        (await ExchangeIngestAsync(client, secret[..^43] + new string('A', 43))).ErrorCode.ShouldBe("token_unknown");
         (await client.SendAsync(HttpMethod.Post, $"/v1/ingest-tokens/{id}/rotate", Admin(user, org))).ErrorCode.ShouldBe("token_revoked");
         (await client.SendAsync(HttpMethod.Delete, $"/v1/ingest-tokens/{Guid.CreateVersion7()}", Admin(user, org), null, NewKey())).Status.ShouldBe(HttpStatusCode.NotFound);
     }

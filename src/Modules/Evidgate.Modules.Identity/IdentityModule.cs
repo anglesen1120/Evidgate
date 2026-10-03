@@ -132,6 +132,12 @@ internal static class IdentityModule
 
         // The JWKS client: a typed HttpClient with a hard timeout and a bounded response (S4, P6).
         services.AddHttpClient<IGitHubJwksProvider, HttpGitHubJwksProvider>(client => client.Timeout = TimeSpan.FromSeconds(5))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                // A redirect would leave the issuer's host (S4); a long-lived singleton client must still follow DNS.
+                AllowAutoRedirect = false,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            })
             .AddTypedClient<IGitHubJwksProvider>((http, provider) =>
                 new HttpGitHubJwksProvider(http, provider.GetRequiredService<IOptions<CiAuthOptions>>(), provider.GetRequiredService<TimeProvider>()));
 

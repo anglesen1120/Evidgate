@@ -128,7 +128,9 @@ internal sealed class TenantRowFactory
     /// is filled from the parents created for <paramref name="parentOrg"/>. The
     /// result is the corrupt row T2.1 asserts on: filed under one org while pointing
     /// at another org's parent. It is not inserted; the caller runs it and asserts
-    /// the composite FK rejects it.
+    /// the composite FK rejects it. With <paramref name="corruptedForeignKey"/> set, only that
+    /// foreign key is moved to the other org (a table with two tenant parents is checked once per key,
+    /// so the rejection can be attributed); null moves every tenant key.
     /// </summary>
     /// <remarks>
     /// Parents are read from the rows already created (never created here): the
@@ -140,11 +142,12 @@ internal sealed class TenantRowFactory
         string table,
         Guid org,
         Guid parentOrg,
+        string? corruptedForeignKey,
         CancellationToken cancellationToken) =>
         GeneratedRow.Build(
             _schema,
             table,
-            await ResolveAsync(table, org, parentOrg, forcedId: null, createMissingParents: false, cancellationToken));
+            await ResolveAsync(table, org, parentOrg, forcedId: null, createMissingParents: false, cancellationToken, corruptedForeignKey));
 
     private async Task<GeneratedRow> CreateAsync(
         string table,
@@ -191,7 +194,8 @@ internal sealed class TenantRowFactory
         Guid tenantParentOrg,
         Guid? forcedId,
         bool createMissingParents,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? corruptedForeignKey = null)
     {
         var values = new Dictionary<string, object>(StringComparer.Ordinal);
 
@@ -207,11 +211,23 @@ internal sealed class TenantRowFactory
 
         foreach (var foreignKey in _schema.ForeignKeysOf(table))
         {
+            // A nullable self-reference (ingest_token.rotated_to_id) is left null: following it would create
+            // the same table again, forever.
+            var corrupted = corruptedForeignKey is null || string.Equals(corruptedForeignKey, foreignKey.Name, StringComparison.Ordinal);
+            if (string.Equals(foreignKey.PrincipalTable, table, StringComparison.Ordinal)
+                && !(corruptedForeignKey is not null && corrupted)
+                && foreignKey.Columns
+                    .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
+                    .All(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
+            {
+                continue;
+            }
+
             // A foreign key to another tenant table is the one the corruption moves
             // to the other org; every other parent (the tenant root, a catalogue
             // row) belongs to the row's own org.
             var principalIsTenantTable = _schema.HasOrgId(foreignKey.PrincipalTable);
-            var parentOrg = principalIsTenantTable ? tenantParentOrg : org;
+            var parentOrg = principalIsTenantTable && corrupted ? tenantParentOrg : org;
             var rootReference = !principalIsTenantTable
                 && Array.IndexOf(foreignKey.Columns, TenantFkScan.TenantColumn) >= 0;
 

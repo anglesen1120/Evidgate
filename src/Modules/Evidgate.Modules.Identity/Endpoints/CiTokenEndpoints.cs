@@ -62,7 +62,7 @@ public static class CiTokenEndpoints
             return Result.Failure<CiTokenResponse>(CiErrors.NotConfigured);
         }
 
-        if (Throttle(context, limiter, "ip:" + (context.Connection.RemoteIpAddress ?? IPAddress.None)) is { } throttled)
+        if (Throttle(context, limiter, "ip:" + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress)) is { } throttled)
         {
             return Result.Failure<CiTokenResponse>(throttled);
         }
@@ -158,7 +158,8 @@ public static class CiTokenEndpoints
             return Result.Failure<CiTokenResponse>(Unauthorized(ApiErrorCode.TokenUnknown, "no such token"));
         }
 
-        if (Throttle(context, limiter, "tok:" + prefix) is { } throttled)
+        // Keyed by caller address too: the prefix is not secret, so a bucket on it alone would let anyone lock the real job out.
+        if (Throttle(context, limiter, "tok:" + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress) + ":" + prefix) is { } throttled)
         {
             return Result.Failure<CiTokenResponse>(throttled);
         }
@@ -169,10 +170,6 @@ public static class CiTokenEndpoints
         {
             case null:
                 return Result.Failure<CiTokenResponse>(Unauthorized(ApiErrorCode.TokenUnknown, "no such token"));
-            case { Status: "revoked" }:
-                return Result.Failure<CiTokenResponse>(Unauthorized(ApiErrorCode.TokenRevoked, "this token was revoked"));
-            case { Status: "expired" }:
-                return Result.Failure<CiTokenResponse>(Unauthorized(ApiErrorCode.TokenExpired, "this token expired"));
             case { OrgId: null } or { ProjectId: null } or { SubjectId: null }:
                 return Result.Failure<CiTokenResponse>(Unauthorized(ApiErrorCode.TokenUnknown, "no such token"));
         }

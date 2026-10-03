@@ -71,6 +71,9 @@ public sealed class SeedDevTests
     [InlineData("::1", true)]
     [InlineData("postgres", true)]
     [InlineData("", false)]
+    [InlineData("localhost,prodhost", false)]
+    [InlineData("prod-db", false)]
+    [InlineData("/var/run/postgresql", true)]
     public void SeedDev_OnlyLocalHostsAreAccepted(string host, bool expected) => DevSeed.IsLocalHost(host).ShouldBe(expected);
 
     [Fact]
