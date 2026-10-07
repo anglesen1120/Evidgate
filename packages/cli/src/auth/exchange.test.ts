@@ -499,7 +499,7 @@ describe('exchangeToken', () => {
     expect(result.token).toBe('egt_ci_token');
     expect(received).toHaveLength(1);
     expect(received[0]?.method).toBe('POST');
-    expect(received[0]?.url).toBe('/ci/token');
+    expect(received[0]?.url).toBe('/v1/ci/token');
     expect(received[0]?.auth).toBe('Bearer jwt-value');
     expect(JSON.parse(received[0]?.body ?? '{}')).toEqual({});
   });
