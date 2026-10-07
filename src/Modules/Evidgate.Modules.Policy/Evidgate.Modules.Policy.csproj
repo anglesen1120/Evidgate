@@ -13,8 +13,6 @@
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
-    <!-- 07.1.1-T2: policy_revision.hash is sha256 over RFC 8785 canonical JSON (00 §7). -->
-    <ProjectReference Include="..\..\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
   </ItemGroup>
   <!-- 01.1.2-T2.1: internal implementation, opened to the two composition roots and the tests. -->
   <ItemGroup>
