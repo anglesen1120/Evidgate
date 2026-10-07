@@ -29,6 +29,7 @@ public static partial class AuditMetadata
         "format",
         "range_days",
         "reason",
+        "outcome",
     };
 
     /// <summary>Throws if <paramref name="metadata"/> breaks the allowlist; returns it otherwise.</summary>

@@ -164,6 +164,12 @@ public static class ApiErrorCode
     /// <summary>422: an environment revision carries a secret value or a malformed member (05.1.2 AC3).</summary>
     public const string EnvironmentRevisionInvalid = "environment_revision_invalid";
 
+    /// <summary>422: a policy body carries a member the 00 §8.6 field set does not declare (07.1.1 AC3).</summary>
+    public const string PolicyUnknownField = "policy_unknown_field";
+
+    /// <summary>422: a policy body is not JSON, does not match <c>policy-revision.v1</c>, or cannot be canonicalised (07.1.1 AC3).</summary>
+    public const string PolicyInvalid = "policy_invalid";
+
     /// <summary>409: the environment's next revision number is not the <c>revision_no</c> the request expected (05.1.2 AC5).</summary>
     public const string RevisionConflict = "revision_conflict";
 
