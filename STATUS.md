@@ -43,6 +43,7 @@ Updated 2026-10-03. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 05.1.1, 05.1.2 | 05.1.1-T2/T3/T4, 05.1.2-T1/T2 | `develop` (Stage A, no PR) | `manifest` (0023) and `environment`/`environment_revision` (0024) with immutability triggers and FORCE RLS; `POST /v1/projects/{p}/manifests` (schema at the edge, secret-free variants, matrix + shard coverage, catalogue checks, content-addressed dedupe), environment revisions (`environment-revision.v1` schema, secret-value detection, numbering under a row lock, 200 on identical content) and `GET /v1/environment-revisions/{id}`; security + performance review fixed (05.1.1/05.1.2 §8a, leftovers OI-05-15) |
 | 04.3.1 | T1 | merged (#13, 02238c1) | `@evidgate/playwright-reporter` (`packages/adapter-playwright`): `EvidgateReporter` (four documented callbacks → event-envelope v1 lines), spool `<spool_dir>/<run_id>/<producer_id>/NNNNNN.jsonl` + `checkpoint.json`, capability document as the first `run.log` envelope (`ext.capability`), `^1.63` engine guard, `ext` allow-list; T2 gates (QA, code review, perf+security review, two delta reviews) closed. Open: placeholder `execution_key` (→ 04.3.2-T1), spool layout vs 04.2.3 §4 (→ 04.2.3-T1), `capture_control` (→ 04.3.3) — see §6 |
 | 04.2.1 | T2 | `feature/04.2.1-T2-s2` (Session 2, PR pending merge) | `packages/cli` skeleton: `evidgate` bin, `resolveConfig()` (flag > env > default, `missing_config` names every var), exit-code registry, `getToken()` with the `EVIDGATE_DEV_TOKEN` dev path (`EVIDGATE_ENV=dev` and a loopback API URL only, never cached), redaction of the registered secrets (secret env values and the returned token, incl. trimmed/encoded/escaped forms) on stdout/stderr, command registry with per-command flags, SDK client with redirects refused; `contracts/cli.md` created (OI-04-06 closed, replay codes 10–19 still `[OPEN]`); QA + code/perf/security reviews and delta fixed; hand-over to 04.2.1-T1 in the 04.2.1 feature plan §10 |
+| 07.1.1 | T1 | `feature/07.1.1-T1-s4` (PR pending) | `policy_revision` (migration 0025): content-addressed (`unique (org_id, project_id, hash)`), per-project `revision_no`, FORCE RLS, app role `SELECT, INSERT` only, trigger refuses `DELETE` and any change beyond `draft → active → retired` and bumps `version` on each move; no-setter EF entity, append-only `PolicyRevisionStore` (`Result` outcome: 404 missing/soft-deleted project, 503 lock timeout; dedupe without consuming a number, numbering under the project row lock; NUL/lone-surrogate bodies refused), Architecture rule against setters in `Evidgate.Modules.Policy.Domain`; open items in §6 and the feature plan Notes |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -189,7 +190,7 @@ Recomputed 2026-10-02 from `plan_graph.py` after the review additions, de-duplic
 | 02.9.1-T1 | M | M1 | Newly ready 2026-10-03: API isolation suite over the registry routes |
 | 04.1.2-T4 | M | M1 | `producer_slot` |
 | 04.7.1-T2 | M | M1 | Adapter protocol |
-| 07.1.1-T1, 07.3.1-T1 | M each | M2 | Policy revision, waiver/quarantine tables |
+| 07.3.1-T1 | M | M2 | Waiver/quarantine tables |
 | 06.1.1-T1 | M | M2 | Artifact record |
 
 **Next after Stage A starts (blocked only by the rows above):** 02.3.1-T1 login (ready, but Stage B) · 01.7.1-T3 (T3.1 branch protection owner-blocked, §6).
@@ -202,7 +203,11 @@ Recomputed 2026-10-02 from `plan_graph.py` after the review additions, de-duplic
 
 | Item | Blocker | Owner |
 |---|---|---|
-| `seed-dev` script | Needs 07.1.1 tables (02.1.1/02.1.2 landed) | Tech Lead |
+| `seed-dev` script | Needs the 07.1.1 revision-write command (07.1.1-T3; table `policy_revision` landed in 07.1.1-T1) | Tech Lead |
+| `policy_revision` state write path (07.1.1-T1 hand-over, from #16) | App role holds `SELECT, INSERT` only; `draft → active → retired` needs a column `UPDATE (state)` grant or an owner `SECURITY DEFINER` function | 07.1.1-T4 |
+| `policy_revision.hash` producer (finding T1-SEC-S2, 07.1.1-T1 security review, from #16) | `PolicyRevisionStore.AppendAsync` trusts the caller's `sha256:<hex>`; `IPolicyHasher` must become its only producer (also in the 07.1.1 plan Notes) | 07.1.1-T2 |
+| `policy_revision.body` size cap (finding T1-PERF-P1, 07.1.1-T1 performance review, from #16) | No DB cap (precedents 0021/0022/0024 cap jsonb); request-body limit for `POST /v1/projects/{p}/policies` to be set and recorded (also in the 07.1.1 plan Notes) | 07.1.1-T3 |
+| Policy contracts read for 05.3.2 (07.1.1-T1 hand-over, from #16) | T1 ships no `Evidgate.Modules.Policy.Contracts` read; `GetActivePolicyQuery`/`GetPolicyRevisionQuery` land later | 07.1.1-T3/T4 |
 | Web app | 09.1.1 (M2) | Lane C |
 | `docker-tests.yml` deleted | Replaced by `ci.yml` in 01.7.1-T1 (wave 5): `global-json-file` SDK pin, single push+PR trigger, `ubuntu-24.04`, SHA-pinned actions, `check-ci-parity.sh`/`check-action-pins.sh` | done (wave 5) |
 | `evidgate_owner` permissive policy on `organization`/`project` | Rationale logged in 00 §15 and in the `0003` copy block; 00 §5.4.3 still lacks the sentence | Tech Lead |

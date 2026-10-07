@@ -447,6 +447,7 @@ public sealed class SchemaConventionAllowListTests
                 ("public.case_dependency", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.manifest", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.environment_revision", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+                ("public.policy_revision", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.rls_probe", SchemaRule.VersionTrigger),
                 ("public.role_permission", SchemaRule.CompositeForeignKey),
             ]);

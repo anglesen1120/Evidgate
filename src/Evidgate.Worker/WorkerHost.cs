@@ -8,6 +8,7 @@ using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Identity;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
+using Evidgate.Modules.Policy;
 using Evidgate.Modules.Tenancy;
 using Evidgate.Worker.Health;
 using Evidgate.Worker.Options;
@@ -69,6 +70,8 @@ public static class WorkerHost
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
         builder.Services.AddOrchestratorModule();
+        // 07.1.1-T1: the policy module, so every handler the Api composes resolves here too.
+        builder.Services.AddPolicyModule();
         // 02.2.1-T1.2: both entry points compose the same module set (00 §5.1 A1).
         builder.Services.AddIdentityModule(builder.Configuration);
         // 02.1.1-T2: the registry module, so every handler the Api composes resolves here too.
