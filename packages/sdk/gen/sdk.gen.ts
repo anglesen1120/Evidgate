@@ -115,7 +115,7 @@ export const cancelRun = <ThrowOnError extends boolean = false>(options: Options
 /**
  * Atomic event batch (≤ 500 events, ≤ 1 MiB before decompression)
  *
- * Body validated against `contracts/schemas/event-envelope.v1.json` (00 §9.4). Atomic commit; per-event ack `accepted`/`duplicate`. Idempotency-Key exempt: per-event `event_id` dedupe is the arbiter (00 §9.4; README exemption list).
+ * Body validated against `contracts/schemas/event-envelope.v1.json` (00 §9.4). Atomic commit; per-event ack `accepted`/`duplicate`. Idempotency-Key exempt: per-event `event_id` dedupe is the arbiter (00 §9.4; README exemption list). A first-send batch whose first envelope is the sequence-1 `run.log` capability carrier (`ext.capability`, `ext.schema` = `<adapter-name>/<protocol-major>`) registers the adapter capability before the first event (04.7.1-T2.3): a schema failure is 422 `capability_invalid` (`details[].path`), an unsupported `protocol.major` is 422 `unsupported_protocol_major` (`details` names both majors), and a natural-key conflict with a stored row that differs in `engine_family`/`platforms`/`supports`/`mode` is 409 `capability_conflict`; all `retryable: false`.
  */
 export const postRunEvents = <ThrowOnError extends boolean = false>(options: Options<PostRunEventsData, ThrowOnError>): RequestResult<PostRunEventsResponses, PostRunEventsErrors, ThrowOnError> => (options.client ?? client).post<PostRunEventsResponses, PostRunEventsErrors, ThrowOnError>({
     security: [{

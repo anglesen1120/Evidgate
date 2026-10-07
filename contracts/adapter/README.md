@@ -30,7 +30,10 @@ whose `ext` carries the document under `ext.capability` (`ext.schema` stays
 `playwright/1`, the `<adapter-name>/<protocol-major>` value of 00 §9.4). `ext` is an open
 object that requires only `schema`, so the carrier needs no new envelope member. The
 document is validated against `capability.v1.json` in that package's tests (Ajv 8) and by
-the server (Corvus) on registration (04.7.1-T2.3).
+the server (Corvus) on registration (04.7.1-T2.3). The server takes the natural-key `name`
+from the `ext.schema` prefix (`<adapter-name>/<protocol-major>`) and registers the
+capability on that first-send envelope before any event is processed; the
+`POST /v1/runs/{r}/events` route wiring that calls this seam lands with 04.1.1-T1.
 
 ## Negotiation rules
 
@@ -75,11 +78,11 @@ false`): a member the protocol does not define is rejected 422
 
 Errors use the 00 §9.2 envelope with `retryable: false`:
 
-| Code                         | Status | When                                                                                              |
-| ---------------------------- | ------ | ------------------------------------------------------------------------------------------------- |
-| `capability_invalid`         | 422    | the document fails the schema; `details[].path` points at the offending field                     |
-| `unsupported_protocol_major` | 422    | the adapter's `protocol.major` is not the server's; `details` names both majors                   |
-| `capability_conflict`        | 409    | the natural key tuple conflicts with a stored row that declares a different `mode`/`supports` set |
+| Code                         | Status | When                                                                                                            |
+| ---------------------------- | ------ | --------------------------------------------------------------------------------------------------------------- |
+| `capability_invalid`         | 422    | the document fails the schema; `details[].path` points at the offending field                                   |
+| `unsupported_protocol_major` | 422    | the adapter's `protocol.major` is not the server's; `details` names both majors                                 |
+| `capability_conflict`        | 409    | the natural key tuple conflicts with a stored row that differs in `engine_family`/`platforms`/`supports`/`mode` |
 
 The executable form of the table above is 04.7.1-T3 (the compatibility matrix
 test); a behaviour change here fails that test, not this document.
