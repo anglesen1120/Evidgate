@@ -20,6 +20,20 @@ divergence/<schema-key>/<vector>.json (+ .verdict.json)   # seeded disagreement,
 `contracts/adapter/capability.v1.json`). Suites take it from the directory name
 and cross-check it against the sidecar's `schema` field.
 
+## Protocol compatibility matrix (`protocol-matrix/`)
+
+`protocol-matrix/negotiation.v1.json` is a second, self-contained corpus: the
+table-driven negotiation matrix of 04.7.1-T3 (AC6, T42). It is **not** a
+`vectors/<schema-key>/` directory — it carries no `*.verdict.json` sidecars and
+the parity suites above never enumerate it. Its `format` is
+`evidgate.protocol-matrix.v1`: a `base_document` (a schema-valid `capability.v1`
+document), the declared `grid` axes, and `rows[]` where each row names a server
+protocol, an adapter version or a full document, and the expected verdict. Both
+runtimes read the same file —
+`tests/Tenancy.IntegrationTests/ProtocolCompatibilityMatrixTests.cs` (.NET) and
+`packages/test-fixtures/src/protocolMatrix.test.ts` (TypeScript) — so flipping
+any `expected` value fails both suites.
+
 ## Verdict sidecar
 
 ```json
