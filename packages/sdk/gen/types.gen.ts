@@ -810,6 +810,42 @@ export type GrantRoleRequest = {
 };
 
 /**
+ * One risk-acceptance waiver (07.3.1-T1, 00 §8.8). `approved_by` is null until a different approver approves it; `state` is returned as stored.
+ */
+export type WaiverDto = {
+    id: string;
+    project_id: string;
+    scope: 'case' | 'suite';
+    target_id: string;
+    reason: string;
+    requested_by: string;
+    approved_by: string | null;
+    state: 'requested' | 'approved' | 'expired' | 'revoked';
+    expires_at: string;
+    created_at: string;
+    updated_at: string;
+};
+
+/**
+ * Body of `POST /v1/waivers` (07.3.1-T1 §5). `expires_at` must be strictly in the future; `reason` is 1..2000 characters.
+ */
+export type WaiverCreateRequest = {
+    project_id: string;
+    scope: 'case' | 'suite';
+    target_id: string;
+    reason: string;
+    expires_at: string;
+};
+
+/**
+ * 00 §9.1 cursor page of `WaiverDto`, keyset-ordered on `(created_at, id)` ascending.
+ */
+export type WaiverPage = {
+    items: Array<WaiverDto>;
+    next_cursor: string | null;
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -1148,6 +1184,8 @@ export type IncidentId = string;
 export type JobId = string;
 
 export type CandidateId = string;
+
+export type WaiverId = string;
 
 export type ExchangeCiTokenData = {
     body?: CiTokenRequest;
@@ -5766,3 +5804,229 @@ export type SetHealingSwitchResponses = {
      */
     200: unknown;
 };
+
+export type CreateWaiverData = {
+    body: WaiverCreateRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/waivers';
+};
+
+export type CreateWaiverErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateWaiverError = CreateWaiverErrors[keyof CreateWaiverErrors];
+
+export type CreateWaiverResponses = {
+    /**
+     * Waiver requested
+     */
+    201: WaiverDto;
+};
+
+export type CreateWaiverResponse = CreateWaiverResponses[keyof CreateWaiverResponses];
+
+export type ApproveWaiverData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        w: string;
+    };
+    query?: never;
+    url: '/waivers/{w}/approve';
+};
+
+export type ApproveWaiverErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ApproveWaiverError = ApproveWaiverErrors[keyof ApproveWaiverErrors];
+
+export type ApproveWaiverResponses = {
+    /**
+     * Waiver approved
+     */
+    200: WaiverDto;
+};
+
+export type ApproveWaiverResponse = ApproveWaiverResponses[keyof ApproveWaiverResponses];
+
+export type RevokeWaiverData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        w: string;
+    };
+    query?: never;
+    url: '/waivers/{w}/revoke';
+};
+
+export type RevokeWaiverErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RevokeWaiverError = RevokeWaiverErrors[keyof RevokeWaiverErrors];
+
+export type RevokeWaiverResponses = {
+    /**
+     * Waiver revoked
+     */
+    200: WaiverDto;
+};
+
+export type RevokeWaiverResponse = RevokeWaiverResponses[keyof RevokeWaiverResponses];
+
+export type ListProjectWaiversData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/waivers';
+};
+
+export type ListProjectWaiversErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListProjectWaiversError = ListProjectWaiversErrors[keyof ListProjectWaiversErrors];
+
+export type ListProjectWaiversResponses = {
+    /**
+     * Page of waivers
+     */
+    200: WaiverPage;
+};
+
+export type ListProjectWaiversResponse = ListProjectWaiversResponses[keyof ListProjectWaiversResponses];

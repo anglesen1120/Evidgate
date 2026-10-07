@@ -34,6 +34,9 @@ internal static class PolicyModule
         // Handlers are resolved eagerly by Mediator at start-up: they receive a Lazy, so the schema set compiles on first use.
         services.TryAddSingleton(provider => new Lazy<ContractSchemaSet>(() => provider.GetRequiredService<ContractSchemaSet>()));
 
+        // 07.3.1-T1: the waiver create validates `expires_at` against the server clock (00 §5.5 C2).
+        services.TryAddSingleton(TimeProvider.System);
+
         return services;
     }
 }
