@@ -155,6 +155,14 @@ public sealed class PolicyRevisionUnitTests
     [InlineData("{\"a\":0.10}", "{\"a\":0.1}")]
     [InlineData("{\"a\":-0}", "{\"a\":0}")]
     [InlineData("{\"a\":1e-7}", "{\"a\":0.0000001}")]
+    // The smallest subnormal, the largest finite double, and the double nearest 0.3 all round-trip through a double.
+    [InlineData("{\"a\":5e-324}", "{\"a\":5E-324}")]
+    [InlineData("{\"a\":1E+2}", "{\"a\":100}")]
+    [InlineData("{\"a\":0e5}", "{\"a\":0}")]
+    [InlineData("{\"a\":-0.0}", "{\"a\":0}")]
+    [InlineData("{\"a\":9007199254740992}", "{\"a\":9.007199254740992e15}")]
+    [InlineData("{\"a\":1.7976931348623157e308}", "{\"a\":1.7976931348623157E+308}")]
+    [InlineData("{\"a\":0.30000000000000004}", "{\"a\":3.0000000000000004e-1}")]
     public void HasOnlyExactNumbers_AcceptsNumbersExactlyRepresentableAsDoubles(string body, string equivalent)
     {
         PolicyRevisionRules.HasOnlyExactNumbers(body).ShouldBeTrue();
@@ -169,9 +177,52 @@ public sealed class PolicyRevisionUnitTests
     [InlineData("{\"a\":9007199254740993}")]
     [InlineData("{\"a\":0.1000000000000000001}")]
     [InlineData("{\"a\":1.00000000000000001}")]
+    // A literal that underflows to zero, or that spells the smallest subnormal with more digits than it round-trips.
+    [InlineData("{\"a\":4.9406564584124654e-324}")]
+    [InlineData("{\"a\":1e-400}")]
+    [InlineData("{\"a\":-1e-400}")]
+    [InlineData("{\"a\":0.10000000000000001}")]
     public void HasOnlyExactNumbers_RefusesNumbersNotExactlyRepresentableAsDoubles(string body)
     {
         PolicyRevisionRules.HasOnlyExactNumbers(body).ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// The read path needs more than a yes/no: a genuinely inexact number must be told from a body that is not
+    /// well-formed JSON at all, which is not-canonicalisable rather than an inexact number (finding F2).
+    /// </summary>
+    [Theory]
+    [InlineData("{\"a\":1}", nameof(PolicyNumberOutcome.Exact))]
+    [InlineData("{\"a\":1.0}", nameof(PolicyNumberOutcome.Exact))]
+    [InlineData("{\"a\":9007199254740993}", nameof(PolicyNumberOutcome.InexactNumber))]
+    [InlineData("{\"a\":0.1000000000000000001}", nameof(PolicyNumberOutcome.InexactNumber))]
+    [InlineData("", nameof(PolicyNumberOutcome.NotCanonicalisable))]
+    [InlineData("not json", nameof(PolicyNumberOutcome.NotCanonicalisable))]
+    [InlineData("{\"a\":1,}", nameof(PolicyNumberOutcome.NotCanonicalisable))]
+    [InlineData("{\"a\":1} trailing", nameof(PolicyNumberOutcome.NotCanonicalisable))]
+    [InlineData("{\"a\":9007199254740993,", nameof(PolicyNumberOutcome.NotCanonicalisable))]
+    public void ClassifyNumbers_TellsAnInexactNumberFromAMalformedBody(string body, string expected)
+    {
+        PolicyRevisionRules.ClassifyNumbers(body).ToString().ShouldBe(expected);
+    }
+
+    /// <summary>A body nested past the canonicalizer's depth cap does not parse, so it carries no exact numbers.</summary>
+    [Fact]
+    public void ClassifyNumbers_ReportsABodyNestedPastTheDepthCap_AsNotCanonicalisable()
+    {
+        var body = new StringBuilder();
+        for (var i = 0; i <= JsonCanonicalizer.MaxDepth; i++)
+        {
+            body.Append("{\"a\":");
+        }
+
+        body.Append('1');
+        for (var i = 0; i <= JsonCanonicalizer.MaxDepth; i++)
+        {
+            body.Append('}');
+        }
+
+        PolicyRevisionRules.ClassifyNumbers(body.ToString()).ShouldBe(PolicyNumberOutcome.NotCanonicalisable);
     }
 
     [Theory]
@@ -187,6 +238,29 @@ public sealed class PolicyRevisionUnitTests
         await Should.ThrowAsync<ArgumentException>(async () =>
             await store.AppendAsync(Guid.CreateVersion7(), body, Guid.CreateVersion7(), TestContext.Current.CancellationToken));
 
+        await db.DidNotReceiveWithAnyArgs().ExecuteAsync(default!, default, TestContext.Current.CancellationToken);
+        scopes.DidNotReceiveWithAnyArgs().Require();
+    }
+
+    /// <summary>
+    /// A number outside the finite double range is refused by the canonicalizer, and the store must not chain that
+    /// message — it names the number text (finding T1-SEC-S2, review S2).
+    /// </summary>
+    [Theory]
+    [InlineData("{\"secretmarker\":1e400}", "1e400")]
+    [InlineData("{\"secretmarker\":1e99999999999999999999}", "1e99999999999999999999")]
+    public async Task Append_RejectsANumberOutsideTheDoubleRange_WithoutLeakingItInTheException(string body, string number)
+    {
+        var db = Substitute.For<ITenantDb>();
+        var scopes = Substitute.For<ITenantScopeAccessor>();
+        var store = new PolicyRevisionStore(db, scopes, Hasher);
+
+        var exception = await Should.ThrowAsync<ArgumentException>(async () =>
+            await store.AppendAsync(Guid.CreateVersion7(), body, Guid.CreateVersion7(), TestContext.Current.CancellationToken));
+
+        exception.ToString().ShouldNotContain("secretmarker");
+        exception.ToString().ShouldNotContain(number);
+        exception.InnerException.ShouldBeNull();
         await db.DidNotReceiveWithAnyArgs().ExecuteAsync(default!, default, TestContext.Current.CancellationToken);
         scopes.DidNotReceiveWithAnyArgs().Require();
     }
