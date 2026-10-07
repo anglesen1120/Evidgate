@@ -6,6 +6,22 @@ using Evidgate.BuildingBlocks.Canonicalization;
 namespace Evidgate.Modules.Policy.Domain;
 
 /// <summary>
+/// The outcome of the number rule over a body (<see cref="PolicyRevisionRules.ClassifyNumbers"/>): the read path
+/// must tell a genuinely inexact number from a body that is not well-formed JSON at all (finding F2).
+/// </summary>
+internal enum PolicyNumberOutcome
+{
+    /// <summary>Every number in the body is exactly representable as an IEEE 754 double (I-JSON, RFC 7493 §2.2).</summary>
+    Exact,
+
+    /// <summary>The body is well-formed JSON but carries a number only a double can round.</summary>
+    InexactNumber,
+
+    /// <summary>The body is not well-formed JSON (malformed, or nested past the canonicalizer's depth cap).</summary>
+    NotCanonicalisable,
+}
+
+/// <summary>
 /// Shape rules of a policy revision (07.1.1-T1): the body is a JSON object (00 §8.6) carrying only text jsonb can
 /// store, and every number in it is an exact IEEE 754 double (I-JSON, RFC 7493 §2.2). Both are checked before the
 /// store touches the database, so a malformed append never reaches a statement.
@@ -41,11 +57,22 @@ internal static class PolicyRevisionRules
     /// such as <c>9007199254740993</c> would be rounded to <c>9007199254740992</c> and two different bodies would
     /// share one content address. A body that is not well-formed JSON carries no exact numbers either.
     /// </summary>
-    public static bool HasOnlyExactNumbers(string? body)
+    public static bool HasOnlyExactNumbers(string? body) =>
+        ClassifyNumbers(body) == PolicyNumberOutcome.Exact;
+
+    /// <summary>
+    /// Classifies the numbers of <paramref name="body"/> (I-JSON, RFC 7493 §2.2) for the read path, which must tell
+    /// a genuinely inexact number from a body that is not well-formed JSON at all:
+    /// <see cref="PolicyNumberOutcome.Exact"/> when every number is exactly representable as an IEEE 754 double,
+    /// <see cref="PolicyNumberOutcome.InexactNumber"/> when a well-formed body carries a number only a double can
+    /// round, and <see cref="PolicyNumberOutcome.NotCanonicalisable"/> when the body does not parse (malformed, or
+    /// nested past the canonicalizer's depth cap) and so carries no exact numbers either.
+    /// </summary>
+    public static PolicyNumberOutcome ClassifyNumbers(string? body)
     {
         if (string.IsNullOrEmpty(body))
         {
-            return false;
+            return PolicyNumberOutcome.NotCanonicalisable;
         }
 
         try
@@ -62,15 +89,15 @@ internal static class PolicyRevisionRules
             {
                 if (reader.TokenType == JsonTokenType.Number && !IsExactlyRepresentable(reader.ValueSpan))
                 {
-                    return false;
+                    return PolicyNumberOutcome.InexactNumber;
                 }
             }
 
-            return true;
+            return PolicyNumberOutcome.Exact;
         }
         catch (JsonException)
         {
-            return false;
+            return PolicyNumberOutcome.NotCanonicalisable;
         }
     }
 
