@@ -1,18 +1,17 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
+using Evidgate.BuildingBlocks.Canonicalization;
 
 namespace Evidgate.Modules.Policy.Domain;
 
 /// <summary>
-/// Shape rules of a policy revision (07.1.1-T1): the content address is <c>sha256:&lt;64 hex&gt;</c> (00 §7) and the
-/// body is a JSON object (00 §8.6) carrying only text jsonb can store. Both are checked before the store touches the
-/// database, so a malformed append never reaches a statement.
+/// Shape rules of a policy revision (07.1.1-T1): the body is a JSON object (00 §8.6) carrying only text jsonb can
+/// store, and every number in it is an exact IEEE 754 double (I-JSON, RFC 7493 §2.2). Both are checked before the
+/// store touches the database, so a malformed append never reaches a statement.
 /// </summary>
-internal static partial class PolicyRevisionRules
+internal static class PolicyRevisionRules
 {
-    /// <summary>True when <paramref name="hash"/> is a <c>sha256:&lt;64 lower-case hex&gt;</c> content address.</summary>
-    public static bool IsValidHash(string? hash) => hash is not null && HashShape().IsMatch(hash);
-
     /// <summary>
     /// True when <paramref name="body"/> parses as a JSON object whose text jsonb can store: no U+0000 and no unpaired
     /// UTF-16 surrogate in a member name or string value (the 05.1.1/05.1.2 <c>JsonBody</c> rule).
@@ -29,6 +28,45 @@ internal static partial class PolicyRevisionRules
             using var document = JsonDocument.Parse(body);
             return document.RootElement.ValueKind == JsonValueKind.Object
                 && !HasUnstorableText(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// True when every number in <paramref name="body"/> is exactly representable as an IEEE 754 double (I-JSON,
+    /// RFC 7493 §2.2): RFC 8785 §3.2.2.3 canonicalises a number as its shortest round-trip double, so a literal
+    /// such as <c>9007199254740993</c> would be rounded to <c>9007199254740992</c> and two different bodies would
+    /// share one content address. A body that is not well-formed JSON carries no exact numbers either.
+    /// </summary>
+    public static bool HasOnlyExactNumbers(string? body)
+    {
+        if (string.IsNullOrEmpty(body))
+        {
+            return false;
+        }
+
+        try
+        {
+            // One token pass over the same bytes the canonicalizer reads; no parse tree is materialised.
+            var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(body), new JsonReaderOptions
+            {
+                MaxDepth = JsonCanonicalizer.MaxDepth,
+                CommentHandling = JsonCommentHandling.Disallow,
+                AllowTrailingCommas = false,
+            });
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.Number && !IsExactlyRepresentable(reader.ValueSpan))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
         catch (JsonException)
         {
@@ -91,7 +129,96 @@ internal static partial class PolicyRevisionRules
         return false;
     }
 
-    // \z, not $: $ also matches before a trailing "\n", which the Postgres CHECK refuses (07.1.1-T1 review C4).
-    [GeneratedRegex("^sha256:[0-9a-f]{64}\\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex HashShape();
+    /// <summary>
+    /// True when the JSON number literal <paramref name="token"/> denotes exactly the double it parses to. The two
+    /// decimal values are compared as (sign, significant digits, exponent), so <c>1.0</c>, <c>1e2</c>, <c>0.10</c>
+    /// and <c>-0</c> are accepted while <c>9007199254740993</c> and <c>0.1000000000000000001</c> are not. A literal
+    /// outside the finite double range is left to the canonicalizer, which reports it as
+    /// <see cref="JsonCanonicalizationException"/>.
+    /// </summary>
+    private static bool IsExactlyRepresentable(ReadOnlySpan<byte> token)
+    {
+        var text = Encoding.UTF8.GetString(token);
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || !double.IsFinite(value))
+        {
+            return true;
+        }
+
+        return Normalise(text) == Normalise(value.ToString("R", CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// The exact decimal value of a JSON number literal as (negative, significant digits, exponent), where the value
+    /// is <c>±digits × 10^exponent</c> and <c>digits</c> carries no leading or trailing zero. Zero normalises to
+    /// (false, "", 0), so <c>-0</c> and <c>0</c> compare equal.
+    /// </summary>
+    private static (bool Negative, string Digits, long Exponent) Normalise(ReadOnlySpan<char> literal)
+    {
+        var index = 0;
+        var negative = false;
+        if (index < literal.Length && literal[index] == '-')
+        {
+            negative = true;
+            index++;
+        }
+
+        var integerStart = index;
+        while (index < literal.Length && char.IsAsciiDigit(literal[index]))
+        {
+            index++;
+        }
+
+        var integer = literal[integerStart..index];
+        var fraction = ReadOnlySpan<char>.Empty;
+        var exponent = 0L;
+
+        if (index < literal.Length && literal[index] == '.')
+        {
+            index++;
+            var fractionStart = index;
+            while (index < literal.Length && char.IsAsciiDigit(literal[index]))
+            {
+                index++;
+            }
+
+            fraction = literal[fractionStart..index];
+            exponent = -fraction.Length;
+        }
+
+        if (index < literal.Length && (literal[index] == 'e' || literal[index] == 'E'))
+        {
+            index++;
+            var exponentNegative = false;
+            if (index < literal.Length && (literal[index] == '+' || literal[index] == '-'))
+            {
+                exponentNegative = literal[index] == '-';
+                index++;
+            }
+
+            var magnitude = 0L;
+            while (index < literal.Length && char.IsAsciiDigit(literal[index]))
+            {
+                magnitude = Math.Min((magnitude * 10) + (literal[index] - '0'), 1_000_000_000L);
+                index++;
+            }
+
+            exponent += exponentNegative ? -magnitude : magnitude;
+        }
+
+        var digits = string.Concat(integer, fraction);
+        var start = 0;
+        while (start < digits.Length && digits[start] == '0')
+        {
+            start++;
+        }
+
+        var end = digits.Length;
+        while (end > start && digits[end - 1] == '0')
+        {
+            end--;
+            exponent++;
+        }
+
+        return start == end ? (false, string.Empty, 0L) : (negative, digits[start..end], exponent);
+    }
 }

@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Policy.Application;
@@ -52,23 +53,24 @@ public sealed class PolicyRevisionImmutabilityTests
     private static string Body(string marker) => $"{{\"marker\":\"{marker}\"}}";
 
     /// <summary>One append through the real store inside its own tenant scope and transaction.</summary>
-    private static async Task<PolicyRevisionAppend> AppendAsync(World world, string hash, string body)
+    private static async Task<PolicyRevisionAppend> AppendAsync(World world, string body)
     {
-        var outcome = await AppendOutcomeAsync(world, hash, body);
+        var outcome = await AppendOutcomeAsync(world, body);
         outcome.IsSuccess.ShouldBeTrue();
+        outcome.Value.Hash.ShouldBe(CanonicalHash.Compute(body));
 
         return outcome.Value;
     }
 
     /// <summary>The raw outcome of one append, for the cases that expect a typed failure.</summary>
-    private static async Task<Result<PolicyRevisionAppend>> AppendOutcomeAsync(World world, string hash, string body)
+    private static async Task<Result<PolicyRevisionAppend>> AppendOutcomeAsync(World world, string body)
     {
         await using var services = world.Api.Services.CreateAsyncScope();
         var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
         await using var scope = await scopes.BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
         var store = services.ServiceProvider.GetRequiredService<PolicyRevisionStore>();
 
-        var appended = await store.AppendAsync(world.Project, body, hash, world.User, TestContext.Current.CancellationToken);
+        var appended = await store.AppendAsync(world.Project, body, world.User, TestContext.Current.CancellationToken);
         await scope.CommitAsync(TestContext.Current.CancellationToken);
 
         return appended;
@@ -100,7 +102,7 @@ public sealed class PolicyRevisionImmutabilityTests
     public async Task AppRole_CannotUpdateOrDelete_AtTheDatabase()
     {
         await using var world = await StartAsync();
-        await AppendAsync(world, Hash('a'), Body("a"));
+        await AppendAsync(world, Body("a"));
 
         foreach (var statement in new[]
         {
@@ -120,7 +122,7 @@ public sealed class PolicyRevisionImmutabilityTests
     public async Task OwnerRole_Trigger_RefusesDeleteAndBodyChange_AndRetiredToActive_ButAllowsDraftToActive()
     {
         await using var world = await StartAsync();
-        var appended = await AppendAsync(world, Hash('a'), Body("a"));
+        var appended = await AppendAsync(world, Body("a"));
 
         (await OwnerErrorAsync(world, "delete from public.policy_revision"))
             .MessageText.ShouldContain("revision_immutable");
@@ -154,7 +156,7 @@ public sealed class PolicyRevisionImmutabilityTests
     public async Task Trigger_BumpsVersionOnATransition_IgnoringACallerSuppliedVersion()
     {
         await using var world = await StartAsync();
-        var appended = await AppendAsync(world, Hash('a'), Body("a"));
+        var appended = await AppendAsync(world, Body("a"));
 
         // A transition overwrites whatever version the caller sent: the database owns the increment (00 §7).
         await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
@@ -170,9 +172,9 @@ public sealed class PolicyRevisionImmutabilityTests
     {
         await using var world = await StartAsync();
 
-        var first = await AppendAsync(world, Hash('a'), Body("a"));
-        var again = await AppendAsync(world, Hash('a'), Body("a"));
-        var other = await AppendAsync(world, Hash('b'), Body("b"));
+        var first = await AppendAsync(world, Body("a"));
+        var again = await AppendAsync(world, Body("a"));
+        var other = await AppendAsync(world, Body("b"));
 
         first.Created.ShouldBeTrue();
         first.RevisionNo.ShouldBe(1);
@@ -189,7 +191,7 @@ public sealed class PolicyRevisionImmutabilityTests
     {
         await using var world = await StartAsync();
 
-        var unknown = await AppendOutcomeAsync(world with { Project = Guid.CreateVersion7() }, Hash('a'), Body("a"));
+        var unknown = await AppendOutcomeAsync(world with { Project = Guid.CreateVersion7() }, Body("a"));
         unknown.IsSuccess.ShouldBeFalse();
         unknown.Error!.Status.ShouldBe(404);
 
@@ -199,7 +201,7 @@ public sealed class PolicyRevisionImmutabilityTests
             await owner.CommitAsync();
         }
 
-        var deleted = await AppendOutcomeAsync(world, Hash('b'), Body("b"));
+        var deleted = await AppendOutcomeAsync(world, Body("b"));
         deleted.IsSuccess.ShouldBeFalse();
         deleted.Error!.Status.ShouldBe(404);
 
@@ -212,7 +214,7 @@ public sealed class PolicyRevisionImmutabilityTests
     public async Task ASessionWithNoOrg_ReadsZeroRows_NotAnError()
     {
         await using var world = await StartAsync();
-        await AppendAsync(world, Hash('a'), Body("a"));
+        await AppendAsync(world, Body("a"));
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database));
 
@@ -226,7 +228,7 @@ public sealed class PolicyRevisionImmutabilityTests
     public async Task AnotherOrg_CannotSeeTheRevision()
     {
         await using var world = await StartAsync();
-        await AppendAsync(world, Hash('a'), Body("a"));
+        await AppendAsync(world, Body("a"));
 
         await using var scope = await TenantScope.BeginAsync(
             _fixture.AppConnectionString(world.Database),
@@ -299,10 +301,10 @@ public sealed class PolicyRevisionImmutabilityTests
     public async Task UniqueKeys_RefuseDuplicateHashAndDuplicateRevisionNo()
     {
         await using var world = await StartAsync();
-        await AppendAsync(world, Hash('a'), Body("a"));
+        var appended = await AppendAsync(world, Body("a"));
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        (await scope.CaptureErrorAsync(InsertSql(world.Org, world.Project, 2, Hash('a')))).SqlState.ShouldBe("23505");
+        (await scope.CaptureErrorAsync(InsertSql(world.Org, world.Project, 2, appended.Hash))).SqlState.ShouldBe("23505");
 
         await using var scope2 = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
         (await scope2.CaptureErrorAsync(InsertSql(world.Org, world.Project, 1, Hash('b')))).SqlState.ShouldBe("23505");
@@ -312,7 +314,7 @@ public sealed class PolicyRevisionImmutabilityTests
     public async Task Trigger_RefusesIdentityChanges_VersionOnlyBump_AndDraftToRetired()
     {
         await using var world = await StartAsync();
-        var appended = await AppendAsync(world, Hash('a'), Body("a"));
+        var appended = await AppendAsync(world, Body("a"));
         var where = $"where id = '{appended.Id}'";
 
         foreach (var set in new[]
@@ -336,13 +338,13 @@ public sealed class PolicyRevisionImmutabilityTests
     }
 
     [Fact]
-    public async Task Store_RejectsMalformedHashAndNonObjectBody_BeforeAnyStatement()
+    public async Task Store_RejectsANonCanonicalisableOrNonObjectBody_BeforeAnyStatement()
     {
         await using var world = await StartAsync();
 
-        await Should.ThrowAsync<ArgumentException>(() => AppendAsync(world, "sha256:ABC", Body("a")));
-        await Should.ThrowAsync<ArgumentException>(() => AppendAsync(world, Hash('a'), "[1]"));
-        await Should.ThrowAsync<ArgumentException>(() => AppendAsync(world, Hash('a'), "not json"));
+        await Should.ThrowAsync<ArgumentException>(() => AppendAsync(world, "[1]"));
+        await Should.ThrowAsync<ArgumentException>(() => AppendAsync(world, "not json"));
+        await Should.ThrowAsync<ArgumentException>(() => AppendAsync(world, "{\"a\":1,\"a\":2}"));
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision")).ShouldBe(0);
     }
 
@@ -351,14 +353,14 @@ public sealed class PolicyRevisionImmutabilityTests
     {
         await using var world = await StartAsync();
 
-        var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => AppendAsync(world, Hash('e'), Body("e"))));
+        var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => AppendAsync(world, Body("e"))));
 
         results.Count(r => r.Created).ShouldBe(1);
         results.Select(r => r.Id).Distinct().Count().ShouldBe(1);
-        (await AppendAsync(world, Hash('f'), Body("f"))).RevisionNo.ShouldBe(2);
+        (await AppendAsync(world, Body("f"))).RevisionNo.ShouldBe(2);
 
         var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "second");
-        var inOther = await AppendAsync(world with { Project = otherProject }, Hash('e'), Body("e"));
+        var inOther = await AppendAsync(world with { Project = otherProject }, Body("e"));
         inOther.Created.ShouldBeTrue();
         inOther.RevisionNo.ShouldBe(1);
     }
@@ -370,7 +372,7 @@ public sealed class PolicyRevisionImmutabilityTests
 
         // All six transactions start before any is awaited, so their project-row locks overlap.
         var results = await Task.WhenAll(
-            Enumerable.Range(0, 6).Select(i => AppendAsync(world, Hash((char)('a' + i)), Body($"m{i}"))));
+            Enumerable.Range(0, 6).Select(i => AppendAsync(world, Body($"m{i}"))));
 
         results.ShouldAllBe(r => r.Created);
         results.Select(r => r.RevisionNo).OrderBy(no => no).ShouldBe(Enumerable.Range(1, 6));

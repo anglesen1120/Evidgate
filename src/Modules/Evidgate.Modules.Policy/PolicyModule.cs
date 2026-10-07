@@ -23,6 +23,9 @@ internal static class PolicyModule
         // 07.1.1-T1: the append-only revision store 07.1.1-T3's command writes through.
         services.TryAddScoped<PolicyRevisionStore>();
 
+        // 07.1.1-T2: the sole producer of policy_revision.hash (finding T1-SEC-S2).
+        services.TryAddSingleton<IPolicyHasher, PolicyHasher>();
+
         return services;
     }
 }
