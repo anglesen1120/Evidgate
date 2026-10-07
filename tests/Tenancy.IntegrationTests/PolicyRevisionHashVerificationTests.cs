@@ -199,4 +199,79 @@ public sealed class PolicyRevisionHashVerificationTests
         result.Value.Body.ShouldNotBe(body);
         result.Value.Hash.ShouldBe(CanonicalHash.Compute(body));
     }
+
+    [Theory]
+    [InlineData("{\"a\":1.0}", "{\"a\":1}")]
+    [InlineData("{\"a\":1e2}", "{\"a\":100}")]
+    [InlineData("{\"a\":-0}", "{\"a\":0}")]
+    [InlineData("{\"a\":1e-7}", "{\"a\":0.0000001}")]
+    [InlineData("{\"a\":\"\\u00e9\"}", "{\"a\":\"é\"}")]
+    [InlineData("{\"a\":\"\\ud834\\udd1e\"}", "{\"a\":\"𝄞\"}")]
+    public async Task EquivalentNumbersAndUnicode_StoredByJsonb_StillVerify(string body, string equivalent)
+    {
+        await using var world = await StartAsync();
+        var id = await InsertAsync(world, body);
+
+        var result = await ReadAsync(world, id);
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Hash.ShouldBe(CanonicalHash.Compute(equivalent));
+        new PolicyHasher().Hash(body).ShouldBe(new PolicyHasher().Hash(equivalent));
+    }
+
+    [Fact]
+    public async Task NonCanonicalisableStoredBody_WrapsTheCauseAsCorruption()
+    {
+        await using var world = await StartAsync();
+        var body = "{\"marker\":\"a\"}";
+        var id = await InsertAsync(world, body);
+        // jsonb accepts this numeric value, but it is outside RFC 8785's finite-double range.
+        await MutateAsync(world, id, "body = @value::jsonb", "{\"a\":1e400}");
+
+        var exception = await Should.ThrowAsync<PolicyRevisionCorruptedException>(() => ReadAsync(world, id));
+
+        exception.RevisionId.ShouldBe(id);
+        exception.StoredHash.ShouldBe(CanonicalHash.Compute(body));
+        exception.RecomputedHash.ShouldBeNull();
+        exception.InnerException.ShouldBeOfType<JsonCanonicalizationException>();
+    }
+
+    [Fact]
+    public async Task Store_CanonicalEquivalentBody_ReturnsTheSameRow_AndReadsWithItsComputedHash()
+    {
+        await using var world = await StartAsync();
+        var bodies = new[] { "{\"z\":1.0,\"a\":\"\\u00e9\"}", " { \"a\" : \"é\", \"z\" : 1 } " };
+        PolicyRevisionAppend? first = null;
+        foreach (var body in bodies)
+        {
+            await using var services = world.Api.Services.CreateAsyncScope();
+            var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
+            await using var scope = await scopes.BeginAsync(world.Org, world.Project, false, TestContext.Current.CancellationToken);
+            var store = services.ServiceProvider.GetRequiredService<PolicyRevisionStore>();
+
+            var appended = await store.AppendAsync(world.Project, body, world.User, TestContext.Current.CancellationToken);
+
+            appended.IsSuccess.ShouldBeTrue();
+            appended.Value.Hash.ShouldBe(CanonicalHash.Compute(bodies[0]));
+            appended.Value.RevisionNo.ShouldBe(1);
+            if (first is null)
+            {
+                appended.Value.Created.ShouldBeTrue();
+                first = appended.Value;
+            }
+            else
+            {
+                appended.Value.Created.ShouldBeFalse();
+                appended.Value.Id.ShouldBe(first.Id);
+                appended.Value.Hash.ShouldBe(first.Hash);
+            }
+
+            await scope.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision")).ShouldBe(1);
+        var read = await ReadAsync(world, first!.Id);
+        read.IsSuccess.ShouldBeTrue();
+        read.Value.Hash.ShouldBe(first.Hash);
+    }
 }
