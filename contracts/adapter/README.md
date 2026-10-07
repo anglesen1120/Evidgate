@@ -85,7 +85,10 @@ Errors use the 00 §9.2 envelope with `retryable: false`:
 | `capability_conflict`        | 409    | the natural key tuple conflicts with a stored row that differs in `engine_family`/`platforms`/`supports`/`mode` |
 
 The executable form of the table above is 04.7.1-T3 (the compatibility matrix
-test); a behaviour change here fails that test, not this document.
+test): the shared corpus `fixtures/contracts/protocol-matrix/negotiation.v1.json`
+is run by both `tests/Tenancy.IntegrationTests/ProtocolCompatibilityMatrixTests.cs`
+(.NET) and `packages/test-fixtures/src/protocolMatrix.test.ts` (TypeScript), so a
+behaviour change here fails both suites, not this document.
 
 ## Addressing another schema file (`$ref`)
 

@@ -6,7 +6,7 @@ Three directories hold vectors asserted by more than one runtime, which is why t
 
 - `canonical/` — the Evidgate golden documents (manifest, policy, candidate, evidence) with their canonical text and `sha256:<hex>` digest inline (01.3.2-T4.2, AC5);
 - `rfc8785/` — the RFC 8785 reference input/output pairs published with cyberphone/json-canonicalization (Apache-2.0, see its README) (01.3.2-T4.1, AC5). Both `tests/Canonicalization.UnitTests` and `packages/cli/src/canonical.test.ts` read them; `.prettierignore` keeps the pairs byte-exact.
-- `contracts/` — the Corvus↔Ajv validator parity corpus (01.3.2-T2): `vectors/<schema-key>/` with `*.verdict.json` sidecars plus `divergence/` regressions. It has its own format (see `fixtures/contracts/README.md`) and is _not_ a `<domain>/<name>/` fixture corpus — both loaders skip it because those directories carry neither `meta.json` nor an `input.*` file.
+- `contracts/` — the Corvus↔Ajv validator parity corpus (01.3.2-T2): `vectors/<schema-key>/` with `*.verdict.json` sidecars plus `divergence/` regressions, and `protocol-matrix/negotiation.v1.json`, the shared negotiation compatibility matrix of 04.7.1-T3 (AC6, T42). It has its own format (see `fixtures/contracts/README.md`) and is _not_ a `<domain>/<name>/` fixture corpus — both loaders skip it because those directories carry neither `meta.json` nor an `input.*` file.
 
 ## `<domain>/<name>/` fixture corpus (01.6.1-T3)
 
