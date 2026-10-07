@@ -270,6 +270,9 @@ describe.each(corpus.rows)('$id', (row) => {
         }
         break;
       }
+      default:
+        // A verdict the corpus contract does not define must fail, never pass silently.
+        expect.unreachable(`${row.id}: unknown expected verdict ${JSON.stringify(row.expected)}`);
     }
   });
 });
@@ -298,6 +301,20 @@ describe('corpus shape and grid coverage (AC6)', () => {
           ? ['adapter', 'expected', 'id', 'kind', 'server', 'why']
           : ['document', 'expected', 'id', 'kind', 'server', 'why'],
       );
+
+      // `expected` carries exactly the members of its verdict, as in the .NET reader.
+      const expectedMembers = Object.keys(row.expected).sort(ordinal);
+      const verdictMembers =
+        row.expected.verdict === 'accepted'
+          ? ['minor', 'unknown_supports_flags', 'verdict']
+          : row.expected.verdict === 'rejected' && row.expected.code === 'capability_invalid'
+            ? ['code', 'paths', 'verdict']
+            : row.expected.verdict === 'rejected' &&
+                row.expected.code === 'unsupported_protocol_major'
+              ? ['code', 'details', 'verdict']
+              : null;
+      expect(verdictMembers, `${row.id}: unknown expected verdict/code`).not.toBeNull();
+      expect(expectedMembers, `${row.id}: expected members`).toEqual(verdictMembers);
     }
 
     // Every combination of the four declared axes appears exactly once.
