@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Policy.Application;
 using Evidgate.Modules.Policy.Domain;
 using Evidgate.Modules.Policy.Infrastructure.Persistence;
@@ -52,6 +53,15 @@ public sealed class PolicyRevisionImmutabilityTests
 
     /// <summary>One append through the real store inside its own tenant scope and transaction.</summary>
     private static async Task<PolicyRevisionAppend> AppendAsync(World world, string hash, string body)
+    {
+        var outcome = await AppendOutcomeAsync(world, hash, body);
+        outcome.IsSuccess.ShouldBeTrue();
+
+        return outcome.Value;
+    }
+
+    /// <summary>The raw outcome of one append, for the cases that expect a typed failure.</summary>
+    private static async Task<Result<PolicyRevisionAppend>> AppendOutcomeAsync(World world, string hash, string body)
     {
         await using var services = world.Api.Services.CreateAsyncScope();
         var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
@@ -119,23 +129,38 @@ public sealed class PolicyRevisionImmutabilityTests
         (await OwnerErrorAsync(world, $"update public.policy_revision set hash = '{Hash('b')}' where id = '{appended.Id}'"))
             .SqlState.ShouldBe("23514");
 
-        // draft -> active is the 07.1.1-T4 path and must stay open.
+        // draft -> active is the 07.1.1-T4 path and must stay open; the trigger bumps version (00 §7).
         await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
         {
             (await owner.ExecuteAsync($"update public.policy_revision set state = 'active' where id = '{appended.Id}'")).ShouldBe(1);
             (await owner.ScalarAsync<string>($"select state from public.policy_revision where id = '{appended.Id}'")).ShouldBe("active");
+            (await owner.ScalarAsync<int>($"select version from public.policy_revision where id = '{appended.Id}'")).ShouldBe(2);
             await owner.CommitAsync();
         }
 
-        // active -> retired is the other legal move.
+        // active -> retired is the other legal move; version moves to 3.
         await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
         {
             (await owner.ExecuteAsync($"update public.policy_revision set state = 'retired' where id = '{appended.Id}'")).ShouldBe(1);
+            (await owner.ScalarAsync<int>($"select version from public.policy_revision where id = '{appended.Id}'")).ShouldBe(3);
             await owner.CommitAsync();
         }
 
         (await OwnerErrorAsync(world, $"update public.policy_revision set state = 'active' where id = '{appended.Id}'"))
             .SqlState.ShouldBe("23514");
+    }
+
+    [Fact]
+    public async Task Trigger_BumpsVersionOnATransition_IgnoringACallerSuppliedVersion()
+    {
+        await using var world = await StartAsync();
+        var appended = await AppendAsync(world, Hash('a'), Body("a"));
+
+        // A transition overwrites whatever version the caller sent: the database owns the increment (00 §7).
+        await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
+        (await owner.ExecuteAsync($"update public.policy_revision set state = 'active', version = 99 where id = '{appended.Id}'")).ShouldBe(1);
+        (await owner.ScalarAsync<int>($"select version from public.policy_revision where id = '{appended.Id}'")).ShouldBe(2);
+        await owner.CommitAsync();
     }
 
     // ------------------------------------------------------------------ (d) store contract
@@ -157,6 +182,28 @@ public sealed class PolicyRevisionImmutabilityTests
         other.Created.ShouldBeTrue();
         other.RevisionNo.ShouldBe(2);
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision")).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Store_UnknownOrSoftDeletedProject_IsNotFound_AndWritesNoRow()
+    {
+        await using var world = await StartAsync();
+
+        var unknown = await AppendOutcomeAsync(world with { Project = Guid.CreateVersion7() }, Hash('a'), Body("a"));
+        unknown.IsSuccess.ShouldBeFalse();
+        unknown.Error!.Status.ShouldBe(404);
+
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            (await owner.ExecuteAsync($"update public.project set status = 'deleted' where id = '{world.Project}'")).ShouldBe(1);
+            await owner.CommitAsync();
+        }
+
+        var deleted = await AppendOutcomeAsync(world, Hash('b'), Body("b"));
+        deleted.IsSuccess.ShouldBeFalse();
+        deleted.Error!.Status.ShouldBe(404);
+
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ (e) no tenant context
@@ -314,6 +361,20 @@ public sealed class PolicyRevisionImmutabilityTests
         var inOther = await AppendAsync(world with { Project = otherProject }, Hash('e'), Body("e"));
         inOther.Created.ShouldBeTrue();
         inOther.RevisionNo.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Store_ConcurrentDistinctHashAppends_NumberExactlyOnceEach()
+    {
+        await using var world = await StartAsync();
+
+        // All six transactions start before any is awaited, so their project-row locks overlap.
+        var results = await Task.WhenAll(
+            Enumerable.Range(0, 6).Select(i => AppendAsync(world, Hash((char)('a' + i)), Body($"m{i}"))));
+
+        results.ShouldAllBe(r => r.Created);
+        results.Select(r => r.RevisionNo).OrderBy(no => no).ShouldBe(Enumerable.Range(1, 6));
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision")).ShouldBe(6);
     }
 
     // ------------------------------------------------------------------ the EF write model

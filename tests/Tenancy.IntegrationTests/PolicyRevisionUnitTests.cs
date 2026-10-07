@@ -7,8 +7,8 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// 07.1.1-T1.2 without a database: the store refuses a malformed hash and a non-object body before it demands a
-/// tenant scope, so a malformed append never reaches a statement.
+/// 07.1.1-T1.2 without a database: the store refuses a malformed hash and a body that is not a storable JSON object
+/// before it demands a tenant scope, so a malformed append never reaches a statement.
 /// </summary>
 public sealed class PolicyRevisionUnitTests
 {
@@ -27,6 +27,9 @@ public sealed class PolicyRevisionUnitTests
             "sha256:" + new string('a', 63),
             "sha256:" + new string('a', 65),
             new string('a', 64),
+            // $ would accept these; \z and the Postgres CHECK do not (07.1.1-T1 review C4).
+            "sha256:" + new string('a', 64) + "\n",
+            "sha256:" + new string('a', 64) + "\r\n",
         ];
 
         foreach (var hash in malformed)
@@ -44,9 +47,21 @@ public sealed class PolicyRevisionUnitTests
     }
 
     [Fact]
-    public async Task Append_RejectsANonObjectBody_WithoutTouchingTheDatabase()
+    public async Task Append_RejectsANonObjectOrUnstorableBody_WithoutTouchingTheDatabase()
     {
-        string[] malformed = [string.Empty, "not json", "[]", "\"text\"", "42", "null"];
+        string[] malformed =
+        [
+            string.Empty,
+            "not json",
+            "[]",
+            "\"text\"",
+            "42",
+            "null",
+            // jsonb refuses U+0000 and unpaired surrogates, so the pre-DB check must too (07.1.1-T1 review C5).
+            "{\"a\":\"\\u0000\"}",
+            "{\"a\":\"\\ud800\"}",
+            "{\"\\u0000\":\"x\"}",
+        ];
 
         foreach (var body in malformed)
         {

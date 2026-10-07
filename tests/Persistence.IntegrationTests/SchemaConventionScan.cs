@@ -86,7 +86,7 @@ internal static class SchemaConventionScan
         new SchemaExemption(
             "public.policy_revision",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
-            "Append-only policy revisions (07.1.1-T1.1; migration 0025): the trigger and the revoked grants refuse UPDATE/DELETE except the §6 draft -> active -> retired move, so it keeps created_at only — no updated_at, and its `version` moves through the lifecycle trigger of 0025, never the shared `set_updated_at_and_version`. Its tenant key, composite FK and RLS are NOT exempt."),
+            "Append-only policy revisions (07.1.1-T1.1; migration 0025): the trigger and the revoked grants refuse UPDATE/DELETE except the §6 draft -> active -> retired move, so it keeps created_at only — no updated_at, and its `version` is bumped by the 0025 lifecycle trigger on a state transition, never the shared `set_updated_at_and_version`. Its tenant key, composite FK and RLS are NOT exempt."),
         new SchemaExemption(
             "public.rls_probe",
             SchemaRule.VersionTrigger,

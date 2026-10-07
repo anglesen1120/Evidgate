@@ -9,7 +9,9 @@
 -- Immutability is defence in depth: the app role holds SELECT, INSERT only (no UPDATE/DELETE, C6), and the
 -- trigger below refuses DELETE and any UPDATE that touches a column other than `state`/`version`. `state` moves
 -- only draft -> active -> retired (07.1.1-T4, §6); `body` and `hash` never change, so a stored revision stays
--- byte-identical to the hash it was written under.
+-- byte-identical to the hash it was written under. The database owns the `version` increment (00 §7): a state
+-- transition sets `version = old.version + 1`, overwriting whatever the caller sent, so the optimistic-concurrency
+-- token advances with the lifecycle and a version-only UPDATE is refused.
 --
 -- `created_by` is the member id that wrote the revision; it carries no foreign key (a member row can be removed
 -- while the revision stays, and the id is an audit fact) — recorded open item on the feature plan.
@@ -42,10 +44,12 @@ create table if not exists public.policy_revision (
 );
 
 -- Append-only: the trigger refuses DELETE and any UPDATE beyond the §6 lifecycle, whoever issues it; the grants
--- say the same to the app role. `state` may move only draft -> active -> retired, and `version` moves only with
--- such a transition; a same-state UPDATE is allowed only as a no-op.
+-- say the same to the app role. `state` may move only draft -> active -> retired, and the database owns the
+-- `version` increment (00 §7): a transition sets `version = old.version + 1`, overwriting whatever the caller
+-- sent, while a same-state UPDATE that changes `version` is refused.
 create or replace function evidgate.policy_revision_immutable() returns trigger
   language plpgsql
+  set search_path = ''
   as $$
   begin
     if tg_op = 'DELETE' then
@@ -72,6 +76,9 @@ create or replace function evidgate.policy_revision_immutable() returns trigger
           old.state, new.state
           using errcode = '23514';
       end if;
+
+      -- The database owns the increment (00 §7): a transition bumps `version`, whatever the caller sent.
+      new.version := old.version + 1;
     elsif new.version is distinct from old.version then
       raise exception 'revision_immutable: version moves only with a state transition (UPDATE)'
         using errcode = '23514';
