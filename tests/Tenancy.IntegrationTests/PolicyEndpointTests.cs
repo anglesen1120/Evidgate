@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -82,7 +83,9 @@ public sealed class PolicyEndpointTests
         string url,
         Action<HttpRequestHeaders> caller,
         string raw,
-        string? ifMatch = null)
+        string? ifMatch = null,
+        string contentType = "application/json",
+        bool chunked = false)
     {
         using var request = new HttpRequestMessage(method, url);
         caller(request.Headers);
@@ -92,7 +95,13 @@ public sealed class PolicyEndpointTests
             request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
         }
 
-        request.Content = new StringContent(raw, Encoding.UTF8, "application/json");
+        if (chunked)
+        {
+            // No Content-Length: the endpoint must cap the streamed body itself (ReadBodyAsync).
+            request.Headers.TransferEncodingChunked = true;
+        }
+
+        request.Content = new StringContent(raw, Encoding.UTF8, contentType);
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var document = JsonDocument.Parse(string.IsNullOrEmpty(text) ? "{}" : text);
@@ -451,5 +460,197 @@ public sealed class PolicyEndpointTests
         var plan = (string)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
         plan.ShouldContain("policy_revision_revision_no_key");
         plan.ShouldNotContain("Seq Scan");
+    }
+
+    // ------------------------------------------------------------------ transport cap (00 §8.6, s9-plan)
+
+    /// <summary>
+    /// The 64 KiB transport cap: a body of exactly <c>MaxPolicyBytes</c> is read and stored, one byte more is
+    /// refused <c>413</c> before parsing, and the streamed (no <c>Content-Length</c>) path caps the same way.
+    /// </summary>
+    [Fact]
+    public async Task CreatePolicyRevision_BodyAtTheCap_IsAccepted_OneByteOver_Is413()
+    {
+        await using var world = await StartAsync();
+
+        var atCap = CapBody();
+        atCap.Length.ShouldBe(64 * 1024);
+
+        var accepted = await CreateAsync(world, atCap);
+        accepted.Status.ShouldBe(HttpStatusCode.Created, accepted.ErrorMessage);
+        (await RevisionCountAsync(world)).ShouldBe(1);
+
+        var overCap = await CreateAsync(world, atCap + " ");
+        overCap.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
+        overCap.ErrorCode.ShouldBe("payload_too_large");
+
+        // The same one-byte-over body with no Content-Length: the endpoint must cap the stream it reads.
+        var streamed = await SendRawAsync(
+            world.Client, HttpMethod.Post, $"/v1/projects/{world.Project}/policies", world.Admin, atCap + " ", chunked: true);
+        streamed.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
+        streamed.ErrorCode.ShouldBe("payload_too_large");
+
+        (await RevisionCountAsync(world)).ShouldBe(1);
+    }
+
+    /// <summary>A schema-valid <c>policy-revision.v1</c> body of exactly 64 KiB (all-ASCII, so chars are bytes).</summary>
+    private static string CapBody()
+    {
+        var items = new List<string>();
+        for (var i = 0; i < 322; i++)
+        {
+            items.Add(i.ToString("D3", CultureInfo.InvariantCulture) + new string('a', 197));
+        }
+
+        items.Add("zzz" + new string('b', 143));
+
+        return "{\"required_suites\":[" + string.Join(",", items.Select(item => "\"" + item + "\"")) + "]}";
+    }
+
+    // ------------------------------------------------------------------ malformed bodies
+
+    /// <summary>An empty body and a non-object root are <c>422 policy_invalid</c>, never a 500 and never a row.</summary>
+    [Fact]
+    public async Task CreatePolicyRevision_EmptyBody_AndArrayRoot_Are422()
+    {
+        await using var world = await StartAsync();
+
+        var empty = await CreateAsync(world, string.Empty);
+        empty.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        empty.ErrorCode.ShouldBe("policy_invalid");
+        Detail(empty).GetProperty("reason").GetString().ShouldBe("invalid_json");
+
+        var array = await CreateAsync(world, "[1,2]");
+        array.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        array.ErrorCode.ShouldBe("policy_invalid");
+
+        (await RevisionCountAsync(world)).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A lone UTF-16 surrogate, a duplicate member name and numbers a double cannot hold exactly are all
+    /// <c>422 policy_invalid</c> before any statement (I-JSON, RFC 7493 §2.2; RFC 8785 §3.2.3).
+    /// </summary>
+    [Fact]
+    public async Task CreatePolicyRevision_LoneSurrogate_DuplicateKeys_AndInexactNumbers_Are422()
+    {
+        await using var world = await StartAsync();
+
+        var surrogate = await CreateAsync(world, """{"required_suites":["\ud800"]}""");
+        surrogate.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        surrogate.ErrorCode.ShouldBe("policy_invalid");
+        Detail(surrogate).GetProperty("reason").GetString().ShouldBe("invalid_value");
+
+        var duplicate = await CreateAsync(world, """{"flaky_budget":3,"flaky_budget":4}""");
+        duplicate.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        duplicate.ErrorCode.ShouldBe("policy_invalid");
+
+        foreach (var body in new[]
+        {
+            """{"flaky_budget":1e400}""",
+            """{"flaky_budget":0.1000000000000000001}""",
+            """{"flaky_budget":9007199254740993}""",
+        })
+        {
+            var inexact = await CreateAsync(world, body);
+            inexact.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, $"{body}: {inexact.ErrorMessage}");
+            inexact.ErrorCode.ShouldBe("policy_invalid");
+        }
+
+        (await RevisionCountAsync(world)).ShouldBe(0);
+    }
+
+    /// <summary>The media type is not part of the contract (00 §9.2 has no 415): the raw body is read regardless.</summary>
+    [Fact]
+    public async Task CreatePolicyRevision_WrongContentType_StillReadsTheRawBody()
+    {
+        await using var world = await StartAsync();
+
+        var answer = await SendRawAsync(
+            world.Client, HttpMethod.Post, $"/v1/projects/{world.Project}/policies", world.Admin, BodyA, contentType: "text/plain");
+
+        answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
+        (await RevisionCountAsync(world)).ShouldBe(1);
+    }
+
+    // ------------------------------------------------------------------ If-Match
+
+    /// <summary>A malformed <c>If-Match</c>, and one naming a head when no revision exists, are both 412.</summary>
+    [Fact]
+    public async Task CreatePolicyRevision_MalformedIfMatch_AndIfMatchOnTheFirstRevision_Are412()
+    {
+        await using var world = await StartAsync();
+
+        var malformed = await CreateAsync(world, BodyA, ifMatch: "not-a-revision-id");
+        malformed.Status.ShouldBe(HttpStatusCode.PreconditionFailed);
+        malformed.ErrorCode.ShouldBe("precondition_failed");
+        Detail(malformed).GetProperty("reason").GetString().ShouldBe("invalid");
+
+        // No revision exists yet, so any cached head is stale: 412, nothing written.
+        var first = await CreateAsync(world, BodyA, ifMatch: $"\"{Guid.CreateVersion7()}\"");
+        first.Status.ShouldBe(HttpStatusCode.PreconditionFailed);
+        first.ErrorCode.ShouldBe("precondition_failed");
+        Detail(first).GetProperty("reason").GetString().ShouldBe("stale");
+        (await RevisionCountAsync(world)).ShouldBe(0);
+
+        // Without the header the same body is the first revision.
+        (await CreateAsync(world, BodyA)).Status.ShouldBe(HttpStatusCode.Created);
+        (await RevisionCountAsync(world)).ShouldBe(1);
+    }
+
+    // ------------------------------------------------------------------ list bounds
+
+    /// <summary>The <c>limit</c> bounds are inclusive (1..200) and a cursor this endpoint did not issue is 422.</summary>
+    [Fact]
+    public async Task ListPolicyRevisions_LimitBounds_AndCursorTampering_Are422()
+    {
+        await using var world = await StartAsync();
+        var created = await CreateAsync(world, BodyA);
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}/revisions?limit=1", world.Admin))
+            .Status.ShouldBe(HttpStatusCode.OK);
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}/revisions?limit=200", world.Admin))
+            .Status.ShouldBe(HttpStatusCode.OK);
+
+        foreach (var limit in new[] { "0", "201", "-1", "+1", "1.0", "abc" })
+        {
+            var answer = await world.Client.SendAsync(
+                HttpMethod.Get, $"/v1/policies/{created.Id()}/revisions?limit={Uri.EscapeDataString(limit)}", world.Admin);
+            answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, $"limit={limit}");
+        }
+
+        foreach (var cursor in new[]
+        {
+            "not-a-cursor",
+            $"00000000-{Guid.CreateVersion7():D}",
+            $"zzzzzzzz-{Guid.CreateVersion7():D}",
+            "00000001-not-a-uuid",
+        })
+        {
+            var answer = await world.Client.SendAsync(
+                HttpMethod.Get, $"/v1/policies/{created.Id()}/revisions?cursor={Uri.EscapeDataString(cursor)}", world.Admin);
+            answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, $"cursor={cursor}");
+        }
+    }
+
+    // ------------------------------------------------------------------ read permission
+
+    /// <summary>A credential that does not claim <c>policy:read</c> is refused 403 before the handler (C2 stage 4).</summary>
+    [Fact]
+    public async Task Read_WithoutPolicyRead_Is403()
+    {
+        await using var world = await StartAsync();
+        var created = await CreateAsync(world, BodyA);
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+
+        var ci = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: world.Project, servicePermissions: ["run:create"]);
+
+        var one = await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}", ci);
+        one.Status.ShouldBe(HttpStatusCode.Forbidden);
+        one.ErrorCode.ShouldBe("forbidden");
+
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}/revisions", ci))
+            .Status.ShouldBe(HttpStatusCode.Forbidden);
     }
 }
