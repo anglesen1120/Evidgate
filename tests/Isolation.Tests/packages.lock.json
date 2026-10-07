@@ -2,6 +2,16 @@
   "version": 2,
   "dependencies": {
     "net10.0": {
+      "Microsoft.AspNetCore.Mvc.Testing": {
+        "type": "Direct",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "OtjgnL8RRLQYaiuS3KzbBbyQ6am1ZrX3dvBdiuXghxL+LQinmT2vMumytveYPbnXLknZSk/aEDKENI6uf7NoNg==",
+        "dependencies": {
+          "Microsoft.AspNetCore.TestHost": "10.0.12",
+          "Microsoft.Extensions.DependencyModel": "10.0.12"
+        }
+      },
       "Microsoft.EntityFrameworkCore": {
         "type": "Direct",
         "requested": "[10.0.12, )",
@@ -113,6 +123,132 @@
         "resolved": "5.1.1",
         "contentHash": "rpYtIczkzGpf+EkZgDr9CClTdemhsrwA/W5hMoPjLkRFnXzH44zDLoovXeKtmxb1ykXK9aJVODSpiJml8CTw2g=="
       },
+      "CommunityToolkit.HighPerformance": {
+        "type": "Transitive",
+        "resolved": "8.3.0",
+        "contentHash": "2zc0Wfr9OtEbLqm6J1Jycim/nKmYv+v12CytJ3tZGNzw7n3yjh1vNCMX0kIBaFBk3sw8g0pMR86QJGXGlArC+A=="
+      },
+      "Corvus.HighPerformance": {
+        "type": "Transitive",
+        "resolved": "1.0.4",
+        "contentHash": "ZSGaQQA3TosSth7bJd/pqMr+LipUiqT1/c0gxli1tI9Rn3JyxHvobnkaBLT42Mwmc49J5HEIogCn+B0+ee4k2w=="
+      },
+      "Corvus.Json.CodeGeneration": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "2qM0MgWmoEIjM1fZSOH3VFw3JvcRL5MpFARYXol/xpYSBGNh9blisf2i+HGFOZYOdewn0KzIaE/WGSZF5fZWUQ==",
+        "dependencies": {
+          "Corvus.Json.JsonReference": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.201909": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "SWyt0C6uAG2I0UP4lM6Wtw+mTIxEm2r6qbn+zm0t/W8xkrzyZ32T8vSBBljDGrNnxisLHUgPBe4JuXKe21MGUg==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.202012": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "MtJqHLkmvcsdd/Dgm2RC2rWhQy+SF2F/L4Uxm+kR4twZAH+18Tol7eMOz9EXwPa4Bo4XjihR9NhnVhZNnBkW2A==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.4": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "T0QZIw3jENSJliD/Ap0rjwOzYrIJEoCq48wA1NlPDbMOprpdZyXZh6lOxx6q+MpvCVedg0u8ayFIIacR3QOKIg==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.6": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "SB1KBqXdhvLUwlGK28jtFj+mUR5ctG/DCB2HLTr6ssKzxerupBKppabhqLMsDfG53qTs+lxpyyYvQThqZepwTQ==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.7": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "SbDBo9OCYoju1ytDZ9WQXGUScuPtTMRL5Qow7GwbJ08Is5FU27ekn8E0btB/CvgkWJOXvWup/qrfPB/SMFhKdw==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.CorvusVocabulary": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "xmTOsHC9Mjo//XvXB1YGBfqMZQOZsO0yM1+nZpoLyd8f6H5vWvBSSm2FxtUU1NuOjf9Xw3z3BNtiRB6aP6XGyg==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.CSharp": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "BVBLkoV9tzRrL389qodxk+ITSs3KzNS6yfK3ll8cmldSLDO/mVYNJsLb6RQ/diJjxOO+xVsDGJDnqfgXJ1LF/Q==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1",
+          "Microsoft.CodeAnalysis.CSharp": "5.3.0"
+        }
+      },
+      "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "98+UcG6FIfNQzdh7wP45Yqr/k9s8JzlZoosZLtZHLCqZS6SiqgJGddHBUyz1gmusxc3CSWys5zbC8whBBfXu+Q==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.OpenApi20": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "g+CZ7hOEcSWQC3a8ohm3RmncrRa/lzofYhr1f72FVBd8RNhtUbNooNaPLJb7kHjLT20AZwS3klg7HsYFpLF8cg==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.CodeGeneration.OpenApi30": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "FBAuTm/R3TRuKbpogmVratg1a0o+tANM/CeTs5rnC6bZqalUisUYPdmgatB52b9TzyiSlj+1md3ZgSLdnZGyYw==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1"
+        }
+      },
+      "Corvus.Json.ExtendedTypes": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "0I1jJAva6RNDMd8FI5MbvddF7YenbvmLtbpHEBIywKYCscRVP6lo42/0y49KUTVQv7BD3hJcayTdOX236yK7Ew==",
+        "dependencies": {
+          "Corvus.Json.JsonReference": "5.6.1",
+          "Corvus.UriTemplates": "2.3.2",
+          "NodaTime": "3.3.1"
+        }
+      },
+      "Corvus.Json.JsonReference": {
+        "type": "Transitive",
+        "resolved": "5.6.1",
+        "contentHash": "mRWP8gkrePcdUBC244E5WQdTqJRAIrptCALQber4cmBOAo9vLal78/bPlgVJQT5wFfEARR0/MEwyneVBxQgcRQ==",
+        "dependencies": {
+          "Corvus.HighPerformance": "1.0.4"
+        }
+      },
+      "Corvus.UriTemplates": {
+        "type": "Transitive",
+        "resolved": "2.3.2",
+        "contentHash": "XAhHr0F6IOhunpIHFzG0HQSj+/X8L1lSJAExYQl9OEIZGAUZ81pbqWtxuIHL080y1u2dEmw796D7XmM44Je2gw==",
+        "dependencies": {
+          "CommunityToolkit.HighPerformance": "8.3.0",
+          "Corvus.HighPerformance": "1.0.0"
+        }
+      },
       "dbup-core": {
         "type": "Transitive",
         "resolved": "6.1.1",
@@ -194,10 +330,42 @@
         "resolved": "2.23.0",
         "contentHash": "nWArUZTdU7iqZLycLKWe0TDms48KKGE6pONH2terYNa8REXiqixrMOkf1sk5DHGMaUTqONU2YkS4SAXBhLStgw=="
       },
+      "Microsoft.AspNetCore.TestHost": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "bTHgbcjSrLxlqSasYRDU9BcJ3hDGoqIjtDY0soLNrndOWi3kxtOyddwUMaNZgtoI2Uf6y7ZQs2EuVj0c20B7mA=="
+      },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
         "resolved": "6.0.0",
         "contentHash": "UcSjPsst+DfAdJGVDsu346FX0ci0ah+lw3WRtn18NUwEqRt70HaOQ7lI72vy3+1LxtqI3T5GWwV39rQSrCzAeg=="
+      },
+      "Microsoft.Bcl.Cryptography": {
+        "type": "Transitive",
+        "resolved": "10.0.2",
+        "contentHash": "LG9Yll3B5aNpxv0+D47g6LiOiKBIlodhcHdQwcYzo8VeexFLGqx5ymetmA2aBRyo9cCcWsQWrFsdbsr8LvmWDw=="
+      },
+      "Microsoft.CodeAnalysis.Analyzers": {
+        "type": "Transitive",
+        "resolved": "5.3.0-2.25625.1",
+        "contentHash": "4Yhh2fnu3G+J0J1lDc8WZVgMjgbynSeTfkl5IFJMFrmiIO0sc7Tjx+f3sFVV8Sd35PrIUWfof0RWc3lAMl7Azg=="
+      },
+      "Microsoft.CodeAnalysis.Common": {
+        "type": "Transitive",
+        "resolved": "5.3.0",
+        "contentHash": "uC0qk3jzTQY7i90ehfnCqaOZpBUGJyPMiHJ3c0jOb8yaPBjWzIhVdNxPbeVzI74DB0C+YgBKPLqUkgFZzua5Mg==",
+        "dependencies": {
+          "Microsoft.CodeAnalysis.Analyzers": "5.3.0-2.25625.1"
+        }
+      },
+      "Microsoft.CodeAnalysis.CSharp": {
+        "type": "Transitive",
+        "resolved": "5.3.0",
+        "contentHash": "SQFNGQF4f7UfDXKxMzzGNMr3fjrPDIjLfmRvvVgDCw+dyvEHDaRfHuKA5q0Pr0/JW0Gcw89TxrxrS/MjwBvluQ==",
+        "dependencies": {
+          "Microsoft.CodeAnalysis.Analyzers": "5.3.0-2.25625.1",
+          "Microsoft.CodeAnalysis.Common": "[5.3.0]"
+        }
       },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
@@ -213,6 +381,38 @@
         "type": "Transitive",
         "resolved": "10.0.12",
         "contentHash": "Kd4o2oO1A6dfKxjz5LS16QyLtpCFTUiFWwmBABETAXRsSImBdRdWeKjSgbbRhAMiV3a3/nWr95ZtzClT4uaADQ=="
+      },
+      "Microsoft.Extensions.DependencyModel": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "rDPQVTxh/zMTDF7wHlRqL/jjZbwjAP6315ydBxj51pZW7qkAwGwjoSiMutxYI91xmOE3ZXjAGHbYRqzyJV7Urw=="
+      },
+      "Microsoft.IdentityModel.Abstractions": {
+        "type": "Transitive",
+        "resolved": "8.23.0",
+        "contentHash": "JjiBkKj12OKvuWr+kB5sQwb7fmWW5bi03Mq/rd2Fu/7YwZ1RWQO9KhI9lBxki4o1VvY0wzqny8c7nwx1uuZzVg=="
+      },
+      "Microsoft.IdentityModel.Logging": {
+        "type": "Transitive",
+        "resolved": "8.23.0",
+        "contentHash": "wSXXOoV4b4hhRcC492jyNBZkO0LWrcWtWP5Cl5ujrON3vTMlufXDT39gTZfBhFAZCV2XJtNU6DLHMDR6E9YpUg==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Abstractions": "8.23.0"
+        }
+      },
+      "Microsoft.IdentityModel.Tokens": {
+        "type": "Transitive",
+        "resolved": "8.23.0",
+        "contentHash": "PUowLq8gqICt+oepHWmKBOJmnVmWoQ5dOVn2CgwFMBZZOAEMHgCQLWs8ONYdsjAyjhDHaFy+AAx0OMG/oV06Zw==",
+        "dependencies": {
+          "Microsoft.Bcl.Cryptography": "10.0.2",
+          "Microsoft.IdentityModel.Logging": "8.23.0"
+        }
+      },
+      "Microsoft.OpenApi": {
+        "type": "Transitive",
+        "resolved": "2.12.0",
+        "contentHash": "0xB/be+f6qYOhvQPUrVsLrau+fkowYv6gt9RIkajMhwT7sZnqtcA797yW3bS5kgSje+AQW4xZgyLnW641YFioQ=="
       },
       "Microsoft.Testing.Extensions.Telemetry": {
         "type": "Transitive",
@@ -261,6 +461,32 @@
         "type": "Transitive",
         "resolved": "5.0.0",
         "contentHash": "dDoKi0PnDz31yAyETfRntsLArTlVAVzUzCIvvEDsDsucrl33Dl8pIJG06ePTJTI3tGpeyHS9Cq7Foc/s4EeKcg=="
+      },
+      "NodaTime": {
+        "type": "Transitive",
+        "resolved": "3.3.1",
+        "contentHash": "7zkTEqmakybTTuDuifpnzl5s8MkmpAdyvoqIPIO2+M2ThF8ixavPcPt1afPfFyCI+A6t3ySujgpGq/5iWc4/RQ=="
+      },
+      "OpenTelemetry": {
+        "type": "Transitive",
+        "resolved": "1.19.1",
+        "contentHash": "6ywhc3upf+dq8EsOohj7I7zS3l4yX9vfbtFkvyEC8xIUY4Z9iDIOVuke356eCAzIZaWtmwmmyl2UXYCp5n7I3Q==",
+        "dependencies": {
+          "OpenTelemetry.Api.ProviderBuilderExtensions": "1.19.1"
+        }
+      },
+      "OpenTelemetry.Api": {
+        "type": "Transitive",
+        "resolved": "1.19.1",
+        "contentHash": "9JKIH+xrV0HNTFjQC8zrx9gZpDOMEljN5Htg/U0VE2IvO3N+7bKALCCsGy5tp09marX5dd8UkrgQFoLaulIBRw=="
+      },
+      "OpenTelemetry.Api.ProviderBuilderExtensions": {
+        "type": "Transitive",
+        "resolved": "1.19.1",
+        "contentHash": "HtGe72B/IhzKqdU0a3fNE5osax/Cegwxd+p4u6lOFy20nsgmeaFuP2NRyFs1WvrOv/bpkII3IvvBkKoZXG8BLg==",
+        "dependencies": {
+          "OpenTelemetry.Api": "1.19.1"
+        }
       },
       "SharpZipLib": {
         "type": "Transitive",
@@ -361,8 +587,46 @@
           "xunit.v3.runner.common": "[4.0.1]"
         }
       },
+      "evidgate.api": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Audit": "[1.0.0, )",
+          "Evidgate.Modules.Catalog": "[1.0.0, )",
+          "Evidgate.Modules.Evidence": "[1.0.0, )",
+          "Evidgate.Modules.Healing": "[1.0.0, )",
+          "Evidgate.Modules.Identity": "[1.0.0, )",
+          "Evidgate.Modules.Ingestion": "[1.0.0, )",
+          "Evidgate.Modules.Notifications": "[1.0.0, )",
+          "Evidgate.Modules.Orchestrator": "[1.0.0, )",
+          "Evidgate.Modules.Policy": "[1.0.0, )",
+          "Evidgate.Modules.Tenancy": "[1.0.0, )",
+          "Evidgate.Modules.Usage": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
+          "OpenTelemetry.Exporter.Prometheus.AspNetCore": "[1.19.1-beta.1, )",
+          "OpenTelemetry.Instrumentation.AspNetCore": "[1.19.0, )"
+        }
+      },
       "evidgate.buildingblocks.canonicalization": {
         "type": "Project"
+      },
+      "evidgate.buildingblocks.contracts.validation": {
+        "type": "Project",
+        "dependencies": {
+          "Corvus.Json.Validator": "[5.6.1, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
+        }
+      },
+      "evidgate.buildingblocks.observability": {
+        "type": "Project",
+        "dependencies": {
+          "OpenTelemetry.Exporter.OpenTelemetryProtocol": "[1.19.1, )",
+          "OpenTelemetry.Extensions.Hosting": "[1.19.1, )"
+        }
       },
       "evidgate.buildingblocks.persistence": {
         "type": "Project",
@@ -376,6 +640,19 @@
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
       },
+      "evidgate.buildingblocks.pipeline": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "FluentValidation": "[12.1.1, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.buildingblocks.sharedkernel": {
+        "type": "Project"
+      },
       "evidgate.migrator": {
         "type": "Project",
         "dependencies": {
@@ -383,8 +660,183 @@
           "dbup-postgresql": "[7.0.1, )"
         }
       },
+      "evidgate.modules.audit": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Audit.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.audit.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.catalog": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Contracts.Validation": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Catalog.Contracts": "[1.0.0, )",
+          "FluentValidation": "[12.1.1, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )",
+          "YamlDotNet": "[18.1.0, )"
+        }
+      },
+      "evidgate.modules.catalog.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.evidence": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.evidence.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.healing": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Healing.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.healing.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.identity": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Identity.Contracts": "[1.0.0, )",
+          "FluentValidation": "[12.1.1, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )",
+          "Microsoft.IdentityModel.JsonWebTokens": "[8.23.0, )"
+        }
+      },
+      "evidgate.modules.identity.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.ingestion": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Ingestion.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.ingestion.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.notifications": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Notifications.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.notifications.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.orchestrator": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Contracts.Validation": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Catalog.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Ingestion.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Orchestrator.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.orchestrator.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.policy": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Policy.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )"
+        }
+      },
+      "evidgate.modules.policy.contracts": {
+        "type": "Project"
+      },
+      "evidgate.modules.tenancy": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Identity.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Tenancy.Contracts": "[1.0.0, )",
+          "FluentValidation": "[12.1.1, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )"
+        }
+      },
       "evidgate.modules.tenancy.contracts": {
         "type": "Project"
+      },
+      "evidgate.modules.usage": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Usage.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.usage.contracts": {
+        "type": "Project"
+      },
+      "Corvus.Json.Validator": {
+        "type": "CentralTransitive",
+        "requested": "[5.6.1, )",
+        "resolved": "5.6.1",
+        "contentHash": "oBtvuhNdbQ62qTye7q5U49GSCe3oxzcW68e7t6mhXYYKYLzVfH9dmcla8dh54apy7udTo94wETMPXA84roIbwA==",
+        "dependencies": {
+          "Corvus.Json.CodeGeneration": "5.6.1",
+          "Corvus.Json.CodeGeneration.201909": "5.6.1",
+          "Corvus.Json.CodeGeneration.202012": "5.6.1",
+          "Corvus.Json.CodeGeneration.4": "5.6.1",
+          "Corvus.Json.CodeGeneration.6": "5.6.1",
+          "Corvus.Json.CodeGeneration.7": "5.6.1",
+          "Corvus.Json.CodeGeneration.CSharp": "5.6.1",
+          "Corvus.Json.CodeGeneration.CorvusVocabulary": "5.6.1",
+          "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": "5.6.1",
+          "Corvus.Json.CodeGeneration.OpenApi20": "5.6.1",
+          "Corvus.Json.CodeGeneration.OpenApi30": "5.6.1",
+          "Corvus.Json.ExtendedTypes": "5.6.1",
+          "Microsoft.CodeAnalysis.CSharp": "5.3.0",
+          "Microsoft.Extensions.DependencyModel": "10.0.7"
+        }
       },
       "Cronos": {
         "type": "CentralTransitive",
@@ -408,6 +860,72 @@
           "dbup-core": "6.1.1"
         }
       },
+      "FluentValidation": {
+        "type": "CentralTransitive",
+        "requested": "[12.1.1, )",
+        "resolved": "12.1.1",
+        "contentHash": "EPpkIe1yh1a0OXyC100oOA8WMbZvqUu5plwhvYcb7oSELfyUZzfxV48BLhvs3kKo4NwG7MGLNgy1RJiYtT8Dpw=="
+      },
+      "Mediator.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[3.0.2, )",
+        "resolved": "3.0.2",
+        "contentHash": "TytjnyN8gLObZBxkM7HHPFJF3LHtk6Y8mHW56ONuXRuVEK6Fmed3f0z79H9TpmoZQP2zQAIS4/0O9R2w0v02qw=="
+      },
+      "Microsoft.AspNetCore.OpenApi": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "7RnQ/UKn+kK3JDLmTpW+vVqNErWthGPAVAy1aIiBzv4ucQ6g9NFvOJUuT0PHcpvcJxGVxctMxj6t+NESWMrgHQ==",
+        "dependencies": {
+          "Microsoft.OpenApi": "[2.12.0, 3.0.0)"
+        }
+      },
+      "Microsoft.IdentityModel.JsonWebTokens": {
+        "type": "CentralTransitive",
+        "requested": "[8.23.0, )",
+        "resolved": "8.23.0",
+        "contentHash": "ePEm+mv5iswzckE3mygh52uFUeQpVlHa1B10nS4jpEyNV5tL1mLgRS9U5sMaRlhsPRsZ1DJP0+FhxSrOIfMGIg==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Tokens": "8.23.0"
+        }
+      },
+      "OpenTelemetry.Exporter.OpenTelemetryProtocol": {
+        "type": "CentralTransitive",
+        "requested": "[1.19.1, )",
+        "resolved": "1.19.1",
+        "contentHash": "vsYYOBf/KxNubnuoja8pjJ9LG0zCC9HAYPay+R6N5ZKZMbhNdKWbaq6JZqJqTvK+55rudiqErJySekf9ql8okA==",
+        "dependencies": {
+          "OpenTelemetry": "1.19.1"
+        }
+      },
+      "OpenTelemetry.Exporter.Prometheus.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[1.19.1-beta.1, )",
+        "resolved": "1.19.1-beta.1",
+        "contentHash": "AMfdsdCo6rKCNJv0j3Yx1FJF3pmOgTZjHDpKllRwpxKlO6UIcpcbWFFJUFYd9+UkJWl7LO2IzTpA75Qrl0fvcw==",
+        "dependencies": {
+          "OpenTelemetry": "[1.19.1, 2.0.0)"
+        }
+      },
+      "OpenTelemetry.Extensions.Hosting": {
+        "type": "CentralTransitive",
+        "requested": "[1.19.1, )",
+        "resolved": "1.19.1",
+        "contentHash": "3qqZfVmW8mKA2/fRwI83o8z+yZd33KbEqRlXrlX0+3e/U7i+z0MQiCr0L3Axxa0jGdiylIrpWX4DIT9nAbJ00A==",
+        "dependencies": {
+          "OpenTelemetry": "1.19.1"
+        }
+      },
+      "OpenTelemetry.Instrumentation.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[1.19.0, )",
+        "resolved": "1.19.0",
+        "contentHash": "reypo7g0Nzyssg1EkbfWU6W58CVFgtgkSEGrFXtbpA+bNit7HUs7587DOkOdPCgqWr3IL4f6X9B2yhnU6POrFA==",
+        "dependencies": {
+          "OpenTelemetry.Api.ProviderBuilderExtensions": "[1.19.0, 2.0.0)"
+        }
+      },
       "Testcontainers": {
         "type": "CentralTransitive",
         "requested": "[4.15.0, )",
@@ -419,6 +937,12 @@
           "SSH.NET": "2026.0.0",
           "SharpZipLib": "1.4.2"
         }
+      },
+      "YamlDotNet": {
+        "type": "CentralTransitive",
+        "requested": "[18.1.0, )",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
       }
     }
   }

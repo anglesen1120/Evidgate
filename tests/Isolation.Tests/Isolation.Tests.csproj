@@ -15,6 +15,8 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- 02.9.1-T1: the API isolation suite drives Program (ApiHost) through WebApplicationFactory. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
   </ItemGroup>
   <!-- 01.6.1-T4.2: the in-process host of the test-only /v1 tenant route. A non-web
        project reaches ASP.NET Core through the shared framework, never through a
@@ -31,6 +33,10 @@
          Dapper read and the test-only route materialise. -->
     <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy.Contracts\Evidgate.Modules.Tenancy.Contracts.csproj" />
+    <!-- 02.9.1-T1: the API isolation suite runs the real host (Program → ApiHost) and seeds
+         test cases through the public case-identity service (no POST /v1 route for cases). -->
+    <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
