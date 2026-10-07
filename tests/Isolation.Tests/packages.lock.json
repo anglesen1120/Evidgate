@@ -777,7 +777,6 @@
       "evidgate.modules.policy": {
         "type": "Project",
         "dependencies": {
-          "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Contracts.Validation": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",

@@ -335,6 +335,8 @@ internal sealed class TenantRowFactory
             ("public.policy_revision", "hash") =>
                 "sha256:" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
             ("public.adapter_capability", "mode") => "full",
+            ("public.waiver", "state") => "requested",
+            ("public.waiver", "scope") => "case",
             _ => (object?)null,
         };
 
