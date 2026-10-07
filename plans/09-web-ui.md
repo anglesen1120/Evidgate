@@ -172,13 +172,15 @@ Web libraries are fixed by DECISIONS §4.2 (licence and version verified 2026-09
 | 09.1.1-T3 | Generated SDK consumption (`@evidgate/sdk`) behind feature data services (W5); interceptors for `X-Request-Id`/`traceparent`, `Idempotency-Key`, typed error-envelope mapping | M | V1 | M2 | 01.3.2-T1, 09.1.1-T2 |
 | 09.1.1-T4 | App shell: layout, navigation, `CanMatchFn`/`CanActivateFn` permission-aware route guards reading server-declared permissions, tenant/project switcher, lazy feature routes | M | V1 | M2 | 09.1.1-T1 |
 | 09.1.1-T5 | OIDC login/logout + cookie session with XSRF wiring (`withXsrfConfiguration`, `X-XSRF-TOKEN` header); 401 → re-auth without losing the current route | M | V1 | M2 | 02.3.1-T1 |
-| 09.1.1-T6 | i18n foundation: `@angular/localize` per-locale builds at `/vi/` and `/en/`, locale switch via prefix navigation + user-profile preference (T37), key-completeness test | M | V1 | M2 | - |
+| 09.1.1-T6 | i18n foundation: `@angular/localize` per-locale builds at `/vi/` and `/en/`, locale switch via prefix navigation + user-profile preference (T37), key-completeness test | M | V1 | M2 | 02.3.1-T3 |
 | 09.1.1-T7 | Shared state components: `EvidenceBadge`, `DecisionChip`, status pills, missing-reason list, hash/revision chips, waiver banner, label chips | M | V1 | M2 | 09.1.1-T4 |
 | 09.1.1-T8 | Loading/empty/error/403/404/412/429 patterns and an idempotent-retry helper | S | V1 | M2 | 09.1.1-T3 |
 | 09.1.1-T9 | Web telemetry: vitals + API error funnel (no PII, ids only); emits the LCP/INP SLIs plan 10 records (T39) | S | V1 | M2 | 09.1.1-T3 |
 | 09.1.1-T10 | App-origin strict CSP + Trusted Types (W6, FR-09-15): policy set at the hosting layer, build verified under it in E2E, `bypassSecurityTrust*` lint rule | S | V1 | M2 | 09.1.1-T1 |
+| 09.1.1-T11 | UX design foundation: wireframes of the six core flows (all states), design tokens (CSS custom properties), light/dark themes, breakpoints and dense-table rules, component state sheet + raw-literal lint; owner approval gates every feature screen task | L | V1 | M2 | 09.1.1-T1 |
+| 09.1.1-T12 | Dev-only fixture backend: `fixtures` build configuration answering SDK calls from `fixtures/` with latency/error toggles; every fixture validated against `contracts/openapi.yaml` | S | V1 | M2 | 09.1.1-T3, 01.6.1-T3 |
 
-Epic 09.1 total: 8.5
+Epic 09.1 total: 11.0
 
 ### Epic 09.2 - Onboarding and project setup (M2-M3, V1)
 
@@ -192,8 +194,9 @@ Epic 09.1 total: 8.5
 | 09.2.1-T5 | Enable step: collect mode, policy advisory preview, explicit "not gating yet" statement, confirmation audit | M | V1 | M3 | 07.1.1-T1 |
 | 09.2.1-T6 | Project & Catalog screens: test list (id, revision, platform/level/purpose, owner, rename history), filters, owner assignment | L | V1 | M3 | 03.1.1-T1, 03.1.2-T2 |
 | 09.2.1-T7 | Connection health panel + CLI quickstart snippet (copyable, secret-free) | S | V1 | M3 | 09.2.1-T2 |
+| 09.2.1-T8 | Mapping resolution screen for `unmapped`/`conflicted` producer results: list with state filter, bind to a case or dismiss, deep link from the report-comparison step | M | V1 | M3 | 09.2.1-T6, 03.1.2-T2 |
 
-Epic 09.2 total: 9.5
+Epic 09.2 total: 10.5
 
 ### Epic 09.3 - Run and Release (M2-M4)
 
@@ -210,8 +213,9 @@ Epic 09.2 total: 9.5
 | 09.3.1-T8 | Flaky and healed labels rendered separately; retry fail→pass shows both attempts | M | V1 | M3 | 07.4.1-T1, 08.3.1-T1 |
 | 09.3.1-T9 | Waiver/quarantine rendering: banner with approver+expiry, quarantine chip, results never suppressed | M | V1 | M3 | 07.3.1-T1, 07.3.2-T1 |
 | 09.3.1-T10 | Release view: components → digests → runs → decisions matrix with freshness/late-window warnings | L | V2 | M4 | 07.5.3-T1 |
+| 09.3.1-T11 | Waiver request/approve/revoke and quarantine add/remove actions on case rows; approve disabled for the requester, server refusals (403/409/422) shown verbatim | M | V1 | M3 | 09.3.1-T9, 07.3.1-T1, 07.3.1-T2 |
 
-Epic 09.3 total: 14.0
+Epic 09.3 total: 15.0
 
 ### Epic 09.4 - Failure Inbox and investigation (M3, V1)
 
@@ -220,12 +224,13 @@ Epic 09.3 total: 14.0
 |---|---|---|---|---|---|
 | 09.4.1-T1 | Inbox list with filters (status, label, owner, severity, flaky) and URL-persisted cursor | M | V1 | M3 | 08.1.1-T1, 08.2.2-T1 |
 | 09.4.1-T2 | Failure detail: root error vs infrastructure error separated, log excerpt, step events, artifact links, related issue | L | V1 | M3 | 06.2.1-T1, 08.1.2-T1 |
-| 09.4.1-T3 | Triage actions: label (5 labels), assign, close, with `label_source` shown (rule/model/human) | M | V1 | M3 | 08.2.2-T1 |
+| 09.4.1-T3 | Triage actions: label (5 labels), assign, close, with `label_source` shown (rule/model/human) | M | V1 | M3 | 08.2.2-T1, 08.2.2-T4 |
 | 09.4.1-T4 | Investigation flow: case history across revisions, rerun comparison, evidence-revision diff | L | V1 | M3 | 09.3.1-T3 |
 | 09.4.1-T5 | Bounded artifact viewer integration: isolated origin, URL refresh, sensitivity gate | M | V1 | M3 | 06.2.1-T1, 06.3.3-T1 |
 | 09.4.1-T6 | Insufficient-evidence states (unknown status, missing artifact, stale epoch) each with reason + fix action | S | V1 | M3 | 09.3.1-T3 |
+| 09.4.1-T7 | Gated artifact state: `content_gated` rows render kind, size band and reason, never request a download URL | S | V1 | M3 | 06.2.1-T1 |
 
-Epic 09.4 total: 7.5
+Epic 09.4 total: 8.0
 
 ### Epic 09.5 - Healing Review (M3 shadow, M4 approve/reject)
 
@@ -273,6 +278,8 @@ Epic 09.6 total: 8.0
 | 09.7.1-T7 | Agents page (V2): pools, capabilities, lease/heartbeat health, `unschedulable` reasons, version drift | L | V2 | M4 | 05.7.3-T1 |
 | 09.7.1-T8 | Integrations page: webhook endpoints, signing-secret rotation, delivery log with retry state | M | V1 | M3 | 07.6.2-T1, 07.6.3-T1, 07.6.3-T2 |
 | 09.7.1-T9 | Security events view in Settings (tenant_admin): V1 lists the 11.1.1-T4 baseline events (auth failures, cross-tenant 404 patterns) plus flagged support-access rows, with project/type/severity/time filters, reading `GET /v1/orgs/{o}/security-events`; injection-attempt events appear from V2 (11.4.1-T2) | S | V1 | M3 | 11.5.1-T5 |
+| 09.7.1-T10 | Support access tab (list/approve/revoke support grants) and the app-shell support-access banner driven by `X-Evidgate-Support-Access` | M | V1 | M3 | 02.8.1-T1, 02.8.1-T2, 09.7.1-T1 |
+| 09.7.1-T11 | Quota warning badge in the app shell from the usage summary (`warned_at`/`blocked_at`), hidden without `usage:read` | S | V1 | M3 | 09.7.1-T5, 12.3.1-T6 |
 
 #### Story 09.7.2 API tokens and deploy targets screens — acceptance: an admin manages API tokens and deploy targets and reads promotion history without leaving Settings.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -282,7 +289,7 @@ Epic 09.6 total: 8.0
 
 **Story 09.7.2 total: 2** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
 
-Epic 09.7 total: 12
+Epic 09.7 total: 13.5
 
 ### Epic 09.8 - Accessibility, i18n and E2E hardening (M3-M4)
 
@@ -341,23 +348,24 @@ Epic 09.8 total: 6.0
 
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
-| 09.1 App shell, SDK, UX foundations | 8.5 | 0 | 0 | 8.5 |
-| 09.2 Onboarding and project setup | 9.5 | 0 | 0 | 9.5 |
-| 09.3 Run and Release | 12.0 | 2.0 | 0 | 14.0 |
-| 09.4 Failure Inbox and investigation | 7.5 | 0 | 0 | 7.5 |
+| 09.1 App shell, SDK, UX foundations | 11.0 | 0 | 0 | 11.0 |
+| 09.2 Onboarding and project setup | 10.5 | 0 | 0 | 10.5 |
+| 09.3 Run and Release | 13.0 | 2.0 | 0 | 15.0 |
+| 09.4 Failure Inbox and investigation | 8.0 | 0 | 0 | 8.0 |
 | 09.5 Healing Review | 4.0 | 4.5 | 0 | 8.5 |
 | 09.6 Test Studio UI | 0 | 8.0 | 0 | 8.0 |
-| 09.7 Settings and administration | 10.0 | 2.0 | 0 | 12.0 |
+| 09.7 Settings and administration | 11.5 | 2.0 | 0 | 13.5 |
 | 09.8 Accessibility, i18n, E2E | 5.0 | 1.0 | 0 | 6.0 |
 | 09.9 Quality overview | 0 | 2.5 | 0 | 2.5 |
-| **Total** | **56.5** | **20.0** | **0** | **76.5** |
+| **Total** | **63.0** | **20.0** | **0** | **83.0** |
 
-→ with 20 % buffer **91.8** person-days
+→ with 20 % buffer **99.6** person-days
 
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: 09-CR-1 → 00 §9.3 with the owning plans' routes (`/v1/projects/{p}/incidents`, `/v1/projects/{p}/healing/candidates`, `/v1/orgs/{o}/audit`, `/v1/orgs/{o}/usage/summary`); 09-CR-2 → 00 §9.1 (412 carries the current revision id; run creation already uses `Idempotency-Key`, so no `If-Match` there). Applied 2026-09-25 by integrator: 09-CR-3 → 00 §14.
 > **Status:** 2026-09-25 CR-D-1 + TL review: web stack rewritten to Angular 22.2 per 00 §5.6 W1-W9 (F-09-1/F-09-2); cookie session + XSRF double-submit decided (T38, closes §11 #2); app-origin CSP + Trusted Types added (FR-09-15, 09.1.1-T10, W6); sanitizer rules restated for Angular (F-09-4); i18n = `@angular/localize` per-locale builds (T37); axe scope fixed to six flows (F-09-7); NFR-09-1 cites W7 budgets (T39); 09.1.1-T2 resized S→M; the 09-CR-3 §12/§14 figures (59 tasks, 71.0 raw / 85.2 buffered) are superseded (60 tasks, 72.0 raw / 86.4 buffered).
+> **Status:** 2026-10-07 frontend gap review: +7 web tasks (09.1.1-T11/T12, 09.2.1-T8, 09.3.1-T11, 09.4.1-T7, 09.7.1-T10/T11; +6.5 V1); the incident close/assign server side is 08.2.2-T4 and the `GET`/`PATCH /v1/me` locale preference is 02.3.1-T3; 00 §9.3, §14 and §15 updated.
 
 | # | Request | Why | Status |
 |---|---|---|---|

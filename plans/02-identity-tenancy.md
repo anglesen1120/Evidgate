@@ -83,6 +83,7 @@ Owned (shapes land in `contracts/openapi.yaml`; mutations follow 00 §9.1):
 | `GET /v1/orgs/{o}/audit`, `GET /v1/orgs/{o}/audit/export` | `audit:read` | cursor pagination (00 §9.1) |
 | `POST /v1/support-grants`, `POST /v1/support-grants/{g}/approve`, `…/revoke` | `support:grant` / `support:approve` | approve by `tenant_admin` of the target org, approver ≠ requester |
 | `GET /v1/auth/oidc/{provider}/start`, `GET /v1/auth/oidc/{provider}/callback`, `POST /v1/auth/logout`, `GET /v1/auth/sessions`, `DELETE /v1/auth/sessions/{s}` | session cookie | `__Host-` cookie + `X-XSRF-TOKEN` antiforgery on mutating routes (T38); not in the 00 core list; documented here and in `contracts/` |
+| `GET /v1/me`, `PATCH /v1/me` | session cookie (own user only) | current user profile (`id`, `email`, `display_name`, `preferred_locale`); PATCH accepts only `preferred_locale ∈ {vi, en}`, `If-Match` on `user.version`; 02.3.1-T3 |
 
 Used: every other plan's endpoints inherit these guards; 04 calls `POST /v1/ci/token` from the CLI/adapter.
 
@@ -187,7 +188,8 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 |---|---|---|---|---|---|
 | 02.3.1-T1 | Login on ASP.NET Core auth handlers: Google Workspace OIDC (ID token + JWKS verify) and GitHub OAuth2 auth-code + PKCE (no ID token; identity from `GET /user`, verified email from `GET /user/emails`); state, nonce/PKCE verifier, redirect allowlist (T6) | L | V1 | M1 | 02.1.2-T1, 01.1.2-T1 |
 | 02.3.1-T2 | Identity linking on `(provider, subject)`, email-verification rule, optional org domain allowlist | M | V1 | M2 | 02.3.1-T1 |
-**Story 02.3.1 total: 3.0**
+| 02.3.1-T3 | `GET /v1/me` profile + `PATCH /v1/me {preferred_locale}` (`vi`/`en`) for the web locale preference (T37) | S | V1 | M2 | 02.3.1-T1 |
+**Story 02.3.1 total: 3.5**
 #### Story 02.3.2 Sessions and revocation — acceptance: the cookie is opaque, `httpOnly`, `Secure`, `SameSite=Lax`; idle and absolute expiry are enforced; a revoked session gets 401 on the next request; users can list and revoke their sessions.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
@@ -198,7 +200,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 02.3.3-T1 | SAML 2.0 SSO (metadata, SP-initiated login, assertion mapping, JIT membership policy) | XL | V3 | M5 | 02.3.2-T1, 02.1.2-T2 |
-**Epic 02.3 total: 7.5 · (V1 4.5 · V3 3.0)**
+**Epic 02.3 total: 8.0 · (V1 5.0 · V3 3.0)**
 ### Epic 02.4 CI authentication
 #### Story 02.4.1 GitHub OIDC exchange — acceptance: a workflow job of a bound repository with the allowed `ref` and `job_workflow_ref` receives a `ci_producer` token scoped to one project; any claim mismatch, unbound repository, fork workflow, or replayed `jti` receives 401/403 and no token.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -318,7 +320,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 |---|---|---|---|---|
 | 02.1 Tenant core | 5.0 | 0 | 0 | 5.0 |
 | 02.2 Roles and permissions as data | 3.0 | 0 | 0 | 3.0 |
-| 02.3 Human login (OIDC / OAuth2) | 4.5 | 0 | 3.0 | 7.5 |
+| 02.3 Human login (OIDC / OAuth2) | 5.0 | 0 | 3.0 | 8.0 |
 | 02.4 CI authentication | 10.5 | 0 | 0 | 10.5 |
 | 02.5 Agent service identity | 0 | 2.0 | 0 | 2.0 |
 | 02.6 Tenant isolation (RLS) | 4.0 | 0 | 0 | 4.0 |
@@ -326,9 +328,9 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | 02.8 Support access | 2.0 | 0 | 0 | 2.0 |
 | 02.9 Cross-tenant isolation suite | 3.0 | 0 | 0 | 3.0 |
 | 02.10 Transactional notifications | 4.5 | 1.5 | 0 | 6.0 |
-| **Total** | **39.0** | **3.5** | **3.0** | **45.5** |
+| **Total** | **39.5** | **3.5** | **3.0** | **46.0** |
 
-→ with 20 % buffer **54.6** person-days
+→ with 20 % buffer **55.2** person-days
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: CR-1 → 00 §5.4.1; CR-2 → 00 §8.9; CR-3 → 00 §9.3; CR-4 → 00 §2; CR-5 confirmed (ids resolve).
