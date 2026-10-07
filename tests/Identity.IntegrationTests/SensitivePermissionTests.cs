@@ -1,0 +1,819 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Evidgate.BuildingBlocks.Canonicalization;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.Modules.Catalog.Contracts;
+using Evidgate.Modules.Identity.Authorization;
+using Evidgate.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Shouldly;
+using Xunit;
+
+namespace Identity.IntegrationTests;
+
+/// <summary>
+/// AC5 (02.2.1 §2, §9): a <c>sensitive</c> permission is reachable only by the roles
+/// the 00 §2 matrix gives it to, and no response a member can read carries a secret
+/// value or a secret-named member.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Both halves run against the REAL evaluator and the REAL host: the first seeds one
+/// active member per member-kind role and evaluates every sensitive code for every
+/// role through <see cref="PermissionEvaluator"/> over the harness's production Dapper
+/// path; the second creates real secret-bearing objects through the API and then reads
+/// every served GET route as a <c>tenant_admin</c>.
+/// </para>
+/// <para>
+/// The expectation comes from <see cref="RoleMatrixFixture"/> (the 00 §2 matrix) and
+/// from <c>contracts/permissions.json</c>'s <c>sensitive</c> flag — never from the
+/// evaluator's own answer, so a role that gains a sensitive code in the seed fails
+/// here rather than agreeing with itself.
+/// </para>
+/// </remarks>
+[Collection(HarnessSuite.Name)]
+[Trait("Category", "Docker")]
+public sealed class SensitivePermissionTests : CatalogueTestBase
+{
+    /// <summary>The roles AC5 names as holding no sensitive code at all.</summary>
+    private static readonly string[] MustHoldNothing = ["viewer", "ci_producer", "agent"];
+
+    /// <summary>
+    /// The served GET routes this scan cannot call. Empty on purpose: every served GET
+    /// route is addressed with a real id — the seeded org, project and membership, the
+    /// created ingest token and CI binding, and the case, suite, suite revisions,
+    /// environment revision and policy revision <see cref="SeedReadableResourcesAsync"/>
+    /// arranges. The set is kept, and asserted against the served table, so a route
+    /// that cannot be addressed must be named here with its reason instead of slipping
+    /// past the scan silently.
+    /// </summary>
+    private static readonly string[] SkippedGetRoutes = [];
+
+    /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>
+    private static readonly JsonSerializerOptions Wire = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        PropertyNameCaseInsensitive = false,
+    };
+
+    /// <summary>The ref patterns the probe binding allows (one entry, so the create body is valid).</summary>
+    private static readonly string[] BindingRefPatterns = ["refs/heads/main"];
+
+    /// <summary>The secret reference the probe environment revision names (a reference, never a value).</summary>
+    private static readonly string[] EnvironmentSecretRefs = ["secret:db_password"];
+
+    /// <summary>The workflow refs the probe binding allows.</summary>
+    private static readonly string[] BindingWorkflowRefs =
+        ["acme/ac5-probe/.github/workflows/ci.yml@refs/heads/main"];
+
+    public SensitivePermissionTests(DatabaseFixture fixture)
+        : base(fixture)
+    {
+    }
+
+    /// <summary>
+    /// AC5, first half: for every <c>sensitive</c> code, every role the fixture does
+    /// not list as a holder is refused by the real evaluator — a member role through a
+    /// real active membership, a service role through its claim set, a staff role
+    /// through the operator principal. The member-kind holders are the positive
+    /// control: they must be granted, or the refusals would prove nothing.
+    /// </summary>
+    [Fact]
+    public async Task Sensitive_Permissions_Are_Unreachable_For_Roles_That_Must_Not_Hold_Them()
+    {
+        var matrix = RoleMatrixFixture.Load();
+
+        var sensitive = Catalogue.Document.Permissions
+            .Where(entry => entry.Sensitive)
+            .Select(entry => entry.Code)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        sensitive.ShouldNotBeEmpty("contracts/permissions.json must mark the secret-adjacent codes sensitive (AC5)");
+
+        foreach (var role in MustHoldNothing)
+        {
+            var held = matrix.PermissionsOf(role)
+                .Where(code => sensitive.Contains(code, StringComparer.Ordinal))
+                .ToList();
+
+            held.ShouldBeEmpty($"'{role}' must hold no sensitive code (AC5), but holds: {string.Join(", ", held)}");
+        }
+
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+
+        // One active member per member-kind role: the evaluator's member road needs a
+        // real membership row, and that row is what makes the verdict about the role.
+        var members = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var role in matrix.RoleCodes.Where(role => matrix.KindOf(role) == "member"))
+        {
+            members[role] = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, role, cancellationToken: Token);
+        }
+
+        members.Count.ShouldBeGreaterThan(0, "the fixture must declare member-kind roles");
+
+        await using var scope = await Fixture.BeginTenantScopeAsync(org, cancellationToken: Token);
+        var evaluator = new PermissionEvaluator(Fixture.Db);
+
+        var evaluated = 0;
+        var granted = 0;
+
+        foreach (var code in sensitive)
+        {
+            var holders = matrix.HoldersOf(code).ToHashSet(StringComparer.Ordinal);
+
+            foreach (var role in matrix.RoleCodes)
+            {
+                var kind = matrix.KindOf(role);
+                var decision = await evaluator.EvaluateAsync(
+                    code,
+                    PrincipalFor(matrix, role, members),
+                    new RequestTenantContext(org, null),
+                    Token);
+
+                evaluated++;
+
+                if (kind == "staff")
+                {
+                    // 02.8.1 is not shipped: the operator principal holds nothing, so a
+                    // staff role is refused every code — including the ones the matrix
+                    // gives it. Pinned here like DenyPathTests pins the same deferral.
+                    decision.IsGranted.ShouldBeFalse(
+                        $"'{role}' is a staff role and the operator principal holds nothing until 02.8.1, "
+                        + $"so '{code}' must be refused");
+                    decision.DenyCode.ShouldBe(
+                        ApiErrorCode.Forbidden,
+                        $"'{role}' must be refused with 403 forbidden for '{code}'");
+                    continue;
+                }
+
+                if (holders.Contains(role))
+                {
+                    decision.IsGranted.ShouldBeTrue(
+                        $"'{role}' holds the sensitive '{code}' in the 00 §2 matrix, so the real evaluator must grant it");
+                    granted++;
+                    continue;
+                }
+
+                decision.IsGranted.ShouldBeFalse(
+                    $"'{role}' does not hold the sensitive '{code}' (AC5), so the real evaluator must refuse it");
+                decision.DenyCode.ShouldBe(
+                    ApiErrorCode.Forbidden,
+                    $"'{role}' must be refused with 403 forbidden for '{code}'");
+            }
+        }
+
+        evaluated.ShouldBe(
+            sensitive.Count * matrix.RoleCodes.Count,
+            "every (sensitive code, role) pair must be evaluated, or the assertion is vacuous");
+        granted.ShouldBeGreaterThan(
+            0,
+            "at least one member role holds a sensitive code, or the positive control is vacuous");
+    }
+
+    /// <summary>
+    /// AC5, second half: a <c>tenant_admin</c> creates a real ingest token and a real
+    /// CI binding through the API, then reads every served GET route it can address.
+    /// No response body may carry the captured one-time values, the <c>egt_</c>
+    /// plaintext, or a JSON member named like a secret — and the create responses must
+    /// be the only place the secret appears.
+    /// </summary>
+    /// <remarks>
+    /// The host is the real Api composition with the <c>EVIDGATE:Ci:*</c> key material
+    /// configured: without it the two create routes answer 503 <c>unavailable</c>
+    /// ("CI authentication is not configured on this deployment"), so no secret could
+    /// be minted and the scan would be vacuous. It publishes the seeded
+    /// <c>tenant_admin</c> member for every request that carries no bearer, so the
+    /// module's REAL evaluator answers the permission checks (02.2.1-T2.2) — the
+    /// point of the test is the shipping authorization path, not a substituted one.
+    /// </remarks>
+    [Fact]
+    public async Task No_Permission_Exposes_Secret_Values()
+    {
+        var (org, project) = await Fixture.SeedProjectAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "tenant_admin", cancellationToken: Token);
+        var membership = await MembershipIdAsync(org, admin);
+
+        await using var factory = CiProducerJwtFactory.Start(
+            Fixture,
+            CiKeyMaterial.Create(),
+            org,
+            project,
+            admin,
+            $"member-{admin:N}@example.test");
+        using var client = factory.CreateClient();
+
+        var token = await CreateIngestTokenAsync(client, project);
+        var binding = await CreateCiBindingAsync(client, project);
+
+        token.Secret.ShouldStartWith("egt_", Case.Sensitive, "the ingest token secret is the egt_ plaintext (02.4.2)");
+        binding.Challenge.ShouldNotBeNullOrWhiteSpace("the binding challenge is a one-time value (02.4.1)");
+
+        string[] secrets = [token.Secret, binding.Challenge];
+
+        // The routes whose path names a resource the identity routes do not create:
+        // a case, a suite, two of its revisions, an environment revision and a policy
+        // revision. Seeded here so the scan addresses every served GET route.
+        var seeded = await SeedReadableResourcesAsync(factory, client, org, project);
+
+        var served = ServedRouteTable.From(factory.Services)
+            .Where(route => route.Method == "GET")
+            .Select(route => route.Template)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        served.ShouldNotBeEmpty("the host must serve GET routes for the scan to mean anything");
+
+        var callable = CallableGetRoutes(org, project, membership, seeded);
+
+        var unclassified = served
+            .Where(template => !callable.ContainsKey(template) && !SkippedGetRoutes.Contains(template, StringComparer.Ordinal))
+            .ToList();
+        unclassified.ShouldBeEmpty(
+            $"every served GET route must be called or named in {nameof(SkippedGetRoutes)}: {string.Join(", ", unclassified)}");
+
+        var stale = callable.Keys
+            .Concat(SkippedGetRoutes)
+            .Where(template => !served.Contains(template))
+            .ToList();
+        stale.ShouldBeEmpty($"the callable and skipped sets must name real served GET routes: {string.Join(", ", stale)}");
+
+        var violations = new List<string>();
+        var answered = new List<string>();
+        var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (template, url) in callable.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            using var response = await client.GetAsync(url, Token);
+            var body = await response.Content.ReadAsStringAsync(Token);
+
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                answered.Add(template);
+                bodies[template] = body;
+            }
+            else
+            {
+                violations.Add($"{template} answered {(int)response.StatusCode} {response.StatusCode} instead of 200");
+            }
+
+            violations.AddRange(SecretScanner.Scan(body, secrets).Select(violation => $"{template}: {violation}"));
+        }
+
+        violations.ShouldBeEmpty(
+            "no GET response may carry a secret value or a secret-named member (AC5):\n" + string.Join('\n', violations));
+
+        // Non-vacuity: the identity list routes really returned the objects created
+        // above, so the clean scan is a statement about real data, not empty pages.
+        answered.ShouldContain("/v1/projects/{p}/ingest-tokens");
+        answered.ShouldContain("/v1/projects/{p}/ci-bindings");
+        answered.ShouldContain("/v1/permissions");
+        answered.ShouldContain("/v1/roles");
+        answered.ShouldContain("/v1/orgs/{o}/memberships");
+
+        // …and so did every route that names a seeded resource: each body carries the
+        // id the scan addressed it with, so none of them answered an empty page.
+        (string Template, Guid Id)[] seededRoutes =
+        [
+            ("/v1/cases/{c}", seeded.CaseId),
+            ("/v1/cases/{c}/revisions", seeded.CaseRevisionId),
+            ("/v1/suites/{s}", seeded.SuiteId),
+            ("/v1/suite-revisions/{r}", seeded.SuiteRevisionId),
+            ("/v1/suite-revisions/{r}/diff", seeded.OtherSuiteRevisionId),
+            ("/v1/environment-revisions/{id}", seeded.EnvironmentRevisionId),
+            ("/v1/policies/{id}", seeded.PolicyRevisionId),
+            ("/v1/policies/{id}/revisions", seeded.PolicyRevisionId),
+        ];
+
+        foreach (var (template, id) in seededRoutes)
+        {
+            answered.ShouldContain(template);
+            bodies[template].ShouldContain(
+                id.ToString(),
+                Case.Sensitive,
+                $"'{template}' must return the seeded object, or the scan is vacuous");
+        }
+
+        var tokenList = await client.GetStringAsync($"/v1/projects/{project}/ingest-tokens", Token);
+        tokenList.ShouldContain(
+            token.Id.ToString(),
+            Case.Sensitive,
+            "the created ingest token must be listed, or the scan is vacuous");
+
+        var bindingList = await client.GetStringAsync($"/v1/projects/{project}/ci-bindings", Token);
+        bindingList.ShouldContain(
+            binding.Id.ToString(),
+            Case.Sensitive,
+            "the created CI binding must be listed, or the scan is vacuous");
+    }
+
+    /// <summary>The principal the evaluator sees for a role: a member, a service token, or the operator stub.</summary>
+    private static RequestPrincipal PrincipalFor(
+        RoleMatrixFixture matrix,
+        string role,
+        Dictionary<string, Guid> members) =>
+        matrix.KindOf(role) switch
+        {
+            "member" => RequestPrincipal.Member(members[role]),
+            "service" => RequestPrincipal.Service(projectScope: null, matrix.PermissionsOf(role)),
+            _ => RequestPrincipal.Operator(),
+        };
+
+    /// <summary>
+    /// The served GET routes this scan addresses with the ids it really has: the
+    /// seeded org and project, the seeded membership, the two created objects' list
+    /// routes, and the case, suite, suite revisions, environment revision and policy
+    /// revision <see cref="SeedReadableResourcesAsync"/> arranges. Keyed by the
+    /// normalised template <see cref="ServedRouteTable"/> reports, valued by the URL
+    /// to call.
+    /// </summary>
+    private static Dictionary<string, string> CallableGetRoutes(
+        Guid org,
+        Guid project,
+        Guid membership,
+        SeededResources seeded) =>
+        new(StringComparer.Ordinal)
+        {
+            ["/v1/orgs"] = "/v1/orgs",
+            ["/v1/orgs/{o}"] = $"/v1/orgs/{org}",
+            ["/v1/orgs/{o}/projects"] = $"/v1/orgs/{org}/projects",
+            ["/v1/projects/{p}"] = $"/v1/projects/{project}",
+            ["/v1/orgs/{o}/memberships"] = $"/v1/orgs/{org}/memberships",
+            ["/v1/orgs/{o}/memberships/{m}"] = $"/v1/orgs/{org}/memberships/{membership}",
+            ["/v1/permissions"] = "/v1/permissions",
+            ["/v1/roles"] = "/v1/roles",
+            ["/v1/orgs/{o}/audit"] = $"/v1/orgs/{org}/audit",
+            ["/v1/orgs/{o}/audit/export"] = $"/v1/orgs/{org}/audit/export",
+            ["/v1/projects/{p}/ci-bindings"] = $"/v1/projects/{project}/ci-bindings",
+            ["/v1/projects/{p}/ingest-tokens"] = $"/v1/projects/{project}/ingest-tokens",
+            ["/v1/projects/{p}/cases"] = $"/v1/projects/{project}/cases",
+            ["/v1/projects/{p}/suites"] = $"/v1/projects/{project}/suites",
+            ["/v1/projects/{p}/waivers"] = $"/v1/projects/{project}/waivers",
+            ["/v1/cases/{c}"] = $"/v1/cases/{seeded.CaseId}",
+            ["/v1/cases/{c}/revisions"] = $"/v1/cases/{seeded.CaseId}/revisions",
+            ["/v1/suites/{s}"] = $"/v1/suites/{seeded.SuiteId}",
+            ["/v1/suite-revisions/{r}"] = $"/v1/suite-revisions/{seeded.SuiteRevisionId}",
+            ["/v1/suite-revisions/{r}/diff"] =
+                $"/v1/suite-revisions/{seeded.SuiteRevisionId}/diff?against={seeded.OtherSuiteRevisionId}",
+            ["/v1/environment-revisions/{id}"] = $"/v1/environment-revisions/{seeded.EnvironmentRevisionId}",
+            ["/v1/policies/{id}"] = $"/v1/policies/{seeded.PolicyRevisionId}",
+            ["/v1/policies/{id}/revisions"] = $"/v1/policies/{seeded.PolicyRevisionId}/revisions",
+        };
+
+    /// <summary>
+    /// Arranges the resources the remaining served GET routes name, so no route is
+    /// skipped: a case and its revision through the catalog module's own discovery
+    /// service (03.1.1 — no served route creates a case), a suite and two of its
+    /// revisions through the served routes as the same <c>tenant_admin</c> (it holds
+    /// <c>suite:write</c>), an environment revision through the served route (which
+    /// creates its environment), and a policy revision through the harness's owner
+    /// seam (<c>tenant_admin</c> does not hold <c>policy:write</c>, 00 §2).
+    /// </summary>
+    private async Task<SeededResources> SeedReadableResourcesAsync(
+        CiProducerJwtFactory factory,
+        HttpClient client,
+        Guid org,
+        Guid project)
+    {
+        var (caseId, caseRevisionId) = await SeedCaseAsync(factory, org, project);
+
+        var suiteId = await CreateSuiteAsync(client, project);
+        var suiteRevisionId = await CreateSuiteRevisionAsync(
+            client,
+            suiteId,
+            new { members = new[] { new { case_revision_id = caseRevisionId } } });
+
+        // A second revision of the same suite, so the diff route has an "against".
+        var otherSuiteRevisionId = await CreateSuiteRevisionAsync(client, suiteId, new { });
+
+        var environmentRevisionId = await CreateEnvironmentRevisionAsync(client, project);
+        var policyRevisionId = await SeedPolicyRevisionAsync(org, project);
+
+        return new SeededResources(
+            caseId,
+            caseRevisionId,
+            suiteId,
+            suiteRevisionId,
+            otherSuiteRevisionId,
+            environmentRevisionId,
+            policyRevisionId);
+    }
+
+    /// <summary>
+    /// Registers one discovered test file through the catalog module's own service —
+    /// the production path that writes <c>test_case</c> and <c>test_revision</c>
+    /// (03.1.1) — and reads both ids back inside the same tenant scope.
+    /// </summary>
+    private static async Task<(Guid CaseId, Guid CaseRevisionId)> SeedCaseAsync(
+        CiProducerJwtFactory factory,
+        Guid org,
+        Guid project)
+    {
+        const string Path = "ac5/probe.spec.ts";
+
+        await using var services = factory.Services.CreateAsyncScope();
+        var provider = services.ServiceProvider;
+        var scopes = provider.GetRequiredService<ITenantScopeFactory>();
+        await using var scope = await scopes.BeginAsync(org, null, false, Token);
+
+        var outcome = await provider.GetRequiredService<ICaseIdentityService>()
+            .RegisterDiscoveredAsync(
+                project,
+                new string('a', 12),
+                [
+                    new SourceFile(
+                        Path,
+                        "// evidgate.id: 018f2f0e-8a52-7c4b-9d3e-000000000001\ntest('ac5', () => {});",
+                        "playwright",
+                        "typescript"),
+                ],
+                Token);
+
+        outcome.Succeeded.ShouldBeTrue(outcome.Failure);
+
+        // The Dapper path of the host's own registration, so the read runs on this
+        // scope's connection and transaction exactly like a module query (C3, C5).
+        var db = provider.GetRequiredService<ITenantDb>();
+
+        var caseId = await db.QuerySingleOrDefaultAsync<Guid>(
+            "select c.id from public.test_case c where c.project_id = @project_id and c.file_path = @path",
+            new { project_id = project, path = Path },
+            Token);
+
+        caseId.ShouldNotBe(Guid.Empty, "the discovery service must have written the case");
+
+        var caseRevisionId = await db.QuerySingleOrDefaultAsync<Guid>(
+            "select r.id from public.test_revision r where r.case_id = @case_id",
+            new { case_id = caseId },
+            Token);
+
+        caseRevisionId.ShouldNotBe(Guid.Empty, "the discovery service must have written the case's revision");
+
+        await scope.CommitAsync(Token);
+
+        return (caseId, caseRevisionId);
+    }
+
+    /// <summary>Creates a suite through the served route and returns its id.</summary>
+    private static async Task<Guid> CreateSuiteAsync(HttpClient client, Guid project)
+    {
+        var (status, body) = await PostAsync(
+            client,
+            $"/v1/projects/{project}/suites",
+            new { Name = "ac5-probe", Slug = "ac5-probe" });
+
+        status.ShouldBe(HttpStatusCode.Created, body);
+
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Creates a suite revision through the served route and returns its id.</summary>
+    private static async Task<Guid> CreateSuiteRevisionAsync(HttpClient client, Guid suite, object body)
+    {
+        var (status, text) = await PostAsync(client, $"/v1/suites/{suite}/revisions", body);
+
+        status.ShouldBeOneOf([HttpStatusCode.Created, HttpStatusCode.OK], text);
+
+        using var document = JsonDocument.Parse(text);
+        return document.RootElement.GetProperty("suite_revision_id").GetGuid();
+    }
+
+    /// <summary>
+    /// Creates an environment revision through the served route (the handler creates
+    /// the environment when the key is new) and returns the revision's id.
+    /// </summary>
+    private static async Task<Guid> CreateEnvironmentRevisionAsync(HttpClient client, Guid project)
+    {
+        var (status, body) = await PostAsync(
+            client,
+            $"/v1/projects/{project}/environments/ac5-probe/revisions",
+            new
+            {
+                Name = "AC5 probe",
+                BaseUrls = new Dictionary<string, string>(StringComparer.Ordinal) { ["web"] = "https://ac5.example.test" },
+                DependencyVersions = new Dictionary<string, string>(StringComparer.Ordinal) { ["postgres"] = "18.0" },
+                SecretRefs = EnvironmentSecretRefs,
+            });
+
+        status.ShouldBeOneOf([HttpStatusCode.Created, HttpStatusCode.OK], body);
+
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("revision_id").GetGuid();
+    }
+
+    /// <summary>
+    /// Arranges one policy revision through the harness's owner seam: the served
+    /// create route needs <c>policy:write</c>, which the 00 §2 matrix does not give
+    /// <c>tenant_admin</c>, so the row is arranged like the policy suites arrange it.
+    /// The stored <c>hash</c> is the real content address of the body
+    /// (<see cref="CanonicalHash"/>, the same digest the module's hasher computes), or
+    /// the read route would refuse the row as corrupted.
+    /// </summary>
+    private async Task<Guid> SeedPolicyRevisionAsync(Guid org, Guid project)
+    {
+        const string Body = "{}";
+        var id = Guid.CreateVersion7();
+
+        await Fixture.SeedAsync(
+            """
+            insert into public.policy_revision (id, org_id, project_id, revision_no, hash, body, created_by)
+            values (@id, @org_id, @project_id, 1, @hash, @body::jsonb, @created_by)
+            """,
+            [
+                ("id", id),
+                ("org_id", org),
+                ("project_id", project),
+                ("hash", CanonicalHash.Compute(Body)),
+                ("body", Body),
+                ("created_by", Guid.CreateVersion7()),
+            ],
+            Token);
+
+        return id;
+    }
+
+    /// <summary>
+    /// Posts a snake_case body with a fresh idempotency key, like the API expects, and
+    /// returns the status and the body text.
+    /// </summary>
+    private static async Task<(HttpStatusCode Status, string Body)> PostAsync(
+        HttpClient client,
+        string url,
+        object body)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = JsonContent.Create(body, options: Wire),
+        };
+
+        request.Headers.Add("Idempotency-Key", Guid.CreateVersion7().ToString("N"));
+
+        using var response = await client.SendAsync(request, Token);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync(Token));
+    }
+
+    /// <summary>The ids the scan addresses the resource-naming GET routes with.</summary>
+    private sealed record SeededResources(
+        Guid CaseId,
+        Guid CaseRevisionId,
+        Guid SuiteId,
+        Guid SuiteRevisionId,
+        Guid OtherSuiteRevisionId,
+        Guid EnvironmentRevisionId,
+        Guid PolicyRevisionId);
+
+    /// <summary>The id of the seeded member's membership, read under RLS as the org.</summary>
+    private async Task<Guid> MembershipIdAsync(Guid org, Guid userId)
+    {
+        await using var scope = await Fixture.BeginTenantScopeAsync(org, cancellationToken: Token);
+
+        var membership = await scope.Db.QuerySingleOrDefaultAsync<Guid>(
+            "select id from public.membership where org_id = @org_id and user_id = @user_id",
+            new { org_id = org, user_id = userId },
+            Token);
+
+        membership.ShouldNotBe(Guid.Empty, "the seeded member must have a membership row");
+        return membership;
+    }
+
+    /// <summary>
+    /// Creates an ingest token through the real route and captures the one-time
+    /// secret. The create response is asserted to be the place the secret appears.
+    /// </summary>
+    private static async Task<CreatedToken> CreateIngestTokenAsync(HttpClient client, Guid project)
+    {
+        using var response = await client.PostAsync(
+            $"/v1/projects/{project}/ingest-tokens",
+            JsonContent.Create(new { Name = "ac5-probe" }, options: Wire),
+            Token);
+
+        var body = await response.Content.ReadAsStringAsync(Token);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
+
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        var secret = root.GetProperty("secret").GetString()!;
+
+        body.ShouldContain(secret, Case.Sensitive, "the create response is the one place the secret appears");
+
+        return new CreatedToken(root.GetProperty("token").GetProperty("id").GetGuid(), secret);
+    }
+
+    /// <summary>Creates a CI binding through the real route and captures the one-time challenge.</summary>
+    private static async Task<CreatedBinding> CreateCiBindingAsync(HttpClient client, Guid project)
+    {
+        using var response = await client.PostAsync(
+            $"/v1/projects/{project}/ci-bindings",
+            JsonContent.Create(
+                new
+                {
+                    Provider = "github_actions",
+                    RepositoryId = 424242L,
+                    RepositoryFullName = "acme/ac5-probe",
+                    AllowedRefPatterns = BindingRefPatterns,
+                    AllowedWorkflowRefs = BindingWorkflowRefs,
+                },
+                options: Wire),
+            Token);
+
+        var body = await response.Content.ReadAsStringAsync(Token);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
+
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        var challenge = root.GetProperty("binding_challenge").GetString()!;
+
+        body.ShouldContain(challenge, Case.Sensitive, "the create response is the one place the challenge appears");
+
+        return new CreatedBinding(root.GetProperty("binding").GetProperty("id").GetGuid(), challenge);
+    }
+
+    /// <summary>An ingest token created through the API: its id and its one-time secret.</summary>
+    private sealed record CreatedToken(Guid Id, string Secret);
+
+    /// <summary>A CI binding created through the API: its id and its one-time challenge.</summary>
+    private sealed record CreatedBinding(Guid Id, string Challenge);
+}
+
+/// <summary>
+/// The AC5 secret scanner as a pure function over a response body: the JSON member
+/// names on the deny-list, plus any captured secret value or <c>egt_</c> plaintext.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The deny-list is defined once, here, and matched case-insensitively as a substring
+/// of the member name, so <c>binding_challenge</c>, <c>secret</c>, <c>token</c>,
+/// <c>password</c>, <c>pepper</c>, <c>hmac</c> and <c>hash_of_secret</c> all fire.
+/// </para>
+/// <para>
+/// The allowed exceptions are the members that legitimately mention one of those words
+/// without carrying a secret: <c>prefix</c> (the public lookup prefix of an ingest
+/// token, never the secret), <c>next_cursor</c>, <c>manifest_hash</c>,
+/// <c>token_id</c>, <c>entry_hash</c>, <c>content_hash</c>, <c>artifact_hash</c> and
+/// <c>checksum</c> (content digests, not credential digests), and <c>secret_refs</c>
+/// (the environment revision's <c>secret:&lt;name&gt;</c> references — the create route
+/// refuses anything that is not a reference or that looks like a value, so the member
+/// names secrets without carrying one, 05.1.2).
+/// </para>
+/// </remarks>
+internal static class SecretScanner
+{
+    /// <summary>The substrings that make a member name secret-bearing.</summary>
+    internal static readonly string[] DenyTerms =
+        ["secret", "token", "challenge", "password", "pepper", "hmac", "hash_of_secret"];
+
+    /// <summary>The member names that may contain a deny term without carrying a secret.</summary>
+    internal static readonly IReadOnlySet<string> AllowedMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "prefix",
+        "next_cursor",
+        "manifest_hash",
+        "token_id",
+        "entry_hash",
+        "content_hash",
+        "artifact_hash",
+        "checksum",
+        "secret_refs",
+    };
+
+    /// <summary>
+    /// The forbidden member names of a body, ordinal. The body may be a single JSON
+    /// document or NDJSON (the audit export streams one object per line); a body that
+    /// parses as neither contributes nothing.
+    /// </summary>
+    internal static IReadOnlyList<string> ForbiddenMembers(string body)
+    {
+        var members = new SortedSet<string>(StringComparer.Ordinal);
+
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return [];
+        }
+
+        if (TryParse(body, out var whole))
+        {
+            Collect(whole.RootElement, members);
+            whole.Dispose();
+            return [.. members];
+        }
+
+        foreach (var line in body.Split('\n'))
+        {
+            if (line.Trim().Length == 0 || !TryParse(line, out var document))
+            {
+                continue;
+            }
+
+            Collect(document.RootElement, members);
+            document.Dispose();
+        }
+
+        return [.. members];
+    }
+
+    /// <summary>
+    /// Every violation of <paramref name="body"/>: one line per forbidden member, one
+    /// per captured secret value it contains, and one when it carries an <c>egt_</c>
+    /// plaintext.
+    /// </summary>
+    internal static IReadOnlyList<string> Scan(string body, IReadOnlyCollection<string> secretValues)
+    {
+        ArgumentNullException.ThrowIfNull(secretValues);
+
+        var violations = ForbiddenMembers(body)
+            .Select(member => $"a JSON member named '{member}' is on the secret deny-list")
+            .ToList();
+
+        foreach (var secret in secretValues)
+        {
+            if (body.Contains(secret, StringComparison.Ordinal))
+            {
+                violations.Add("the body contains a captured secret value");
+            }
+        }
+
+        if (body.Contains("egt_", StringComparison.Ordinal))
+        {
+            violations.Add("the body contains an egt_ token plaintext");
+        }
+
+        return violations;
+    }
+
+    private static bool TryParse(string body, out JsonDocument document)
+    {
+        try
+        {
+            document = JsonDocument.Parse(body);
+            return true;
+        }
+        catch (JsonException)
+        {
+            document = null!;
+            return false;
+        }
+    }
+
+    private static void Collect(JsonElement element, SortedSet<string> members)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    if (IsForbidden(property.Name))
+                    {
+                        members.Add(property.Name);
+                    }
+
+                    Collect(property.Value, members);
+                }
+
+                break;
+
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    Collect(item, members);
+                }
+
+                break;
+        }
+    }
+
+    private static bool IsForbidden(string member) =>
+        !AllowedMembers.Contains(member)
+        && DenyTerms.Any(term => member.Contains(term, StringComparison.OrdinalIgnoreCase));
+}
+
+/// <summary>
+/// AC5's seeded violation: the scanner is a pure function, so its own test needs no
+/// database — a synthetic body carrying a forbidden member and a captured secret must
+/// report both, and a clean body must report nothing.
+/// </summary>
+public sealed class SecretScannerTests
+{
+    /// <summary>A body with only allowlisted members and no secret is clean; a seeded one reports both violations.</summary>
+    [Fact]
+    public void Scan_Reports_A_Seeded_Forbidden_Member_And_Secret_Value()
+    {
+        const string secret = "egt_abcdefghijkl_secretvalue";
+
+        var clean = """{"items":[{"id":"1","prefix":"abcdefghijkl","next_cursor":null}]}""";
+        SecretScanner.Scan(clean, [secret])
+            .ShouldBeEmpty("a body with only allowlisted members and no secret value is clean");
+
+        var seeded = $$"""{"items":[{"id":"1","prefix":"abcdefghijkl","binding_challenge":"xyz","note":"{{secret}}"}]}""";
+        var violations = SecretScanner.Scan(seeded, [secret]);
+
+        violations.Any(violation => violation.Contains("binding_challenge", StringComparison.Ordinal))
+            .ShouldBeTrue($"the seeded forbidden member must be reported; got: {string.Join(" | ", violations)}");
+        violations.Any(violation => violation.Contains("secret value", StringComparison.Ordinal))
+            .ShouldBeTrue($"the seeded captured secret value must be reported; got: {string.Join(" | ", violations)}");
+    }
+}

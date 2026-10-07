@@ -1,3 +1,5 @@
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Testing;
 using Shouldly;
@@ -27,14 +29,6 @@ public sealed class SeedMatrixTests : CatalogueTestBase
     /// </summary>
     private static readonly string[] NonAssignable =
         ["billing:read", "billing:write", "event:write", "job:claim", "job:execute", "support:grant"];
-
-    /// <summary>
-    /// Roles that may hold a `sensitive` permission (AC5): the evidence readers and the
-    /// staff roles. `viewer` is explicitly excluded by 00 §2 ("No secrets") and a
-    /// service identity must never hold one.
-    /// </summary>
-    private static readonly string[] SensitiveHoldersAllowed =
-        ["billing_operator", "platform_operator", "qa_engineer", "release_approver", "tenant_admin", "test_maintainer"];
 
     public SeedMatrixTests(DatabaseFixture fixture)
         : base(fixture)
@@ -96,6 +90,130 @@ public sealed class SeedMatrixTests : CatalogueTestBase
         {
             grantsByRole[role.Code].ShouldBe(Catalogue.PermissionsOf(role.Code));
         }
+    }
+
+    /// <summary>
+    /// AC1 / T21 / T98 / T79 / AC5: the generated role × permission matrix — every
+    /// built-in role × every catalogue permission — equals the 00 §2-derived fixture
+    /// (02.2.1-T3.1), on both halves of the enforcement path: the seeded rows read as the
+    /// app role under RLS, and the real evaluator's verdict. Member roles are resolved
+    /// with one <c>ResolveAsync</c> per role (never per cell); service roles are
+    /// evaluated with the fixture's own claim set, bounded by the catalogue ceiling.
+    /// Every mismatching cell is reported in one failure message. The fixture's provenance
+    /// audit (`InferredGrants`) is pinned first, so a grant whose citation does not name its
+    /// holder stays visible instead of hiding behind a citation that only names the permission.
+    /// </summary>
+    [Fact]
+    public async Task Every_Role_Permission_Cell_Matches_The_Overview_Fixture()
+    {
+        var fixture = RoleMatrixFixture.Load();
+
+        // The axes are the catalogue's, so a fixture that dropped a role or a permission
+        // fails here before any cell is compared (a catalogue code missing from the
+        // fixture's axis is the drift this test exists to catch).
+        fixture.RoleCodes.ShouldBe(Catalogue.RoleCodes);
+        fixture.PermissionCodes.ShouldBe(
+            [.. Catalogue.Codes.Union(fixture.PermissionCodes, StringComparer.Ordinal).Order(StringComparer.Ordinal)],
+            "the fixture's permission axis must name every code in contracts/permissions.json");
+
+        // The provenance audit (README §Grant provenance): a grant is `inferred` when its
+        // citation does not name the holder. Pin the audit's meaning — an inferred row must
+        // be a real grant whose citation does not name the role, and the audit must be
+        // present — so flipping a basis is a deliberate edit, not a silent one.
+        fixture.InferredGrants.ShouldNotBeEmpty(
+            "the fixture must mark the grants whose citations leave the holder implicit");
+        foreach (var (role, permission, source) in fixture.InferredGrants)
+        {
+            fixture.Holds(role, permission).ShouldBeTrue(
+                $"inferred grant {role} × {permission} must be a real grant of the fixture");
+            source.ShouldNotContain(
+                role,
+                Case.Sensitive,
+                $"inferred grant {role} × {permission} cites '{source}', which names the role");
+        }
+
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+
+        // (a) the seeded rows, read as the app role under RLS.
+        var seeded = await ReadCatalogueAsync(org);
+        var seededCells = seeded.Grants
+            .Select(grant => (grant.RoleCode, grant.PermissionCode))
+            .ToHashSet();
+
+        // (b) the real evaluator. Members are arranged before the scope opens (one scope
+        // per async flow, 00 §5.4.2); each holds exactly one role, so one resolution per
+        // role yields that role's effective set.
+        var members = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var role in fixture.RoleCodes.Where(role => fixture.KindOf(role) == "member"))
+        {
+            members[role] = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, role, cancellationToken: Token);
+        }
+
+        var evaluator = new PermissionEvaluator(Fixture.Db);
+        var evaluatorCells = new HashSet<(string Role, string Permission)>();
+        var evaluatorRoles = new HashSet<string>(StringComparer.Ordinal);
+
+        await using (var scope = await Fixture.BeginTenantScopeAsync(org, cancellationToken: Token))
+        {
+            foreach (var role in fixture.RoleCodes)
+            {
+                // Staff roles have no evaluator path in V1: the operator principal is a
+                // stub that denies until 02.8.1 ships the support grant, so they are
+                // asserted on the seed only.
+                IRequestPrincipal? principal = fixture.KindOf(role) switch
+                {
+                    "member" => RequestPrincipal.Member(members[role]),
+                    "service" => RequestPrincipal.Service(projectScope: null, [.. fixture.PermissionsOf(role)]),
+                    _ => null,
+                };
+
+                if (principal is null)
+                {
+                    continue;
+                }
+
+                evaluatorRoles.Add(role);
+                foreach (var code in await evaluator.ResolveAsync(org, principal, Token))
+                {
+                    evaluatorCells.Add((role, code));
+                }
+            }
+        }
+
+        // Every cell, both halves, aggregated into one failure message.
+        var mismatches = new List<string>();
+        var cells = 0;
+
+        foreach (var role in fixture.RoleCodes)
+        {
+            foreach (var permission in fixture.PermissionCodes)
+            {
+                cells++;
+                var expected = fixture.Holds(role, permission);
+
+                var seededActual = seededCells.Contains((role, permission));
+                if (seededActual != expected)
+                {
+                    mismatches.Add($"seed: {role} × {permission}: expected {expected}, seeded {seededActual}");
+                }
+
+                if (evaluatorRoles.Contains(role))
+                {
+                    var evaluatorActual = evaluatorCells.Contains((role, permission));
+                    if (evaluatorActual != expected)
+                    {
+                        mismatches.Add($"evaluator: {role} × {permission}: expected {expected}, evaluator {evaluatorActual}");
+                    }
+                }
+            }
+        }
+
+        var expectedCells = fixture.RoleCodes.Count * fixture.PermissionCodes.Count;
+        expectedCells.ShouldBeGreaterThan(0, "the matrix must not be empty");
+        cells.ShouldBe(expectedCells, "every role × permission cell must be compared");
+        evaluatorRoles.ShouldNotBeEmpty("the evaluator half must evaluate at least one role");
+
+        mismatches.ShouldBeEmpty(string.Join(Environment.NewLine, mismatches));
     }
 
     /// <summary>
@@ -212,14 +330,16 @@ public sealed class SeedMatrixTests : CatalogueTestBase
     }
 
     /// <summary>
-    /// AC5 (the seed half): a `sensitive` permission is held only by the evidence
-    /// readers and the staff roles — never by `viewer` (00 §2 "No secrets") and never by
-    /// a service identity. The full AC5 (that no catalogue permission exposes a secret
+    /// AC5 (the seed half): a `sensitive` permission is held only by the roles the
+    /// 00 §2-derived fixture grants it to — never by `viewer` (00 §2 "No secrets") and
+    /// never by a service identity. The allowed-holder set is the fixture's, not a second
+    /// hand-maintained list. The full AC5 (that no catalogue permission exposes a secret
     /// value) is 02.2.1-T3's.
     /// </summary>
     [Fact]
     public async Task Sensitive_Permissions_Are_Not_Held_By_Unprivileged_Roles()
     {
+        var fixture = RoleMatrixFixture.Load();
         var catalogue = await ReadCatalogueAsync(await Fixture.SeedOrgAsync(cancellationToken: Token));
         var holders = Holders(catalogue);
 
@@ -230,10 +350,17 @@ public sealed class SeedMatrixTests : CatalogueTestBase
 
         sensitive.ShouldNotBeEmpty("the catalogue marks secret-adjacent permissions (AC5)");
 
+        // The allowed-holder set is the union of the roles the fixture grants a sensitive
+        // code to (00 §2-derived), so a new sensitive grant in the plans widens it without
+        // a second list to maintain.
+        var allowed = sensitive
+            .SelectMany(code => fixture.HoldersOf(code))
+            .ToHashSet(StringComparer.Ordinal);
+
         foreach (var code in sensitive)
         {
             holders[code].ShouldNotContain("viewer", $"'{code}' is sensitive and viewer reads no secrets (00 §2)");
-            holders[code].ShouldBeSubsetOf(SensitiveHoldersAllowed);
+            holders[code].ShouldBeSubsetOf(allowed);
         }
 
         // The service identities and viewer hold nothing sensitive, as a set.
