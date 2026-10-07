@@ -16,6 +16,7 @@ internal static partial class AdapterName
     /// <param name="name">The candidate name.</param>
     internal static bool IsValid(string? name) => name is not null && Shape().IsMatch(name);
 
-    [GeneratedRegex("^" + Pattern + "$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
+    // \z, not $: .NET's $ also matches before a final '\n', which the Postgres CHECK refuses.
+    [GeneratedRegex("^" + Pattern + @"\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex Shape();
 }

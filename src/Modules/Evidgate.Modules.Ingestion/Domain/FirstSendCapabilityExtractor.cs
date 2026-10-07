@@ -20,7 +20,7 @@ internal static partial class FirstSendCapabilityExtractor
     /// slash, the protocol major.
     /// </summary>
     [GeneratedRegex(
-        "^(?<name>" + AdapterName.Pattern + ")/(?<major>[0-9]+)$",
+        "^(?<name>" + AdapterName.Pattern + @")/(?<major>[0-9]+)\z",
         RegexOptions.CultureInvariant,
         matchTimeoutMilliseconds: 100)]
     private static partial Regex SchemaShape();

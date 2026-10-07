@@ -257,6 +257,8 @@ public sealed class AdapterCapabilityTests
     [InlineData("-playwright")]
     // 65 characters: one past the 64-character cap.
     [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    // A trailing newline: .NET's $ would accept it, the column CHECK refuses it.
+    [InlineData("playwright\n")]
     public async Task RegisterCapability_InvalidName_422_ZeroRows(string name)
     {
         await using var world = await StartAsync();
