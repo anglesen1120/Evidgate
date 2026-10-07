@@ -1,0 +1,214 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { ExitCode } from './exitCodes.js';
+import { main } from './main.js';
+import { resetSecrets, type Io } from './redact.js';
+
+interface Captured {
+  readonly io: Io;
+  readonly stdout: string[];
+  readonly stderr: string[];
+}
+
+function capture(): Captured {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    io: { stdout: (text) => stdout.push(text), stderr: (text) => stderr.push(text) },
+    stdout,
+    stderr,
+  };
+}
+
+// The dev token is returned only for a loopback API URL (contracts/cli.md §4).
+const devEnv = {
+  EVIDGATE_API_URL: 'http://127.0.0.1:8080',
+  EVIDGATE_PROJECT: 'proj-1',
+  EVIDGATE_ENV: 'dev',
+  EVIDGATE_DEV_TOKEN: 'dev-token-value',
+};
+
+/** Every non-empty stderr line must carry the `evidgate: ` prefix (SEC4). */
+function expectPrefixedStderr(text: string): void {
+  for (const line of text.split('\n').filter((line) => line.length > 0)) {
+    expect(line.startsWith('evidgate: ')).toBe(true);
+  }
+}
+
+// 04.2.1-T2.1/T2.2: the dispatcher — help/version, the AC5 missing-config exit, the
+// AC8 dev path, the `--json` shape and redaction over every error path (T78).
+describe('main', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  it('prints usage and exits 0 for --help, -h and the help command', async () => {
+    for (const argv of [['--help'], ['-h'], ['help']]) {
+      const { io, stdout } = capture();
+      await expect(main(argv, {}, io)).resolves.toBe(0);
+      expect(stdout.join('')).toContain('Usage: evidgate');
+    }
+  });
+
+  it('prints the package version and exits 0 for --version', async () => {
+    const { io, stdout } = capture();
+    await expect(main(['--version'], {}, io)).resolves.toBe(0);
+    expect(stdout.join('').trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('exits 3 naming every missing variable for config check with an empty env (AC5)', async () => {
+    const { io, stderr } = capture();
+    await expect(main(['config', 'check'], {}, io)).resolves.toBe(3);
+    const text = stderr.join('');
+    expect(text).toContain('evidgate: error missing_config:');
+    expect(text).toContain('EVIDGATE_API_URL (or --api-url)');
+    expect(text).toContain('EVIDGATE_PROJECT (or --project)');
+    expect(text).toContain('EVIDGATE_OIDC_TOKEN');
+    expect(text).toContain('ACTIONS_ID_TOKEN_REQUEST_URL + ACTIONS_ID_TOKEN_REQUEST_TOKEN');
+    expect(text).toContain('EVIDGATE_INGEST_TOKEN');
+    expect(text).toContain('EVIDGATE_DEV_TOKEN');
+  });
+
+  it('runs config check on the dev path and never prints the token (AC8, T78)', async () => {
+    const { io, stdout, stderr } = capture();
+    await expect(main(['config', 'check'], devEnv, io)).resolves.toBe(0);
+    expect(stdout.join('')).toBe(
+      'ok api_url=http://127.0.0.1:8080 project=proj-1 token_source=dev\n',
+    );
+    expect(stdout.join('')).not.toContain('dev-token-value');
+    expect(stderr.join('')).not.toContain('dev-token-value');
+  });
+
+  it('emits the --json shape without a token', async () => {
+    const { io, stdout } = capture();
+    await expect(main(['config', 'check', '--json'], devEnv, io)).resolves.toBe(0);
+    const payload = JSON.parse(stdout.join('')) as {
+      ok: boolean;
+      api_url: string;
+      project: string;
+      token_source: string;
+    };
+    expect(payload).toEqual({
+      ok: true,
+      api_url: 'http://127.0.0.1:8080',
+      project: 'proj-1',
+      token_source: 'dev',
+    });
+    expect(stdout.join('')).not.toContain('dev-token-value');
+  });
+
+  it('redacts the token in --verbose output and prefixes every line', async () => {
+    const { io, stderr } = capture();
+    await expect(main(['config', 'check', '--verbose'], devEnv, io)).resolves.toBe(0);
+    const text = stderr.join('');
+    expect(text).toContain('dev_token=[REDACTED]');
+    expect(text).not.toContain('dev-token-value');
+    expectPrefixedStderr(text);
+  });
+
+  it('exits 3 with usage for an unknown flag', async () => {
+    const { io, stderr } = capture();
+    await expect(main(['config', 'check', '--nope'], {}, io)).resolves.toBe(3);
+    expect(stderr.join('')).toContain('evidgate: error usage:');
+    expect(stderr.join('')).toContain("run 'evidgate --help' for usage");
+  });
+
+  it('exits 3 with usage for a flag missing its value', async () => {
+    const { io, stderr } = capture();
+    await expect(main(['config', 'check', '--api-url'], {}, io)).resolves.toBe(3);
+    expect(stderr.join('')).toContain('evidgate: error usage:');
+  });
+
+  it('exits 3 with usage for an unknown command', async () => {
+    const { io, stderr } = capture();
+    await expect(main(['frobnicate'], {}, io)).resolves.toBe(3);
+    expect(stderr.join('')).toContain("unknown command 'frobnicate'");
+  });
+
+  it('exits 3 with usage when no command is given', async () => {
+    const { io, stderr } = capture();
+    await expect(main([], {}, io)).resolves.toBe(3);
+    expect(stderr.join('')).toContain('no command given');
+  });
+
+  it('exits 3 with usage for an extra positional on config check', async () => {
+    const { io, stderr } = capture();
+    await expect(main(['config', 'check', 'extra'], devEnv, io)).resolves.toBe(3);
+    expect(stderr.join('')).toContain('evidgate: error usage:');
+    expect(stderr.join('')).toContain("unexpected argument 'extra'");
+  });
+
+  it('redacts a secret wherever a message or output echoes it (T78)', async () => {
+    const token = 'evg_dev_FAKE_echo_secret';
+    const urlToken = 'http://127.0.0.1:8080';
+    const cases: ReadonlyArray<{
+      readonly argv: string[];
+      readonly env: Record<string, string | undefined>;
+      readonly secret: string;
+      readonly code: ExitCode;
+    }> = [
+      // the usage error echoes the unknown command text (QA-D1: before resolveConfig)
+      {
+        argv: [token],
+        env: { ...devEnv, EVIDGATE_DEV_TOKEN: token },
+        secret: token,
+        code: ExitCode.Error,
+      },
+      // parseArgs echoes the unknown flag name
+      {
+        argv: ['config', 'check', `--${token}`],
+        env: { ...devEnv, EVIDGATE_DEV_TOKEN: token },
+        secret: token,
+        code: ExitCode.Error,
+      },
+      // `config check` echoes the resolved project
+      {
+        argv: ['config', 'check', '--project', token],
+        env: { ...devEnv, EVIDGATE_DEV_TOKEN: token },
+        secret: token,
+        code: ExitCode.Ok,
+      },
+      // `config check` echoes the resolved api_url (the secret is a valid loopback URL)
+      {
+        argv: ['config', 'check', '--api-url', urlToken],
+        env: { ...devEnv, EVIDGATE_API_URL: urlToken, EVIDGATE_DEV_TOKEN: urlToken },
+        secret: urlToken,
+        code: ExitCode.Ok,
+      },
+    ];
+    for (const { argv, env, secret, code } of cases) {
+      const { io, stdout, stderr } = capture();
+      await expect(main(argv, env, io)).resolves.toBe(code);
+      expect(stdout.join('')).not.toContain(secret);
+      expect(stderr.join('')).not.toContain(secret);
+    }
+  });
+
+  it('redacts an unexpected failure and its stack (internal_error)', async () => {
+    const token = 'dev-token-value';
+    const stderr: string[] = [];
+    const io: Io = {
+      stdout: () => {
+        throw new Error(`unexpected failure with ${token}`);
+      },
+      stderr: (text) => stderr.push(text),
+    };
+    await expect(main(['config', 'check', '--verbose'], devEnv, io)).resolves.toBe(3);
+    const text = stderr.join('');
+    expect(text).toContain('evidgate: error internal_error:');
+    expect(text).not.toContain(token);
+    expectPrefixedStderr(text);
+  });
+
+  it('escapes control characters so no stderr line can start with :: (SEC4)', async () => {
+    const hostile = '\n::stop-commands::tok\u001b[31m';
+    const { io, stderr } = capture();
+    await expect(main([hostile], devEnv, io)).resolves.toBe(3);
+    const text = stderr.join('');
+    expectPrefixedStderr(text);
+    expect(text).not.toContain('\n::');
+    expect(text).toContain('\\u000a');
+    expect(text).toContain('\\u001b');
+    expect(text).toContain('::stop-commands::tok');
+  });
+});
