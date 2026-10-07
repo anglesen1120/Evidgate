@@ -10,8 +10,8 @@ export const configCheckCommand: CommandDefinition = {
   name: 'config check',
   summary: 'resolve configuration and the token source',
   requireToken: true,
-  run: async ({ config, io }) => {
-    const { source } = await getToken(config);
+  run: async ({ config, io, deps }) => {
+    const { source } = await getToken(config, deps);
     if (config.json) {
       const payload = {
         ok: true,

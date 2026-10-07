@@ -1,3 +1,7 @@
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { resolveConfig, type ResolvedConfig } from '../config.js';
@@ -5,6 +9,7 @@ import { CliError } from '../errors.js';
 import { resetSecrets } from '../redact.js';
 
 import { resolveDevToken } from './devToken.js';
+import { getToken } from './getToken.js';
 
 const baseEnv = {
   EVIDGATE_API_URL: 'http://127.0.0.1:8080',
@@ -112,5 +117,28 @@ describe('resolveDevToken', () => {
       ),
     );
     expect(error.code).toBe('missing_config');
+  });
+});
+
+// 04.2.1-T1.2 / AC8: the dev path never writes the token cache — the dev token is a
+// real ingest token and must not be persisted (04.2.1 §8 retention).
+describe('dev token cache (AC8)', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  it('dev_token_never_writes_the_cache', async () => {
+    const cacheDir = await mkdtemp(join(tmpdir(), 'evidgate-dev-'));
+    try {
+      const config = resolveConfig({
+        env: { ...baseEnv, EVIDGATE_ENV: 'dev', EVIDGATE_CACHE_DIR: cacheDir },
+      });
+
+      await getToken(config);
+
+      await expect(readdir(cacheDir)).resolves.toEqual([]);
+    } finally {
+      await rm(cacheDir, { recursive: true, force: true });
+    }
   });
 });
