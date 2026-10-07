@@ -2,6 +2,10 @@
 // Precedence is explicit `--flag` > `EVIDGATE_*` env > built-in default; an empty env
 // value counts as unset and a token value is never accepted from a flag (argv is
 // visible in `ps`, 04.2.1 §5). Every secret read here is registered for redaction.
+// 04.2.1-T1.1: adds `cacheDir` (the token-cache location, §5 `auth/token-cache.ts`).
+import { homedir as osHomedir } from 'node:os';
+import { posix, win32 } from 'node:path';
+
 import { CliError } from './errors.js';
 import { redacted, registerSecret } from './redact.js';
 
@@ -18,6 +22,10 @@ export interface ResolveConfigInput {
   readonly flags?: ConfigFlags;
   /** When true, a token source must be present or `missing_config` is raised. */
   readonly requireToken?: boolean;
+  /** Target platform for the cache-dir default; defaults to `process.platform`. */
+  readonly platform?: NodeJS.Platform;
+  /** Home directory for the cache-dir default; defaults to `os.homedir()`. */
+  readonly homedir?: string;
 }
 
 /** Where the bearer token comes from, in §5 precedence order. */
@@ -26,6 +34,8 @@ export type TokenSource = 'oidc' | 'actions-id-token' | 'ingest' | 'dev';
 export interface ResolvedConfig {
   readonly apiUrl: string;
   readonly project: string;
+  /** Absolute token-cache directory (04.2.1-T1.1); the platform default ends in `evidgate`. */
+  readonly cacheDir: string;
   readonly env: string | undefined;
   readonly oidcToken: string | undefined;
   readonly actionsIdTokenRequestUrl: string | undefined;
@@ -48,6 +58,7 @@ export const envNames = {
   ingestToken: 'EVIDGATE_INGEST_TOKEN',
   devToken: 'EVIDGATE_DEV_TOKEN',
   bindingChallenge: 'EVIDGATE_BINDING_CHALLENGE',
+  cacheDir: 'EVIDGATE_CACHE_DIR',
 } as const;
 
 const apiUrlNames = `${envNames.apiUrl} (or --api-url)`;
@@ -140,9 +151,16 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
     throw new CliError(`missing configuration: ${missing.join(', ')}`, { code: 'missing_config' });
   }
 
+  const cacheDir = resolveCacheDir(
+    env,
+    input.platform ?? process.platform,
+    input.homedir ?? osHomedir(),
+  );
+
   return Object.freeze({
     apiUrl: validateApiUrl(apiUrlRaw),
     project: validateProject(projectRaw),
+    cacheDir,
     env: environment,
     oidcToken,
     actionsIdTokenRequestUrl,
@@ -191,6 +209,7 @@ export function formatConfigForVerbose(config: ResolvedConfig): string {
     'evidgate: resolved config',
     `  api_url=${config.apiUrl}`,
     `  project=${config.project}`,
+    `  cache_dir=${config.cacheDir}`,
     `  env=${config.env ?? 'unset'}`,
     `  oidc_token=${maskSecret(config.oidcToken)}`,
     `  actions_id_token_request_url=${config.actionsIdTokenRequestUrl ?? 'unset'}`,
@@ -240,6 +259,43 @@ function flagOrEnv(flag: string | undefined, envValue: string | undefined): stri
 
 function invalidConfig(names: string, reason: string): CliError {
   return new CliError(`invalid configuration: ${names}: ${reason}`, { code: 'invalid_config' });
+}
+
+/**
+ * The token-cache directory (04.2.1 §5 `auth/token-cache.ts`): `EVIDGATE_CACHE_DIR`
+ * used as-is, else `%LOCALAPPDATA%\evidgate` on Windows, else
+ * `$XDG_CACHE_HOME/evidgate`, else `<home>/.cache/evidgate`. Every env value must be
+ * an absolute path; a relative one is `invalid_config` naming the variable and never
+ * echoing the value (SEC3).
+ */
+function resolveCacheDir(
+  env: Readonly<Record<string, string | undefined>>,
+  platform: NodeJS.Platform,
+  home: string,
+): string {
+  const paths = platform === 'win32' ? win32 : posix;
+  const explicit = rawEnv(env, envNames.cacheDir);
+  if (explicit !== undefined) {
+    return requireAbsolutePath(explicit, envNames.cacheDir, paths);
+  }
+  if (platform === 'win32') {
+    const localAppData = rawEnv(env, 'LOCALAPPDATA');
+    if (localAppData !== undefined) {
+      return paths.join(requireAbsolutePath(localAppData, 'LOCALAPPDATA', paths), 'evidgate');
+    }
+  }
+  const xdgCacheHome = rawEnv(env, 'XDG_CACHE_HOME');
+  if (xdgCacheHome !== undefined) {
+    return paths.join(requireAbsolutePath(xdgCacheHome, 'XDG_CACHE_HOME', paths), 'evidgate');
+  }
+  return paths.join(home, '.cache', 'evidgate');
+}
+
+function requireAbsolutePath(value: string, name: string, paths: typeof posix): string {
+  if (!paths.isAbsolute(value)) {
+    throw invalidConfig(name, 'must be an absolute path');
+  }
+  return value;
 }
 
 /**

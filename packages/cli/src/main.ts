@@ -1,10 +1,12 @@
-// 04.2.1-T2.1: the pure entry point. `main` takes argv, the environment and the two
-// output writers, returns the exit code and never calls `process.exit` (that is
-// `bin.ts`). Every write goes through a redacting writer, so a secret can never reach
-// stdout/stderr (T78).
+// 04.2.1-T2.1 / 04.2.1-T1.1: the pure entry point. `main` takes argv, the environment,
+// the two output writers and the optional exchange seams, returns the exit code and
+// never calls `process.exit` (that is `bin.ts`). Every write goes through a redacting
+// writer, so a secret can never reach stdout/stderr (T78); the one exception is the
+// `::add-mask::` line, which a command writes through `maskSecret` to the RAW stdout.
 import { readFileSync } from 'node:fs';
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
 
+import type { ExchangeDeps } from './auth/exchange.js';
 import {
   resolveCommand,
   usageText,
@@ -25,7 +27,7 @@ import {
   prefixStderrLines,
 } from './errors.js';
 import { ExitCode } from './exitCodes.js';
-import { createRedactingIo, resetSecrets, type Io } from './redact.js';
+import { createRedactingIo, redact, resetSecrets, type Io } from './redact.js';
 
 const helpHint = "run 'evidgate --help' for usage";
 
@@ -48,12 +50,21 @@ export async function main(
   argv: readonly string[],
   env: Readonly<Record<string, string | undefined>>,
   io: Io,
+  deps: ExchangeDeps = {},
 ): Promise<ExitCode> {
   // Register every secret before any argument parsing, so a usage error that echoes a
   // secret value is still redacted (QA-D1, contracts/cli.md §6).
   resetSecrets();
   registerEnvSecrets(env);
   const output = createRedactingIo(io);
+  // The mask line must reach the runner verbatim, so it is written to the RAW stdout.
+  // `redact(value) !== value` is true only for a registered secret, and the CR/LF guard
+  // keeps a value from forging a second workflow command (04.2.1-T1.1, T78).
+  const maskSecret = (value: string): void => {
+    if (value.length > 0 && !/[\r\n]/.test(value) && redact(value) !== value) {
+      io.stdout(`::add-mask::${value}\n`);
+    }
+  };
   let verbose = false;
   try {
     const global = parseGlobal(argv);
@@ -99,6 +110,8 @@ export async function main(
       env,
       values: parsed.values,
       positionals: rest,
+      deps,
+      maskSecret,
     });
   } catch (error) {
     return reportError(error, output, verbose);

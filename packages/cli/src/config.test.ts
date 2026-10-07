@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  formatConfigForVerbose,
   registerEnvSecrets,
   resolveConfig,
   resolveTokenSource,
@@ -280,5 +281,89 @@ describe('registerEnvSecrets', () => {
   it('skips empty and unset values', () => {
     registerEnvSecrets({ EVIDGATE_DEV_TOKEN: '', EVIDGATE_INGEST_TOKEN: undefined });
     expect(redact('nothing to hide')).toBe('nothing to hide');
+  });
+});
+
+// 04.2.1-T1.1 / NFR-04-2: the token-cache directory — `EVIDGATE_CACHE_DIR` as-is,
+// else the platform default, and a relative env value is refused without echoing it.
+describe('resolveConfig cacheDir', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  it('uses EVIDGATE_CACHE_DIR as-is', () => {
+    const config = resolveConfig({
+      env: { ...baseEnv, EVIDGATE_CACHE_DIR: '/tmp/evidgate-cache' },
+    });
+    expect(config.cacheDir).toBe('/tmp/evidgate-cache');
+  });
+
+  it('falls back to $XDG_CACHE_HOME/evidgate', () => {
+    const config = resolveConfig({
+      env: { ...baseEnv, XDG_CACHE_HOME: '/home/u/.cache' },
+      platform: 'linux',
+      homedir: '/home/u',
+    });
+    expect(config.cacheDir).toBe('/home/u/.cache/evidgate');
+  });
+
+  it('falls back to <home>/.cache/evidgate when XDG_CACHE_HOME is unset', () => {
+    const config = resolveConfig({ env: baseEnv, platform: 'linux', homedir: '/home/u' });
+    expect(config.cacheDir).toBe('/home/u/.cache/evidgate');
+  });
+
+  it('uses <home>/.cache/evidgate on darwin', () => {
+    const config = resolveConfig({ env: baseEnv, platform: 'darwin', homedir: '/Users/u' });
+    expect(config.cacheDir).toBe('/Users/u/.cache/evidgate');
+  });
+
+  it('uses %LOCALAPPDATA%\\evidgate on win32', () => {
+    const config = resolveConfig({
+      env: { ...baseEnv, LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' },
+      platform: 'win32',
+      homedir: 'C:\\Users\\u',
+    });
+    expect(config.cacheDir).toBe('C:\\Users\\u\\AppData\\Local\\evidgate');
+  });
+
+  it('prefers LOCALAPPDATA over XDG_CACHE_HOME on win32', () => {
+    const config = resolveConfig({
+      env: { ...baseEnv, LOCALAPPDATA: 'C:\\Local', XDG_CACHE_HOME: 'C:\\xdg' },
+      platform: 'win32',
+      homedir: 'C:\\Users\\u',
+    });
+    expect(config.cacheDir).toBe('C:\\Local\\evidgate');
+  });
+
+  it('refuses a relative EVIDGATE_CACHE_DIR without echoing it', () => {
+    const error = captureCliError(() =>
+      resolveConfig({ env: { ...baseEnv, EVIDGATE_CACHE_DIR: 'relative/dir' } }),
+    );
+    expect(error.code).toBe('invalid_config');
+    expect(error.message).toContain('EVIDGATE_CACHE_DIR');
+    expect(error.message).not.toContain('relative/dir');
+  });
+
+  it('refuses a relative XDG_CACHE_HOME', () => {
+    const error = captureCliError(() =>
+      resolveConfig({ env: { ...baseEnv, XDG_CACHE_HOME: 'rel' }, platform: 'linux' }),
+    );
+    expect(error.code).toBe('invalid_config');
+    expect(error.message).toContain('XDG_CACHE_HOME');
+  });
+
+  it('refuses a relative LOCALAPPDATA on win32', () => {
+    const error = captureCliError(() =>
+      resolveConfig({ env: { ...baseEnv, LOCALAPPDATA: 'rel' }, platform: 'win32' }),
+    );
+    expect(error.code).toBe('invalid_config');
+    expect(error.message).toContain('LOCALAPPDATA');
+  });
+
+  it('prints cache_dir in the verbose dump', () => {
+    const config = resolveConfig({
+      env: { ...baseEnv, EVIDGATE_CACHE_DIR: '/tmp/evidgate-cache' },
+    });
+    expect(formatConfigForVerbose(config)).toContain('cache_dir=/tmp/evidgate-cache');
   });
 });
