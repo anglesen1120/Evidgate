@@ -32,6 +32,19 @@ export function reportInternalError(error: unknown, io: Io): void {
 }
 
 /**
+ * Records `main`'s exit code without ever lowering one a process-level backstop already
+ * set. Once `ExitCode.Error` (3) is recorded — by an uncaught exception, an unhandled
+ * rejection or a stream EPIPE — a later `main` result must not overwrite it with a
+ * lower code (contracts/cli.md §5). Exported so `bin.test.ts` can assert the ordering
+ * without running the CLI.
+ */
+export function applyExitCode(exitCode: ExitCode): void {
+  if (process.exitCode !== ExitCode.Error) {
+    process.exitCode = exitCode;
+  }
+}
+
+/**
  * Registers the process-level backstops: an uncaught exception, an unhandled rejection
  * or a stdout/stderr `'error'` (EPIPE) exits 3 — never 1, the gate-FAIL code. Returns a
  * disposer so a spec can unregister them without running the CLI.
@@ -74,7 +87,7 @@ if (isEntryPoint()) {
   installProcessHandlers(io);
   main(process.argv.slice(2), process.env, io)
     .then((exitCode) => {
-      process.exitCode = exitCode;
+      applyExitCode(exitCode);
     })
     .catch((error: unknown) => {
       // `main` handles every failure itself; this is the last-resort backstop.

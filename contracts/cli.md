@@ -73,18 +73,22 @@ records them here. Until then no command emits 10–19.
 - Token values are never accepted from flags: argv is visible in `ps`.
 - `EVIDGATE_ENV`, after trim and lower-casing, must match
   `^[a-z0-9][a-z0-9._-]{0,31}$`. Otherwise exit 3 `invalid_config` with the
-  message `EVIDGATE_ENV has an invalid value`; the value is never echoed.
+  message `invalid configuration: EVIDGATE_ENV: has an invalid value`; the
+  value is never echoed.
 - `EVIDGATE_PROJECT` / `--project` rejects any Unicode control (`\p{Cc}`) or
-  format (`\p{Cf}`) character and any whitespace. The message names the variable
+  format (`\p{Cf}`) character and any whitespace. The message is
+  `invalid configuration: EVIDGATE_PROJECT (or --project): must not contain whitespace or control characters`
   and does not echo the value.
 - `EVIDGATE_API_URL` / `--api-url` must be an absolute URL. The scheme is
   `https:`, or `http:` only for loopback hosts (`localhost`, `127.0.0.1`,
-  `[::1]`). No userinfo. Any `?` or `#` in the raw value is rejected
-  (`must not contain a query or fragment`). An unparseable value exits 3
-  `invalid_config` with the message `EVIDGATE_API_URL is not an absolute URL`
-  (for `--api-url` the message names `--api-url`); the value is never echoed.
-  The normalised value is `url.origin + url.pathname` with a trailing `/`
-  removed.
+  `[::1]`). No userinfo. Every rejection exits 3 `invalid_config` with the
+  message `invalid configuration: EVIDGATE_API_URL (or --api-url): <reason>`,
+  where `<reason>` is one of: `must not contain a query or fragment` (any `?` or
+  `#` in the raw value), `is not an absolute URL` (an unparseable value),
+  `must not contain userinfo`, `http: is only allowed for loopback hosts
+(localhost, 127.0.0.1, [::1])`, or `unsupported scheme '<scheme>' (expected
+https:)`. The value is never echoed. The normalised value is
+  `url.origin + url.pathname` with a trailing `/` removed.
 - Missing required configuration is a `CliError` with exit 3 and code
   `missing_config`; the message lists every missing name at once, for example
   `missing configuration: EVIDGATE_API_URL (or --api-url), EVIDGATE_PROJECT (or --project)`.

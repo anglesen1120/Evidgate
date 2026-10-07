@@ -64,6 +64,19 @@ describe('redact', () => {
     expect(redact('a\\"b')).toBe(redacted);
   });
 
+  // D-2: `formatCliError`/`formatInternalError` escape Cc/Cf characters before the
+  // redacting writer runs, so the escaped form must also be registered. `\u200b` (Cf)
+  // is not escaped by `JSON.stringify`, so this form is only registered by the fix.
+  it('registers the control-character-escaped form of a secret (D-2)', () => {
+    registerSecret('evg_dev_\u200btoken');
+    expect(redact('evg_dev_\\u200btoken')).toBe(redacted);
+  });
+
+  it('still redacts the raw form of a secret with a format character (D-2)', () => {
+    registerSecret('evg_dev_\u200btoken');
+    expect(redact('evg_dev_\u200btoken')).toBe(redacted);
+  });
+
   it('wraps both writers', () => {
     registerSecret('tok');
     const stdout: string[] = [];

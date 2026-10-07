@@ -4,6 +4,7 @@
 // register the runtime token. Every stdout/stderr write in `main` goes through
 // `createRedactingIo`, which replaces any registered value with `[REDACTED]` and never
 // lets an `Authorization` header through.
+import { escapeControlCharacters } from './errors.js';
 
 /** Placeholder that replaces every registered secret. */
 export const redacted = '[REDACTED]';
@@ -23,9 +24,13 @@ const authorizationHeader = /(authorization\s*:\s*)[^\r\n]*/gi;
 
 /**
  * Registers a secret value and the forms it can take in an error message: the value
- * itself, its trimmed form, its percent-encoded form and its JSON-escaped form. Empty
- * forms are skipped; a value shorter than four characters is still registered
- * (fail-safe).
+ * itself, its trimmed form, its percent-encoded form, its JSON-escaped form and its
+ * control-character-escaped form. Empty forms are skipped; a value shorter than four
+ * characters is still registered (fail-safe).
+ *
+ * The escaped form matters because `formatCliError`/`formatInternalError` run
+ * `escapeControlCharacters` on the message before the redacting writer sees it, so a
+ * secret containing a `Cc`/`Cf` character would otherwise no longer match (D-2).
  */
 export function registerSecret(value: string | undefined): void {
   if (value === undefined || value.length === 0) {
@@ -33,7 +38,13 @@ export function registerSecret(value: string | undefined): void {
   }
   let added = false;
   const jsonEscaped = JSON.stringify(value).slice(1, -1);
-  for (const form of [value, value.trim(), encodeURIComponent(value), jsonEscaped]) {
+  for (const form of [
+    value,
+    value.trim(),
+    encodeURIComponent(value),
+    jsonEscaped,
+    escapeControlCharacters(value),
+  ]) {
     if (form.length > 0 && !registeredSecrets.has(form)) {
       registeredSecrets.add(form);
       added = true;

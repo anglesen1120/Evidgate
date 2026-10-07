@@ -58,4 +58,27 @@ describe('redaction of echoed input', () => {
     expect(stderr.join('')).not.toContain('hunter2');
     expect(stdout.join('')).not.toContain('hunter2');
   });
+
+  // D-2: the error formatter escapes Cc/Cf characters before the redacting writer
+  // runs, so a secret containing one is echoed in its escaped form. Both the raw and
+  // the escaped form must be redacted end to end. `\u200b` (Cf) is not escaped by
+  // `JSON.stringify`, so the escaped form is only registered by the fix.
+  it('redacts a secret whose control characters were escaped before the writer (D-2)', async () => {
+    const secret = 'evg_dev_\u200becho_value';
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const io: Io = {
+      stdout: (text) => stdout.push(text),
+      stderr: (text) => stderr.push(text),
+    };
+
+    const code = await main([secret], { EVIDGATE_INGEST_TOKEN: secret }, io);
+
+    expect(code).toBe(3);
+    expect(stderr.join('')).toContain('unknown command');
+    expect(stderr.join('')).toContain('[REDACTED]');
+    expect(stderr.join('')).not.toContain(secret);
+    expect(stderr.join('')).not.toContain('\\u200b');
+    expect(stdout.join('')).not.toContain(secret);
+  });
 });

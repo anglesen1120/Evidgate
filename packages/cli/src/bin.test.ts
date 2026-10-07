@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { installProcessHandlers, reportInternalError } from './bin.js';
+import { applyExitCode, installProcessHandlers, reportInternalError } from './bin.js';
+import { ExitCode } from './exitCodes.js';
 import { resetSecrets, type Io } from './redact.js';
 
 function capture(): { io: Io; stdout: string[]; stderr: string[] } {
@@ -72,5 +73,33 @@ describe('bin process backstops', () => {
     dispose();
     expect(stderr.join('')).toContain('evidgate: error internal_error: uncaught boom');
     expect(process.exitCode).toBe(3);
+  });
+
+  // D-1: the `.then` after `main()` must not overwrite an exit code a process-level
+  // backstop already recorded. `applyExitCode` is the exported seam for that ordering.
+  it('records main exit code when no backstop has run (D-1)', () => {
+    process.exitCode = undefined;
+    applyExitCode(ExitCode.Fail);
+    expect(process.exitCode).toBe(ExitCode.Fail);
+  });
+
+  it('never lowers an exit code a backstop already recorded (D-1)', () => {
+    process.exitCode = ExitCode.Error;
+    applyExitCode(ExitCode.Ok);
+    expect(process.exitCode).toBe(ExitCode.Error);
+  });
+
+  it('keeps the backstop exit code when main resolves after a fatal handler (D-1)', () => {
+    const { io } = capture();
+    const before = new Set(process.listeners('uncaughtException'));
+    const dispose = installProcessHandlers(io);
+    const added = process
+      .listeners('uncaughtException')
+      .filter((listener) => !before.has(listener)) as Array<(error: unknown) => void>;
+    process.exitCode = undefined;
+    added[0]?.(new Error('fatal before main settled'));
+    applyExitCode(ExitCode.Ok);
+    dispose();
+    expect(process.exitCode).toBe(ExitCode.Error);
   });
 });
