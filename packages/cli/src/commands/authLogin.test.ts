@@ -231,6 +231,19 @@ describe('auth login / auth logout', () => {
     expect(stderr.join('')).not.toContain('egt_ci_token');
   });
 
+  it('github_env_unset_exit3', async () => {
+    const env = await oidcEnv();
+    const { fetchImpl } = stubFetch(() => jsonResponse(200, successBody()));
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['auth', 'login', '--github-env'], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    expect(stderr.join('')).toContain('evidgate: error missing_config:');
+    expect(stderr.join('')).toContain('GITHUB_ENV');
+  });
+
   it('binding_errors_exit3', async () => {
     const cases = [
       { status: 403, code: 'binding_pending', hint: 'EVIDGATE_BINDING_CHALLENGE' },

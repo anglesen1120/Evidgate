@@ -187,6 +187,64 @@ describe('exchangeToken', () => {
     expect(failStub.calls).toHaveLength(2);
   });
 
+  it('retry_after_clamped_and_http_date', async () => {
+    const config = await oidcConfig();
+    const retryOnce = (headers: Record<string, string>) => {
+      let attempt = 0;
+      return stubFetch(() => {
+        attempt += 1;
+        return attempt === 1
+          ? jsonResponse(429, envelope('rate_limited'), headers)
+          : jsonResponse(200, successBody());
+      });
+    };
+
+    // A delta-seconds value above the ceiling is clamped to 60 s (contracts/cli.md §5).
+    const clamped = retryOnce({ 'retry-after': '9999' });
+    const sleepClamped = vi.fn(() => Promise.resolve());
+    await exchangeToken(config, { fetch: clamped.fetchImpl, sleep: sleepClamped });
+    expect(sleepClamped).toHaveBeenCalledWith(60_000);
+
+    // An HTTP-date is honoured as a delta from now.
+    const dated = retryOnce({ 'retry-after': new Date(Date.now() + 5_000).toUTCString() });
+    const sleepDated = vi.fn(() => Promise.resolve());
+    await exchangeToken(config, { fetch: dated.fetchImpl, sleep: sleepDated });
+    const waited = sleepDated.mock.calls[0]?.[0] ?? 0;
+    expect(waited).toBeGreaterThan(3_000);
+    expect(waited).toBeLessThanOrEqual(5_000);
+
+    // A missing header falls back to 1 s.
+    const bare = retryOnce({});
+    const sleepBare = vi.fn(() => Promise.resolve());
+    await exchangeToken(config, { fetch: bare.fetchImpl, sleep: sleepBare });
+    expect(sleepBare).toHaveBeenCalledWith(1_000);
+  });
+
+  it('rejects a 200 body whose token carries whitespace', async () => {
+    const config = await oidcConfig();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(200, {
+        token: 'egt_ ci',
+        expires_at: '2030-01-01T00:00:00Z',
+        project_id: 'proj-1',
+      }),
+    );
+
+    const error = await captureCliError(() => exchangeToken(config, { fetch: fetchImpl }));
+
+    expect(error.code).toBe('exchange_failed');
+    expect(error.message).not.toContain('egt_ ci');
+  });
+
+  it('omits binding_challenge when the env value is empty', async () => {
+    const config = await oidcConfig({ EVIDGATE_BINDING_CHALLENGE: '' });
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, successBody()));
+
+    await exchangeToken(config, { fetch: fetchImpl });
+
+    expect(JSON.parse(calls[0]?.body ?? '{}')).toEqual({});
+  });
+
   it('binding_challenge_sent', async () => {
     const withChallenge = stubFetch(() => jsonResponse(200, successBody()));
     const configWith = await oidcConfig({ EVIDGATE_BINDING_CHALLENGE: 'challenge-value' });
