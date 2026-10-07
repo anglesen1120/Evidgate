@@ -88,6 +88,10 @@ internal static class SchemaConventionScan
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only policy revisions (07.1.1-T1.1; migration 0025): the trigger and the revoked grants refuse UPDATE/DELETE except the §6 draft -> active -> retired move, so it keeps created_at only — no updated_at, and its `version` is bumped by the 0025 lifecycle trigger on a state transition, never the shared `set_updated_at_and_version`. Its tenant key, composite FK and RLS are NOT exempt."),
         new SchemaExemption(
+            "public.adapter_capability",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only first-write facts (04.7.1-T2; migration 0026): a capability row records what an adapter declared the first time it was seen and is never updated (the revoked UPDATE says so), so it keeps `first_seen_at` only — no created_at/updated_at/version and no version trigger. Its tenant key and RLS are NOT exempt."),
+        new SchemaExemption(
             "public.rls_probe",
             SchemaRule.VersionTrigger,
             "The tenancy template of migration 0003 predates the shared trigger function (0004, M1W3-01) and 0003 is checksum-locked, so the trigger cannot be added there; 0004/0005 are the copy source for module tables."),
