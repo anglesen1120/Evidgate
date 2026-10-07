@@ -76,4 +76,37 @@ describe('createApiClient', () => {
     await expect(pending).rejects.toThrow();
     expect(targetRequests).toEqual([]);
   });
+
+  it('omits the Authorization header when no token is given (ingest exchange)', () => {
+    const config = resolveConfig({
+      env: { EVIDGATE_API_URL: 'https://api.evidgate.test', EVIDGATE_PROJECT: 'proj-1' },
+    });
+
+    const client = createApiClient(config);
+    const clientConfig = client.getConfig();
+
+    expect(clientConfig.headers).toBeInstanceOf(Headers);
+    expect((clientConfig.headers as Headers).get('authorization')).toBeNull();
+  });
+
+  it('uses the injected fetch and forces redirect: error on every call', async () => {
+    const config = resolveConfig({
+      env: { EVIDGATE_API_URL: 'https://api.evidgate.test', EVIDGATE_PROJECT: 'proj-1' },
+    });
+    const seen: Request[] = [];
+    const fetchImpl: typeof fetch = (input) => {
+      const request = input as Request;
+      seen.push(request);
+      return Promise.resolve(
+        new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+      );
+    };
+
+    const client = createApiClient(config, 'bearer-token-value', fetchImpl);
+    await client.get({ url: '/', redirect: 'follow' });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.redirect).toBe('error');
+    expect(seen[0]?.headers.get('authorization')).toBe('Bearer bearer-token-value');
+  });
 });

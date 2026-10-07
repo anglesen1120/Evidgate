@@ -53,6 +53,21 @@ describe('command registry', () => {
     });
   });
 
+  it('resolves the auth login and auth logout commands', () => {
+    expect(resolveCommand(['auth', 'login'])).toMatchObject({
+      command: commandRegistry['auth login'],
+      words: 2,
+      rest: [],
+    });
+    expect(resolveCommand(['auth', 'logout'])).toMatchObject({
+      command: commandRegistry['auth logout'],
+      words: 2,
+      rest: [],
+    });
+    // `--github-env` is a per-command option, never a global one (04.2.1-T2 hand-over 2).
+    expect(commandRegistry['auth login']?.options?.['github-env']).toEqual({ type: 'boolean' });
+  });
+
   it('aligns the help column for a long command name', () => {
     const commands = [
       stub('config check', 'resolve configuration'),
