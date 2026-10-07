@@ -351,6 +351,16 @@ public sealed class TenantGucTests
             """,
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.waiver (id, org_id, project_id, scope, target_id, reason, requested_by, expires_at)
+            values (@id, @org_id, @project_id, 'case', @target_id, 'probe', @requested_by, now() + interval '1 hour')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("target_id", Guid.CreateVersion7()),
+            ("requested_by", Guid.CreateVersion7()));
         var membershipId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             "insert into public.membership (id, org_id, invited_email) values (@id, @org_id, @invited_email)",

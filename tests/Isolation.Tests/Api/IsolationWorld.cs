@@ -83,6 +83,12 @@ public sealed class IsolationProject
 
     /// <summary>The project's manifest.</summary>
     public required Guid ManifestId { get; init; }
+
+    /// <summary>The project's waivers (<c>{w}</c> of <c>/v1/waivers/{w}/…</c>), in seeding order; at least two, so the list pages.</summary>
+    public required IReadOnlyList<Guid> WaiverIds { get; init; }
+
+    /// <summary>The first waiver (<c>{w}</c>), requested by the org's admin; <see cref="WaiverIds"/>[0].</summary>
+    public Guid WaiverId => WaiverIds[0];
 }
 
 /// <summary>One seeded org: its admin, members, projects and every id a route can name.</summary>
@@ -233,6 +239,9 @@ public sealed class IsolationWorld
 
     /// <summary>Two revisions per case, so <c>/v1/cases/{c}/revisions</c> pages at limit 1.</summary>
     private const int RevisionsPerCase = 2;
+
+    /// <summary>Two waivers per project, so <c>/v1/projects/{p}/waivers</c> pages at limit 1 and the approve and revoke controls never share a row.</summary>
+    private const int WaiversPerProject = 2;
 
     /// <summary>The commit of the first tree; the second sync uses <see cref="SecondCommitSha"/>.</summary>
     private const string CommitSha = "bbbbbbb2222222";
@@ -441,6 +450,25 @@ public sealed class IsolationWorld
                 Manifest(suiteRevisions[0], primaryRevisions, environmentRevision),
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("manifest_id").GetGuid();
 
+            var waivers = new List<Guid>();
+            for (var i = 0; i < WaiversPerProject; i++)
+            {
+                waivers.Add((await SendAsync(
+                    HttpMethod.Post,
+                    "/v1/waivers",
+                    admin,
+                    org,
+                    new
+                    {
+                        project_id = project,
+                        scope = "case",
+                        target_id = cases[i % cases.Length],
+                        reason = $"isolation waiver {i}",
+                        expires_at = DateTimeOffset.UtcNow.AddDays(30),
+                    },
+                    HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("id").GetGuid());
+            }
+
             var repository = $"{orgSlug}/{projectSlug}";
             var (binding, challenge) = await CreateBindingAsync(project, admin, org, repositoryId, repository).ConfigureAwait(false);
             var (mirrorBinding, _) = await CreateBindingAsync(project, admin, org, repositoryId + 100, $"{repository}-mirror").ConfigureAwait(false);
@@ -500,6 +528,7 @@ public sealed class IsolationWorld
                 EnvironmentRevisionId = environmentRevision,
                 PolicyRevisionId = policyRevision,
                 ManifestId = manifest,
+                WaiverIds = waivers,
             };
         }
 
