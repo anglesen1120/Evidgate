@@ -3,6 +3,7 @@ using System.Text.Json;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Ingestion.Domain;
 
 namespace Evidgate.Modules.Ingestion.Application;
 
@@ -55,7 +56,7 @@ internal static class CapabilityBody
                 [new ErrorDetail(string.Empty, ContractValidationError.InvalidJsonReason)]);
         }
 
-        if (HasUnstorableText(parsed.RootElement))
+        if (UnstorableText.Contains(parsed.RootElement))
         {
             parsed.Dispose();
 
@@ -100,7 +101,7 @@ internal static class CapabilityBody
                 [new ErrorDetail(pathPrefix, ContractValidationError.BodyTooLargeReason)]);
         }
 
-        if (HasUnstorableText(document))
+        if (UnstorableText.Contains(document))
         {
             return Invalid(
                 "the capability document carries a string that cannot be stored",
@@ -146,61 +147,5 @@ internal static class CapabilityBody
         var path = string.Join('/', segments);
 
         return path.Length > 200 ? path[..200] : path;
-    }
-
-    /// <summary>
-    /// True when a member name or string anywhere in <paramref name="element"/> is no text PostgreSQL and the
-    /// RFC 8785 form can carry: an unpaired UTF-16 surrogate (which also makes the schema engine throw) or
-    /// U+0000 (refused by jsonb). Checked before the schema runs, so such a body is a 422, never a 400 or a 500.
-    /// </summary>
-    /// <param name="element">The parsed document root or capability object.</param>
-    internal static bool HasUnstorableText(JsonElement element)
-    {
-        try
-        {
-            return Walk(element);
-        }
-        catch (InvalidOperationException)
-        {
-            // System.Text.Json refuses to transcode an invalid escape sequence.
-            return true;
-        }
-
-        static bool Walk(JsonElement element) => element.ValueKind switch
-        {
-            JsonValueKind.String => Unstorable(element.GetString()!),
-            JsonValueKind.Array => element.EnumerateArray().Any(Walk),
-            JsonValueKind.Object => element.EnumerateObject().Any(member => Unstorable(member.Name) || Walk(member.Value)),
-            _ => false,
-        };
-    }
-
-    /// <summary>NUL, or a surrogate without its partner.</summary>
-    private static bool Unstorable(string text)
-    {
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (c == '\0')
-            {
-                return true;
-            }
-
-            if (char.IsHighSurrogate(c))
-            {
-                if (i + 1 >= text.Length || !char.IsLowSurrogate(text[i + 1]))
-                {
-                    return true;
-                }
-
-                i++;
-            }
-            else if (char.IsLowSurrogate(c))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
-using Evidgate.Modules.Ingestion.Application;
 
 namespace Evidgate.Modules.Ingestion.Domain;
 
@@ -16,9 +15,12 @@ namespace Evidgate.Modules.Ingestion.Domain;
 /// </summary>
 internal static partial class FirstSendCapabilityExtractor
 {
-    /// <summary>The <c>ext.schema</c> shape: an adapter name, a slash, the protocol major.</summary>
+    /// <summary>
+    /// The <c>ext.schema</c> shape: an adapter name (the shared <see cref="AdapterName"/> grammar), a
+    /// slash, the protocol major.
+    /// </summary>
     [GeneratedRegex(
-        "^(?<name>[a-z0-9][a-z0-9._-]{0,63})/(?<major>[0-9]+)$",
+        "^(?<name>" + AdapterName.Pattern + ")/(?<major>[0-9]+)$",
         RegexOptions.CultureInvariant,
         matchTimeoutMilliseconds: 100)]
     private static partial Regex SchemaShape();
@@ -36,8 +38,8 @@ internal static partial class FirstSendCapabilityExtractor
         }
 
         // A lone surrogate in a carrier string makes GetString throw; the shared guard turns it into a
-        // 422 before the decode, exactly as the capability body does (CapabilityBody.HasUnstorableText).
-        if (CapabilityBody.HasUnstorableText(kind))
+        // 422 before the decode, exactly as the capability body does (UnstorableText.Contains).
+        if (UnstorableText.Contains(kind))
         {
             return FirstSendExtraction.Invalid([new ErrorDetail("/kind", "invalid_value")]);
         }
@@ -60,7 +62,7 @@ internal static partial class FirstSendCapabilityExtractor
             return FirstSendExtraction.Invalid([new ErrorDetail("/ext/schema", "invalid_format")]);
         }
 
-        if (CapabilityBody.HasUnstorableText(schema))
+        if (UnstorableText.Contains(schema))
         {
             return FirstSendExtraction.Invalid([new ErrorDetail("/ext/schema", "invalid_value")]);
         }

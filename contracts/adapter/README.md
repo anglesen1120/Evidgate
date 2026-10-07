@@ -78,11 +78,11 @@ false`): a member the protocol does not define is rejected 422
 
 Errors use the 00 §9.2 envelope with `retryable: false`:
 
-| Code                         | Status | When                                                                                              |
-| ---------------------------- | ------ | ------------------------------------------------------------------------------------------------- |
-| `capability_invalid`         | 422    | the document fails the schema; `details[].path` points at the offending field                     |
-| `unsupported_protocol_major` | 422    | the adapter's `protocol.major` is not the server's; `details` names both majors                   |
-| `capability_conflict`        | 409    | the natural key tuple conflicts with a stored row that declares a different `mode`/`supports` set |
+| Code                         | Status | When                                                                                                            |
+| ---------------------------- | ------ | --------------------------------------------------------------------------------------------------------------- |
+| `capability_invalid`         | 422    | the document fails the schema; `details[].path` points at the offending field                                   |
+| `unsupported_protocol_major` | 422    | the adapter's `protocol.major` is not the server's; `details` names both majors                                 |
+| `capability_conflict`        | 409    | the natural key tuple conflicts with a stored row that differs in `engine_family`/`platforms`/`supports`/`mode` |
 
 The executable form of the table above is 04.7.1-T3 (the compatibility matrix
 test); a behaviour change here fails that test, not this document.

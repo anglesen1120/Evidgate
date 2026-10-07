@@ -101,7 +101,10 @@ internal sealed class AdapterCapabilityRegistrar(
         return await RegisterValidatedAsync(adapterName, document, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Binds, negotiates and stores a document that already passed <c>capability.v1</c>.</summary>
+    /// <summary>
+    /// Checks the adapter name, then binds, negotiates and stores a document that already passed
+    /// <c>capability.v1</c>.
+    /// </summary>
     /// <param name="adapterName">The adapter identity: the natural key's <c>name</c>.</param>
     /// <param name="document">The validated <c>capability.v1</c> document root.</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
@@ -110,6 +113,21 @@ internal sealed class AdapterCapabilityRegistrar(
         JsonElement document,
         CancellationToken cancellationToken)
     {
+        // The name is the natural key's `name` and the column CHECK's subject (migration 0026); refuse it
+        // here, before any statement, so a bad name is a 422 capability_invalid and never a 23514 that
+        // aborts the tenant transaction. The first-send path already enforced the same grammar in
+        // FirstSendCapabilityExtractor, so this is a no-op there and the one guard for the direct command.
+        if (!AdapterName.IsValid(adapterName))
+        {
+            var invalid = CapabilityBody.Invalid(
+                "the adapter name does not match the adapter-name grammar",
+                [new ErrorDetail("/name", "invalid_format")]);
+
+            EvidgateTelemetry.RecordAdapterCapabilityRejected(invalid.Code, null);
+
+            return Result.Failure<AdapterCapabilityRegistered>(invalid);
+        }
+
         var binding = CapabilityBinder.Bind(document);
         var negotiation = negotiator.Negotiate(binding.Document, ServerProtocol.Current);
         if (!negotiation.Accepted)

@@ -7,7 +7,6 @@ using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Application.Commands;
-using Evidgate.Modules.Ingestion.Contracts;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -245,6 +244,33 @@ public sealed class AdapterCapabilityTests
         (await RowsAsync(world)).ShouldBe(0);
     }
 
+    [Theory]
+    // Uppercase is outside the ^[a-z0-9][a-z0-9._-]{0,63}$ grammar the column CHECK enforces.
+    [InlineData("Playwright")]
+    // The ext.schema form is not a bare name.
+    [InlineData("playwright/1")]
+    // An empty name.
+    [InlineData("")]
+    // A space is outside the grammar.
+    [InlineData("play wright")]
+    // A leading separator is outside the grammar.
+    [InlineData("-playwright")]
+    // 65 characters: one past the 64-character cap.
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public async Task RegisterCapability_InvalidName_422_ZeroRows(string name)
+    {
+        await using var world = await StartAsync();
+
+        var result = await RegisterAsync(world, name, Document());
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ApiErrorCode.CapabilityInvalid);
+        result.Error.Status.ShouldBe(422);
+        result.Error.Retryable.ShouldBeFalse();
+        result.Error.Details!.ShouldContain(detail => detail.Path == "/name");
+        (await RowsAsync(world)).ShouldBe(0);
+    }
+
     [Fact]
     public async Task RegisterCapability_IngestOnly_RegistersAndStoresMode()
     {
@@ -253,9 +279,10 @@ public sealed class AdapterCapabilityTests
         var result = await RegisterAsync(world, "playwright", Document(mode: "ingest_only"));
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        // The stored row carries the mode the document declared — the input the gate-eligibility rule
+        // reads (AC4). The rule itself is the pure AdapterModeRules function, covered by
+        // ProtocolNegotiatorUnitTests.AdapterModeRules_IsGateEligible_TruthTable.
         (await _fixture.ScalarAsync<string>(world.Database, "select mode from public.adapter_capability")).ShouldBe("ingest_only");
-        // An ingest_only producer is never gate-eligible while the manifest is not proven complete (AC4).
-        AdapterModeRules.IsGateEligible(AdapterMode.IngestOnly, manifestProvenComplete: false).ShouldBeFalse();
     }
 
     [Fact]
