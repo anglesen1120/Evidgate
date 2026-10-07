@@ -9,8 +9,33 @@ internal sealed record RlsTable(string Name, bool RowLevelSecurityEnabled, bool 
 /// <summary>
 /// One row level security policy, as <c>pg_get_expr</c> writes its two clauses. A clause the
 /// policy does not declare is the empty string, never null, so the matcher never has to guess.
+/// <see cref="Command"/>, <see cref="Permissive"/> and <see cref="Roles"/> are what decides
+/// whether the policy can widen a read for the runtime role: permissive policies OR-combine,
+/// so a permissive sibling that reaches <c>evidgate_app</c> and governs SELECT opens the table
+/// however scoped its neighbours are (00 §5.4.7/T2).
 /// </summary>
-internal sealed record RlsPolicy(string Table, string Using, string WithCheck);
+internal sealed record RlsPolicy(
+    string Table,
+    string Name,
+    string Command,
+    bool Permissive,
+    string[] Roles,
+    string Using,
+    string WithCheck)
+{
+    /// <summary>True for <c>polcmd = '*'</c>: the policy covers every command, reads included.</summary>
+    internal bool IsAllCommands => string.Equals(Command, "*", StringComparison.Ordinal);
+
+    /// <summary>
+    /// True when PostgreSQL consults the policy for a SELECT (<c>FOR ALL</c> or <c>FOR SELECT</c>).
+    /// An INSERT/UPDATE/DELETE-only policy never widens a read.
+    /// </summary>
+    internal bool AppliesToSelect => IsAllCommands || string.Equals(Command, "r", StringComparison.Ordinal);
+
+    /// <summary>True when the policy reaches <paramref name="role"/> or the PUBLIC pseudo-role.</summary>
+    internal bool AppliesTo(string role, string publicRole) =>
+        Roles.Contains(role, StringComparer.Ordinal) || Roles.Contains(publicRole, StringComparer.Ordinal);
+}
 
 /// <summary>One role of the live catalogue, with the two attributes that would defeat a policy (DECISIONS F5).</summary>
 internal sealed record RlsRole(string Name, bool BypassRls, bool Superuser);
@@ -63,6 +88,12 @@ internal static class RlsTableCatalog
     /// <summary>The tenant setting the parameterised <c>set_config</c> of the tenant scope writes (00 §5.4.2).</summary>
     internal const string TenantSetting = "evidgate.org_id";
 
+    /// <summary>The runtime role every read rule is judged for — the role both hosts connect as (00 §5.4.3).</summary>
+    internal const string ApplicationRole = "evidgate_app";
+
+    /// <summary>How PostgreSQL spells the PUBLIC pseudo-role in a policy's role list (<c>polroles</c> 0).</summary>
+    internal const string PublicRole = "public";
+
     /// <summary>The org-scoped policy predicate of a tenant table (00 §5.4.7/T2).</summary>
     internal const string TenantPredicate = "org_id = evidgate.current_org_id()";
 
@@ -114,13 +145,25 @@ internal static class RlsTableCatalog
         return tables;
     }
 
-    /// <summary>Every policy of every base table, with both clauses as <c>pg_get_expr</c> writes them.</summary>
+    /// <summary>
+    /// Every policy of every base table, with its name, command, permissiveness, role list and
+    /// both clauses as <c>pg_get_expr</c> writes them. The role list spells the PUBLIC
+    /// pseudo-role (<c>polroles</c> 0) as <c>public</c>, exactly as the boot self-check reads it.
+    /// </summary>
     internal static async Task<IReadOnlyList<RlsPolicy>> ReadPoliciesAsync(
         NpgsqlConnection connection,
         CancellationToken cancellationToken)
     {
         const string sql = """
             select n.nspname || '.' || c.relname,
+                   p.polname,
+                   p.polcmd::text,
+                   p.polpermissive,
+                   coalesce((select array_agg(coalesce(r.rolname, 'public')::text
+                                                order by coalesce(r.rolname, 'public')::text)
+                               from unnest(p.polroles) as u(roleoid)
+                               left join pg_catalog.pg_roles r on r.oid = u.roleoid),
+                            array[]::text[]),
                    coalesce(pg_catalog.pg_get_expr(p.polqual, p.polrelid), ''),
                    coalesce(pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid), '')
               from pg_catalog.pg_policy p
@@ -129,7 +172,7 @@ internal static class RlsTableCatalog
              where c.relkind in ('r', 'p')
                and n.nspname <> 'information_schema'
                and n.nspname not like 'pg\_%'
-             order by 1
+             order by 1, 2
             """;
 
         var policies = new List<RlsPolicy>();
@@ -138,7 +181,14 @@ internal static class RlsTableCatalog
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            policies.Add(new RlsPolicy(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+            policies.Add(new RlsPolicy(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetBoolean(3),
+                await reader.GetFieldValueAsync<string[]>(4, cancellationToken),
+                reader.GetString(5),
+                reader.GetString(6)));
         }
 
         return policies;
@@ -268,10 +318,27 @@ internal static class RlsTableCatalog
         await scope.ScalarAsync<string?>("select set_config(@key, null, true)", ("key", TenantSetting));
     }
 
+    /// <summary>
+    /// True when the policy's USING clause carries the predicate. A policy scoped only by its
+    /// WITH CHECK does not scope a read: PostgreSQL consults USING for SELECT, so a permissive
+    /// policy with <c>using (true) with check (org_id = …)</c> still exposes every row (00 §5.4.7/T2).
+    /// </summary>
+    internal static bool MatchesUsing(RlsPolicy policy, string predicate) =>
+        policy.Using.Length > 0 && IsolationSelfCheck.MatchesPredicate(policy.Using, predicate);
+
     /// <summary>True when either clause of the policy carries the predicate (the catalogue rule of 02 §4.5).</summary>
     internal static bool Matches(RlsPolicy policy, string predicate) =>
-        (policy.Using.Length > 0 && IsolationSelfCheck.MatchesPredicate(policy.Using, predicate))
+        MatchesUsing(policy, predicate)
         || (policy.WithCheck.Length > 0 && IsolationSelfCheck.MatchesPredicate(policy.WithCheck, predicate));
+
+    /// <summary>
+    /// True when the policy is one PostgreSQL OR-combines into a SELECT for the runtime role:
+    /// permissive, reaching <c>evidgate_app</c> or PUBLIC, and governing SELECT (<c>FOR ALL</c>
+    /// or <c>FOR SELECT</c>). A restrictive policy only narrows what the permissive ones allow,
+    /// and a policy for another role never reaches the app role, so neither can widen a read.
+    /// </summary>
+    internal static bool ScopesSelectForApp(RlsPolicy policy) =>
+        policy.Permissive && policy.AppliesTo(ApplicationRole, PublicRole) && policy.AppliesToSelect;
 
     private static string[] Split(string commaSeparated) =>
         commaSeparated.Length == 0

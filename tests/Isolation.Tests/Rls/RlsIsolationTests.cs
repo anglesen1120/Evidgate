@@ -280,6 +280,27 @@ public sealed class RlsIsolationTests : HarnessTest
                     + "(USING or WITH CHECK through evidgate.current_org_id()) — a table absent from both the "
                     + "org-scoped policy set and the exception list");
             }
+
+            // A permissive policy the runtime role can use is OR-combined with its siblings, so
+            // an unlisted (tenant) table is only org-scoped for a read when every such policy
+            // that governs a SELECT filters through the tenant predicate in USING. A policy
+            // scoped only by its WITH CHECK — `using (true) with check (org_id = …)` — leaves
+            // the read open, so it is refused here; the catalogue kind of the exception list is
+            // the only shape where a WITH-CHECK-only scope is accepted (02 §4.5, and
+            // RlsPolicyCoverageTests.CoverageRule_CataloguePolicyScopedOnlyByItsWithCheck_IsAccepted).
+            if (kind is null)
+            {
+                foreach (var policy in tablePolicies.Where(RlsTableCatalog.ScopesSelectForApp))
+                {
+                    if (!RlsTableCatalog.MatchesUsing(policy, RlsTableCatalog.TenantPredicate))
+                    {
+                        failures.Add(
+                            $"{table.Name}: permissive policy '{policy.Name}' reaches evidgate_app for SELECT but its USING "
+                            + $"is not '{RlsTableCatalog.TenantPredicate}' — permissive policies OR-combine, so the read is "
+                            + "not org-scoped (a WITH CHECK alone does not scope a read)");
+                    }
+                }
+            }
         }
 
         // T3/T4: the exception list's kinds carry their own shape, not just "a policy exists".

@@ -51,7 +51,9 @@ public sealed class ResolverTests : HarnessTest
 
     /// <summary>
     /// The platform identity tables of AC5 (D12): they hold no customer business data and are
-    /// reached only through a membership, never by a direct tenant read. The exception list
+    /// reached only through a membership, never by a direct tenant read. The contract is
+    /// therefore stronger than the resolved tables' — the app role must hold no direct SELECT
+    /// on them at all, FORCE row level security or not (02.9.1 §8 T1). The exception list
     /// allows the entry before the migration that creates the table, so an absent one is reported
     /// as inert rather than skipped.
     /// </summary>
@@ -208,7 +210,10 @@ public sealed class ResolverTests : HarnessTest
         }
 
         // 4. The platform identity tables: absent ones are inert (the exception list allows the
-        //    entry first); a present one the app role can read must at least be FORCE-RLS'd.
+        //    entry first); a present one the app role can read at all is a hole. These tables
+        //    are reached only through evidgate_resolve and membership, so no FORCE flag and no
+        //    policy makes a direct SELECT acceptable — the resolver must be the only path
+        //    across the tenant boundary (00 §5.4.8, TL T1; 02.9.1 §8 T1).
         foreach (var table in PlatformIdentityTables)
         {
             if (!await RlsTableCatalog.TableExistsAsync(connection, table, Token))
@@ -218,18 +223,19 @@ public sealed class ResolverTests : HarnessTest
             }
 
             var canRead = await RlsTableCatalog.HasTablePrivilegeAsync(connection, "evidgate_app", table, "SELECT", Token);
-            var info = tablesByName[table];
-            if (canRead && !info.RowLevelSecurityForced)
+            if (canRead)
             {
                 failures.Add(
-                    $"{table}: evidgate_app holds a direct SELECT on a platform identity table without FORCE row level security");
+                    $"{table}: evidgate_app holds a direct SELECT on a platform identity table — it is reached only "
+                    + "through evidgate_resolve and membership, so the resolver would not be the only path across the "
+                    + "tenant boundary (00 §5.4.8, TL T1)");
             }
 
             _output.WriteLine(
                 "{0}: evidgate_app SELECT={1} force={2} policies={3}",
                 table,
                 canRead,
-                info.RowLevelSecurityForced,
+                tablesByName.GetValueOrDefault(table)?.RowLevelSecurityForced ?? false,
                 (policiesByTable.GetValueOrDefault(table) ?? []).Count);
         }
 
