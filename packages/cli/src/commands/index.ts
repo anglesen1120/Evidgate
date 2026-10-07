@@ -12,6 +12,7 @@ import { authLoginCommand } from './authLogin.js';
 import { authLogoutCommand } from './authLogout.js';
 import { configCheckCommand } from './configCheck.js';
 import { manifestsUploadCommand } from './manifestsUpload.js';
+import { quickstartCommand } from './quickstart.js';
 
 /** Values `node:util` `parseArgs` returns for the merged global + command options. */
 export type ParsedValues = Record<string, string | boolean | Array<string | boolean> | undefined>;
@@ -43,6 +44,12 @@ export interface CommandDefinition {
   readonly options?: ParseArgsOptionsConfig;
   /** Usage placeholder for the command's positional arguments, e.g. `<file>`. */
   readonly positionals?: string;
+  /**
+   * Optional pre-flight check `main` runs after `resolveConfig` and BEFORE the
+   * `--verbose` config dump, so a command can refuse an unusable configuration without
+   * that dump echoing the offending value (04.2.4-T2 `quickstart` project guard).
+   */
+  readonly validateConfig?: (config: ResolvedConfig) => void;
   readonly run: (context: CommandContext) => Promise<ExitCode>;
 }
 
@@ -52,6 +59,7 @@ export const commandRegistry: Readonly<Record<string, CommandDefinition>> = {
   [authLoginCommand.name]: authLoginCommand,
   [authLogoutCommand.name]: authLogoutCommand,
   [manifestsUploadCommand.name]: manifestsUploadCommand,
+  [quickstartCommand.name]: quickstartCommand,
 };
 
 export interface ResolvedCommand {

@@ -17,7 +17,7 @@ holds only the process-level contract.
   and the 401 purge); 04.2.2-T2 adds `runs create`.
 - 04.2.3 adds the spool format, its caps, `EVIDGATE_SPOOL_*` and
   `EVIDGATE_SEND_DEADLINE`, and `runs finalize`.
-- 04.2.4 adds `artifacts upload` and `quickstart`.
+- 04.2.4-T2 adds `quickstart` (§9); `artifacts upload` comes with 04.2.4-T1.
 - 04.9.1 adds `replay` and the replay exit codes 10–19 (04.9.1-T4).
 - 07.6.1 adds `gate`; 07.7.1 adds the advisory exit rule; 07.8.1 adds
   `gate --release --target`.
@@ -26,7 +26,11 @@ holds only the process-level contract.
 Command registry: a command is one `CommandDefinition` entry — `name`
 (space-separated words, e.g. `config check`), `summary`, `requireToken`, an
 optional `options` (node:util `parseArgs` option config, merged with the global
-options for that command) and an optional `positionals` usage string. The
+options for that command), an optional `positionals` usage string and an
+optional `validateConfig(config)` pre-flight check. `main` calls
+`validateConfig` right after `resolveConfig` and before the `--verbose` config
+dump, so a command can refuse an unusable configuration without that dump
+echoing the offending value (04.2.4-T2 `quickstart` project guard). The
 dispatcher resolves the command by the longest registered name that prefixes the
 positionals and passes the remaining positionals; `CommandContext` is
 `{ config, io, env, values, positionals, deps, maskSecret }`. `deps` is the
@@ -198,6 +202,7 @@ position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 | Code                  | Exit | Meaning                                                                                                                                                                             |
 | --------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `usage`               | 3    | unknown command or flag, or a missing flag value; a one-line help pointer follows                                                                                                   |
+| `write_failed`        | 3    | `quickstart --write` could not create or write the file (permissions, read-only filesystem, full disk, I/O); the message is fixed and never names the path                          |
 | `missing_config`      | 3    | a required field or token source is unset; the message lists every missing name at once                                                                                             |
 | `invalid_config`      | 3    | a value fails validation; the message names the variable and does not echo the value                                                                                                |
 | `dev_token_refused`   | 3    | `EVIDGATE_DEV_TOKEN` set while `EVIDGATE_ENV` is not exactly `dev`, or the API URL host is not loopback                                                                             |
@@ -383,3 +388,103 @@ The cap is the server's documented transport limit: openapi `createManifest`
 ("Body ≤ 256 KiB → 413") and 05.1.1 §8 (`MaxManifestBytes = 256 * 1024`). The
 CLI refuses a larger file locally, so the 413 is never reached. The manifest
 content is never echoed, not even under `--verbose`.
+
+## 9. Quickstart
+
+`evidgate quickstart [--format github|generic] [--write <path>]` (04.2.4-T2)
+renders a CI recipe for the project to stdout, or writes it to a file. It is a
+local template command: no network call, no token read, no cache read. It still
+resolves configuration like every other command (§3), so `EVIDGATE_API_URL` (or
+`--api-url`) and `EVIDGATE_PROJECT` (or `--project`) are required; a missing one
+fails with the usual configuration error.
+
+Options:
+
+- `--format <github|generic>` — default `github`; any other value exits 3
+  `usage` with `--format must be github or generic`.
+- `--write <path>` — write the rendered template to `<path>` instead of stdout.
+
+Project guard: the resolved project must match
+`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`. A value that does not match exits 3
+`invalid_config` with `invalid configuration: EVIDGATE_PROJECT (or --project):
+not renderable in a CI template`. The guard runs as the command's
+`validateConfig` pre-flight check (§1), before `main`'s `--verbose` config dump,
+so the value is never echoed — not even under `--verbose` — and a project name
+carrying YAML, a GitHub `${{ }}` expression or shell metacharacters cannot reach
+the rendered file.
+
+Pinned version: both templates pin the exact `version` from
+`packages/cli/package.json` (`@evidgate/cli@<version>`), never a range and never
+`latest`. `readCliVersion()` is shared between `main.ts` and the command, so the
+pin follows the package automatically.
+
+GitHub template (`--format github`, YAML):
+
+- top-level `permissions: { contents: read, id-token: write }`;
+- `on: push` and `pull_request` (a comment notes that a fork PR gets no OIDC
+  token);
+- one job `evidgate` on `ubuntu-24.04`, with `env`
+  `EVIDGATE_API_URL: ${{ vars.EVIDGATE_API_URL }}` — a repository configuration
+  **variable**, not a secret, and the only stored setting — and
+  `EVIDGATE_PROJECT: "<project>"` rendered literal;
+- steps: `actions/checkout` and `actions/setup-node` pinned by commit SHA (the
+  same SHAs as the repo `ci.yml`), `node-version: "22"`, then
+  `npx --yes --package @evidgate/cli@<version> -- evidgate auth login` (OIDC via
+  `ACTIONS_ID_TOKEN_REQUEST_*`, exchanged at `POST /v1/ci/token`; the token goes
+  only to the 0600 cache, never printed) and
+  `npx … -- evidgate manifests upload --file evidgate-manifest.json`;
+- steps not yet built are comments naming the owning task, never fake commands:
+  `runs create` (04.2.2-T2), sending events and `runs finalize` (04.2.3-T1/T2),
+  `artifacts upload` (04.2.4-T1).
+
+No `secrets.` reference and no token or key value appears anywhere in the
+template.
+
+Generic template (`--format generic`, POSIX `sh`): `#!/bin/sh` with `set -eu`.
+[DECISION] Generic CI renders a shell script, not YAML: V1 CI integration is
+GitHub Actions, and other CIs are per-project configuration (00 §1, 2026-10-02).
+The script expects `EVIDGATE_API_URL` from the CI's non-secret variables, guards
+it with `: "${EVIDGATE_API_URL:?…}"` and then `export`s it, so the pinned `npx`
+steps inherit it, and renders `EVIDGATE_PROJECT='<project>'`. The credential is
+named only:
+`EVIDGATE_OIDC_TOKEN` when the CI injects a short-lived OIDC JWT the project
+binding accepts, else `EVIDGATE_INGEST_TOKEN` injected by the CI's masked secret
+store — a project-scoped, revocable, rotatable ingest token created with an
+expiry (02.4.2), never committed and never echoed. It then runs the same pinned
+`npx` lines for `auth login` and `manifests upload`, with the same commented
+placeholders as the GitHub template.
+
+`--write <path>`:
+
+- containment is decided only by comparing `realpath` of the nearest existing
+  parent of the target against `realpath(cwd)`: the target must be that
+  directory or sit under it, decided with `path.relative` so the check is also
+  correct when the cwd is `/`. A `..` escape or a symlinked parent that points
+  outside exits 3 `usage`; an absolute path that reaches the cwd through a
+  symlink alias (macOS `/tmp` → `/private/tmp`) is accepted;
+- missing parent directories inside cwd are created (`mkdir -p`);
+- the file is created at the realpath'd target with flag `wx` (exclusive — an
+  existing file exits 3 `usage` `file exists`) and mode `0o644`;
+- every filesystem failure is mapped to a fixed message that never carries the
+  Node error text or an absolute path: a path-shape errno (`ENOENT`, `ENOTDIR`,
+  `EISDIR`, `EEXIST`) exits 3 `usage` (`cannot write --write path: not a
+directory`, `cannot write --write path: no such directory`, `cannot write
+--write path: is a directory`, `file exists`); any other failure (`EACCES`,
+  `EPERM`, `EROFS`, `ENOSPC`, `EIO`, …) exits 3 `write_failed` (`cannot write
+--write path`);
+- a write that fails after the exclusive create closes the handle and removes
+  the file it created, so a retry does not hit `file exists`;
+- after the file is created its `realpath` is re-checked against `realpath(cwd)`
+  and removed with `usage` `--write path escapes the working directory` if it
+  escaped. Residual race: a local actor with write access inside the cwd could
+  swap a parent directory for a symlink between the containment check and the
+  create; the post-create re-check is what catches it;
+- stdout prints `wrote <relative path>` (relative to `realpath(cwd)`), with
+  control and format characters escaped as `\uXXXX` (§5) so a filename cannot
+  forge a log line.
+
+Without `--write`, the template goes to stdout and nothing else is printed.
+
+Exit codes: `0` on success; `3` for a usage error (`--format`, `--write`), an
+invalid configuration (the project guard) or any other error. The command emits
+no other code.
