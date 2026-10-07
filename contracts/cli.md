@@ -95,6 +95,11 @@ records them here. Until then no command emits 10–19.
 (localhost, 127.0.0.1, [::1])`, or `unsupported scheme '<scheme>' (expected
 https:)`. The value is never echoed. The normalised value is
   `url.origin + url.pathname` with a trailing `/` removed.
+- `EVIDGATE_API_URL` / `--api-url` is the API root **without** the version
+  prefix. The openapi document declares `servers: - url: /v1`, so the CLI appends
+  `/v1` to every API call (`POST /v1/ci/token`, `POST /v1/projects/{p}/manifests`).
+  A value that already ends in `/v1` therefore yields `/v1/v1`; this is not
+  validated against (there is no rule forbidding it), so pass the root.
 - `EVIDGATE_CACHE_DIR` is used as-is; when unset the default is
   `%LOCALAPPDATA%\evidgate` on Windows, else `$XDG_CACHE_HOME/evidgate`, else
   `<home>/.cache/evidgate`. A relative `EVIDGATE_CACHE_DIR` is exit 3
@@ -168,8 +173,11 @@ stderr line format:
   hint/request_id lines
 
 A `detail:` line is `index=<n> path=<p> reason=<r>`: `index=` is omitted when the
-entry has none, a field that is not a string or a number is skipped, and every text
-field is control-char escaped and capped at 200 chars. At most 50 `detail:` lines are
+entry has none, an `index` or `path` that is not a string or a number is skipped, and
+every text field is control-char escaped and capped at 200 chars. A detail whose
+`reason` is missing or not a string makes the whole envelope unusable, so the reply
+falls back to the command's fallback code (`request_failed` for `manifests upload`)
+with no `detail:` lines (fail closed). At most 50 `detail:` lines are
 printed; more collapse into one final `evidgate: detail: (<k> more)` line. No
 submitted value is echoed — the server names a parameter by position (`#n`).
 
@@ -201,8 +209,9 @@ verbatim as `error.code` (for example `token_invalid`, `token_replayed`,
 `binding_disabled`, `rate_limited`, `unavailable`, `manifest_invalid`); a code that
 does not match becomes the command's fallback code (`exchange_failed` for the
 exchange, `request_failed` for `manifests upload`). `request_id` comes from the body
-`error.request_id`, else the `X-Request-Id` header. A 429 is retried once after
-`Retry-After` (clamped to 0–60 s, default 1 s); 401/403/409 are never retried. No
+`error.request_id`, else the `X-Request-Id` header. A 429 from the token exchange
+(`POST /v1/ci/token`) is retried once after `Retry-After` (clamped to 0–60 s, default
+1 s); `manifests upload` does not retry (§8). 401/403/409 are never retried. No
 server subcode changes the exit code.
 
 - `Retry-After` is delta-seconds (digits only) or an HTTP-date; a missing header

@@ -2,10 +2,12 @@
 // `manifest_id`/`manifest_hash` output, the `manifest_invalid` details passthrough, the
 // local size cap, the 401 cache purge (hand-over from 04.2.1-T1 #23) and every failure
 // path (04.2.2 §2 AC1, §5, §8, §9, §10; contracts/cli.md §5/§6/§7).
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -41,10 +43,10 @@ function capture(): Captured {
 
 interface StubCall {
   readonly request: Request;
-  readonly body: string;
+  readonly body: Buffer;
 }
 
-/** A `fetch` stub that records every request (URL, headers, body) and answers from `handler`. */
+/** A `fetch` stub that records every request (URL, headers, raw body) and answers from `handler`. */
 function stubFetch(handler: (request: Request) => Response | Promise<Response>): {
   readonly fetchImpl: typeof fetch;
   readonly calls: StubCall[];
@@ -52,7 +54,7 @@ function stubFetch(handler: (request: Request) => Response | Promise<Response>):
   const calls: StubCall[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
-    calls.push({ request, body: await request.clone().text() });
+    calls.push({ request, body: Buffer.from(await request.clone().arrayBuffer()) });
     return handler(request);
   };
   return { fetchImpl, calls };
@@ -140,10 +142,9 @@ describe('manifests upload', () => {
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call?.request.method).toBe('POST');
-    // The SDK server base carries `/v1`; assert the operation path and the method.
-    expect(
-      new URL(call?.request.url ?? '').pathname.endsWith(`/projects/${project}/manifests`),
-    ).toBe(true);
+    // D-1: `createApiClient` puts the SDK's `/v1` server prefix on the base URL, so the
+    // operation path is `<root>/v1/projects/{p}/manifests` (the env value carries no `/v1`).
+    expect(new URL(call?.request.url ?? '').pathname).toBe(`/v1/projects/${project}/manifests`);
     expect(call?.request.headers.get('authorization')).toBe('Bearer dev-token-value');
     expect(call?.request.headers.get('content-type')).toBe('application/json');
     // 00 §9.1: the route requires an `Idempotency-Key` (openapi `required: true`); the
@@ -151,7 +152,7 @@ describe('manifests upload', () => {
     expect(call?.request.headers.get('idempotency-key')).toBe(
       createHash('sha256').update(text).digest('hex'),
     );
-    expect(call?.body).toBe(text);
+    expect(call?.body.toString('utf8')).toBe(text);
   });
 
   // 04.2.2-T1.1 / AC1: `--json` prints exactly one line with the two ids.
@@ -351,6 +352,8 @@ describe('manifests upload', () => {
     const text = stderr.join('');
     expect(text).toContain('evidgate: error usage: ');
     expect(text).toContain('--file');
+    // O-3: the command-level usage error carries the same hint as main.ts's parse errors.
+    expect(text).toContain("evidgate: hint: run 'evidgate --help' for usage");
     expect(calls).toHaveLength(0);
   });
 
@@ -531,5 +534,412 @@ describe('manifests upload', () => {
     const text = stderr.join('');
     expect(text).toContain('evidgate: error transport: ');
     expect(text).not.toContain('http://secret');
+  });
+});
+
+// Independent boundary, negative and exploratory coverage for `manifests upload`, merged
+// here so there is one test file per command (the `authLogin.test.ts` precedent). Every
+// case is deterministic and isolated: the only transport is an injected `fetch` stub —
+// except the redirect case, which needs a real 127.0.0.1 server because the redirect
+// refusal lives in the transport layer (`redirect: 'error'` on the outgoing Request).
+describe('manifests upload — boundaries', () => {
+  const dirs: string[] = [];
+
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  afterEach(async () => {
+    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+
+  async function tempDir(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'evidgate-cli-qa-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  async function manifestFile(content: string | Buffer): Promise<string> {
+    const path = join(await tempDir(), 'manifest.json');
+    await writeFile(path, content);
+    return path;
+  }
+
+  async function devEnv(extra: Record<string, string> = {}) {
+    const cacheDir = await tempDir();
+    return {
+      EVIDGATE_API_URL: 'http://127.0.0.1:8080',
+      EVIDGATE_PROJECT: project,
+      EVIDGATE_ENV: 'dev',
+      EVIDGATE_DEV_TOKEN: 'dev-token-value',
+      EVIDGATE_CACHE_DIR: cacheDir,
+      ...extra,
+    };
+  }
+
+  const ok = () => jsonResponse(201, { manifest_id: manifestId, manifest_hash: manifestHash });
+
+  function envelope(code: string, message: string, extra: Record<string, unknown> = {}) {
+    return { error: { code, message, request_id: 'req-1', retryable: false, ...extra } };
+  }
+
+  // ---- boundary: non-UTF-8 bytes travel verbatim and the key is their digest ----
+
+  it('non_utf8_bytes_sent_verbatim', async () => {
+    const bytes = Buffer.from([0xff, 0xfe, 0x00, 0x01, 0x80, 0x7f, 0x0a]);
+    const file = await manifestFile(bytes);
+    const env = await devEnv();
+    const { fetchImpl, calls } = stubFetch(ok);
+    const { io } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(0);
+
+    expect(calls[0]?.body.equals(bytes)).toBe(true);
+    expect(calls[0]?.request.headers.get('idempotency-key')).toBe(
+      createHash('sha256').update(bytes).digest('hex'),
+    );
+  });
+
+  // ---- path handling: symlink, device, FIFO, relative path, empty flag ----
+
+  it('symlink_to_a_file_is_uploaded', async () => {
+    const target = await manifestFile('{"schema":"manifest.v1"}');
+    const link = join(await tempDir(), 'link.json');
+    await symlink(target, link);
+    const env = await devEnv();
+    const { fetchImpl, calls } = stubFetch(ok);
+    const { io } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', link], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(0);
+    expect(calls).toHaveLength(1);
+  });
+
+  it.skipIf(process.platform === 'win32')('dev_zero_is_unreadable_with_zero_requests', async () => {
+    const env = await devEnv();
+    const { fetchImpl, calls } = stubFetch(ok);
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', '/dev/zero'], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    expect(stderr.join('')).toContain('evidgate: error manifest_unreadable: ');
+    expect(calls).toHaveLength(0);
+  });
+
+  // D-2: `open(path, 'r')` on a FIFO blocks until a writer appears, so the non-regular-file
+  // check never ran and the command hung. The open is now `O_RDONLY | O_NONBLOCK`, which
+  // returns at once on a FIFO, so the `fstat` check refuses it (contracts/cli.md §8 step 2).
+  it.skipIf(process.platform === 'win32')(
+    'fifo_is_refused_without_hanging',
+    async () => {
+      const fifo = join(await tempDir(), 'manifest.fifo');
+      execFileSync('mkfifo', [fifo]);
+      const env = await devEnv();
+      const { fetchImpl, calls } = stubFetch(ok);
+      const { io, stderr } = capture();
+
+      const pending = main(['manifests', 'upload', '--file', fifo], env, io, {
+        fetch: fetchImpl,
+      });
+      // Real wall-clock timer on purpose: the hang was a blocked libuv `open()` on the
+      // FIFO, not a scheduled timer, so fake timers cannot observe it. The race is a
+      // bounded liveness probe, not a sleep that masks a race.
+      const outcome = await Promise.race([
+        pending.then(
+          (code) => `settled:${code}`,
+          () => 'settled:threw',
+        ),
+        new Promise<string>((resolve) => setTimeout(() => resolve('hung'), 1500)),
+      ]);
+      await pending;
+
+      expect(outcome).toBe('settled:3');
+      expect(stderr.join('')).toContain('evidgate: error manifest_unreadable: ');
+      expect(calls).toHaveLength(0);
+    },
+    10_000,
+  );
+
+  it('empty_file_flag_is_usage_with_zero_requests', async () => {
+    const env = await devEnv();
+    const { fetchImpl, calls } = stubFetch(ok);
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file='], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    expect(stderr.join('')).toContain('evidgate: error usage: ');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('relative_path_is_uploaded', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const rel = relative(process.cwd(), file);
+    expect(rel.startsWith('.')).toBe(true);
+    const env = await devEnv();
+    const { fetchImpl, calls } = stubFetch(ok);
+    const { io } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', rel], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(0);
+    expect(calls).toHaveLength(1);
+  });
+
+  // ---- details rendering: skipped fields, escaping, caps ----
+
+  it('details_skip_non_string_index_and_path', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(
+        422,
+        envelope('manifest_invalid', 'bad', {
+          details: [{ index: 'zero', path: 42, reason: 'fine' }],
+        }),
+      ),
+    );
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    // contracts/cli.md §5: `index=` is omitted when the entry has none and a field that
+    // is not a string or a number is skipped.
+    expect(stderr.join('')).toContain('evidgate: detail: reason=fine\n');
+    expect(stderr.join('')).not.toContain('index=');
+    expect(stderr.join('')).not.toContain('path=');
+  });
+
+  // Characterization of the fail-closed reading of §5: a detail whose `reason` is not a
+  // string makes the whole envelope unusable (`isErrorEnvelope` requires a string
+  // `reason`), so the server code and every detail are dropped. This contradicts the
+  // literal §5 sentence "a field that is not a string or a number is skipped" — reported
+  // as defect D-3 (low, contract precision).
+  it('details_non_string_reason_drops_the_envelope', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(
+        422,
+        envelope('manifest_invalid', 'bad', {
+          details: [
+            { index: 0, path: '/a', reason: 7 },
+            { index: 1, path: '/b', reason: 'fine' },
+          ],
+        }),
+      ),
+    );
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    const text = stderr.join('');
+    expect(text).toContain('evidgate: error request_failed: ');
+    expect(text).not.toContain('detail:');
+  });
+
+  it('detail_fields_are_escaped_and_capped', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(
+        422,
+        envelope('manifest_invalid', 'msg\n::error::forged\u0007', {
+          details: [{ index: 0, path: '/a\nb', reason: 'r'.repeat(300) }],
+        }),
+      ),
+    );
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    const text = stderr.join('');
+    expect(text).toContain('msg\\u000a::error::forged\\u0007');
+    expect(text).toContain('path=/a\\u000ab');
+    // Every stderr line carries the prefix, so no line can start with `::`.
+    for (const line of text.split('\n').filter((l) => l.length > 0)) {
+      expect(line.startsWith('evidgate: ')).toBe(true);
+    }
+    const reasonLine = text.split('\n').find((line) => line.includes('reason=')) ?? '';
+    expect(reasonLine.length - 'evidgate: detail: index=0 path=/a\\u000ab reason='.length).toBe(
+      200,
+    );
+  });
+
+  it('message_is_capped_at_200_chars', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(422, envelope('manifest_invalid', 'm'.repeat(500))),
+    );
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    const line = stderr.join('').split('\n')[0] ?? '';
+    expect(line).toBe(`evidgate: error manifest_invalid: ${'m'.repeat(200)}`);
+  });
+
+  // ---- envelope edge cases: unsafe code, request_id escaping, header fallback ----
+
+  it('unsafe_code_pattern_falls_back_to_request_failed', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() => jsonResponse(422, envelope('Bad Code!', 'bad')));
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    expect(stderr.join('')).toContain('evidgate: error request_failed: bad\n');
+  });
+
+  it('request_id_control_chars_are_escaped', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(
+        422,
+        envelope('manifest_invalid', 'ok', { request_id: 'req\n::error::forged\u0007' }),
+      ),
+    );
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    expect(stderr.join('')).toContain('evidgate: request_id: req\\u000a::error::forged\\u0007\n');
+  });
+
+  it('x_request_id_header_is_the_fallback', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(500, { unexpected: true }, { 'x-request-id': 'header-req-9' }),
+    );
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    const text = stderr.join('');
+    expect(text).toContain(
+      'evidgate: error request_failed: the manifest upload failed (HTTP 500)\n',
+    );
+    expect(text).toContain('evidgate: request_id: header-req-9\n');
+  });
+
+  it('server_413_code_is_echoed', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(413, envelope('payload_too_large', 'body too large')),
+    );
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    expect(stderr.join('')).toContain('evidgate: error payload_too_large: body too large\n');
+  });
+
+  // The redirect refusal lives in the transport layer (`redirect: 'error'` on the
+  // outgoing Request), so it needs a real 127.0.0.1 server: an injected `fetch` stub
+  // that returns a 302 Response never performs the redirect.
+  it('redirect_is_refused_as_transport', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(302, { location: 'http://127.0.0.1:1/elsewhere' });
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
+    try {
+      const file = await manifestFile('{"schema":"manifest.v1"}');
+      const env = await devEnv({ EVIDGATE_API_URL: `http://127.0.0.1:${port}` });
+      const { io, stderr } = capture();
+
+      await expect(main(['manifests', 'upload', '--file', file], env, io)).resolves.toBe(3);
+
+      const text = stderr.join('');
+      expect(text).toContain('evidgate: error transport: the request failed\n');
+      expect(text).not.toContain('127.0.0.1:1');
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  // ---- output rules: --verbose, --json on failure, token cache ----
+
+  it('verbose_never_prints_manifest_content_or_token', async () => {
+    const secret = 'SUPER-SECRET-MANIFEST-BODY';
+    const file = await manifestFile(`{"schema":"manifest.v1","note":"${secret}"}`);
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(ok);
+    const { io, stdout, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file, '--verbose'], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(0);
+
+    const text = stdout.join('') + stderr.join('');
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain('dev-token-value');
+    expect(stderr.join('')).toContain('dev_token=[REDACTED]');
+  });
+
+  it('json_flag_keeps_errors_on_stderr', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() => jsonResponse(422, envelope('manifest_invalid', 'bad')));
+    const { io, stdout, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file, '--json'], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    expect(stdout.join('')).toBe('');
+    expect(stderr.join('')).toContain('evidgate: error manifest_invalid: bad\n');
+  });
+
+  it('401_without_a_cache_entry_is_not_a_cache_error', async () => {
+    const cacheDir = await tempDir();
+    const env = {
+      EVIDGATE_API_URL: 'https://api.evidgate.test',
+      EVIDGATE_PROJECT: project,
+      EVIDGATE_CACHE_DIR: cacheDir,
+      EVIDGATE_INGEST_TOKEN: 'egt_ingest_secret_value',
+    };
+    const config = resolveConfig({ env });
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const { fetchImpl } = stubFetch(() => jsonResponse(401, envelope('token_revoked', 'revoked')));
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    const text = stderr.join('');
+    expect(text).toContain('evidgate: error token_revoked: revoked\n');
+    expect(text).not.toContain('token_cache_error');
+    await expect(readCachedToken(config)).resolves.toBeUndefined();
   });
 });

@@ -5,6 +5,7 @@
 // exchange. A 401 purges the cached CI token (04.2.1-T1 hand-over, contracts/cli.md
 // §7/§8); a 403 keeps it, because a scope refusal does not invalidate the token.
 import { createHash } from 'node:crypto';
+import { constants } from 'node:fs';
 import { open, type FileHandle } from 'node:fs/promises';
 
 import { createManifest, type ManifestV1 } from '@evidgate/sdk';
@@ -21,6 +22,16 @@ import type { CommandDefinition } from './index.js';
 /** The server's documented body cap (openapi `createManifest`: "Body ≤ 256 KiB → 413"). */
 const maxManifestBytes = 256 * 1024;
 const requestTimeoutMs = 30_000;
+/**
+ * The usage-error hint `main.ts` attaches to its parse-level usage errors (`helpHint`
+ * there, module-private). Repeated here so the command-level `--file` usage error carries
+ * the same pointer (contracts/cli.md §5 `usage` row); keep the two literals in sync.
+ */
+const helpHint = "run 'evidgate --help' for usage";
+// D-2: `O_NONBLOCK` keeps `open` from blocking on a FIFO — without it the non-regular-file
+// check below never runs, because the open waits for a writer. Regular-file reads are
+// unaffected. win32 has no `O_NONBLOCK`, so the flags reduce to `O_RDONLY` (plain `'r'`).
+const openReadFlags = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0);
 /** `manifest_id` is a UUID and `manifest_hash` is `sha256:<64 hex>` (openapi `ManifestAccepted`). */
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const manifestHashPattern = /^sha256:[0-9a-f]{64}$/;
@@ -33,7 +44,7 @@ export const manifestsUploadCommand: CommandDefinition = {
   run: async ({ config, io, values, deps }) => {
     const file = values.file;
     if (typeof file !== 'string' || file.length === 0) {
-      throw new CliError('missing required flag --file', { code: 'usage' });
+      throw new CliError('missing required flag --file', { code: 'usage', hint: helpHint });
     }
     // The file is read (and capped) before any token work: an oversize or unreadable
     // file must not trigger a request, including the token exchange (04.2.2 §8).
@@ -88,13 +99,14 @@ export const manifestsUploadCommand: CommandDefinition = {
 /**
  * Reads the manifest file with a hard byte cap. The size is never trusted from `stat`
  * alone: at most `maxManifestBytes + 1` bytes are read, so a file that grows between
- * the `fstat` and the read is still refused. The content is never echoed and the path
- * is never named (contracts/cli.md §5).
+ * the `fstat` and the read is still refused. The read loops until EOF or a full buffer,
+ * so a short read on a regular file cannot silently truncate the body. The content is
+ * never echoed and the path is never named (contracts/cli.md §5).
  */
 async function readManifestFile(path: string): Promise<Uint8Array> {
   let handle: FileHandle;
   try {
-    handle = await open(path, 'r');
+    handle = await open(path, openReadFlags);
   } catch (error) {
     throw unreadable(error);
   }
@@ -106,7 +118,14 @@ async function readManifestFile(path: string): Promise<Uint8Array> {
       });
     }
     const buffer = Buffer.allocUnsafe(maxManifestBytes + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const read = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
+      if (read.bytesRead === 0) {
+        break;
+      }
+      bytesRead += read.bytesRead;
+    }
     if (bytesRead > maxManifestBytes) {
       throw new CliError(`the manifest file exceeds ${maxManifestBytes} bytes`, {
         code: 'manifest_too_large',
