@@ -4,6 +4,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Policy.Domain;
 using Mediator;
 
 namespace Evidgate.Modules.Policy.Application.Queries;
@@ -60,24 +61,31 @@ internal sealed class GetPolicyRevisionQueryHandler(ITenantDb db, IPolicyHasher 
 
     /// <summary>
     /// Recomputes the content address of the stored body and refuses a row that no longer matches it (07.1.1-T2.2).
-    /// A body that cannot be canonicalised is corruption too, so the canonicalisation failure is wrapped rather than
-    /// escaping as a different exception type.
+    /// A body that cannot be canonicalised, or that carries a number only a double can round, is corruption too, so
+    /// the failure is reported as <see cref="PolicyRevisionCorruptedException"/> with a fixed reason rather than
+    /// escaping as a different exception type. The cause is never chained: its message carries body content.
     /// </summary>
     private static void Verify(PolicyRevisionView row, IPolicyHasher hasher)
     {
+        // Checked before the hash compare: a digit-tampered body would otherwise surface as a hash mismatch.
+        if (!PolicyRevisionRules.HasOnlyExactNumbers(row.Body))
+        {
+            throw new PolicyRevisionCorruptedException(row.Id, row.Hash, null, PolicyRevisionCorruptionReasons.InexactNumber);
+        }
+
         string recomputed;
         try
         {
             recomputed = hasher.Hash(row.Body);
         }
-        catch (JsonCanonicalizationException exception)
+        catch (JsonCanonicalizationException)
         {
-            throw new PolicyRevisionCorruptedException(row.Id, row.Hash, exception);
+            throw new PolicyRevisionCorruptedException(row.Id, row.Hash, null, PolicyRevisionCorruptionReasons.NotCanonicalisable);
         }
 
         if (!string.Equals(row.Hash, recomputed, StringComparison.Ordinal))
         {
-            throw new PolicyRevisionCorruptedException(row.Id, row.Hash, recomputed);
+            throw new PolicyRevisionCorruptedException(row.Id, row.Hash, recomputed, PolicyRevisionCorruptionReasons.HashMismatch);
         }
     }
 }

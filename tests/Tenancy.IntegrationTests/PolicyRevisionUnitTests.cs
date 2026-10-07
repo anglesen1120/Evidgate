@@ -3,6 +3,7 @@ using System.Text.Json;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Policy.Application;
+using Evidgate.Modules.Policy.Domain;
 using NSubstitute;
 using Shouldly;
 using Xunit;
@@ -11,8 +12,9 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// 07.1.1-T1.2/T2.1 without a database: the store refuses a body that is not a storable, canonicalisable JSON
-/// object before it demands a tenant scope, so a malformed append never reaches a statement, and
-/// <see cref="PolicyHasher"/> reproduces the RFC 8785 vectors the 01/04 suites already assert.
+/// object — or whose numbers are not exact IEEE 754 doubles (I-JSON, RFC 7493 §2.2) — before it demands a tenant
+/// scope, so a malformed append never reaches a statement, and <see cref="PolicyHasher"/> reproduces the RFC 8785
+/// vectors the 01/04 suites already assert.
 /// </summary>
 public sealed class PolicyRevisionUnitTests
 {
@@ -121,17 +123,11 @@ public sealed class PolicyRevisionUnitTests
               "b": [2]
             }
             """);
-
-        compact.ShouldBe(formatted);
-    }
-
-    [Fact]
-    public void Hash_OfAJsonbReserialisation_MatchesTheOriginalBody()
-    {
         // jsonb re-serialises on read: keys reordered and a space after ':' and ','. The canonical form must not care.
         var stored = Hasher.Hash("""{"name":"release gate","rules":[{"op":"gte","threshold":0.995}]}""");
         var reserialised = Hasher.Hash("""{"rules": [{"threshold": 0.995, "op": "gte"}], "name": "release gate"}""");
 
+        compact.ShouldBe(formatted);
         stored.ShouldBe(reserialised);
     }
 
@@ -145,6 +141,73 @@ public sealed class PolicyRevisionUnitTests
     public void Hash_IsAPrefixedLowercaseSha256()
     {
         Hasher.Hash("""{"a":1}""").ShouldMatch("^sha256:[0-9a-f]{64}$");
+    }
+
+    // ------------------------------- 07.1.1-T2.1: numbers must be exact doubles (I-JSON §2.2, PolicyRevisionRules)
+
+    /// <summary>
+    /// A number whose exact decimal value is the double it parses to passes the rule, in every spelling of the
+    /// value (RFC 8785 §3.2.2.3 canonicalises the double, not the literal).
+    /// </summary>
+    [Theory]
+    [InlineData("{\"a\":1.0}", "{\"a\":1}")]
+    [InlineData("{\"a\":1e2}", "{\"a\":100}")]
+    [InlineData("{\"a\":0.10}", "{\"a\":0.1}")]
+    [InlineData("{\"a\":-0}", "{\"a\":0}")]
+    [InlineData("{\"a\":1e-7}", "{\"a\":0.0000001}")]
+    public void HasOnlyExactNumbers_AcceptsNumbersExactlyRepresentableAsDoubles(string body, string equivalent)
+    {
+        PolicyRevisionRules.HasOnlyExactNumbers(body).ShouldBeTrue();
+        PolicyRevisionRules.HasOnlyExactNumbers(equivalent).ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// A number that only exists beyond double precision is refused: RFC 8785 would round it, so two different
+    /// bodies would share one content address (finding T1-SEC-S2, I-JSON RFC 7493 §2.2).
+    /// </summary>
+    [Theory]
+    [InlineData("{\"a\":9007199254740993}")]
+    [InlineData("{\"a\":0.1000000000000000001}")]
+    [InlineData("{\"a\":1.00000000000000001}")]
+    public void HasOnlyExactNumbers_RefusesNumbersNotExactlyRepresentableAsDoubles(string body)
+    {
+        PolicyRevisionRules.HasOnlyExactNumbers(body).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("{\"a\":9007199254740993}")]
+    [InlineData("{\"a\":0.1000000000000000001}")]
+    [InlineData("{\"a\":1.00000000000000001}")]
+    public async Task Append_RejectsANumberNotExactlyRepresentableAsADouble_WithoutTouchingTheDatabase(string body)
+    {
+        var db = Substitute.For<ITenantDb>();
+        var scopes = Substitute.For<ITenantScopeAccessor>();
+        var store = new PolicyRevisionStore(db, scopes, Hasher);
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await store.AppendAsync(Guid.CreateVersion7(), body, Guid.CreateVersion7(), TestContext.Current.CancellationToken));
+
+        await db.DidNotReceiveWithAnyArgs().ExecuteAsync(default!, default, TestContext.Current.CancellationToken);
+        scopes.DidNotReceiveWithAnyArgs().Require();
+    }
+
+    /// <summary>
+    /// The refusal never carries the body: the canonicalisation message names the offending property, so the store
+    /// must not chain it (finding T1-SEC-S2, review S2).
+    /// </summary>
+    [Fact]
+    public async Task Append_RejectsANonCanonicalisableBody_WithoutLeakingItInTheException()
+    {
+        var db = Substitute.For<ITenantDb>();
+        var scopes = Substitute.For<ITenantScopeAccessor>();
+        var store = new PolicyRevisionStore(db, scopes, Hasher);
+        const string body = "{\"secretmarker\":1,\"secretmarker\":2}";
+
+        var exception = await Should.ThrowAsync<ArgumentException>(async () =>
+            await store.AppendAsync(Guid.CreateVersion7(), body, Guid.CreateVersion7(), TestContext.Current.CancellationToken));
+
+        exception.ToString().ShouldNotContain("secretmarker");
+        exception.InnerException.ShouldBeNull();
     }
 
     /// <summary>A file under the repository's <c>fixtures/</c> directory, resolved as the suite's fixture does.</summary>

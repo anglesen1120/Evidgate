@@ -47,22 +47,23 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
             throw new ArgumentException("the body must be a storable JSON object", nameof(body));
         }
 
+        // A number that only exists beyond double precision would be rounded by RFC 8785, so two bodies could
+        // share one content address (I-JSON, RFC 7493 §2.2). Refused before the hash and before any statement.
+        if (!PolicyRevisionRules.HasOnlyExactNumbers(body))
+        {
+            throw new ArgumentException("the body must carry only numbers exactly representable as IEEE 754 doubles", nameof(body));
+        }
+
         string hash;
         try
         {
             hash = hasher.Hash(body);
         }
-        catch (JsonCanonicalizationException exception)
+        catch (JsonCanonicalizationException)
         {
             // A duplicate name, a lone surrogate or a number outside the IEEE 754 double range: not a policy body.
-            throw new ArgumentException("the body cannot be canonicalised", nameof(body), exception);
-        }
-
-        // Defensive: the hasher is the only producer and always returns sha256:<64 hex>; the assert keeps the
-        // store's own invariant if a future hasher ever returns something else.
-        if (!PolicyRevisionRules.IsValidHash(hash))
-        {
-            throw new ArgumentException("the computed hash must be sha256:<64 hex>", nameof(body));
+            // The cause is not chained: its message carries property names and number text from the body (review S2).
+            throw new ArgumentException("the body cannot be canonicalised", nameof(body));
         }
 
         var orgId = scopes.Require().OrgId;

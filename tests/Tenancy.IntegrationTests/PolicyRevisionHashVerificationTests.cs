@@ -116,7 +116,7 @@ public sealed class PolicyRevisionHashVerificationTests
         view.ProjectId.ShouldBe(world.Project);
         view.RevisionNo.ShouldBe(1);
         view.Hash.ShouldBe(CanonicalHash.Compute(body));
-        view.Body.ShouldContain("marker");
+        CanonicalHash.Compute(view.Body).ShouldBe(CanonicalHash.Compute(body));
         view.State.ShouldBe(PolicyRevisionState.Draft);
         view.CreatedBy.ShouldBe(world.User);
         view.Version.ShouldBe(1);
@@ -216,11 +216,10 @@ public sealed class PolicyRevisionHashVerificationTests
 
         result.IsSuccess.ShouldBeTrue();
         result.Value.Hash.ShouldBe(CanonicalHash.Compute(equivalent));
-        new PolicyHasher().Hash(body).ShouldBe(new PolicyHasher().Hash(equivalent));
     }
 
     [Fact]
-    public async Task NonCanonicalisableStoredBody_WrapsTheCauseAsCorruption()
+    public async Task NonCanonicalisableStoredBody_IsCorruption_WithTheNotCanonicalisableReason()
     {
         await using var world = await StartAsync();
         var body = "{\"marker\":\"a\"}";
@@ -233,7 +232,27 @@ public sealed class PolicyRevisionHashVerificationTests
         exception.RevisionId.ShouldBe(id);
         exception.StoredHash.ShouldBe(CanonicalHash.Compute(body));
         exception.RecomputedHash.ShouldBeNull();
-        exception.InnerException.ShouldBeOfType<JsonCanonicalizationException>();
+        exception.Reason.ShouldBe(PolicyRevisionCorruptionReasons.NotCanonicalisable);
+        exception.InnerException.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task InexactNumberStoredByJsonb_FailsTheRead_WithTheInexactNumberReason()
+    {
+        await using var world = await StartAsync();
+        // The hash is computed for the double-precision value 9007199254740992; the owner rewrites the stored
+        // number to 9007199254740993, which jsonb keeps exactly but no double can represent (I-JSON §2.2).
+        var body = "{\"marker\":9007199254740992}";
+        var id = await InsertAsync(world, body);
+        await MutateAsync(world, id, "body = @value::jsonb", "{\"marker\":9007199254740993}");
+
+        var exception = await Should.ThrowAsync<PolicyRevisionCorruptedException>(() => ReadAsync(world, id));
+
+        exception.RevisionId.ShouldBe(id);
+        exception.StoredHash.ShouldBe(CanonicalHash.Compute(body));
+        exception.RecomputedHash.ShouldBeNull();
+        exception.Reason.ShouldBe(PolicyRevisionCorruptionReasons.InexactNumber);
+        exception.ToString().ShouldNotContain("marker");
     }
 
     [Fact]
