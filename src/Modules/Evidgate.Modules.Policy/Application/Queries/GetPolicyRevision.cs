@@ -1,6 +1,8 @@
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -33,10 +35,15 @@ internal sealed record PolicyRevisionView(
 /// Handler of <see cref="GetPolicyRevisionQuery"/>: one statement, then the corruption check of 07.1.1-T2.2 — the
 /// stored <c>body</c> is re-canonicalised and re-hashed and must equal the stored <c>hash</c> column, so a row
 /// mutated outside the append-only path (the app role holds no <c>UPDATE</c> grant) is refused on read instead of
-/// being served under the wrong content address. Another tenant's revision is 404 (RLS hides it), never 403.
+/// being served under the wrong content address. Another tenant's revision is 404 (RLS hides it), never 403, and so
+/// is one outside the credential's project scope (07.1.1-T3, finding S3).
 /// </summary>
 [Permission(Permissions.Policy.Read)]
-internal sealed class GetPolicyRevisionQueryHandler(ITenantDb db, IPolicyHasher hasher)
+internal sealed class GetPolicyRevisionQueryHandler(
+    ITenantDb db,
+    IPolicyHasher hasher,
+    IRequestPrincipalAccessor principals,
+    IRequestTenantContextAccessor tenant)
     : IQueryHandler<GetPolicyRevisionQuery, Result<PolicyRevisionView>>
 {
     /// <inheritdoc />
@@ -49,9 +56,9 @@ internal sealed class GetPolicyRevisionQueryHandler(ITenantDb db, IPolicyHasher 
             new { id = query.Id },
             cancellationToken).ConfigureAwait(false);
 
-        if (row is null)
+        if (row is null || PolicyScope.Project(row.ProjectId, principals, tenant) is not null)
         {
-            return Result.Failure<PolicyRevisionView>(PolicyRevisionReadErrors.RevisionNotFound);
+            return Result.Failure<PolicyRevisionView>(PolicyErrors.RevisionNotFound);
         }
 
         Verify(row, hasher);
@@ -95,20 +102,18 @@ internal sealed class GetPolicyRevisionQueryHandler(ITenantDb db, IPolicyHasher 
     }
 }
 
-/// <summary>Errors of the policy-revision read surface (07.1.1 §5, 00 §9.2).</summary>
-internal static class PolicyRevisionReadErrors
-{
-    /// <summary>404: no revision with that id is visible to this tenant (another tenant's id included, 00 §9.2).</summary>
-    internal static Error RevisionNotFound => Error.NotFound("no policy revision with that id is visible to this tenant");
-}
-
 /// <summary>The read statements of the policy-revision query; every one runs in the request's tenant transaction.</summary>
 internal static class PolicyRevisionReadSql
 {
-    /// <summary>One revision by id; RLS scopes it to the request's tenant (00 §5.4.2), so another tenant reads no row.</summary>
+    /// <summary>
+    /// One revision by id; RLS scopes it to the request's tenant (00 §5.4.2), so another tenant reads no row. The
+    /// project join (finding S3, the <c>OrchestratorSql.RevisionById</c> precedent) hides a revision whose project
+    /// is soft-deleted, so it is the same 404 as an unknown id.
+    /// </summary>
     internal const string ById = """
-        select id, project_id, revision_no, hash, body::text as body, state, created_by, created_at, version
-          from public.policy_revision
-         where id = @id
+        select r.id, r.project_id, r.revision_no, r.hash, r.body::text as body, r.state, r.created_by, r.created_at, r.version
+          from public.policy_revision r
+          join public.project p on p.org_id = r.org_id and p.id = r.project_id and p.status <> 'deleted'
+         where r.id = @id
         """;
 }

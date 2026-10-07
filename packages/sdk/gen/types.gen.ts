@@ -357,6 +357,42 @@ export type EnvironmentRevisionDto = {
 };
 
 /**
+ * One immutable policy revision (07.1.1-T3); `body` is the closed `policy-revision.v1` document.
+ */
+export type PolicyRevisionDto = {
+    id: string;
+    project_id: string;
+    revision_no: number;
+    hash: string;
+    state: 'draft' | 'active' | 'retired';
+    body: PolicyRevisionV1;
+    created_by: string;
+    created_at: string;
+    version: number;
+};
+
+/**
+ * A policy revision without its body (07.1.1-T3 list rows).
+ */
+export type PolicyRevisionSummaryDto = {
+    id: string;
+    revision_no: number;
+    hash: string;
+    state: 'draft' | 'active' | 'retired';
+    created_by: string;
+    created_at: string;
+    version: number;
+};
+
+/**
+ * 00 §9.1 cursor page of `PolicyRevisionSummaryDto`, keyset-ordered on `(revision_no, id)`.
+ */
+export type PolicyRevisionListResponse = {
+    items: Array<PolicyRevisionSummaryDto>;
+    next_cursor: string | null;
+};
+
+/**
  * Any JSON value. The served document names the .NET `JsonElement` this way; the members that use it (variant `params`, the three strategy documents) say what they hold in their own description.
  */
 export type JsonElement = unknown;
@@ -985,6 +1021,67 @@ export type Event = unknown & {
     };
 };
 
+/**
+ * Policy revision v1
+ *
+ * The body of POST /v1/projects/{p}/policies (07.1.1-T3, 00 §8.6 + D-A10): the decision-rule configuration of one project — the cases and suites a run must cover, the critical cases, the skips the policy allows, the flaky budget, the required artifacts, the collection deadline and late window, the freshness bound, the quarantine list and the branch-gating references. The server canonicalises the body (RFC 8785) and hashes it into `sha256:<hex>`; content already stored for the project answers 200 with that revision, new content 201 with the next revision_no. The schema is closed: any member not listed here is refused as 422 policy_unknown_field with the member's JSON pointer in error.details[].path. The transport cap is 64 KiB.
+ */
+export type PolicyRevisionV1 = {
+    /**
+     * Suites whose evidence the run must carry
+     */
+    required_suites?: Array<string>;
+    /**
+     * Cases whose evidence the run must carry
+     */
+    required_cases?: Array<string>;
+    /**
+     * Cases that can never be quarantined and can never be skipped (00 §8.6, DECISIONS O9)
+     */
+    critical_cases?: Array<string>;
+    /**
+     * Cases the policy allows to be skipped without making the run INCONCLUSIVE
+     */
+    allowed_skips?: Array<string>;
+    /**
+     * How many non-critical fail → pass flips the policy tolerates before the decision becomes INCONCLUSIVE with reason flaky_budget_exceeded (00 §8.6, TL T27)
+     */
+    flaky_budget?: number;
+    /**
+     * Artifact kinds the run must produce (00 §7 kind names)
+     */
+    required_artifacts?: Array<string>;
+    /**
+     * Deadline for a run's collection phase, in minutes
+     */
+    collection_timeout_minutes?: number;
+    /**
+     * How long after the deadline late evidence is still accepted (00 §8.1, TL T81)
+     */
+    late_window_minutes?: number;
+    /**
+     * Maximum age of the evidence a run may pin, in minutes
+     */
+    freshness_minutes?: number;
+    /**
+     * Quarantine entries this policy revision honours; the list is stored as given and honoured at evaluation time. The refusal of a critical case belongs to POST /v1/quarantine (07.3.1).
+     */
+    quarantine_ids?: Array<string>;
+    /**
+     * Branch policy for gated runs (DECISIONS D-A10)
+     */
+    gating_refs?: {
+        /**
+         * Whether the repository's default branch is gated
+         */
+        default_branch?: boolean;
+        /**
+         * Glob of the release branches that are gated
+         */
+        release_branch_glob?: string;
+    };
+};
+
 export type BindingId = string;
 
 export type IngestTokenId = string;
@@ -1012,6 +1109,11 @@ export type AuditTo = string;
  */
 export type Cursor = string;
 
+/**
+ * Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
+ */
+export type PolicyRevisionCursor = string;
+
 export type Limit = number;
 
 /**
@@ -1023,6 +1125,11 @@ export type IdempotencyKey = string;
  * ETag for optimistic concurrency; stale → 412 (00 §9.1).
  */
 export type IfMatch = string;
+
+/**
+ * Optional optimistic-concurrency check: the caller's cached head revision id, quoted; stale or malformed → 412 with the current head revision id in `error.details`; absent means no check (00 §9.1, 07.1.1-T3).
+ */
+export type IfMatchOptional = string;
 
 /**
  * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
@@ -1046,6 +1153,8 @@ export type ArtifactId = string;
 export type ReleaseId = string;
 
 export type EnvironmentRevisionId = string;
+
+export type PolicyRevisionId = string;
 
 export type EnvironmentSlug = string;
 
@@ -1892,6 +2001,181 @@ export type GetEnvironmentRevisionResponses = {
 };
 
 export type GetEnvironmentRevisionResponse = GetEnvironmentRevisionResponses[keyof GetEnvironmentRevisionResponses];
+
+export type CreatePolicyRevisionData = {
+    body: PolicyRevisionV1;
+    headers?: {
+        /**
+         * Optional optimistic-concurrency check: the caller's cached head revision id, quoted; stale or malformed → 412 with the current head revision id in `error.details`; absent means no check (00 §9.1, 07.1.1-T3).
+         */
+        'If-Match'?: string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/policies';
+};
+
+export type CreatePolicyRevisionErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreatePolicyRevisionError = CreatePolicyRevisionErrors[keyof CreatePolicyRevisionErrors];
+
+export type CreatePolicyRevisionResponses = {
+    /**
+     * The same body is already stored; that revision is returned
+     */
+    200: PolicyRevisionDto;
+    /**
+     * Revision created
+     */
+    201: PolicyRevisionDto;
+};
+
+export type CreatePolicyRevisionResponse = CreatePolicyRevisionResponses[keyof CreatePolicyRevisionResponses];
+
+export type GetPolicyRevisionData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/policies/{id}';
+};
+
+export type GetPolicyRevisionErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetPolicyRevisionError = GetPolicyRevisionErrors[keyof GetPolicyRevisionErrors];
+
+export type GetPolicyRevisionResponses = {
+    /**
+     * The policy revision
+     */
+    200: PolicyRevisionDto;
+};
+
+export type GetPolicyRevisionResponse = GetPolicyRevisionResponses[keyof GetPolicyRevisionResponses];
+
+export type ListPolicyRevisionsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional optimistic-concurrency check: the caller's cached head revision id, quoted; stale or malformed → 412 with the current head revision id in `error.details`; absent means no check (00 §9.1, 07.1.1-T3).
+         */
+        'If-Match'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/policies/{id}/revisions';
+};
+
+export type ListPolicyRevisionsErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListPolicyRevisionsError = ListPolicyRevisionsErrors[keyof ListPolicyRevisionsErrors];
+
+export type ListPolicyRevisionsResponses = {
+    /**
+     * Page of policy revisions
+     */
+    200: PolicyRevisionListResponse;
+};
+
+export type ListPolicyRevisionsResponse = ListPolicyRevisionsResponses[keyof ListPolicyRevisionsResponses];
 
 export type GetReportComparisonData = {
     body?: never;

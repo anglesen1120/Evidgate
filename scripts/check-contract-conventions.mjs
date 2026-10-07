@@ -43,6 +43,9 @@ const EXPECTED = [
   ['/runs/{r}/rerun', 'post', 'run:create', 'v1'],
   ['/projects/{p}/environments/{e}/revisions', 'post', 'environment:write', 'v1'],
   ['/environment-revisions/{id}', 'get', 'run:read', 'v1'],
+  ['/projects/{p}/policies', 'post', 'policy:write', 'v1'],
+  ['/policies/{id}', 'get', 'policy:read', 'v1'],
+  ['/policies/{id}/revisions', 'get', 'policy:read', 'v1'],
   ['/runs/{r}/reports/{report_id}/comparison', 'get', 'run:read', 'v1'],
   ['/runs/{r}/reprocess', 'post', 'run:create', 'v1'],
   ['/projects/{p}/releases', 'post', 'run:create', 'v1'],
@@ -191,6 +194,7 @@ const IDEM_EXEMPT = new Set([
   'post /runs/{r}/events',
   'post /drafts/{d}/pull-request',
   'post /jobs/{j}/heartbeat',
+  'post /projects/{p}/policies',
 ]);
 for (const { path, method, op } of ops) {
   for (const prm of op.parameters ?? []) {

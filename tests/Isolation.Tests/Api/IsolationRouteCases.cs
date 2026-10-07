@@ -335,6 +335,13 @@ public static class IsolationRouteCases
         ObjectCase("GET", "/v1/environment-revisions/{id}", p => [("environment revision", p.EnvironmentRevisionId)], id =>
             new(HttpMethod.Get, $"/v1/environment-revisions/{id}"), ownControl: true),
 
+        // ---- Policy (PolicyEndpoints.cs; 07.1.1-T3) -------------------------------------------------------------
+        ProjectCase("POST", "/v1/projects/{p}/policies", p => new(HttpMethod.Post, $"/v1/projects/{p}/policies", Policy())),
+        ObjectCase("GET", "/v1/policies/{id}", p => [("policy revision", p.PolicyRevisionId)], id =>
+            new(HttpMethod.Get, $"/v1/policies/{id}"), ownControl: true),
+        ObjectCase("GET", "/v1/policies/{id}/revisions", p => [("policy revision", p.PolicyRevisionId)], id =>
+            new(HttpMethod.Get, $"/v1/policies/{id}/revisions"), ownControl: true),
+
         // ---- Policy waivers (WaiverEndpoints.cs) ---------------------------------------------------------------
         WaiverCreateCase(),
         WaiverStateCase("approve"),
@@ -808,6 +815,9 @@ public static class IsolationRouteCases
         ["dependency_versions"] = new JsonObject { ["postgres"] = "18.0" },
     };
 
+    /// <summary>The minimal valid <c>policy-revision.v1</c> body a probe sends (the shape the seeder creates, <see cref="IsolationWorld"/>).</summary>
+    private static JsonObject Policy() => new() { ["flaky_budget"] = 0 };
+
     private static JsonObject Manifest(IsolationProject project) =>
         Manifest(project.SuiteRevisionIds[0], project.CaseRevisionIds, project.EnvironmentRevisionId);
 
@@ -919,6 +929,8 @@ public sealed class RouteProbeRunner
             ids.AddRange(p.SuiteRevisionIds);
             ids.AddRange(p.WaiverIds);
         }
+
+        ids.AddRange(org.Projects.Select(p => p.PolicyRevisionId));
 
         return ids.Select(id => id.ToString("D")).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
