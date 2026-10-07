@@ -3,10 +3,13 @@
 // (contracts/cli.md §1).
 import type { ParseArgsOptionsConfig } from 'node:util';
 
+import type { ExchangeDeps } from '../auth/exchange.js';
 import type { ResolvedConfig } from '../config.js';
 import type { ExitCode } from '../exitCodes.js';
 import type { Io } from '../redact.js';
 
+import { authLoginCommand } from './authLogin.js';
+import { authLogoutCommand } from './authLogout.js';
 import { configCheckCommand } from './configCheck.js';
 
 /** Values `node:util` `parseArgs` returns for the merged global + command options. */
@@ -18,6 +21,14 @@ export interface CommandContext {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly values: ParsedValues;
   readonly positionals: readonly string[];
+  /** Transport/back-off seams `main` forwards from its own `deps` argument. */
+  readonly deps: ExchangeDeps;
+  /**
+   * Writes a GitHub `::add-mask::<value>` line to the RAW stdout, bypassing the
+   * redacting writer (which would otherwise turn the mask into `[REDACTED]`). A no-op
+   * unless `value` is a registered secret without a line break (04.2.1-T1.1, T78).
+   */
+  readonly maskSecret: (value: string) => void;
 }
 
 export interface CommandDefinition {
@@ -37,6 +48,8 @@ export interface CommandDefinition {
 /** Static string-keyed registry; `resolveCommand` matches the longest name prefix. */
 export const commandRegistry: Readonly<Record<string, CommandDefinition>> = {
   [configCheckCommand.name]: configCheckCommand,
+  [authLoginCommand.name]: authLoginCommand,
+  [authLogoutCommand.name]: authLogoutCommand,
 };
 
 export interface ResolvedCommand {

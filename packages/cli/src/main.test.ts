@@ -1,5 +1,10 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { tokenCachePath } from './auth/tokenCache.js';
 import { ExitCode } from './exitCodes.js';
 import { main } from './main.js';
 import { resetSecrets, type Io } from './redact.js';
@@ -95,6 +100,54 @@ describe('main', () => {
       token_source: 'dev',
     });
     expect(stdout.join('')).not.toContain('dev-token-value');
+  });
+
+  // 04.2.1-T1.1 / C1: `config check` forwards `main`'s `deps` to `getToken`, so an
+  // ingest source runs the exchange and fills the cache (contracts/cli.md §6/§7).
+  it('runs the ingest exchange for config check and writes the cache (C1)', async () => {
+    const cacheDir = await mkdtemp(join(tmpdir(), 'evidgate-cli-cache-'));
+    const token = 'egt_ci_token_value';
+    const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+    const projectId = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+    const requests: Request[] = [];
+    const fetchImpl: typeof fetch = (input, init) => {
+      requests.push(input instanceof Request ? input : new Request(input, init));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            token,
+            expires_at: expiresAt,
+            project_id: projectId,
+            permission_set: [],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    };
+    const env = {
+      EVIDGATE_API_URL: 'https://api.evidgate.test',
+      EVIDGATE_PROJECT: 'proj-1',
+      EVIDGATE_INGEST_TOKEN: 'egt_ingest_secret',
+      EVIDGATE_CACHE_DIR: cacheDir,
+    };
+    try {
+      const { io, stdout, stderr } = capture();
+      await expect(main(['config', 'check'], env, io, { fetch: fetchImpl })).resolves.toBe(0);
+      expect(stdout.join('')).toContain('token_source=ingest');
+      expect(stdout.join('')).not.toContain(token);
+      expect(stderr.join('')).not.toContain(token);
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url.endsWith('/ci/token')).toBe(true);
+      const cached = JSON.parse(
+        await readFile(
+          tokenCachePath({ apiUrl: 'https://api.evidgate.test', project: 'proj-1', cacheDir }),
+          'utf8',
+        ),
+      ) as { token: string; expires_at: string };
+      expect(cached).toEqual({ token, expires_at: expiresAt });
+    } finally {
+      await rm(cacheDir, { recursive: true, force: true });
+    }
   });
 
   it('redacts the token in --verbose output and prefixes every line', async () => {
