@@ -175,4 +175,13 @@ public static class ApiErrorCode
 
     /// <summary>The row exists but is not `dead_letter` (01.5.1 §5 operator replay: 409).</summary>
     public const string TaskNotDeadLetter = "task_not_dead_letter";
+
+    /// <summary>422: the capability.v1 document fails its schema; <c>details[].path</c> points at the offending member (04.7.1 AC2, contracts/adapter/README.md).</summary>
+    public const string CapabilityInvalid = "capability_invalid";
+
+    /// <summary>422: the adapter's <c>protocol.major</c> is not one the server supports; <c>details</c> names both majors (04.7.1 AC2, contracts/adapter/README.md).</summary>
+    public const string UnsupportedProtocolMajor = "unsupported_protocol_major";
+
+    /// <summary>409: the natural key tuple matches a stored row that declares a different <c>mode</c>/<c>supports</c> set (04.7.1 AC3, contracts/adapter/README.md).</summary>
+    public const string CapabilityConflict = "capability_conflict";
 }
