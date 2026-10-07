@@ -332,6 +332,8 @@ internal sealed class TenantRowFactory
             ("public.environment_revision", "revision_no") => Interlocked.Increment(ref _revisionNo),
             ("public.manifest", "manifest_hash") or ("public.environment_revision", "revision_hash") =>
                 "sha256:" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+            ("public.policy_revision", "hash") =>
+                "sha256:" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
             _ => (object?)null,
         };
 

@@ -426,9 +426,12 @@
         "type": "Project",
         "dependencies": {
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Policy.Contracts": "[1.0.0, )",
-          "Mediator.Abstractions": "[3.0.2, )"
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )"
         }
       },
       "evidgate.modules.policy.contracts": {
