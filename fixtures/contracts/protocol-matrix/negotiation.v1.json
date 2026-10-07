@@ -1,0 +1,728 @@
+{
+  "format": "evidgate.protocol-matrix.v1",
+  "comment": "Shared protocol-negotiation compatibility matrix for plan 04.7.1-T3 (AC6, T42). Read by tests/Tenancy.IntegrationTests/ProtocolCompatibilityMatrixTests.cs (.NET) and packages/test-fixtures/src/protocolMatrix.test.ts (TypeScript); both run the same rows against the same rules (contracts/adapter/README.md §Negotiation rules), so flipping any expected verdict fails both suites.",
+  "base_document": {
+    "protocol": { "major": 1, "minor": 0 },
+    "engine": { "family": "playwright", "version": "1.49.0" },
+    "platforms": ["linux-x64"],
+    "supports": {
+      "discovery": true,
+      "step_events": true,
+      "retry": true,
+      "cancel": true
+    },
+    "mode": "full"
+  },
+  "grid": {
+    "server_supported_majors": [[1], [1, 2], [2]],
+    "server_minor": [1],
+    "adapter_major": [1, 2, 3],
+    "adapter_minor": [0, 1, 2]
+  },
+  "rows": [
+    {
+      "id": "g-s1-m1-a1-n0",
+      "kind": "grid",
+      "why": "Server supports major 1 and implements minor 1; an adapter on major 1 minor 0 is accepted for the operations that minor declares (README minor rule: adapter minor lower than the server's).",
+      "server": { "supported_majors": [1], "minor": 1 },
+      "adapter": { "major": 1, "minor": 0 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "adapter_older",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s1-m1-a1-n1",
+      "kind": "grid",
+      "why": "Server supports major 1 and implements minor 1; an adapter on major 1 minor 1 speaks the server's minor (README minor rule: equal).",
+      "server": { "supported_majors": [1], "minor": 1 },
+      "adapter": { "major": 1, "minor": 1 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s1-m1-a1-n2",
+      "kind": "grid",
+      "why": "Server supports major 1 and implements minor 1; an adapter on major 1 minor 2 is accepted and its newer flags would be unknown (README minor rule: adapter minor higher than the server's).",
+      "server": { "supported_majors": [1], "minor": 1 },
+      "adapter": { "major": 1, "minor": 2 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "adapter_newer",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s1-m1-a2-n0",
+      "kind": "grid",
+      "why": "Server supports only major 1; an adapter on major 2 is rejected 422 unsupported_protocol_major naming both majors (README major rule).",
+      "server": { "supported_majors": [1], "minor": 1 },
+      "adapter": { "major": 2, "minor": 0 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=2" },
+          { "path": "/protocol/major", "reason": "supported_majors=1" }
+        ]
+      }
+    },
+    {
+      "id": "g-s1-m1-a2-n1",
+      "kind": "grid",
+      "why": "Server supports only major 1; an adapter on major 2 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [1], "minor": 1 },
+      "adapter": { "major": 2, "minor": 1 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=2" },
+          { "path": "/protocol/major", "reason": "supported_majors=1" }
+        ]
+      }
+    },
+    {
+      "id": "g-s1-m1-a2-n2",
+      "kind": "grid",
+      "why": "Server supports only major 1; an adapter on major 2 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [1], "minor": 1 },
+      "adapter": { "major": 2, "minor": 2 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=2" },
+          { "path": "/protocol/major", "reason": "supported_majors=1" }
+        ]
+      }
+    },
+    {
+      "id": "g-s1-m1-a3-n0",
+      "kind": "grid",
+      "why": "Server supports only major 1; an adapter on major 3 is rejected 422 unsupported_protocol_major naming both majors (README major rule).",
+      "server": { "supported_majors": [1], "minor": 1 },
+      "adapter": { "major": 3, "minor": 0 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=3" },
+          { "path": "/protocol/major", "reason": "supported_majors=1" }
+        ]
+      }
+    },
+    {
+      "id": "g-s1-m1-a3-n1",
+      "kind": "grid",
+      "why": "Server supports only major 1; an adapter on major 3 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [1], "minor": 1 },
+      "adapter": { "major": 3, "minor": 1 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=3" },
+          { "path": "/protocol/major", "reason": "supported_majors=1" }
+        ]
+      }
+    },
+    {
+      "id": "g-s1-m1-a3-n2",
+      "kind": "grid",
+      "why": "Server supports only major 1; an adapter on major 3 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [1], "minor": 1 },
+      "adapter": { "major": 3, "minor": 2 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=3" },
+          { "path": "/protocol/major", "reason": "supported_majors=1" }
+        ]
+      }
+    },
+    {
+      "id": "g-s1-2-m1-a1-n0",
+      "kind": "grid",
+      "why": "Server supports majors {1,2}; an adapter on major 1 minor 0 is accepted for the operations that minor declares (README minor rule).",
+      "server": { "supported_majors": [1, 2], "minor": 1 },
+      "adapter": { "major": 1, "minor": 0 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "adapter_older",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s1-2-m1-a1-n1",
+      "kind": "grid",
+      "why": "Server supports majors {1,2}; an adapter on major 1 minor 1 speaks the server's minor (README minor rule: equal).",
+      "server": { "supported_majors": [1, 2], "minor": 1 },
+      "adapter": { "major": 1, "minor": 1 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s1-2-m1-a1-n2",
+      "kind": "grid",
+      "why": "Server supports majors {1,2}; an adapter on major 1 minor 2 is accepted with a newer minor (README minor rule).",
+      "server": { "supported_majors": [1, 2], "minor": 1 },
+      "adapter": { "major": 1, "minor": 2 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "adapter_newer",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s1-2-m1-a2-n0",
+      "kind": "grid",
+      "why": "Server supports majors {1,2}; an adapter on major 2 minor 0 is accepted for the operations that minor declares (README minor rule).",
+      "server": { "supported_majors": [1, 2], "minor": 1 },
+      "adapter": { "major": 2, "minor": 0 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "adapter_older",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s1-2-m1-a2-n1",
+      "kind": "grid",
+      "why": "Server supports majors {1,2}; an adapter on major 2 minor 1 speaks the server's minor (README minor rule: equal).",
+      "server": { "supported_majors": [1, 2], "minor": 1 },
+      "adapter": { "major": 2, "minor": 1 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s1-2-m1-a2-n2",
+      "kind": "grid",
+      "why": "Server supports majors {1,2}; an adapter on major 2 minor 2 is accepted with a newer minor (README minor rule).",
+      "server": { "supported_majors": [1, 2], "minor": 1 },
+      "adapter": { "major": 2, "minor": 2 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "adapter_newer",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s1-2-m1-a3-n0",
+      "kind": "grid",
+      "why": "Server supports majors {1,2}; an adapter on major 3 is rejected 422 unsupported_protocol_major naming both supported majors (README major rule).",
+      "server": { "supported_majors": [1, 2], "minor": 1 },
+      "adapter": { "major": 3, "minor": 0 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=3" },
+          { "path": "/protocol/major", "reason": "supported_majors=1,2" }
+        ]
+      }
+    },
+    {
+      "id": "g-s1-2-m1-a3-n1",
+      "kind": "grid",
+      "why": "Server supports majors {1,2}; an adapter on major 3 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [1, 2], "minor": 1 },
+      "adapter": { "major": 3, "minor": 1 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=3" },
+          { "path": "/protocol/major", "reason": "supported_majors=1,2" }
+        ]
+      }
+    },
+    {
+      "id": "g-s1-2-m1-a3-n2",
+      "kind": "grid",
+      "why": "Server supports majors {1,2}; an adapter on major 3 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [1, 2], "minor": 1 },
+      "adapter": { "major": 3, "minor": 2 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=3" },
+          { "path": "/protocol/major", "reason": "supported_majors=1,2" }
+        ]
+      }
+    },
+    {
+      "id": "g-s2-m1-a1-n0",
+      "kind": "grid",
+      "why": "Server supports only major 2; an adapter on major 1 is rejected 422 unsupported_protocol_major naming both majors (README major rule).",
+      "server": { "supported_majors": [2], "minor": 1 },
+      "adapter": { "major": 1, "minor": 0 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=1" },
+          { "path": "/protocol/major", "reason": "supported_majors=2" }
+        ]
+      }
+    },
+    {
+      "id": "g-s2-m1-a1-n1",
+      "kind": "grid",
+      "why": "Server supports only major 2; an adapter on major 1 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [2], "minor": 1 },
+      "adapter": { "major": 1, "minor": 1 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=1" },
+          { "path": "/protocol/major", "reason": "supported_majors=2" }
+        ]
+      }
+    },
+    {
+      "id": "g-s2-m1-a1-n2",
+      "kind": "grid",
+      "why": "Server supports only major 2; an adapter on major 1 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [2], "minor": 1 },
+      "adapter": { "major": 1, "minor": 2 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=1" },
+          { "path": "/protocol/major", "reason": "supported_majors=2" }
+        ]
+      }
+    },
+    {
+      "id": "g-s2-m1-a2-n0",
+      "kind": "grid",
+      "why": "Server supports only major 2; an adapter on major 2 minor 0 is accepted for the operations that minor declares (README minor rule).",
+      "server": { "supported_majors": [2], "minor": 1 },
+      "adapter": { "major": 2, "minor": 0 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "adapter_older",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s2-m1-a2-n1",
+      "kind": "grid",
+      "why": "Server supports only major 2; an adapter on major 2 minor 1 speaks the server's minor (README minor rule: equal).",
+      "server": { "supported_majors": [2], "minor": 1 },
+      "adapter": { "major": 2, "minor": 1 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s2-m1-a2-n2",
+      "kind": "grid",
+      "why": "Server supports only major 2; an adapter on major 2 minor 2 is accepted with a newer minor (README minor rule).",
+      "server": { "supported_majors": [2], "minor": 1 },
+      "adapter": { "major": 2, "minor": 2 },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "adapter_newer",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "g-s2-m1-a3-n0",
+      "kind": "grid",
+      "why": "Server supports only major 2; an adapter on major 3 is rejected 422 unsupported_protocol_major naming both majors (README major rule).",
+      "server": { "supported_majors": [2], "minor": 1 },
+      "adapter": { "major": 3, "minor": 0 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=3" },
+          { "path": "/protocol/major", "reason": "supported_majors=2" }
+        ]
+      }
+    },
+    {
+      "id": "g-s2-m1-a3-n1",
+      "kind": "grid",
+      "why": "Server supports only major 2; an adapter on major 3 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [2], "minor": 1 },
+      "adapter": { "major": 3, "minor": 1 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=3" },
+          { "path": "/protocol/major", "reason": "supported_majors=2" }
+        ]
+      }
+    },
+    {
+      "id": "g-s2-m1-a3-n2",
+      "kind": "grid",
+      "why": "Server supports only major 2; an adapter on major 3 is rejected regardless of its minor (README major rule).",
+      "server": { "supported_majors": [2], "minor": 1 },
+      "adapter": { "major": 3, "minor": 2 },
+      "expected": {
+        "verdict": "rejected",
+        "code": "unsupported_protocol_major",
+        "details": [
+          { "path": "/protocol/major", "reason": "adapter_major=3" },
+          { "path": "/protocol/major", "reason": "supported_majors=2" }
+        ]
+      }
+    },
+    {
+      "id": "u-01-unknown-supports-flag-true",
+      "kind": "unknown_field",
+      "why": "An unknown boolean support flag is accepted and listed verbatim (README 'Unknown fields': supports is extensible).",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true,
+          "experimental_streaming": true
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": ["experimental_streaming"]
+      }
+    },
+    {
+      "id": "u-02-unknown-supports-flag-false",
+      "kind": "unknown_field",
+      "why": "A false-valued unknown flag is still accepted and listed — the flag's value is never evaluated (README 'Unknown fields').",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true,
+          "experimental_streaming": false
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": ["experimental_streaming"]
+      }
+    },
+    {
+      "id": "u-03-several-unknown-flags-sorted",
+      "kind": "unknown_field",
+      "why": "Several unknown flags are listed sorted ordinal and case-sensitive (ProtocolNegotiator.Negotiate).",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true,
+          "zeta_flag": true,
+          "alpha_flag": true,
+          "mid_flag": false
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": ["alpha_flag", "mid_flag", "zeta_flag"]
+      }
+    },
+    {
+      "id": "u-04-case-variant-known-flag-is-unknown",
+      "kind": "unknown_field",
+      "why": "A case variant of a known flag ('Retry') is not the known 'retry' — the known set is ordinal, so it is unknown (README 'Unknown fields').",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true,
+          "Retry": true
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": ["Retry"]
+      }
+    },
+    {
+      "id": "u-05-capture-control-known-flag",
+      "kind": "unknown_field",
+      "why": "capture_control is a known protocol v1 flag (README 'capture_control'), so it is never listed as unknown.",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true,
+          "capture_control": true
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": []
+      }
+    },
+    {
+      "id": "u-06-unknown-flag-adapter-newer-minor",
+      "kind": "unknown_field",
+      "why": "A newer adapter minor is accepted and its newer support flags are unknown to this server (README minor rule: adapter minor higher than the server's).",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 2 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true,
+          "experimental_streaming": true
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "adapter_newer",
+        "unknown_supports_flags": ["experimental_streaming"]
+      }
+    },
+    {
+      "id": "u-07-unknown-flag-object-value",
+      "kind": "unknown_field",
+      "why": "An unknown flag must still be a boolean; an object value fails the schema at its own path (README 'Unknown fields').",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true,
+          "experimental_streaming": { "nested": true }
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "rejected",
+        "code": "capability_invalid",
+        "paths": ["/supports/experimental_streaming"]
+      }
+    },
+    {
+      "id": "u-08-unknown-flag-string-value",
+      "kind": "unknown_field",
+      "why": "An unknown flag whose value is a string fails the boolean schema at its path (README 'Unknown fields').",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true,
+          "experimental_streaming": "yes"
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "rejected",
+        "code": "capability_invalid",
+        "paths": ["/supports/experimental_streaming"]
+      }
+    },
+    {
+      "id": "u-09-unknown-root-member",
+      "kind": "unknown_field",
+      "why": "The document root is closed (additionalProperties:false); an undefined root member is rejected at its path (README 'Unknown fields').",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true
+        },
+        "mode": "full",
+        "extra": 1
+      },
+      "expected": {
+        "verdict": "rejected",
+        "code": "capability_invalid",
+        "paths": ["/extra"]
+      }
+    },
+    {
+      "id": "u-10-unknown-member-in-protocol",
+      "kind": "unknown_field",
+      "why": "protocol is closed; an undefined member inside it is rejected at /protocol/patch (README 'Unknown fields').",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0, "patch": 1 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "rejected",
+        "code": "capability_invalid",
+        "paths": ["/protocol/patch"]
+      }
+    },
+    {
+      "id": "u-11-unknown-member-in-engine",
+      "kind": "unknown_field",
+      "why": "engine is closed; an undefined member inside it is rejected at /engine/build (README 'Unknown fields').",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0", "build": "x" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "rejected",
+        "code": "capability_invalid",
+        "paths": ["/engine/build"]
+      }
+    },
+    {
+      "id": "u-12-ingest-only-unknown-flag",
+      "kind": "unknown_field",
+      "why": "ingest_only is a valid mode and does not change negotiation; the unknown flag is still accepted and listed (README mode rule).",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 1, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true,
+          "experimental_streaming": true
+        },
+        "mode": "ingest_only"
+      },
+      "expected": {
+        "verdict": "accepted",
+        "minor": "equal",
+        "unknown_supports_flags": ["experimental_streaming"]
+      }
+    },
+    {
+      "id": "p-01-major-2-unknown-root-member",
+      "kind": "precedence",
+      "why": "Schema validation runs before negotiation: major 2 is schema-valid, but the unknown root member is rejected as capability_invalid, never unsupported_protocol_major.",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 2, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true
+        },
+        "mode": "full",
+        "extra": 1
+      },
+      "expected": {
+        "verdict": "rejected",
+        "code": "capability_invalid",
+        "paths": ["/extra"]
+      }
+    },
+    {
+      "id": "p-02-major-zero",
+      "kind": "precedence",
+      "why": "protocol.major has minimum 1, so major 0 fails the schema (capability_invalid) before any negotiation (README major rule).",
+      "server": { "supported_majors": [1], "minor": 0 },
+      "document": {
+        "protocol": { "major": 0, "minor": 0 },
+        "engine": { "family": "playwright", "version": "1.49.0" },
+        "platforms": ["linux-x64"],
+        "supports": {
+          "discovery": true,
+          "step_events": true,
+          "retry": true,
+          "cancel": true
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "verdict": "rejected",
+        "code": "capability_invalid",
+        "paths": ["/protocol/major"]
+      }
+    }
+  ]
+}

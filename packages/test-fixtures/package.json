@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@evidgate/cli": "*",
     "canonicalize": "5.1.0"
   }
 }
