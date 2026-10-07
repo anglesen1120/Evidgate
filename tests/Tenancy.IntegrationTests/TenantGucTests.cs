@@ -334,6 +334,16 @@ public sealed class TenantGucTests
             ("hash", "sha256:" + new string('d', 64)),
             ("suite_revision_id", suiteRevisionId),
             ("environment_revision_id", environmentRevisionId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.policy_revision (id, org_id, project_id, revision_no, hash, body, created_by)
+            values (@id, @org_id, @project_id, 1, @hash, '{}', @created_by)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("hash", "sha256:" + new string('e', 64)),
+            ("created_by", Guid.CreateVersion7()));
         var membershipId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             "insert into public.membership (id, org_id, invited_email) values (@id, @org_id, @invited_email)",

@@ -15,6 +15,7 @@ using Evidgate.Modules.Identity;
 using Evidgate.Modules.Identity.Endpoints;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
+using Evidgate.Modules.Policy;
 using Evidgate.Modules.Catalog.Endpoints;
 using Evidgate.Modules.Orchestrator.Endpoints;
 using Evidgate.Modules.Tenancy;
@@ -73,6 +74,8 @@ public static partial class ApiHost
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
         builder.Services.AddOrchestratorModule();
+        // 07.1.1-T1: the policy module — the append-only revision write model and store.
+        builder.Services.AddPolicyModule();
         // 02.2.1-T1.2/T2.2: the permission-catalogue module — reads (00 §2, 02 §4.2),
         // the flagged custom-role writes and the C2 permission evaluator, which
         // replaces the pipeline's fail-closed default.
