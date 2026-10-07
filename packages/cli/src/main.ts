@@ -3,7 +3,6 @@
 // never calls `process.exit` (that is `bin.ts`). Every write goes through a redacting
 // writer, so a secret can never reach stdout/stderr (T78); the one exception is the
 // `::add-mask::` line, which a command writes through `maskSecret` to the RAW stdout.
-import { readFileSync } from 'node:fs';
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
 
 import type { ExchangeDeps } from './auth/exchange.js';
@@ -28,6 +27,7 @@ import {
 } from './errors.js';
 import { ExitCode } from './exitCodes.js';
 import { createRedactingIo, redact, resetSecrets, type Io } from './redact.js';
+import { readCliVersion } from './version.js';
 
 const helpHint = "run 'evidgate --help' for usage";
 
@@ -101,6 +101,9 @@ export async function main(
       flags: toConfigFlags(parsed.values),
       requireToken: resolved.command.requireToken,
     });
+    // A command's own pre-flight check runs before the `--verbose` dump, so a refused
+    // configuration is never echoed by that dump (04.2.4-T2 `quickstart`).
+    resolved.command.validateConfig?.(config);
     if (config.verbose) {
       output.stderr(prefixStderrLines(`${formatConfigForVerbose(config)}\n`));
     }
@@ -188,12 +191,4 @@ function reportError(error: unknown, io: Io, verbose: boolean): ExitCode {
     );
   }
   return ExitCode.Error;
-}
-
-/** The package version, read from the manifest next to `dist/` (or `src/`). */
-function readCliVersion(): string {
-  const manifest = JSON.parse(
-    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-  ) as { version?: unknown };
-  return typeof manifest.version === 'string' ? manifest.version : '0.0.0';
 }

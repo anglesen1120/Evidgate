@@ -1,0 +1,37 @@
+# Evidgate quickstart — GitHub Actions workflow (rendered by `evidgate quickstart`).
+#
+# The only stored setting is the repository configuration VARIABLE EVIDGATE_API_URL
+# (Settings → Secrets and variables → Actions → Variables). No secret is stored: the
+# CLI exchanges the GitHub OIDC token for a short-lived Evidgate CI token.
+#
+# Fork pull requests get no OIDC token, so the exchange step below fails there; add
+# `if: github.event_name != 'pull_request'` to skip it on forks.
+name: evidgate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  evidgate:
+    runs-on: ubuntu-24.04
+    env:
+      EVIDGATE_API_URL: ${{ vars.EVIDGATE_API_URL }}
+      EVIDGATE_PROJECT: "my-project"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      # Exchange the GitHub OIDC token for a short-lived Evidgate CI token. The token
+      # is written only to the 0600 cache, never printed.
+      - run: npx --yes --package @evidgate/cli@0.0.0 -- evidgate auth login
+      - run: npx --yes --package @evidgate/cli@0.0.0 -- evidgate manifests upload --file evidgate-manifest.json
+      # Not yet available — these steps land with their owning tasks:
+      #   runs create (04.2.2-T2)
+      #   events send + runs finalize (04.2.3-T1/T2)
+      #   artifacts upload (04.2.4-T1)

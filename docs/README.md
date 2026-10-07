@@ -12,6 +12,7 @@ Where each kind of documentation lives (plan 01.9.1-T3). A path not listed here 
 | Feature plans | [`../plans/features/`](../plans/features/) `<NN>-<area>/NN.E.S-<slug>.md` | One detailed plan per story (00 §12); area plans stay in [`../plans/`](../plans/) |
 | Decision memos and their criteria | [`decisions/`](decisions/) — one file per decision, e.g. [`10.8.1-provider-selection-criteria.md`](decisions/10.8.1-provider-selection-criteria.md) | Owner-facing documents that feed an open owner decision (DECISIONS §8): the criteria document and, later, the decision memo for the same story id. Owned by the story that writes them (10.8.1 for O3); they state findings and no vendor until the owner decides |
 | Dev setup quickstart | [`dev-setup.md`](dev-setup.md) | Prerequisites, `scripts/dev/up.sh`, ports and `.env.dev` mapping, troubleshooting; owned by 01.8.1 |
+| CI quickstart examples | [`quickstart/`](quickstart/) — `github-actions.yml` and `generic.sh` | Rendered by `evidgate quickstart` and kept equal to the renderer by a test; owned by 04.2.4-T2 |
 | Source design | [`source/`](source/) | Original Vietnamese design the plan set supersedes where DECISIONS.md §9 lists a delta |
 | Repo guide | [`../AGENTS.md`](../AGENTS.md) | Authority order, editing rules, legend |
 
