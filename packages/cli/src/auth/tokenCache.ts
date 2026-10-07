@@ -21,7 +21,9 @@ export const refreshMarginMs = 60_000;
 export const maxTokenLifetimeMs = 65 * 60_000;
 
 // `O_NOFOLLOW` is POSIX-only; win32 falls back to the `lstat` check in `readCachedToken`.
-const noFollowFlag = constants.O_NOFOLLOW ?? 0;
+// `O_NONBLOCK` keeps a FIFO planted at the cache path from blocking the open.
+const openReadFlags =
+  constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0);
 
 export interface CachedToken {
   readonly token: string;
@@ -62,7 +64,7 @@ export async function readCachedToken(config: TokenCacheConfig): Promise<CachedT
         return undefined;
       }
     }
-    handle = await open(path, constants.O_RDONLY | noFollowFlag);
+    handle = await open(path, openReadFlags);
     const stats = await handle.stat();
     if (!stats.isFile()) {
       return undefined;

@@ -226,7 +226,7 @@ describe('exchangeToken', () => {
 
   it('falls back to 1 s for a malformed Retry-After', async () => {
     const config = await oidcConfig();
-    for (const value of ['-5', '1.5']) {
+    for (const value of ['-5', '1.5', 'soon 5']) {
       let attempt = 0;
       const { fetchImpl } = stubFetch(() => {
         attempt += 1;

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import {
   chmod,
   lstat,
@@ -109,6 +110,14 @@ describe('tokenCache', () => {
     const config = cacheConfig(cacheDir);
     await mkdir(cacheDir, { recursive: true, mode: 0o700 });
     await symlink(target, tokenCachePath(config));
+
+    await expect(readCachedToken(config)).resolves.toBeUndefined();
+  });
+
+  it.skipIf(!posix)('ignores a FIFO at the cache path without blocking', async () => {
+    const config = cacheConfig(cacheDir);
+    await mkdir(cacheDir, { recursive: true, mode: 0o700 });
+    execFileSync('mkfifo', ['-m', '600', tokenCachePath(config)]);
 
     await expect(readCachedToken(config)).resolves.toBeUndefined();
   });

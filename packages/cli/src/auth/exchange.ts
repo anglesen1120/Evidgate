@@ -343,9 +343,9 @@ function retryAfterMs(header: string | null): number {
   if (/^\d+$/.test(value)) {
     return Math.min(Math.max(Number(value) * 1000, 0), maxRetryAfterMs);
   }
-  // Only a value that looks like an HTTP-date (it carries a letter) is parsed as one; a
-  // malformed delta such as `1.5` or `-5` falls back to the default (D6).
-  if (/[A-Za-z]/.test(value)) {
+  // Only an IMF-fixdate (`Sun, 06 Nov 1994 08:49:37 GMT`) is parsed as an HTTP-date; a
+  // malformed delta such as `1.5` or `-5`, or other text, falls back to the default (D6).
+  if (/^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/.test(value)) {
     const date = Date.parse(value);
     if (Number.isFinite(date)) {
       return Math.min(Math.max(date - Date.now(), 0), maxRetryAfterMs);
