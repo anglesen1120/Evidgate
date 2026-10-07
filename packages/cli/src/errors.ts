@@ -10,12 +10,18 @@ export interface CliErrorOptions {
   readonly hint?: string;
   /** Optional server request id, printed as `evidgate: request_id: <id>`. */
   readonly requestId?: string;
+  /**
+   * Optional per-item server detail lines, printed one per entry as
+   * `evidgate: detail: <detail>` after the hint/request_id lines (contracts/cli.md §5).
+   */
+  readonly details?: readonly string[];
 }
 
 export class CliError extends Error {
   readonly code: string;
   readonly hint?: string;
   readonly requestId?: string;
+  readonly details?: readonly string[];
 
   constructor(message: string, options: CliErrorOptions) {
     super(message);
@@ -26,6 +32,9 @@ export class CliError extends Error {
     }
     if (options.requestId !== undefined) {
       this.requestId = options.requestId;
+    }
+    if (options.details !== undefined) {
+      this.details = options.details;
     }
   }
 }
@@ -73,6 +82,9 @@ export function formatCliError(error: CliError): string {
   }
   if (error.requestId !== undefined) {
     lines.push(`evidgate: request_id: ${escapeControlCharacters(error.requestId)}`);
+  }
+  for (const detail of error.details ?? []) {
+    lines.push(`evidgate: detail: ${escapeControlCharacters(detail)}`);
   }
   return lines.join('\n');
 }
