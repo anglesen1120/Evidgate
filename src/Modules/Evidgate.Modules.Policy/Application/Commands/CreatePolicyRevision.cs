@@ -61,7 +61,7 @@ internal sealed class CreatePolicyRevisionCommandHandler(
             return Result.Failure<PolicyRevisionDto>(Error.Forbidden("policy:write is held by a member"));
         }
 
-        if (Validate(command.Body, schemas.Value, hasher, out var body, out var element) is { } bodyError)
+        if (Validate(command.Body, schemas.Value, hasher, out var body) is { } bodyError)
         {
             return Result.Failure<PolicyRevisionDto>(bodyError);
         }
@@ -85,7 +85,18 @@ internal sealed class CreatePolicyRevisionCommandHandler(
         }
 
         var row = appended.Value;
-        audit.Describe(new AuditObject("policy_revision", row.Id.ToString("D")));
+
+        // The replay is audited under the same action as the create (AC1), so the outcome is what tells them apart
+        // (finding S2): the content address is the after-hash on both paths, and the metadata carries which one ran.
+        audit.Describe(new AuditObject(
+            "policy_revision",
+            row.Id.ToString("D"),
+            AfterHash: Convert.FromHexString(row.Hash[CanonicalHash.Prefix.Length..]),
+            Metadata: new Dictionary<string, string> { ["outcome"] = row.Created ? "created" : "unchanged" }));
+
+        // The response body is the stored jsonb (finding CR5), not the caller's element: the database's rendering is
+        // what a later GET returns, so a create and a replay answer with the same bytes.
+        using var stored = JsonDocument.Parse(row.Body);
 
         return Result.Success(
             new PolicyRevisionDto(
@@ -94,7 +105,7 @@ internal sealed class CreatePolicyRevisionCommandHandler(
                 row.RevisionNo,
                 row.Hash,
                 row.State,
-                element,
+                stored.RootElement.Clone(),
                 row.CreatedBy,
                 row.CreatedAt,
                 row.Version),
@@ -103,18 +114,16 @@ internal sealed class CreatePolicyRevisionCommandHandler(
 
     /// <summary>
     /// Null when the body is a storable JSON object the schema accepts and the domain rules admit, else the 422.
-    /// The order is the route's: JSON, then the schema (an unknown member is its own code, AC3), then the rules the
-    /// store would otherwise enforce with an exception.
+    /// The order is the route's: JSON, then the cheap bounds pre-check (finding S1), then the schema (an unknown
+    /// member is its own code, AC3), then the rules the store would otherwise enforce with an exception.
     /// </summary>
     private static Error? Validate(
         ReadOnlyMemory<byte> bytes,
         ContractSchemaSet schemas,
         IPolicyHasher hasher,
-        out string body,
-        out JsonElement element)
+        out string body)
     {
         body = string.Empty;
-        element = default;
 
         JsonDocument document;
         try
@@ -138,6 +147,13 @@ internal sealed class CreatePolicyRevisionCommandHandler(
                     [new ErrorDetail(string.Empty, "invalid_value")]);
             }
 
+            // The schema engine is the expensive path (finding S1): a body that is obviously out of bounds is
+            // refused here, before it runs.
+            if (PolicyBodyBounds.Check(document.RootElement) is { } boundsError)
+            {
+                return boundsError;
+            }
+
             var verdict = schemas.Validate(ContractSchemaKeys.PolicyRevision, document.RootElement);
             if (!verdict.IsValid)
             {
@@ -150,8 +166,6 @@ internal sealed class CreatePolicyRevisionCommandHandler(
                         "the body does not match policy-revision.v1",
                         [.. verdict.Errors.Select(error => new ErrorDetail(PolicyBodyPaths.Of(error), error.Reason, error.Index))]);
             }
-
-            element = document.RootElement.Clone();
         }
 
         body = Encoding.UTF8.GetString(bytes.Span);

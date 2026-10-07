@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
@@ -127,4 +128,65 @@ internal static class PolicyBodyPaths
     /// <summary>The absolute JSON pointer of the failing member, capped at 200 characters.</summary>
     internal static string Of(ContractValidationError error) =>
         error.Path.Length > 200 ? error.Path[..200] : error.Path;
+}
+
+/// <summary>
+/// The cheap pre-check of 07.1.1-T3 finding S1: the schema engine is the expensive path, so a body that is
+/// obviously out of bounds is refused before it runs. Every array and every number of <c>policy-revision.v1</c> is
+/// a top-level member, so the check is complete for this contract; a member the closed schema does not declare is
+/// left to the schema, so it keeps its own code (AC3). One pass over the top-level members, no per-element
+/// allocation beyond the enumeration itself.
+/// </summary>
+internal static class PolicyBodyBounds
+{
+    /// <summary>The <c>maxItems</c> of every array member of <c>policy-revision.v1</c> (contracts/schemas/policy-revision.v1.json).</summary>
+    private static readonly Dictionary<string, int> MaxItems = new(StringComparer.Ordinal)
+    {
+        ["required_suites"] = 1000,
+        ["required_cases"] = 1000,
+        ["critical_cases"] = 1000,
+        ["allowed_skips"] = 1000,
+        ["required_artifacts"] = 100,
+        ["quarantine_ids"] = 1000,
+    };
+
+    /// <summary>Longest number literal the canonical form can need (RFC 8785 §3.2.2.3 shortest round-trip double).</summary>
+    internal const int MaxNumberLength = 32;
+
+    /// <summary>Reason of an array past its member's <c>maxItems</c>.</summary>
+    internal const string TooManyItemsReason = "too_many_items";
+
+    /// <summary>Reason of a number literal longer than <see cref="MaxNumberLength"/>.</summary>
+    internal const string NumberTooLongReason = "number_too_long";
+
+    /// <summary>Null when every bounded array and every number is inside the schema's limits, else the 422.</summary>
+    internal static Error? Check(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        foreach (var member in root.EnumerateObject())
+        {
+            var value = member.Value;
+            if (value.ValueKind == JsonValueKind.Array
+                && MaxItems.TryGetValue(member.Name, out var max)
+                && value.GetArrayLength() > max)
+            {
+                return PolicyErrors.PolicyInvalid(
+                    "the body carries an array larger than policy-revision.v1 allows",
+                    [new ErrorDetail("/" + member.Name, TooManyItemsReason)]);
+            }
+
+            if (value.ValueKind == JsonValueKind.Number && value.GetRawText().Length > MaxNumberLength)
+            {
+                return PolicyErrors.PolicyInvalid(
+                    "the body carries a number literal longer than the canonical form allows",
+                    [new ErrorDetail("/" + member.Name, NumberTooLongReason)]);
+            }
+        }
+
+        return null;
+    }
 }

@@ -775,7 +775,8 @@ paths:
         member outside the 00 §8.6 field set is `422 policy_unknown_field` with
         the member's JSON pointer in `error.details[].path` (AC3); any other
         schema failure is `422 policy_invalid` (reasons `invalid_json`,
-        `not_canonicalisable`, `inexact_number`). No `Idempotency-Key` is
+        `not_canonicalisable`, `inexact_number`, `too_many_items`,
+        `number_too_long`). No `Idempotency-Key` is
         required — the content hash is the idempotency key, so a retried
         identical POST returns the same revision and never `409
         idempotency_conflict` (07.1.1 §5). `If-Match` is optional: when present
@@ -892,7 +893,7 @@ paths:
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/PolicyRevisionId'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/PolicyRevisionCursor'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/IfMatchOptional'
       responses:
@@ -3561,6 +3562,13 @@ components:
       in: query
       required: false
       description: Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+      schema:
+        type: string
+    PolicyRevisionCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
       schema:
         type: string
     Limit:

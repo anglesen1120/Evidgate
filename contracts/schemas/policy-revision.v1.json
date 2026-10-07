@@ -89,7 +89,7 @@
       "type": "array",
       "maxItems": 1000,
       "uniqueItems": true,
-      "description": "Quarantine entries this policy revision honours; a critical case on this list is refused (422 critical_case_not_quarantinable)",
+      "description": "Quarantine entries this policy revision honours; the list is stored as given and honoured at evaluation time. The refusal of a critical case belongs to POST /v1/quarantine (07.3.1).",
       "items": {
         "type": "string",
         "format": "uuid"

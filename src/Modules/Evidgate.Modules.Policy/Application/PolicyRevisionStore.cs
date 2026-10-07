@@ -13,6 +13,7 @@ namespace Evidgate.Modules.Policy.Application;
 /// <param name="Id">The revision id (the existing row's id when the hash was already on file).</param>
 /// <param name="RevisionNo">The revision number.</param>
 /// <param name="Hash">The content address.</param>
+/// <param name="Body">The stored <c>jsonb</c> as text (the database's rendering, finding CR5).</param>
 /// <param name="State">The row's lifecycle state.</param>
 /// <param name="CreatedBy">The member that wrote the row.</param>
 /// <param name="CreatedAt">When the row was stored, UTC.</param>
@@ -22,6 +23,7 @@ internal sealed record PolicyRevisionAppend(
     Guid Id,
     int RevisionNo,
     string Hash,
+    string Body,
     string State,
     Guid CreatedBy,
     DateTimeOffset CreatedAt,
@@ -45,7 +47,7 @@ internal sealed record PolicyRevisionAppend(
 /// An optional <c>expectedHeadId</c> (07.1.1-T3, AC5) is compared against the project's current head revision
 /// <em>after</em> the project row lock and before the slot query, so the check and the append are serialised by the
 /// same lock: a stale <c>If-Match</c> is a typed 412
-/// (<see cref="PolicyRevisionErrors.PreconditionFailed"/>) and writes nothing.
+/// (<see cref="PolicyErrors.Stale"/>) and writes nothing.
 /// </para>
 /// </summary>
 internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor scopes, IPolicyHasher hasher)
@@ -130,7 +132,7 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
 
             if (head != expected)
             {
-                return Result.Failure<PolicyRevisionAppend>(PolicyRevisionErrors.PreconditionFailed(head));
+                return Result.Failure<PolicyRevisionAppend>(PolicyErrors.Stale(head));
             }
         }
 
@@ -145,6 +147,7 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
                 existingId,
                 slot.ExistingNo!.Value,
                 hash,
+                slot.ExistingBody!,
                 slot.ExistingState!,
                 slot.ExistingCreatedBy!.Value,
                 slot.ExistingCreatedAt!.Value,
@@ -174,6 +177,7 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
                 inserted.Id,
                 inserted.RevisionNo,
                 hash,
+                inserted.Body,
                 inserted.State,
                 inserted.CreatedBy,
                 inserted.CreatedAt,
@@ -192,6 +196,7 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
             existing.Id,
             existing.RevisionNo,
             hash,
+            existing.Body,
             existing.State,
             existing.CreatedBy,
             existing.CreatedAt,
@@ -210,6 +215,8 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
 
         public int? ExistingNo { get; set; }
 
+        public string? ExistingBody { get; set; }
+
         public string? ExistingState { get; set; }
 
         public Guid? ExistingCreatedBy { get; set; }
@@ -226,6 +233,8 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
         public Guid Id { get; set; }
 
         public int RevisionNo { get; set; }
+
+        public string Body { get; set; } = string.Empty;
 
         public string State { get; set; } = string.Empty;
 
@@ -251,9 +260,6 @@ internal static class PolicyRevisionErrors
         ApiErrorCode.Unavailable,
         "the project's policy revisions are being changed by another request; retry shortly",
         503);
-
-    /// <summary>412: the caller's <c>If-Match</c> named a head that is not the project's current head (AC5).</summary>
-    internal static Error PreconditionFailed(Guid? currentHeadId) => PolicyErrors.Stale(currentHeadId);
 }
 
 /// <summary>The statements of the policy-revision store; every one runs in the request's tenant transaction.</summary>
@@ -282,13 +288,14 @@ internal static class PolicyRevisionSql
     /// <summary>Dedupe and numbering in one round trip.</summary>
     internal const string RevisionSlot = """
         select same.id as existing_id, same.revision_no as existing_no,
+               same.body::text as existing_body,
                same.state as existing_state, same.created_by as existing_created_by,
                same.created_at as existing_created_at, same.version as existing_version,
                (select coalesce(max(revision_no), 0) + 1 from public.policy_revision
                  where org_id = @org_id and project_id = @project_id) as next_no
           from (select 1) as one
           left join lateral (
-                select id, revision_no, state, created_by, created_at, version from public.policy_revision
+                select id, revision_no, body::text as body, state, created_by, created_at, version from public.policy_revision
                  where org_id = @org_id and project_id = @project_id and hash = @hash) as same on true
         """;
 
@@ -298,12 +305,12 @@ internal static class PolicyRevisionSql
                (id, org_id, project_id, revision_no, hash, body, state, created_by)
         values (@id, @org_id, @project_id, @revision_no, @hash, @body::jsonb, @state, @created_by)
         on conflict (org_id, project_id, hash) do nothing
-        returning id, revision_no, state, created_by, created_at, version
+        returning id, revision_no, state, created_by, created_at, version, body::text as body
         """;
 
     /// <summary>The row a lost race left behind.</summary>
     internal const string ReadByHash = """
-        select id, revision_no, state, created_by, created_at, version
+        select id, revision_no, state, created_by, created_at, version, body::text as body
           from public.policy_revision
          where org_id = @org_id and project_id = @project_id and hash = @hash
         """;

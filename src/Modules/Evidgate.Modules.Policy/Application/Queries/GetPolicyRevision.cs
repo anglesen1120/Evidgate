@@ -58,7 +58,7 @@ internal sealed class GetPolicyRevisionQueryHandler(
 
         if (row is null || PolicyScope.Project(row.ProjectId, principals, tenant) is not null)
         {
-            return Result.Failure<PolicyRevisionView>(PolicyRevisionReadErrors.RevisionNotFound);
+            return Result.Failure<PolicyRevisionView>(PolicyErrors.RevisionNotFound);
         }
 
         Verify(row, hasher);
@@ -102,20 +102,18 @@ internal sealed class GetPolicyRevisionQueryHandler(
     }
 }
 
-/// <summary>Errors of the policy-revision read surface (07.1.1 §5, 00 §9.2).</summary>
-internal static class PolicyRevisionReadErrors
-{
-    /// <summary>404: no revision with that id is visible to this tenant (another tenant's id included, 00 §9.2).</summary>
-    internal static Error RevisionNotFound => Error.NotFound("no policy revision with that id is visible to this tenant");
-}
-
 /// <summary>The read statements of the policy-revision query; every one runs in the request's tenant transaction.</summary>
 internal static class PolicyRevisionReadSql
 {
-    /// <summary>One revision by id; RLS scopes it to the request's tenant (00 §5.4.2), so another tenant reads no row.</summary>
+    /// <summary>
+    /// One revision by id; RLS scopes it to the request's tenant (00 §5.4.2), so another tenant reads no row. The
+    /// project join (finding S3, the <c>OrchestratorSql.RevisionById</c> precedent) hides a revision whose project
+    /// is soft-deleted, so it is the same 404 as an unknown id.
+    /// </summary>
     internal const string ById = """
-        select id, project_id, revision_no, hash, body::text as body, state, created_by, created_at, version
-          from public.policy_revision
-         where id = @id
+        select r.id, r.project_id, r.revision_no, r.hash, r.body::text as body, r.state, r.created_by, r.created_at, r.version
+          from public.policy_revision r
+          join public.project p on p.org_id = r.org_id and p.id = r.project_id and p.status <> 'deleted'
+         where r.id = @id
         """;
 }

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Evidgate.Modules.Policy.Application.Queries;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -198,6 +199,45 @@ public sealed class PolicyEndpointTests
         (await RevisionCountAsync(world)).ShouldBe(2);
     }
 
+    /// <summary>
+    /// 07.1.1 AC1 + finding S2: the create and the replay are both audited under <c>policy_revision.create</c>,
+    /// told apart by the metadata outcome, and both carry the revision's content address as the after-hash; a
+    /// refused write (412, 422) is audited by nothing.
+    /// </summary>
+    [Fact]
+    public async Task CreatePolicyRevision_AuditRecordsCreateAndReplay_NotTheRefusedWrites()
+    {
+        await using var world = await StartAsync();
+
+        var created = await CreateAsync(world, BodyA);
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+        var replay = await CreateAsync(world, BodyAReordered);
+        replay.Status.ShouldBe(HttpStatusCode.OK, replay.ErrorMessage);
+        replay.Id().ShouldBe(created.Id());
+
+        // A stale If-Match (412) and an unknown field (422) are both refused before the handler: no audit row.
+        (await CreateAsync(world, BodyD, ifMatch: $"\"{Guid.CreateVersion7()}\"")).Status.ShouldBe(HttpStatusCode.PreconditionFailed);
+        (await CreateAsync(world, """{"bogus":true}""")).Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+
+        var hashHex = created.Text("hash")!["sha256:".Length..];
+        var rows = await _fixture.ColumnAsync<string>(
+            world.Database,
+            $"""
+            select action || '|' || coalesce(object_type, '-') || '|' || coalesce(object_id, '-') || '|' ||
+                   coalesce(metadata ->> 'outcome', '-') || '|' || coalesce(encode(after_hash, 'hex'), '-') || '|' ||
+                   actor_type || '|' || actor_id
+              from public.audit_log
+             where org_id = '{world.Org}' and action = 'policy_revision.create'
+             order by seq
+            """);
+
+        rows.ShouldBe(
+        [
+            $"policy_revision.create|policy_revision|{created.Id():D}|created|{hashHex}|user|{world.User:D}",
+            $"policy_revision.create|policy_revision|{created.Id():D}|unchanged|{hashHex}|user|{world.User:D}",
+        ]);
+    }
+
     [Fact]
     public async Task CreatePolicyRevision_UnknownFields_Are422_WithPointer_AndWriteNothing()
     {
@@ -250,6 +290,32 @@ public sealed class PolicyEndpointTests
         (await RevisionCountAsync(world)).ShouldBe(0);
     }
 
+    /// <summary>
+    /// 07.1.1 finding S1: the cheap bounds pre-check refuses an array past its member's <c>maxItems</c> and a
+    /// number literal longer than the canonical form allows, before the schema engine runs, and writes nothing.
+    /// </summary>
+    [Fact]
+    public async Task CreatePolicyRevision_ArrayOverMaxItems_AndLongNumber_Are422_NoRow()
+    {
+        await using var world = await StartAsync();
+
+        var suites = string.Join(",", Enumerable.Range(0, 1001).Select(index => $"\"suite-{index}\""));
+        var tooMany = await CreateAsync(world, $"{{\"required_suites\":[{suites}]}}");
+        tooMany.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        tooMany.ErrorCode.ShouldBe("policy_invalid");
+        Detail(tooMany).GetProperty("path").GetString().ShouldBe("/required_suites");
+        Detail(tooMany).GetProperty("reason").GetString().ShouldBe("too_many_items");
+
+        // 40 digits: longer than the 32-character canonical number form (RFC 8785 §3.2.2.3).
+        var longNumber = await CreateAsync(world, """{"flaky_budget":1234567890123456789012345678901234567890}""");
+        longNumber.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        longNumber.ErrorCode.ShouldBe("policy_invalid");
+        Detail(longNumber).GetProperty("path").GetString().ShouldBe("/flaky_budget");
+        Detail(longNumber).GetProperty("reason").GetString().ShouldBe("number_too_long");
+
+        (await RevisionCountAsync(world)).ShouldBe(0);
+    }
+
     [Fact]
     public async Task Permissions_WriteNeedsPolicyWrite_ReadNeedsPolicyRead()
     {
@@ -272,32 +338,68 @@ public sealed class PolicyEndpointTests
         (await RevisionCountAsync(world)).ShouldBe(1);
     }
 
+    /// <summary>
+    /// 07.1.1 AC2: <c>policy:write</c> is release_approver-only — a member holding only that role writes, a viewer
+    /// is refused 403 — and an <c>If-Match</c> naming the current head admits a new body (201) and a replay of the
+    /// head body (200).
+    /// </summary>
     [Fact]
-    public async Task ProjectScopedCredential_SeesNothingOfAnotherProject_AndCannotPost()
+    public async Task Permissions_ReleaseApproverWrites_ViewerCannot_AndIfMatchOnHeadSucceeds()
+    {
+        await using var world = await StartAsync();
+        var approver = TenancyApiFactory.Resolved(user: await AddMemberAsync(world, "release_approver"), orgHeader: world.Org);
+        var viewer = TenancyApiFactory.Resolved(user: await AddMemberAsync(world, "viewer"), orgHeader: world.Org);
+
+        var first = await CreateAsync(world, BodyA, caller: approver);
+        first.Status.ShouldBe(HttpStatusCode.Created, first.ErrorMessage);
+
+        (await CreateAsync(world, BodyB, caller: viewer)).Status.ShouldBe(HttpStatusCode.Forbidden);
+
+        // If-Match naming the current head: a new body appends (201), the head's own body replays (200).
+        var next = await CreateAsync(world, BodyB, caller: approver, ifMatch: $"\"{first.Id()}\"");
+        next.Status.ShouldBe(HttpStatusCode.Created, next.ErrorMessage);
+        next.Body.GetProperty("revision_no").GetInt32().ShouldBe(2);
+
+        var replay = await CreateAsync(world, BodyB, caller: approver, ifMatch: $"\"{next.Id()}\"");
+        replay.Status.ShouldBe(HttpStatusCode.OK, replay.ErrorMessage);
+        replay.Id().ShouldBe(next.Id());
+
+        (await RevisionCountAsync(world)).ShouldBe(2);
+    }
+
+    /// <summary>
+    /// A project-scoped service credential cannot touch policy revisions at all: <c>policy:read</c> and
+    /// <c>policy:write</c> are outside the service-role ceiling (<c>PermissionEvaluator.ServiceRoleCeiling</c>), so
+    /// the C2 stage refuses the token as malformed with 403 <c>forbidden</c> before the handler runs. The refusal
+    /// is identical for an existing revision of another project and an unknown id, so it is no existence oracle.
+    /// </summary>
+    [Fact]
+    public async Task ProjectScopedServiceCredential_IsRefusedByTheServiceRoleCeiling_OnReadAndWrite()
     {
         await using var world = await StartAsync();
         var projectB = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
         var created = await CreateAsync(world, BodyA);
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
 
-        var scopedToB = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: projectB, servicePermissions: ["policy:read"]);
-        var scopedToBWrite = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: projectB, servicePermissions: ["policy:write"]);
+        var readScopedToB = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: projectB, servicePermissions: ["policy:read"]);
+        var writeScopedToB = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: projectB, servicePermissions: ["policy:write"]);
 
-        // A credential scoped to project B learns nothing about project A's revision: the same 404 as an unknown id.
-        var hidden = await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}", scopedToB);
-        var unknown = await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{Guid.CreateVersion7()}", scopedToB);
-        hidden.Status.ShouldBe(HttpStatusCode.NotFound);
-        unknown.Status.ShouldBe(HttpStatusCode.NotFound);
-        hidden.ErrorCode.ShouldBe(unknown.ErrorCode);
-        hidden.ErrorMessage.ShouldBe(unknown.ErrorMessage);
+        // policy:read is outside the service-role ceiling: the token is malformed, so it holds nothing.
+        var existing = await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}", readScopedToB);
+        var unknown = await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{Guid.CreateVersion7()}", readScopedToB);
+        existing.Status.ShouldBe(HttpStatusCode.Forbidden);
+        unknown.Status.ShouldBe(HttpStatusCode.Forbidden);
+        existing.ErrorCode.ShouldBe("forbidden");
+        // The same code and message for an existing and an unknown id: the refusal is no existence oracle.
+        existing.ErrorCode.ShouldBe(unknown.ErrorCode);
+        existing.ErrorMessage.ShouldBe(unknown.ErrorMessage);
 
-        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}/revisions", scopedToB))
-            .Status.ShouldBe(HttpStatusCode.NotFound);
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}/revisions", readScopedToB))
+            .Status.ShouldBe(HttpStatusCode.Forbidden);
 
-        // Writing into project A with a credential scoped to B is the 00 §9.1 project-scope mismatch.
-        var mismatch = await CreateAsync(world, BodyB, caller: scopedToBWrite);
-        mismatch.Status.ShouldBe(HttpStatusCode.Forbidden);
-        mismatch.ErrorCode.ShouldBe("project_scope_mismatch");
+        var write = await CreateAsync(world, BodyB, caller: writeScopedToB);
+        write.Status.ShouldBe(HttpStatusCode.Forbidden);
+        write.ErrorCode.ShouldBe("forbidden");
 
         (await RevisionCountAsync(world)).ShouldBe(1);
     }
@@ -317,6 +419,32 @@ public sealed class PolicyEndpointTests
             .Status.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    /// <summary>
+    /// 07.1.1 finding S3: a revision whose project is soft-deleted is invisible on both read paths, with the same
+    /// 404 code and message as an unknown id (the <c>OrchestratorSql.RevisionById</c> precedent).
+    /// </summary>
+    [Fact]
+    public async Task SoftDeletedProject_HidesItsRevisions_AsTheSame404AsAnUnknownId()
+    {
+        await using var world = await StartAsync();
+        var created = await CreateAsync(world, BodyA);
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+
+        await _fixture.ExecuteAsync(world.Database, $"update public.project set status = 'deleted' where id = '{world.Project}'");
+
+        var hidden = await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}", world.Admin);
+        var unknown = await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{Guid.CreateVersion7()}", world.Admin);
+        hidden.Status.ShouldBe(HttpStatusCode.NotFound);
+        unknown.Status.ShouldBe(HttpStatusCode.NotFound);
+        hidden.ErrorCode.ShouldBe(unknown.ErrorCode);
+        hidden.ErrorMessage.ShouldBe(unknown.ErrorMessage);
+
+        var list = await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}/revisions", world.Admin);
+        list.Status.ShouldBe(HttpStatusCode.NotFound);
+        list.ErrorCode.ShouldBe(unknown.ErrorCode);
+        list.ErrorMessage.ShouldBe(unknown.ErrorMessage);
+    }
+
     [Fact]
     public async Task GetPolicyRevision_ReturnsPostedBody_DraftState_AndEtag()
     {
@@ -332,6 +460,29 @@ public sealed class PolicyEndpointTests
         read.Id("project_id").ShouldBe(world.Project);
         using var posted = JsonDocument.Parse(BodyA);
         JsonSemanticallyEqual(read.Body.GetProperty("body"), posted.RootElement).ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// 07.1.1 finding CR5: the POST response body is the stored <c>jsonb</c> rendering, so a replay answers with
+    /// the same bytes a later GET returns, even though the replay request reordered keys and added whitespace.
+    /// </summary>
+    [Fact]
+    public async Task CreatePolicyRevision_ReplayBodyEqualsTheStoredRendering()
+    {
+        await using var world = await StartAsync();
+        var created = await CreateAsync(world, BodyA);
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+
+        var replay = await CreateAsync(world, BodyAReordered);
+        replay.Status.ShouldBe(HttpStatusCode.OK, replay.ErrorMessage);
+
+        var read = await world.Client.SendAsync(HttpMethod.Get, $"/v1/policies/{created.Id()}", world.Admin);
+        read.Status.ShouldBe(HttpStatusCode.OK);
+
+        // Both are the database's rendering of the same jsonb value: byte-identical, not merely semantically equal.
+        var replayBody = replay.Body.GetProperty("body").GetRawText();
+        replayBody.ShouldBe(read.Body.GetProperty("body").GetRawText());
+        replayBody.ShouldNotBe(BodyAReordered);
     }
 
     [Fact]
@@ -442,24 +593,37 @@ public sealed class PolicyEndpointTests
             await set.ExecuteScalarAsync(TestContext.Current.CancellationToken);
         }
 
-        // The list SQL shape of ListPolicyRevisionsQuery: filter (org_id, project_id), order (revision_no, id).
-        await using var command = new NpgsqlCommand(
-            """
-            explain (format json)
-            select id, revision_no, hash, state, created_by, created_at, version
-              from public.policy_revision
-             where org_id = @org_id and project_id = @project_id
-             order by revision_no, id
-             limit 51
-            """,
-            connection,
-            transaction);
-        command.Parameters.AddWithValue("org_id", world.Org);
-        command.Parameters.AddWithValue("project_id", world.Project);
+        // The production list statements (PolicyRevisionListSql), with the handler's own parameter names bound.
+        var firstPage = await ExplainAsync(connection, transaction, PolicyRevisionListSql.FirstPage, command =>
+        {
+            command.Parameters.AddWithValue("org_id", world.Org);
+            command.Parameters.AddWithValue("project_id", world.Project);
+            command.Parameters.AddWithValue("limit", 51);
+        });
+        firstPage.ShouldContain("policy_revision_revision_no_key");
 
-        var plan = (string)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
-        plan.ShouldContain("policy_revision_revision_no_key");
-        plan.ShouldNotContain("Seq Scan");
+        var nextPage = await ExplainAsync(connection, transaction, PolicyRevisionListSql.NextPage, command =>
+        {
+            command.Parameters.AddWithValue("org_id", world.Org);
+            command.Parameters.AddWithValue("project_id", world.Project);
+            command.Parameters.AddWithValue("cursor_revision_no", 50);
+            command.Parameters.AddWithValue("cursor_id", Guid.CreateVersion7());
+            command.Parameters.AddWithValue("limit", 51);
+        });
+        nextPage.ShouldContain("policy_revision_revision_no_key");
+    }
+
+    /// <summary>Runs <c>EXPLAIN (FORMAT JSON)</c> over one production statement with its real parameters bound.</summary>
+    private static async Task<string> ExplainAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string sql,
+        Action<NpgsqlCommand> bind)
+    {
+        await using var command = new NpgsqlCommand("explain (format json) " + sql, connection, transaction);
+        bind(command);
+
+        return (string)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
     }
 
     // ------------------------------------------------------------------ transport cap (00 §8.6, s9-plan)

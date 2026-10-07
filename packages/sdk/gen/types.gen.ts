@@ -1028,7 +1028,7 @@ export type PolicyRevisionV1 = {
      */
     freshness_minutes?: number;
     /**
-     * Quarantine entries this policy revision honours; a critical case on this list is refused (422 critical_case_not_quarantinable)
+     * Quarantine entries this policy revision honours; the list is stored as given and honoured at evaluation time. The refusal of a critical case belongs to POST /v1/quarantine (07.3.1).
      */
     quarantine_ids?: Array<string>;
     /**
@@ -1072,6 +1072,11 @@ export type AuditTo = string;
  * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
  */
 export type Cursor = string;
+
+/**
+ * Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
+ */
+export type PolicyRevisionCursor = string;
 
 export type Limit = number;
 
@@ -2084,7 +2089,7 @@ export type ListPolicyRevisionsData = {
     };
     query?: {
         /**
-         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         * Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
          */
         cursor?: string;
         limit?: number;

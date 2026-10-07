@@ -104,7 +104,9 @@ internal static class PolicyRevisionListSql
 {
     /// <summary>
     /// The anchor revision's project and that project's head, in one round trip. RLS scopes both to the request's
-    /// tenant, so another tenant's id resolves no row.
+    /// tenant, so another tenant's id resolves no row; the project join (finding S3, the
+    /// <c>OrchestratorSql.RevisionById</c> precedent) hides a revision whose project is soft-deleted, so it is the
+    /// same 404 as an unknown id.
     /// </summary>
     internal const string Anchor = """
         select r.project_id,
@@ -114,6 +116,7 @@ internal static class PolicyRevisionListSql
                  order by h.revision_no desc
                  limit 1) as head_id
           from public.policy_revision r
+          join public.project p on p.org_id = r.org_id and p.id = r.project_id and p.status <> 'deleted'
          where r.id = @revision_id
         """;
 
