@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -37,7 +38,7 @@ namespace Identity.IntegrationTests;
 /// </remarks>
 [Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class SensitivePermissionTests : CatalogueTestBase
+public sealed partial class SensitivePermissionTests : CatalogueTestBase
 {
     /// <summary>The roles AC5 names as holding no sensitive code at all.</summary>
     private static readonly string[] MustHoldNothing = ["viewer", "ci_producer", "agent"];
@@ -87,13 +88,22 @@ public sealed class SensitivePermissionTests : CatalogueTestBase
     {
         var matrix = RoleMatrixFixture.Load();
 
-        var sensitive = Catalogue.Document.Permissions
+        // The fixture is the 00 §2-derived expectation, so the sensitive set is
+        // enumerated from it and the catalogue must agree: a code that gains or loses
+        // the flag in contracts/permissions.json fails here instead of agreeing with
+        // itself.
+        var sensitive = matrix.SensitiveCodes;
+        sensitive.ShouldNotBeEmpty("the fixture must pin the sensitive codes (AC5)");
+
+        var catalogueSensitive = Catalogue.Document.Permissions
             .Where(entry => entry.Sensitive)
             .Select(entry => entry.Code)
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        sensitive.ShouldNotBeEmpty("contracts/permissions.json must mark the secret-adjacent codes sensitive (AC5)");
+        catalogueSensitive.ShouldBe(
+            sensitive,
+            "the catalogue's sensitive set must equal the 00 §2-derived fixture's (AC5)");
 
         foreach (var role in MustHoldNothing)
         {
@@ -210,10 +220,26 @@ public sealed class SensitivePermissionTests : CatalogueTestBase
         var token = await CreateIngestTokenAsync(client, project);
         var binding = await CreateCiBindingAsync(client, project);
 
-        token.Secret.ShouldStartWith("egt_", Case.Sensitive, "the ingest token secret is the egt_ plaintext (02.4.2)");
+        IngestTokenShape().IsMatch(token.Secret).ShouldBeTrue(
+            "the ingest token secret must be the egt_ plaintext (02.4.2); the message must not echo the value");
         binding.Challenge.ShouldNotBeNullOrWhiteSpace("the binding challenge is a one-time value (02.4.1)");
 
-        string[] secrets = [token.Secret, binding.Challenge];
+        // Two more one-time values a later GET must never carry: the successor the
+        // rotate route mints (the old token verifies for 24 h more), and the
+        // short-lived ci_producer JWT the pre-tenant exchange route returns for the
+        // ingest token. Both are captured before the scan, so the scan sees them.
+        var rotated = await RotateIngestTokenAsync(client, token.Id);
+        var exchanged = await ExchangeIngestTokenAsync(client, token.Secret);
+
+        string[] secrets =
+        [
+            token.Secret,
+            IngestSecretPart(token.Secret),
+            rotated,
+            IngestSecretPart(rotated),
+            binding.Challenge,
+            exchanged,
+        ];
 
         // The routes whose path names a resource the identity routes do not create:
         // a case, a suite, two of its revisions, an environment revision and a policy
@@ -296,6 +322,24 @@ public sealed class SensitivePermissionTests : CatalogueTestBase
                 id.ToString(),
                 Case.Sensitive,
                 $"'{template}' must return the seeded object, or the scan is vacuous");
+        }
+
+        // The audit trail is where a credential's *metadata* is expected to appear, so
+        // both routes must name the objects created above: the clean scan is then a
+        // statement about real entries, not an empty page.
+        string[] auditRoutes = ["/v1/orgs/{o}/audit", "/v1/orgs/{o}/audit/export"];
+
+        foreach (var template in auditRoutes)
+        {
+            answered.ShouldContain(template);
+            bodies[template].ShouldContain(
+                token.Id.ToString(),
+                Case.Sensitive,
+                $"'{template}' must record the created ingest token, or the scan is vacuous");
+            bodies[template].ShouldContain(
+                binding.Id.ToString(),
+                Case.Sensitive,
+                $"'{template}' must record the created CI binding, or the scan is vacuous");
         }
 
         var tokenList = await client.GetStringAsync($"/v1/projects/{project}/ingest-tokens", Token);
@@ -593,13 +637,18 @@ public sealed class SensitivePermissionTests : CatalogueTestBase
             Token);
 
         var body = await response.Content.ReadAsStringAsync(Token);
-        response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
+
+        // Booleans, not ShouldBe/ShouldContain: a failure message must never echo the
+        // one-time value the create response carries.
+        (response.StatusCode == HttpStatusCode.Created).ShouldBeTrue(
+            $"the ingest token create route must answer 201, not {(int)response.StatusCode}");
 
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
         var secret = root.GetProperty("secret").GetString()!;
 
-        body.ShouldContain(secret, Case.Sensitive, "the create response is the one place the secret appears");
+        body.Contains(secret, StringComparison.Ordinal).ShouldBeTrue(
+            "the create response is the one place the secret appears");
 
         return new CreatedToken(root.GetProperty("token").GetProperty("id").GetGuid(), secret);
     }
@@ -622,16 +671,84 @@ public sealed class SensitivePermissionTests : CatalogueTestBase
             Token);
 
         var body = await response.Content.ReadAsStringAsync(Token);
-        response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
+
+        (response.StatusCode == HttpStatusCode.Created).ShouldBeTrue(
+            $"the CI binding create route must answer 201, not {(int)response.StatusCode}");
 
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
         var challenge = root.GetProperty("binding_challenge").GetString()!;
 
-        body.ShouldContain(challenge, Case.Sensitive, "the create response is the one place the challenge appears");
+        body.Contains(challenge, StringComparison.Ordinal).ShouldBeTrue(
+            "the create response is the one place the challenge appears");
 
         return new CreatedBinding(root.GetProperty("binding").GetProperty("id").GetGuid(), challenge);
     }
+
+    /// <summary>
+    /// Rotates the ingest token through the real route and captures the successor's
+    /// one-time secret (the old token keeps verifying for 24 h, 02.4.2).
+    /// </summary>
+    private static async Task<string> RotateIngestTokenAsync(HttpClient client, Guid tokenId)
+    {
+        var (status, body) = await PostAsync(client, $"/v1/ingest-tokens/{tokenId}/rotate", new { });
+
+        (status == HttpStatusCode.OK).ShouldBeTrue(
+            $"the ingest token rotate route must answer 200, not {(int)status}");
+
+        using var document = JsonDocument.Parse(body);
+        var secret = document.RootElement.GetProperty("secret").GetString()!;
+
+        IngestTokenShape().IsMatch(secret).ShouldBeTrue(
+            "the rotated secret must be the egt_ plaintext (02.4.2); the message must not echo the value");
+
+        return secret;
+    }
+
+    /// <summary>
+    /// Exchanges the ingest token for a short-lived <c>ci_producer</c> JWT through the
+    /// real pre-tenant route (anonymous: the credential travels in the body) and
+    /// captures the token.
+    /// </summary>
+    private static async Task<string> ExchangeIngestTokenAsync(HttpClient client, string ingestToken)
+    {
+        var (status, body) = await PostAsync(client, "/v1/ci/token", new { IngestToken = ingestToken });
+
+        (status == HttpStatusCode.OK).ShouldBeTrue(
+            $"the CI token exchange route must answer 200, not {(int)status}");
+
+        using var document = JsonDocument.Parse(body);
+        var token = document.RootElement.GetProperty("token").GetString()!;
+
+        SecretScanner.JwtShaped().IsMatch(token).ShouldBeTrue(
+            "the exchange must return a JWT (02.4.1); the message must not echo the value");
+
+        return token;
+    }
+
+    /// <summary>
+    /// The secret half of a minted ingest token — everything after
+    /// <c>egt_&lt;prefix&gt;_</c>. A GET that leaks only the half still leaks the
+    /// credential, so the scan looks for it too.
+    /// </summary>
+    private static string IngestSecretPart(string token)
+    {
+        var match = IngestTokenShape().Match(token);
+
+        match.Success.ShouldBeTrue("a minted ingest token must have the egt_ shape (02.4.2)");
+
+        return match.Groups["secret"].Value;
+    }
+
+    /// <summary>
+    /// The shape of a minted ingest token: <c>egt_</c>, the 12-character lookup prefix,
+    /// and the secret half (<c>IngestTokenFormat</c>, 02.4.2).
+    /// </summary>
+    [GeneratedRegex(
+        @"^egt_[A-Za-z0-9]{12}_(?<secret>[A-Za-z0-9_-]{40,})$",
+        RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 100)]
+    private static partial Regex IngestTokenShape();
 
     /// <summary>An ingest token created through the API: its id and its one-time secret.</summary>
     private sealed record CreatedToken(Guid Id, string Secret);
@@ -642,13 +759,18 @@ public sealed class SensitivePermissionTests : CatalogueTestBase
 
 /// <summary>
 /// The AC5 secret scanner as a pure function over a response body: the JSON member
-/// names on the deny-list, plus any captured secret value or <c>egt_</c> plaintext.
+/// names on the deny-list, a <c>secret_refs</c> value that is not a reference, a
+/// JWT-shaped value, any captured secret value or <c>egt_</c> plaintext, and a
+/// non-empty body that is neither JSON nor NDJSON.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The deny-list is defined once, here, and matched case-insensitively as a substring
 /// of the member name, so <c>binding_challenge</c>, <c>secret</c>, <c>token</c>,
-/// <c>password</c>, <c>pepper</c>, <c>hmac</c> and <c>hash_of_secret</c> all fire.
+/// <c>password</c>, <c>pepper</c>, <c>hmac</c>, <c>hash_of_secret</c>,
+/// <c>credential</c>, <c>private_key</c>, <c>api_key</c>, <c>signing</c>,
+/// <c>authorization</c>, <c>cookie</c>, <c>bearer</c>, <c>jwt</c>, <c>digest</c>,
+/// <c>verifier</c> and <c>salt</c> all fire.
 /// </para>
 /// <para>
 /// The allowed exceptions are the members that legitimately mention one of those words
@@ -658,14 +780,27 @@ public sealed class SensitivePermissionTests : CatalogueTestBase
 /// <c>checksum</c> (content digests, not credential digests), and <c>secret_refs</c>
 /// (the environment revision's <c>secret:&lt;name&gt;</c> references — the create route
 /// refuses anything that is not a reference or that looks like a value, so the member
-/// names secrets without carrying one, 05.1.2).
+/// names secrets without carrying one, 05.1.2). The allowlist is an exact member-name
+/// set, never a substring rule, and <c>secret_refs</c> is the one entry whose values
+/// are checked instead: every value must match <see cref="SecretReference"/>.
+/// </para>
+/// <para>
+/// The deny-list is deliberately test-side: it is the expectation a response must
+/// meet, so it is not derived from the production <c>SecretShape</c> helper, which
+/// answers a different question (whether a write-time key or value looks like a
+/// secret) and treats every long hex run as one — the audit chain's hashes would trip
+/// it.
 /// </para>
 /// </remarks>
-internal static class SecretScanner
+internal static partial class SecretScanner
 {
     /// <summary>The substrings that make a member name secret-bearing.</summary>
     internal static readonly string[] DenyTerms =
-        ["secret", "token", "challenge", "password", "pepper", "hmac", "hash_of_secret"];
+    [
+        "secret", "token", "challenge", "password", "pepper", "hmac", "hash_of_secret",
+        "credential", "private_key", "api_key", "signing", "authorization", "cookie",
+        "bearer", "jwt", "digest", "verifier", "salt",
+    ];
 
     /// <summary>The member names that may contain a deny term without carrying a secret.</summary>
     internal static readonly IReadOnlySet<string> AllowedMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -682,24 +817,56 @@ internal static class SecretScanner
     };
 
     /// <summary>
-    /// The forbidden member names of a body, ordinal. The body may be a single JSON
-    /// document or NDJSON (the audit export streams one object per line); a body that
-    /// parses as neither contributes nothing.
+    /// The reference shape a <c>secret_refs</c> value must have — the same pattern the
+    /// create route enforces (<c>EnvironmentRevisionRules.Reference</c>, 05.1.2).
     /// </summary>
-    internal static IReadOnlyList<string> ForbiddenMembers(string body)
-    {
-        var members = new SortedSet<string>(StringComparer.Ordinal);
+    [GeneratedRegex(
+        "^secret:[A-Za-z0-9_.-]{1,64}$",
+        RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 100)]
+    private static partial Regex SecretReference();
 
+    /// <summary>A JWT-shaped value: the base64url header <c>eyJ</c> and two dots.</summary>
+    [GeneratedRegex(
+        @"eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+",
+        RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 100)]
+    internal static partial Regex JwtShaped();
+
+    /// <summary>
+    /// The member-level violations of a body, ordinal: a member name on the deny-list,
+    /// or a <c>secret_refs</c> value that is not a reference. The body may be a single
+    /// JSON document or NDJSON (the audit export streams one object per line); a body
+    /// that parses as neither contributes nothing.
+    /// </summary>
+    private static IReadOnlyList<string> MemberViolations(string body)
+    {
+        var violations = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (var element in Elements(body))
+        {
+            Collect(element, violations);
+        }
+
+        return [.. violations];
+    }
+
+    /// <summary>The root elements of a body: one for a JSON document, one per NDJSON line.</summary>
+    private static IEnumerable<JsonElement> Elements(string body)
+    {
         if (string.IsNullOrWhiteSpace(body))
         {
-            return [];
+            yield break;
         }
 
         if (TryParse(body, out var whole))
         {
-            Collect(whole.RootElement, members);
-            whole.Dispose();
-            return [.. members];
+            using (whole)
+            {
+                yield return whole.RootElement.Clone();
+            }
+
+            yield break;
         }
 
         foreach (var line in body.Split('\n'))
@@ -709,25 +876,29 @@ internal static class SecretScanner
                 continue;
             }
 
-            Collect(document.RootElement, members);
-            document.Dispose();
+            using (document)
+            {
+                yield return document.RootElement.Clone();
+            }
         }
-
-        return [.. members];
     }
 
     /// <summary>
-    /// Every violation of <paramref name="body"/>: one line per forbidden member, one
-    /// per captured secret value it contains, and one when it carries an <c>egt_</c>
-    /// plaintext.
+    /// Every violation of <paramref name="body"/>: one line per member-level violation,
+    /// one per captured secret value it contains, one when it carries an <c>egt_</c>
+    /// plaintext or a JWT-shaped value, and one when a non-empty body is neither JSON
+    /// nor NDJSON.
     /// </summary>
     internal static IReadOnlyList<string> Scan(string body, IReadOnlyCollection<string> secretValues)
     {
         ArgumentNullException.ThrowIfNull(secretValues);
 
-        var violations = ForbiddenMembers(body)
-            .Select(member => $"a JSON member named '{member}' is on the secret deny-list")
-            .ToList();
+        var violations = MemberViolations(body).ToList();
+
+        if (!string.IsNullOrWhiteSpace(body) && !IsJsonOrNdjson(body))
+        {
+            violations.Add("the body is neither a JSON document nor NDJSON");
+        }
 
         foreach (var secret in secretValues)
         {
@@ -742,7 +913,44 @@ internal static class SecretScanner
             violations.Add("the body contains an egt_ token plaintext");
         }
 
+        if (JwtShaped().IsMatch(body))
+        {
+            violations.Add("the body contains a JWT-shaped value");
+        }
+
         return violations;
+    }
+
+    /// <summary>True when a non-empty body is a JSON document or NDJSON.</summary>
+    private static bool IsJsonOrNdjson(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return true;
+        }
+
+        if (TryParse(body, out var whole))
+        {
+            whole.Dispose();
+            return true;
+        }
+
+        foreach (var line in body.Split('\n'))
+        {
+            if (line.Trim().Length == 0)
+            {
+                continue;
+            }
+
+            if (!TryParse(line, out var document))
+            {
+                return false;
+            }
+
+            document.Dispose();
+        }
+
+        return true;
     }
 
     private static bool TryParse(string body, out JsonDocument document)
@@ -759,7 +967,7 @@ internal static class SecretScanner
         }
     }
 
-    private static void Collect(JsonElement element, SortedSet<string> members)
+    private static void Collect(JsonElement element, SortedSet<string> violations)
     {
         switch (element.ValueKind)
         {
@@ -768,10 +976,15 @@ internal static class SecretScanner
                 {
                     if (IsForbidden(property.Name))
                     {
-                        members.Add(property.Name);
+                        violations.Add($"a JSON member named '{property.Name}' is on the secret deny-list");
                     }
 
-                    Collect(property.Value, members);
+                    if (IsSecretRefs(property.Name))
+                    {
+                        CollectSecretRefs(property.Value, violations);
+                    }
+
+                    Collect(property.Value, violations);
                 }
 
                 break;
@@ -779,12 +992,33 @@ internal static class SecretScanner
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
-                    Collect(item, members);
+                    Collect(item, violations);
                 }
 
                 break;
         }
     }
+
+    /// <summary>Every <c>secret_refs</c> value that is not a <c>secret:&lt;name&gt;</c> reference.</summary>
+    private static void CollectSecretRefs(JsonElement value, SortedSet<string> violations)
+    {
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            violations.Add("a JSON member named 'secret_refs' is not an array of references");
+            return;
+        }
+
+        foreach (var item in value.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String || !SecretReference().IsMatch(item.GetString()!))
+            {
+                violations.Add("a JSON member named 'secret_refs' carries a value that is not a secret:<name> reference");
+            }
+        }
+    }
+
+    private static bool IsSecretRefs(string member) =>
+        member.Equals("secret_refs", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsForbidden(string member) =>
         !AllowedMembers.Contains(member)
@@ -815,5 +1049,48 @@ public sealed class SecretScannerTests
             .ShouldBeTrue($"the seeded forbidden member must be reported; got: {string.Join(" | ", violations)}");
         violations.Any(violation => violation.Contains("secret value", StringComparison.Ordinal))
             .ShouldBeTrue($"the seeded captured secret value must be reported; got: {string.Join(" | ", violations)}");
+    }
+
+    /// <summary>Every deny term fires on a member name that is not allowlisted.</summary>
+    [Fact]
+    public void Scan_Reports_Every_Seeded_Deny_Term()
+    {
+        SecretScanner.DenyTerms.ShouldNotBeEmpty("the deny-list must not be empty");
+
+        foreach (var term in SecretScanner.DenyTerms)
+        {
+            var body = $$"""{"{{term}}_value":"x"}""";
+
+            SecretScanner.Scan(body, [])
+                .ShouldNotBeEmpty($"the deny term '{term}' must fire on a member name");
+        }
+    }
+
+    /// <summary>A <c>secret_refs</c> member is allowed, but only with reference values.</summary>
+    [Fact]
+    public void Scan_Reports_A_Seeded_Secret_Refs_Value_That_Is_Not_A_Reference()
+    {
+        var references = """{"secret_refs":["secret:db_password","secret:api_key"]}""";
+        SecretScanner.Scan(references, [])
+            .ShouldBeEmpty("secret:<name> references are the allowlisted shape (05.1.2)");
+
+        var seeded = """{"secret_refs":["secret:db_password","hunter2"]}""";
+        SecretScanner.Scan(seeded, [])
+            .ShouldNotBeEmpty("a secret_refs value that is not a reference must be reported");
+    }
+
+    /// <summary>A JWT-shaped value and a non-JSON body are both reported.</summary>
+    [Fact]
+    public void Scan_Reports_A_Seeded_Jwt_And_A_Non_Json_Body()
+    {
+        var jwt = """{"note":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature"}""";
+        SecretScanner.Scan(jwt, [])
+            .ShouldNotBeEmpty("a JWT-shaped value must be reported");
+
+        SecretScanner.Scan("<html>not json</html>", [])
+            .ShouldNotBeEmpty("a non-empty body that is neither JSON nor NDJSON must be reported");
+
+        SecretScanner.Scan(string.Empty, [])
+            .ShouldBeEmpty("an empty body is not a violation");
     }
 }

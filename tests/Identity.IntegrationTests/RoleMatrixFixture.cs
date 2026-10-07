@@ -13,11 +13,18 @@ internal sealed record RoleMatrixGrant(string Permission, string Source, string?
 /// <summary>One role of the fixture: its code, its kind and its grant rows.</summary>
 internal sealed record RoleMatrixRole(string Code, string Kind, IReadOnlyList<RoleMatrixGrant> Grants);
 
+/// <summary>
+/// One sensitive-code row of the fixture: the permission code and the plan citation that
+/// marks it as gating secret-adjacent data or returning a plaintext secret once (AC5).
+/// </summary>
+internal sealed record RoleMatrixSensitive(string Permission, string Source);
+
 /// <summary>The fixture document (02.2.1-T3.1).</summary>
 internal sealed record RoleMatrixDocument(
     string Comment,
     IReadOnlyList<RoleMatrixRole> Roles,
-    IReadOnlyList<string> Permissions);
+    IReadOnlyList<string> Permissions,
+    IReadOnlyList<RoleMatrixSensitive> Sensitive);
 
 /// <summary>
 /// The 00 §2 role × permission matrix as the <b>plans</b> state it (02.2.1-T3.1, AC1):
@@ -37,7 +44,9 @@ internal sealed record RoleMatrixDocument(
 /// instead of silently shrinking the matrix. A grant's <c>basis</c> is <c>explicit</c>
 /// (default) or <c>inferred</c>; anything else is rejected, and the inferred rows are
 /// exposed through <see cref="InferredGrants"/> so the plan text that does not pin a
-/// holder can be strengthened without touching the matrix.
+/// holder can be strengthened without touching the matrix. The <c>sensitive</c> rows are
+/// validated the same way (each names a code of the axis and a citation) and exposed as
+/// <see cref="SensitiveCodes"/>.
 /// </para>
 /// <para>
 /// Every list this class returns is ordinal-sorted, and an unknown role or permission
@@ -143,6 +152,33 @@ internal sealed class RoleMatrixFixture
             throw new InvalidOperationException("the fixture declares no roles");
         }
 
+        var sensitive = document.Sensitive;
+        if (sensitive.Count == 0)
+        {
+            throw new InvalidOperationException("the fixture marks no sensitive permission (AC5)");
+        }
+
+        var sensitiveSeen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var row in sensitive)
+        {
+            if (!permissionSet.Contains(row.Permission))
+            {
+                throw new InvalidOperationException(
+                    $"the fixture marks '{row.Permission}' sensitive, which is not in its `permissions` axis");
+            }
+
+            if (!sensitiveSeen.Add(row.Permission))
+            {
+                throw new InvalidOperationException($"the fixture marks '{row.Permission}' sensitive twice");
+            }
+
+            if (string.IsNullOrWhiteSpace(row.Source))
+            {
+                throw new InvalidOperationException(
+                    $"the fixture marks '{row.Permission}' sensitive with no plan source");
+            }
+        }
+
         _roles = roles;
         _holders = holders.ToDictionary(
             pair => pair.Key,
@@ -151,6 +187,7 @@ internal sealed class RoleMatrixFixture
 
         RoleCodes = [.. roles.Keys.Order(StringComparer.Ordinal)];
         PermissionCodes = [.. permissions.Order(StringComparer.Ordinal)];
+        SensitiveCodes = [.. sensitive.Select(row => row.Permission).Order(StringComparer.Ordinal)];
         InferredGrants =
         [
             .. inferred
@@ -164,6 +201,14 @@ internal sealed class RoleMatrixFixture
 
     /// <summary>Every permission code of the matrix's permission axis, ordinal order.</summary>
     public IReadOnlyList<string> PermissionCodes { get; }
+
+    /// <summary>
+    /// The plan-derived sensitive set (AC5): the codes the plans mark as gating
+    /// secret-adjacent data or returning a plaintext secret once, ordinal order. The matrix
+    /// test asserts the seeded <c>permission.sensitive</c> flags equal it exactly, so a flag
+    /// flipped in <c>contracts/permissions.json</c> fails.
+    /// </summary>
+    public IReadOnlyList<string> SensitiveCodes { get; }
 
     /// <summary>
     /// The grants whose holder the plan text does not affirm (basis <c>inferred</c>), ordinal by

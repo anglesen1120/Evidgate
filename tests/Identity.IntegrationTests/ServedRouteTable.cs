@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -86,10 +87,10 @@ internal static class ServedRouteTable
     };
 
     /// <summary>
-    /// Served routes deliberately absent from the spec, each a recorded decision. Mirrors
-    /// <c>tests/Isolation.Tests/Api/CoverageTests.cs:17-21</c>.
+    /// Served routes deliberately absent from the spec, each with the recorded reason the
+    /// classification cites. Mirrors <c>tests/Isolation.Tests/Api/CoverageTests.cs:17-21</c>.
     /// </summary>
-    private static readonly Dictionary<(string Method, string Template), string> ServedNotInSpec =
+    internal static readonly Dictionary<(string Method, string Template), string> ServedNotInSpec =
         new()
         {
             [("POST", "/v1/slice/run")] =
@@ -136,7 +137,16 @@ internal static class ServedRouteTable
                             + "classify it in the spec or record it in ServedRouteTable.ServedNotInSpec");
                     }
 
-                    _ = reason;
+                    // The recorded reason is the classification's justification, not a
+                    // throwaway: the exclusion-list assertions cite it, so an empty one is a
+                    // broken classification and fails here rather than passing silently.
+                    if (string.IsNullOrWhiteSpace(reason))
+                    {
+                        throw new InvalidOperationException(
+                            $"served route {upper} {template} is allowlisted in ServedRouteTable.ServedNotInSpec "
+                            + "without a reason");
+                    }
+
                     permission = NoPermission;
                 }
 
@@ -156,6 +166,33 @@ internal static class ServedRouteTable
     /// <summary>True for a method that mutates state (the viewer deny matrix's scope).</summary>
     internal static bool IsMutating(string method) =>
         method is "POST" or "PUT" or "PATCH" or "DELETE";
+
+    /// <summary>
+    /// True when a route carries no catalogue permission a caller could be denied for: the
+    /// spec's <c>none</c> or <c>authenticated</c>, or a served route recorded in
+    /// <see cref="ServedNotInSpec"/> (classified <c>none</c>). The viewer and ci_producer
+    /// exclusion sets are derived from this, never from a hand list, so a route that
+    /// changes its <c>x-permission</c> moves in or out of the matrix by itself.
+    /// </summary>
+    internal static bool IsUnpermissioned(ServedRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+
+        return route.Permission is NoPermission or Authenticated
+            || ServedNotInSpec.ContainsKey((route.Method, route.Template));
+    }
+
+    /// <summary>
+    /// The recorded reason <paramref name="route"/> is absent from the spec, or null when
+    /// the spec declares it. The exclusion-list assertions cite it, so a classification
+    /// cannot be recorded without a justification.
+    /// </summary>
+    internal static string? NotInSpecReason(ServedRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+
+        return ServedNotInSpec.TryGetValue((route.Method, route.Template), out var reason) ? reason : null;
+    }
 
     /// <summary>True for <c>/v1</c> and <c>/v1/…</c> (never <c>/v10</c>).</summary>
     internal static bool IsVersioned(string template) =>
@@ -437,18 +474,22 @@ internal static class ServedRouteTable
     }
 }
 
-/// <summary>One request a probe sends: the verb, the URL, an optional JSON body and the two edge headers.</summary>
+/// <summary>One request a probe sends: the verb, the URL, an optional JSON body and the edge headers.</summary>
 /// <param name="Method">The verb.</param>
 /// <param name="Url">The path and query.</param>
 /// <param name="Body">The JSON body, if any.</param>
 /// <param name="IfMatch">The <c>If-Match</c> value, if the route's optimistic concurrency needs it.</param>
 /// <param name="IdempotencyKey">The <c>Idempotency-Key</c> value, if the route's idempotency stage needs it.</param>
+/// <param name="Bearer">The bearer token, when the probe presents a real minted credential.</param>
+/// <param name="Claims">The claim set a <see cref="ServicePrincipalProbeFactory"/> host runs the request as.</param>
 internal sealed record RouteRequest(
     HttpMethod Method,
     string Url,
     JsonNode? Body = null,
     string? IfMatch = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    string? Bearer = null,
+    IReadOnlyList<string>? Claims = null);
 
 /// <summary>
 /// The ids a <see cref="RouteRequest"/> builder substitutes into a route's path and body.
@@ -719,43 +760,25 @@ internal static class RouteProbe
             message.Headers.TryAddWithoutValidation("Idempotency-Key", request.IdempotencyKey);
         }
 
+        if (request.Bearer is not null)
+        {
+            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", request.Bearer);
+        }
+
+        if (request.Claims is { } claims)
+        {
+            message.Headers.TryAddWithoutValidation(ServicePrincipalProbeFactory.ClaimsHeader, string.Join(",", claims));
+        }
+
         return await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Null when the answer is the 403 <c>forbidden</c> envelope, else the violation line.</summary>
-    internal static async Task<string?> ForbiddenViolationAsync(
+    internal static Task<string?> ForbiddenViolationAsync(
         ServedRoute route,
         HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(route);
-        ArgumentNullException.ThrowIfNull(response);
-
-        if (response.StatusCode != HttpStatusCode.Forbidden)
-        {
-            return $"{route.Method} {route.Template}: expected 403, got {(int)response.StatusCode}";
-        }
-
-        if (!response.Headers.Contains("X-Request-Id"))
-        {
-            return $"{route.Method} {route.Template}: 403 without X-Request-Id";
-        }
-
-        using var envelope = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-        var error = envelope.RootElement.GetProperty("error");
-        var code = error.GetProperty("code").GetString();
-        if (!string.Equals(code, ApiErrorCode.Forbidden, StringComparison.Ordinal))
-        {
-            return $"{route.Method} {route.Template}: 403 with error.code '{code}' (expected '{ApiErrorCode.Forbidden}')";
-        }
-
-        if (error.GetProperty("retryable").GetBoolean())
-        {
-            return $"{route.Method} {route.Template}: 403 retryable true";
-        }
-
-        return null;
-    }
+        CancellationToken cancellationToken) =>
+        DeniedViolationAsync(route, response, ApiErrorCode.Forbidden, cancellationToken);
 
     /// <summary>Null when the answer is the 403 envelope with <paramref name="expectedCode"/>, else the violation line.</summary>
     internal static async Task<string?> DeniedViolationAsync(

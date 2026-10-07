@@ -102,6 +102,30 @@ public sealed class CatalogueTests
             "plans/features/07-policy-decisions/07.6.2-outbound-webhooks-and-delivery-operations.md:165 — 07.6.2-T2.1 endpoint CRUD"),
     ];
 
+    /// <summary>
+    /// The <c>reserved</c> codes whose only reference is a spec <c>x-permission</c>:
+    /// the operation is in <c>contracts/openapi.yaml</c> before its handler ships, so
+    /// the code is neither handler-referenced nor unreferenced. The catalogue's own
+    /// description names the owning story of each — <c>draft:dry_run</c> and
+    /// <c>draft:merge_request</c> (V2, 03.6.1), <c>healing:approve</c> and
+    /// <c>healing:revoke</c> (V2, 00 §8.7, 08), <c>job:claim</c> and
+    /// <c>job:execute</c> (V2, 00 §9.3, 05.7).
+    /// </summary>
+    /// <remarks>
+    /// The set is pinned rather than derived: a new spec-only reserved code must be
+    /// added here with its owning story, and one that gains a handler must be removed,
+    /// so the allowance cannot widen unnoticed.
+    /// </remarks>
+    private static readonly string[] ReservedSpecOnlyCodes =
+    [
+        "draft:dry_run",
+        "draft:merge_request",
+        "healing:approve",
+        "healing:revoke",
+        "job:claim",
+        "job:execute",
+    ];
+
     // ------------------------------------------------------------------ real solution
 
     /// <summary>
@@ -160,6 +184,12 @@ public sealed class CatalogueTests
     /// flipped instead). The list is asserted non-empty and every entry must name a
     /// story file that exists under <c>plans/features/</c>, so it cannot rot silently.
     /// </para>
+    /// <para>
+    /// A <c>reserved</c> code whose only reference is a spec <c>x-permission</c> is
+    /// allowed by the rule: the operation is in the contract before its handler ships.
+    /// The set is pinned by <see cref="ReservedSpecOnlyCodes"/>, so it cannot widen
+    /// unnoticed and a code that gains a handler must leave the list.
+    /// </para>
     /// </remarks>
     [Fact]
     public void UnreferencedMustBeReserved()
@@ -194,6 +224,12 @@ public sealed class CatalogueTests
         violations.ShouldBeEmpty(
             "every catalogue code with no consumer must be tagged reserved: true or classified as a V1-pending "
             + "consumer, and a reserved code must have no handler (AC2):\n" + string.Join('\n', violations));
+
+        CatalogueDriftRules.ReservedSpecOnly(catalogue, handlerCodes, specCodes)
+            .ShouldBe(
+                ReservedSpecOnlyCodes,
+                "the reserved codes referenced only by the spec are pinned: a new one must be added here with its "
+                + "owning story, and one that gains a handler must be removed (AC2)");
     }
 
     /// <summary>
@@ -294,6 +330,20 @@ public sealed class CatalogueTests
                 [new("run:create", Reserved: false)], ["run:create"], [], ["not_a:permission"])
             .ShouldHaveSingleItem()
             .ShouldContain("not_a:permission");
+
+        // Guard four: the spec-only allowance. A reserved code referenced only by the
+        // spec is the pinned shape; one that gains a handler leaves it (and is the
+        // violation UnreferencedMustBeReserved reports); a non-reserved spec-only code
+        // is not the shape at all.
+        CatalogueDriftRules.ReservedSpecOnly([new("job:claim", Reserved: true)], [], ["job:claim"])
+            .ShouldHaveSingleItem()
+            .ShouldBe("job:claim");
+
+        CatalogueDriftRules.ReservedSpecOnly([new("job:claim", Reserved: true)], ["job:claim"], ["job:claim"])
+            .ShouldBeEmpty("a reserved code with a handler is not the spec-only shape");
+
+        CatalogueDriftRules.ReservedSpecOnly([new("job:claim", Reserved: false)], [], ["job:claim"])
+            .ShouldBeEmpty("a non-reserved spec-only code is not the spec-only shape");
     }
 
     /// <summary>AC2 / T1.1: the checker reports a constant missing from the catalogue and one the catalogue does not declare.</summary>
@@ -562,6 +612,36 @@ public sealed class CatalogueTests
             }
 
             return violations;
+        }
+
+        /// <summary>
+        /// AC2, the spec-only allowance: the <c>reserved</c> codes whose only reference
+        /// is a spec <c>x-permission</c> — the operation is in the contract before its
+        /// handler ships. The caller pins the expected set, so the allowance cannot
+        /// widen unnoticed.
+        /// </summary>
+        /// <param name="catalogue">The catalogue rows with their <c>reserved</c> flags.</param>
+        /// <param name="handlerCodes">The codes Mediator handlers declare.</param>
+        /// <param name="specCodes">The codes <c>contracts/openapi.yaml</c> declares as <c>x-permission</c>.</param>
+        public static IReadOnlyList<string> ReservedSpecOnly(
+            IReadOnlyCollection<CatalogueCode> catalogue,
+            IReadOnlyCollection<string> handlerCodes,
+            IReadOnlyCollection<string> specCodes)
+        {
+            ArgumentNullException.ThrowIfNull(catalogue);
+            ArgumentNullException.ThrowIfNull(handlerCodes);
+            ArgumentNullException.ThrowIfNull(specCodes);
+
+            var handlers = handlerCodes.ToHashSet(StringComparer.Ordinal);
+            var spec = specCodes.ToHashSet(StringComparer.Ordinal);
+
+            return
+            [
+                .. catalogue
+                    .Where(entry => entry.Reserved && !handlers.Contains(entry.Code) && spec.Contains(entry.Code))
+                    .Select(entry => entry.Code)
+                    .Order(StringComparer.Ordinal),
+            ];
         }
 
         /// <summary>

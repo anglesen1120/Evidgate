@@ -1,5 +1,5 @@
 {
-  "comment": "The 00 §2 built-in role × permission matrix, derived from the PLANS (not from contracts/permissions.json). Each grant carries the plan citation it is derived from (`NN §S:L` = plans/NN-*.md section S line L; `NN.E.S §S:L` = the feature plan plans/features/*/NN.E.S-*.md; `README T59:118` = plans/features/README.md ruling T59) and a `basis`: `explicit` when the cited text affirms that this role holds this permission (it names the permission code together with the role, or with a phrase the plan uses for exactly that role/role-set - `every member role` for the five member roles, `operator session` for `platform_operator` per 00 §9.1; a row of a role-mapping table counts, its header names the roles), `inferred` when the citation names the permission but not the holder (an endpoint/contract row, or a line naming a different role), so the holder is derived. `permissions` is every catalogue code the plans name (the permission axis of the matrix). The full rule and the inferred table are in README.md.",
+  "comment": "The 00 §2 built-in role × permission matrix, derived from the PLANS (not from contracts/permissions.json). Each grant carries the plan citation it is derived from (`NN §S:L` = plans/NN-*.md section S line L; `NN.E.S §S:L` = the feature plan plans/features/*/NN.E.S-*.md; `README T59:118` = plans/features/README.md ruling T59) and a `basis`: `explicit` when the cited text affirms that this role holds this permission (it names the permission code together with the role, or with a phrase the plan uses for exactly that role/role-set - `every member role` for the five member roles, `operator session` for `platform_operator` per 00 §9.1; a row of a role-mapping table counts, its header names the roles), `inferred` when the citation names the permission but not the holder (an endpoint/contract row, or a line naming a different role), so the holder is derived. `permissions` is every catalogue code the plans name (the permission axis of the matrix). The full rule and the inferred table are in README.md. `sensitive` is the plan-derived set of codes that gate secret-adjacent data or return a plaintext secret once (AC5), each with its citation; the matrix test asserts the seeded `permission.sensitive` flags equal it exactly.",
   "roles": [
     {
       "code": "viewer",
@@ -22,7 +22,11 @@
       "grants": [
         { "permission": "ai_draft:request", "source": "03 §4.5:130", "basis": "explicit" },
         { "permission": "artifact:read", "source": "00 §9.3:346", "basis": "inferred" },
-        { "permission": "artifact:read_sensitive", "source": "00 §2:50 + 06 §4:71", "basis": "inferred" },
+        {
+          "permission": "artifact:read_sensitive",
+          "source": "00 §2:50 + 06 §4:71",
+          "basis": "inferred"
+        },
         { "permission": "artifact:write", "source": "00 §9.3:334", "basis": "inferred" },
         { "permission": "case:read", "source": "03 §4.5:122", "basis": "explicit" },
         { "permission": "decision:read", "source": "00 §9.3:336", "basis": "inferred" },
@@ -48,7 +52,11 @@
         { "permission": "agent_pool:read", "source": "00 §2:60", "basis": "explicit" },
         { "permission": "ai_draft:request", "source": "03 §4.5:130", "basis": "explicit" },
         { "permission": "artifact:read", "source": "00 §9.3:346", "basis": "inferred" },
-        { "permission": "artifact:read_sensitive", "source": "00 §2:50 + 06 §4:71", "basis": "inferred" },
+        {
+          "permission": "artifact:read_sensitive",
+          "source": "00 §2:50 + 06 §4:71",
+          "basis": "inferred"
+        },
         { "permission": "artifact:write", "source": "00 §9.3:334", "basis": "inferred" },
         { "permission": "case:read", "source": "03 §4.5:122", "basis": "explicit" },
         { "permission": "case:write", "source": "03 §4.5:124", "basis": "explicit" },
@@ -77,7 +85,11 @@
       "kind": "member",
       "grants": [
         { "permission": "artifact:read", "source": "00 §9.3:346", "basis": "inferred" },
-        { "permission": "artifact:read_sensitive", "source": "00 §2:50 + 06 §4:71", "basis": "inferred" },
+        {
+          "permission": "artifact:read_sensitive",
+          "source": "00 §2:50 + 06 §4:71",
+          "basis": "inferred"
+        },
         { "permission": "case:read", "source": "03 §4.5:122", "basis": "explicit" },
         { "permission": "decision:read", "source": "00 §9.3:336", "basis": "inferred" },
         { "permission": "organization:read", "source": "02 §4.2:77", "basis": "inferred" },
@@ -142,7 +154,11 @@
       "code": "ci_producer",
       "kind": "service",
       "grants": [
-        { "permission": "artifact:write", "source": "00 §2:56 + 02 FR-02-7:22", "basis": "explicit" },
+        {
+          "permission": "artifact:write",
+          "source": "00 §2:56 + 02 FR-02-7:22",
+          "basis": "explicit"
+        },
         { "permission": "event:write", "source": "00 §2:56 + 02 FR-02-7:22", "basis": "explicit" },
         { "permission": "run:create", "source": "00 §2:56 + 02 FR-02-7:22", "basis": "explicit" }
       ]
@@ -152,7 +168,7 @@
       "kind": "service",
       "grants": [
         { "permission": "artifact:write", "source": "02.5.1 §8:71", "basis": "explicit" },
-        { "permission": "event:write", "source": "00 §2:55 + 04 §4:70", "basis": "inferred" },
+        { "permission": "event:write", "source": "04 §1:10 + 00 §2:55", "basis": "inferred" },
         { "permission": "job:claim", "source": "02.5.1 §8:71", "basis": "explicit" },
         { "permission": "job:execute", "source": "02.5.1 §8:71", "basis": "explicit" }
       ]
@@ -161,7 +177,11 @@
       "code": "platform_operator",
       "kind": "staff",
       "grants": [
-        { "permission": "support:grant", "source": "02.8.1 §1:11 + 02.8.1 §2:22", "basis": "explicit" },
+        {
+          "permission": "support:grant",
+          "source": "02.8.1 §1:11 + 02.8.1 §2:22",
+          "basis": "explicit"
+        },
         { "permission": "support:read", "source": "README T59:118", "basis": "inferred" }
       ]
     },
@@ -230,5 +250,13 @@
     "usage:read",
     "webhook:read",
     "webhook:write"
+  ],
+  "sensitive": [
+    { "permission": "artifact:read_sensitive", "source": "00 §2:50 + 00 §2:54" },
+    { "permission": "billing:read", "source": "00 §2:54 + 00 §2:58" },
+    { "permission": "billing:write", "source": "00 §2:54 + 00 §2:60" },
+    { "permission": "ingest_token:write", "source": "00 §9.3:356" },
+    { "permission": "support:approve", "source": "00 §9.3:360 + 02.8.1 §2:23" },
+    { "permission": "support:grant", "source": "00 §9.3:360 + 02.8.1 §2:22" }
   ]
 }
