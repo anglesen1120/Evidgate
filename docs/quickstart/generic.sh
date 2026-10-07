@@ -12,6 +12,7 @@
 set -eu
 
 : "${EVIDGATE_API_URL:?EVIDGATE_API_URL must be set in the CI variables}"
+export EVIDGATE_API_URL
 export EVIDGATE_PROJECT='my-project'
 
 # Exchange the credential for a short-lived Evidgate CI token. The token is written

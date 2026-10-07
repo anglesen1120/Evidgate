@@ -10,13 +10,14 @@
 // could break out of the template (a `${{ }}` expression, a quote, a colon, a leading
 // dash) is refused as `invalid_config` and never echoed.
 import { lstatSync } from 'node:fs';
-import { mkdir, open, realpath } from 'node:fs/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { mkdir, open, realpath, unlink } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
-import { CliError } from '../errors.js';
+import { CliError, escapeControlCharacters } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
 import { readCliVersion } from '../version.js';
 
+import type { FileHandle } from 'node:fs/promises';
 import type { CommandDefinition } from './index.js';
 
 /** The two templates `--format` selects; `github` is the default. */
@@ -70,7 +71,9 @@ export const quickstartCommand: CommandDefinition = {
       throw usageError('missing required flag --write');
     }
     const written = await writeTemplate(write, text);
-    io.stdout(`wrote ${written}\n`);
+    // S-2: the path is echoed back, so escape control/format characters (§5) — a
+    // filename can carry them, and they must not forge a log line.
+    io.stdout(`wrote ${escapeControlCharacters(written)}\n`);
     return ExitCode.Ok;
   },
 };
@@ -182,6 +185,7 @@ function renderGeneric(project: string, version: string): string {
 set -eu
 
 : "\${EVIDGATE_API_URL:?EVIDGATE_API_URL must be set in the CI variables}"
+export EVIDGATE_API_URL
 export EVIDGATE_PROJECT='${project}'
 
 # Exchange the credential for a short-lived Evidgate CI token. The token is written
@@ -198,6 +202,15 @@ ${npx(version, 'manifests upload --file evidgate-manifest.json')}
 }
 
 /**
+ * Injectable fs seam for `writeTemplate`: a spec replaces `writeFile` to exercise the
+ * post-`open` cleanup path (CR-2) without a real disk-full or I/O failure.
+ */
+export interface WriteTemplateDeps {
+  /** Replaces `handle.writeFile`; the default writes `text` as UTF-8. */
+  readonly writeFile?: (handle: FileHandle, text: string) => Promise<void>;
+}
+
+/**
  * Writes `text` to `target`, which must resolve inside the current working directory.
  * The escape check resolves symlinks on both sides — `realpath(cwd)` and the realpath of
  * the nearest existing parent of the target — so a `..` escape and a symlinked parent
@@ -206,36 +219,95 @@ ${npx(version, 'manifests upload --file evidgate-manifest.json')}
  * `/tmp` → `/private/tmp`), so only the realpath comparison decides. The file is created
  * with the exclusive `wx` flag (never overwriting) and mode 0o644, and missing parent
  * directories inside the cwd are created. Returns the path relative to the cwd.
+ *
+ * Every filesystem failure is mapped to a `CliError` (CR-1): a path-shape errno is
+ * `usage`, anything else is `write_failed`, and the message is fixed — it never carries
+ * the Node error text or an absolute path.
  */
-async function writeTemplate(target: string, text: string): Promise<string> {
+export async function writeTemplate(
+  target: string,
+  text: string,
+  deps: WriteTemplateDeps = {},
+): Promise<string> {
   const cwd = process.cwd();
   const resolved = resolve(cwd, target);
-  const parent = dirname(resolved);
-  const existing = nearestExisting(parent);
-  const realCwd = await realpath(cwd);
-  const realExisting = await realpath(existing);
-  if (realExisting !== realCwd && !realExisting.startsWith(realCwd + sep)) {
-    throw usageError('--write must be inside the current working directory');
-  }
-  // The real path of the target: the existing ancestor resolved through symlinks plus
-  // the not-yet-created tail, so `wrote <path>` is correct even through an alias.
-  const realTarget = join(realExisting, relative(existing, resolved));
-  await mkdir(dirname(realTarget), { recursive: true });
-  let handle;
+  const existing = nearestExisting(dirname(resolved));
+  let handle: FileHandle | undefined;
+  let realTarget = '';
   try {
-    handle = await open(realTarget, 'wx', 0o644);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      throw usageError('file exists');
+    const realCwd = await realpath(cwd);
+    const realExisting = await realpath(existing);
+    if (!isInside(realCwd, realExisting)) {
+      throw usageError('--write must be inside the current working directory');
     }
-    throw error;
-  }
-  try {
-    await handle.writeFile(text, 'utf8');
-  } finally {
+    // The real path of the target: the existing ancestor resolved through symlinks plus
+    // the not-yet-created tail, so `wrote <path>` is correct even through an alias.
+    realTarget = join(realExisting, relative(existing, resolved));
+    await mkdir(dirname(realTarget), { recursive: true });
+    handle = await open(realTarget, 'wx', 0o644);
+    const write =
+      deps.writeFile ?? ((file: FileHandle, body: string) => file.writeFile(body, 'utf8'));
+    await write(handle, text);
     await handle.close();
+    handle = undefined;
+    // S-1: re-check containment after creation. A local actor with write access inside
+    // the cwd could have swapped a parent for a symlink between the check above and the
+    // create; if the created file now resolves outside, remove it and refuse.
+    const realCreated = await realpath(realTarget).catch(() => undefined);
+    if (realCreated === undefined || !isInside(realCwd, realCreated)) {
+      await unlink(realCreated ?? realTarget).catch(() => undefined);
+      throw usageError('--write path escapes the working directory');
+    }
+    return relative(realCwd, realTarget);
+  } catch (error) {
+    if (error instanceof CliError) {
+      throw error;
+    }
+    if (handle !== undefined) {
+      // CR-2: a failed write must not leave the created file behind, or a retry would
+      // hit `file exists` on the exclusive create.
+      await cleanupFailedWrite(handle, realTarget);
+    }
+    throw writeError(error);
   }
-  return relative(realCwd, realTarget);
+}
+
+/**
+ * True when `candidate` is `base` itself or sits under it, decided with `path.relative`
+ * so the check is correct when `base` is the filesystem root (S-1): the old
+ * `startsWith(base + sep)` test compared against `//` for `/` and wrongly rejected every
+ * path. Exported for the pure unit test.
+ */
+export function isInside(base: string, candidate: string): boolean {
+  const rel = relative(base, candidate);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+/**
+ * Maps a filesystem failure in the `--write` path to a `CliError` (CR-1). Path-shape
+ * errno codes are `usage`; every other failure — permissions, read-only filesystem,
+ * full disk, I/O — is `write_failed`. Each message is fixed and never contains the Node
+ * error message or an absolute path.
+ */
+function writeError(error: unknown): CliError {
+  switch ((error as NodeJS.ErrnoException | null)?.code) {
+    case 'ENOENT':
+      return usageError('cannot write --write path: no such directory');
+    case 'ENOTDIR':
+      return usageError('cannot write --write path: not a directory');
+    case 'EISDIR':
+      return usageError('cannot write --write path: is a directory');
+    case 'EEXIST':
+      return usageError('file exists');
+    default:
+      return new CliError('cannot write --write path', { code: 'write_failed' });
+  }
+}
+
+/** CR-2: closes the handle and best-effort removes the file a failed write created. */
+async function cleanupFailedWrite(handle: FileHandle, path: string): Promise<void> {
+  await handle.close().catch(() => undefined);
+  await unlink(path).catch(() => undefined);
 }
 
 /**

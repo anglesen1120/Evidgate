@@ -202,6 +202,7 @@ position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 | Code                  | Exit | Meaning                                                                                                                                                                             |
 | --------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `usage`               | 3    | unknown command or flag, or a missing flag value; a one-line help pointer follows                                                                                                   |
+| `write_failed`        | 3    | `quickstart --write` could not create or write the file (permissions, read-only filesystem, full disk, I/O); the message is fixed and never names the path                          |
 | `missing_config`      | 3    | a required field or token source is unset; the message lists every missing name at once                                                                                             |
 | `invalid_config`      | 3    | a value fails validation; the message names the variable and does not echo the value                                                                                                |
 | `dev_token_refused`   | 3    | `EVIDGATE_DEV_TOKEN` set while `EVIDGATE_ENV` is not exactly `dev`, or the API URL host is not loopback                                                                             |
@@ -442,8 +443,10 @@ template.
 Generic template (`--format generic`, POSIX `sh`): `#!/bin/sh` with `set -eu`.
 [DECISION] Generic CI renders a shell script, not YAML: V1 CI integration is
 GitHub Actions, and other CIs are per-project configuration (00 §1, 2026-10-02).
-The script expects `EVIDGATE_API_URL` from the CI's non-secret variables and
-renders `EVIDGATE_PROJECT='<project>'`. The credential is named only:
+The script expects `EVIDGATE_API_URL` from the CI's non-secret variables, guards
+it with `: "${EVIDGATE_API_URL:?…}"` and then `export`s it, so the pinned `npx`
+steps inherit it, and renders `EVIDGATE_PROJECT='<project>'`. The credential is
+named only:
 `EVIDGATE_OIDC_TOKEN` when the CI injects a short-lived OIDC JWT the project
 binding accepts, else `EVIDGATE_INGEST_TOKEN` injected by the CI's masked secret
 store — a project-scoped, revocable, rotatable ingest token created with an
@@ -455,13 +458,30 @@ placeholders as the GitHub template.
 
 - containment is decided only by comparing `realpath` of the nearest existing
   parent of the target against `realpath(cwd)`: the target must be that
-  directory or sit under it. A `..` escape or a symlinked parent that points
+  directory or sit under it, decided with `path.relative` so the check is also
+  correct when the cwd is `/`. A `..` escape or a symlinked parent that points
   outside exits 3 `usage`; an absolute path that reaches the cwd through a
   symlink alias (macOS `/tmp` → `/private/tmp`) is accepted;
 - missing parent directories inside cwd are created (`mkdir -p`);
 - the file is created at the realpath'd target with flag `wx` (exclusive — an
   existing file exits 3 `usage` `file exists`) and mode `0o644`;
-- stdout prints `wrote <relative path>` (relative to `realpath(cwd)`).
+- every filesystem failure is mapped to a fixed message that never carries the
+  Node error text or an absolute path: a path-shape errno (`ENOENT`, `ENOTDIR`,
+  `EISDIR`, `EEXIST`) exits 3 `usage` (`cannot write --write path: not a
+directory`, `cannot write --write path: no such directory`, `cannot write
+--write path: is a directory`, `file exists`); any other failure (`EACCES`,
+  `EPERM`, `EROFS`, `ENOSPC`, `EIO`, …) exits 3 `write_failed` (`cannot write
+--write path`);
+- a write that fails after the exclusive create closes the handle and removes
+  the file it created, so a retry does not hit `file exists`;
+- after the file is created its `realpath` is re-checked against `realpath(cwd)`
+  and removed with `usage` `--write path escapes the working directory` if it
+  escaped. Residual race: a local actor with write access inside the cwd could
+  swap a parent directory for a symlink between the containment check and the
+  create; the post-create re-check is what catches it;
+- stdout prints `wrote <relative path>` (relative to `realpath(cwd)`), with
+  control and format characters escaped as `\uXXXX` (§5) so a filename cannot
+  forge a log line.
 
 Without `--write`, the template goes to stdout and nothing else is printed.
 
