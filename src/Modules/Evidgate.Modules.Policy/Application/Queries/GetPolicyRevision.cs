@@ -67,10 +67,15 @@ internal sealed class GetPolicyRevisionQueryHandler(ITenantDb db, IPolicyHasher 
     /// </summary>
     private static void Verify(PolicyRevisionView row, IPolicyHasher hasher)
     {
-        // Checked before the hash compare: a digit-tampered body would otherwise surface as a hash mismatch.
-        if (!PolicyRevisionRules.HasOnlyExactNumbers(row.Body))
+        // Checked before the hash compare: a digit-tampered body would otherwise surface as a hash mismatch. A body
+        // that is not well-formed JSON (malformed, or nested past the canonicalizer's depth cap) is not an inexact
+        // number, so it is reported as not-canonicalisable — the same reason the hasher's own refusal carries.
+        switch (PolicyRevisionRules.ClassifyNumbers(row.Body))
         {
-            throw new PolicyRevisionCorruptedException(row.Id, row.Hash, null, PolicyRevisionCorruptionReasons.InexactNumber);
+            case PolicyNumberOutcome.InexactNumber:
+                throw new PolicyRevisionCorruptedException(row.Id, row.Hash, null, PolicyRevisionCorruptionReasons.InexactNumber);
+            case PolicyNumberOutcome.NotCanonicalisable:
+                throw new PolicyRevisionCorruptedException(row.Id, row.Hash, null, PolicyRevisionCorruptionReasons.NotCanonicalisable);
         }
 
         string recomputed;
