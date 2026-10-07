@@ -242,8 +242,10 @@ done
 # environment-setup stages a job needs before its real stages can run
 # (`restore` produces obj/project.assets.json; a second job that also runs
 # `licence-scan`/`audit-deps`/`sbom` must restore first, and repeating it is
-# harmless: locked mode is idempotent).
-REPEATABLE_STAGES=' restore '
+# harmless: locked mode is idempotent). `build` is the same: the isolation
+# (M1 gate) job builds the solution in Release before running the isolation
+# suite, and a second Release build is idempotent.
+REPEATABLE_STAGES=' restore build '
 seen=""
 for inv in ${invoked[@]+"${invoked[@]}"}; do
   canonical=0

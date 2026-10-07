@@ -176,6 +176,14 @@ public static class IsolationRouteCases
     public static ProbeCaller OrgBService(IsolationWorld world) =>
         ProbeCaller.Service("org-B ci_producer (project web)", Require(world).Acme2.Projects[0].CiProducerJwt);
 
+    /// <summary>
+    /// Org B's OIDC-minted <c>ci_producer</c> of project <c>web</c> (02.9.1-T3, hand-over from #19): the same
+    /// scope as <see cref="OrgBService"/>, minted through the JWKS-verified binding exchange instead of the
+    /// ingest token.
+    /// </summary>
+    public static ProbeCaller OrgBServiceOidc(IsolationWorld world) =>
+        ProbeCaller.Service("org-B OIDC ci_producer (project web)", Require(world).Acme2.Projects[0].OidcProducerJwt);
+
     /// <summary>The full-pagination walks of every served list route.</summary>
     public static IReadOnlyList<ListWalk> Lists(IsolationWorld world)
     {
@@ -494,6 +502,12 @@ public static class IsolationRouteCases
                     route, "sibling project api of the token's org", OrgBService(w), request(w.Acme2.Projects[1].Id),
                     requireScopeCode: route.Template.EndsWith("/manifests", StringComparison.Ordinal))),
                 Pair(route, "org A project web in {p}", ProbeExpect.ServiceRefused, OrgBService(w), request(w.Acme.Projects[0].Id), request(Guid.CreateVersion7())),
+                // The OIDC-minted token of project web carries the same scope, so it must be refused identically
+                // (02.9.1-T3, hand-over from #19).
+                new(route, "sibling project api of the OIDC token's org", runner => runner.ScopeMismatchAsync(
+                    route, "sibling project api of the OIDC token's org", OrgBServiceOidc(w), request(w.Acme2.Projects[1].Id),
+                    requireScopeCode: route.Template.EndsWith("/manifests", StringComparison.Ordinal))),
+                Pair(route, "org A project web in {p} (OIDC token)", ProbeExpect.ServiceRefused, OrgBServiceOidc(w), request(w.Acme.Projects[0].Id), request(Guid.CreateVersion7())),
             ]);
 
     /// <summary>
@@ -618,6 +632,23 @@ public static class IsolationRouteCases
                         Upload(w.Acme.Projects[0].Id, Manifest(w.Acme.Projects[0])), Upload(Guid.CreateVersion7(), Manifest(w.Acme.Projects[0]))),
                     Pair(route, "own project, manifest over org A's revisions", ProbeExpect.NotSuccess, OrgBService(w),
                         Upload(w.Acme2.Projects[0].Id, Manifest(w.Acme.Projects[0])), Upload(w.Acme2.Projects[0].Id, Random())),
+                    // The OIDC-minted token of project web: accepted for its own project (200 dedupe or 201), refused
+                    // on the sibling project (403 project_scope_mismatch) and on org A's project (02.9.1-T3, from #19).
+                    new(route, "own project, OIDC token accepted", async runner =>
+                    {
+                        var response = await runner.SendAsync(OrgBServiceOidc(w), Upload(w.Acme2.Projects[0].Id, Manifest(w.Acme2.Projects[0])));
+                        var violations = new List<string>();
+                        if (response.Status is not (200 or 201))
+                        {
+                            violations.Add(RouteProbeRunner.Describe(route, "own project, OIDC token accepted", OrgBServiceOidc(w), $"answered {response}, expected 200 or 201"));
+                        }
+
+                        return violations;
+                    }),
+                    new(route, "sibling project api of the OIDC token's org", runner => runner.ScopeMismatchAsync(
+                        route, "sibling project api of the OIDC token's org", OrgBServiceOidc(w), Upload(w.Acme2.Projects[1].Id, Manifest(w.Acme2.Projects[1])), requireScopeCode: true)),
+                    Pair(route, "org A project web in {p} (OIDC token)", ProbeExpect.ServiceRefused, OrgBServiceOidc(w),
+                        Upload(w.Acme.Projects[0].Id, Manifest(w.Acme.Projects[0])), Upload(Guid.CreateVersion7(), Manifest(w.Acme.Projects[0]))),
                 ];
             });
     }
