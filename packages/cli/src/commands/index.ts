@@ -11,6 +11,7 @@ import type { Io } from '../redact.js';
 import { authLoginCommand } from './authLogin.js';
 import { authLogoutCommand } from './authLogout.js';
 import { configCheckCommand } from './configCheck.js';
+import { manifestsUploadCommand } from './manifestsUpload.js';
 
 /** Values `node:util` `parseArgs` returns for the merged global + command options. */
 export type ParsedValues = Record<string, string | boolean | Array<string | boolean> | undefined>;
@@ -50,6 +51,7 @@ export const commandRegistry: Readonly<Record<string, CommandDefinition>> = {
   [configCheckCommand.name]: configCheckCommand,
   [authLoginCommand.name]: authLoginCommand,
   [authLogoutCommand.name]: authLogoutCommand,
+  [manifestsUploadCommand.name]: manifestsUploadCommand,
 };
 
 export interface ResolvedCommand {

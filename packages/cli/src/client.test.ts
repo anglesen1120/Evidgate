@@ -44,7 +44,7 @@ describe('createApiClient', () => {
     const client = createApiClient(config, 'bearer-token-value');
     const clientConfig = client.getConfig();
 
-    expect(clientConfig.baseUrl).toBe('https://api.evidgate.test');
+    expect(clientConfig.baseUrl).toBe('https://api.evidgate.test/v1');
     expect(clientConfig.redirect).toBe('error');
     expect(clientConfig.headers).toBeInstanceOf(Headers);
     expect((clientConfig.headers as Headers).get('authorization')).toBe(
@@ -108,5 +108,44 @@ describe('createApiClient', () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]?.redirect).toBe('error');
     expect(seen[0]?.headers.get('authorization')).toBe('Bearer bearer-token-value');
+  });
+
+  // D-1 / AC1: the openapi document declares `servers: - url: /v1`, so every SDK call
+  // must land on `<EVIDGATE_API_URL>/v1/<operation path>`; the env value is the API root
+  // without the version (contracts/cli.md §3).
+  it('sends every call to <apiUrl>/v1/<operation path>', async () => {
+    const config = resolveConfig({
+      env: { EVIDGATE_API_URL: 'https://api.evidgate.test', EVIDGATE_PROJECT: 'proj-1' },
+    });
+    const seen: Request[] = [];
+    const fetchImpl: typeof fetch = (input) => {
+      seen.push(input as Request);
+      return Promise.resolve(
+        new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+      );
+    };
+
+    const client = createApiClient(config, 'bearer-token-value', fetchImpl);
+    await client.get({ url: '/ci/token' });
+
+    expect(seen[0]?.url).toBe('https://api.evidgate.test/v1/ci/token');
+  });
+
+  it('keeps a path prefix in EVIDGATE_API_URL before the version (/api -> /api/v1)', async () => {
+    const config = resolveConfig({
+      env: { EVIDGATE_API_URL: 'http://127.0.0.1:8080/api', EVIDGATE_PROJECT: 'proj-1' },
+    });
+    const seen: Request[] = [];
+    const fetchImpl: typeof fetch = (input) => {
+      seen.push(input as Request);
+      return Promise.resolve(
+        new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+      );
+    };
+
+    const client = createApiClient(config, 'bearer-token-value', fetchImpl);
+    await client.get({ url: '/ci/token' });
+
+    expect(new URL(seen[0]?.url ?? '').pathname).toBe('/api/v1/ci/token');
   });
 });
