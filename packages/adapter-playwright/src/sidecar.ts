@@ -35,6 +35,13 @@ const MAX_PATH_CHARS = 1024;
 /** Control, format and lone-surrogate code points, refused in paths and names (`TextRules.IsClean`). */
 const UNCLEAN = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
+/**
+ * Strict UTF-8: malformed bytes are refused instead of being repaired to U+FFFD (which would
+ * silently map a different, replacement-character filename). A leading BOM is kept, exactly as
+ * `readFileSync(path, 'utf8')` returned it before this loader owned the decode.
+ */
+const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
 /** One problem found while reading a sidecar. `path` is the manifest, or the described file. */
 export interface SidecarWarning {
   code: 'invalid_sidecar' | 'invalid_sidecar_entry' | 'sidecar_conflict';
@@ -49,9 +56,9 @@ export interface SidecarIndex {
   readonly warnings: readonly SidecarWarning[];
 }
 
-/** The file-system seam: `readFile` returns the sidecar text, or undefined when it is absent. */
+/** The file-system seam: `readFile` returns the sidecar bytes, or undefined when it is absent. */
 export interface SidecarFs {
-  readFile(path: string, maxBytes: number): string | undefined;
+  readFile(path: string, maxBytes: number): Uint8Array | undefined;
 }
 
 /** One usable mapping of a sidecar: the absolute path of the described file and its id. */
@@ -80,7 +87,7 @@ type Inspection =
 type Warn = (code: SidecarWarning['code'], path: string, message: string) => void;
 
 const defaultFs: SidecarFs = {
-  readFile: (path) => readFileSync(path, 'utf8'),
+  readFile: (path) => readFileSync(path),
 };
 
 // Plain data only: the core schema, no merge keys, unique keys, scalar keys, and no custom tags.
@@ -187,22 +194,28 @@ function readSidecar(manifestPath: string, fs: SidecarFs, warn: Warn): string | 
     return undefined;
   }
 
-  let content: string | undefined;
+  let bytes: Uint8Array | undefined;
   try {
-    content = fs.readFile(manifestPath, MAX_BYTES);
+    bytes = fs.readFile(manifestPath, MAX_BYTES);
   } catch (error) {
     warn('invalid_sidecar', manifestPath, `the sidecar could not be read (${errorCode(error)})`);
     return undefined;
   }
-  if (content === undefined) {
+  if (bytes === undefined) {
     return undefined;
   }
-  if (content.length > MAX_BYTES) {
+  if (bytes.byteLength > MAX_BYTES) {
     warn('invalid_sidecar', manifestPath, 'the sidecar is larger than 1 MiB');
     return undefined;
   }
 
-  return content;
+  try {
+    return UTF8.decode(bytes);
+  } catch {
+    // Malformed UTF-8 must never be repaired into a U+FFFD filename that maps a different file.
+    warn('invalid_sidecar', manifestPath, 'the sidecar is not valid UTF-8 text');
+    return undefined;
+  }
 }
 
 /** lstats the manifest: absent, not a regular file (symlinks are never followed), or a file with its size. */
@@ -373,7 +386,7 @@ function isRepoPath(path: string): boolean {
 }
 
 /** A short, single-line, control-free rendering of untrusted text for a message (`TextRules.Brief`). */
-function brief(text: string, maxChars = 120): string {
+export function brief(text: string, maxChars = 120): string {
   const truncated = truncate(text, maxChars);
   let out = '';
   for (const character of truncated) {

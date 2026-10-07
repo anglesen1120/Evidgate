@@ -97,7 +97,7 @@ describe('loadSidecarIndex', () => {
     const fs: SidecarFs = {
       readFile: () => {
         reads += 1;
-        return 'version: 1\ncases: []\n';
+        return Buffer.from('version: 1\ncases: []\n');
       },
     };
 
@@ -284,7 +284,7 @@ describe('loadSidecarIndex', () => {
     const fs: SidecarFs = {
       readFile: (path) => {
         reads += 1;
-        return readFileSync(path, 'utf8');
+        return readFileSync(path);
       },
     };
 

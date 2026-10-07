@@ -7,7 +7,7 @@
 // (coordinator decision 4): the reporter never hashes it.
 import type { TestCase } from '@playwright/test/reporter';
 
-import type { SidecarIndex } from './sidecar.js';
+import { brief, type SidecarIndex } from './sidecar.js';
 import { normalizeVariant } from './variant.js';
 
 /** 64 hex zeros — a schema-valid stand-in until the server derives the real key. */
@@ -179,7 +179,10 @@ export function createIdentityResolver(deps: IdentityResolverDeps): IdentityReso
   if (deps.warn !== undefined) resolved.warn = deps.warn;
 
   const cache = new Map<string, Identity>();
-  const firstLocation = new Map<string, string>();
+  // The first test seen for a case id, keyed by the id. Tracking the test key (not just the
+  // location string) catches loop-generated/parameterized tests that share one source
+  // location; a retry of the same test is a cache hit above and never re-warns.
+  const firstUse = new Map<string, { key: string; location: string; title: string }>();
 
   return (test) => {
     const key = testKey(test);
@@ -191,13 +194,20 @@ export function createIdentityResolver(deps: IdentityResolverDeps): IdentityReso
 
     if (identity.case_id !== undefined) {
       const location = locationOf(test);
-      const first = firstLocation.get(identity.case_id);
+      const first = firstUse.get(identity.case_id);
       if (first === undefined) {
-        firstLocation.set(identity.case_id, location);
-      } else if (first !== location) {
+        firstUse.set(identity.case_id, { key, location, title: test.title });
+      } else if (first.key !== key) {
+        // AC1: name both locations. Two tests that share one source location are told apart
+        // by their (sanitised) titles so the message stays useful without echoing raw text.
+        const sameLocation = first.location === location;
+        const firstLabel = sameLocation
+          ? `${first.location} (${brief(first.title)})`
+          : first.location;
+        const secondLabel = sameLocation ? `${location} (${brief(test.title)})` : location;
         resolved.warn?.({
           code: 'duplicate_case_id',
-          message: `case_id ${identity.case_id} is used by two tests: ${first} and ${location}`,
+          message: `case_id ${identity.case_id} is used by two tests: ${firstLabel} and ${secondLabel}`,
           path: location,
         });
       }
@@ -249,11 +259,13 @@ function readAnnotation(
 /**
  * The variant hash for a test's project: `normalizeVariant` over the project's declared
  * params (`metadata.evidgate.params`, own properties only; absent → `{}`). Memoised per
- * params object so 5k tests of one project cost one hash; a refused set emits one
- * `invalid_variant_params` warning naming the problem paths and reasons only.
+ * params object (a scalar set falls back to the project object) so 5k tests of one project
+ * cost one hash; a refused set emits one `invalid_variant_params` warning naming the problem
+ * paths and reasons only.
  */
 function variantOutcome(test: TestCase, deps: IdentityResolverDeps): VariantOutcome {
-  const metadata = test.parent?.project?.()?.metadata;
+  const project = test.parent?.project?.();
+  const metadata = project?.metadata;
   const evidgate =
     typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)
       ? (metadata as Record<string, unknown>).evidgate
@@ -264,7 +276,15 @@ function variantOutcome(test: TestCase, deps: IdentityResolverDeps): VariantOutc
       : undefined;
   const rawParams = declared === undefined || declared === null ? EMPTY_PARAMS : declared;
 
-  const cacheKey = typeof rawParams === 'object' && rawParams !== null ? rawParams : undefined;
+  // Memoise per params object; a scalar params set has no object identity of its own, so fall
+  // back to the project object — the mapping doc promises one `invalid_variant_params` warning
+  // per project, not one per test.
+  const cacheKey =
+    typeof rawParams === 'object' && rawParams !== null
+      ? rawParams
+      : typeof project === 'object' && project !== null
+        ? project
+        : undefined;
   if (cacheKey !== undefined) {
     const cached = deps.variantCache?.get(cacheKey);
     if (cached !== undefined) return cached;

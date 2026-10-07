@@ -530,7 +530,7 @@ describe('reporter identity wiring', () => {
     const fs: SidecarFs = {
       readFile: (path) =>
         path === join(dir, 'evidgate.cases.yaml')
-          ? `version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: ${CASE_B}\n`
+          ? Buffer.from(`version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: ${CASE_B}\n`)
           : undefined,
     };
     const { reporter, spool } = makeReporter({ sidecarFs: fs });

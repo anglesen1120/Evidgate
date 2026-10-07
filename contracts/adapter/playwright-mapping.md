@@ -43,6 +43,8 @@ The sidecar is untrusted input from a customer repository, so it is read as
 **data** (04.3.2 §3, mirroring the server reader):
 
 - Read at most **1 MiB** per file, checked **before** the content is read.
+- Decoded as strict UTF-8; malformed bytes are refused (never repaired to U+FFFD,
+  which could silently map a different, replacement-character filename).
 - Parsed with the pinned `yaml` 2.9.1 package in the **core schema**: plain data
   only, no custom tags. Anchors, aliases, merge keys, duplicate keys and a second
   document are **refused** (the server refuses them too).
@@ -133,18 +135,18 @@ Warnings are **data**: each is a `run.log` envelope whose `ext.warn` carries
 `{ code, message, path?, count? }`. A message names the offending path or key and
 never echoes file content or a parameter value.
 
-| `code`                   | Meaning                                                                                                                                         |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `duplicate_case_id`      | the same `case_id` resolved for two different tests; one warning naming both `file:line:column` locations, emitted when the second test is seen |
-| `identity_conflict`      | annotation and sidecar disagree (or two different `evidgate.id` annotations); names the test location                                           |
-| `invalid_annotation`     | an `evidgate.id` annotation whose description is not a UUID; treated as absent                                                                  |
-| `invalid_variant_params` | the declared params were refused; names the problem paths and reasons only                                                                      |
-| `invalid_target_env`     | `EVIDGATE_TARGET_ENV` does not match the `targetEnv` shape; falls back to the project name                                                      |
-| `invalid_sidecar`        | a sidecar manifest was refused (size, YAML shape, schema)                                                                                       |
-| `invalid_sidecar_entry`  | one sidecar entry was refused (path outside the directory, missing file, bad id)                                                                |
-| `sidecar_conflict`       | two sidecars claim the same test file                                                                                                           |
-| `unmapped`               | `onEnd` summary: how many tests ended without a `case_id` (and how many conflicted)                                                             |
-| `warnings_truncated`     | `onEnd` summary: how many warnings the cap suppressed                                                                                           |
+| `code`                   | Meaning                                                                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `duplicate_case_id`      | the same `case_id` resolved for two different tests; one warning naming both `file:line:column` locations (with the test titles when the two tests share one location), emitted when the second test is seen |
+| `identity_conflict`      | annotation and sidecar disagree (or two different `evidgate.id` annotations); names the test location                                                                                                        |
+| `invalid_annotation`     | an `evidgate.id` annotation whose description is not a UUID; treated as absent                                                                                                                               |
+| `invalid_variant_params` | the declared params were refused; names the problem paths and reasons only                                                                                                                                   |
+| `invalid_target_env`     | `EVIDGATE_TARGET_ENV` does not match the `targetEnv` shape; falls back to the project name                                                                                                                   |
+| `invalid_sidecar`        | a sidecar manifest was refused (size, encoding, YAML shape, schema)                                                                                                                                          |
+| `invalid_sidecar_entry`  | one sidecar entry was refused (path outside the directory, missing file, bad id)                                                                                                                             |
+| `sidecar_conflict`       | two sidecars claim the same test file                                                                                                                                                                        |
+| `unmapped`               | `onEnd` summary: how many tests ended without a `case_id` (and how many conflicted)                                                                                                                          |
+| `warnings_truncated`     | `onEnd` summary: how many warnings the cap suppressed                                                                                                                                                        |
 
 Sidecar warnings are emitted at `onBegin` (after the capability and `run_begin`
 markers); the rest as they occur. At most **100** warning envelopes are emitted
