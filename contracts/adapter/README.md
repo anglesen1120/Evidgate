@@ -14,6 +14,8 @@ TypeScript or C# source is needed.
 | `operations/collect.v1.json`  | adapter → server | Result of the `collect` phase: the artifact inventory, reported as 00 §9.4 envelope events whose `artifact_ids` list the collected artifacts.                                                                                        |
 | `operations/cleanup.v1.json`  | adapter → server | Result of the `cleanup` phase: the namespace, the resources removed and the ones it could not remove.                                                                                                                                |
 
+The Playwright adapter's producer-side identity mapping — the `evidgate.id` annotation, the `evidgate.cases.yaml` sidecar, the conflict rule, `variant_hash`, `target_env`, the `execution_key` placeholder and the `ext.warn` channel — is specified in [`playwright-mapping.md`](./playwright-mapping.md) (04.3.2-T1).
+
 An operation result document carries `error {code, message}` when the phase
 failed. A partial failure may report the payload _and_ the error; a phase that
 produced nothing (a failed `prepare`, an aborted `collect`) omits the payload

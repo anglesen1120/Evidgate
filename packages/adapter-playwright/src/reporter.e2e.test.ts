@@ -64,6 +64,7 @@ beforeAll(() => {
         EVIDGATE_SPOOL_DIR: spool,
         EVIDGATE_RUN_ID: RUN_ID,
         EVIDGATE_E2E_OUTPUT_DIR: outputDir,
+        EVIDGATE_TARGET_ENV: 'e2e-local',
       },
       encoding: 'utf8',
       timeout: 170_000,
@@ -95,12 +96,12 @@ function readEnvelopes(): EventEnvelope[] {
 }
 
 describe('reporter e2e (real playwright test CLI)', () => {
-  it('AC1: 3 fixture tests produce one test.started and one test.finished each', () => {
+  it('AC1: 4 fixture tests produce one test.started and one test.finished each', () => {
     if (runFailure !== null) throw new Error(`playwright test failed: ${runFailure}`);
 
     const envelopes = readEnvelopes();
-    expect(envelopes.filter((item) => item.type === 'test.started')).toHaveLength(3);
-    expect(envelopes.filter((item) => item.type === 'test.finished')).toHaveLength(3);
+    expect(envelopes.filter((item) => item.type === 'test.started')).toHaveLength(4);
+    expect(envelopes.filter((item) => item.type === 'test.finished')).toHaveLength(4);
     for (const envelope of envelopes.filter((item) => item.type === 'test.finished')) {
       expect(envelope.status).toBe('passed');
       expect(envelope.producer_id).toBe(PRODUCER_ID);
@@ -152,9 +153,23 @@ describe('reporter e2e (real playwright test CLI)', () => {
     expect(finished?.ext).toHaveProperty('project');
   });
 
+  it('AC1/AC4: annotated and sidecar-mapped tests carry ext.case_id and ext.target_env', () => {
+    if (runFailure !== null) throw new Error(`playwright test failed: ${runFailure}`);
+
+    const finished = readEnvelopes().filter((item) => item.type === 'test.finished');
+    const caseIds = finished.map((item) => item.ext.case_id);
+    expect(caseIds).toContain('11111111-1111-1111-1111-111111111111');
+    expect(caseIds).toContain('44444444-4444-4444-4444-444444444444');
+    for (const envelope of finished) {
+      expect(envelope.ext.target_env).toBe('e2e-local');
+      expect(envelope.ext.identity_conflict).toBeUndefined();
+      expect(envelope.execution_key).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
   it('AC1: the CLI prints the default summary because printsToStdio() is false', () => {
     if (runFailure !== null) throw new Error(`playwright test failed: ${runFailure}`);
 
-    expect(cliOutput).toContain('3 passed');
+    expect(cliOutput).toContain('4 passed');
   });
 });
