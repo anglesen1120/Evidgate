@@ -1,12 +1,26 @@
 {
-  "name": "@evidgate/adapter-playwright",
+  "name": "@evidgate/playwright-reporter",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -b",
     "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@playwright/test": "^1.63.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
   }
 }

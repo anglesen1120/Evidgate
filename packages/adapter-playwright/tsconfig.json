@@ -4,7 +4,12 @@
     "composite": true,
     "declaration": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    // 04.3.1-T1.1: the reporter reads @playwright/test/package.json (node:module
+    // createRequire) and writes the spool (node:fs/node:crypto/node:path). Same
+    // reasoning as packages/cli's canonical.ts — only this project needs the
+    // @types/node entry; the specs get it through vitest.config.base.mts.
+    "types": ["node"]
   },
   "include": ["src"],
   // 01.6.1-T1.2: specs and the Vitest config are type-checked by tsconfig.spec.json and
