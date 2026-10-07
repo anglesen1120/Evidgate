@@ -121,7 +121,8 @@ public sealed class ProtocolCompatibilityMatrixTests
 
     /// <summary>
     /// The corpus shape contract: the declared grid axes are covered exactly once, ids are unique, no
-    /// row carries an unknown kind, and every row carries the members its kind requires.
+    /// row carries an unknown kind, every row carries the members its kind requires, and each
+    /// <c>expected</c> object carries exactly the members its verdict defines.
     /// </summary>
     [Fact]
     public void Corpus_Declares_Every_Grid_Combination_Exactly_Once()
@@ -170,9 +171,20 @@ public sealed class ProtocolCompatibilityMatrixTests
                 row.Adapter.ShouldBeNull($"{row.Id}: a non-grid row has no adapter");
             }
 
+            // The expected object's key set is exact per verdict: the typed record tolerates extra
+            // members, the TypeScript suite rejects them, so assert the same here.
+            var expectedKeys = row.ExpectedRaw.EnumerateObject()
+                .Select(property => property.Name)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+
             switch (row.Expected.Verdict)
             {
                 case "accepted":
+                    expectedKeys.ShouldBe(
+                        ["minor", "unknown_supports_flags", "verdict"],
+                        Case.Sensitive,
+                        $"{row.Id}: an accepted expected carries exactly verdict, minor and unknown_supports_flags");
                     row.Expected.Minor.ShouldNotBeNullOrWhiteSpace($"{row.Id}: accepted rows name the minor relation");
                     row.Expected.UnknownSupportsFlags.ShouldNotBeNull($"{row.Id}: accepted rows list unknown flags");
                     row.Expected.Code.ShouldBeNull();
@@ -181,11 +193,19 @@ public sealed class ProtocolCompatibilityMatrixTests
                     row.Expected.Code.ShouldNotBeNullOrWhiteSpace($"{row.Id}: rejected rows name a code");
                     if (row.Expected.Code == "capability_invalid")
                     {
+                        expectedKeys.ShouldBe(
+                            ["code", "paths", "verdict"],
+                            Case.Sensitive,
+                            $"{row.Id}: a capability_invalid expected carries exactly verdict, code and paths");
                         row.Expected.Paths.ShouldNotBeNull($"{row.Id}: capability_invalid rows list paths");
                         row.Expected.Paths!.ShouldNotBeEmpty();
                     }
                     else
                     {
+                        expectedKeys.ShouldBe(
+                            ["code", "details", "verdict"],
+                            Case.Sensitive,
+                            $"{row.Id}: an unsupported_protocol_major expected carries exactly verdict, code and details");
                         row.Expected.Details.ShouldNotBeNull($"{row.Id}: unsupported_protocol_major rows list details");
                         row.Expected.Details!.ShouldNotBeEmpty();
                     }
@@ -257,6 +277,7 @@ public sealed class ProtocolCompatibilityMatrixTests
     }
 
     /// <summary>The shared corpus (fixtures/contracts/protocol-matrix/negotiation.v1.json).</summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed record Corpus(
         [property: JsonPropertyName("format")] string Format,
         [property: JsonPropertyName("comment")] string Comment,
@@ -265,6 +286,7 @@ public sealed class ProtocolCompatibilityMatrixTests
         [property: JsonPropertyName("rows")] IReadOnlyList<Row> Rows);
 
     /// <summary>The declared grid axes; every combination must appear exactly once among the grid rows.</summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed record Grid(
         [property: JsonPropertyName("server_supported_majors")] IReadOnlyList<IReadOnlyList<int>> ServerSupportedMajors,
         [property: JsonPropertyName("server_minor")] IReadOnlyList<int> ServerMinor,
@@ -272,6 +294,7 @@ public sealed class ProtocolCompatibilityMatrixTests
         [property: JsonPropertyName("adapter_minor")] IReadOnlyList<int> AdapterMinor);
 
     /// <summary>One corpus row.</summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed record Row(
         [property: JsonPropertyName("id")] string Id,
         [property: JsonPropertyName("kind")] string Kind,
@@ -279,14 +302,23 @@ public sealed class ProtocolCompatibilityMatrixTests
         [property: JsonPropertyName("server")] Server Server,
         [property: JsonPropertyName("adapter")] Adapter? Adapter,
         [property: JsonPropertyName("document")] JsonElement? Document,
-        [property: JsonPropertyName("expected")] Expected Expected);
+        [property: JsonPropertyName("expected")] JsonElement ExpectedRaw)
+    {
+        /// <summary>
+        /// The typed expected outcome. Kept raw above so the shape test can assert the exact key set
+        /// per verdict: <see cref="Expected"/> tolerates extra members, the TypeScript suite does not.
+        /// </summary>
+        public Expected Expected => JsonSerializer.Deserialize<Expected>(ExpectedRaw.GetRawText())!;
+    }
 
     /// <summary>The server side of a row.</summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed record Server(
         [property: JsonPropertyName("supported_majors")] IReadOnlyList<int> SupportedMajors,
         [property: JsonPropertyName("minor")] int Minor);
 
     /// <summary>The adapter version of a grid row.</summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed record Adapter(
         [property: JsonPropertyName("major")] int Major,
         [property: JsonPropertyName("minor")] int Minor);
@@ -301,6 +333,7 @@ public sealed class ProtocolCompatibilityMatrixTests
         [property: JsonPropertyName("paths")] IReadOnlyList<string>? Paths);
 
     /// <summary>One expected <c>details[]</c> row of an <c>unsupported_protocol_major</c> rejection.</summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed record Detail(
         [property: JsonPropertyName("path")] string Path,
         [property: JsonPropertyName("reason")] string Reason);
