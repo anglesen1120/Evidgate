@@ -22,6 +22,16 @@ payload and `error` (`anyOf`). A phase failure is never a silent success (source
 design §4: "reports setup errors separately", "reports separately if cleanup
 fails").
 
+## Emitting the capability document
+
+The Playwright adapter (`@evidgate/playwright-reporter`, 04.3.1-T1) emits its capability
+document as the **first spooled envelope** of a run: a `run.log` envelope at sequence 1
+whose `ext` carries the document under `ext.capability` (`ext.schema` stays
+`playwright/1`, the `<adapter-name>/<protocol-major>` value of 00 §9.4). `ext` is an open
+object that requires only `schema`, so the carrier needs no new envelope member. The
+document is validated against `capability.v1.json` in that package's tests (Ajv 8) and by
+the server (Corvus) on registration (04.7.1-T2.3).
+
 ## Negotiation rules
 
 Protocol v1 — the only version defined today — has major **1**: the schema
