@@ -162,7 +162,8 @@ start with `::` (a GitHub workflow command). Multi-line messages and `--verbose`
 stacks are split and each line is prefixed. Values interpolated into an error
 message (unknown command text, `parseArgs` messages, `EVIDGATE_ENV` in
 `dev_token_refused`) have control and format characters escaped as `\uXXXX`, and
-newlines never pass through.
+newlines never pass through. The escaped set is `\p{Cc}`, `\p{Cf}`, `\p{Zl}` and
+`\p{Zp}`, so U+2028 and U+2029 (line and paragraph separators) are escaped too.
 
 stderr line format:
 
@@ -172,14 +173,27 @@ stderr line format:
 - `evidgate: detail: <detail>` once per server `error.details[]` entry, after the
   hint/request_id lines
 
-A `detail:` line is `index=<n> path=<p> reason=<r>`: `index=` is omitted when the
-entry has none, an `index` or `path` that is not a string or a number is skipped, and
-every text field is control-char escaped and capped at 200 chars. A detail whose
-`reason` is missing or not a string makes the whole envelope unusable, so the reply
-falls back to the command's fallback code (`request_failed` for `manifests upload`)
-with no `detail:` lines (fail closed). At most 50 `detail:` lines are
-printed; more collapse into one final `evidgate: detail: (<k> more)` line. No
-submitted value is echoed — the server names a parameter by position (`#n`).
+Server-supplied text fields — the envelope `message`, `request_id` (from the body
+or the `X-Request-Id` header fallback) and each detail `path`/`reason` — are
+processed in one fixed order: (1) `redact()`, so a registered secret straddling
+the cut can never leave a clear-text prefix; (2) cap to the first 200 Unicode
+code points, never splitting a surrogate pair or an escape; (3) escape control
+characters as above.
+
+A `detail:` line is `index=<n> path=<p> reason=<r>`: `index=` is printed only when
+the entry's `index` is a number, `path=` only when its `path` is a string, and
+`reason=` only when its `reason` is a string. A detail whose `reason` is missing
+or not a string makes the whole envelope unusable, so the reply falls back to the
+command's fallback code (`request_failed` for `manifests upload`) with no
+`detail:` lines (fail closed). At most 50 `detail:` lines are printed; more
+collapse into one final `evidgate: detail: (<k> more)` line. `detail:` lines are
+printed only by project-scoped commands (`manifests upload`); the token exchange
+(`auth login`, `getToken`) never prints them.
+
+The CLI prints the server's own `path`/`reason` text, after redaction, capping and
+escaping. That no submitted value is echoed, and that a parameter is named by
+position (`#n`) rather than by value, is the server contract (05.1.1, openapi
+`createManifest`), not a CLI guarantee.
 
 | Code                  | Exit | Meaning                                                                                                                                                                             |
 | --------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -350,11 +364,12 @@ Order of operations (observable):
 4. A 2xx body must be `{ manifest_id: <uuid>, manifest_hash: sha256:<64 hex> }`;
    anything else is exit 3 `request_failed` and the body is never echoed.
 5. A non-2xx reply maps through §5: the server's `error.code` when it is a safe
-   identifier (else `request_failed`), the server's message escaped and capped at
-   200 chars, `request_id` from the body else the `X-Request-Id` header, and one
-   `detail:` line per `error.details[]` entry — so a 422 `manifest_invalid`
-   passes its per-item causes through. A non-2xx reply without a usable envelope
-   is `request_failed` with `the manifest upload failed (HTTP <status>)`.
+   identifier (else `request_failed`), the server's message redacted, capped at
+   200 code points and escaped, `request_id` from the body else the
+   `X-Request-Id` header (same treatment), and one `detail:` line per
+   `error.details[]` entry — so a 422 `manifest_invalid` passes its per-item
+   causes through. A non-2xx reply without a usable envelope is `request_failed`
+   with `the manifest upload failed (HTTP <status>)`.
 6. A 401 purges the cached CI token before the error propagates (§7); a 403 does
    not. A transport failure, a timeout or a refused redirect is exit 3
    `transport` with a fixed message.

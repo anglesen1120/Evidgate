@@ -39,12 +39,14 @@ export class CliError extends Error {
   }
 }
 
-const controlOrFormat = /[\p{Cc}\p{Cf}]/gu;
+const controlOrFormat = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
 
 /**
- * Escapes Unicode control (`Cc`) and format (`Cf`) characters as `\uXXXX`, so a value
- * interpolated into a message cannot forge a log line or a GitHub `::` workflow command
- * (contracts/cli.md §5, SEC4). A newline therefore never passes through.
+ * Escapes Unicode control (`Cc`), format (`Cf`) and line/paragraph separator (`Zl`/`Zp`)
+ * characters as `\uXXXX`, so a value interpolated into a message cannot forge a log line
+ * or a GitHub `::` workflow command (contracts/cli.md §5, SEC4). A newline therefore
+ * never passes through, and neither do U+2028/U+2029, which some log viewers and
+ * JSON-lines consumers render as line breaks.
  */
 export function escapeControlCharacters(value: string): string {
   return value.replace(controlOrFormat, (character) => {

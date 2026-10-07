@@ -142,7 +142,7 @@ describe('manifests upload', () => {
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call?.request.method).toBe('POST');
-    // D-1: `createApiClient` puts the SDK's `/v1` server prefix on the base URL, so the
+    // `createApiClient` puts the SDK's `/v1` server prefix on the base URL, so the
     // operation path is `<root>/v1/projects/{p}/manifests` (the env value carries no `/v1`).
     expect(new URL(call?.request.url ?? '').pathname).toBe(`/v1/projects/${project}/manifests`);
     expect(call?.request.headers.get('authorization')).toBe('Bearer dev-token-value');
@@ -352,7 +352,7 @@ describe('manifests upload', () => {
     const text = stderr.join('');
     expect(text).toContain('evidgate: error usage: ');
     expect(text).toContain('--file');
-    // O-3: the command-level usage error carries the same hint as main.ts's parse errors.
+    // The command-level usage error carries the same hint as main.ts's parse errors.
     expect(text).toContain("evidgate: hint: run 'evidgate --help' for usage");
     expect(calls).toHaveLength(0);
   });
@@ -631,8 +631,8 @@ describe('manifests upload — boundaries', () => {
     expect(calls).toHaveLength(0);
   });
 
-  // D-2: `open(path, 'r')` on a FIFO blocks until a writer appears, so the non-regular-file
-  // check never ran and the command hung. The open is now `O_RDONLY | O_NONBLOCK`, which
+  // `open(path, 'r')` on a FIFO blocks until a writer appears, so the non-regular-file
+  // check never ran and the command hung. The open is `O_RDONLY | O_NONBLOCK`, which
   // returns at once on a FIFO, so the `fstat` check refuses it (contracts/cli.md §8 step 2).
   it.skipIf(process.platform === 'win32')(
     'fifo_is_refused_without_hanging',
@@ -718,11 +718,9 @@ describe('manifests upload — boundaries', () => {
     expect(stderr.join('')).not.toContain('path=');
   });
 
-  // Characterization of the fail-closed reading of §5: a detail whose `reason` is not a
-  // string makes the whole envelope unusable (`isErrorEnvelope` requires a string
-  // `reason`), so the server code and every detail are dropped. This contradicts the
-  // literal §5 sentence "a field that is not a string or a number is skipped" — reported
-  // as defect D-3 (low, contract precision).
+  // Pins contracts/cli.md §5's fail-closed rule: a detail whose `reason` is not a string
+  // makes the whole envelope unusable (`isErrorEnvelope` requires a string `reason`), so
+  // the reply falls back to `request_failed` and no `detail:` line is printed.
   it('details_non_string_reason_drops_the_envelope', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
@@ -794,6 +792,48 @@ describe('manifests upload — boundaries', () => {
     expect(line).toBe(`evidgate: error manifest_invalid: ${'m'.repeat(200)}`);
   });
 
+  it('message_cap_never_leaves_a_secret_prefix', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    // The dev token starts at code point 188, so the raw 200-code-point cut would fall
+    // inside it. Redaction runs before the cap, so no prefix of the token can survive.
+    const message = `${'x'.repeat(188)}dev-token-value${'y'.repeat(50)}`;
+    const { fetchImpl } = stubFetch(() => jsonResponse(422, envelope('manifest_invalid', message)));
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    const text = stderr.join('');
+    expect(text).not.toContain('dev-token-value');
+    expect(text).not.toContain('dev-toke');
+    expect(text).toContain('[REDACTED]');
+  });
+
+  it('message_cap_does_not_split_an_astral_char', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    // The emoji is the 200th code point; a UTF-16 `slice(0, 200)` would keep only its
+    // high surrogate, so the cap counts code points instead.
+    const message = `${'a'.repeat(199)}\u{1F600}${'b'.repeat(10)}`;
+    const { fetchImpl } = stubFetch(() => jsonResponse(422, envelope('manifest_invalid', message)));
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    const text = stderr.join('');
+    expect(text.split('\n')[0]).toBe(
+      `evidgate: error manifest_invalid: ${'a'.repeat(199)}\u{1F600}`,
+    );
+    // No lone surrogate anywhere in stderr.
+    expect(text).not.toMatch(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/,
+    );
+  });
+
   // ---- envelope edge cases: unsafe code, request_id escaping, header fallback ----
 
   it('unsafe_code_pattern_falls_back_to_request_failed', async () => {
@@ -825,6 +865,23 @@ describe('manifests upload — boundaries', () => {
     ).resolves.toBe(3);
 
     expect(stderr.join('')).toContain('evidgate: request_id: req\\u000a::error::forged\\u0007\n');
+  });
+
+  it('request_id_is_capped_at_200_code_points', async () => {
+    const file = await manifestFile('{"schema":"manifest.v1"}');
+    const env = await devEnv();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(422, envelope('manifest_invalid', 'ok', { request_id: 'r'.repeat(5000) })),
+    );
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    const text = stderr.join('');
+    expect(text).toContain(`evidgate: request_id: ${'r'.repeat(200)}\n`);
+    expect(text).not.toContain('r'.repeat(201));
   });
 
   it('x_request_id_header_is_the_fallback', async () => {
