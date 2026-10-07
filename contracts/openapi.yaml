@@ -61,6 +61,8 @@ tags:
     description: Usage summary and ledger (12)
   - name: jobs
     description: Runner job claim and heartbeat (V2, 04/05)
+  - name: policy
+    description: Waivers and quarantine lifecycles (07)
 paths:
   /ci/token:
     post:
@@ -3317,6 +3319,174 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /waivers:
+    post:
+      operationId: createWaiver
+      tags: [policy]
+      summary: Request a waiver for a case or suite (07.3.1-T1)
+      description: >-
+        Records a human risk acceptance for one case or suite of the project; a waiver is
+        never itself a test result and never changes a decision (00 §8.8). The caller must
+        be a member of the org (`X-Evidgate-Org` selects it when the caller has more than
+        one) and hold `policy:write`; the project must be in the credential's scope and
+        exist, else 404 (also for another tenant's project). `expires_at` must be strictly
+        in the future and `reason` 1..2000 characters, else 422 with `error.details[]` per
+        field. The waiver starts `requested` with `requested_by` = the caller; a different
+        `release_approver` approves it (`POST /v1/waivers/{w}/approve`). Idempotency-Key
+        required.
+      x-permission: policy:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaiverCreateRequest'
+      responses:
+        '201':
+          description: Waiver requested
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaiverDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /waivers/{w}/approve:
+    post:
+      operationId: approveWaiver
+      tags: [policy]
+      summary: Approve a requested waiver (07.3.1-T1)
+      description: >-
+        Approves a waiver that is still `requested` and not yet expired. The approver must
+        differ from the requester: the requester approving their own waiver is 403
+        `waiver_self_approval` (also enforced by the `waiver_self_approval_check` DB
+        constraint). A waiver that is not `requested`, or whose `expires_at` has passed, is
+        409 `waiver_state_conflict`; an unknown id, another tenant's waiver or a project
+        outside the credential's scope is 404. Idempotency-Key required.
+      x-permission: policy:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/WaiverId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: Waiver approved
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaiverDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /waivers/{w}/revoke:
+    post:
+      operationId: revokeWaiver
+      tags: [policy]
+      summary: Revoke a requested or approved waiver (07.3.1-T1)
+      description: >-
+        Withdraws a waiver that is `requested` or `approved` and not yet expired (a
+        requester or an approver may withdraw before or after approval). A waiver already
+        `expired` or `revoked`, or one whose `expires_at` has passed, is 409
+        `waiver_state_conflict`; an unknown id, another tenant's waiver or a project outside
+        the credential's scope is 404. Idempotency-Key required.
+      x-permission: policy:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/WaiverId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: Waiver revoked
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaiverDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/waivers:
+    get:
+      operationId: listProjectWaivers
+      tags: [policy]
+      summary: Cursor page of a project's waivers (07.3.1-T1)
+      description: >-
+        Every member role, including `viewer`, may read (T58). The stored `state` is
+        returned as is (`requested`, `approved`, `expired`, `revoked`); the page is
+        keyset-ordered on `(created_at, id)` ascending. Another tenant's project, or a
+        project outside the credential's scope, is 404; a `limit` outside 1..200 or a
+        malformed `cursor` is 422.
+      x-permission: policy:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of waivers
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaiverPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 components:
   securitySchemes:
     sessionCookie:
@@ -3580,6 +3750,13 @@ components:
         format: uuid
     CandidateId:
       name: c
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    WaiverId:
+      name: w
       in: path
       required: true
       schema:
@@ -4864,6 +5041,58 @@ components:
           type: string
           format: uuid
           description: A built-in catalogue role or one of the caller's own org roles (else 409 `unknown_role`).
+    WaiverDto:
+      type: object
+      description: >-
+        One risk-acceptance waiver (07.3.1-T1, 00 §8.8). `approved_by` is null until a
+        different approver approves it; `state` is returned as stored.
+      required:
+        [
+          id,
+          project_id,
+          scope,
+          target_id,
+          reason,
+          requested_by,
+          approved_by,
+          state,
+          expires_at,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        scope: { type: string, enum: [case, suite] }
+        target_id: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+        requested_by: { type: string, format: uuid }
+        approved_by: { type: [string, 'null'], format: uuid }
+        state: { type: string, enum: [requested, approved, expired, revoked] }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    WaiverCreateRequest:
+      type: object
+      description: >-
+        Body of `POST /v1/waivers` (07.3.1-T1 §5). `expires_at` must be strictly in the
+        future; `reason` is 1..2000 characters.
+      required: [project_id, scope, target_id, reason, expires_at]
+      properties:
+        project_id: { type: string, format: uuid }
+        scope: { type: string, enum: [case, suite] }
+        target_id: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+        expires_at: { type: string, format: date-time }
+    WaiverPage:
+      type: object
+      description: 00 §9.1 cursor page of `WaiverDto`, keyset-ordered on `(created_at, id)` ascending.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/WaiverDto' }
+        next_cursor: { type: [string, 'null'] }
 security:
   - sessionCookie: []
   - bearerToken: []

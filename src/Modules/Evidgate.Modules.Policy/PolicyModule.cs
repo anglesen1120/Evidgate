@@ -26,6 +26,9 @@ internal static class PolicyModule
         // 07.1.1-T2: the sole producer of policy_revision.hash (finding T1-SEC-S2).
         services.TryAddSingleton<IPolicyHasher, PolicyHasher>();
 
+        // 07.3.1-T1: the waiver create validates `expires_at` against the server clock (00 §5.5 C2).
+        services.TryAddSingleton(TimeProvider.System);
+
         return services;
     }
 }

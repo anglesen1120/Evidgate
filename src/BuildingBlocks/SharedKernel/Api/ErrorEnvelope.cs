@@ -184,4 +184,10 @@ public static class ApiErrorCode
 
     /// <summary>409: the natural key tuple matches a stored row that declares a different <c>mode</c>/<c>supports</c> set (04.7.1 AC3, contracts/adapter/README.md).</summary>
     public const string CapabilityConflict = "capability_conflict";
+
+    /// <summary>403: a waiver may not be approved by the member who requested it (07.3.1 AC1, FR-07-8; 00 §9.3).</summary>
+    public const string WaiverSelfApproval = "waiver_self_approval";
+
+    /// <summary>409: the waiver is not in a state, or is past its expiry, that allows the requested transition (07.3.1 §6).</summary>
+    public const string WaiverStateConflict = "waiver_state_conflict";
 }

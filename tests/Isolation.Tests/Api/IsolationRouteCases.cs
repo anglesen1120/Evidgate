@@ -213,6 +213,8 @@ public static class IsolationRouteCases
                 Fixed(bp.CaseIds), aAdmin, $"/v1/projects/{ap.Id}/cases?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/suites"), $"org B project {bp.Slug} suites", bAdmin, $"/v1/projects/{bp.Id}/suites?limit=1", "id",
                 Fixed(bp.SuiteIds), aAdmin, $"/v1/projects/{ap.Id}/suites?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/waivers"), $"org B project {bp.Slug} waivers", bAdmin, $"/v1/projects/{bp.Id}/waivers?limit=1", "id",
+                Fixed(bp.WaiverIds), aAdmin, $"/v1/projects/{ap.Id}/waivers?limit=1"));
             for (var c = 0; c < bp.CaseIds.Count; c++)
             {
                 walks.Add(new(Get("/v1/cases/{c}/revisions"), $"org B case {bp.Slug}#{c} revisions", bAdmin, $"/v1/cases/{bp.CaseIds[c]}/revisions?limit=1", "id",
@@ -332,6 +334,12 @@ public static class IsolationRouteCases
             new(HttpMethod.Post, $"/v1/projects/{p}/environments/{IsolationWorld.EnvironmentKey}/revisions", Environment())),
         ObjectCase("GET", "/v1/environment-revisions/{id}", p => [("environment revision", p.EnvironmentRevisionId)], id =>
             new(HttpMethod.Get, $"/v1/environment-revisions/{id}"), ownControl: true),
+
+        // ---- Policy waivers (WaiverEndpoints.cs) ---------------------------------------------------------------
+        WaiverCreateCase(),
+        WaiverStateCase("approve"),
+        WaiverStateCase("revoke"),
+        ProjectCase("GET", "/v1/projects/{p}/waivers", p => new(HttpMethod.Get, $"/v1/projects/{p}/waivers"), list: true),
 
         // ---- Dev surface (SliceEndpoints.cs:29-40; recorded in ServedDocumentTests.cs:59) -------------------------
         Case("POST", "/v1/slice/run", (route, w) =>
@@ -622,6 +630,88 @@ public static class IsolationRouteCases
             });
     }
 
+    /// <summary>
+    /// <c>POST /v1/waivers</c>: the project is named in the body, the org in <c>X-Evidgate-Org</c>. Org A's
+    /// project against a random project id (404, no row written), plus the header naming org A.
+    /// </summary>
+    private static RouteCase WaiverCreateCase()
+    {
+        var route = new ApiRoute("POST", "/v1/waivers");
+        static ProbeRequest Create(Guid project, Guid target) => new(HttpMethod.Post, "/v1/waivers", new JsonObject
+        {
+            ["project_id"] = project.ToString(),
+            ["scope"] = "case",
+            ["target_id"] = target.ToString(),
+            ["reason"] = "isolation probe",
+            ["expires_at"] = DateTimeOffset.UtcNow.AddDays(30).ToString("O", CultureInfo.InvariantCulture),
+        });
+
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    .. w.Acme.Projects.Select(p => Pair(route, $"org A project {p.Slug} in the body", ProbeExpect.NotFound, OrgBAdmin(w),
+                        Create(p.Id, p.CaseIds[0]), Create(Guid.CreateVersion7(), p.CaseIds[0]))),
+                    new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
+                        route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderCaller(w), RandomHeaderCaller(w),
+                        Create(w.Acme.Projects[0].Id, w.Acme.Projects[0].CaseIds[0]))),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "org A project web in the body", ProbeExpect.ServiceRefused, OrgBService(w),
+                        Create(w.Acme.Projects[0].Id, w.Acme.Projects[0].CaseIds[0]), Create(Guid.CreateVersion7(), w.Acme.Projects[0].CaseIds[0])),
+                ];
+            });
+    }
+
+    /// <summary>
+    /// <c>POST /v1/waivers/{w}/approve</c> and <c>.../revoke</c>: org A's waivers against random ids, the header
+    /// probe, and one own-waiver control. The approve control is the requester approving their own waiver
+    /// (403 <c>waiver_self_approval</c>, no write); the revoke control revokes a dedicated own waiver (200).
+    /// </summary>
+    private static RouteCase WaiverStateCase(string action)
+    {
+        var route = new ApiRoute("POST", $"/v1/waivers/{{w}}/{action}");
+        var revoke = action == "revoke";
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                var own = w.Acme2.Projects[0];
+                var probes = new List<RouteProbe>();
+                probes.AddRange(w.Acme.Projects.SelectMany(p => Indexed("waiver", p.WaiverIds).Select(id => Pair(route, $"org A {id.Label} of project {p.Slug}", ProbeExpect.NotFound, OrgBAdmin(w),
+                    new(HttpMethod.Post, $"/v1/waivers/{id.Id}/{action}"), new(HttpMethod.Post, $"/v1/waivers/{Guid.CreateVersion7()}/{action}")))));
+                probes.Add(new(route, "X-Evidgate-Org: A with an org-A waiver id", runner => runner.CallerPairAsync(
+                    route, "X-Evidgate-Org: A with an org-A waiver id", ForeignHeaderCaller(w), RandomHeaderCaller(w),
+                    new(HttpMethod.Post, $"/v1/waivers/{w.Acme.Projects[0].WaiverId}/{action}"))));
+                probes.Add(revoke
+                    ? OwnObject(route, "own waiver revoked by its requester answers 200", OrgBAdmin(w), new(HttpMethod.Post, $"/v1/waivers/{own.WaiverIds[1]}/{action}"))
+                    : new RouteProbe(route, "own waiver, the requester approves their own -> 403 self-approval", runner => runner.OwnObjectAsync(
+                        route, "own waiver, the requester approves their own -> 403 self-approval", OrgBAdmin(w),
+                        new(HttpMethod.Post, $"/v1/waivers/{own.WaiverId}/{action}"), expectedStatus: 403)));
+                return probes;
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    .. Indexed("waiver", w.Acme.Projects[0].WaiverIds).Select(id => Pair(route, $"org A {id.Label} of project web", ProbeExpect.ServiceRefused, OrgBService(w),
+                        new(HttpMethod.Post, $"/v1/waivers/{id.Id}/{action}"), new(HttpMethod.Post, $"/v1/waivers/{Guid.CreateVersion7()}/{action}"))),
+                    .. Indexed("waiver", w.Acme2.Projects[1].WaiverIds).Select(id => new RouteProbe(route, $"sibling project api's {id.Label}", runner => runner.RefusedAsync(
+                        route, $"sibling project api's {id.Label}", OrgBService(w), new(HttpMethod.Post, $"/v1/waivers/{id.Id}/{action}"), allowed: [403, 404]))),
+                ];
+            });
+    }
+
     /// <summary><see cref="ObjectCase"/> whose request also needs the object's project, plus extra member probes.</summary>
     private static RouteCase ObjectCaseWith(
         string method,
@@ -827,6 +917,7 @@ public sealed class RouteProbeRunner
             ids.AddRange(p.CaseRevisions.SelectMany(revisions => revisions));
             ids.AddRange(p.SuiteIds);
             ids.AddRange(p.SuiteRevisionIds);
+            ids.AddRange(p.WaiverIds);
         }
 
         return ids.Select(id => id.ToString("D")).ToHashSet(StringComparer.OrdinalIgnoreCase);
