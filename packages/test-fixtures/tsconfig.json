@@ -13,5 +13,10 @@
   "include": ["src"],
   // 01.6.1-T1.2 convention (see packages/cli): specs and the Vitest config are
   // type-checked by tsconfig.spec.json and never emitted into dist.
-  "exclude": ["src/**/*.test.ts", "vitest.config.ts"]
+  "exclude": ["src/**/*.test.ts", "vitest.config.ts"],
+  // 04.7.1-T3.1: the protocol-matrix spec validates the corpus with the CLI's
+  // ContractSchemaSet, so the build must see @evidgate/cli's emitted declarations
+  // (npm workspaces links it via node_modules) — the same reference packages/cli
+  // declares for ../sdk.
+  "references": [{ "path": "../cli" }]
 }

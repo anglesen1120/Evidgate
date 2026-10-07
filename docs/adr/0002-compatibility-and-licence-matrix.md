@@ -87,7 +87,8 @@ npm packages (direct dependencies/devDependencies, root + workspaces):
 | license-checker-rseidelsohn | 5.0.1 | `engines.node >=24` | BSD-3-Clause | https://registry.npmjs.org/license-checker-rseidelsohn/5.0.1 — npm licence scanner for `scripts/licence-scan.sh` (01.7.1-T2); the maintained fork: `license-checker` upstream is archived (last release 2022), a detail the plan row predates |
 | @cyclonedx/cyclonedx-npm | 6.0.1 | `engines.node >=20.18.0` | Apache-2.0 | https://registry.npmjs.org/@cyclonedx/cyclonedx-npm/6.0.1 — npm CycloneDX SBOM for CI artifacts (01.7.1-T4.2) |
 | @evidgate/sdk | 0.0.0 | first-party workspace (private) | First-party (unpublished) | `packages/sdk` — generated from `contracts/openapi.yaml` by `@hey-api/openapi-ts` (01.3.2-T1); ships no third-party code of its own |
-| @evidgate/test-fixtures | 0.0.0 | first-party workspace (private) | First-party (unpublished) | `packages/test-fixtures` — `fixtures/` loaders + golden-file helper (01.6.1-T3); sole dependency is `canonicalize` (row above) |
+| @evidgate/cli | 0.0.0 | first-party workspace (private) | First-party (unpublished) | `packages/cli` — the `evidgate` CLI (04.2.1) and its Ajv 8 contract validator (01.3.2-T2); listed because `packages/test-fixtures` depends on it for the 04.7.1-T3 protocol matrix spec; its third-party dependencies have their own rows |
+| @evidgate/test-fixtures | 0.0.0 | first-party workspace (private) | First-party (unpublished) | `packages/test-fixtures` — `fixtures/` loaders + golden-file helper (01.6.1-T3); dependencies: `canonicalize` (row above) and the first-party `@evidgate/cli` (04.7.1-T3 protocol matrix spec, row above) |
 
 .NET local tools (`.config/dotnet-tools.json`; 01.7.1 — scanned out-of-process, never linked):
 
