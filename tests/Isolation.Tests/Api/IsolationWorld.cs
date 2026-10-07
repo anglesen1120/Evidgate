@@ -100,6 +100,13 @@ public sealed class IsolationOrg
     /// <summary>A pending invite created through <c>POST /v1/orgs/{o}/memberships</c> (no user bound yet).</summary>
     public required Guid PendingInviteMembershipId { get; init; }
 
+    /// <summary>
+    /// Every invite address the org owns: the shared <c>invitee@example.test</c>, plus org A's own
+    /// <c>invitee-a@example.test</c> (org B has only the shared one). The platform-scope check's live
+    /// org-A-only address set (02.9.1-T3.2 AC5, CR2).
+    /// </summary>
+    public required IReadOnlyList<string> InviteEmails { get; init; }
+
     /// <summary>The extra role granted through <c>POST /v1/orgs/{o}/memberships/{m}/roles</c>; the DELETE target.</summary>
     public required IsolationRoleGrant ExtraGrant { get; init; }
 
@@ -163,7 +170,9 @@ public sealed class IsolationOrg
 /// <item>active members — owner SQL (<c>membership</c> + <c>membership_role</c>, as
 /// <c>tests/Identity.IntegrationTests/IdentityTestData.cs</c> does): an invite only becomes
 /// active through 02.3.x's login, which is not merged, so no route can produce an active member;</item>
-/// <item>a pending invite — <c>POST /v1/orgs/{o}/memberships</c>; an extra role grant — <c>POST …/memberships/{m}/roles</c>;</item>
+/// <item>a pending invite — <c>POST /v1/orgs/{o}/memberships</c>; org A additionally gets one invite address
+/// org B never has (<c>invitee-a@example.test</c>, the platform-scope check's live org-A-only address, CR2);
+/// an extra role grant — <c>POST …/memberships/{m}/roles</c>;</item>
 /// <item>test cases — <c>ICaseIdentityService.RegisterDiscoveredAsync</c> in an <c>ITenantScope</c> (no POST route for
 /// cases), synced twice with changed content so every case has two revisions;</item>
 /// <item>suites + revisions, the <c>staging</c> environment revision (the environment row is created by the
@@ -322,13 +331,30 @@ public sealed class IsolationWorld
                 members.Add(await SeedActiveMemberAsync(org, label, codes, roles).ConfigureAwait(false));
             }
 
+            var inviteEmails = new List<string> { "invitee@example.test" };
             var invite = (await SendAsync(
                 HttpMethod.Post,
                 $"/v1/orgs/{org}/memberships",
                 admin,
                 org,
-                new { email = "invitee@example.test", roles = new[] { roles["viewer"] } },
+                new { email = inviteEmails[0], roles = new[] { roles["viewer"] } },
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("id").GetGuid();
+
+            // Org A only (orgIndex 1 = acme): one address no other org owns, so the platform-scope check
+            // (02.9.1-T3.2 AC5) scans a live org-A-only address instead of an always-empty set (CR2). Seeded
+            // through the same invite route as the shared invite above; org B never gets it.
+            if (orgIndex == 1)
+            {
+                const string orgAOnlyInviteEmail = "invitee-a@example.test";
+                await SendAsync(
+                    HttpMethod.Post,
+                    $"/v1/orgs/{org}/memberships",
+                    admin,
+                    org,
+                    new { email = orgAOnlyInviteEmail, roles = new[] { roles["viewer"] } },
+                    HttpStatusCode.Created).ConfigureAwait(false);
+                inviteEmails.Add(orgAOnlyInviteEmail);
+            }
 
             var approver = members.Single(m => m.Label == "release_approver");
             await SendAsync(
@@ -354,6 +380,7 @@ public sealed class IsolationWorld
                 Admin = admin,
                 Members = members,
                 PendingInviteMembershipId = invite,
+                InviteEmails = inviteEmails,
                 ExtraGrant = new IsolationRoleGrant(approver.MembershipId, roles["viewer"]),
                 Projects = seeded,
                 RoleIds = roles,

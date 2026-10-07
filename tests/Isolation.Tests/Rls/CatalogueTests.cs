@@ -33,6 +33,15 @@ namespace Isolation.Tests;
 /// source, as the 02.2.1 catalogue suites (<c>CatalogueTestBase</c>). The rows are never
 /// hand-written here.
 /// </para>
+/// <para>
+/// Two holes the built-in-only probes cannot reach are covered explicitly. CR1: <c>role</c> and
+/// <c>role_permission</c> carry a nullable <c>org_id</c>, so a permissive <c>using (true)</c>
+/// policy would leak one org's custom rows to another; the suite seeds an org-B custom role and
+/// its grant and asserts they are invisible to org A and to a session with no tenant setting, and
+/// visible to org B. SEC2: <c>TRUNCATE</c> is not scoped by row level security at all, so the only
+/// thing that can refuse it is the missing privilege — the suite probes it alongside the
+/// insert/update/delete refusals.
+/// </para>
 /// </summary>
 [Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
@@ -161,6 +170,130 @@ public sealed class CatalogueTests : HarnessTest
     }
 
     /// <summary>
+    /// CR1: the catalogue's <em>custom</em> rows are org-scoped. <c>role</c> and
+    /// <c>role_permission</c> carry a nullable <c>org_id</c> (0010), and the read policy is
+    /// <c>org_id is null or org_id = evidgate.current_org_id()</c> — the built-in-only probes of
+    /// <see cref="ReadableByEveryOrg_NotWritableByApp"/> never read a non-null <c>org_id</c>, so a
+    /// permissive <c>using (true)</c> policy would leak org B's custom role to org A undetected.
+    /// This test seeds one org-B custom role and one org-B grant through the owner seam and asserts
+    /// the read half of the policy: invisible to org A, visible to org B, and — with no tenant
+    /// setting — only the built-ins remain.
+    /// </summary>
+    [Fact]
+    public async Task CustomRoleRows_AreOrgScoped()
+    {
+        await SeedCatalogueAsync();
+        var (roleId, grantId) = await SeedOrgBCustomRoleAsync();
+
+        var failures = new List<string>();
+
+        await CheckCustomRowScopeAsync("public.role", "id::text", roleId, failures);
+        await CheckCustomRowScopeAsync("public.role_permission", "id::text", grantId, failures);
+
+        failures.ShouldBeEmpty(
+            $"the catalogue's custom rows are not scoped to their org:{Environment.NewLine}"
+            + string.Join(Environment.NewLine, failures));
+    }
+
+    /// <summary>
+    /// Seeds org A, org B and one custom role of org B plus one grant of that role, as
+    /// <c>evidgate_owner</c> (the harness's one seeding seam). The values respect the real columns
+    /// and constraints of 0010: <c>role.kind</c> is one of <c>member</c>/<c>service</c>/<c>staff</c>
+    /// (0010:102), <c>is_builtin = (org_id is null)</c> forces <c>false</c> for a tenant row
+    /// (0010:105), the code matches <c>^[a-z][a-z0-9_]*$</c> (0010:91) and the grant's
+    /// <c>permission_code</c> is an existing catalogue code (<c>case:read</c>, 0010:318) so the FK
+    /// holds. The org rows are not referenced by <c>role.org_id</c> today (0010 declares no FK
+    /// there), but the tenant pair is seeded as a real one so a later FK or a policy that joins
+    /// <c>organization</c> still holds.
+    /// </summary>
+    private async Task<(Guid RoleId, Guid GrantId)> SeedOrgBCustomRoleAsync()
+    {
+        await Fixture.SeedAsync(
+            "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
+            [("id", OrgA), ("name", "Org A"), ("slug", "org-a-0291t3")],
+            Token);
+        await Fixture.SeedAsync(
+            "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
+            [("id", OrgB), ("name", "Org B"), ("slug", "org-b-0291t3")],
+            Token);
+
+        var roleId = Guid.NewGuid();
+        await Fixture.SeedAsync(
+            "insert into public.role (id, org_id, code, name, is_builtin, kind) values (@id, @org_id, @code, @name, false, 'member')",
+            [
+                ("id", roleId),
+                ("org_id", OrgB),
+                ("code", "custom_probe_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8]),
+                ("name", "Custom probe role"),
+            ],
+            Token);
+
+        var grantId = Guid.NewGuid();
+        await Fixture.SeedAsync(
+            "insert into public.role_permission (id, org_id, role_id, permission_code) values (@id, @org_id, @role_id, @permission_code)",
+            [
+                ("id", grantId),
+                ("org_id", OrgB),
+                ("role_id", roleId),
+                ("permission_code", "case:read"),
+            ],
+            Token);
+
+        return (roleId, grantId);
+    }
+
+    /// <summary>
+    /// One table's custom-row scope: the org-B row is invisible under org A, visible under org B,
+    /// and gone (only the built-ins remain) with no tenant setting. Every failure names the table.
+    /// </summary>
+    private async Task CheckCustomRowScopeAsync(
+        string table,
+        string keyExpression,
+        Guid orgBKey,
+        List<string> failures)
+    {
+        var expected = new[] { orgBKey.ToString("D", CultureInfo.InvariantCulture) };
+
+        // The built-ins are the reference set the unset-GUC read must reduce to, and their
+        // presence keeps the "only built-ins" assertion from passing on an empty table.
+        var builtIns = await ReadKeysAsync(table, "org_id is null", keyExpression);
+        if (builtIns.Count == 0)
+        {
+            failures.Add($"{table}: no built-in row is visible — the custom-row scope probe would be vacuous");
+        }
+
+        await using (var scopeA = await TenantScope.BeginAsync(Fixture.AppConnectionString, OrgA))
+        {
+            var underA = await ReadOrgKeysAsync(scopeA, table, keyExpression, OrgB);
+            if (underA.Count != 0)
+            {
+                failures.Add(
+                    $"{table}: org {OrgA} sees org {OrgB}'s custom row(s) [{Keys(underA)}] — the catalogue read is not org-scoped");
+            }
+        }
+
+        await using (var scopeB = await TenantScope.BeginAsync(Fixture.AppConnectionString, OrgB))
+        {
+            var underB = await ReadOrgKeysAsync(scopeB, table, keyExpression, OrgB);
+            if (!underB.SequenceEqual(expected))
+            {
+                failures.Add(
+                    $"{table}: org {OrgB} does not see its own custom row [{Keys(underB)}], expected [{Keys(expected)}]");
+            }
+        }
+
+        await using (var unset = await TenantScope.BeginAsync(Fixture.AppConnectionString))
+        {
+            var visible = await ReadAllKeysAsync(unset, table, keyExpression);
+            if (!visible.SequenceEqual(builtIns))
+            {
+                failures.Add(
+                    $"{table}: with no tenant setting the visible rows are [{Keys(visible)}], expected only the built-ins [{Keys(builtIns)}]");
+            }
+        }
+    }
+
+    /// <summary>
     /// Re-applies the seed block of <c>migrations/0010_identity_permission_catalogue.sql</c> as
     /// <c>evidgate_owner</c> — the same step, read from the same source, as the 02.2.1 catalogue
     /// suites (<c>tests/Identity.IntegrationTests/CatalogueTestBase.cs</c>). The rows are never
@@ -219,8 +352,13 @@ public sealed class CatalogueTests : HarnessTest
             ("key", before[0]));
         AssertRefused(table, "DELETE of a built-in row", delete, silentAllowed: true, failures);
 
+        // SEC2: TRUNCATE is not scoped by row level security, so the only refusal available is the
+        // missing privilege — 0010 never grants it and 0001's default privileges do not include it.
+        var truncate = await RefusalAsync("truncate public.permission");
+        AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
+
         await AssertUnchangedAsync(table, "true", "code", before, failures);
-        _output.WriteLine("{0}: insert/update/delete refused; {1} built-in row(s) unchanged", table, before.Count);
+        _output.WriteLine("{0}: insert/update/delete/truncate refused; {1} built-in row(s) unchanged", table, before.Count);
     }
 
     /// <summary>
@@ -250,8 +388,13 @@ public sealed class CatalogueTests : HarnessTest
             ("key", before[0]));
         AssertRefused(table, "DELETE of a built-in row", delete, silentAllowed: true, failures);
 
+        // SEC2: TRUNCATE is not scoped by row level security, so the only refusal available is the
+        // missing privilege — 0010 never grants it and 0001's default privileges do not include it.
+        var truncate = await RefusalAsync("truncate public.role");
+        AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
+
         await AssertUnchangedAsync(table, "org_id is null", "id::text", before, failures);
-        _output.WriteLine("{0}: insert/update/delete refused; {1} built-in row(s) unchanged", table, before.Count);
+        _output.WriteLine("{0}: insert/update/delete/truncate refused; {1} built-in row(s) unchanged", table, before.Count);
     }
 
     /// <summary>
@@ -288,8 +431,13 @@ public sealed class CatalogueTests : HarnessTest
             ("key", before[0]));
         AssertRefused(table, "DELETE of a built-in row", delete, silentAllowed: true, failures);
 
+        // SEC2: TRUNCATE is not scoped by row level security, so the only refusal available is the
+        // missing privilege — 0010 never grants it and 0001's default privileges do not include it.
+        var truncate = await RefusalAsync("truncate public.role_permission");
+        AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
+
         await AssertUnchangedAsync(table, "org_id is null", "id::text", before, failures);
-        _output.WriteLine("{0}: insert/update/delete refused; {1} built-in row(s) unchanged", table, before.Count);
+        _output.WriteLine("{0}: insert/update/delete/truncate refused; {1} built-in row(s) unchanged", table, before.Count);
     }
 
     /// <summary>
@@ -383,6 +531,24 @@ public sealed class CatalogueTests : HarnessTest
         await using var scope = await TenantScope.BeginAsync(Fixture.AppConnectionString, OrgA);
         return await ReadKeysAsync(scope, table, builtInWhere, keyExpression);
     }
+
+    /// <summary>The keys of one org's rows, as the app role sees them under the scope's tenant setting.</summary>
+    private static async Task<IReadOnlyList<string>> ReadOrgKeysAsync(
+        TenantScope scope,
+        string table,
+        string keyExpression,
+        Guid orgId) =>
+        await scope.ScalarAsync<string[]>(
+            $"select coalesce(array_agg({keyExpression} order by {keyExpression}), '{{}}'::text[]) from {table} where org_id = @org_id",
+            ("org_id", orgId));
+
+    /// <summary>Every key the app role can see in the table, under the scope's tenant setting.</summary>
+    private static async Task<IReadOnlyList<string>> ReadAllKeysAsync(
+        TenantScope scope,
+        string table,
+        string keyExpression) =>
+        await scope.ScalarAsync<string[]>(
+            $"select coalesce(array_agg({keyExpression} order by {keyExpression}), '{{}}'::text[]) from {table}");
 
     private static async Task<IReadOnlyList<string>> ReadKeysAsync(
         TenantScope scope,

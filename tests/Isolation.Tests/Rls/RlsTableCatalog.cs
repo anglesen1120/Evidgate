@@ -41,7 +41,7 @@ internal sealed record RlsPolicy(
 internal sealed record RlsRole(string Name, bool BypassRls, bool Superuser);
 
 /// <summary>
-/// One SECURITY DEFINER function of the resolver schemas, as <c>pg_proc</c> describes it.
+/// One SECURITY DEFINER function of any non-system schema, as <c>pg_proc</c> describes it.
 /// <see cref="ResultColumns"/> is the OUT-column list (the <c>proargmodes</c> entries of mode
 /// <c>t</c>): the only thing a resolver may return is the documented tuple (00 §5.4.8, TL T1).
 /// </summary>
@@ -64,11 +64,14 @@ internal sealed record ResolverFunction(
             .Any(setting => string.Equals(setting, "search_path=\"\"", StringComparison.Ordinal));
 
     /// <summary>
-    /// A resolver is the pre-tenant function that returns the tenant tuple: it has an
-    /// <c>org_id</c> OUT column. The owner sweeps of <c>evidgate</c> return a count or a set of
-    /// ids and are not resolvers, so the two are told apart by the catalogue, not by a list.
+    /// A resolver is a <c>SECURITY DEFINER</c> function of the <c>evidgate_resolve</c> schema —
+    /// the pre-tenant surface (00 §5.4.8). The schema decides, not the result shape: a definer
+    /// that returns a different tuple is still a resolver and must be registered with its exact
+    /// tuple, so a resolver added by a later migration cannot slip past by returning something
+    /// else. The owner sweeps of <c>evidgate</c> live outside the schema and are told apart by
+    /// the catalogue, not by a list.
     /// </summary>
-    internal bool IsResolver => ResultColumns.Contains("org_id", StringComparer.Ordinal);
+    internal bool IsResolver => string.Equals(Schema, "evidgate_resolve", StringComparison.Ordinal);
 }
 
 /// <summary>
@@ -214,11 +217,13 @@ internal static class RlsTableCatalog
     }
 
     /// <summary>
-    /// Every SECURITY DEFINER function of the resolver schemas (<c>evidgate_resolve</c>) and of
-    /// the helper/table schemas (<c>evidgate</c>, <c>public</c>), with its owner, its pinned
+    /// Every SECURITY DEFINER function of every non-system schema, with its owner, its pinned
     /// configuration, its OUT columns and the two EXECUTE facts the suite asserts. The
-    /// enumeration is catalogue-driven, so a resolver added by a later migration is covered the
-    /// moment it lands.
+    /// enumeration is catalogue-driven and schema-wide, so a definer added by a later migration
+    /// is covered the moment it lands: the definers of <c>evidgate_resolve</c> are the resolver
+    /// surface, and every definer outside it must be registered on the sweep allowlist. A
+    /// schema filter narrower than "every non-system schema" is exactly how a definer in
+    /// <c>evidgate_resolve</c> returning a different tuple escaped the comparison (SEC3).
     /// </summary>
     internal static async Task<IReadOnlyList<ResolverFunction>> ReadResolversAsync(
         NpgsqlConnection connection,
@@ -241,7 +246,8 @@ internal static class RlsTableCatalog
               join pg_catalog.pg_namespace n on n.oid = p.pronamespace
               join pg_catalog.pg_roles r on r.oid = p.proowner
              where p.prosecdef
-               and n.nspname in ('evidgate_resolve', 'evidgate', 'public')
+               and n.nspname <> 'information_schema'
+               and n.nspname not like 'pg\_%'
              order by n.nspname, p.proname
             """;
 
@@ -298,6 +304,27 @@ internal static class RlsTableCatalog
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "select has_table_privilege(@role::name, @table, @privilege)";
+        command.Parameters.AddWithValue("role", role);
+        command.Parameters.AddWithValue("table", table);
+        command.Parameters.AddWithValue("privilege", privilege);
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken))!;
+    }
+
+    /// <summary>
+    /// True when the role holds the privilege on any column of the relation. A column-level
+    /// <c>GRANT</c> is independent of the table-level one — <c>has_table_privilege</c> stays
+    /// false — so a read check that only asks the table would miss
+    /// <c>grant select (id) on public.user to evidgate_app</c> (SEC5).
+    /// </summary>
+    internal static async Task<bool> HasAnyColumnPrivilegeAsync(
+        NpgsqlConnection connection,
+        string role,
+        string table,
+        string privilege,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select has_any_column_privilege(@role::name, @table, @privilege)";
         command.Parameters.AddWithValue("role", role);
         command.Parameters.AddWithValue("table", table);
         command.Parameters.AddWithValue("privilege", privilege);

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Evidgate.Testing;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
@@ -22,6 +23,12 @@ namespace Isolation.Tests;
 /// permissive, so an owner read would prove nothing about the path the API uses. The setup
 /// assertion pins the role, so a fixture that ever connected as the owner fails loudly instead of
 /// turning the suite into a false pass.
+/// </para>
+/// <para>
+/// The exception list's kinds are shape-checked against <c>pg_catalog</c>, not trusted: a
+/// <c>platform</c> entry must have no <c>org_id</c> column, a <c>catalogue</c> entry a nullable
+/// one, and the <c>mechanism</c> kind is pinned to the three 01 tables — so a kind is a claim the
+/// deployed schema verifies, not a label the suite believes.
 /// </para>
 /// </summary>
 [Collection(HarnessSuite.Name)]
@@ -49,8 +56,39 @@ public sealed class RlsIsolationTests : HarnessTest
         "public.policy_revision",
     ];
 
-    /// <summary>The two runtime roles AC4 names: neither may carry <c>BYPASSRLS</c> or <c>SUPERUSER</c> (DECISIONS F5).</summary>
-    private static readonly string[] RuntimeRoles = ["evidgate_app", "evidgate_operator"];
+    /// <summary>
+    /// The four <c>evidgate_*</c> roles <c>migrations/0001_foundation_roles.sql</c> creates: none
+    /// may carry <c>BYPASSRLS</c> or <c>SUPERUSER</c> (DECISIONS F5). The owner is included
+    /// because FORCE row level security only binds a non-bypass owner — an owner with
+    /// <c>BYPASSRLS</c> would read every tenant's rows through its own policy.
+    /// </summary>
+    private static readonly string[] EvidgateRoles = ["evidgate_owner", "evidgate_app", "evidgate_operator", "evidgate_worker_sched"];
+
+    /// <summary>
+    /// The three 01 mechanism tables the exception list's <c>mechanism</c> kind is pinned to
+    /// (00 §5.3, migrations 0006-0008). A fourth mechanism entry is a review decision, not a
+    /// silent exemption, so it fails the suite by name.
+    /// </summary>
+    private static readonly string[] PinnedMechanismTables = ["public.schema_migration", "public.outbox", "public.task"];
+
+    /// <summary>
+    /// SEC2: base-table privileges the runtime roles may legitimately hold beyond DML. Empty by
+    /// construction — <c>0001_foundation_roles.sql:90-95</c> grants <c>evidgate_app</c> only
+    /// SELECT/INSERT/UPDATE/DELETE and <c>evidgate_operator</c> only SELECT, and
+    /// <c>0001_foundation_roles.sql:112-113</c> revokes TRUNCATE/REFERENCES/TRIGGER on the journal,
+    /// so no grant of TRUNCATE, REFERENCES or TRIGGER exists anywhere in <c>migrations/</c>. An
+    /// entry added here must cite the migration that grants it.
+    /// </summary>
+    private static readonly (string Table, string Role, string Privilege)[] TablePrivilegeAllowlist = [];
+
+    /// <summary>
+    /// SEC6: relations of kind view/materialized view/foreign table that <c>evidgate_app</c> may
+    /// SELECT. Empty by construction — no migration creates a view, materialized view or foreign
+    /// table (a scan of <c>migrations/</c> for <c>create view</c>/<c>create materialized view</c>/
+    /// <c>create foreign table</c> returns nothing). A view added here must carry
+    /// <c>security_invoker=true</c>, asserted below.
+    /// </summary>
+    private static readonly string[] SelectableRelationAllowlist = [];
 
     private readonly ITestOutputHelper _output;
 
@@ -200,10 +238,13 @@ public sealed class RlsIsolationTests : HarnessTest
     /// AC4 / DECISIONS F5 / 00 §5.4.7: <c>relrowsecurity</c> AND <c>relforcerowsecurity</c> are
     /// true on every business table (every table the exception list does not mark
     /// <c>mechanism</c> — platform and catalogue tables included), each carries at least one
-    /// policy, and neither <c>evidgate_app</c> nor <c>evidgate_operator</c> carries
-    /// <c>BYPASSRLS</c> or <c>SUPERUSER</c>. The exception list is asserted exactly: a table that
-    /// is neither org-scoped nor listed fails, so a forgotten policy cannot hide behind an
-    /// unlisted table.
+    /// policy, and none of the four <c>evidgate_*</c> roles of 0001 carries <c>BYPASSRLS</c> or
+    /// <c>SUPERUSER</c> — nor is any of them a member, directly or transitively, of a role that
+    /// does. The exception list is asserted exactly: a table that is neither org-scoped nor
+    /// listed fails, and each kind is shape-checked against <c>pg_catalog</c> (platform: no
+    /// <c>org_id</c>; catalogue: nullable <c>org_id</c>; mechanism: pinned to the three 01
+    /// tables), so a forgotten policy cannot hide behind an unlisted table and a kind cannot
+    /// drift from the schema.
     /// </summary>
     [Fact]
     public async Task ForcedRls_And_NoBypassRls()
@@ -332,7 +373,58 @@ public sealed class RlsIsolationTests : HarnessTest
                 + "must self-scope to the current org (TL T4)");
         }
 
-        foreach (var roleName in RuntimeRoles)
+        // SEC4: the exception list's kinds are claims about the deployed schema, not trusted
+        // labels. A `platform` entry must have no org_id column at all, a `catalogue` entry must
+        // carry a nullable org_id, and the `mechanism` kind is pinned to the three 01 tables — so
+        // a kind that drifts from the schema, or a fourth mechanism table, fails here by name.
+        var orgIdNullability = await ReadOrgIdNullabilityAsync(connection, Token);
+        var existingTables = tables.Select(table => table.Name).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var entry in exceptions)
+        {
+            if (!existingTables.Contains(entry.Table))
+            {
+                continue; // inert until the migration that creates it lands (contracts/rls-exceptions.txt:11-12)
+            }
+
+            if (string.Equals(entry.Kind, "platform", StringComparison.Ordinal)
+                && orgIdNullability.ContainsKey(entry.Table))
+            {
+                failures.Add(
+                    $"{entry.Table}: listed as 'platform' but carries an org_id column — a platform table is "
+                    + "outside the org scope and must have no org_id (contracts/rls-exceptions.txt:20-25)");
+            }
+
+            if (string.Equals(entry.Kind, "catalogue", StringComparison.Ordinal)
+                && (!orgIdNullability.TryGetValue(entry.Table, out var orgIdNotNull) || orgIdNotNull))
+            {
+                failures.Add(
+                    $"{entry.Table}: listed as 'catalogue' but its org_id is "
+                    + (orgIdNullability.ContainsKey(entry.Table) ? "NOT NULL" : "absent")
+                    + " — a catalogue table carries a nullable org_id (built-in rows are NULL) "
+                    + "(contracts/rls-exceptions.txt:26-30)");
+            }
+        }
+
+        var mechanismEntries = exceptions
+            .Where(entry => string.Equals(entry.Kind, "mechanism", StringComparison.Ordinal))
+            .Select(entry => entry.Table)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var extra in mechanismEntries.Except(PinnedMechanismTables, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{extra}: listed as 'mechanism' but is not one of the three 01 mechanism tables "
+                + $"[{string.Join(", ", PinnedMechanismTables)}] — the mechanism kind is pinned "
+                + "(contracts/rls-exceptions.txt:31-36)");
+        }
+
+        foreach (var missing in PinnedMechanismTables.Except(mechanismEntries, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{missing}: the pinned mechanism table is not listed as 'mechanism' in {RlsExceptionList.PathInRepo}");
+        }
+
+        foreach (var roleName in EvidgateRoles)
         {
             var role = roles.SingleOrDefault(candidate => string.Equals(candidate.Name, roleName, StringComparison.Ordinal));
             if (role is null)
@@ -350,6 +442,21 @@ public sealed class RlsIsolationTests : HarnessTest
             {
                 failures.Add($"{roleName}: rolsuper is true — a superuser skips every policy (DECISIONS F5)");
             }
+        }
+
+        // SEC1: a membership is the other way a policy is defeated — a role that inherits a
+        // bypass role skips every policy even though its own rolbypassrls is false
+        // (0001_foundation_roles.sql:42-79). The Testcontainers bootstrap superuser is not an
+        // evidgate_* role, so it is out of scope by construction.
+        (await CountBypassRolesAsync(connection, Token)).ShouldBeGreaterThan(
+            0,
+            "no role carries SUPERUSER or BYPASSRLS: the membership check would be vacuous");
+
+        foreach (var reach in await ReadBypassRoleReachAsync(connection, Token))
+        {
+            failures.Add(
+                $"{reach}: an evidgate role is a member (directly or transitively) of a role with SUPERUSER or "
+                + "BYPASSRLS — the membership defeats every policy (DECISIONS F5)");
         }
 
         // The scan is not vacuous: the M1 business tables were judged, the platform and catalogue
@@ -384,6 +491,79 @@ public sealed class RlsIsolationTests : HarnessTest
                 kindByTable.GetValueOrDefault(table.Name) ?? "tenant");
         }
     }
+
+    /// <summary>
+    /// SEC2 / SEC6 (02.9.1-T3, 00 §5.4.3 least privilege): the runtime roles hold no privilege
+    /// that widens the tenant boundary beyond DML. <c>evidgate_app</c> and <c>evidgate_operator</c>
+    /// hold neither <c>TRUNCATE</c>, <c>REFERENCES</c> nor <c>TRIGGER</c> on any base table, and no
+    /// view, materialized view or foreign table is SELECTable by <c>evidgate_app</c> — a relation
+    /// that reads across the tenant boundary without a policy is a hole the table scan cannot see.
+    /// </summary>
+    [Fact]
+    public async Task RoleAndPrivilege_Hardening()
+    {
+        await using var connection = await Fixture.AppDataSource.OpenConnectionAsync(Token);
+
+        var tables = await RlsTableCatalog.ReadTablesAsync(connection, Token);
+        tables.ShouldNotBeEmpty(
+            "the catalogue yielded no base table: the privilege scan would prove nothing about the migrated schema");
+
+        var failures = new List<string>();
+
+        var violations = await ReadTablePrivilegeViolationsAsync(connection, Token);
+        foreach (var (table, role, privilege) in violations)
+        {
+            if (TablePrivilegeAllowlist.Contains((table, role, privilege)))
+            {
+                continue;
+            }
+
+            failures.Add(
+                $"{table}: {role} holds {privilege} — the runtime roles must hold no privilege beyond DML "
+                + "(00 §5.4.3); a legitimate exception must be allowlisted with its migration citation");
+        }
+
+        var relations = await ReadRelationFactsAsync(connection, Token);
+        relations.ShouldContain(
+            facts => facts.Kind is "r" or "p",
+            "the relation scan found no base table: the view/foreign-table scan would prove nothing about the migrated schema");
+
+        foreach (var relation in relations.Where(facts => facts.Kind is "v" or "m" or "f"))
+        {
+            if (SelectableRelationAllowlist.Contains(relation.Name, StringComparer.Ordinal))
+            {
+                if (string.Equals(relation.Kind, "v", StringComparison.Ordinal)
+                    && !relation.Options.Contains("security_invoker=true", StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        $"{relation.Name}: allowlisted view must carry security_invoker=true so it reads with the "
+                        + "caller's privileges, not the view owner's");
+                }
+
+                continue;
+            }
+
+            if (relation.TableSelect || relation.ColumnSelect)
+            {
+                failures.Add(
+                    $"{relation.Name}: relation of kind '{relation.Kind}' is SELECTable by evidgate_app — a view, "
+                    + "materialized view or foreign table bypasses the table-level policy scan (00 §5.4.7)");
+            }
+        }
+
+        failures.ShouldBeEmpty(
+            $"the runtime roles hold a privilege that widens the tenant boundary:{Environment.NewLine}"
+            + string.Join(Environment.NewLine, failures));
+
+        _output.WriteLine(
+            "privilege scan: {0} base table(s), {1} relation(s) of every kind, {2} violation(s)",
+            tables.Count,
+            relations.Count,
+            violations.Count);
+    }
+
+    /// <summary>One relation of the live catalogue, with the facts the SEC6 scan needs.</summary>
+    private sealed record RelationFacts(string Name, string Kind, string Options, bool TableSelect, bool ColumnSelect);
 
     /// <summary>
     /// The tenant set of the live database, discovered exactly as the composite-FK suite discovers
@@ -429,4 +609,167 @@ public sealed class RlsIsolationTests : HarnessTest
 
     private static string Ids(IReadOnlyList<Guid> ids) =>
         string.Join(", ", ids.Select(id => id.ToString("D", CultureInfo.InvariantCulture)));
+
+    /// <summary>
+    /// The <c>org_id</c> nullability of every base table that carries the column, keyed by
+    /// <c>schema.table</c>; the value is <c>true</c> when the column is NOT NULL. A table without
+    /// the column is absent. Read from <c>pg_attribute</c>, so the exception list's kinds are
+    /// checked against the deployed schema rather than trusted.
+    /// </summary>
+    private static async Task<IReadOnlyDictionary<string, bool>> ReadOrgIdNullabilityAsync(
+        NpgsqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            select n.nspname || '.' || c.relname,
+                   a.attnotnull
+              from pg_catalog.pg_class c
+              join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+              join pg_catalog.pg_attribute a on a.attrelid = c.oid
+             where c.relkind in ('r', 'p')
+               and n.nspname <> 'information_schema'
+               and n.nspname not like 'pg\_%'
+               and a.attname = 'org_id'
+               and a.attnum > 0
+               and not a.attisdropped
+            """;
+
+        var nullability = new Dictionary<string, bool>(StringComparer.Ordinal);
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            nullability[reader.GetString(0)] = reader.GetBoolean(1);
+        }
+
+        return nullability;
+    }
+
+    /// <summary>
+    /// Every <c>evidgate_*</c> role that is a member, directly or transitively, of a role carrying
+    /// <c>SUPERUSER</c> or <c>BYPASSRLS</c>, as <c>member -&gt; target</c>. The recursion walks
+    /// <c>pg_auth_members</c> so a two-hop membership cannot hide behind a role whose own
+    /// <c>rolbypassrls</c> is false (0001_foundation_roles.sql:42-79).
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> ReadBypassRoleReachAsync(
+        NpgsqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            with recursive reach(roleid, member) as (
+              select m.roleid, m.member from pg_catalog.pg_auth_members m
+              union
+              select r.roleid, a.member
+                from pg_catalog.pg_auth_members r
+                join reach a on a.roleid = r.member
+            )
+            select distinct mem.rolname || ' -> ' || tgt.rolname
+              from reach
+              join pg_catalog.pg_roles mem on mem.oid = reach.member
+              join pg_catalog.pg_roles tgt on tgt.oid = reach.roleid
+             where mem.rolname like 'evidgate\_%'
+               and (tgt.rolsuper or tgt.rolbypassrls)
+             order by 1
+            """;
+
+        var reach = new List<string>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            reach.Add(reader.GetString(0));
+        }
+
+        return reach;
+    }
+
+    /// <summary>The number of roles that carry <c>SUPERUSER</c> or <c>BYPASSRLS</c> — the non-vacuity guard of the membership scan.</summary>
+    private static async Task<int> CountBypassRolesAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*)::int from pg_catalog.pg_roles where rolsuper or rolbypassrls";
+        return (int)(await command.ExecuteScalarAsync(cancellationToken))!;
+    }
+
+    /// <summary>
+    /// SEC2: every (base table, runtime role, privilege) triple where the role holds
+    /// <c>TRUNCATE</c>, <c>REFERENCES</c> or <c>TRIGGER</c>. The scan is catalogue-driven, so a
+    /// table added by a later migration is covered the moment it lands.
+    /// </summary>
+    private static async Task<IReadOnlyList<(string Table, string Role, string Privilege)>> ReadTablePrivilegeViolationsAsync(
+        NpgsqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            select n.nspname || '.' || c.relname,
+                   r.role_name,
+                   p.privilege
+              from pg_catalog.pg_class c
+              join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+              cross join (values ('evidgate_app'), ('evidgate_operator')) as r(role_name)
+              cross join (values ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) as p(privilege)
+             where c.relkind in ('r', 'p')
+               and n.nspname <> 'information_schema'
+               and n.nspname not like 'pg\_%'
+               and has_table_privilege(r.role_name::name, c.oid, p.privilege)
+             order by 1, 2, 3
+            """;
+
+        var violations = new List<(string Table, string Role, string Privilege)>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            violations.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// SEC6: every relation of a non-system schema with its kind, its <c>reloptions</c> and
+    /// whether <c>evidgate_app</c> can SELECT it (table-level, or any column for a view or
+    /// foreign table). The scan is catalogue-driven, so a view added by a later migration is
+    /// covered the moment it lands.
+    /// </summary>
+    private static async Task<IReadOnlyList<RelationFacts>> ReadRelationFactsAsync(
+        NpgsqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            select n.nspname || '.' || c.relname,
+                   c.relkind::text,
+                   coalesce(array_to_string(c.reloptions, ','), ''),
+                   has_table_privilege('evidgate_app', c.oid, 'SELECT'),
+                   case when c.relkind in ('v', 'f')
+                        then has_any_column_privilege('evidgate_app', c.oid, 'SELECT')
+                        else false
+                   end
+              from pg_catalog.pg_class c
+              join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+             where c.relkind in ('r', 'p', 'v', 'm', 'f')
+               and n.nspname <> 'information_schema'
+               and n.nspname not like 'pg\_%'
+             order by 1
+            """;
+
+        var relations = new List<RelationFacts>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            relations.Add(new RelationFacts(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetBoolean(3),
+                reader.GetBoolean(4)));
+        }
+
+        return relations;
+    }
 }

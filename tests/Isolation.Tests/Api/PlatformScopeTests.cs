@@ -18,7 +18,9 @@ namespace Isolation.Tests.Api;
 /// The world seeds no <c>session</c> row (02.3.2 is not merged, see <see cref="IsolationWorld.NotYetBuildable"/>),
 /// so the session half of AC5 is carried by check 1: a session route appearing in the spec or on the host fails
 /// here. The member addresses deliberately collide between the two orgs (the same local text, 02 §7), so check 3
-/// scans for org-A addresses org B does not also own; its user-id half is strict.
+/// scans for org-A addresses org B does not also own: org A's own pending invite
+/// (<c>invitee-a@example.test</c>, seeded by <see cref="IsolationWorld"/>) is the live org-A-only address, and
+/// the set is asserted non-empty so the branch cannot pass vacuously; its user-id half is strict.
 /// </remarks>
 [Collection(ApiIsolationSuite.Name)]
 [Trait("Category", "Docker")]
@@ -94,7 +96,11 @@ public sealed class PlatformScopeTests(ApiIsolationFixture fixture)
         walks.Count.ShouldBeGreaterThan(0, "no list route to walk");
         var foreignUserIds = world.Acme.Users.Select(user => user.UserId.ToString("D")).ToList();
         var foreignOnlyEmails = world.Acme.Users.Select(user => user.Email)
-            .Except(world.Acme2.Users.Select(user => user.Email), StringComparer.OrdinalIgnoreCase).ToList();
+            .Concat(world.Acme.InviteEmails)
+            .Except(world.Acme2.Users.Select(user => user.Email).Concat(world.Acme2.InviteEmails), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        foreignOnlyEmails.ShouldNotBeEmpty(
+            "the world seeds no address org A owns and org B does not, so the address half of check 3 would pass vacuously");
         foreach (var walk in walks)
         {
             var (_, failure, pages) = await runner.WalkAsync(walk.Caller, walk.Url, walk.IdField);
