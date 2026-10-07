@@ -44,6 +44,12 @@ export interface CommandDefinition {
   readonly options?: ParseArgsOptionsConfig;
   /** Usage placeholder for the command's positional arguments, e.g. `<file>`. */
   readonly positionals?: string;
+  /**
+   * Optional pre-flight check `main` runs after `resolveConfig` and BEFORE the
+   * `--verbose` config dump, so a command can refuse an unusable configuration without
+   * that dump echoing the offending value (04.2.4-T2 `quickstart` project guard).
+   */
+  readonly validateConfig?: (config: ResolvedConfig) => void;
   readonly run: (context: CommandContext) => Promise<ExitCode>;
 }
 

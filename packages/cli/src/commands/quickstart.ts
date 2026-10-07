@@ -11,7 +11,7 @@
 // dash) is refused as `invalid_config` and never echoed.
 import { lstatSync } from 'node:fs';
 import { mkdir, open, realpath } from 'node:fs/promises';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { CliError } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
@@ -52,6 +52,11 @@ export const quickstartCommand: CommandDefinition = {
   summary: 'print a CI recipe for this project',
   requireToken: false,
   options: { format: { type: 'string' }, write: { type: 'string' } },
+  // Runs before `main`'s `--verbose` dump, so an unrenderable project is refused
+  // without that dump echoing the value (04.2.4 §8).
+  validateConfig: (config) => {
+    readProject(config.project);
+  },
   run: async ({ config, io, values }) => {
     const format = readFormat(values.format);
     const project = readProject(config.project);
@@ -194,26 +199,31 @@ ${npx(version, 'manifests upload --file evidgate-manifest.json')}
 
 /**
  * Writes `text` to `target`, which must resolve inside the current working directory.
- * The lexical check refuses a `..` escape; the `realpath` check of the nearest existing
- * parent refuses a symlinked parent that points outside. The file is created with the
- * exclusive `wx` flag (never overwriting) and mode 0o644, and missing parent
+ * The escape check resolves symlinks on both sides — `realpath(cwd)` and the realpath of
+ * the nearest existing parent of the target — so a `..` escape and a symlinked parent
+ * that points outside are both refused. Comparing the raw `resolve` output against `cwd`
+ * would wrongly reject a path that reaches the cwd through a symlink alias (macOS
+ * `/tmp` → `/private/tmp`), so only the realpath comparison decides. The file is created
+ * with the exclusive `wx` flag (never overwriting) and mode 0o644, and missing parent
  * directories inside the cwd are created. Returns the path relative to the cwd.
  */
 async function writeTemplate(target: string, text: string): Promise<string> {
   const cwd = process.cwd();
   const resolved = resolve(cwd, target);
-  if (!resolved.startsWith(cwd + sep)) {
-    throw usageError('--write must be inside the current working directory');
-  }
+  const parent = dirname(resolved);
+  const existing = nearestExisting(parent);
   const realCwd = await realpath(cwd);
-  const realParent = await realpath(nearestExisting(dirname(resolved)));
-  if (realParent !== realCwd && !realParent.startsWith(realCwd + sep)) {
+  const realExisting = await realpath(existing);
+  if (realExisting !== realCwd && !realExisting.startsWith(realCwd + sep)) {
     throw usageError('--write must be inside the current working directory');
   }
-  await mkdir(dirname(resolved), { recursive: true });
+  // The real path of the target: the existing ancestor resolved through symlinks plus
+  // the not-yet-created tail, so `wrote <path>` is correct even through an alias.
+  const realTarget = join(realExisting, relative(existing, resolved));
+  await mkdir(dirname(realTarget), { recursive: true });
   let handle;
   try {
-    handle = await open(resolved, 'wx', 0o644);
+    handle = await open(realTarget, 'wx', 0o644);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       throw usageError('file exists');
@@ -225,7 +235,7 @@ async function writeTemplate(target: string, text: string): Promise<string> {
   } finally {
     await handle.close();
   }
-  return relative(cwd, resolved);
+  return relative(realCwd, realTarget);
 }
 
 /**

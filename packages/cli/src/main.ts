@@ -101,6 +101,9 @@ export async function main(
       flags: toConfigFlags(parsed.values),
       requireToken: resolved.command.requireToken,
     });
+    // A command's own pre-flight check runs before the `--verbose` dump, so a refused
+    // configuration is never echoed by that dump (04.2.4-T2 `quickstart`).
+    resolved.command.validateConfig?.(config);
     if (config.verbose) {
       output.stderr(prefixStderrLines(`${formatConfigForVerbose(config)}\n`));
     }

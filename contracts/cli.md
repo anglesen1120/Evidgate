@@ -26,7 +26,11 @@ holds only the process-level contract.
 Command registry: a command is one `CommandDefinition` entry — `name`
 (space-separated words, e.g. `config check`), `summary`, `requireToken`, an
 optional `options` (node:util `parseArgs` option config, merged with the global
-options for that command) and an optional `positionals` usage string. The
+options for that command), an optional `positionals` usage string and an
+optional `validateConfig(config)` pre-flight check. `main` calls
+`validateConfig` right after `resolveConfig` and before the `--verbose` config
+dump, so a command can refuse an unusable configuration without that dump
+echoing the offending value (04.2.4-T2 `quickstart` project guard). The
 dispatcher resolves the command by the longest registered name that prefixes the
 positionals and passes the remaining positionals; `CommandContext` is
 `{ config, io, env, values, positionals, deps, maskSecret }`. `deps` is the
@@ -402,7 +406,9 @@ Options:
 Project guard: the resolved project must match
 `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`. A value that does not match exits 3
 `invalid_config` with `invalid configuration: EVIDGATE_PROJECT (or --project):
-not renderable in a CI template`. The value is never echoed, so a project name
+not renderable in a CI template`. The guard runs as the command's
+`validateConfig` pre-flight check (§1), before `main`'s `--verbose` config dump,
+so the value is never echoed — not even under `--verbose` — and a project name
 carrying YAML, a GitHub `${{ }}` expression or shell metacharacters cannot reach
 the rendered file.
 
@@ -447,14 +453,15 @@ placeholders as the GitHub template.
 
 `--write <path>`:
 
-- the path must resolve inside the current working directory: after
-  `path.resolve`, and after `realpath` of the nearest existing parent, it must
-  still be inside `realpath(cwd)`. A `..` escape or a symlinked parent that
-  escapes exits 3 `usage`;
+- containment is decided only by comparing `realpath` of the nearest existing
+  parent of the target against `realpath(cwd)`: the target must be that
+  directory or sit under it. A `..` escape or a symlinked parent that points
+  outside exits 3 `usage`; an absolute path that reaches the cwd through a
+  symlink alias (macOS `/tmp` → `/private/tmp`) is accepted;
 - missing parent directories inside cwd are created (`mkdir -p`);
-- the file is created with flag `wx` (exclusive — an existing file exits 3
-  `usage` `file exists`) and mode `0o644`;
-- stdout prints `wrote <relative path>`.
+- the file is created at the realpath'd target with flag `wx` (exclusive — an
+  existing file exits 3 `usage` `file exists`) and mode `0o644`;
+- stdout prints `wrote <relative path>` (relative to `realpath(cwd)`).
 
 Without `--write`, the template goes to stdout and nothing else is printed.
 
