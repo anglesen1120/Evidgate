@@ -33,6 +33,9 @@
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
     <!-- 07.1.1-T1: the policy revision store and its EF write model run through the same host and database. -->
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Policy\Evidgate.Modules.Policy.csproj" />
+    <!-- 04.7.1-T2: the ingestion capability store, negotiator and first-send seam run through the same host and database. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion\Evidgate.Modules.Ingestion.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
     <!-- 02.1.1-T2: the endpoint suites drive Program (ApiHost) through WebApplicationFactory. -->
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
