@@ -28,9 +28,13 @@ optional `options` (node:util `parseArgs` option config, merged with the global
 options for that command) and an optional `positionals` usage string. The
 dispatcher resolves the command by the longest registered name that prefixes the
 positionals and passes the remaining positionals; `CommandContext` is
-`{ config, io, env, values, positionals }`. Adding a command is one registry
-entry, never a dispatcher edit. Help column width is computed from the longest
-command name + 2.
+`{ config, io, env, values, positionals, deps, maskSecret }`. `deps` is the
+transport/back-off seam `main` forwards from its optional 4th argument
+(`ExchangeDeps`: `fetch`, `sleep`); `maskSecret` writes a raw
+`::add-mask::<value>` line to stdout, only for a registered secret without a
+CR/LF (the redacting writer would otherwise turn the mask into `[REDACTED]`).
+Adding a command is one registry entry, never a dispatcher edit. Help column
+width is computed from the longest command name + 2.
 
 ## 2. Exit codes
 
@@ -92,8 +96,13 @@ https:)`. The value is never echoed. The normalised value is
   `url.origin + url.pathname` with a trailing `/` removed.
 - `EVIDGATE_CACHE_DIR` is used as-is; when unset the default is
   `%LOCALAPPDATA%\evidgate` on Windows, else `$XDG_CACHE_HOME/evidgate`, else
-  `<home>/.cache/evidgate`. A relative value for any of the three is exit 3
-  `invalid_config` naming the variable; the value is never echoed.
+  `<home>/.cache/evidgate`. A relative `EVIDGATE_CACHE_DIR` is exit 3
+  `invalid_config` naming the variable; the value is never echoed. A relative
+  `XDG_CACHE_HOME` or `LOCALAPPDATA` is ignored and the next default is used
+  (XDG Base Directory spec), never an error.
+- `ACTIONS_ID_TOKEN_REQUEST_URL` is a secret: it carries a signed query, so it is
+  registered with the redactor and shown as `[REDACTED]` (or `unset`) in
+  `--verbose` (§6).
 - Missing required configuration is a `CliError` with exit 3 and code
   `missing_config`; the message lists every missing name at once, for example
   `missing configuration: EVIDGATE_API_URL (or --api-url), EVIDGATE_PROJECT (or --project)`.
@@ -125,10 +134,15 @@ https:)`. The value is never echoed. The normalised value is
 <jwt>`; an ingest token goes in the body as `{"ingest_token":"egt_…"}` (a body
   ingest token wins over any bearer); the `actions-id-token` source first fetches
   `ACTIONS_ID_TOKEN_REQUEST_URL` with `ACTIONS_ID_TOKEN_REQUEST_TOKEN` as bearer and
-  `?audience=evidgate`, then sends the returned `value` as the bearer. When
-  `EVIDGATE_BINDING_CHALLENGE` is set it is forwarded as `binding_challenge` (T70).
-  The project is not sent: the server scopes the token to the credential's project
-  (00 §9.1). The reply is `{token, expires_at, project_id, permission_set}`.
+  `?audience=evidgate`, then sends the returned `value` as the bearer. That URL
+  must be `https:` (or `http:` on a loopback host) with no userinfo and no
+  fragment; otherwise exit 3 `invalid_config` naming the variable, never echoing
+  the value. When `EVIDGATE_BINDING_CHALLENGE` is set it is forwarded as
+  `binding_challenge` (T70). The project is not sent: the server scopes the token
+  to the credential's project (00 §9.1). The reply is
+  `{token, expires_at, project_id, permission_set}`; a 2xx body without a
+  non-empty `token`, an RFC 3339 `expires_at` and a UUID `project_id` is exit 3
+  `exchange_failed` (the body is never echoed).
 - No source at all is `missing_config` (§3).
 
 ## 5. Errors
@@ -178,18 +192,25 @@ else the `X-Request-Id` header. A 429 is retried once after `Retry-After`
 (clamped to 0–60 s, default 1 s); 401/403/409 are never retried. No server
 subcode changes the exit code.
 
+- `Retry-After` is delta-seconds (digits only) or an HTTP-date; a missing header
+  or any other value is 1 s.
+- A `transport` error prints a fixed message and never echoes the request URL or
+  a credential.
+- A 401/403 purge failure never hides the server code: the cache delete is
+  best-effort and the original `ExchangeAuthError` propagates.
+
 ## 6. Output and redaction
 
 - T78: the CLI never prints a bearer token. Token material exists only in the
   process environment, process memory, the `0600` cache file (04.2.1-T1) or
   `$GITHUB_ENV` behind `::add-mask::`.
 - Every secret value read from env (`EVIDGATE_OIDC_TOKEN`,
-  `ACTIONS_ID_TOKEN_REQUEST_TOKEN`, `EVIDGATE_INGEST_TOKEN`,
-  `EVIDGATE_DEV_TOKEN`, `EVIDGATE_BINDING_CHALLENGE`) is registered with the
-  redactor; every stderr and stdout write goes through a writer that replaces a
-  registered value with `[REDACTED]`. `resolveConfig` registers them, and
-  `main()` calls `resetSecrets()` then `registerEnvSecrets(env)` as its first
-  statements, before any argument parsing.
+  `ACTIONS_ID_TOKEN_REQUEST_URL`, `ACTIONS_ID_TOKEN_REQUEST_TOKEN`,
+  `EVIDGATE_INGEST_TOKEN`, `EVIDGATE_DEV_TOKEN`, `EVIDGATE_BINDING_CHALLENGE`)
+  is registered with the redactor; every stderr and stdout write goes through a
+  writer that replaces a registered value with `[REDACTED]`. `resolveConfig`
+  registers them, and `main()` calls `resetSecrets()` then
+  `registerEnvSecrets(env)` as its first statements, before any argument parsing.
 - `registerSecret(value)` also registers the trimmed, `encodeURIComponent`-,
   JSON-string-escaped and control-character-escaped (`\uXXXX`, the form error
   messages print) forms of the value when they differ and are non-empty; a
@@ -233,8 +254,12 @@ Commands:
   prints `{"ok":true,"expires_at":…,"project_id":…}`. The token is never printed
   (T78). With `--github-env` the token is appended to `$GITHUB_ENV` as an
   `EVIDGATE_CI_TOKEN` heredoc, after an `::add-mask::<token>` line on stdout;
-  `$GITHUB_ENV` unset is exit 3 `missing_config` naming `GITHUB_ENV`.
-  `[DECISION]` the variable name is `EVIDGATE_CI_TOKEN`.
+  `--github-env` checks `$GITHUB_ENV` before any exchange, so an unset
+  `$GITHUB_ENV` is exit 3 `missing_config` naming `GITHUB_ENV` with no network
+  call. `[DECISION]` the variable name is `EVIDGATE_CI_TOKEN`. `[DECISION]` with
+  `--json --github-env` the `::add-mask::` line is always the first stdout line,
+  before the JSON line, so a consumer that parses the last line still reads the
+  JSON.
 - `evidgate auth logout` deletes the cache file for the resolved api_url +
   project. An absent file is not an error.
 
@@ -244,14 +269,29 @@ Cache:
   Windows, else `$XDG_CACHE_HOME/evidgate`, else `<home>/.cache/evidgate` (§3).
 - File name: `ci-token.<sha256 hex of api_url + "\n" + project>.json`.
   `[DECISION]` the `\n` separator keeps the two fields unambiguous.
-- Mode `0600` in a `0700` directory; the write is atomic — a `0600` temp file in
-  the same directory is renamed over the target, which replaces a symlink rather
-  than following it. Content is exactly `{"token":…,"expires_at":…}`.
+- Mode `0600` in a `0700` directory; the directory is `chmod 0700` when it is
+  owned by the user, and a directory owned by another uid is refused
+  (`token_cache_error`) on write and ignored on read. The write is atomic — a
+  `0600` temp file in the same directory is renamed over the target, which
+  replaces a symlink rather than following it; the cache file is opened with
+  `O_NOFOLLOW`. Content is exactly `{"token":…,"expires_at":…}`.
 - A file that is not a regular file, is group/world-readable or foreign-owned
   (POSIX), or does not parse is treated as absent — never trusted.
 - Reuse: a cached token is reused while `exp - now > 60 s`; within the margin it
-  is re-exchanged and the cache rewritten (AC3).
+  is re-exchanged and the cache rewritten (AC3). An entry whose expiry is more
+  than 65 min ahead is treated as stale (`maxTokenLifetimeMs = 65 min`: server
+  tokens live at most 60 min, +5 min skew).
 - Purge: a 401/403 from `/v1/ci/token` deletes the cache entry before the error
-  propagates; `auth logout` deletes it explicitly (04.2.1 §8 retention).
+  propagates (a delete failure is best-effort and never hides the server code);
+  `auth logout` deletes it explicitly (04.2.1 §8 retention).
 - `[DECISION]` a cache write or delete failure is exit 3 `token_cache_error`
   whose message names the operation and never a token value.
+- `[note]` worst-case time to failure is bounded at ~150 s: 30 s for the
+  `ACTIONS_ID_TOKEN_REQUEST_URL` fetch + 30 s for the exchange + up to 60 s
+  `Retry-After` + 30 s for the single retry.
+- `[DECISION]` concurrent invocations with a stale cache each exchange once; the
+  atomic rename keeps the file consistent, so no lock is taken.
+- `[DECISION]` the cache is keyed by api URL + project only, so jobs of the same
+  OS user on the same runner share it for that project (the scope is identical).
+- Hand-over to 04.2.2-T1: a 401 from a later project-scoped command does not
+  purge the cache yet.

@@ -6,14 +6,8 @@
 import { randomUUID } from 'node:crypto';
 import { appendFile } from 'node:fs/promises';
 
-import {
-  ExchangeAuthError,
-  exchangeToken,
-  type ExchangeDeps,
-  type ExchangedToken,
-} from '../auth/exchange.js';
-import { deleteCachedToken, writeCachedToken } from '../auth/tokenCache.js';
-import type { ResolvedConfig } from '../config.js';
+import { exchangeAndPurge } from '../auth/exchange.js';
+import { writeCachedToken } from '../auth/tokenCache.js';
 import { CliError } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
 
@@ -28,10 +22,17 @@ export const authLoginCommand: CommandDefinition = {
   requireToken: true,
   options: { 'github-env': { type: 'boolean' } },
   run: async ({ config, io, env, values, deps, maskSecret }) => {
-    const exchanged = await exchangeOrPurge(config, deps);
+    // `--github-env` must fail before the exchange and the cache write, so an unset
+    // GITHUB_ENV never leaves a token on disk (D3).
+    const exportToGithub = values['github-env'] === true;
+    const githubEnvPath = exportToGithub ? env['GITHUB_ENV'] : undefined;
+    if (exportToGithub && (githubEnvPath === undefined || githubEnvPath === '')) {
+      throw new CliError('missing configuration: GITHUB_ENV', { code: 'missing_config' });
+    }
+    const exchanged = await exchangeAndPurge(config, deps);
     await writeCachedToken(config, { token: exchanged.token, expiresAt: exchanged.expiresAt });
-    if (values['github-env'] === true) {
-      await exportToGithubEnv(env, exchanged.token, maskSecret);
+    if (githubEnvPath !== undefined) {
+      await appendGithubEnv(githubEnvPath, exchanged.token, maskSecret);
     }
     if (config.json) {
       const payload = {
@@ -48,38 +49,16 @@ export const authLoginCommand: CommandDefinition = {
 };
 
 /**
- * Exchanges the credential, purging the cache entry first when the server answers
- * 401/403 so the next run re-authenticates cleanly (04.2.1 §6).
- */
-async function exchangeOrPurge(
-  config: ResolvedConfig,
-  deps: ExchangeDeps,
-): Promise<ExchangedToken> {
-  try {
-    return await exchangeToken(config, deps);
-  } catch (error) {
-    if (error instanceof ExchangeAuthError) {
-      await deleteCachedToken(config);
-    }
-    throw error;
-  }
-}
-
-/**
  * Appends `EVIDGATE_CI_TOKEN` to `$GITHUB_ENV` as a heredoc, after emitting the
  * `::add-mask::` line to the RAW stdout so the runner masks the value in later logs
- * (T78). A missing `GITHUB_ENV` is `missing_config`; a token with a line break is
- * refused before anything is written.
+ * (T78). A token with a line break is refused before anything is written.
  */
-async function exportToGithubEnv(
-  env: Readonly<Record<string, string | undefined>>,
+async function appendGithubEnv(
+  path: string,
   token: string,
   maskSecret: (value: string) => void,
 ): Promise<void> {
-  const path = env['GITHUB_ENV'];
-  if (path === undefined || path === '') {
-    throw new CliError('missing configuration: GITHUB_ENV', { code: 'missing_config' });
-  }
+  // defence in depth: readSuccess already rejects whitespace
   if (/[\r\n]/.test(token)) {
     throw new CliError('the exchanged token contains a line break', { code: 'exchange_failed' });
   }

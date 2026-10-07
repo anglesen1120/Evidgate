@@ -1,4 +1,15 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,6 +20,7 @@ import { redact, redacted, resetSecrets } from '../redact.js';
 import {
   deleteCachedToken,
   isFresh,
+  maxTokenLifetimeMs,
   readCachedToken,
   refreshMarginMs,
   tokenCachePath,
@@ -101,6 +113,76 @@ describe('tokenCache', () => {
     await expect(readCachedToken(config)).resolves.toBeUndefined();
   });
 
+  // D1: a cache directory that is a symlink is refused, and nothing is written through it.
+  it.skipIf(!posix)('refuses to write when the cache dir is a symlink', async () => {
+    const realDir = join(root, 'real-dir');
+    await mkdir(realDir, { mode: 0o700 });
+    await symlink(realDir, cacheDir);
+
+    await expect(
+      writeCachedToken(cacheConfig(cacheDir), {
+        token: 'egt_secret',
+        expiresAt: '2030-01-01T00:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ code: 'token_cache_error' });
+    expect(await readdir(realDir)).toEqual([]);
+  });
+
+  // D1: a loose pre-existing directory is tightened to 0700 on write.
+  it.skipIf(!posix)('tightens a pre-existing 0755 cache dir to 0700', async () => {
+    const config = cacheConfig(cacheDir);
+    await mkdir(cacheDir, { recursive: true });
+    await chmod(cacheDir, 0o755);
+
+    await writeCachedToken(config, { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' });
+
+    expect((await stat(cacheDir)).mode & 0o777).toBe(0o700);
+  });
+
+  // C5b: a failed write is `token_cache_error` and leaves no temp file behind.
+  it('fails with token_cache_error when the cache dir path is a file', async () => {
+    const config = cacheConfig(cacheDir);
+    await writeFile(cacheDir, 'not a directory', { mode: 0o600 });
+
+    await expect(
+      writeCachedToken(config, { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' }),
+    ).rejects.toMatchObject({ code: 'token_cache_error' });
+  });
+
+  it('fails with token_cache_error and removes the temp file when the target is a directory', async () => {
+    const config = cacheConfig(cacheDir);
+    await mkdir(cacheDir, { recursive: true, mode: 0o700 });
+    await mkdir(tokenCachePath(config));
+
+    await expect(
+      writeCachedToken(config, { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' }),
+    ).rejects.toMatchObject({ code: 'token_cache_error' });
+
+    expect((await readdir(cacheDir)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+  });
+
+  // C5b: a pre-existing symlink at the target is replaced by a 0600 file, its target intact.
+  it.skipIf(!posix)(
+    'replaces a symlink at the target path without touching its target',
+    async () => {
+      const target = join(root, 'real.json');
+      await writeFile(target, 'untouched', { mode: 0o600 });
+      const config = cacheConfig(cacheDir);
+      await mkdir(cacheDir, { recursive: true, mode: 0o700 });
+      await symlink(target, tokenCachePath(config));
+
+      await writeCachedToken(config, {
+        token: 'egt_secret',
+        expiresAt: '2030-01-01T00:00:00.000Z',
+      });
+
+      const path = tokenCachePath(config);
+      expect((await lstat(path)).isFile()).toBe(true);
+      expect((await stat(path)).mode & 0o777).toBe(0o600);
+      expect(await readFile(target, 'utf8')).toBe('untouched');
+    },
+  );
+
   it('ignores corrupt or incomplete JSON', async () => {
     const config = cacheConfig(cacheDir);
     const path = tokenCachePath(config);
@@ -146,5 +228,17 @@ describe('tokenCache', () => {
     expect(isFresh(at(refreshMarginMs), now)).toBe(false);
     expect(isFresh(at(refreshMarginMs - 1), now)).toBe(false);
     expect(isFresh(at(-1), now)).toBe(false);
+  });
+
+  // S3: a far-future `expires_at` is untrusted — the server never issues one that long.
+  it('isFresh rejects a far-future expiry beyond the max token lifetime', () => {
+    const now = Date.parse('2030-01-01T00:00:00.000Z');
+    const at = (offsetMs: number) => ({
+      token: 'egt',
+      expiresAt: new Date(now + offsetMs).toISOString(),
+    });
+
+    expect(isFresh(at(maxTokenLifetimeMs), now)).toBe(true);
+    expect(isFresh(at(maxTokenLifetimeMs + 1), now)).toBe(false);
   });
 });

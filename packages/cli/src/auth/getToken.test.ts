@@ -12,14 +12,15 @@ import { ExchangeAuthError } from './exchange.js';
 import { getToken } from './getToken.js';
 import { readCachedToken, writeCachedToken } from './tokenCache.js';
 
-// 04.2.1-T1.2: only `exchangeToken` is mocked; `ExchangeAuthError` is the real class, so
-// the purge branch is exercised against the shape `exchange.ts` throws. The cache and
-// the freshness logic are exercised for real.
-const exchangeMock = vi.hoisted(() => ({ exchangeToken: vi.fn() }));
+// 04.2.1-T1.2: `exchangeAndPurge` is mocked (the purge branch itself is covered in
+// exchange.test.ts); `ExchangeAuthError` is the real class, so getToken's propagation is
+// exercised against the shape `exchange.ts` throws. The cache and the freshness logic
+// are exercised for real.
+const exchangeMock = vi.hoisted(() => ({ exchangeAndPurge: vi.fn() }));
 
 vi.mock('./exchange.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  exchangeToken: exchangeMock.exchangeToken,
+  exchangeAndPurge: exchangeMock.exchangeAndPurge,
 }));
 
 const baseEnv = {
@@ -29,6 +30,8 @@ const baseEnv = {
 
 const now = Date.parse('2030-01-01T00:00:00.000Z');
 const iso = (offsetMs: number): string => new Date(now + offsetMs).toISOString();
+/** A valid `project_id` (openapi `format: uuid`); the exchange refuses anything else (S1). */
+const projectId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
 async function cacheEntries(cacheDir: string): Promise<string[]> {
   try {
@@ -54,7 +57,7 @@ describe('getToken', () => {
   beforeEach(async () => {
     resetSecrets();
     vi.stubGlobal('fetch', fetchSpy);
-    exchangeMock.exchangeToken.mockReset();
+    exchangeMock.exchangeAndPurge.mockReset();
     cacheDir = await mkdtemp(join(tmpdir(), 'evidgate-gettoken-'));
   });
 
@@ -71,7 +74,7 @@ describe('getToken', () => {
 
     expect(result).toEqual({ token: 'dev-token-value', source: 'dev' });
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(exchangeMock.exchangeToken).not.toHaveBeenCalled();
+    expect(exchangeMock.exchangeAndPurge).not.toHaveBeenCalled();
     expect(await cacheEntries(cacheDir)).toEqual([]);
   });
 
@@ -91,17 +94,17 @@ describe('getToken', () => {
       EVIDGATE_DEV_TOKEN: 'dev-token-value',
       EVIDGATE_OIDC_TOKEN: 'oidc-jwt',
     });
-    exchangeMock.exchangeToken.mockResolvedValue({
+    exchangeMock.exchangeAndPurge.mockResolvedValue({
       token: 'ci-token',
       expiresAt: iso(20 * 60_000),
-      projectId: 'p',
+      projectId,
       source: 'oidc',
     });
 
     const result = await getToken(config, { now: () => now });
 
     expect(result).toEqual({ token: 'ci-token', source: 'oidc', expiresAt: iso(20 * 60_000) });
-    expect(exchangeMock.exchangeToken).toHaveBeenCalledTimes(1);
+    expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
   });
 
   it('cache_reuse_and_60s_refresh', async () => {
@@ -115,14 +118,14 @@ describe('getToken', () => {
       source: 'oidc',
       expiresAt: iso(10 * 60_000),
     });
-    expect(exchangeMock.exchangeToken).not.toHaveBeenCalled();
+    expect(exchangeMock.exchangeAndPurge).not.toHaveBeenCalled();
 
     // Within the 60 s margin → exchange and rewrite the cache.
     await writeCachedToken(config, { token: 'stale-token', expiresAt: iso(30_000) });
-    exchangeMock.exchangeToken.mockResolvedValue({
+    exchangeMock.exchangeAndPurge.mockResolvedValue({
       token: 'fresh-token',
       expiresAt: iso(20 * 60_000),
-      projectId: 'p',
+      projectId,
       source: 'oidc',
     });
     await expect(getToken(config, deps)).resolves.toEqual({
@@ -130,37 +133,36 @@ describe('getToken', () => {
       source: 'oidc',
       expiresAt: iso(20 * 60_000),
     });
-    expect(exchangeMock.exchangeToken).toHaveBeenCalledTimes(1);
+    expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
     await expect(readCachedToken(config)).resolves.toEqual({
       token: 'fresh-token',
       expiresAt: iso(20 * 60_000),
     });
 
     // Exactly at the margin → refresh (not fresh).
-    exchangeMock.exchangeToken.mockClear();
+    exchangeMock.exchangeAndPurge.mockClear();
     await writeCachedToken(config, { token: 'boundary-token', expiresAt: iso(60_000) });
     await getToken(config, deps);
-    expect(exchangeMock.exchangeToken).toHaveBeenCalledTimes(1);
+    expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
   });
 
-  it('auth_error_purges_cache', async () => {
+  it('propagates an auth error from the exchange', async () => {
     const config = configFor({ EVIDGATE_OIDC_TOKEN: 'oidc-jwt' });
-    await writeCachedToken(config, { token: 'stale-token', expiresAt: iso(30_000) });
-    exchangeMock.exchangeToken.mockRejectedValue(
+    exchangeMock.exchangeAndPurge.mockRejectedValue(
       new ExchangeAuthError('token rejected', { code: 'token_invalid', status: 401 }),
     );
 
     await expect(getToken(config, { now: () => now })).rejects.toMatchObject({
       code: 'token_invalid',
     });
-    await expect(readCachedToken(config)).resolves.toBeUndefined();
+    expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
     expect(await cacheEntries(cacheDir)).toEqual([]);
   });
 
   it('keeps the cache on a non-auth failure', async () => {
     const config = configFor({ EVIDGATE_OIDC_TOKEN: 'oidc-jwt' });
     await writeCachedToken(config, { token: 'stale-token', expiresAt: iso(30_000) });
-    exchangeMock.exchangeToken.mockRejectedValue(
+    exchangeMock.exchangeAndPurge.mockRejectedValue(
       new CliError('network down', { code: 'transport' }),
     );
 

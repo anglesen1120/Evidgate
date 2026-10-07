@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,6 +8,9 @@ import { readCachedToken, tokenCachePath, writeCachedToken } from '../auth/token
 import { resolveConfig } from '../config.js';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
+
+/** A valid `project_id` (openapi `format: uuid`); the exchange refuses anything else (S1). */
+const projectId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
 interface Captured {
   readonly io: Io;
@@ -65,7 +68,7 @@ function successBody(): unknown {
   return {
     token: 'egt_ci_token',
     expires_at: '2030-01-01T00:00:00Z',
-    project_id: 'proj-1',
+    project_id: projectId,
     permission_set: [],
   };
 }
@@ -108,7 +111,7 @@ describe('auth login / auth logout', () => {
 
     await expect(main(['auth', 'login'], env, io, { fetch: fetchImpl })).resolves.toBe(0);
 
-    expect(stdout.join('')).toBe('ok expires_at=2030-01-01T00:00:00Z project_id=proj-1\n');
+    expect(stdout.join('')).toBe(`ok expires_at=2030-01-01T00:00:00Z project_id=${projectId}\n`);
     expect(stderr.join('')).toBe('');
     expect(calls[0]?.request.headers.get('authorization')).toBe('Bearer jwt-value');
     const cached = JSON.parse(await readFile(tokenCachePath(resolveConfig({ env })), 'utf8')) as {
@@ -196,7 +199,7 @@ describe('auth login / auth logout', () => {
     expect(JSON.parse(stdout.join(''))).toEqual({
       ok: true,
       expires_at: '2030-01-01T00:00:00Z',
-      project_id: 'proj-1',
+      project_id: projectId,
     });
     expect(stdout.join('')).not.toContain('egt_ci_token');
     expect(stderr.join('')).not.toContain('egt_ci_token');
@@ -233,7 +236,7 @@ describe('auth login / auth logout', () => {
 
   it('github_env_unset_exit3', async () => {
     const env = await oidcEnv();
-    const { fetchImpl } = stubFetch(() => jsonResponse(200, successBody()));
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, successBody()));
     const { io, stderr } = capture();
 
     await expect(
@@ -242,6 +245,25 @@ describe('auth login / auth logout', () => {
 
     expect(stderr.join('')).toContain('evidgate: error missing_config:');
     expect(stderr.join('')).toContain('GITHUB_ENV');
+    // The guard runs before the exchange and the cache write (D3).
+    expect(calls).toHaveLength(0);
+    await expect(readCachedToken(resolveConfig({ env }))).resolves.toBeUndefined();
+  });
+
+  it('purge_failure_surfaces_server_code', async () => {
+    const env = await oidcEnv();
+    const config = resolveConfig({ env });
+    // A directory at the cache path makes the purge fail (EISDIR); the server's code
+    // must still be the one reported (C2).
+    await mkdir(tokenCachePath(config), { recursive: true });
+    const { fetchImpl } = stubFetch(() => jsonResponse(401, envelope('token_invalid')));
+    const { io, stderr } = capture();
+
+    await expect(main(['auth', 'login'], env, io, { fetch: fetchImpl })).resolves.toBe(3);
+
+    const text = stderr.join('');
+    expect(text).toContain('evidgate: error token_invalid:');
+    expect(text).not.toContain('token_cache_error');
   });
 
   it('binding_errors_exit3', async () => {

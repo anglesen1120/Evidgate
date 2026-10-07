@@ -14,13 +14,8 @@ import { CliError } from '../errors.js';
 import { registerSecret } from '../redact.js';
 
 import { resolveDevToken } from './devToken.js';
-import {
-  ExchangeAuthError,
-  exchangeToken,
-  type ExchangeDeps,
-  type ExchangedToken,
-} from './exchange.js';
-import { deleteCachedToken, isFresh, readCachedToken, writeCachedToken } from './tokenCache.js';
+import { exchangeAndPurge, type ExchangeDeps } from './exchange.js';
+import { isFresh, readCachedToken, writeCachedToken } from './tokenCache.js';
 
 export interface TokenResult {
   readonly token: string;
@@ -50,16 +45,7 @@ export async function getToken(
       registerSecret(cached.token);
       return { token: cached.token, source, expiresAt: cached.expiresAt };
     }
-    let exchanged: ExchangedToken;
-    try {
-      exchanged = await exchangeToken(config, deps);
-    } catch (error) {
-      if (error instanceof ExchangeAuthError) {
-        // A 401/403 means the cached token is dead: purge it so the next run re-auths.
-        await deleteCachedToken(config);
-      }
-      throw error;
-    }
+    const exchanged = await exchangeAndPurge(config, deps);
     registerSecret(exchanged.token);
     await writeCachedToken(config, { token: exchanged.token, expiresAt: exchanged.expiresAt });
     return { token: exchanged.token, source, expiresAt: exchanged.expiresAt };

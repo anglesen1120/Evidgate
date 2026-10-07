@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +10,11 @@ import { resolveConfig } from '../config.js';
 import { CliError } from '../errors.js';
 import { resetSecrets } from '../redact.js';
 
-import { ExchangeAuthError, exchangeToken } from './exchange.js';
+import { ExchangeAuthError, exchangeAndPurge, exchangeToken } from './exchange.js';
+import { readCachedToken, tokenCachePath, writeCachedToken } from './tokenCache.js';
+
+/** A valid `project_id` (openapi `format: uuid`); the exchange refuses anything else (S1). */
+const projectId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
 interface StubCall {
   readonly request: Request;
@@ -52,7 +56,7 @@ function successBody(): unknown {
   return {
     token: 'egt_ci_token',
     expires_at: '2030-01-01T00:00:00Z',
-    project_id: 'proj-1',
+    project_id: projectId,
     permission_set: [],
   };
 }
@@ -207,7 +211,7 @@ describe('exchangeToken', () => {
 
     // An HTTP-date is honoured as a delta from now.
     const dated = retryOnce({ 'retry-after': new Date(Date.now() + 5_000).toUTCString() });
-    const sleepDated = vi.fn(() => Promise.resolve());
+    const sleepDated = vi.fn<(ms: number) => Promise<void>>(() => Promise.resolve());
     await exchangeToken(config, { fetch: dated.fetchImpl, sleep: sleepDated });
     const waited = sleepDated.mock.calls[0]?.[0] ?? 0;
     expect(waited).toBeGreaterThan(3_000);
@@ -220,11 +224,64 @@ describe('exchangeToken', () => {
     expect(sleepBare).toHaveBeenCalledWith(1_000);
   });
 
+  it('falls back to 1 s for a malformed Retry-After', async () => {
+    const config = await oidcConfig();
+    for (const value of ['-5', '1.5']) {
+      let attempt = 0;
+      const { fetchImpl } = stubFetch(() => {
+        attempt += 1;
+        return attempt === 1
+          ? jsonResponse(429, envelope('rate_limited'), { 'retry-after': value })
+          : jsonResponse(200, successBody());
+      });
+      const sleep = vi.fn(() => Promise.resolve());
+
+      await exchangeToken(config, { fetch: fetchImpl, sleep });
+
+      expect(sleep).toHaveBeenCalledWith(1_000);
+    }
+  });
+
   it('rejects a 200 body whose token carries whitespace', async () => {
     const config = await oidcConfig();
     const { fetchImpl } = stubFetch(() =>
       jsonResponse(200, {
         token: 'egt_ ci',
+        expires_at: '2030-01-01T00:00:00Z',
+        project_id: projectId,
+      }),
+    );
+
+    const error = await captureCliError(() => exchangeToken(config, { fetch: fetchImpl }));
+
+    expect(error.code).toBe('exchange_failed');
+    expect(error.message).not.toContain('egt_ ci');
+  });
+
+  it('rejects a 200 body whose expires_at is not RFC 3339', async () => {
+    const config = await oidcConfig();
+    const injected = [
+      '2030-01-01T00:00:00Z\n(see https://evil.example)',
+      '2030-01-01T00:00:00Z (see https://evil.example)',
+    ];
+    for (const expiresAt of injected) {
+      const { fetchImpl } = stubFetch(() =>
+        jsonResponse(200, { token: 'egt_ci_token', expires_at: expiresAt, project_id: projectId }),
+      );
+
+      const error = await captureCliError(() => exchangeToken(config, { fetch: fetchImpl }));
+
+      expect(error.code).toBe('exchange_failed');
+      expect(error.message).not.toContain('evil.example');
+      expect(error.message).not.toContain(expiresAt);
+    }
+  });
+
+  it('rejects a 200 body whose project_id is not a UUID', async () => {
+    const config = await oidcConfig();
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse(200, {
+        token: 'egt_ci_token',
         expires_at: '2030-01-01T00:00:00Z',
         project_id: 'proj-1',
       }),
@@ -233,7 +290,7 @@ describe('exchangeToken', () => {
     const error = await captureCliError(() => exchangeToken(config, { fetch: fetchImpl }));
 
     expect(error.code).toBe('exchange_failed');
-    expect(error.message).not.toContain('egt_ ci');
+    expect(error.message).not.toContain('proj-1');
   });
 
   it('omits binding_challenge when the env value is empty', async () => {
@@ -304,6 +361,102 @@ describe('exchangeToken', () => {
       expect((error as ExchangeAuthError).status).toBe(status);
       expect(error.code).toBe('token_invalid');
     }
+  });
+
+  it('rejects an actions id-token URL with credentials or a fragment', async () => {
+    const cacheDir = await tempCacheDir();
+    const urls = [
+      'https://user:secret@actions.example/oidc',
+      'https://actions.example/oidc#fragment',
+    ];
+    for (const requestUrl of urls) {
+      const config = resolveConfig({
+        env: {
+          EVIDGATE_API_URL: 'https://api.evidgate.test',
+          EVIDGATE_PROJECT: 'proj-1',
+          EVIDGATE_CACHE_DIR: cacheDir,
+          ACTIONS_ID_TOKEN_REQUEST_URL: requestUrl,
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'request-token-value',
+        },
+      });
+      const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, successBody()));
+
+      const error = await captureCliError(() => exchangeToken(config, { fetch: fetchImpl }));
+
+      expect(error.code).toBe('invalid_config');
+      expect(error.message).not.toContain('secret');
+      expect(error.message).not.toContain('actions.example');
+      expect(calls).toHaveLength(0);
+    }
+  });
+
+  it('cancels the ID-token response body on a non-ok reply', async () => {
+    const cacheDir = await tempCacheDir();
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('nope'));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const { fetchImpl } = stubFetch((request) =>
+      request.url.startsWith('https://actions.example/oidc')
+        ? new Response(body, { status: 500 })
+        : jsonResponse(200, successBody()),
+    );
+    const config = resolveConfig({
+      env: {
+        EVIDGATE_API_URL: 'https://api.evidgate.test',
+        EVIDGATE_PROJECT: 'proj-1',
+        EVIDGATE_CACHE_DIR: cacheDir,
+        ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.example/oidc',
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'request-token-value',
+      },
+    });
+
+    const error = await captureCliError(() => exchangeToken(config, { fetch: fetchImpl }));
+
+    expect(error.code).toBe('oidc_request_failed');
+    expect(cancelled).toBe(true);
+  });
+
+  it('exchangeAndPurge purges the cache on 401', async () => {
+    const config = await oidcConfig();
+    await writeCachedToken(config, { token: 'stale-token', expiresAt: '2030-01-01T00:00:00Z' });
+    const { fetchImpl } = stubFetch(() => jsonResponse(401, envelope('token_invalid')));
+
+    await expect(exchangeAndPurge(config, { fetch: fetchImpl })).rejects.toMatchObject({
+      code: 'token_invalid',
+    });
+    await expect(readCachedToken(config)).resolves.toBeUndefined();
+  });
+
+  it('exchangeAndPurge keeps the cache on a non-auth failure', async () => {
+    const config = await oidcConfig();
+    await writeCachedToken(config, { token: 'stale-token', expiresAt: '2030-01-01T00:00:00Z' });
+    const { fetchImpl } = stubFetch(() => jsonResponse(500, envelope('server_error')));
+
+    await expect(exchangeAndPurge(config, { fetch: fetchImpl })).rejects.toMatchObject({
+      code: 'server_error',
+    });
+    await expect(readCachedToken(config)).resolves.toEqual({
+      token: 'stale-token',
+      expiresAt: '2030-01-01T00:00:00Z',
+    });
+  });
+
+  it('exchangeAndPurge swallows a purge failure and surfaces the server code', async () => {
+    const config = await oidcConfig();
+    // A directory at the cache path makes `deleteCachedToken` reject (EISDIR).
+    await mkdir(tokenCachePath(config), { recursive: true });
+    const { fetchImpl } = stubFetch(() => jsonResponse(401, envelope('token_invalid')));
+
+    const error = await captureCliError(() => exchangeAndPurge(config, { fetch: fetchImpl }));
+
+    expect(error).toBeInstanceOf(ExchangeAuthError);
+    expect(error.code).toBe('token_invalid');
   });
 
   it('exchanges against a real HTTP server (integration)', async () => {

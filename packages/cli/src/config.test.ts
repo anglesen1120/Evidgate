@@ -164,6 +164,7 @@ describe('resolveConfig', () => {
       env: {
         ...baseEnv,
         EVIDGATE_OIDC_TOKEN: 'oidc-secret',
+        ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.test/oidc?token=url-secret',
         ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'actions-secret',
         EVIDGATE_INGEST_TOKEN: 'ingest-secret',
         EVIDGATE_DEV_TOKEN: 'dev-secret',
@@ -172,6 +173,7 @@ describe('resolveConfig', () => {
     });
     for (const secret of [
       'oidc-secret',
+      'https://actions.test/oidc?token=url-secret',
       'actions-secret',
       'ingest-secret',
       'dev-secret',
@@ -259,9 +261,10 @@ describe('registerEnvSecrets', () => {
     resetSecrets();
   });
 
-  it('registers the five secret env values for redaction (QA-D1)', () => {
+  it('registers the six secret env values for redaction (QA-D1, D4/S2)', () => {
     registerEnvSecrets({
       EVIDGATE_OIDC_TOKEN: 'oidc-secret',
+      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.test/oidc?token=url-secret',
       ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'actions-secret',
       EVIDGATE_INGEST_TOKEN: 'ingest-secret',
       EVIDGATE_DEV_TOKEN: 'dev-secret',
@@ -269,6 +272,7 @@ describe('registerEnvSecrets', () => {
     });
     for (const secret of [
       'oidc-secret',
+      'https://actions.test/oidc?token=url-secret',
       'actions-secret',
       'ingest-secret',
       'dev-secret',
@@ -285,7 +289,8 @@ describe('registerEnvSecrets', () => {
 });
 
 // 04.2.1-T1.1 / NFR-04-2: the token-cache directory — `EVIDGATE_CACHE_DIR` as-is,
-// else the platform default, and a relative env value is refused without echoing it.
+// else the platform default; only a relative `EVIDGATE_CACHE_DIR` is refused, a
+// relative `XDG_CACHE_HOME` / `LOCALAPPDATA` is ignored (C3).
 describe('resolveConfig cacheDir', () => {
   beforeEach(() => {
     resetSecrets();
@@ -344,20 +349,31 @@ describe('resolveConfig cacheDir', () => {
     expect(error.message).not.toContain('relative/dir');
   });
 
-  it('refuses a relative XDG_CACHE_HOME', () => {
-    const error = captureCliError(() =>
-      resolveConfig({ env: { ...baseEnv, XDG_CACHE_HOME: 'rel' }, platform: 'linux' }),
-    );
-    expect(error.code).toBe('invalid_config');
-    expect(error.message).toContain('XDG_CACHE_HOME');
+  it('ignores a relative XDG_CACHE_HOME and falls back to <home>/.cache/evidgate (C3)', () => {
+    const config = resolveConfig({
+      env: { ...baseEnv, XDG_CACHE_HOME: 'rel' },
+      platform: 'linux',
+      homedir: '/home/u',
+    });
+    expect(config.cacheDir).toBe('/home/u/.cache/evidgate');
   });
 
-  it('refuses a relative LOCALAPPDATA on win32', () => {
-    const error = captureCliError(() =>
-      resolveConfig({ env: { ...baseEnv, LOCALAPPDATA: 'rel' }, platform: 'win32' }),
-    );
-    expect(error.code).toBe('invalid_config');
-    expect(error.message).toContain('LOCALAPPDATA');
+  it('ignores a relative LOCALAPPDATA on win32 and falls through to XDG_CACHE_HOME (C3)', () => {
+    const config = resolveConfig({
+      env: { ...baseEnv, LOCALAPPDATA: 'rel', XDG_CACHE_HOME: 'C:\\xdg' },
+      platform: 'win32',
+      homedir: 'C:\\Users\\u',
+    });
+    expect(config.cacheDir).toBe('C:\\xdg\\evidgate');
+  });
+
+  it('ignores a relative XDG_CACHE_HOME on win32 and falls back to <home>/.cache (C3)', () => {
+    const config = resolveConfig({
+      env: { ...baseEnv, XDG_CACHE_HOME: 'rel' },
+      platform: 'win32',
+      homedir: 'C:\\Users\\u',
+    });
+    expect(config.cacheDir).toBe('C:\\Users\\u\\.cache\\evidgate');
   });
 
   it('prints cache_dir in the verbose dump', () => {
@@ -365,5 +381,33 @@ describe('resolveConfig cacheDir', () => {
       env: { ...baseEnv, EVIDGATE_CACHE_DIR: '/tmp/evidgate-cache' },
     });
     expect(formatConfigForVerbose(config)).toContain('cache_dir=/tmp/evidgate-cache');
+  });
+});
+
+// 04.2.1-T1.1 / D4, S2: the Actions ID-token request URL is a secret (it carries a
+// signed query), so the `--verbose` dump redacts it like every other secret.
+describe('formatConfigForVerbose', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  it('redacts ACTIONS_ID_TOKEN_REQUEST_URL and never prints it (D4, S2)', () => {
+    const url = 'https://actions.test/oidc?token=url-secret';
+    const config = resolveConfig({
+      env: {
+        ...baseEnv,
+        ACTIONS_ID_TOKEN_REQUEST_URL: url,
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'actions-secret',
+      },
+    });
+    const dump = formatConfigForVerbose(config);
+    expect(dump).toContain('actions_id_token_request_url=[REDACTED]');
+    expect(dump).not.toContain(url);
+    expect(dump).not.toContain('url-secret');
+  });
+
+  it('prints unset when ACTIONS_ID_TOKEN_REQUEST_URL is absent', () => {
+    const dump = formatConfigForVerbose(resolveConfig({ env: baseEnv }));
+    expect(dump).toContain('actions_id_token_request_url=unset');
   });
 });

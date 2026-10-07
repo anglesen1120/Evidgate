@@ -93,6 +93,8 @@ const projectForbidden = /[\s\p{Cc}\p{Cf}]/u;
  */
 export function registerEnvSecrets(env: Readonly<Record<string, string | undefined>>): void {
   registerSecret(rawEnv(env, envNames.oidcToken));
+  // 04.2.1-T1.1 (D4/S2): the request URL carries a signed query, so it is a secret too.
+  registerSecret(rawEnv(env, envNames.actionsIdTokenRequestUrl));
   registerSecret(rawEnv(env, envNames.actionsIdTokenRequestToken));
   registerSecret(rawEnv(env, envNames.ingestToken));
   registerSecret(rawEnv(env, envNames.devToken));
@@ -212,7 +214,7 @@ export function formatConfigForVerbose(config: ResolvedConfig): string {
     `  cache_dir=${config.cacheDir}`,
     `  env=${config.env ?? 'unset'}`,
     `  oidc_token=${maskSecret(config.oidcToken)}`,
-    `  actions_id_token_request_url=${config.actionsIdTokenRequestUrl ?? 'unset'}`,
+    `  actions_id_token_request_url=${maskSecret(config.actionsIdTokenRequestUrl)}`,
     `  actions_id_token_request_token=${maskSecret(config.actionsIdTokenRequestToken)}`,
     `  ingest_token=${maskSecret(config.ingestToken)}`,
     `  dev_token=${maskSecret(config.devToken)}`,
@@ -264,9 +266,10 @@ function invalidConfig(names: string, reason: string): CliError {
 /**
  * The token-cache directory (04.2.1 §5 `auth/token-cache.ts`): `EVIDGATE_CACHE_DIR`
  * used as-is, else `%LOCALAPPDATA%\evidgate` on Windows, else
- * `$XDG_CACHE_HOME/evidgate`, else `<home>/.cache/evidgate`. Every env value must be
- * an absolute path; a relative one is `invalid_config` naming the variable and never
- * echoing the value (SEC3).
+ * `$XDG_CACHE_HOME/evidgate`, else `<home>/.cache/evidgate`. `EVIDGATE_CACHE_DIR` must
+ * be an absolute path; a relative one is `invalid_config` naming the variable and never
+ * echoing the value (SEC3). A relative `XDG_CACHE_HOME` / `LOCALAPPDATA` is ignored and
+ * the next default is used (XDG Base Directory spec), never an error.
  */
 function resolveCacheDir(
   env: Readonly<Record<string, string | undefined>>,
@@ -280,13 +283,13 @@ function resolveCacheDir(
   }
   if (platform === 'win32') {
     const localAppData = rawEnv(env, 'LOCALAPPDATA');
-    if (localAppData !== undefined) {
-      return paths.join(requireAbsolutePath(localAppData, 'LOCALAPPDATA', paths), 'evidgate');
+    if (localAppData !== undefined && paths.isAbsolute(localAppData)) {
+      return paths.join(localAppData, 'evidgate');
     }
   }
   const xdgCacheHome = rawEnv(env, 'XDG_CACHE_HOME');
-  if (xdgCacheHome !== undefined) {
-    return paths.join(requireAbsolutePath(xdgCacheHome, 'XDG_CACHE_HOME', paths), 'evidgate');
+  if (xdgCacheHome !== undefined && paths.isAbsolute(xdgCacheHome)) {
+    return paths.join(xdgCacheHome, 'evidgate');
   }
   return paths.join(home, '.cache', 'evidgate');
 }

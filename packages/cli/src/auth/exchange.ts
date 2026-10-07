@@ -14,6 +14,8 @@ import { envNames, isLoopbackApiUrl, resolveTokenSource, type ResolvedConfig } f
 import { CliError, escapeControlCharacters, type CliErrorOptions } from '../errors.js';
 import { registerSecret } from '../redact.js';
 
+import { deleteCachedToken } from './tokenCache.js';
+
 /** The credential the exchange presents; `dev` is never exchanged (contracts/cli.md §4). */
 export type ExchangeSource = 'oidc' | 'actions-id-token' | 'ingest';
 
@@ -51,6 +53,10 @@ const maxMessageLength = 200;
 const githubOidcAudience = 'evidgate';
 /** A server `error.code` is echoed only when it is a safe identifier (contracts/cli.md §5). */
 const serverCodePattern = /^[a-z][a-z0-9_]{0,63}$/;
+/** Strict RFC 3339 `date-time` (openapi); a value that is not one is refused un-echoed (S1). */
+const rfc3339Pattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+/** The `project_id` is a UUID (openapi `format: uuid`); a non-UUID is refused un-echoed (S1). */
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The `missing_config` entry for "no exchangeable source is set" (dev cannot be exchanged). */
 const exchangeSourceNames =
@@ -115,6 +121,25 @@ export async function exchangeToken(
       });
     }
     throw new CliError(envelope.message, envelope.options);
+  }
+}
+
+/**
+ * Exchanges the credential and, when the server answers 401/403, purges the cached
+ * entry first so the next run re-authenticates cleanly (04.2.1 §6). A purge failure is
+ * swallowed: the server's error is the one that must surface (C2).
+ */
+export async function exchangeAndPurge(
+  config: ResolvedConfig,
+  deps: ExchangeDeps = {},
+): Promise<ExchangedToken> {
+  try {
+    return await exchangeToken(config, deps);
+  } catch (error) {
+    if (error instanceof ExchangeAuthError) {
+      await deleteCachedToken(config).catch(() => undefined);
+    }
+    throw error;
   }
 }
 
@@ -199,6 +224,8 @@ async function fetchActionsIdToken(
     throw transportError(error);
   }
   if (!response.ok) {
+    // Release the body before throwing so the connection can be reused (P2).
+    await response.body?.cancel().catch(() => undefined);
     throw new CliError('the GitHub Actions ID token request failed', {
       code: 'oidc_request_failed',
     });
@@ -240,6 +267,13 @@ function parseActionsIdTokenUrl(raw: string): URL {
       { code: 'invalid_config' },
     );
   }
+  if (url.username !== '' || url.password !== '' || url.hash !== '') {
+    throw new CliError(
+      `invalid configuration: ${envNames.actionsIdTokenRequestUrl}: must not carry ` +
+        `credentials or a fragment`,
+      { code: 'invalid_config' },
+    );
+  }
   return url;
 }
 
@@ -258,9 +292,10 @@ function readSuccess(data: unknown, source: ExchangeSource): ExchangedToken {
     token.length === 0 ||
     /\s/.test(token) ||
     typeof expiresAt !== 'string' ||
+    !rfc3339Pattern.test(expiresAt) ||
     !Number.isFinite(Date.parse(expiresAt)) ||
     typeof projectId !== 'string' ||
-    projectId.length === 0
+    !uuidPattern.test(projectId)
   ) {
     throw new CliError('the token exchange response was not valid', { code: 'exchange_failed' });
   }
@@ -308,14 +343,22 @@ function retryAfterMs(header: string | null): number {
   if (/^\d+$/.test(value)) {
     return Math.min(Math.max(Number(value) * 1000, 0), maxRetryAfterMs);
   }
-  const date = Date.parse(value);
-  if (Number.isFinite(date)) {
-    return Math.min(Math.max(date - Date.now(), 0), maxRetryAfterMs);
+  // Only a value that looks like an HTTP-date (it carries a letter) is parsed as one; a
+  // malformed delta such as `1.5` or `-5` falls back to the default (D6).
+  if (/[A-Za-z]/.test(value)) {
+    const date = Date.parse(value);
+    if (Number.isFinite(date)) {
+      return Math.min(Math.max(date - Date.now(), 0), maxRetryAfterMs);
+    }
   }
   return defaultRetryAfterMs;
 }
 
+/** A transport failure is reported with a fixed message; the cause may echo a URL or token. */
 function transportError(cause: unknown): CliError {
-  const detail = cause instanceof Error ? cause.message : 'the request failed';
-  return new CliError(`transport error: ${detail}`, { code: 'transport' });
+  const timedOut =
+    cause instanceof Error && (cause.name === 'AbortError' || cause.name === 'TimeoutError');
+  return new CliError(timedOut ? 'the request timed out' : 'the request failed', {
+    code: 'transport',
+  });
 }
