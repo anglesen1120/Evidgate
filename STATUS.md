@@ -41,6 +41,7 @@ Updated 2026-10-03. Source of truth for tasks: `plans/01`–`12` and `plans/feat
 | 02.4.1, 02.4.2, 01.8.1 | 02.4.1-T1/T2/T3/T4, 02.4.2-T1/T2, 01.8.1-T3.1 | `develop` (Stage A, no PR) | `ci_binding`/`ci_token_issue`/`ingest_token` (migrations 0016-0018), GitHub OIDC validator + JWKS client, `POST /v1/ci/token` (OIDC and ingest-token grants), `ci_producer` minting + authenticator, binding/ingest-token admin API, replay purge task, `Migrator seed-dev`; 812 .NET tests, security + performance review recorded (02.4.1 §8a), migration 0019 |
 | 03.1.1, 03.1.3, 03.2.1 | 03.1.1-T1–T3, 03.1.3-T1–T3, 03.2.1-T1–T4 | `develop` (Stage A, no PR) | Catalog module: `test_case`/identity sources/rename history (0020), append-only `test_revision` with fail-closed assertion hash (0021), `suite`/`suite_revision`/`variant`/`suite_member`/`case_dependency` with insert and head guards (0022); annotation + sidecar discovery, registration service, case and suite routes, revision diff and dry-run, `ICatalogContracts` (incl. manifest lookups for 05.1.1); shared `SecretShape`; 1096 .NET tests, security + performance reviews recorded (03.1.1/03.1.3/03.2.1 §8a, leftovers OI-03-15) |
 | 05.1.1, 05.1.2 | 05.1.1-T2/T3/T4, 05.1.2-T1/T2 | `develop` (Stage A, no PR) | `manifest` (0023) and `environment`/`environment_revision` (0024) with immutability triggers and FORCE RLS; `POST /v1/projects/{p}/manifests` (schema at the edge, secret-free variants, matrix + shard coverage, catalogue checks, content-addressed dedupe), environment revisions (`environment-revision.v1` schema, secret-value detection, numbering under a row lock, 200 on identical content) and `GET /v1/environment-revisions/{id}`; security + performance review fixed (05.1.1/05.1.2 §8a, leftovers OI-05-15) |
+| 04.2.1 | T2 | `feature/04.2.1-T2-s2` (Session 2, PR pending merge) | `packages/cli` skeleton: `evidgate` bin, `resolveConfig()` (flag > env > default, `missing_config` names every var), exit-code registry, `getToken()` with the `EVIDGATE_DEV_TOKEN` dev path (`EVIDGATE_ENV=dev` and a loopback API URL only, never cached), redaction of every secret on every write path, command registry with per-command flags, SDK client with redirects refused; `contracts/cli.md` created (OI-04-06 closed, replay codes 10–19 still `[OPEN]`); QA + code/perf/security reviews and delta fixed; hand-over to 04.2.1-T1 in the 04.2.1 feature plan §10 |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -186,7 +187,6 @@ Recomputed 2026-10-02 from `plan_graph.py` after the review additions, de-duplic
 |---|---|---|---|
 | 02.9.1-T1 | M | M1 | Newly ready 2026-10-03: API isolation suite over the registry routes |
 | 04.1.2-T4 | M | M1 | `producer_slot` |
-| 04.2.1-T2 | S | M1 | New: CLI skeleton + `EVIDGATE_DEV_TOKEN` dev path |
 | 04.3.1-T1, 04.7.1-T2 | M each | M1 | Playwright reporter, adapter protocol |
 | 07.1.1-T1, 07.3.1-T1 | M each | M2 | Policy revision, waiver/quarantine tables |
 | 06.1.1-T1 | M | M2 | Artifact record |
