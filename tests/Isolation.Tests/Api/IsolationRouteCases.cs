@@ -40,7 +40,7 @@ public sealed record ProbeCaller(string Label, Guid? UserId = null, string? Emai
 /// <param name="Method">The verb.</param>
 /// <param name="Url">The path and query.</param>
 /// <param name="Body">The JSON body, if any.</param>
-/// <param name="IfMatch">The <c>If-Match</c> value, if any (required on every PATCH, 00 §9.1).</param>
+/// <param name="IfMatch">The <c>If-Match</c> value, if any (sent on every PATCH whose endpoint requires it, 00 §9.1).</param>
 public sealed record ProbeRequest(HttpMethod Method, string Url, JsonNode? Body = null, string? IfMatch = null)
 {
     /// <summary>"GET /v1/…".</summary>
@@ -144,9 +144,9 @@ public sealed record ListWalk(
 /// </summary>
 /// <remarks>
 /// Mutation bodies are valid for the route (the shapes the seeder sends successfully against the caller's own
-/// objects, <see cref="IsolationWorld"/>), and every PATCH carries <c>If-Match</c>, so a foreign request reaches
-/// tenancy and the handler instead of stopping at a 400/422 that could hide a leak; <see cref="ProbeExpect"/>
-/// statuses exclude 400/422 for every pair except <see cref="ProbeExpect.NotSuccess"/>.
+/// objects, <see cref="IsolationWorld"/>), and every PATCH whose endpoint requires <c>If-Match</c> carries it, so a
+/// foreign request reaches tenancy and the handler instead of stopping at a 400/422 that could hide a leak;
+/// <see cref="ProbeExpect"/> statuses exclude 400/422 for every pair except <see cref="ProbeExpect.NotSuccess"/>.
 /// </remarks>
 public static class IsolationRouteCases
 {
@@ -219,6 +219,16 @@ public static class IsolationRouteCases
         }
 
         return walks;
+    }
+
+    /// <summary>Org B's own non-list reads (the audit export stream): 200, and the text carries no org-A id.</summary>
+    public static IReadOnlyList<RouteProbe> OwnStreams(IsolationWorld world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        var route = Get("/v1/orgs/{o}/audit/export");
+        const string name = "org B's own audit export";
+        var request = new ProbeRequest(HttpMethod.Get, $"/v1/orgs/{world.Acme2.Id}/audit/export");
+        return [new(route, name, runner => runner.OwnReadAsync(route, name, OrgBAdmin(world), request))];
     }
 
     private static List<RouteCase> Build() =>
@@ -298,7 +308,7 @@ public static class IsolationRouteCases
         ObjectCase("GET", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}")),
         ObjectCase("PATCH", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id =>
             new(HttpMethod.Patch, $"/v1/cases/{id}", new JsonObject { ["name"] = "intruder" }, "\"1\"")),
-        ObjectCase("GET", "/v1/cases/{c}/revisions", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}/revisions"), list: true),
+        ObjectCase("GET", "/v1/cases/{c}/revisions", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}/revisions")),
         ProjectCase("POST", "/v1/projects/{p}/suites", p => new(HttpMethod.Post, $"/v1/projects/{p}/suites", new JsonObject { ["name"] = "intruder", ["slug"] = "intruder" })),
         ProjectCase("GET", "/v1/projects/{p}/suites", p => new(HttpMethod.Get, $"/v1/projects/{p}/suites"), list: true),
         ObjectCase("GET", "/v1/suites/{s}", p => Indexed("suite", p.SuiteIds), id => new(HttpMethod.Get, $"/v1/suites/{id}")),
@@ -641,6 +651,11 @@ public sealed class RouteProbeRunner
 {
     private const int MaxPages = 500;
 
+    private static readonly HashSet<string> SecretMembers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "token", "ingest_token", "secret", "access_token", "jwt", "binding_challenge",
+    };
+
     private readonly ApiIsolationFixture _fixture;
     private readonly HttpClient _client;
     private readonly HashSet<string> _foreignIds;
@@ -788,7 +803,7 @@ public sealed class RouteProbeRunner
 
             if (!ok)
             {
-                violations.Add(Describe(route, name, caller, $"{half} {request} answered {response}, expected {Expected(expect)}: {Brief(response.Text)}"));
+                violations.Add(Describe(route, name, caller, $"{half} {request} answered {response}, expected {Expected(expect)}: {Brief(response)}"));
             }
         }
     }
@@ -807,7 +822,7 @@ public sealed class RouteProbeRunner
         var violations = new List<string>();
         if (real.Status is not (403 or 404))
         {
-            violations.Add(Describe(route, name, foreignCaller, $"{request} answered {real}, expected {Expected(ProbeExpect.ForeignOrg)}: {Brief(real.Text)}"));
+            violations.Add(Describe(route, name, foreignCaller, $"{request} answered {real}, expected {Expected(ProbeExpect.ForeignOrg)}: {Brief(real)}"));
         }
 
         if (real.Status != control.Status || !string.Equals(real.Code, control.Code, StringComparison.Ordinal))
@@ -826,7 +841,7 @@ public sealed class RouteProbeRunner
         var violations = new List<string>();
         if (response.IsSuccess || (allowed is not null && !allowed.Contains(response.Status)))
         {
-            violations.Add(Describe(route, name, caller, $"{request} answered {response}, expected a refusal{(allowed is null ? string.Empty : " (" + string.Join('/', allowed) + ")")}: {Brief(response.Text)}"));
+            violations.Add(Describe(route, name, caller, $"{request} answered {response}, expected a refusal{(allowed is null ? string.Empty : " (" + string.Join('/', allowed) + ")")}: {Brief(response)}"));
         }
 
         violations.AddRange(ForeignIdsIn(response.Text).Select(id => Describe(route, name, caller, $"{request} answered {response} carrying org-A id {id}")));
@@ -844,7 +859,7 @@ public sealed class RouteProbeRunner
         if (response.Status != 403 || (requireScopeCode && response.Code != "project_scope_mismatch"))
         {
             violations.Add(Describe(route, name, caller,
-                $"{request} answered {response}, expected 403 {(requireScopeCode ? "project_scope_mismatch" : "project_scope_mismatch/forbidden")}: {Brief(response.Text)}"));
+                $"{request} answered {response}, expected 403 {(requireScopeCode ? "project_scope_mismatch" : "project_scope_mismatch/forbidden")}: {Brief(response)}"));
         }
 
         return violations;
@@ -866,7 +881,7 @@ public sealed class RouteProbeRunner
         var created = await SendAsync(caller, new(HttpMethod.Post, "/v1/orgs", new JsonObject { ["name"] = "Acme", ["slug"] = slug })).ConfigureAwait(false);
         if (created.Status != 201 || created.Json is not { } body || !body.TryGetProperty("id", out var idElement))
         {
-            violations.Add(Describe(route, name, caller, $"POST /v1/orgs answered {created}, expected 201: {Brief(created.Text)}"));
+            violations.Add(Describe(route, name, caller, $"POST /v1/orgs answered {created}, expected 201: {Brief(created)}"));
             return violations;
         }
 
@@ -933,7 +948,7 @@ public sealed class RouteProbeRunner
             answers.Add(response);
             if (response.Status != 401 || (response.Json is { ValueKind: JsonValueKind.Object } json && json.TryGetProperty("token", out _)))
             {
-                violations.Add(Describe(route, name, caller, $"POST /v1/ci/token answered {response}, expected 401 without a token: {Brief(response.Text)}"));
+                violations.Add(Describe(route, name, caller, $"POST /v1/ci/token answered {response}, expected 401 without a token: {Brief(response)}"));
             }
 
             violations.AddRange(ForeignIdsIn(response.Text).Select(id => Describe(route, name, caller, $"answer carries org-A id {id}")));
@@ -956,10 +971,26 @@ public sealed class RouteProbeRunner
         var violations = new List<string>();
         if (response.Status >= 500)
         {
-            violations.Add(Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {response}: {Brief(response.Text)}"));
+            violations.Add(Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {response}: {Brief(response)}"));
         }
 
         violations.AddRange(ForeignIdsIn(response.Text).Select(id => Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {response} carrying org-A id {id}")));
+        return violations;
+    }
+
+    /// <summary>Org B's own read of a non-list answer (a stream): 200, and the text carries no org-A id.</summary>
+    public async Task<IReadOnlyList<string>> OwnReadAsync(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(caller);
+        ArgumentNullException.ThrowIfNull(request);
+        var response = await SendAsync(caller, request).ConfigureAwait(false);
+        var violations = new List<string>();
+        if (response.Status != 200)
+        {
+            violations.Add(Describe(route, name, caller, $"{request} answered {response}, expected 200: {Brief(response)}"));
+        }
+
+        violations.AddRange(ForeignIdsIn(response.Text).Select(id => Describe(route, name, caller, $"{request} answered {response} carrying org-A id {id}")));
         return violations;
     }
 
@@ -990,7 +1021,7 @@ public sealed class RouteProbeRunner
             pages.Add(response.Text);
             if (response.Status != 200 || response.ItemCount is null)
             {
-                return (ids, $"GET {pageUrl} answered {response}: {Brief(response.Text)}", pages);
+                return (ids, $"GET {pageUrl} answered {response}: {Brief(response)}", pages);
             }
 
             ids.AddRange(Ids(response, idField));
@@ -1064,5 +1095,29 @@ public sealed class RouteProbeRunner
         _ => expect.ToString(),
     };
 
-    private static string Brief(string text) => text.Length <= 300 ? text : text[..300] + "…";
+    /// <summary>
+    /// The body for a failure message: JSON with every secret-bearing member and every JWT-shaped string masked,
+    /// capped at 300 chars; a non-JSON body prints only status, code and length.
+    /// </summary>
+    private static string Brief(ProbeResponse response)
+    {
+        if (response.Json is not { } json)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"non-JSON body ({response.Status} {response.Code ?? "-"}, {response.Text.Length} chars)");
+        }
+
+        var text = Redact(json)?.ToJsonString() ?? "null";
+        return text.Length <= 300 ? text : text[..300] + "…";
+    }
+
+    private static JsonNode? Redact(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => new JsonObject(element.EnumerateObject()
+            .Select(p => KeyValuePair.Create<string, JsonNode?>(p.Name, SecretMembers.Contains(p.Name) ? Redacted() : Redact(p.Value)))),
+        JsonValueKind.Array => new JsonArray([.. element.EnumerateArray().Select(Redact)]),
+        JsonValueKind.String when element.GetString()!.StartsWith("eyJ", StringComparison.Ordinal) => Redacted(),
+        _ => JsonValue.Create(element),
+    };
+
+    private static JsonValue Redacted() => JsonValue.Create("[redacted]")!;
 }

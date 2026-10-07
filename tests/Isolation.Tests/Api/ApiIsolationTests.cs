@@ -44,11 +44,19 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
     public async Task TokenScope_OtherProject_403()
     {
         var runner = new RouteProbeRunner(fixture);
-        var probes = IsolationRouteCases.ServiceProbes(fixture.World)
-            .Concat(IsolationRouteCases.MemberProbes(fixture.World).Where(p => p.Route.Template == CiToken))
+        var world = fixture.World;
+        var probes = IsolationRouteCases.ServiceProbes(world)
+            .Concat(IsolationRouteCases.MemberProbes(world).Where(p => p.Route.Template == CiToken))
             .ToList();
 
+        var before = await fixture.SnapshotOrgAsync(world.Acme.Id);
         var violations = await RunAsync(runner, probes);
+        var after = await fixture.SnapshotOrgAsync(world.Acme.Id);
+
+        if (before != after)
+        {
+            violations.Add($"org A's rows changed during {nameof(TokenScope_OtherProject_403)}:" + Environment.NewLine + Diff(before, after));
+        }
 
         probes.ShouldContain(p => p.Case.StartsWith("sibling project", StringComparison.Ordinal));
         violations.ShouldBeEmpty(Report("ci_producer scope", probes.Count, violations));
@@ -64,6 +72,8 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
         var runner = new RouteProbeRunner(fixture);
         var walks = IsolationRouteCases.Lists(fixture.World);
         var violations = new List<string>();
+        var cursorChecks = 0;
+        var noForeignCursor = new List<string>();
 
         foreach (var walk in walks)
         {
@@ -106,12 +116,32 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
 
             if (walk.ForeignCaller is not null && walk.ForeignUrl is not null)
             {
-                violations.AddRange(await ForeignCursorAsync(runner, walk));
+                var (executed, cursorViolations) = await ForeignCursorAsync(runner, walk);
+                violations.AddRange(cursorViolations);
+                if (executed)
+                {
+                    cursorChecks++;
+                }
+                else
+                {
+                    noForeignCursor.Add($"{walk.Route} [{walk.Case}]");
+                }
             }
         }
 
+        var streams = IsolationRouteCases.OwnStreams(fixture.World);
+        violations.AddRange(await RunAsync(runner, streams));
+
+        var cursorNote = noForeignCursor.Count == 0
+            ? string.Empty
+            : $"{Environment.NewLine}org-A first page had no next_cursor (cross-cursor step not exercised) for {noForeignCursor.Count} walk(s): {string.Join("; ", noForeignCursor)}";
+        if (cursorChecks == 0)
+        {
+            violations.Add("no org-A cursor was fed to org B: no walk with a foreign caller got an org-A next_cursor");
+        }
+
         walks.Count.ShouldBeGreaterThan(0);
-        violations.ShouldBeEmpty(Report("full-pagination lists", walks.Count, violations));
+        violations.ShouldBeEmpty(Report("full-pagination lists", walks.Count, violations) + cursorNote);
     }
 
     /// <summary>
@@ -160,14 +190,17 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
         return violations;
     }
 
-    /// <summary>Org A's first-page cursor on org B's list: refused (4xx, never 5xx) or only org-B items, never an org-A id.</summary>
-    private static async Task<IReadOnlyList<string>> ForeignCursorAsync(RouteProbeRunner runner, ListWalk walk)
+    /// <summary>
+    /// Org A's first-page cursor on org B's list: refused (4xx, never 5xx) or only org-B items, never an org-A id.
+    /// <c>Executed</c> is false when org A's first page has no <c>next_cursor</c>.
+    /// </summary>
+    private static async Task<(bool Executed, IReadOnlyList<string> Violations)> ForeignCursorAsync(RouteProbeRunner runner, ListWalk walk)
     {
         const string name = "org-A cursor fed to org B";
         var cursor = await runner.FirstCursorAsync(walk.ForeignCaller!, walk.ForeignUrl!);
         if (cursor is null)
         {
-            return [];
+            return (false, []);
         }
 
         var url = walk.Url + (walk.Url.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "cursor=" + Uri.EscapeDataString(cursor);
@@ -179,7 +212,7 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
         }
 
         violations.AddRange(runner.ForeignIdsIn(response.Text).Select(id => RouteProbeRunner.Describe(walk.Route, name, walk.Caller, $"GET {url} yielded org-A id {id}")));
-        return violations;
+        return (true, violations);
     }
 
     private static string Report(string what, int count, List<string> violations)
