@@ -202,6 +202,27 @@ describe('resolveIdentity (annotation, sidecar, conflict)', () => {
     expect(warnings.map((warning) => warning.code)).toEqual(['invalid_annotation']);
   });
 
+  it('AC1: a nil-UUID annotation is refused and treated as absent', () => {
+    const nil = '00000000-0000-0000-0000-000000000000';
+    const warnings: WarningPayload[] = [];
+    const identity = resolveIdentity(
+      fakeTest({ annotations: [{ type: 'evidgate.id', description: nil }] }),
+      { warn: (warning) => warnings.push(warning) },
+    );
+    expect(identity.case_id).toBeUndefined();
+    expect(identity.source).toBeUndefined();
+    expect(warnings.map((warning) => warning.code)).toEqual(['invalid_annotation']);
+
+    // Treated as absent, not as a conflict: a sidecar mapping still resolves the test.
+    const mapped = resolveIdentity(
+      fakeTest({ annotations: [{ type: 'evidgate.id', description: nil }] }),
+      { sidecar: fakeIndex({ 'tests/math.spec.ts': CASE_B }) },
+    );
+    expect(mapped.case_id).toBe(CASE_B);
+    expect(mapped.source).toBe('sidecar');
+    expect(mapped.identity_conflict).toBeUndefined();
+  });
+
   it('AC1: two different evidgate.id annotations on one test are a conflict', () => {
     const warnings: WarningPayload[] = [];
     const identity = resolveIdentity(
@@ -486,6 +507,9 @@ describe('reporter identity wiring', () => {
 
     const summary = warningsOf(readEnvelopes(spool)).find((warning) => warning.code === 'unmapped');
     expect(summary?.count).toBe(1);
+    expect(summary?.message).toContain(
+      '(0 conflicted, 1 no case_id, 0 no variant_hash, 0 no target_env)',
+    );
   });
 
   it('AC2: a fully mapped run does not fail', () => {
@@ -653,6 +677,7 @@ describe('reporter identity wiring', () => {
       const line = String(write.mock.calls[0]?.[0]);
       expect(line).toContain('[evidgate]');
       expect(line).toContain('EVIDGATE_ALLOW_UNMAPPED=1');
+      expect(line).toContain('(0 conflicted, 1 no case_id, 0 no variant_hash, 0 no target_env)');
     } finally {
       write.mockRestore();
     }

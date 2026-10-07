@@ -129,6 +129,7 @@ describe('independent identity QA', () => {
     ['two different UUIDs', [ID, OTHER], undefined, true],
     ['whitespace around UUID', [` ${ID} `], undefined, false],
     ['not a UUID', ['invalid-identifier'], undefined, false],
+    ['nil UUID', ['00000000-0000-0000-0000-000000000000'], undefined, false],
   ] as const)(
     'handles %s annotations without silently selecting a conflict',
     (_name, ids, expected, conflict) => {

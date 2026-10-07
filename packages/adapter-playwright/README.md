@@ -224,14 +224,15 @@ reach the envelope.
 Every test envelope carries the resolved identity. The full contract is
 `contracts/adapter/playwright-mapping.md`; the summary:
 
-- **`ext.case_id`** — the `evidgate.id` annotation first (a UUID, any version,
-  lower-cased), else the `evidgate.cases.yaml` sidecar manifest of the test file's
-  own directory or an ancestor directory up to the suite's common ancestor
-  (03.1.1-T1). Both present and **different** is a conflict: `ext.identity_conflict:
-true`, **no** `case_id`, and an `identity_conflict` warning naming the location —
-  never a silent pick. An invalid annotation UUID is reported as `invalid_annotation`
-  and treated as absent. The sidecar index is built once at `onBegin` from the suite's
-  test files.
+- **`ext.case_id`** — the `evidgate.id` annotation first (the strict canonical case id
+  the server accepts: the 36-character hyphenated UUID in any version and any case,
+  lower-cased, **never** the nil UUID), else the `evidgate.cases.yaml` sidecar manifest
+  of the test file's own directory or an ancestor directory up to the suite's common
+  ancestor (03.1.1-T1). Both present and **different** is a conflict:
+  `ext.identity_conflict: true`, **no** `case_id`, and an `identity_conflict` warning
+  naming the location — never a silent pick. An annotation that is not a canonical case
+  id (including the nil UUID) is reported as `invalid_annotation` and treated as absent.
+  The sidecar index is built once at `onBegin` from the suite's test files.
 - **`ext.variant_hash`** — the server `VariantNormalizer` hash of the Playwright
   project's declared params (`metadata.evidgate.params`; explicit and opt-in, **never**
   derived from `use`, the project name, the title or the path): `sha256:<hex>` over the
@@ -254,16 +255,22 @@ true`, **no** `case_id`, and an `identity_conflict` warning naming the location 
 - **Exit code (AC2)** — `onEnd` returns `{ status: 'failed' }` when any test lacked a
   complete identity (no `case_id`, no `variant_hash` or no `target_env`), unless
   `EVIDGATE_ALLOW_UNMAPPED=1`; the override applies only to a `passed` run, and the gate
-  writes one `[evidgate]` line to stderr. Playwright awaits the reporter's `onEnd` result
-  and overrides the run status with it, so a run that lost identity fails the CI job
-  instead of passing with partial evidence.
+  writes one `[evidgate]` line to stderr naming the per-cause counts
+  (`N conflicted, N no case_id, N no variant_hash, N no target_env`). The causes are
+  counted independently, so one test can appear in several of them (a conflicted test has
+  no `case_id`); the leading `N test(s)` counts each test once. Playwright awaits the
+  reporter's `onEnd` result and overrides the run status with it, so a run that lost
+  identity fails the CI job instead of passing with partial evidence.
 
 `execution_key` stays server-owned (00 §7): the reporter emits
 `PLACEHOLDER_EXECUTION_KEY = '0'.repeat(64)` (valid per the schema pattern
 `^[0-9a-f]{64}$`) for test and `run.log` envelopes and never hashes it. 05.2.1-T3.1
 defines the byte layout and owns the real wiring; until then an adapter batch cannot
 match a planned execution (T10 `unknown_execution_key`). A caller may inject an
-`identity` resolver, which wins over the built-in mapping.
+`identity` resolver, which wins over the built-in mapping. The injected resolver is held
+to the **same completeness gate**: every identity it returns must carry `case_id`,
+`variant_hash` and `target_env`, or the run fails at `onEnd` unless
+`EVIDGATE_ALLOW_UNMAPPED=1`.
 
 ## Version guard
 

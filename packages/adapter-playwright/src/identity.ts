@@ -1,13 +1,14 @@
 // 04.3.2-T1.2/T1.4: case/variant identity mapping. The server owns `execution_key`
 // (00 §7); the reporter resolves the case identity (the `evidgate.id` annotation first,
-// else the per-directory sidecar manifest), the variant hash (the server
+// else the sidecar manifest of the test file's own directory or an ancestor directory up
+// to the suite's common ancestor), the variant hash (the server
 // `VariantNormalizer` semantics over the project's declared params) and the target env,
 // and emits them as `ext.case_id`, `ext.variant_hash` and `ext.target_env`.
 // `execution_key` stays the schema-valid placeholder behind the injectable resolver seam
 // (coordinator decision 4): the reporter never hashes it.
 import type { TestCase } from '@playwright/test/reporter';
 
-import { brief, type SidecarIndex } from './sidecar.js';
+import { brief, isCanonicalCaseId, type SidecarIndex } from './sidecar.js';
 import { normalizeVariant } from './variant.js';
 
 /** 64 hex zeros — a schema-valid stand-in until the server derives the real key. */
@@ -18,9 +19,6 @@ export const TARGET_ENV_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 /** The annotation type that carries a catalog case id (00 §7, 03.1.1). */
 export const EVIDGATE_ID_ANNOTATION = 'evidgate.id';
-
-/** Any-version UUID; the resolved id is lower-cased before use. */
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The shared empty parameter set: every project without declared params hashes once. */
 const EMPTY_PARAMS: Record<string, never> = {};
@@ -290,9 +288,10 @@ interface AnnotationRead {
 }
 
 /**
- * Reads the `evidgate.id` annotations of a test: a valid UUID (any version) is
- * lower-cased; an invalid description is reported once and treated as absent; two
- * different valid ids are a conflict.
+ * Reads the `evidgate.id` annotations of a test: the strict canonical case id the server
+ * accepts (`isCanonicalCaseId`: the 36-character hyphenated UUID in any version and any
+ * case, never the nil UUID) is lower-cased; an invalid description is reported once and
+ * treated as absent; two different valid ids are a conflict.
  */
 function readAnnotation(
   test: TestCase,
@@ -305,7 +304,7 @@ function readAnnotation(
   for (const annotation of annotations) {
     if (annotation?.type !== EVIDGATE_ID_ANNOTATION) continue;
     const description = annotation.description;
-    if (typeof description === 'string' && UUID_PATTERN.test(description)) {
+    if (typeof description === 'string' && isCanonicalCaseId(description)) {
       ids.add(description.toLowerCase());
     } else {
       invalid = true;
@@ -314,7 +313,7 @@ function readAnnotation(
   if (invalid) {
     warn?.({
       code: 'invalid_annotation',
-      message: `an ${EVIDGATE_ID_ANNOTATION} annotation is not a UUID and was ignored`,
+      message: `an ${EVIDGATE_ID_ANNOTATION} annotation is not a canonical case id and was ignored`,
       path: location,
     });
   }
@@ -357,14 +356,10 @@ function variantOutcome(test: TestCase, deps: IdentityResolverDeps): VariantOutc
     if (cached !== undefined) return cached;
   }
 
-  // A defensive own-property copy for a plain object; arrays and scalars pass through so
-  // the normaliser refuses them.
-  const params =
-    typeof rawParams === 'object' && rawParams !== null && !Array.isArray(rawParams)
-      ? Object.fromEntries(Object.entries(rawParams))
-      : rawParams;
-
-  const result = normalizeVariant(params);
+  // No defensive copy: `normalizeVariant` reads only own enumerable properties (never a
+  // prototype lookup) and never mutates its input, so the declared object is passed as is;
+  // arrays and scalars pass through so the normaliser refuses them.
+  const result = normalizeVariant(rawParams);
   const outcome: VariantOutcome = result.ok ? { hash: result.hash } : {};
   if (!result.ok) {
     // Paths and reasons only — a refused value may itself be the secret, never echoed.

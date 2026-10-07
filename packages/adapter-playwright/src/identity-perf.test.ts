@@ -21,7 +21,8 @@ const project = {
 };
 
 function caseId(index: number): string {
-  // index + 1 so the first id is never the nil UUID (refused by the strict UUID check).
+  // index + 1 so the first id is never the nil UUID (refused by the strict canonical
+  // case-id check, `isCanonicalCaseId`, on both the annotation and the sidecar path).
   return `${(index + 1).toString(16).padStart(8, '0')}-0000-0000-0000-000000000000`;
 }
 

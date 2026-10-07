@@ -17,9 +17,12 @@ and sidecar), 03.2.1-T2.1 (`VariantNormalizer`), 04.3.2 §3/§5/§6, 05.2.1-T3
 resolved per test, in this order:
 
 1. **Annotation.** A `test.annotations` entry with `type === 'evidgate.id'` and a
-   `description` that parses as a UUID (any version, per 00 §7). The resolved id
-   is **lower-cased** before use. An invalid description is reported once as
-   `invalid_annotation` and treated as **absent** (never as an id).
+   `description` that is the strict canonical case id the server accepts
+   (`AnnotationParser.IsCanonicalUuid`): the 36-character hyphenated UUID in any
+   version and any case, **never** the nil UUID. The resolved id is **lower-cased**
+   before use. Any other description — a non-UUID, a `urn:uuid:`-prefixed id or the
+   nil UUID — is reported once as `invalid_annotation` and treated as **absent**
+   (never as an id), exactly as the sidecar path refuses the same spellings per entry.
 2. **Sidecar manifest.** `evidgate.cases.yaml` in the test file's own directory or
    in an ancestor directory up to the **common ancestor** of the suite's test files
    (03.1.1-T1, TL T55; schema `contracts/catalog/sidecar.v1.json`). The index is
@@ -189,13 +192,13 @@ never echoes file content or a parameter value.
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `duplicate_case_id`      | the same `case_id` resolved for two different tests; one warning naming both `file:line:column` locations (with the test titles when the two tests share one location), emitted when the second test is seen. "Different" is by location file + title path **without the project segment**, so one test under several Playwright projects (case × variant) or `repeatEach` repeats is one test, not a duplicate; two tests mapped by the same sidecar file are not a duplicate either (one file → one case, as the server's `CaseDiscovery`) |
 | `identity_conflict`      | annotation and sidecar disagree (or two different `evidgate.id` annotations); names the test location                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `invalid_annotation`     | an `evidgate.id` annotation whose description is not a UUID; treated as absent                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `invalid_annotation`     | an `evidgate.id` annotation whose description is not a canonical case id (a non-UUID, a `urn:uuid:`-prefixed id or the nil UUID); treated as absent                                                                                                                                                                                                                                                                                                                                                                                          |
 | `invalid_variant_params` | the declared params were refused; names the problem paths and reasons only                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `invalid_target_env`     | `EVIDGATE_TARGET_ENV` does not match the `targetEnv` shape (warned once, falls back to the project name); additionally one warning **per project** when the project name is invalid too (no value echoed)                                                                                                                                                                                                                                                                                                                                    |
 | `invalid_sidecar`        | a sidecar manifest was refused (size, encoding, YAML shape, schema) or the 8 MiB aggregate budget was exhausted                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `invalid_sidecar_entry`  | one sidecar entry was refused (path outside the directory, missing file, an `evidgate.id` that is a `urn:uuid:`-prefixed or nil UUID)                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `sidecar_conflict`       | two sidecars claim the same test file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `unmapped`               | `onEnd` summary: how many tests ended without a **complete identity** — no `case_id`, no `variant_hash` or no `target_env`, or a conflict (and how many conflicted)                                                                                                                                                                                                                                                                                                                                                                          |
+| `unmapped`               | `onEnd` summary: how many tests ended without a **complete identity** — no `case_id`, no `variant_hash` or no `target_env`, or a conflict — with the per-cause breakdown in the message (`conflicted`, `no case_id`, `no variant_hash`, `no target_env`; counted independently, so one test can appear in several)                                                                                                                                                                                                                           |
 | `warnings_truncated`     | `onEnd` summary: how many warnings the reporter's caps suppressed — the 100-envelope cap plus the sidecar loader's own warning cap                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Sidecar warnings are emitted at `onBegin` (after the capability and `run_begin`
@@ -217,7 +220,21 @@ only to a `passed` run: an `interrupted` or `timedout` run keeps its own status.
 When the gate trips, `onEnd` also writes one line to **stderr** so the CI log
 explains the failure:
 
-    [evidgate] N test(s) without a complete identity (M conflicted); set EVIDGATE_ALLOW_UNMAPPED=1 to allow
+    [evidgate] N test(s) without a complete identity (C conflicted, C no case_id, C no variant_hash, C no target_env); set EVIDGATE_ALLOW_UNMAPPED=1 to allow
+
+The leading `N` counts each test once; the four per-cause counts are independent,
+so one test can appear in several of them (a conflicted test has no `case_id` and
+is counted in both `conflicted` and `no case_id`). The same breakdown is carried in
+the `unmapped` summary envelope's `message`, so the spool explains the failure too.
+The most common cause is a Playwright project name that is not a valid target env
+(the default unnamed project, or a name like `Mobile Safari`), which
+`EVIDGATE_TARGET_ENV` fixes.
+
+An injected `identity` resolver (the reporter's `identity` option, which wins over
+the built-in mapping) is held to the **same completeness gate**: every identity it
+returns must carry `case_id`, `variant_hash` and `target_env`, or the run fails at
+`onEnd` unless `EVIDGATE_ALLOW_UNMAPPED=1`. A custom resolver that returns only
+`execution_key` and `case_id` therefore fails every passed run.
 
 Playwright awaits the reporter's `onEnd` result and overrides the run status with
 it, so a run that silently lost identity fails the CI job instead of passing with

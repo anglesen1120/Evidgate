@@ -15,8 +15,8 @@
 // Warnings are data: `run.log` envelopes with `ext.warn`. `onEnd` returns
 // `{ status: 'failed' }` when any test lacked a complete identity (no `case_id`, no
 // `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`;
-// the gate also writes one `[evidgate]` line to stderr so a CI log explains the failure,
-// and it overrides the status only for a `passed` run (S3/C3).
+// the gate also writes one `[evidgate]` line to stderr, naming the per-cause counts, so a
+// CI log explains the failure, and it overrides the status only for a `passed` run (S3/C3).
 import type {
   FullConfig,
   FullResult,
@@ -108,6 +108,9 @@ export class EvidgateReporter implements Reporter {
   private resolver: IdentityResolver | undefined;
   private unidentifiedCount = 0;
   private conflictCount = 0;
+  private noCaseIdCount = 0;
+  private noVariantHashCount = 0;
+  private noTargetEnvCount = 0;
   private warningCount = 0;
   private suppressedWarnings = 0;
   private bufferedError: Error | null = null;
@@ -288,8 +291,8 @@ export class EvidgateReporter implements Reporter {
    * (AC2/S3); Playwright awaits the return value and overrides the run status with it
    * (node_modules/playwright/lib/runner/index.js:1644). The override applies only to a
    * `passed` run — an `interrupted`/`timedout` run keeps its own status (C3). The gate
-   * also writes one `[evidgate]` line to stderr so a CI log explains the failure. A
-   * buffered write failure still throws synchronously.
+   * also writes one `[evidgate]` line to stderr, naming the per-cause counts, so a CI log
+   * explains the failure. A buffered write failure still throws synchronously.
    *
    * The declared return type is `void`, not the interface's
    * `Promise<{status?} | undefined | void> | void`: the reporter must keep throwing
@@ -307,7 +310,7 @@ export class EvidgateReporter implements Reporter {
           code: 'unmapped',
           message:
             `${this.unidentifiedCount} test(s) without a complete identity ` +
-            `(${this.conflictCount} conflicted)`,
+            `(${this.identityCauses()})`,
           count: this.unidentifiedCount,
         });
       }
@@ -333,7 +336,7 @@ export class EvidgateReporter implements Reporter {
       // C3: one line, so a run that fails on identity says why in the CI log.
       process.stderr.write(
         `[evidgate] ${this.unidentifiedCount} test(s) without a complete identity ` +
-          `(${this.conflictCount} conflicted); set EVIDGATE_ALLOW_UNMAPPED=1 to allow\n`,
+          `(${this.identityCauses()}); set EVIDGATE_ALLOW_UNMAPPED=1 to allow\n`,
       );
     }
     let closeError: Error | null = null;
@@ -366,12 +369,20 @@ export class EvidgateReporter implements Reporter {
     return this.resolver(test);
   }
 
-  /** Counts each distinct test once: conflicted, or without a complete identity (AC2/S3). */
+  /**
+   * Counts each distinct test once. `unidentifiedCount` counts a test once when any of the
+   * three identity fields is missing; the per-cause counters are independent, so one test
+   * can be counted in several of them — a conflicted test has no `case_id` and is counted
+   * in both `conflictCount` and `noCaseIdCount`.
+   */
   private noteIdentity(test: TestCase, identity: Identity): void {
     const key = testKey(test);
     if (this.seenTests.has(key)) return;
     this.seenTests.add(key);
     if (identity.identity_conflict === true) this.conflictCount += 1;
+    if (identity.case_id === undefined) this.noCaseIdCount += 1;
+    if (identity.variant_hash === undefined) this.noVariantHashCount += 1;
+    if (identity.target_env === undefined) this.noTargetEnvCount += 1;
     if (
       identity.case_id === undefined ||
       identity.variant_hash === undefined ||
@@ -379,6 +390,18 @@ export class EvidgateReporter implements Reporter {
     ) {
       this.unidentifiedCount += 1;
     }
+  }
+
+  /**
+   * The per-cause breakdown of the identity gate, appended to the `unmapped` summary and
+   * the stderr line so a CI log reader can tell which fix applies (a Playwright project
+   * name that is not a valid target env, for example, is fixed by `EVIDGATE_TARGET_ENV`).
+   */
+  private identityCauses(): string {
+    return (
+      `${this.conflictCount} conflicted, ${this.noCaseIdCount} no case_id, ` +
+      `${this.noVariantHashCount} no variant_hash, ${this.noTargetEnvCount} no target_env`
+    );
   }
 
   /** Emits one warning envelope, up to the cap; the overflow is counted, not emitted. */

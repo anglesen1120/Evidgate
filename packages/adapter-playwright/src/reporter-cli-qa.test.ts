@@ -136,6 +136,9 @@ describe('independent reporter real CLI QA', () => {
         expect(status).toBe(1);
         expect(stderr).toContain('[evidgate]');
         expect(stderr).toContain('EVIDGATE_ALLOW_UNMAPPED=1');
+        expect(stderr).toContain(
+          '(1 conflicted, 1 no case_id, 0 no variant_hash, 0 no target_env)',
+        );
       }
     }
   }, 120_000);
