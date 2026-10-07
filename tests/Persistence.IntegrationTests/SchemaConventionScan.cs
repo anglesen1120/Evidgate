@@ -84,6 +84,10 @@ internal static class SchemaConventionScan
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only environment configuration (05.1.2-T1.1; migration 0024): a revision is never updated or deleted, so it keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
         new SchemaExemption(
+            "public.policy_revision",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only policy revisions (07.1.1-T1.1; migration 0025): the trigger and the revoked grants refuse UPDATE/DELETE except the §6 draft -> active -> retired move, so it keeps created_at only — no updated_at, and its `version` is bumped by the 0025 lifecycle trigger on a state transition, never the shared `set_updated_at_and_version`. Its tenant key, composite FK and RLS are NOT exempt."),
+        new SchemaExemption(
             "public.rls_probe",
             SchemaRule.VersionTrigger,
             "The tenancy template of migration 0003 predates the shared trigger function (0004, M1W3-01) and 0003 is checksum-locked, so the trigger cannot be added there; 0004/0005 are the copy source for module tables."),
