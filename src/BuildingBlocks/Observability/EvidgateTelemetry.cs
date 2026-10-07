@@ -32,6 +32,9 @@ public static class EvidgateTelemetry
     /// <summary>Counter of manifests refused at upload, tagged by reason (05.1.1 §11).</summary>
     public const string ManifestRejectedMetricName = "evidgate_manifest_rejected_total";
 
+    /// <summary>Counter of adapter capabilities refused at first send, tagged by code and protocol-major bucket (04.7.1-T2).</summary>
+    public const string AdapterCapabilityRejectedMetricName = "evidgate_adapter_capability_rejected_total";
+
     /// <summary>Histogram of pipeline-handler durations in milliseconds (01.4.2-T4.1, the C2 telemetry stage).</summary>
     public const string PipelineDurationMetricName = "evidgate.pipeline.duration";
 
@@ -54,6 +57,11 @@ public static class EvidgateTelemetry
         ManifestRejectedMetricName,
         unit: "{manifest}",
         description: "Manifests refused at upload, by reason (05.1.1). Never labelled with a manifest value, case name or hash.");
+
+    private static readonly Counter<long> AdapterCapabilityRejections = Meter.CreateCounter<long>(
+        AdapterCapabilityRejectedMetricName,
+        unit: "{capability}",
+        description: "Adapter capabilities refused at first send, by code and protocol-major bucket (04.7.1). Never labelled with a document value, adapter name or hash.");
 
     private static readonly Histogram<double> PipelineDurations = Meter.CreateHistogram<double>(
         PipelineDurationMetricName,
@@ -94,6 +102,32 @@ public static class EvidgateTelemetry
     /// <param name="reason">The reason token; never a value from the manifest.</param>
     public static void RecordManifestRejected(string reason) =>
         ManifestRejections.Add(1, new KeyValuePair<string, object?>("reason", reason));
+
+    /// <summary>
+    /// Counts one adapter capability refused at first send (04.7.1-T2), tagged by the
+    /// rejection <paramref name="code"/> and a bounded protocol-major bucket.
+    /// </summary>
+    /// <param name="code">The <c>ApiErrorCode</c> token: <c>capability_invalid</c>, <c>unsupported_protocol_major</c> or <c>capability_conflict</c>; never a document value.</param>
+    /// <param name="protocolMajor">The adapter's declared major, bucketed to <c>1</c>–<c>8</c> or <c>other</c>; <c>null</c> when the document carried none.</param>
+    public static void RecordAdapterCapabilityRejected(string code, int? protocolMajor) =>
+        AdapterCapabilityRejections.Add(
+            1,
+            new KeyValuePair<string, object?>("code", code),
+            new KeyValuePair<string, object?>("protocol_major", ProtocolMajorBucket(protocolMajor)));
+
+    /// <summary>Bounds the protocol-major label to <c>1</c>–<c>8</c> (the majors a v1 server can see) or <c>other</c>, so the tag stays low-cardinality.</summary>
+    private static string ProtocolMajorBucket(int? protocolMajor) => protocolMajor switch
+    {
+        1 => "1",
+        2 => "2",
+        3 => "3",
+        4 => "4",
+        5 => "5",
+        6 => "6",
+        7 => "7",
+        8 => "8",
+        _ => "other",
+    };
 
     /// <summary>
     /// Records the handler duration of one pipeline message, tagged with the

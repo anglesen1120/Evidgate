@@ -9,6 +9,9 @@
     <ProjectReference Include="..\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <!-- 04.7.1-T2.2/T2.3: the tenant transaction (Dapper) and the Corvus schema set the capability body validates against. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
   </ItemGroup>
   <!--
     01.1.2-T2.1: the module implementation stays internal (00 §5.5), so the two
@@ -20,5 +23,6 @@
     <InternalsVisibleTo Include="Evidgate.Api" />
     <InternalsVisibleTo Include="Evidgate.Worker" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
+    <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
   </ItemGroup>
 </Project>
