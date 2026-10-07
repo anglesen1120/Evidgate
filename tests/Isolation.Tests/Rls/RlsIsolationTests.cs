@@ -524,8 +524,7 @@ public sealed class RlsIsolationTests : HarnessTest
         }
 
         var relations = await ReadRelationFactsAsync(connection, Token);
-        relations.ShouldContain(
-            facts => facts.Kind is "r" or "p",
+        relations.Any(facts => facts.Kind is "r" or "p").ShouldBeTrue(
             "the relation scan found no base table: the view/foreign-table scan would prove nothing about the migrated schema");
 
         foreach (var relation in relations.Where(facts => facts.Kind is "v" or "m" or "f"))
