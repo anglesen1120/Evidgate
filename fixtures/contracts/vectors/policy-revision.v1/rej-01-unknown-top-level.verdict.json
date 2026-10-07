@@ -1,0 +1,5 @@
+{
+  "schema": "policy-revision.v1",
+  "valid": false,
+  "errors": [{ "index": null, "path": "/bogus", "reason": "additional_properties" }]
+}

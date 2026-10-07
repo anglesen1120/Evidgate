@@ -1,6 +1,8 @@
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -33,10 +35,15 @@ internal sealed record PolicyRevisionView(
 /// Handler of <see cref="GetPolicyRevisionQuery"/>: one statement, then the corruption check of 07.1.1-T2.2 — the
 /// stored <c>body</c> is re-canonicalised and re-hashed and must equal the stored <c>hash</c> column, so a row
 /// mutated outside the append-only path (the app role holds no <c>UPDATE</c> grant) is refused on read instead of
-/// being served under the wrong content address. Another tenant's revision is 404 (RLS hides it), never 403.
+/// being served under the wrong content address. Another tenant's revision is 404 (RLS hides it), never 403, and so
+/// is one outside the credential's project scope (07.1.1-T3, finding S3).
 /// </summary>
 [Permission(Permissions.Policy.Read)]
-internal sealed class GetPolicyRevisionQueryHandler(ITenantDb db, IPolicyHasher hasher)
+internal sealed class GetPolicyRevisionQueryHandler(
+    ITenantDb db,
+    IPolicyHasher hasher,
+    IRequestPrincipalAccessor principals,
+    IRequestTenantContextAccessor tenant)
     : IQueryHandler<GetPolicyRevisionQuery, Result<PolicyRevisionView>>
 {
     /// <inheritdoc />
@@ -49,7 +56,7 @@ internal sealed class GetPolicyRevisionQueryHandler(ITenantDb db, IPolicyHasher 
             new { id = query.Id },
             cancellationToken).ConfigureAwait(false);
 
-        if (row is null)
+        if (row is null || PolicyScope.Project(row.ProjectId, principals, tenant) is not null)
         {
             return Result.Failure<PolicyRevisionView>(PolicyRevisionReadErrors.RevisionNotFound);
         }

@@ -1,0 +1,13 @@
+{
+  "required_suites": ["checkout", "payments"],
+  "required_cases": ["checkout/guest", "checkout/member", "payments/card"],
+  "critical_cases": ["checkout/guest"],
+  "allowed_skips": ["payments/card"],
+  "flaky_budget": 3,
+  "required_artifacts": ["junit_xml", "screenshot"],
+  "collection_timeout_minutes": 120,
+  "late_window_minutes": 30,
+  "freshness_minutes": 1440,
+  "quarantine_ids": ["00000000-0000-0000-0000-000000000001"],
+  "gating_refs": { "default_branch": true, "release_branch_glob": "release/*" }
+}

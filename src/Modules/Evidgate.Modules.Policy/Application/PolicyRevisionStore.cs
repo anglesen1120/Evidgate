@@ -9,12 +9,24 @@ using Npgsql;
 
 namespace Evidgate.Modules.Policy.Application;
 
-/// <summary>One append of a policy revision: the row's id and number, its hash, and whether this call created it.</summary>
+/// <summary>One append of a policy revision: the stored row's columns and whether this call created it.</summary>
 /// <param name="Id">The revision id (the existing row's id when the hash was already on file).</param>
 /// <param name="RevisionNo">The revision number.</param>
 /// <param name="Hash">The content address.</param>
+/// <param name="State">The row's lifecycle state.</param>
+/// <param name="CreatedBy">The member that wrote the row.</param>
+/// <param name="CreatedAt">When the row was stored, UTC.</param>
+/// <param name="Version">The row's optimistic-concurrency token.</param>
 /// <param name="Created">True when this call wrote the row.</param>
-internal sealed record PolicyRevisionAppend(Guid Id, int RevisionNo, string Hash, bool Created);
+internal sealed record PolicyRevisionAppend(
+    Guid Id,
+    int RevisionNo,
+    string Hash,
+    string State,
+    Guid CreatedBy,
+    DateTimeOffset CreatedAt,
+    int Version,
+    bool Created);
 
 /// <summary>
 /// The append-only store of policy revisions (07.1.1-T1): one statement per append, the project row locked so the
@@ -29,15 +41,30 @@ internal sealed record PolicyRevisionAppend(Guid Id, int RevisionNo, string Hash
 /// <c>lock_timeout</c> is a typed 503 (<see cref="PolicyRevisionErrors.Busy"/>). Both are decided before the slot
 /// query and the insert, so a refused append writes no row.
 /// </para>
+/// <para>
+/// An optional <c>expectedHeadId</c> (07.1.1-T3, AC5) is compared against the project's current head revision
+/// <em>after</em> the project row lock and before the slot query, so the check and the append are serialised by the
+/// same lock: a stale <c>If-Match</c> is a typed 412
+/// (<see cref="PolicyRevisionErrors.PreconditionFailed"/>) and writes nothing.
+/// </para>
 /// </summary>
 internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor scopes, IPolicyHasher hasher)
 {
     /// <summary>Appends one revision, or returns the existing row when the hash is already on file.</summary>
+    /// <param name="projectId">The project the revision belongs to.</param>
+    /// <param name="body">The raw policy body.</param>
+    /// <param name="createdBy">The member writing the revision.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <param name="expectedHeadId">
+    /// The head revision id the caller's <c>If-Match</c> named, or null for no precondition. Checked under the
+    /// project row lock, so a concurrent append cannot slip between the check and the insert.
+    /// </param>
     public async ValueTask<Result<PolicyRevisionAppend>> AppendAsync(
         Guid projectId,
         string body,
         Guid createdBy,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? expectedHeadId = null)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Policy, nameof(AppendAsync));
 
@@ -92,6 +119,21 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
             return Result.Failure<PolicyRevisionAppend>(PolicyRevisionErrors.ProjectNotFound);
         }
 
+        // The If-Match precondition (AC5) is decided here, under the project row lock: a concurrent append cannot
+        // move the head between this read and the insert below, so a caller whose view is stale writes nothing.
+        if (expectedHeadId is { } expected)
+        {
+            var head = await db.ScalarAsync<Guid?>(
+                PolicyRevisionSql.HeadRevision,
+                new { org_id = orgId, project_id = projectId },
+                cancellationToken).ConfigureAwait(false);
+
+            if (head != expected)
+            {
+                return Result.Failure<PolicyRevisionAppend>(PolicyRevisionErrors.PreconditionFailed(head));
+            }
+        }
+
         var slot = await db.QuerySingleOrDefaultAsync<SlotRow>(
             PolicyRevisionSql.RevisionSlot,
             new { org_id = orgId, project_id = projectId, hash },
@@ -99,7 +141,15 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
 
         if (slot.ExistingId is { } existingId)
         {
-            return Result.Success(new PolicyRevisionAppend(existingId, slot.ExistingNo!.Value, hash, false));
+            return Result.Success(new PolicyRevisionAppend(
+                existingId,
+                slot.ExistingNo!.Value,
+                hash,
+                slot.ExistingState!,
+                slot.ExistingCreatedBy!.Value,
+                slot.ExistingCreatedAt!.Value,
+                slot.ExistingVersion!.Value,
+                false));
         }
 
         var id = Guid.CreateVersion7();
@@ -120,7 +170,15 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
 
         if (inserted is not null)
         {
-            return Result.Success(new PolicyRevisionAppend(inserted.Id, inserted.RevisionNo, hash, true));
+            return Result.Success(new PolicyRevisionAppend(
+                inserted.Id,
+                inserted.RevisionNo,
+                hash,
+                inserted.State,
+                inserted.CreatedBy,
+                inserted.CreatedAt,
+                inserted.Version,
+                true));
         }
 
         // A concurrent append of the same hash that slipped past the lock: read the winner's row (the same second
@@ -130,7 +188,15 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
             new { org_id = orgId, project_id = projectId, hash },
             cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("the revision insert returned neither a new nor an existing row");
 
-        return Result.Success(new PolicyRevisionAppend(existing.Id, existing.RevisionNo, hash, false));
+        return Result.Success(new PolicyRevisionAppend(
+            existing.Id,
+            existing.RevisionNo,
+            hash,
+            existing.State,
+            existing.CreatedBy,
+            existing.CreatedAt,
+            existing.Version,
+            false));
     }
 
     private sealed class ProjectRow
@@ -144,6 +210,14 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
 
         public int? ExistingNo { get; set; }
 
+        public string? ExistingState { get; set; }
+
+        public Guid? ExistingCreatedBy { get; set; }
+
+        public DateTimeOffset? ExistingCreatedAt { get; set; }
+
+        public int? ExistingVersion { get; set; }
+
         public int NextNo { get; set; }
     }
 
@@ -152,6 +226,14 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
         public Guid Id { get; set; }
 
         public int RevisionNo { get; set; }
+
+        public string State { get; set; } = string.Empty;
+
+        public Guid CreatedBy { get; set; }
+
+        public DateTimeOffset CreatedAt { get; set; }
+
+        public int Version { get; set; }
     }
 }
 
@@ -169,6 +251,9 @@ internal static class PolicyRevisionErrors
         ApiErrorCode.Unavailable,
         "the project's policy revisions are being changed by another request; retry shortly",
         503);
+
+    /// <summary>412: the caller's <c>If-Match</c> named a head that is not the project's current head (AC5).</summary>
+    internal static Error PreconditionFailed(Guid? currentHeadId) => PolicyErrors.Stale(currentHeadId);
 }
 
 /// <summary>The statements of the policy-revision store; every one runs in the request's tenant transaction.</summary>
@@ -185,14 +270,25 @@ internal static class PolicyRevisionSql
            for no key update of p
         """;
 
+    /// <summary>The project's current head revision (the highest <c>revision_no</c>), or no row before the first append.</summary>
+    internal const string HeadRevision = """
+        select id
+          from public.policy_revision
+         where org_id = @org_id and project_id = @project_id
+         order by revision_no desc
+         limit 1
+        """;
+
     /// <summary>Dedupe and numbering in one round trip.</summary>
     internal const string RevisionSlot = """
         select same.id as existing_id, same.revision_no as existing_no,
+               same.state as existing_state, same.created_by as existing_created_by,
+               same.created_at as existing_created_at, same.version as existing_version,
                (select coalesce(max(revision_no), 0) + 1 from public.policy_revision
                  where org_id = @org_id and project_id = @project_id) as next_no
           from (select 1) as one
           left join lateral (
-                select id, revision_no from public.policy_revision
+                select id, revision_no, state, created_by, created_at, version from public.policy_revision
                  where org_id = @org_id and project_id = @project_id and hash = @hash) as same on true
         """;
 
@@ -202,12 +298,12 @@ internal static class PolicyRevisionSql
                (id, org_id, project_id, revision_no, hash, body, state, created_by)
         values (@id, @org_id, @project_id, @revision_no, @hash, @body::jsonb, @state, @created_by)
         on conflict (org_id, project_id, hash) do nothing
-        returning id, revision_no
+        returning id, revision_no, state, created_by, created_at, version
         """;
 
     /// <summary>The row a lost race left behind.</summary>
     internal const string ReadByHash = """
-        select id, revision_no
+        select id, revision_no, state, created_by, created_at, version
           from public.policy_revision
          where org_id = @org_id and project_id = @project_id and hash = @hash
         """;

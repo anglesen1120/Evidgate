@@ -105,9 +105,10 @@ internal static class PolicyRevisionRules
     /// <summary>
     /// True when a member name or string anywhere in <paramref name="element"/> is no text PostgreSQL can carry: an
     /// unpaired UTF-16 surrogate (<c>"\ud800"</c>) or U+0000 (refused by jsonb). The 05.1.1/05.1.2 <c>JsonBody</c>
-    /// walk, kept local because that helper is internal to the Orchestrator module.
+    /// walk, kept local because that helper is internal to the Orchestrator module. The command handler runs it
+    /// before the schema engine, which throws on such an escape.
     /// </summary>
-    private static bool HasUnstorableText(JsonElement element)
+    internal static bool HasUnstorableText(JsonElement element)
     {
         try
         {

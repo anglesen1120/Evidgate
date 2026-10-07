@@ -99,6 +99,9 @@ agent job routes) must not (T38). All error responses reference
   (00 §9.3).
 - `POST /v1/jobs/{j}/heartbeat` — naturally idempotent: the server extends
   only the current epoch (00 §9.3).
+- `POST /v1/projects/{p}/policies` — the RFC 8785 content hash is the
+  idempotency key: an identical body returns the stored revision (`200`), a
+  different body is a new revision, never a conflict (07.1.1 §5).
 
 ## Validation corpus (`fixtures/contracts/`, 01.3.2-T2)
 

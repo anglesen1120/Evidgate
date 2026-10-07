@@ -35,6 +35,8 @@ tags:
     description: Run and release decisions
   - name: environments
     description: Immutable environment revisions
+  - name: policies
+    description: Immutable policy revisions (07)
   - name: reports
     description: Raw-report comparisons
   - name: releases
@@ -746,6 +748,167 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/policies:
+    post:
+      operationId: createPolicyRevision
+      tags: [policies]
+      summary: Append an immutable, hashed policy revision
+      description: >-
+        Appends a revision to the project's policy (07.1.1-T3, 00 §8.6). The body
+        is `contracts/schemas/policy-revision.v1.json` (≤ 64 KiB → `413`). The
+        server canonicalises it (RFC 8785) and hashes it into `sha256:<hex>`; a
+        body identical to one already stored for the project answers `200` with
+        that revision (same `id` and `hash`, never a second row), a different
+        body `201` with the next `revision_no` (AC1). The schema is closed: a
+        member outside the 00 §8.6 field set is `422 policy_unknown_field` with
+        the member's JSON pointer in `error.details[].path` (AC3); any other
+        schema failure is `422 policy_invalid` (reasons `invalid_json`,
+        `not_canonicalisable`, `inexact_number`). No `Idempotency-Key` is
+        required — the content hash is the idempotency key, so a retried
+        identical POST returns the same revision and never `409
+        idempotency_conflict` (07.1.1 §5). `If-Match` is optional: when present
+        it carries the caller's cached head revision id and is checked before
+        the write — a stale or malformed value is `412 precondition_failed`
+        with the current head revision id in `error.details`, and nothing is
+        written (AC5); absent means no check. Another tenant's or another
+        project's `{p}` is `404`; a credential scoped to another project is
+        `403 project_scope_mismatch`. A revision is never edited.
+      x-permission: policy:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IfMatchOptional'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/policy-revision.v1.json'
+      responses:
+        '200':
+          description: The same body is already stored; that revision is returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyRevisionDto'
+        '201':
+          description: Revision created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyRevisionDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /policies/{id}:
+    get:
+      operationId: getPolicyRevision
+      tags: [policies]
+      summary: One policy revision, with its body
+      description: >-
+        One policy revision (07.1.1-T3, AC3). `ETag` is the revision id. Another
+        tenant's revision, or — for a project-scoped credential — another
+        project's revision, is the same `404` as an unknown id (00 §9.2).
+      x-permission: policy:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/PolicyRevisionId'
+      responses:
+        '200':
+          description: The policy revision
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyRevisionDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /policies/{id}/revisions:
+    get:
+      operationId: listPolicyRevisions
+      tags: [policies]
+      summary: Append-only revisions of the revision's project, oldest first
+      description: >-
+        `{id}` is any revision id; the page lists that project's revisions in
+        append-only order `(revision_no ASC, id ASC)`, keyset on
+        `(revision_no, id)` (07.1.1-T3, AC5). `limit` defaults to 50 and must be
+        1..200 (else `422`); a malformed `cursor` is `422`. `ETag` is the head
+        revision id (the highest `revision_no`). `If-Match` is optional: when
+        present it carries the caller's cached head revision id and is checked
+        before the read — a stale or malformed value is `412
+        precondition_failed` with the current head revision id in
+        `error.details`; absent means no check. An id that is not visible to the
+        caller — another tenant, or another project for a project-scoped
+        credential — is the same `404` as an unknown id.
+      x-permission: policy:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/PolicyRevisionId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/IfMatchOptional'
+      responses:
+        '200':
+          description: Page of policy revisions
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyRevisionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -3416,6 +3579,16 @@ components:
       description: ETag for optimistic concurrency; stale → 412 (00 §9.1).
       schema:
         type: string
+    IfMatchOptional:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        Optional optimistic-concurrency check: the caller's cached head revision
+        id, quoted; stale or malformed → 412 with the current head revision id in
+        `error.details`; absent means no check (00 §9.1, 07.1.1-T3).
+      schema:
+        type: string
     XsrfToken:
       name: X-XSRF-TOKEN
       in: header
@@ -3482,6 +3655,13 @@ components:
         type: string
         format: uuid
     EnvironmentRevisionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PolicyRevisionId:
       name: id
       in: path
       required: true
@@ -4238,6 +4418,41 @@ components:
           type: array
           items: { type: string, pattern: '^secret:[A-Za-z0-9_.-]{1,64}$' }
         created_at: { type: string, format: date-time }
+    PolicyRevisionDto:
+      type: object
+      description: One immutable policy revision (07.1.1-T3); `body` is the closed `policy-revision.v1` document.
+      required: [id, project_id, revision_no, hash, state, body, created_by, created_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        revision_no: { type: integer, minimum: 1 }
+        hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        state: { type: string, enum: [draft, active, retired] }
+        body: { $ref: './schemas/policy-revision.v1.json' }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        version: { type: integer }
+    PolicyRevisionSummaryDto:
+      type: object
+      description: A policy revision without its body (07.1.1-T3 list rows).
+      required: [id, revision_no, hash, state, created_by, created_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        revision_no: { type: integer, minimum: 1 }
+        hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        state: { type: string, enum: [draft, active, retired] }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        version: { type: integer }
+    PolicyRevisionListResponse:
+      type: object
+      description: 00 §9.1 cursor page of `PolicyRevisionSummaryDto`, keyset-ordered on `(revision_no, id)`.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PolicyRevisionSummaryDto' }
+        next_cursor: { type: [string, 'null'] }
     JsonElement:
       description: >-
         Any JSON value. The served document names the .NET `JsonElement` this way; the members that use it (variant
