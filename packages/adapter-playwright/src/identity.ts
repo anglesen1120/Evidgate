@@ -83,6 +83,8 @@ export interface IdentityResolverDeps {
   warn?: ((warning: WarningPayload) => void) | undefined;
   /** Per-project variant memo; created when absent. */
   variantCache?: WeakMap<object, VariantOutcome> | undefined;
+  /** Projects already warned about an invalid target env (S3); created when absent. */
+  targetEnvWarned?: WeakSet<object> | undefined;
 }
 
 /**
@@ -93,6 +95,23 @@ export function testKey(test: TestCase): string {
   const id = test.id;
   if (typeof id === 'string' && id.length > 0) return id;
   return `${locationOf(test)}:${test.title}`;
+}
+
+/**
+ * The identity of a test *across Playwright projects and `repeatEach` repeats*: the
+ * location file plus the title path with the leading root and project segments removed.
+ * Playwright's own `test.id` embeds the project id and the repeat index
+ * (`[project=<id>]file+titles (repeat:N)`), so the same test running under several
+ * projects (the normal case × variant design) would otherwise look like a second,
+ * distinct test. Falls back to the test title for a synthetic object without a
+ * `titlePath`.
+ */
+export function identityKey(test: TestCase): string {
+  const path = typeof test.titlePath === 'function' ? test.titlePath() : undefined;
+  // Playwright's titlePath is ["", projectName, file, ...describeTitles, testTitle]; the
+  // root "" and the project name are dropped so one test under several projects collapses.
+  const titles = Array.isArray(path) && path.length >= 2 ? path.slice(2) : [test.title];
+  return `${test.location.file}\u0000${titles.join('\u0000')}`;
 }
 
 /** `file:line:column` of a test, the location form the warning messages name. */
@@ -159,8 +178,26 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
   const variant = variantOutcome(test, deps);
   if (variant.hash !== undefined) identity.variant_hash = variant.hash;
 
-  const targetEnv = deps.targetEnv ?? validTargetEnv(test.parent?.project?.()?.name);
-  if (targetEnv !== undefined) identity.target_env = targetEnv;
+  const project = test.parent?.project?.();
+  const targetEnv = deps.targetEnv ?? validTargetEnv(project?.name);
+  if (targetEnv !== undefined) {
+    identity.target_env = targetEnv;
+  } else if (deps.targetEnv === undefined && project !== undefined) {
+    // S3: both EVIDGATE_TARGET_ENV and the project name are invalid, so no target_env is
+    // emitted. Warn once per project (the project object is the memo key) and never echo
+    // the rejected name.
+    const warned = deps.targetEnvWarned;
+    if (warned === undefined || !warned.has(project)) {
+      warned?.add(project);
+      deps.warn?.({
+        code: 'invalid_target_env',
+        message:
+          'neither EVIDGATE_TARGET_ENV nor the Playwright project name is a valid target env; ' +
+          'no target_env is emitted',
+        path: location,
+      });
+    }
+  }
 
   return identity;
 }
@@ -169,20 +206,21 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
  * The stateful resolver the reporter uses: memoises each test's identity by
  * {@link testKey} (so a conflicted test is never re-mapped within the run, §6) and
  * reports a `duplicate_case_id` warning the first time a case id is seen on a second
- * location.
+ * identity (see {@link identityKey}).
  */
 export function createIdentityResolver(deps: IdentityResolverDeps): IdentityResolver {
   const variantCache = deps.variantCache ?? new WeakMap<object, VariantOutcome>();
-  const resolved: IdentityResolverDeps = { variantCache };
+  const targetEnvWarned = deps.targetEnvWarned ?? new WeakSet<object>();
+  const resolved: IdentityResolverDeps = { variantCache, targetEnvWarned };
   if (deps.sidecar !== undefined) resolved.sidecar = deps.sidecar;
   if (deps.targetEnv !== undefined) resolved.targetEnv = deps.targetEnv;
   if (deps.warn !== undefined) resolved.warn = deps.warn;
 
   const cache = new Map<string, Identity>();
-  // The first test seen for a case id, keyed by the id. Tracking the test key (not just the
-  // location string) catches loop-generated/parameterized tests that share one source
-  // location; a retry of the same test is a cache hit above and never re-warns.
-  const firstUse = new Map<string, { key: string; location: string; title: string }>();
+  // The first test seen for a case id, keyed by the id. The identity key (not Playwright's
+  // project-scoped `test.id`) collapses the same test across projects and `repeatEach`
+  // repeats; a retry of the same test is a cache hit above and never re-warns.
+  const firstUse = new Map<string, FirstUse>();
 
   return (test) => {
     const key = testKey(test);
@@ -194,27 +232,56 @@ export function createIdentityResolver(deps: IdentityResolverDeps): IdentityReso
 
     if (identity.case_id !== undefined) {
       const location = locationOf(test);
+      const file = test.location.file;
+      const identityOfTest = identityKey(test);
       const first = firstUse.get(identity.case_id);
       if (first === undefined) {
-        firstUse.set(identity.case_id, { key, location, title: test.title });
-      } else if (first.key !== key) {
-        // AC1: name both locations. Two tests that share one source location are told apart
-        // by their (sanitised) titles so the message stays useful without echoing raw text.
-        const sameLocation = first.location === location;
-        const firstLabel = sameLocation
-          ? `${first.location} (${brief(first.title)})`
-          : first.location;
-        const secondLabel = sameLocation ? `${location} (${brief(test.title)})` : location;
-        resolved.warn?.({
-          code: 'duplicate_case_id',
-          message: `case_id ${identity.case_id} is used by two tests: ${firstLabel} and ${secondLabel}`,
-          path: location,
+        firstUse.set(identity.case_id, {
+          key: identityOfTest,
+          location,
+          title: test.title,
+          source: identity.source,
+          file,
         });
+      } else if (first.key !== identityOfTest) {
+        // A sidecar maps one file to one case (the server's CaseDiscovery is one case per
+        // file), so several tests in that file share the id by design: not a conflict.
+        const sameSidecarFile =
+          first.source === 'sidecar' && identity.source === 'sidecar' && first.file === file;
+        if (!sameSidecarFile) {
+          // AC1: name both locations. Two tests that share one source location are told
+          // apart by their (sanitised) titles so the message stays useful without echoing
+          // raw text.
+          const sameLocation = first.location === location;
+          const firstLabel = sameLocation
+            ? `${first.location} (${brief(first.title)})`
+            : first.location;
+          const secondLabel = sameLocation ? `${location} (${brief(test.title)})` : location;
+          resolved.warn?.({
+            code: 'duplicate_case_id',
+            message: `case_id ${identity.case_id} is used by two tests: ${firstLabel} and ${secondLabel}`,
+            path: location,
+          });
+        }
       }
     }
 
     return identity;
   };
+}
+
+/** The first test seen for a case id, for the AC1 duplicate warning. */
+interface FirstUse {
+  /** {@link identityKey} of the first test: stable across projects and `repeatEach`. */
+  key: string;
+  /** `file:line:column` of the first test. */
+  location: string;
+  /** The first test's title, for the same-location message. */
+  title: string;
+  /** Where the first test's case id came from. */
+  source: 'annotation' | 'sidecar' | undefined;
+  /** The first test's file, for the sidecar one-file-one-case rule. */
+  file: string;
 }
 
 interface AnnotationRead {

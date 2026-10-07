@@ -13,8 +13,10 @@
 // `VariantNormalizer` semantics over the project's declared params) and
 // `ext.target_env` — plus `ext.identity_conflict` when annotation and sidecar disagree.
 // Warnings are data: `run.log` envelopes with `ext.warn`. `onEnd` returns
-// `{ status: 'failed' }` when any test was conflicted or unmapped, unless
-// `EVIDGATE_ALLOW_UNMAPPED=1`.
+// `{ status: 'failed' }` when any test lacked a complete identity (no `case_id`, no
+// `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`;
+// the gate also writes one `[evidgate]` line to stderr so a CI log explains the failure,
+// and it overrides the status only for a `passed` run (S3/C3).
 import type {
   FullConfig,
   FullResult,
@@ -101,9 +103,10 @@ export class EvidgateReporter implements Reporter {
   private readonly targetEnvWarning: WarningPayload | undefined;
   private readonly allowUnmapped: boolean;
   private readonly variantCache = new WeakMap<object, VariantOutcome>();
+  private readonly targetEnvWarned = new WeakSet<object>();
   private readonly seenTests = new Set<string>();
   private resolver: IdentityResolver | undefined;
-  private withoutCaseIdCount = 0;
+  private unidentifiedCount = 0;
   private conflictCount = 0;
   private warningCount = 0;
   private suppressedWarnings = 0;
@@ -185,11 +188,15 @@ export class EvidgateReporter implements Reporter {
       const testFiles = new Set<string>();
       for (const test of suite?.allTests() ?? []) testFiles.add(test.location.file);
       const index = loadSidecarIndex(testFiles, this.sidecarFs);
+      // P3: warnings the sidecar loader discarded past its own cap still count as
+      // suppressed, so `warnings_truncated` reports the full loss.
+      this.suppressedWarnings += index.droppedWarnings;
       this.resolver = createIdentityResolver({
         sidecar: index,
         targetEnv: this.targetEnv,
         warn: (warning) => this.warn(warning),
         variantCache: this.variantCache,
+        targetEnvWarned: this.targetEnvWarned,
       });
 
       const capability = buildCapabilityDocument({
@@ -276,10 +283,13 @@ export class EvidgateReporter implements Reporter {
 
   /**
    * Emits the `unmapped` summary and the `run_end` marker, then closes the spool. Returns
-   * `{ status: 'failed' }` when any test was conflicted or unmapped, unless
-   * `EVIDGATE_ALLOW_UNMAPPED=1` (AC2); Playwright awaits the return value and overrides
-   * the run status with it (node_modules/playwright/lib/runner/index.js:1644). A buffered
-   * write failure still throws synchronously.
+   * `{ status: 'failed' }` when any test lacked a complete identity (no `case_id`, no
+   * `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`
+   * (AC2/S3); Playwright awaits the return value and overrides the run status with it
+   * (node_modules/playwright/lib/runner/index.js:1644). The override applies only to a
+   * `passed` run — an `interrupted`/`timedout` run keeps its own status (C3). The gate
+   * also writes one `[evidgate]` line to stderr so a CI log explains the failure. A
+   * buffered write failure still throws synchronously.
    *
    * The declared return type is `void`, not the interface's
    * `Promise<{status?} | undefined | void> | void`: the reporter must keep throwing
@@ -290,21 +300,21 @@ export class EvidgateReporter implements Reporter {
    */
   onEnd(result: FullResult): void {
     this.guard(() => {
-      if (this.withoutCaseIdCount > 0) {
-        this.warn({
+      if (this.unidentifiedCount > 0) {
+        // C4/P3: the summary bypasses the 100-envelope cap, so the counts that explain the
+        // failure survive even when the run already emitted MAX_WARNING_ENVELOPES warnings.
+        this.emitWarning({
           code: 'unmapped',
           message:
-            `${this.withoutCaseIdCount} test(s) without case_id ` +
+            `${this.unidentifiedCount} test(s) without a complete identity ` +
             `(${this.conflictCount} conflicted)`,
-          count: this.withoutCaseIdCount,
+          count: this.unidentifiedCount,
         });
       }
       if (this.suppressedWarnings > 0) {
         this.emitWarning({
           code: 'warnings_truncated',
-          message:
-            `${this.suppressedWarnings} warning(s) suppressed by the ` +
-            `${MAX_WARNING_ENVELOPES}-envelope cap`,
+          message: `${this.suppressedWarnings} warning(s) suppressed by the reporter's warning caps`,
           count: this.suppressedWarnings,
         });
       }
@@ -318,6 +328,14 @@ export class EvidgateReporter implements Reporter {
         }),
       );
     });
+    const gateTripped = !this.allowUnmapped && this.unidentifiedCount > 0;
+    if (gateTripped) {
+      // C3: one line, so a run that fails on identity says why in the CI log.
+      process.stderr.write(
+        `[evidgate] ${this.unidentifiedCount} test(s) without a complete identity ` +
+          `(${this.conflictCount} conflicted); set EVIDGATE_ALLOW_UNMAPPED=1 to allow\n`,
+      );
+    }
     let closeError: Error | null = null;
     try {
       this.writer.close();
@@ -326,7 +344,7 @@ export class EvidgateReporter implements Reporter {
     }
     const failure = this.bufferedError ?? closeError;
     if (failure !== null) throw failure;
-    if (!this.allowUnmapped && this.withoutCaseIdCount > 0) {
+    if (gateTripped && result.status === 'passed') {
       return { status: 'failed' } as unknown as void;
     }
     return undefined;
@@ -343,17 +361,24 @@ export class EvidgateReporter implements Reporter {
       targetEnv: this.targetEnv,
       warn: (warning) => this.warn(warning),
       variantCache: this.variantCache,
+      targetEnvWarned: this.targetEnvWarned,
     });
     return this.resolver(test);
   }
 
-  /** Counts each distinct test once: conflicted, or without a case id (AC2). */
+  /** Counts each distinct test once: conflicted, or without a complete identity (AC2/S3). */
   private noteIdentity(test: TestCase, identity: Identity): void {
     const key = testKey(test);
     if (this.seenTests.has(key)) return;
     this.seenTests.add(key);
     if (identity.identity_conflict === true) this.conflictCount += 1;
-    if (identity.case_id === undefined) this.withoutCaseIdCount += 1;
+    if (
+      identity.case_id === undefined ||
+      identity.variant_hash === undefined ||
+      identity.target_env === undefined
+    ) {
+      this.unidentifiedCount += 1;
+    }
   }
 
   /** Emits one warning envelope, up to the cap; the overflow is counted, not emitted. */

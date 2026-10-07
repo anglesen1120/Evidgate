@@ -171,5 +171,8 @@ describe('reporter e2e (real playwright test CLI)', () => {
     if (runFailure !== null) throw new Error(`playwright test failed: ${runFailure}`);
 
     expect(cliOutput).toContain('4 passed');
+    // C3: the fixture is fully mapped, so the identity gate never trips and no
+    // `[evidgate]` line reaches stderr.
+    expect(cliOutput).not.toContain('[evidgate]');
   });
 });

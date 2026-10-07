@@ -1,5 +1,5 @@
-// 04.3.2-T1.3: `variant_hash` — the reporter's byte-for-byte port of the server's
-// catalog normaliser and digest. The server is the source of truth:
+// 04.3.2-T1.3: `variant_hash` — the reporter's port of the server's catalog normaliser and
+// digest. The server is the source of truth:
 //   src/Modules/Evidgate.Modules.Catalog/Domain/VariantNormalizer.cs (Normalize/Scalar/StringValue)
 //   src/Modules/Evidgate.Modules.Catalog/Domain/TextRules.cs (IsClean)
 //   src/BuildingBlocks/SharedKernel/Security/SecretShape.cs (KeyLooksSecret/ValueLooksSecret/Entropy)
@@ -10,6 +10,29 @@
 // packages/cli/src/canonical.ts wraps — and the `sha256:<lowercase hex>` wrapper is taken over its
 // output. `fixtures/variant-hash/vectors.json` is the shared corpus the .NET suite
 // (tests/Tenancy.IntegrationTests/VariantGoldenVectorTests.cs) asserts with the same expectations.
+//
+// The normalisation rules and the digest are ported exactly. Two things cannot be, because the
+// reporter is handed a JavaScript value where the server reads the author's JSON text:
+//
+//   * `too_large` is measured the way the server measures it — the UTF-8 byte count of
+//     `JsonSerializer.Serialize(result)` under the default `JavaScriptEncoder`, not of the
+//     canonical form — so `serverSerializedLength` reproduces that serialisation (escaping and
+//     number notation included). The escaping rule is exact; the number notation is exact for
+//     every value the reporter accepts (see `dotnetDoubleLength`).
+//   * A number's spelling is already lost: Playwright hands over a `number`, so `1e20` and
+//     `100000000000000000000` are the same value. The server branches on the raw text
+//     (`VariantNormalizer.Scalar`) — an exponent or a fraction means a `double`, plain digits mean
+//     a `long` that must fit `MaxExactInteger` — while the reporter can only branch on
+//     `String(value)`. Three spellings then disagree, each verified against the server:
+//       - a value in [2^53, 1e21) written with an exponent or a fraction (`9.1e15`, `1e16`, `1e20`):
+//         the server stores a `double` and accepts, the reporter sees plain digits past
+//         `MaxExactInteger` and refuses;
+//       - a value of 1e21 or more written in full digits (`1000000000000000000000`): the server's
+//         `long` overflows and it refuses, the reporter sees `1e+21` and accepts;
+//       - `-0.0` against `-0`: the server writes `-0` for the `double` and `0` for the `long`, the
+//         reporter cannot tell them apart and writes `0`; the hash is identical, the length differs
+//         by one byte.
+//     The corpus records only what both sides agree on.
 //
 // Input is untrusted: only own enumerable properties are read (never a prototype lookup) and the
 // normalised object is built with a null prototype, so a `__proto__`/`constructor` key can neither
@@ -40,7 +63,7 @@ const MAX_KEYS = 32;
 /** The largest integer a double (and so RFC 8785) represents exactly: 2^53 − 1. */
 const MAX_EXACT_INTEGER = 9_007_199_254_740_991;
 
-/** The database refuses larger parameter sets (`variant_params_check`); checked here too. */
+/** The database refuses larger parameter sets (`variant_params_check`); measured as the server does. */
 const MAX_PARAMS_BYTES = 8000;
 
 const MAX_STRING_CHARS = 256;
@@ -394,6 +417,114 @@ function normalizeScalar(
 }
 
 /**
+ * The printable ASCII characters the default `JavaScriptEncoder` writes as `\uXXXX` (six bytes)
+ * instead of themselves; every other printable ASCII character is written as itself. `\` is the
+ * one exception: it is written as `\\` (two bytes). Measured against `JsonSerializer.Serialize`
+ * on .NET 10 (`System.Text.Encodings.Web`).
+ */
+const ENCODER_ESCAPED_ASCII: Record<string, true> = {
+  '"': true,
+  '&': true,
+  "'": true,
+  '+': true,
+  '<': true,
+  '>': true,
+  '`': true,
+};
+
+/**
+ * The length `JsonSerializer.Serialize` gives a string under the default encoder: the two quotes
+ * plus, per code point, six bytes for an escaped character (`\uXXXX`), twelve for an astral
+ * character (a surrogate pair, so two escapes), two for `\`, and one otherwise. The serialised
+ * text is pure ASCII, so its length is its UTF-8 byte count.
+ */
+function encodedStringLength(text: string): number {
+  let length = 2;
+  for (const character of text) {
+    const codePoint = character.codePointAt(0) as number;
+    if (codePoint < 0x20) {
+      // Control characters never survive `isClean`; kept so the rule is complete.
+      length +=
+        character === '\b' ||
+        character === '\f' ||
+        character === '\n' ||
+        character === '\r' ||
+        character === '\t'
+          ? 2
+          : 6;
+    } else if (codePoint < 0x7f) {
+      length += character === '\\' ? 2 : ENCODER_ESCAPED_ASCII[character] === true ? 6 : 1;
+    } else {
+      length += codePoint <= 0xffff ? 6 : 12;
+    }
+  }
+  return length;
+}
+
+/**
+ * The length of `JsonSerializer.Serialize(JsonValue.Create(double))`: the shortest round-trip
+ * digits `String(value)` also produces, in .NET's `G17` notation — scientific when the decimal
+ * exponent is below −4 or at least 17, uppercase `E`, an explicit sign and at least two exponent
+ * digits. Only the notation differs from ECMAScript, which switches to scientific below −6 or at
+ * least 21 and writes a lowercase `e` with no leading zero, so `1e-7` is four characters where
+ * .NET writes `1E-07`, five.
+ */
+function dotnetDoubleLength(value: number): number {
+  const [mantissa, exponentText] = Math.abs(value).toExponential().split('e');
+  const exponent = Number(exponentText);
+  const digits = (mantissa as string).replace('.', '');
+  const sign = value < 0 ? 1 : 0;
+  if (exponent < -4 || exponent >= 17) {
+    const head = digits.length === 1 ? digits : `${digits[0]}.${digits.slice(1)}`;
+    return sign + head.length + 2 + String(Math.abs(exponent)).padStart(2, '0').length;
+  }
+  if (exponent < 0) return sign + 2 + -exponent - 1 + digits.length;
+  return sign + (digits.length > exponent + 1 ? digits.length + 1 : exponent + 1);
+}
+
+/**
+ * The length `JsonSerializer.Serialize` gives the number the server stored for `value`
+ * (`VariantNormalizer.Scalar`): a `long` written as its decimal digits, or a `double` written by
+ * `dotnetDoubleLength`. The reporter has no raw text, so it branches on `String(value)` — the
+ * shortest round-trip form `JSON.stringify` emits — exactly as the server branches on the raw
+ * text; the spellings where that stands in for the raw text incorrectly are listed in the file
+ * header.
+ */
+function serverNumberLength(value: number): number {
+  const text = String(value);
+  if (!/[.eE]/.test(text)) return text.length;
+  return dotnetDoubleLength(value);
+}
+
+/**
+ * The byte count the server measures for `too_large`: `Encoding.UTF8.GetByteCount` of
+ * `JsonSerializer.Serialize(result)`, where `result` is the `SortedDictionary<string, JsonNode?>`
+ * of normalised parameters. Keys are ASCII-only (`KeyShape`) and sorted ordinal, which the default
+ * `Array.prototype.sort` order matches; the serialised text is pure ASCII, so its length is its
+ * UTF-8 byte count.
+ */
+function serverSerializedLength(value: unknown): number {
+  if (typeof value === 'string') return encodedStringLength(value);
+  if (typeof value === 'number') return serverNumberLength(value);
+  if (typeof value === 'boolean') return value ? 4 : 5;
+  if (Array.isArray(value)) {
+    let length = 2;
+    for (const [index, item] of value.entries()) {
+      if (index > 0) length += 1;
+      length += serverSerializedLength(item);
+    }
+    return length;
+  }
+  const record = value as Record<string, unknown>;
+  let length = 2;
+  for (const [index, key] of Object.keys(record).sort().entries()) {
+    if (index > 0) length += 1;
+    length += encodedStringLength(key) + 1 + serverSerializedLength(record[key]);
+  }
+  return length;
+}
+
+/**
  * Normalises variant parameters into a content-addressed identity, mirroring
  * `VariantNormalizer.Normalize` exactly: identical parameters after normalisation — key order,
  * null defaults, the case of enum-like values, non-identifying keys — map to the same variant, and
@@ -448,13 +579,16 @@ export function normalizeVariant(params: unknown): VariantResult {
     return { ok: false, problems };
   }
 
+  // The server measures the serialised parameters, not the canonical form, and checks the size
+  // before it canonicalises; both are kept so a refusal matches.
+  if (serverSerializedLength(normalised) > MAX_PARAMS_BYTES) {
+    problems.push({ path: BASE_PATH, reason: 'too_large' });
+    return { ok: false, problems };
+  }
+
   const paramsJson = canonicalize(normalised);
   if (paramsJson === undefined) {
     problems.push({ path: BASE_PATH, reason: 'invalid_value' });
-    return { ok: false, problems };
-  }
-  if (Buffer.byteLength(paramsJson, 'utf8') > MAX_PARAMS_BYTES) {
-    problems.push({ path: BASE_PATH, reason: 'too_large' });
     return { ok: false, problems };
   }
 

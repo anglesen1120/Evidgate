@@ -1,12 +1,23 @@
-// 04.3.2-T1.1: the per-directory `evidgate.cases.yaml` sidecar loader (03.1.1-T1.3, TL T55).
+// 04.3.2-T1.1: the `evidgate.cases.yaml` sidecar loader (03.1.1-T1.3, TL T55).
 // The file is untrusted input from a customer repository, so it is read as *data*: the size is
 // capped before the content is read, the YAML is parsed with the core schema and refused when it
 // carries an anchor, alias, tag, merge key, duplicate key or a second document, the result is
 // validated against the embedded sidecar.v1 schema, and every entry is checked against the
 // repository path rules so it can never name a file outside the manifest's own directory.
-// Warnings are data — the identity layer (04.3.2-T1.2) turns them into `run.log` envelopes — and a
-// message never echoes file content beyond the offending path or key.
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
+// A manifest is looked up in each test file's own directory and in every ancestor directory up to
+// the common ancestor of the test files (the server reads every manifest of the tree and resolves
+// each entry with `RepoPath.Combine`), each manifest is read once, and the bytes read for one run
+// are capped in aggregate. Warnings are data — the identity layer (04.3.2-T1.2) turns them into
+// `run.log` envelopes — and a message never echoes file content beyond the offending path or key.
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readSync,
+} from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 
 import { Ajv2020 } from 'ajv/dist/2020.js';
@@ -22,6 +33,8 @@ export const SIDECAR_FILE_NAME = 'evidgate.cases.yaml';
 
 /** Hard cap on the sidecar text, mirroring the server reader's `MaxChars`. */
 const MAX_BYTES = 1024 * 1024;
+/** Aggregate cap on the sidecar bytes read for one run; past it the remaining manifests are skipped. */
+const MAX_TOTAL_BYTES = 8 * 1024 * 1024;
 /** Nesting cap, mirroring the server reader's `MaxDepth`. */
 const MAX_DEPTH = 8;
 /** Node cap, mirroring the server reader's `MaxNodes`. */
@@ -34,6 +47,22 @@ const MAX_WARNINGS = 2000;
 const MAX_PATH_CHARS = 1024;
 /** Control, format and lone-surrogate code points, refused in paths and names (`TextRules.IsClean`). */
 const UNCLEAN = /[\p{Cc}\p{Cf}\p{Cs}]/u;
+
+/** The 36-character hyphenated UUID form, any case (`AnnotationParser.IsCanonicalUuid`). */
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The nil UUID: a spelling the schema accepts and the server refuses (`Guid.Empty`). */
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * True for the strict canonical case id the server accepts (`AnnotationParser.IsCanonicalUuid`):
+ * the 36-character hyphenated form in any case, and never the nil UUID. `urn:uuid:`-prefixed,
+ * braced, unhyphenated and nil spellings are refused, so a sidecar id can never name a case the
+ * server would resolve to a different (or no) identity. Exported so the annotation path can reuse
+ * the same rule.
+ */
+export function isCanonicalCaseId(value: string): boolean {
+  return CANONICAL_UUID.test(value) && value.toLowerCase() !== NIL_UUID;
+}
 
 /**
  * Strict UTF-8: malformed bytes are refused instead of being repaired to U+FFFD (which would
@@ -54,9 +83,11 @@ export interface SidecarIndex {
   /** The case id (lower-case UUID) for an absolute test file path, undefined when unmapped or held by a conflict. */
   lookup(testFile: string): string | undefined;
   readonly warnings: readonly SidecarWarning[];
+  /** Warnings the loader discarded past its own cap; the reporter adds them to its suppressed tally. */
+  readonly droppedWarnings: number;
 }
 
-/** The file-system seam: `readFile` returns the sidecar bytes, or undefined when it is absent. */
+/** The file-system seam: `readFile` returns the sidecar bytes (at most `maxBytes + 1`), or undefined when it is absent. */
 export interface SidecarFs {
   readFile(path: string, maxBytes: number): Uint8Array | undefined;
 }
@@ -87,8 +118,47 @@ type Inspection =
 type Warn = (code: SidecarWarning['code'], path: string, message: string) => void;
 
 const defaultFs: SidecarFs = {
-  readFile: (path) => readFileSync(path),
+  readFile: (path, maxBytes) => readBounded(path, maxBytes),
 };
+
+/**
+ * The default reader: opens without following a symlink (where the platform has `O_NOFOLLOW`),
+ * requires a regular file on the descriptor, and reads at most one byte past `maxBytes`, so an
+ * oversized manifest is refused without being allocated in full. A missing path is `undefined`;
+ * anything else that stops the read is thrown and reported by the caller as `invalid_sidecar`.
+ */
+function readBounded(path: string, maxBytes: number): Uint8Array | undefined {
+  let fd: number;
+  try {
+    fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  } catch (error) {
+    const code = errorCode(error);
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return undefined;
+    }
+    throw error;
+  }
+
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) {
+      throw new SidecarReadError('ENOTFILE');
+    }
+    const size = Math.min(stat.size, maxBytes + 1);
+    const buffer = Buffer.allocUnsafe(size);
+    let filled = 0;
+    while (filled < size) {
+      const read = readSync(fd, buffer, filled, size - filled, filled);
+      if (read === 0) {
+        break;
+      }
+      filled += read;
+    }
+    return buffer.subarray(0, filled);
+  } finally {
+    closeSync(fd);
+  }
+}
 
 // Plain data only: the core schema, no merge keys, unique keys, scalar keys, and no custom tags.
 // Anchors, aliases and explicit tags are refused by `inspectNode` (the server refuses them too).
@@ -114,54 +184,113 @@ function schemaValidator(): ValidateFunction<SidecarDocument> {
 }
 
 /**
- * Reads every distinct directory's `evidgate.cases.yaml` and returns the `location → case_id`
- * index. Each directory is read once; a directory without a sidecar contributes nothing and no
- * warning. A sidecar that is refused contributes no entry at all.
+ * Reads the `evidgate.cases.yaml` of every test file's directory and of every ancestor directory up
+ * to the common ancestor of all test files, and returns the `location → case_id` index. The server
+ * reads every manifest of the tree and resolves each entry with `RepoPath.Combine(manifest
+ * directory, file)`, so a manifest in an ancestor directory can map a test in a subdirectory; the
+ * reporter has no tree snapshot, so the common ancestor of the test files is the closest thing to
+ * the repository root it can derive (a manifest strictly above it is not read). Each manifest is
+ * read once; a directory without a sidecar contributes nothing and no warning. A sidecar that is
+ * refused contributes no entry at all.
  */
 export function loadSidecarIndex(
   testFiles: Iterable<string>,
   fs: SidecarFs = defaultFs,
 ): SidecarIndex {
   const warnings: SidecarWarning[] = [];
+  let droppedWarnings = 0;
   const warn: Warn = (code, path, message) => {
     if (warnings.length < MAX_WARNINGS) {
       warnings.push({ code, path, message });
+    } else {
+      droppedWarnings += 1;
     }
   };
 
-  const manifests = new Map<string, string>();
+  const directories = new Set<string>();
   for (const file of testFiles) {
-    const directory = dirname(normalizePath(file));
-    if (!manifests.has(directory)) {
-      manifests.set(directory, join(directory, SIDECAR_FILE_NAME));
+    directories.add(dirname(normalizePath(file)));
+  }
+
+  const manifests = new Set<string>();
+  const root = commonAncestor([...directories]);
+  for (const directory of directories) {
+    let current = directory;
+    for (;;) {
+      manifests.add(join(current, SIDECAR_FILE_NAME));
+      if (current === root) {
+        break;
+      }
+      const parent = dirname(current);
+      if (parent === current) {
+        break;
+      }
+      current = parent;
     }
   }
 
   const index = new Map<string, string>();
   const conflicted = new Set<string>();
+  const exists = new Map<string, boolean>();
+  let remaining = MAX_TOTAL_BYTES;
+  let budgetReported = false;
 
-  for (const manifestPath of manifests.values()) {
-    const content = readSidecar(manifestPath, fs, warn);
-    if (content === undefined) {
+  for (const manifestPath of manifests) {
+    if (remaining <= 0) {
+      if (!budgetReported) {
+        budgetReported = true;
+        warn(
+          'invalid_sidecar',
+          manifestPath,
+          'the sidecars of this run exceed the 8 MiB budget; the rest were skipped',
+        );
+      }
       continue;
     }
 
-    for (const entry of parseEntries(manifestPath, content, warn)) {
-      if (!existsSync(entry.path)) {
-        warn(
-          'invalid_sidecar_entry',
-          entry.path,
-          `the sidecar ${manifestPath} names a file that is not in the tree`,
-        );
-        continue;
-      }
+    const inspection = inspectSidecar(manifestPath);
+    if (inspection.kind === 'absent') {
+      continue;
+    }
+    if (inspection.kind === 'invalid') {
+      warn('invalid_sidecar', manifestPath, inspection.reason);
+      continue;
+    }
+    if (inspection.size > MAX_BYTES) {
+      warn('invalid_sidecar', manifestPath, 'the sidecar is larger than 1 MiB');
+      continue;
+    }
 
+    // Charge the budget for every manifest that is read, valid or not: a tree of refused manifests
+    // must not be able to spend unbounded parse time.
+    remaining -= inspection.size;
+
+    const text = readText(manifestPath, fs, warn);
+    if (text === undefined) {
+      continue;
+    }
+
+    for (const entry of parseEntries(manifestPath, text, warn)) {
       const earlier = index.get(entry.path);
       if (earlier !== undefined) {
         if (earlier !== entry.id) {
           conflicted.add(entry.path);
           warn('sidecar_conflict', entry.path, 'two sidecar entries give this file different ids');
         }
+        continue;
+      }
+
+      let present = exists.get(entry.path);
+      if (present === undefined) {
+        present = existsSync(entry.path);
+        exists.set(entry.path, present);
+      }
+      if (!present) {
+        warn(
+          'invalid_sidecar_entry',
+          entry.path,
+          `the sidecar ${manifestPath} names a file that is not in the tree`,
+        );
         continue;
       }
 
@@ -176,24 +305,32 @@ export function loadSidecarIndex(
   return {
     lookup: (testFile) => index.get(normalizePath(testFile)),
     warnings,
+    droppedWarnings,
   };
 }
 
-/** Inspects the manifest path and reads its text, or returns undefined with a warning. */
-function readSidecar(manifestPath: string, fs: SidecarFs, warn: Warn): string | undefined {
-  const inspection = inspectSidecar(manifestPath);
-  if (inspection.kind === 'absent') {
-    return undefined;
-  }
-  if (inspection.kind === 'invalid') {
-    warn('invalid_sidecar', manifestPath, inspection.reason);
-    return undefined;
-  }
-  if (inspection.size > MAX_BYTES) {
-    warn('invalid_sidecar', manifestPath, 'the sidecar is larger than 1 MiB');
-    return undefined;
+/** The deepest directory that contains every given absolute, forward-slashed directory. */
+function commonAncestor(directories: string[]): string {
+  const [first, ...rest] = directories;
+  if (first === undefined) {
+    return '/';
   }
 
+  let common = first.split('/');
+  for (const directory of rest) {
+    const parts = directory.split('/');
+    let length = 0;
+    while (length < common.length && length < parts.length && common[length] === parts[length]) {
+      length += 1;
+    }
+    common = common.slice(0, length);
+  }
+
+  return common.join('/') || '/';
+}
+
+/** Reads and decodes one inspected manifest, or returns undefined with a warning. */
+function readText(manifestPath: string, fs: SidecarFs, warn: Warn): string | undefined {
   let bytes: Uint8Array | undefined;
   try {
     bytes = fs.readFile(manifestPath, MAX_BYTES);
@@ -305,6 +442,14 @@ function collectEntries(
     }
 
     const path = normalizePath(join(directory, item.file));
+
+    // The schema's `format: uuid` accepts the `urn:uuid:` prefix and the nil UUID (as the server's
+    // format assertion does); the server then refuses both per entry, so the reporter does too.
+    if (!isCanonicalCaseId(item['evidgate.id'])) {
+      warn('invalid_sidecar_entry', path, 'the evidgate.id of this entry is not a UUID');
+      continue;
+    }
+
     if (item.name !== undefined && UNCLEAN.test(item.name)) {
       warn(
         'invalid_sidecar_entry',
@@ -392,7 +537,7 @@ export function brief(text: string, maxChars = 120): string {
   for (const character of truncated) {
     out += UNCLEAN.test(character) ? '?' : character;
   }
-  return out.length < text.length ? `${out}…` : out;
+  return truncated.length < text.length ? `${out}…` : out;
 }
 
 /** The longest prefix that ends on a rune boundary (`TextRules.Truncate`). */
@@ -421,3 +566,11 @@ function errorCode(error: unknown): string {
 
 /** A refusal of the whole document, raised while walking the parsed YAML. */
 class SidecarFormatError extends Error {}
+
+/** A refusal of the default reader (a race past the lstat), carrying a code the caller reports. */
+class SidecarReadError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+    this.name = 'SidecarReadError';
+  }
+}

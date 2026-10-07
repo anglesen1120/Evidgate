@@ -36,7 +36,11 @@ beforeAll(() => {
 
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
-function run(configuration: string, runId: string, allow = false): EventEnvelope[] {
+function run(
+  configuration: string,
+  runId: string,
+  allow = false,
+): { events: EventEnvelope[]; stderr: string; status: number } {
   const env = { ...process.env };
   delete env.EVIDGATE_ALLOW_UNMAPPED;
   if (allow) env.EVIDGATE_ALLOW_UNMAPPED = '1';
@@ -66,12 +70,12 @@ function run(configuration: string, runId: string, allow = false): EventEnvelope
     );
   for (const event of events) expect(validate(event), JSON.stringify(validate.errors)).toBe(true);
   console.log(`QA real CLI ${runId}: exit ${String(run.status)}, ${events.length} valid envelopes`);
-  return events;
+  return { events, stderr: run.stderr ?? '', status: run.status ?? -1 };
 }
 
 describe('independent reporter real CLI QA', () => {
   it('maps the shipped fixture with case/variant/target fields and schema-valid envelopes', () => {
-    const events = run(config, 'qa-fixture');
+    const { events, stderr } = run(config, 'qa-fixture');
     const finished = events.filter((event) => event.type === 'test.finished');
     expect(finished).toHaveLength(4);
     for (const event of finished) {
@@ -81,6 +85,8 @@ describe('independent reporter real CLI QA', () => {
       expect(event.ext.identity_conflict).toBeUndefined();
       expect(event.execution_key).toBe('0'.repeat(64));
     }
+    // C3: a fully mapped run trips no gate, so no `[evidgate]` line reaches stderr.
+    expect(stderr).not.toContain('[evidgate]');
   });
 
   it('fails a conflicted real suite by default, allows the override, and retains identity across retries', () => {
@@ -103,7 +109,11 @@ describe('independent reporter real CLI QA', () => {
         `export default { ...base, reporter: [[${JSON.stringify(join(packageDir, 'dist/index.js'))}, { spool_dir: process.env.EVIDGATE_SPOOL_DIR, producer_id: 'pw-e2e-0' }]], testDir: ${JSON.stringify(tests)}, retries: 1 };\n`,
     );
     for (const allow of [false, true]) {
-      const events = run(override, allow ? 'qa-conflict-allowed' : 'qa-conflict-default', allow);
+      const { events, stderr, status } = run(
+        override,
+        allow ? 'qa-conflict-allowed' : 'qa-conflict-default',
+        allow,
+      );
       const finished = events.filter((event) => event.type === 'test.finished');
       expect(finished.map((event) => event.attempt_no)).toEqual([1, 2]);
       for (const event of finished) {
@@ -117,6 +127,16 @@ describe('independent reporter real CLI QA', () => {
         .map((event) => event.ext.warn as WarningPayload);
       expect(warnings.filter((warning) => warning.code === 'identity_conflict')).toHaveLength(1);
       expect(warnings.find((warning) => warning.code === 'unmapped')?.count).toBe(1);
+      // C3: the gate writes one stderr line and overrides the passed run to failed; the
+      // EVIDGATE_ALLOW_UNMAPPED=1 override keeps exit 0 and writes no line.
+      if (allow) {
+        expect(status).toBe(0);
+        expect(stderr).not.toContain('[evidgate]');
+      } else {
+        expect(status).toBe(1);
+        expect(stderr).toContain('[evidgate]');
+        expect(stderr).toContain('EVIDGATE_ALLOW_UNMAPPED=1');
+      }
     }
   }, 120_000);
 });

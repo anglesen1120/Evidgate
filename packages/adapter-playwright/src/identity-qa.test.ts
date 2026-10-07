@@ -28,6 +28,16 @@ function testCase(id: string, params: unknown = {}, descriptions: string[] = [ID
   } as unknown as TestCase;
 }
 
+function sidecarTest(id: string, title: string, file = '/tmp/customer/a.spec.ts'): TestCase {
+  return {
+    id,
+    title,
+    location: { file, line: 10, column: 1 },
+    annotations: [],
+    parent: { project: () => ({ name: 'chromium' }) },
+  } as unknown as TestCase;
+}
+
 function envelopes(spool: string): EventEnvelope[] {
   const dir = join(spool, 'qa-run', 'qa-producer');
   return readdirSync(dir)
@@ -64,6 +74,53 @@ describe('independent identity QA', () => {
     resolve(testCase('parameter-b'));
     expect(warnings.map((warning) => warning.code)).toContain('duplicate_case_id');
     expect(warnings[0]?.message).toContain('/tmp/customer/a.spec.ts:10:1');
+  });
+
+  it('does not warn for the same test under two Playwright projects', () => {
+    const warnings: WarningPayload[] = [];
+    const resolve = createIdentityResolver({ warn: (warning) => warnings.push(warning) });
+    const base = {
+      title: 'adds two numbers',
+      location: { file: '/tmp/customer/a.spec.ts', line: 10, column: 1 },
+      annotations: [{ type: 'evidgate.id', description: ID }],
+    };
+    const chromium = { name: 'chromium', metadata: { evidgate: { params: {} } } };
+    const firefox = { name: 'firefox', metadata: { evidgate: { params: {} } } };
+    resolve({
+      ...base,
+      id: 'chromium-a',
+      titlePath: () => ['', 'chromium', 'a.spec.ts', 'adds two numbers'],
+      parent: { project: () => chromium },
+    } as unknown as TestCase);
+    resolve({
+      ...base,
+      id: 'firefox-a',
+      titlePath: () => ['', 'firefox', 'a.spec.ts', 'adds two numbers'],
+      parent: { project: () => firefox },
+    } as unknown as TestCase);
+    expect(warnings.map((warning) => warning.code)).not.toContain('duplicate_case_id');
+  });
+
+  it('does not warn for two tests mapped by one sidecar file', () => {
+    const warnings: WarningPayload[] = [];
+    const resolve = createIdentityResolver({
+      sidecar: { lookup: () => ID, warnings: [], droppedWarnings: 0 },
+      warn: (warning) => warnings.push(warning),
+    });
+    resolve(sidecarTest('t1', 'first test'));
+    resolve(sidecarTest('t2', 'second test'));
+    expect(warnings.map((warning) => warning.code)).not.toContain('duplicate_case_id');
+  });
+
+  it('still warns when two different sidecar files claim one case id', () => {
+    const warnings: WarningPayload[] = [];
+    const resolve = createIdentityResolver({
+      sidecar: { lookup: () => ID, warnings: [], droppedWarnings: 0 },
+      warn: (warning) => warnings.push(warning),
+    });
+    resolve(sidecarTest('t1', 'first test', '/tmp/customer/a.spec.ts'));
+    resolve(sidecarTest('t2', 'second test', '/tmp/customer/b.spec.ts'));
+    expect(warnings.map((warning) => warning.code)).toContain('duplicate_case_id');
   });
 
   it.each([

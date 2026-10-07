@@ -10,11 +10,11 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { Suite, TestCase, TestResult } from '@playwright/test/reporter';
+import type { FullResult, Suite, TestCase, TestResult } from '@playwright/test/reporter';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ValidateFunction } from 'ajv/dist/2020.js';
 import ajvFormats from 'ajv-formats';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EventEnvelope } from './envelope.js';
 import {
@@ -29,7 +29,12 @@ import {
   MAX_WARNING_ENVELOPES,
   type EvidgateReporterOptions,
 } from './reporter.js';
-import type { SidecarFs, SidecarIndex, SidecarWarning } from './sidecar.js';
+import {
+  SIDECAR_FILE_NAME,
+  type SidecarFs,
+  type SidecarIndex,
+  type SidecarWarning,
+} from './sidecar.js';
 
 const contractsDir = join(dirname(fileURLToPath(import.meta.url)), '../../../contracts');
 
@@ -133,7 +138,7 @@ function sidecarDir(files: Record<string, string>): string {
 }
 
 function fakeIndex(entries: Record<string, string>, warnings: SidecarWarning[] = []): SidecarIndex {
-  return { lookup: (file: string) => entries[file], warnings };
+  return { lookup: (file: string) => entries[file], warnings, droppedWarnings: 0 };
 }
 
 function makeReporter(overrides: Partial<EvidgateReporterOptions> = {}): {
@@ -171,6 +176,10 @@ function warningsOf(envelopes: EventEnvelope[]): WarningPayload[] {
 }
 
 const fullResult = { status: 'passed' as const, startTime: new Date(), duration: 1 };
+
+function fullResultWith(status: FullResult['status']): FullResult {
+  return { status, startTime: new Date(), duration: 1 };
+}
 
 describe('resolveIdentity (annotation, sidecar, conflict)', () => {
   it('AC1: an evidgate.id annotation maps the test and lower-cases the UUID', () => {
@@ -488,17 +497,6 @@ describe('reporter identity wiring', () => {
   });
 
   it('reads EVIDGATE_TARGET_ENV in the ctor and warns once when it is invalid', () => {
-    process.env.EVIDGATE_TARGET_ENV = '  staging-eu  ';
-    const { reporter, spool } = makeReporter();
-    const test = fakeTest({ annotations: [{ type: 'evidgate.id', description: CASE_A }] });
-    reporter.onBegin();
-    reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
-    const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
-    expect(started?.ext.target_env).toBe('staging-eu');
-  });
-
-  it('warns invalid_target_env and falls back to the project name', () => {
     process.env.EVIDGATE_TARGET_ENV = 'Not Valid';
     const { reporter, spool } = makeReporter();
     const test = fakeTest({ annotations: [{ type: 'evidgate.id', description: CASE_A }] });
@@ -507,7 +505,25 @@ describe('reporter identity wiring', () => {
     reporter.onEnd(fullResult);
     const envelopes = readEnvelopes(spool);
     expect(envelopes.find((item) => item.type === 'test.started')?.ext.target_env).toBe('chromium');
-    expect(warningsOf(envelopes).map((warning) => warning.code)).toContain('invalid_target_env');
+    expect(
+      warningsOf(envelopes).filter((warning) => warning.code === 'invalid_target_env'),
+    ).toHaveLength(1);
+  });
+
+  it('trims a valid EVIDGATE_TARGET_ENV read in the ctor', () => {
+    process.env.EVIDGATE_TARGET_ENV = '  staging-eu  ';
+    const { reporter, spool } = makeReporter();
+    const test = fakeTest({ annotations: [{ type: 'evidgate.id', description: CASE_A }] });
+    reporter.onBegin();
+    reporter.onTestBegin(test, fakeResult());
+    reporter.onEnd(fullResult);
+    const envelopes = readEnvelopes(spool);
+    expect(envelopes.find((item) => item.type === 'test.started')?.ext.target_env).toBe(
+      'staging-eu',
+    );
+    expect(warningsOf(envelopes).map((warning) => warning.code)).not.toContain(
+      'invalid_target_env',
+    );
   });
 
   it('builds the sidecar index at onBegin from the suite test files', () => {
@@ -624,5 +640,165 @@ describe('reporter identity wiring', () => {
     for (const envelope of envelopes) {
       expect(validateEnvelope(envelope), JSON.stringify(validateEnvelope.errors)).toBe(true);
     }
+  });
+
+  it('C3: writes one stderr line when the identity gate trips and overrides only a passed run', () => {
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const { reporter } = makeReporter();
+      reporter.onBegin();
+      reporter.onTestBegin(fakeTest(), fakeResult());
+      expect(reporter.onEnd(fullResult)).toEqual({ status: 'failed' });
+      expect(write).toHaveBeenCalledTimes(1);
+      const line = String(write.mock.calls[0]?.[0]);
+      expect(line).toContain('[evidgate]');
+      expect(line).toContain('EVIDGATE_ALLOW_UNMAPPED=1');
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it('C3: keeps an interrupted run status but still reports the identity gate', () => {
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const { reporter } = makeReporter();
+      reporter.onBegin();
+      reporter.onTestBegin(fakeTest(), fakeResult());
+      expect(reporter.onEnd(fullResultWith('interrupted'))).toBeUndefined();
+      expect(write).toHaveBeenCalledTimes(1);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it('C3: writes no stderr line when the gate is allowed', () => {
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      process.env.EVIDGATE_ALLOW_UNMAPPED = '1';
+      const { reporter } = makeReporter();
+      reporter.onBegin();
+      reporter.onTestBegin(fakeTest(), fakeResult());
+      expect(reporter.onEnd(fullResult)).toBeUndefined();
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it('C4: the unmapped summary bypasses the warning cap', () => {
+    const { reporter, spool } = makeReporter();
+    reporter.onBegin();
+    const total = MAX_WARNING_ENVELOPES + 50;
+    for (let index = 0; index < total; index += 1) {
+      reporter.onTestBegin(
+        fakeTest({
+          id: `t${index}`,
+          file: `tests/t${index}.spec.ts`,
+          annotations: [{ type: 'evidgate.id', description: CASE_A }],
+        }),
+        fakeResult(),
+      );
+    }
+    reporter.onTestBegin(
+      fakeTest({ id: 'unmapped', file: 'tests/unmapped.spec.ts' }),
+      fakeResult(),
+    );
+    reporter.onEnd(fullResult);
+
+    const warnings = warningsOf(readEnvelopes(spool));
+    expect(warnings.filter((warning) => warning.code === 'duplicate_case_id')).toHaveLength(
+      MAX_WARNING_ENVELOPES,
+    );
+    expect(warnings.find((warning) => warning.code === 'unmapped')?.count).toBe(1);
+    expect(warnings.find((warning) => warning.code === 'warnings_truncated')?.count).toBe(
+      total - 1 - MAX_WARNING_ENVELOPES,
+    );
+  });
+
+  it('P3: counts the sidecar loader drops in warnings_truncated', () => {
+    const entries = Array.from(
+      { length: 2001 },
+      (_, index) => `  - file: missing-${index}.spec.ts\n    evidgate.id: ${CASE_A}\n`,
+    ).join('');
+    const manifest = `version: 1\ncases:\n${entries}`;
+    const dir = sidecarDir({ 'a.spec.ts': '', [SIDECAR_FILE_NAME]: manifest });
+    const { reporter, spool } = makeReporter();
+    const test = fakeTest({ id: 't1', file: join(dir, 'a.spec.ts') });
+    reporter.onBegin(undefined, fakeSuite([test]));
+    reporter.onEnd(fullResult);
+
+    const truncated = warningsOf(readEnvelopes(spool)).find(
+      (warning) => warning.code === 'warnings_truncated',
+    );
+    // 2001 loader warnings: 2000 kept (100 emitted, 1900 capped) + 1 dropped by the
+    // sidecar's own cap.
+    expect(truncated?.count).toBe(2001 - MAX_WARNING_ENVELOPES);
+  });
+
+  it('S3: a test whose variant params were refused counts toward the identity gate', () => {
+    const { reporter, spool } = makeReporter();
+    const test = fakeTest({
+      annotations: [{ type: 'evidgate.id', description: CASE_A }],
+      project: {
+        name: 'chromium',
+        metadata: { evidgate: { params: { api_token: 'secret-value' } } },
+      },
+    });
+    reporter.onBegin();
+    reporter.onTestBegin(test, fakeResult());
+    const gate = reporter.onEnd(fullResult);
+    const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
+    expect(started?.ext.case_id).toBe(CASE_A);
+    expect(started?.ext.variant_hash).toBeUndefined();
+    expect(gate).toEqual({ status: 'failed' });
+  });
+
+  it('S3: a test with no valid target env counts toward the identity gate', () => {
+    const { reporter, spool } = makeReporter();
+    const test = fakeTest({
+      annotations: [{ type: 'evidgate.id', description: CASE_A }],
+      project: { name: 'Chromium Desktop' },
+    });
+    reporter.onBegin();
+    reporter.onTestBegin(test, fakeResult());
+    const gate = reporter.onEnd(fullResult);
+    const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
+    expect(started?.ext.case_id).toBe(CASE_A);
+    expect(started?.ext.target_env).toBeUndefined();
+    expect(gate).toEqual({ status: 'failed' });
+  });
+
+  it('S3: warns once per project when neither the env nor the project name is valid', () => {
+    const { reporter, spool } = makeReporter();
+    const chromium = { name: 'Chromium Desktop' };
+    const firefox = { name: 'Firefox Desktop' };
+    const tests = [
+      fakeTest({
+        id: 't1',
+        annotations: [{ type: 'evidgate.id', description: CASE_A }],
+        project: chromium,
+      }),
+      fakeTest({
+        id: 't2',
+        file: 'tests/b.spec.ts',
+        annotations: [{ type: 'evidgate.id', description: CASE_B }],
+        project: chromium,
+      }),
+      fakeTest({
+        id: 't3',
+        file: 'tests/c.spec.ts',
+        annotations: [{ type: 'evidgate.id', description: CASE_A }],
+        project: firefox,
+      }),
+    ];
+    reporter.onBegin();
+    for (const test of tests) reporter.onTestBegin(test, fakeResult());
+    reporter.onEnd(fullResult);
+
+    const invalid = warningsOf(readEnvelopes(spool)).filter(
+      (warning) => warning.code === 'invalid_target_env',
+    );
+    expect(invalid).toHaveLength(2);
+    expect(JSON.stringify(invalid)).not.toContain('Desktop');
   });
 });

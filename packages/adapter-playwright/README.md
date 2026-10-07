@@ -76,12 +76,12 @@ the value (one producer per shard).
 
 ## Environment
 
-| Variable                  | Used for                                                                  |
-| ------------------------- | ------------------------------------------------------------------------- |
-| `EVIDGATE_SPOOL_DIR`      | `spool_dir` fallback                                                      |
-| `EVIDGATE_RUN_ID`         | `run_id` fallback                                                         |
-| `EVIDGATE_TARGET_ENV`     | `ext.target_env`; validated in the ctor, else the Playwright project name |
-| `EVIDGATE_ALLOW_UNMAPPED` | `'1'` keeps an unmapped/conflicted run from failing the CI job (AC2)      |
+| Variable                  | Used for                                                                    |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `EVIDGATE_SPOOL_DIR`      | `spool_dir` fallback                                                        |
+| `EVIDGATE_RUN_ID`         | `run_id` fallback                                                           |
+| `EVIDGATE_TARGET_ENV`     | `ext.target_env`; validated in the ctor, else the Playwright project name   |
+| `EVIDGATE_ALLOW_UNMAPPED` | `'1'` keeps a run without a complete identity from failing the CI job (AC2) |
 
 Every variable is read **once in the constructor**; no callback reads `process.env`.
 
@@ -225,7 +225,8 @@ Every test envelope carries the resolved identity. The full contract is
 `contracts/adapter/playwright-mapping.md`; the summary:
 
 - **`ext.case_id`** — the `evidgate.id` annotation first (a UUID, any version,
-  lower-cased), else the per-directory `evidgate.cases.yaml` sidecar manifest
+  lower-cased), else the `evidgate.cases.yaml` sidecar manifest of the test file's
+  own directory or an ancestor directory up to the suite's common ancestor
   (03.1.1-T1). Both present and **different** is a conflict: `ext.identity_conflict:
 true`, **no** `case_id`, and an `identity_conflict` warning naming the location —
   never a silent pick. An invalid annotation UUID is reported as `invalid_annotation`
@@ -241,18 +242,21 @@ true`, **no** `case_id`, and an `identity_conflict` warning naming the location 
 - **`ext.target_env`** — `EVIDGATE_TARGET_ENV` (trimmed, validated against the manifest
   `targetEnv` shape), else the Playwright project name validated the same way; an
   invalid env value warns `invalid_target_env` and falls back, an invalid project name is
-  omitted.
+  omitted (and warns once per project when the env value is invalid too).
 - **`ext.warn`** — the warning channel: `run.log` envelopes carrying
   `{ code, message, path?, count? }`. Codes: `duplicate_case_id`, `identity_conflict`,
   `invalid_annotation`, `invalid_variant_params`, `invalid_target_env`,
   `invalid_sidecar`, `invalid_sidecar_entry`, `sidecar_conflict`, `unmapped`,
   `warnings_truncated`. At most 100 warning envelopes per run
-  (`MAX_WARNING_ENVELOPES`); the overflow is summarised once at `onEnd`. A message never
-  echoes file content or a parameter value.
-- **Exit code (AC2)** — `onEnd` returns `{ status: 'failed' }` when any test was
-  conflicted or unmapped, unless `EVIDGATE_ALLOW_UNMAPPED=1`. Playwright awaits the
-  reporter's `onEnd` result and overrides the run status with it, so a run that lost case
-  identity fails the CI job instead of passing with partial evidence.
+  (`MAX_WARNING_ENVELOPES`); the overflow is summarised once at `onEnd`, and the two
+  `onEnd` summaries bypass the cap. A message never echoes file content or a parameter
+  value.
+- **Exit code (AC2)** — `onEnd` returns `{ status: 'failed' }` when any test lacked a
+  complete identity (no `case_id`, no `variant_hash` or no `target_env`), unless
+  `EVIDGATE_ALLOW_UNMAPPED=1`; the override applies only to a `passed` run, and the gate
+  writes one `[evidgate]` line to stderr. Playwright awaits the reporter's `onEnd` result
+  and overrides the run status with it, so a run that lost identity fails the CI job
+  instead of passing with partial evidence.
 
 `execution_key` stays server-owned (00 §7): the reporter emits
 `PLACEHOLDER_EXECUTION_KEY = '0'.repeat(64)` (valid per the schema pattern

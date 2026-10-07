@@ -8,7 +8,12 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { loadSidecarIndex, SIDECAR_FILE_NAME, type SidecarFs } from './sidecar.js';
+import {
+  isCanonicalCaseId,
+  loadSidecarIndex,
+  SIDECAR_FILE_NAME,
+  type SidecarFs,
+} from './sidecar.js';
 import { SIDECAR_SCHEMA_V1 } from './sidecarSchema.js';
 
 const isWindows = process.platform === 'win32';
@@ -331,7 +336,150 @@ describe('loadSidecarIndex', () => {
     const index = loadSidecarIndex([file]);
 
     expect(index.warnings.length).toBe(2000);
+    expect(index.droppedWarnings).toBe(1);
     expect(codes(index).every((code) => code === 'invalid_sidecar_entry')).toBe(true);
+  });
+
+  it('refuses a urn:uuid: or nil evidgate.id per entry and keeps the valid sibling', () => {
+    const dir = tempDir();
+    const a = writeTestFile(dir, 'a.spec.ts');
+    const b = writeTestFile(dir, 'b.spec.ts');
+    const c = writeTestFile(dir, 'c.spec.ts');
+    writeSidecar(
+      dir,
+      [
+        'version: 1',
+        'cases:',
+        '  - file: a.spec.ts',
+        `    evidgate.id: "urn:uuid:${UUID_A}"`,
+        '  - file: b.spec.ts',
+        '    evidgate.id: 00000000-0000-0000-0000-000000000000',
+        '  - file: c.spec.ts',
+        `    evidgate.id: ${UUID_B}`,
+        '',
+      ].join('\n'),
+    );
+
+    const index = loadSidecarIndex([a, b, c]);
+
+    expect(index.lookup(a)).toBeUndefined();
+    expect(index.lookup(b)).toBeUndefined();
+    expect(index.lookup(c)).toBe(UUID_B);
+    expect(codes(index)).toEqual(['invalid_sidecar_entry', 'invalid_sidecar_entry']);
+  });
+
+  it('maps a nested file from a manifest in the common ancestor directory', () => {
+    const root = tempDir();
+    const a = writeTestFile(root, 'e2e/a.spec.ts');
+    const b = writeTestFile(root, 'unit/b.spec.ts');
+    writeSidecar(
+      root,
+      [
+        'version: 1',
+        'cases:',
+        '  - file: e2e/a.spec.ts',
+        `    evidgate.id: ${UUID_A}`,
+        '  - file: unit/b.spec.ts',
+        `    evidgate.id: ${UUID_B}`,
+        '',
+      ].join('\n'),
+    );
+
+    const index = loadSidecarIndex([a, b]);
+
+    expect(index.lookup(a)).toBe(UUID_A);
+    expect(index.lookup(b)).toBe(UUID_B);
+    expect(index.warnings).toEqual([]);
+  });
+
+  it('reads only up to the common ancestor of the test files', () => {
+    const root = tempDir();
+    const a = writeTestFile(root, 'e2e/a.spec.ts');
+    const b = writeTestFile(root, 'e2e/b.spec.ts');
+    writeSidecar(root, `version: 1\ncases:\n  - file: e2e/a.spec.ts\n    evidgate.id: ${UUID_A}\n`);
+
+    const index = loadSidecarIndex([a, b]);
+
+    expect(index.lookup(a)).toBeUndefined();
+    expect(index.warnings).toEqual([]);
+  });
+
+  it('detects a conflict between a manifest and its ancestor', () => {
+    const root = tempDir();
+    const nested = writeTestFile(root, 'sub/a.spec.ts');
+    const other = writeTestFile(root, 'other/b.spec.ts');
+    writeSidecar(root, `version: 1\ncases:\n  - file: sub/a.spec.ts\n    evidgate.id: ${UUID_A}\n`);
+    writeSidecar(
+      join(root, 'sub'),
+      `version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: ${UUID_B}\n`,
+    );
+
+    const index = loadSidecarIndex([nested, other]);
+
+    expect(index.lookup(nested)).toBeUndefined();
+    expect(codes(index)).toEqual(['sidecar_conflict']);
+  });
+
+  it('stops reading manifests past the 8 MiB aggregate budget', () => {
+    const root = tempDir();
+    const header = `version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: ${UUID_A}\n`;
+    const content = `${header}# ${'x'.repeat(1024 * 1024 - header.length - 3)}\n`;
+    const files: string[] = [];
+    for (let position = 0; position < 9; position += 1) {
+      const dir = join(root, `d${position}`);
+      files.push(writeTestFile(dir, 'a.spec.ts'));
+      writeSidecar(dir, content);
+    }
+
+    const index = loadSidecarIndex(files);
+    const mapped = files.filter((file) => index.lookup(file) !== undefined);
+
+    // The first eight manifests fit the 8 MiB budget; the ninth is skipped.
+    expect(mapped).toEqual(files.slice(0, 8));
+    expect(codes(index)).toEqual(['invalid_sidecar']);
+  });
+
+  it('charges the aggregate budget for manifests it refuses', () => {
+    const root = tempDir();
+    const broken = `version: [1\n# ${'x'.repeat(1024 * 1024 - 15)}\n`;
+    const header = `version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: ${UUID_A}\n`;
+    const valid = `${header}# ${'x'.repeat(1024 * 1024 - header.length - 3)}\n`;
+    const files: string[] = [];
+    for (let position = 0; position < 9; position += 1) {
+      const dir = join(root, `d${position}`);
+      files.push(writeTestFile(dir, 'a.spec.ts'));
+      writeSidecar(dir, position < 8 ? broken : valid);
+    }
+
+    const index = loadSidecarIndex(files);
+
+    // The eight refused manifests still spend the 8 MiB budget, so the valid ninth is skipped.
+    expect(files.filter((file) => index.lookup(file) !== undefined)).toEqual([]);
+    expect(codes(index)).toEqual(Array.from({ length: 9 }, () => 'invalid_sidecar'));
+  });
+
+  it('reads a sidecar of exactly 1 MiB through the default reader', () => {
+    const dir = tempDir();
+    const file = writeTestFile(dir, 'a.spec.ts');
+    const header = `version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: ${UUID_A}\n`;
+    writeSidecar(dir, `${header}# ${'x'.repeat(1024 * 1024 - header.length - 3)}\n`);
+
+    const index = loadSidecarIndex([file]);
+
+    expect(index.lookup(file)).toBe(UUID_A);
+    expect(index.warnings).toEqual([]);
+  });
+});
+
+describe('isCanonicalCaseId', () => {
+  it('accepts the 36-character hyphenated form in any case and refuses every other spelling', () => {
+    expect(isCanonicalCaseId(UUID_A)).toBe(true);
+    expect(isCanonicalCaseId(UUID_UPPER)).toBe(true);
+    expect(isCanonicalCaseId(`urn:uuid:${UUID_A}`)).toBe(false);
+    expect(isCanonicalCaseId('00000000-0000-0000-0000-000000000000')).toBe(false);
+    expect(isCanonicalCaseId('{11111111-1111-1111-1111-111111111111}')).toBe(false);
+    expect(isCanonicalCaseId('11111111111111111111111111111111')).toBe(false);
+    expect(isCanonicalCaseId('nope')).toBe(false);
   });
 });
 

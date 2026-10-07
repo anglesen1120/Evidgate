@@ -1,5 +1,5 @@
 // Independent QA for 04.3.2-T1.1: hostile real files and parser boundaries.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -90,5 +90,51 @@ describe('independent sidecar QA', () => {
       expect(index.lookup(file)).toBeUndefined();
       expect(index.warnings[0]?.code).toBe('invalid_sidecar');
     }
+  });
+
+  it('refuses a urn:uuid: and a nil id per entry while the valid sibling still maps', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'evidgate-sidecar-qa-'));
+    directories.push(directory);
+    const a = join(directory, 'a.spec.ts');
+    const b = join(directory, 'b.spec.ts');
+    const c = join(directory, 'c.spec.ts');
+    for (const path of [a, b, c]) writeFileSync(path, '// browserless test\n');
+    writeFileSync(
+      join(directory, SIDECAR_FILE_NAME),
+      [
+        'version: 1',
+        'cases:',
+        '  - file: a.spec.ts',
+        `    evidgate.id: "urn:uuid:${ID}"`,
+        '  - file: b.spec.ts',
+        '    evidgate.id: 00000000-0000-0000-0000-000000000000',
+        '  - file: c.spec.ts',
+        `    evidgate.id: ${ID}`,
+        '',
+      ].join('\n'),
+    );
+
+    const index = loadSidecarIndex([a, b, c]);
+
+    expect(index.lookup(a)).toBeUndefined();
+    expect(index.lookup(b)).toBeUndefined();
+    expect(index.lookup(c)).toBe(ID);
+    expect(index.warnings.map((warning) => warning.code)).toEqual([
+      'invalid_sidecar_entry',
+      'invalid_sidecar_entry',
+    ]);
+  });
+
+  it('refuses a manifest that is a directory', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'evidgate-sidecar-qa-'));
+    directories.push(directory);
+    const file = join(directory, 'a.spec.ts');
+    writeFileSync(file, '// browserless test\n');
+    mkdirSync(join(directory, SIDECAR_FILE_NAME));
+
+    const index = loadSidecarIndex([file]);
+
+    expect(index.lookup(file)).toBeUndefined();
+    expect(index.warnings[0]?.code).toBe('invalid_sidecar');
   });
 });

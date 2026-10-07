@@ -1,7 +1,9 @@
 // 04.3.2-T1.3 / AC3: `variant_hash` stability and cross-runtime parity. The corpus
 // fixtures/variant-hash/vectors.json is asserted here and by the server's own suite
 // (tests/Tenancy.IntegrationTests/VariantGoldenVectorTests.cs), so a regression on either
-// side fails that side's suite.
+// side fails that side's suite. The `*-near-limit-*` vectors pin the `too_large` boundary: the
+// server measures the UTF-8 byte count of `JsonSerializer.Serialize(result)` under the default
+// encoder, not of the canonical form, so they are accepted or refused on that measure alone.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -86,5 +88,18 @@ describe('variant_hash properties', () => {
     const parsed = JSON.parse('{"constructor":"x"}') as Record<string, unknown>;
 
     expect(normalizeVariant(parsed)).toEqual(normalizeVariant({ constructor: 'x' }));
+  });
+});
+
+describe('variant_hash known divergences', () => {
+  // The reporter is handed a JavaScript number, not the author's JSON text, so it cannot tell two
+  // spellings of one value apart. The file header lists the three cases; this pins the first, where
+  // the server accepts the exponent spelling `1e20` as a `double` and the reporter sees plain
+  // digits past `MaxExactInteger` and refuses.
+  it('refuses an integer above 2^53 that the server accepts when it is spelled with an exponent', () => {
+    expect(normalizeVariant({ v: 1e20 })).toEqual({
+      ok: false,
+      problems: [{ path: '/params/v', reason: 'invalid_value' }],
+    });
   });
 });
