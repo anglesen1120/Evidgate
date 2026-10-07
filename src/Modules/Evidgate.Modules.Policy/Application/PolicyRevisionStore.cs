@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -18,8 +19,9 @@ internal sealed record PolicyRevisionAppend(Guid Id, int RevisionNo, string Hash
 /// <summary>
 /// The append-only store of policy revisions (07.1.1-T1): one statement per append, the project row locked so the
 /// per-project numbering is serialised (the 05.1.2 environment-revision precedent), and a duplicate hash returns
-/// the existing row without writing anything or consuming a number (ruling T25). The hash is passed in by the
-/// caller — the hasher service is 07.1.1-T2 — and only its shape is checked here.
+/// the existing row without writing anything or consuming a number (ruling T25). The hash is computed here from
+/// the body by the injected <see cref="IPolicyHasher"/> (07.1.1-T2, finding T1-SEC-S2), so a stored body can never
+/// sit under another content's address.
 /// <para>
 /// The outcome is a <see cref="Result{T}"/> (00 §5.5 C8), the shape the 05.1.2 environment-revision precedent
 /// returns: a project that is missing or soft-deleted is a typed 404
@@ -28,24 +30,39 @@ internal sealed record PolicyRevisionAppend(Guid Id, int RevisionNo, string Hash
 /// query and the insert, so a refused append writes no row.
 /// </para>
 /// </summary>
-internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor scopes)
+internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor scopes, IPolicyHasher hasher)
 {
     /// <summary>Appends one revision, or returns the existing row when the hash is already on file.</summary>
     public async ValueTask<Result<PolicyRevisionAppend>> AppendAsync(
         Guid projectId,
         string body,
-        string hash,
         Guid createdBy,
         CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Policy, nameof(AppendAsync));
 
-        // Both shapes are checked before the scope is demanded, so a malformed append never reaches a statement.
-        if (!PolicyRevisionRules.IsValidHash(hash) || !PolicyRevisionRules.IsJsonObject(body))
+        // Every shape is checked before the scope is demanded, so a malformed append never reaches a statement.
+        if (!PolicyRevisionRules.IsJsonObject(body))
         {
-            throw new ArgumentException(
-                "the revision hash must be sha256:<64 hex> and the body a JSON object",
-                nameof(hash));
+            throw new ArgumentException("the body must be a storable JSON object", nameof(body));
+        }
+
+        string hash;
+        try
+        {
+            hash = hasher.Hash(body);
+        }
+        catch (JsonCanonicalizationException exception)
+        {
+            // A duplicate name, a lone surrogate or a number outside the IEEE 754 double range: not a policy body.
+            throw new ArgumentException("the body cannot be canonicalised", nameof(body), exception);
+        }
+
+        // Defensive: the hasher is the only producer and always returns sha256:<64 hex>; the assert keeps the
+        // store's own invariant if a future hasher ever returns something else.
+        if (!PolicyRevisionRules.IsValidHash(hash))
+        {
+            throw new ArgumentException("the computed hash must be sha256:<64 hex>", nameof(body));
         }
 
         var orgId = scopes.Require().OrgId;
