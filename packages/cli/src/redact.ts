@@ -1,7 +1,9 @@
 // 04.2.1-T2.1/T2.2: redaction of every secret the CLI reads from the environment (T78,
-// 04.2.1 §8 S3 analogue). `resolveConfig` registers each secret value; every
-// stdout/stderr write in `main` goes through `createRedactingIo`, which replaces any
-// registered value with `[REDACTED]` and never lets an `Authorization` header through.
+// 04.2.1 §8 S3 analogue). `registerEnvSecrets` (called by `main` before parsing argv
+// and by `resolveConfig`) registers each env secret; `getToken`/`createApiClient`
+// register the runtime token. Every stdout/stderr write in `main` goes through
+// `createRedactingIo`, which replaces any registered value with `[REDACTED]` and never
+// lets an `Authorization` header through.
 
 /** Placeholder that replaces every registered secret. */
 export const redacted = '[REDACTED]';
@@ -14,24 +16,44 @@ export interface Io {
 
 const registeredSecrets = new Set<string>();
 
+/** Registered secrets, longest first, so a shorter prefix cannot mask a longer value. */
+let secretsByLength: readonly string[] = [];
+
 const authorizationHeader = /(authorization\s*:\s*)[^\r\n]*/gi;
 
-/** Registers a secret value; empty and undefined values are ignored. */
+/**
+ * Registers a secret value and the forms it can take in an error message: the value
+ * itself, its trimmed form, its percent-encoded form and its JSON-escaped form. Empty
+ * forms are skipped; a value shorter than four characters is still registered
+ * (fail-safe).
+ */
 export function registerSecret(value: string | undefined): void {
-  if (value !== undefined && value.length > 0) {
-    registeredSecrets.add(value);
+  if (value === undefined || value.length === 0) {
+    return;
+  }
+  let added = false;
+  const jsonEscaped = JSON.stringify(value).slice(1, -1);
+  for (const form of [value, value.trim(), encodeURIComponent(value), jsonEscaped]) {
+    if (form.length > 0 && !registeredSecrets.has(form)) {
+      registeredSecrets.add(form);
+      added = true;
+    }
+  }
+  if (added) {
+    secretsByLength = [...registeredSecrets].sort((a, b) => b.length - a.length);
   }
 }
 
 /** Clears the registry — `main` calls it at entry, specs between cases. */
 export function resetSecrets(): void {
   registeredSecrets.clear();
+  secretsByLength = [];
 }
 
 /** Replaces every registered secret and any `Authorization` header value. */
 export function redact(text: string): string {
   let output = text;
-  for (const secret of registeredSecrets) {
+  for (const secret of secretsByLength) {
     output = output.split(secret).join(redacted);
   }
   return output.replace(authorizationHeader, `$1${redacted}`);

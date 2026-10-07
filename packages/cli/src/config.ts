@@ -64,7 +64,29 @@ const loopbackHosts: Record<string, true> = {
   '[::1]': true,
 };
 
-const projectForbidden = /[\s\u0000-\u001f\u007f]/;
+/** True when `apiUrl` targets one of the loopback hosts `http:` is allowed on. */
+export function isLoopbackApiUrl(apiUrl: string): boolean {
+  return loopbackHosts[new URL(apiUrl).hostname] === true;
+}
+
+/** `EVIDGATE_ENV` after trim + lower-case: a short, log-safe label (04.2.1-T2 §Config). */
+const envPattern = /^[a-z0-9][a-z0-9._-]{0,31}$/;
+
+/** Whitespace, C0/C1 controls and Unicode format characters are all rejected. */
+const projectForbidden = /[\s\p{Cc}\p{Cf}]/u;
+
+/**
+ * Registers every secret env value for redaction. `main` calls it before parsing argv
+ * so a usage error that echoes a secret value is still redacted (QA-D1); `resolveConfig`
+ * calls it too, so a direct caller is covered.
+ */
+export function registerEnvSecrets(env: Readonly<Record<string, string | undefined>>): void {
+  registerSecret(rawEnv(env, envNames.oidcToken));
+  registerSecret(rawEnv(env, envNames.actionsIdTokenRequestToken));
+  registerSecret(rawEnv(env, envNames.ingestToken));
+  registerSecret(rawEnv(env, envNames.devToken));
+  registerSecret(rawEnv(env, envNames.bindingChallenge));
+}
 
 /**
  * Resolves the whole `EVIDGATE_*` surface into one frozen object. Every missing
@@ -74,9 +96,16 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
   const { env } = input;
   const flags = input.flags ?? {};
 
+  // Register every secret before any validation can throw, so an error message that
+  // happens to embed one is still redacted by the writer in `main` (T78).
+  registerEnvSecrets(env);
+
   const apiUrlRaw = flagOrEnv(flags.apiUrl, trimmedEnv(env, envNames.apiUrl));
   const projectRaw = flagOrEnv(flags.project, trimmedEnv(env, envNames.project));
   const environment = trimmedEnv(env, envNames.env)?.toLowerCase();
+  if (environment !== undefined && !envPattern.test(environment)) {
+    throw invalidConfig(envNames.env, 'has an invalid value');
+  }
   const oidcToken = rawEnv(env, envNames.oidcToken);
   const actionsIdTokenRequestUrl = rawEnv(env, envNames.actionsIdTokenRequestUrl);
   const actionsIdTokenRequestToken = rawEnv(env, envNames.actionsIdTokenRequestToken);
@@ -84,37 +113,36 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
   const devToken = rawEnv(env, envNames.devToken);
   const bindingChallenge = rawEnv(env, envNames.bindingChallenge);
 
-  // Register every secret before any validation can throw, so an error message that
-  // happens to embed one is still redacted by the writer in `main` (T78).
-  registerSecret(oidcToken);
-  registerSecret(actionsIdTokenRequestToken);
-  registerSecret(ingestToken);
-  registerSecret(devToken);
-  registerSecret(bindingChallenge);
-
   const hasTokenSource =
-    oidcToken !== undefined ||
-    (actionsIdTokenRequestUrl !== undefined && actionsIdTokenRequestToken !== undefined) ||
-    ingestToken !== undefined ||
-    devToken !== undefined;
+    resolveTokenSource({
+      oidcToken,
+      actionsIdTokenRequestUrl,
+      actionsIdTokenRequestToken,
+      ingestToken,
+      devToken,
+    }) !== undefined;
 
-  const missing: string[] = [];
-  if (apiUrlRaw === undefined) {
-    missing.push(apiUrlNames);
-  }
-  if (projectRaw === undefined) {
-    missing.push(projectNames);
-  }
-  if (input.requireToken === true && !hasTokenSource) {
-    missing.push(tokenSourceNames);
-  }
-  if (missing.length > 0) {
+  if (
+    apiUrlRaw === undefined ||
+    projectRaw === undefined ||
+    (input.requireToken === true && !hasTokenSource)
+  ) {
+    const missing: string[] = [];
+    if (apiUrlRaw === undefined) {
+      missing.push(apiUrlNames);
+    }
+    if (projectRaw === undefined) {
+      missing.push(projectNames);
+    }
+    if (input.requireToken === true && !hasTokenSource) {
+      missing.push(tokenSourceNames);
+    }
     throw new CliError(`missing configuration: ${missing.join(', ')}`, { code: 'missing_config' });
   }
 
   return Object.freeze({
-    apiUrl: validateApiUrl(assertDefined(apiUrlRaw, apiUrlNames)),
-    project: validateProject(assertDefined(projectRaw, projectNames)),
+    apiUrl: validateApiUrl(apiUrlRaw),
+    project: validateProject(projectRaw),
     env: environment,
     oidcToken,
     actionsIdTokenRequestUrl,
@@ -127,8 +155,18 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
   });
 }
 
+/** The fields `resolveTokenSource` reads; `ResolvedConfig` satisfies it structurally. */
+export type TokenSourceFields = Pick<
+  ResolvedConfig,
+  | 'oidcToken'
+  | 'actionsIdTokenRequestUrl'
+  | 'actionsIdTokenRequestToken'
+  | 'ingestToken'
+  | 'devToken'
+>;
+
 /** The token source §5 would use, or `undefined` when none is configured. */
-export function resolveTokenSource(config: ResolvedConfig): TokenSource | undefined {
+export function resolveTokenSource(config: TokenSourceFields): TokenSource | undefined {
   if (config.oidcToken !== undefined) {
     return 'oidc';
   }
@@ -200,34 +238,27 @@ function flagOrEnv(flag: string | undefined, envValue: string | undefined): stri
   return envValue;
 }
 
-function assertDefined<T>(value: T | undefined, names: string): T {
-  if (value === undefined) {
-    // Unreachable: the missing-name check above already threw for this value.
-    throw new CliError(`missing configuration: ${names}`, { code: 'missing_config' });
-  }
-  return value;
-}
-
 function invalidConfig(names: string, reason: string): CliError {
   return new CliError(`invalid configuration: ${names}: ${reason}`, { code: 'invalid_config' });
 }
 
 /**
  * Absolute URL, `https:` (or `http:` on loopback only), no userinfo, no query or
- * fragment; a trailing `/` is normalised away (04.2.1-T2 §Config).
+ * fragment; a trailing `/` is normalised away (04.2.1-T2 §Config). The raw value is
+ * never echoed — it may carry credentials (SEC3).
  */
 function validateApiUrl(value: string): string {
+  if (value.includes('?') || value.includes('#')) {
+    throw invalidConfig(apiUrlNames, 'must not contain a query or fragment');
+  }
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    throw invalidConfig(apiUrlNames, `'${value}' is not an absolute URL`);
+    throw invalidConfig(apiUrlNames, 'is not an absolute URL');
   }
   if (url.username !== '' || url.password !== '') {
     throw invalidConfig(apiUrlNames, 'must not contain userinfo');
-  }
-  if (url.search !== '' || url.hash !== '') {
-    throw invalidConfig(apiUrlNames, 'must not contain a query or fragment');
   }
   if (url.protocol === 'http:') {
     if (loopbackHosts[url.hostname] !== true) {
@@ -239,7 +270,7 @@ function validateApiUrl(value: string): string {
   } else if (url.protocol !== 'https:') {
     throw invalidConfig(apiUrlNames, `unsupported scheme '${url.protocol}' (expected https:)`);
   }
-  return url.href.replace(/\/+$/, '');
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
 function validateProject(value: string): string {

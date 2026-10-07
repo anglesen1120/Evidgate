@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { resolveConfig, resolveTokenSource, tokenSourceNames } from './config.js';
+import {
+  registerEnvSecrets,
+  resolveConfig,
+  resolveTokenSource,
+  tokenSourceNames,
+} from './config.js';
 import { CliError } from './errors.js';
 import { redact, redacted, resetSecrets } from './redact.js';
 
@@ -31,7 +36,6 @@ describe('resolveConfig', () => {
   it('names every missing variable at once (AC5)', () => {
     const error = captureCliError(() => resolveConfig({ env: {}, requireToken: true }));
     expect(error.code).toBe('missing_config');
-    expect(error.exitCode).toBe(3);
     expect(error.message).toContain('EVIDGATE_API_URL (or --api-url)');
     expect(error.message).toContain('EVIDGATE_PROJECT (or --project)');
     expect(error.message).toContain(tokenSourceNames);
@@ -181,5 +185,100 @@ describe('resolveConfig', () => {
       resolveConfig({ env: { EVIDGATE_DEV_TOKEN: 'dev-secret' }, requireToken: true }),
     );
     expect(redact('dev-secret')).toBe(redacted);
+  });
+
+  it('rejects an EVIDGATE_ENV that is not a short log-safe label (SEC4)', () => {
+    for (const value of [
+      'x\n::stop-commands::tok',
+      'has space',
+      'UPPER!',
+      'a'.repeat(33),
+      '-lead',
+    ]) {
+      const error = captureCliError(() =>
+        resolveConfig({ env: { ...baseEnv, EVIDGATE_ENV: value } }),
+      );
+      expect(error.code).toBe('invalid_config');
+      expect(error.message).toContain('EVIDGATE_ENV');
+      expect(error.message).not.toContain(value);
+    }
+  });
+
+  it('accepts a log-safe EVIDGATE_ENV', () => {
+    for (const value of ['dev', 'staging', 'prod', 'qa-1', 'team.a_b']) {
+      expect(resolveConfig({ env: { ...baseEnv, EVIDGATE_ENV: value } }).env).toBe(value);
+    }
+  });
+
+  it('rejects control and format characters in the project (SEC4)', () => {
+    for (const value of ['proj\u0000', 'proj\u009b', 'proj\u200b', 'proj\u202e']) {
+      const error = captureCliError(() =>
+        resolveConfig({ env: { ...baseEnv, EVIDGATE_PROJECT: value } }),
+      );
+      expect(error.code).toBe('invalid_config');
+      expect(error.message).toContain('EVIDGATE_PROJECT');
+      expect(error.message).not.toContain(value);
+    }
+  });
+
+  it('rejects an empty query or fragment left dangling by a trailing ? or # (CR4)', () => {
+    for (const url of ['https://api.evidgate.test/?', 'https://api.evidgate.test/#']) {
+      const error = captureCliError(() =>
+        resolveConfig({ env: { ...baseEnv, EVIDGATE_API_URL: url } }),
+      );
+      expect(error.code).toBe('invalid_config');
+      expect(error.message).toContain('must not contain a query or fragment');
+    }
+  });
+
+  it('does not echo an unparseable API URL (SEC3)', () => {
+    const value = 'https://ci:hunter2@host:99999';
+    const error = captureCliError(() =>
+      resolveConfig({ env: { ...baseEnv, EVIDGATE_API_URL: value } }),
+    );
+    expect(error.code).toBe('invalid_config');
+    expect(error.message).toContain('is not an absolute URL');
+    expect(error.message).not.toContain('hunter2');
+    expect(error.message).not.toContain(value);
+  });
+
+  it('normalises a base path without a trailing slash', () => {
+    const config = resolveConfig({
+      env: { ...baseEnv, EVIDGATE_API_URL: 'https://api.evidgate.test/base/' },
+    });
+    expect(config.apiUrl).toBe('https://api.evidgate.test/base');
+  });
+});
+
+// QA-D1: `main` registers the env secrets before parsing argv, so a usage error that
+// echoes a secret value is still redacted. The helper is the single place that knows
+// which env names are secret.
+describe('registerEnvSecrets', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  it('registers the five secret env values for redaction (QA-D1)', () => {
+    registerEnvSecrets({
+      EVIDGATE_OIDC_TOKEN: 'oidc-secret',
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'actions-secret',
+      EVIDGATE_INGEST_TOKEN: 'ingest-secret',
+      EVIDGATE_DEV_TOKEN: 'dev-secret',
+      EVIDGATE_BINDING_CHALLENGE: 'challenge-secret',
+    });
+    for (const secret of [
+      'oidc-secret',
+      'actions-secret',
+      'ingest-secret',
+      'dev-secret',
+      'challenge-secret',
+    ]) {
+      expect(redact(`value=${secret}`)).toBe(`value=${redacted}`);
+    }
+  });
+
+  it('skips empty and unset values', () => {
+    registerEnvSecrets({ EVIDGATE_DEV_TOKEN: '', EVIDGATE_INGEST_TOKEN: undefined });
+    expect(redact('nothing to hide')).toBe('nothing to hide');
   });
 });

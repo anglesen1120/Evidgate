@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { ExitCode } from './exitCodes.js';
 import { main } from './main.js';
 import { resetSecrets, type Io } from './redact.js';
 
@@ -19,12 +20,20 @@ function capture(): Captured {
   };
 }
 
-const baseEnv = {
-  EVIDGATE_API_URL: 'https://api.evidgate.test',
+// The dev token is returned only for a loopback API URL (contracts/cli.md §4).
+const devEnv = {
+  EVIDGATE_API_URL: 'http://127.0.0.1:8080',
   EVIDGATE_PROJECT: 'proj-1',
+  EVIDGATE_ENV: 'dev',
+  EVIDGATE_DEV_TOKEN: 'dev-token-value',
 };
 
-const devEnv = { ...baseEnv, EVIDGATE_ENV: 'dev', EVIDGATE_DEV_TOKEN: 'dev-token-value' };
+/** Every non-empty stderr line must carry the `evidgate: ` prefix (SEC4). */
+function expectPrefixedStderr(text: string): void {
+  for (const line of text.split('\n').filter((line) => line.length > 0)) {
+    expect(line.startsWith('evidgate: ')).toBe(true);
+  }
+}
 
 // 04.2.1-T2.1/T2.2: the dispatcher — help/version, the AC5 missing-config exit, the
 // AC8 dev path, the `--json` shape and redaction over every error path (T78).
@@ -64,7 +73,7 @@ describe('main', () => {
     const { io, stdout, stderr } = capture();
     await expect(main(['config', 'check'], devEnv, io)).resolves.toBe(0);
     expect(stdout.join('')).toBe(
-      'ok api_url=https://api.evidgate.test project=proj-1 token_source=dev\n',
+      'ok api_url=http://127.0.0.1:8080 project=proj-1 token_source=dev\n',
     );
     expect(stdout.join('')).not.toContain('dev-token-value');
     expect(stderr.join('')).not.toContain('dev-token-value');
@@ -81,18 +90,20 @@ describe('main', () => {
     };
     expect(payload).toEqual({
       ok: true,
-      api_url: 'https://api.evidgate.test',
+      api_url: 'http://127.0.0.1:8080',
       project: 'proj-1',
       token_source: 'dev',
     });
     expect(stdout.join('')).not.toContain('dev-token-value');
   });
 
-  it('redacts the token in --verbose output', async () => {
+  it('redacts the token in --verbose output and prefixes every line', async () => {
     const { io, stderr } = capture();
     await expect(main(['config', 'check', '--verbose'], devEnv, io)).resolves.toBe(0);
-    expect(stderr.join('')).toContain('dev_token=[REDACTED]');
-    expect(stderr.join('')).not.toContain('dev-token-value');
+    const text = stderr.join('');
+    expect(text).toContain('dev_token=[REDACTED]');
+    expect(text).not.toContain('dev-token-value');
+    expectPrefixedStderr(text);
   });
 
   it('exits 3 with usage for an unknown flag', async () => {
@@ -120,37 +131,56 @@ describe('main', () => {
     expect(stderr.join('')).toContain('no command given');
   });
 
-  it('redacts the token on every error path', async () => {
-    const token = 'dev-token-value';
-    const cases: ReadonlyArray<readonly [string[], Record<string, string | undefined>]> = [
-      [['config', 'check'], { ...baseEnv, EVIDGATE_ENV: 'prod', EVIDGATE_DEV_TOKEN: token }],
-      [
-        ['config', 'check'],
-        {
-          ...baseEnv,
-          EVIDGATE_ENV: 'dev',
-          EVIDGATE_DEV_TOKEN: token,
-          EVIDGATE_OIDC_TOKEN: 'oidc-jwt',
-        },
-      ],
-      [
-        ['config', 'check', '--api-url', 'http://api.evidgate.test'],
-        { ...baseEnv, EVIDGATE_ENV: 'dev', EVIDGATE_DEV_TOKEN: token },
-      ],
-      [
-        ['config', 'check'],
-        {
-          EVIDGATE_API_URL: baseEnv.EVIDGATE_API_URL,
-          EVIDGATE_ENV: 'dev',
-          EVIDGATE_DEV_TOKEN: token,
-        },
-      ],
+  it('exits 3 with usage for an extra positional on config check', async () => {
+    const { io, stderr } = capture();
+    await expect(main(['config', 'check', 'extra'], devEnv, io)).resolves.toBe(3);
+    expect(stderr.join('')).toContain('evidgate: error usage:');
+    expect(stderr.join('')).toContain("unexpected argument 'extra'");
+  });
+
+  it('redacts a secret wherever a message or output echoes it (T78)', async () => {
+    const token = 'evg_dev_FAKE_echo_secret';
+    const urlToken = 'http://127.0.0.1:8080';
+    const cases: ReadonlyArray<{
+      readonly argv: string[];
+      readonly env: Record<string, string | undefined>;
+      readonly secret: string;
+      readonly code: ExitCode;
+    }> = [
+      // the usage error echoes the unknown command text (QA-D1: before resolveConfig)
+      {
+        argv: [token],
+        env: { ...devEnv, EVIDGATE_DEV_TOKEN: token },
+        secret: token,
+        code: ExitCode.Error,
+      },
+      // parseArgs echoes the unknown flag name
+      {
+        argv: ['config', 'check', `--${token}`],
+        env: { ...devEnv, EVIDGATE_DEV_TOKEN: token },
+        secret: token,
+        code: ExitCode.Error,
+      },
+      // `config check` echoes the resolved project
+      {
+        argv: ['config', 'check', '--project', token],
+        env: { ...devEnv, EVIDGATE_DEV_TOKEN: token },
+        secret: token,
+        code: ExitCode.Ok,
+      },
+      // `config check` echoes the resolved api_url (the secret is a valid loopback URL)
+      {
+        argv: ['config', 'check', '--api-url', urlToken],
+        env: { ...devEnv, EVIDGATE_API_URL: urlToken, EVIDGATE_DEV_TOKEN: urlToken },
+        secret: urlToken,
+        code: ExitCode.Ok,
+      },
     ];
-    for (const [argv, env] of cases) {
+    for (const { argv, env, secret, code } of cases) {
       const { io, stdout, stderr } = capture();
-      await expect(main(argv, env, io)).resolves.toBe(3);
-      expect(stdout.join('')).not.toContain(token);
-      expect(stderr.join('')).not.toContain(token);
+      await expect(main(argv, env, io)).resolves.toBe(code);
+      expect(stdout.join('')).not.toContain(secret);
+      expect(stderr.join('')).not.toContain(secret);
     }
   });
 
@@ -164,7 +194,21 @@ describe('main', () => {
       stderr: (text) => stderr.push(text),
     };
     await expect(main(['config', 'check', '--verbose'], devEnv, io)).resolves.toBe(3);
-    expect(stderr.join('')).toContain('evidgate: error internal_error:');
-    expect(stderr.join('')).not.toContain(token);
+    const text = stderr.join('');
+    expect(text).toContain('evidgate: error internal_error:');
+    expect(text).not.toContain(token);
+    expectPrefixedStderr(text);
+  });
+
+  it('escapes control characters so no stderr line can start with :: (SEC4)', async () => {
+    const hostile = '\n::stop-commands::tok\u001b[31m';
+    const { io, stderr } = capture();
+    await expect(main([hostile], devEnv, io)).resolves.toBe(3);
+    const text = stderr.join('');
+    expectPrefixedStderr(text);
+    expect(text).not.toContain('\n::');
+    expect(text).toContain('\\u000a');
+    expect(text).toContain('\\u001b');
+    expect(text).toContain('::stop-commands::tok');
   });
 });

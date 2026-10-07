@@ -7,7 +7,7 @@ import { resetSecrets } from '../redact.js';
 import { resolveDevToken } from './devToken.js';
 
 const baseEnv = {
-  EVIDGATE_API_URL: 'https://api.evidgate.test',
+  EVIDGATE_API_URL: 'http://127.0.0.1:8080',
   EVIDGATE_PROJECT: 'proj-1',
   EVIDGATE_DEV_TOKEN: 'dev-token-value',
 };
@@ -69,6 +69,37 @@ describe('resolveDevToken', () => {
     expect(error.code).toBe('dev_token_refused');
     expect(error.message).toContain('EVIDGATE_ENV=test');
     expect(error.hint).toBe('set EVIDGATE_ENV=dev');
+  });
+
+  it('refuses the dev token when the API URL is not loopback (SEC2)', () => {
+    const error = captureCliError(() =>
+      resolveDevToken(
+        configFor({
+          ...baseEnv,
+          EVIDGATE_API_URL: 'https://api.evidgate.test',
+          EVIDGATE_ENV: 'dev',
+        }),
+      ),
+    );
+    expect(error.code).toBe('dev_token_refused');
+    expect(error.message).toBe('EVIDGATE_DEV_TOKEN is only sent to a loopback API URL');
+    expect(error.hint).toBe(
+      'point EVIDGATE_API_URL at the local dev stack (http://127.0.0.1:8080)',
+    );
+  });
+
+  it('checks EVIDGATE_ENV before the API target (SEC2)', () => {
+    const error = captureCliError(() =>
+      resolveDevToken(
+        configFor({
+          ...baseEnv,
+          EVIDGATE_API_URL: 'https://api.evidgate.test',
+          EVIDGATE_ENV: 'staging',
+        }),
+      ),
+    );
+    expect(error.message).toContain('EVIDGATE_ENV=staging');
+    expect(error.hint).toBeUndefined();
   });
 
   it('raises missing_config when no dev token is set', () => {

@@ -3,112 +3,176 @@
 // `bin.ts`). Every write goes through a redacting writer, so a secret can never reach
 // stdout/stderr (T78).
 import { readFileSync } from 'node:fs';
-import { parseArgs } from 'node:util';
+import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
 
-import { findCommand, usageText } from './commands/index.js';
-import { formatConfigForVerbose, resolveConfig, type ConfigFlags } from './config.js';
-import { CliError, formatCliError } from './errors.js';
+import {
+  resolveCommand,
+  usageText,
+  type CommandDefinition,
+  type ParsedValues,
+} from './commands/index.js';
+import {
+  formatConfigForVerbose,
+  registerEnvSecrets,
+  resolveConfig,
+  type ConfigFlags,
+} from './config.js';
+import {
+  CliError,
+  escapeControlCharacters,
+  formatCliError,
+  formatInternalError,
+  prefixStderrLines,
+} from './errors.js';
 import { ExitCode } from './exitCodes.js';
 import { createRedactingIo, resetSecrets, type Io } from './redact.js';
 
 const helpHint = "run 'evidgate --help' for usage";
 
-const cliOptions = {
+/** Options every command accepts; a command's own `options` are merged on top. */
+const globalOptions: ParseArgsOptionsConfig = {
   help: { type: 'boolean', short: 'h' },
   version: { type: 'boolean' },
   verbose: { type: 'boolean' },
   json: { type: 'boolean' },
   'api-url': { type: 'string' },
   project: { type: 'string' },
-} as const;
+};
 
 interface ParsedArguments {
-  readonly command: string;
-  readonly flags: ConfigFlags;
-  readonly help: boolean;
-  readonly version: boolean;
+  readonly values: ParsedValues;
+  readonly positionals: string[];
 }
 
 export async function main(
   argv: readonly string[],
   env: Readonly<Record<string, string | undefined>>,
   io: Io,
-): Promise<number> {
+): Promise<ExitCode> {
+  // Register every secret before any argument parsing, so a usage error that echoes a
+  // secret value is still redacted (QA-D1, contracts/cli.md §6).
   resetSecrets();
+  registerEnvSecrets(env);
   const output = createRedactingIo(io);
   let verbose = false;
   try {
-    const parsed = parseArguments(argv);
-    verbose = parsed.flags.verbose === true;
-    if (parsed.help) {
+    const global = parseGlobal(argv);
+    verbose = global.values.verbose === true;
+    if (
+      global.values.help === true ||
+      (global.positionals.length === 1 && global.positionals[0] === 'help')
+    ) {
       output.stdout(usageText);
       return ExitCode.Ok;
     }
-    if (parsed.version) {
+    if (global.values.version === true) {
       output.stdout(`${readCliVersion()}\n`);
       return ExitCode.Ok;
     }
-    const command = findCommand(parsed.command);
-    if (command === undefined) {
-      const message =
-        parsed.command.length === 0 ? 'no command given' : `unknown command '${parsed.command}'`;
-      throw new CliError(message, { code: 'usage', hint: helpHint });
+    const resolved = resolveCommand(global.positionals);
+    if (resolved === undefined) {
+      const text = global.positionals.join(' ');
+      throw new CliError(text.length === 0 ? 'no command given' : `unknown command '${text}'`, {
+        code: 'usage',
+        hint: helpHint,
+      });
     }
-    const config = resolveConfig({ env, flags: parsed.flags, requireToken: command.requireToken });
+    const parsed = parseCommand(argv, resolved.command);
+    const rest = parsed.positionals.slice(resolved.words);
+    if (rest.length > 0 && resolved.command.positionals === undefined) {
+      throw new CliError(`unexpected argument '${rest[0] ?? ''}'`, {
+        code: 'usage',
+        hint: helpHint,
+      });
+    }
+    const config = resolveConfig({
+      env,
+      flags: toConfigFlags(parsed.values),
+      requireToken: resolved.command.requireToken,
+    });
     if (config.verbose) {
-      output.stderr(`${formatConfigForVerbose(config)}\n`);
+      output.stderr(prefixStderrLines(`${formatConfigForVerbose(config)}\n`));
     }
-    return await command.run({ config, io: output });
+    return await resolved.command.run({
+      config,
+      io: output,
+      env,
+      values: parsed.values,
+      positionals: rest,
+    });
   } catch (error) {
     return reportError(error, output, verbose);
   }
 }
 
-function parseArguments(argv: readonly string[]): ParsedArguments {
+/**
+ * First parse pass: global options only, tolerant of unknown options so a per-command
+ * flag does not fail before the command is known. Only the positionals (and the global
+ * `--help`/`--version`/`--verbose` flags) are used from this pass.
+ */
+function parseGlobal(argv: readonly string[]): ParsedArguments {
   try {
     const { values, positionals } = parseArgs({
       args: [...argv],
-      options: cliOptions,
+      options: globalOptions,
       allowPositionals: true,
-      strict: true,
+      strict: false,
     });
-    const flags: ConfigFlags = {};
-    const apiUrl = values['api-url'];
-    if (apiUrl !== undefined) {
-      flags.apiUrl = apiUrl;
-    }
-    const project = values.project;
-    if (project !== undefined) {
-      flags.project = project;
-    }
-    if (values.verbose === true) {
-      flags.verbose = true;
-    }
-    if (values.json === true) {
-      flags.json = true;
-    }
-    const command = positionals.join(' ');
-    return {
-      command,
-      flags,
-      help: values.help === true || command === 'help',
-      version: values.version === true,
-    };
+    return { values, positionals };
   } catch (error) {
-    const message = error instanceof Error ? error.message.split('\n')[0] : undefined;
-    throw new CliError(message ?? 'invalid arguments', { code: 'usage', hint: helpHint });
+    throw usageError(error);
   }
 }
 
-function reportError(error: unknown, io: Io, verbose: boolean): number {
-  if (error instanceof CliError) {
-    io.stderr(`${formatCliError(error)}\n`);
-    return error.exitCode;
+/** Second parse pass: the global options merged with the command's own, strict. */
+function parseCommand(argv: readonly string[], command: CommandDefinition): ParsedArguments {
+  try {
+    const { values, positionals } = parseArgs({
+      args: [...argv],
+      options: { ...globalOptions, ...command.options },
+      allowPositionals: true,
+      strict: true,
+    });
+    return { values, positionals };
+  } catch (error) {
+    throw usageError(error);
   }
-  const message = error instanceof Error ? error.message : 'unexpected non-Error failure';
-  io.stderr(`evidgate: error internal_error: ${message}\n`);
+}
+
+function usageError(error: unknown): CliError {
+  const message = error instanceof Error ? error.message.split('\n')[0] : undefined;
+  return new CliError(message ?? 'invalid arguments', { code: 'usage', hint: helpHint });
+}
+
+function toConfigFlags(values: ParsedValues): ConfigFlags {
+  const flags: ConfigFlags = {};
+  const apiUrl = values['api-url'];
+  if (typeof apiUrl === 'string') {
+    flags.apiUrl = apiUrl;
+  }
+  const project = values.project;
+  if (typeof project === 'string') {
+    flags.project = project;
+  }
+  if (values.verbose === true) {
+    flags.verbose = true;
+  }
+  if (values.json === true) {
+    flags.json = true;
+  }
+  return flags;
+}
+
+function reportError(error: unknown, io: Io, verbose: boolean): ExitCode {
+  if (error instanceof CliError) {
+    io.stderr(prefixStderrLines(`${formatCliError(error)}\n`));
+    return ExitCode.Error;
+  }
+  io.stderr(prefixStderrLines(`${formatInternalError(error)}\n`));
   if (verbose && error instanceof Error && error.stack !== undefined) {
-    io.stderr(`${error.stack}\n`);
+    io.stderr(
+      prefixStderrLines(`${error.stack.split('\n').map(escapeControlCharacters).join('\n')}\n`),
+    );
   }
   return ExitCode.Error;
 }

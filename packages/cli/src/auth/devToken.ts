@@ -1,12 +1,17 @@
 // 04.2.1-T2.2: the M1 dev-token path (04.2.1 §5 `auth/dev-token.ts`, AC8). It returns
 // `EVIDGATE_DEV_TOKEN` as the bearer with no exchange, no cache and no file write, and
-// is refused unless `EVIDGATE_ENV` is exactly `dev` — a fail-closed decision stricter
-// than AC8's minimum (04.2.1-T2 contract §Token sources). 04.2.1-T1 replaces the
-// caller's branch with the real exchange.
-import type { ResolvedConfig } from '../config.js';
+// is refused unless `EVIDGATE_ENV` is exactly `dev` AND the API URL is loopback — a
+// fail-closed decision stricter than AC8's minimum (04.2.1-T2 contract §Token sources).
+// 04.2.1-T1 replaces the caller's branch with the real exchange.
+import { isLoopbackApiUrl, type ResolvedConfig } from '../config.js';
 import { CliError } from '../errors.js';
 
-/** Returns the dev token as the bearer, or throws `dev_token_refused`/`missing_config`. */
+/**
+ * Returns the dev token as the bearer, or throws `dev_token_refused`/`missing_config`.
+ * `getToken` only calls this when the source is `dev` (so the token is set), but the
+ * function is part of the package surface (`index.ts` re-exports it), so a direct
+ * caller can still pass a config without one — the guard is reachable, not dead code.
+ */
 export function resolveDevToken(config: ResolvedConfig): string {
   const token = config.devToken;
   if (token === undefined) {
@@ -14,6 +19,12 @@ export function resolveDevToken(config: ResolvedConfig): string {
   }
   if (config.env !== 'dev') {
     throw devTokenRefused(config.env);
+  }
+  if (!isLoopbackApiUrl(config.apiUrl)) {
+    throw new CliError('EVIDGATE_DEV_TOKEN is only sent to a loopback API URL', {
+      code: 'dev_token_refused',
+      hint: 'point EVIDGATE_API_URL at the local dev stack (http://127.0.0.1:8080)',
+    });
   }
   return token;
 }

@@ -10,6 +10,7 @@ import {
   type TokenSource,
 } from '../config.js';
 import { CliError } from '../errors.js';
+import { registerSecret } from '../redact.js';
 
 import { resolveDevToken } from './devToken.js';
 
@@ -18,13 +19,17 @@ export interface TokenResult {
   readonly source: TokenSource;
 }
 
+// `async` is kept (with no `await` yet) so 04.2.1-T1's exchange drops into this
+// function without changing the signature every later command depends on.
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function getToken(config: ResolvedConfig): Promise<TokenResult> {
   const source = resolveTokenSource(config);
   if (source === 'dev') {
-    // M1 dev path (AC8): no exchange, no cache, no network. `getToken` stays `async`
-    // (and the value is awaited) so 04.2.1-T1's exchange drops into this branch
-    // without changing the signature every later command depends on.
-    return { token: await Promise.resolve(resolveDevToken(config)), source: 'dev' };
+    // M1 dev path (AC8): no exchange, no cache, no network. The token is registered so
+    // it can never reach a writer even if a later error message embeds it (SEC6).
+    const token = resolveDevToken(config);
+    registerSecret(token);
+    return { token, source: 'dev' };
   }
   if (source !== undefined) {
     throw new CliError('token exchange at POST /v1/ci/token ships in 04.2.1-T1', {

@@ -37,6 +37,33 @@ describe('redact', () => {
     expect(redact('secret')).toBe('secret');
   });
 
+  it('replaces a longer secret before a shorter prefix of it (CR5/SEC1)', () => {
+    registerSecret('tok');
+    registerSecret('tok-long-value');
+    expect(redact('tok-long-value')).toBe(redacted);
+  });
+
+  it('replaces a longer secret regardless of registration order (CR5/SEC1)', () => {
+    registerSecret('tok-long-value');
+    registerSecret('tok');
+    expect(redact('tok-long-value')).toBe(redacted);
+  });
+
+  it('registers the trimmed form of a secret (SEC6)', () => {
+    registerSecret('  padded-secret  ');
+    expect(redact('padded-secret')).toBe(redacted);
+  });
+
+  it('registers the percent-encoded form of a secret (SEC6)', () => {
+    registerSecret('a b');
+    expect(redact('a%20b')).toBe(redacted);
+  });
+
+  it('registers the JSON-escaped form of a secret (SEC6)', () => {
+    registerSecret('a"b');
+    expect(redact('a\\"b')).toBe(redacted);
+  });
+
   it('wraps both writers', () => {
     registerSecret('tok');
     const stdout: string[] = [];
