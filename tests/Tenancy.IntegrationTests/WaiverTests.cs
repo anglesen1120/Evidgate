@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Evidgate.Modules.Policy.Application.Waivers;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -513,5 +514,63 @@ public sealed class WaiverTests
             """);
 
         plan.ShouldContain("waiver_project_created_idx");
+    }
+
+    /// <summary>
+    /// 00 §5.7 P4: the keyset cursor walks <c>waiver_project_created_idx</c> and the expiry sweeper's
+    /// per-project due rows walk <c>waiver_state_expiry_idx</c>. The target project is seeded sparsely
+    /// against a dense rest of the table and <c>ANALYZE</c>d, so the planner prefers each index on its
+    /// own; sequential scans are disabled so a small table cannot make it prefer one.
+    /// </summary>
+    [Fact]
+    public async Task CursorAndDueQueries_UseTheirIndexes()
+    {
+        await using var world = await StartAsync();
+        var otherProject = Guid.CreateVersion7();
+
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            insert into public.project (id, org_id, name, slug)
+            values ('{otherProject}', '{world.Org}', 'other', 'other');
+            insert into public.waiver (id, org_id, project_id, scope, target_id, reason, requested_by, approved_by, state, expires_at, created_at)
+            select gen_random_uuid(), '{world.Org}', '{world.Project}', 'case', gen_random_uuid(), 'due', '{world.User}',
+                   case when g <= 100 then '00000000-0000-0000-0000-000000000001'::uuid end,
+                   case when g <= 100 then 'approved' else 'requested' end,
+                   now() - interval '1 hour',
+                   now() - g * interval '1 minute'
+              from generate_series(1, 2000) g;
+            insert into public.waiver (id, org_id, project_id, scope, target_id, reason, requested_by, expires_at, created_at)
+            select gen_random_uuid(), '{world.Org}', '{otherProject}', 'case', gen_random_uuid(), 'other', '{world.User}',
+                   now() + interval '7 days',
+                   now() - g * interval '1 minute'
+              from generate_series(1, 20000) g;
+            analyze public.waiver;
+            """);
+
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        await scope.SetAsync("enable_seqscan", "off");
+
+        // The next page: the production statement with the (created_at, id) row-comparison cursor.
+        var cursor = await scope.ScalarAsync<string>(
+            $"explain (format json) {WaiverSql.NextPage}",
+            ("org_id", world.Org),
+            ("project_id", world.Project),
+            ("cursor_created_at", DateTimeOffset.UtcNow.AddDays(-1)),
+            ("cursor_id", Guid.CreateVersion7()),
+            ("limit", 51));
+        cursor.ShouldContain("waiver_project_created_idx");
+
+        // The expiry sweeper's per-project due rows (07.3.2-T2): state and expires_at inside one project.
+        var due = await scope.ScalarAsync<string>(
+            """
+            explain (format json)
+            select id from public.waiver
+             where org_id = @org_id and project_id = @project_id
+               and state = 'approved' and expires_at <= now()
+            """,
+            ("org_id", world.Org),
+            ("project_id", world.Project));
+        due.ShouldContain("waiver_state_expiry_idx");
     }
 }
