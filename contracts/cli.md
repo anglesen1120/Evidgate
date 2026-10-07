@@ -169,8 +169,9 @@ code.
   registered value with `[REDACTED]`. `resolveConfig` registers them, and
   `main()` calls `resetSecrets()` then `registerEnvSecrets(env)` as its first
   statements, before any argument parsing.
-- `registerSecret(value)` also registers the trimmed, `encodeURIComponent`- and
-  JSON-string-escaped forms of the value when they differ and are non-empty; a
+- `registerSecret(value)` also registers the trimmed, `encodeURIComponent`-,
+  JSON-string-escaped and control-character-escaped (`\uXXXX`, the form error
+  messages print) forms of the value when they differ and are non-empty; a
   value shorter than 4 characters after trim is still registered (fail-safe).
   `redact()` replaces longest-first, so a shorter secret cannot leave the tail
   of a longer one in clear text. `getToken()` registers the token it returns and
