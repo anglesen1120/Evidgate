@@ -12,6 +12,7 @@ import { authLoginCommand } from './authLogin.js';
 import { authLogoutCommand } from './authLogout.js';
 import { configCheckCommand } from './configCheck.js';
 import { manifestsUploadCommand } from './manifestsUpload.js';
+import { quickstartCommand } from './quickstart.js';
 
 /** Values `node:util` `parseArgs` returns for the merged global + command options. */
 export type ParsedValues = Record<string, string | boolean | Array<string | boolean> | undefined>;
@@ -52,6 +53,7 @@ export const commandRegistry: Readonly<Record<string, CommandDefinition>> = {
   [authLoginCommand.name]: authLoginCommand,
   [authLogoutCommand.name]: authLogoutCommand,
   [manifestsUploadCommand.name]: manifestsUploadCommand,
+  [quickstartCommand.name]: quickstartCommand,
 };
 
 export interface ResolvedCommand {

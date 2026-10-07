@@ -17,7 +17,7 @@ holds only the process-level contract.
   and the 401 purge); 04.2.2-T2 adds `runs create`.
 - 04.2.3 adds the spool format, its caps, `EVIDGATE_SPOOL_*` and
   `EVIDGATE_SEND_DEADLINE`, and `runs finalize`.
-- 04.2.4 adds `artifacts upload` and `quickstart`.
+- 04.2.4-T2 adds `quickstart` (§9); `artifacts upload` comes with 04.2.4-T1.
 - 04.9.1 adds `replay` and the replay exit codes 10–19 (04.9.1-T4).
 - 07.6.1 adds `gate`; 07.7.1 adds the advisory exit rule; 07.8.1 adds
   `gate --release --target`.
@@ -383,3 +383,81 @@ The cap is the server's documented transport limit: openapi `createManifest`
 ("Body ≤ 256 KiB → 413") and 05.1.1 §8 (`MaxManifestBytes = 256 * 1024`). The
 CLI refuses a larger file locally, so the 413 is never reached. The manifest
 content is never echoed, not even under `--verbose`.
+
+## 9. Quickstart
+
+`evidgate quickstart [--format github|generic] [--write <path>]` (04.2.4-T2)
+renders a CI recipe for the project to stdout, or writes it to a file. It is a
+local template command: no network call, no token read, no cache read. It still
+resolves configuration like every other command (§3), so `EVIDGATE_API_URL` (or
+`--api-url`) and `EVIDGATE_PROJECT` (or `--project`) are required; a missing one
+fails with the usual configuration error.
+
+Options:
+
+- `--format <github|generic>` — default `github`; any other value exits 3
+  `usage` with `--format must be github or generic`.
+- `--write <path>` — write the rendered template to `<path>` instead of stdout.
+
+Project guard: the resolved project must match
+`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`. A value that does not match exits 3
+`invalid_config` with `invalid configuration: EVIDGATE_PROJECT (or --project):
+not renderable in a CI template`. The value is never echoed, so a project name
+carrying YAML, a GitHub `${{ }}` expression or shell metacharacters cannot reach
+the rendered file.
+
+Pinned version: both templates pin the exact `version` from
+`packages/cli/package.json` (`@evidgate/cli@<version>`), never a range and never
+`latest`. `readCliVersion()` is shared between `main.ts` and the command, so the
+pin follows the package automatically.
+
+GitHub template (`--format github`, YAML):
+
+- top-level `permissions: { contents: read, id-token: write }`;
+- `on: push` and `pull_request` (a comment notes that a fork PR gets no OIDC
+  token);
+- one job `evidgate` on `ubuntu-24.04`, with `env`
+  `EVIDGATE_API_URL: ${{ vars.EVIDGATE_API_URL }}` — a repository configuration
+  **variable**, not a secret, and the only stored setting — and
+  `EVIDGATE_PROJECT: "<project>"` rendered literal;
+- steps: `actions/checkout` and `actions/setup-node` pinned by commit SHA (the
+  same SHAs as the repo `ci.yml`), `node-version: "22"`, then
+  `npx --yes --package @evidgate/cli@<version> -- evidgate auth login` (OIDC via
+  `ACTIONS_ID_TOKEN_REQUEST_*`, exchanged at `POST /v1/ci/token`; the token goes
+  only to the 0600 cache, never printed) and
+  `npx … -- evidgate manifests upload --file evidgate-manifest.json`;
+- steps not yet built are comments naming the owning task, never fake commands:
+  `runs create` (04.2.2-T2), sending events and `runs finalize` (04.2.3-T1/T2),
+  `artifacts upload` (04.2.4-T1).
+
+No `secrets.` reference and no token or key value appears anywhere in the
+template.
+
+Generic template (`--format generic`, POSIX `sh`): `#!/bin/sh` with `set -eu`.
+[DECISION] Generic CI renders a shell script, not YAML: V1 CI integration is
+GitHub Actions, and other CIs are per-project configuration (00 §1, 2026-10-02).
+The script expects `EVIDGATE_API_URL` from the CI's non-secret variables and
+renders `EVIDGATE_PROJECT='<project>'`. The credential is named only:
+`EVIDGATE_OIDC_TOKEN` when the CI injects a short-lived OIDC JWT the project
+binding accepts, else `EVIDGATE_INGEST_TOKEN` injected by the CI's masked secret
+store — a project-scoped, revocable, rotatable ingest token created with an
+expiry (02.4.2), never committed and never echoed. It then runs the same pinned
+`npx` lines for `auth login` and `manifests upload`, with the same commented
+placeholders as the GitHub template.
+
+`--write <path>`:
+
+- the path must resolve inside the current working directory: after
+  `path.resolve`, and after `realpath` of the nearest existing parent, it must
+  still be inside `realpath(cwd)`. A `..` escape or a symlinked parent that
+  escapes exits 3 `usage`;
+- missing parent directories inside cwd are created (`mkdir -p`);
+- the file is created with flag `wx` (exclusive — an existing file exits 3
+  `usage` `file exists`) and mode `0o644`;
+- stdout prints `wrote <relative path>`.
+
+Without `--write`, the template goes to stdout and nothing else is printed.
+
+Exit codes: `0` on success; `3` for a usage error (`--format`, `--write`), an
+invalid configuration (the project guard) or any other error. The command emits
+no other code.
