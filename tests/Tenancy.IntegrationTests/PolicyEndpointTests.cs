@@ -313,6 +313,11 @@ public sealed class PolicyEndpointTests
         Detail(longNumber).GetProperty("path").GetString().ShouldBe("/flaky_budget");
         Detail(longNumber).GetProperty("reason").GetString().ShouldBe("number_too_long");
 
+        // A long number under a member the schema does not declare keeps the unknown-field refusal (AC3).
+        var undeclared = await CreateAsync(world, """{"bogus":1234567890123456789012345678901234567890}""");
+        undeclared.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        undeclared.ErrorCode.ShouldBe("policy_unknown_field");
+
         (await RevisionCountAsync(world)).ShouldBe(0);
     }
 

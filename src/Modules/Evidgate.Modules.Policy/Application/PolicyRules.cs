@@ -150,6 +150,15 @@ internal static class PolicyBodyBounds
         ["quarantine_ids"] = 1000,
     };
 
+    /// <summary>The integer members of <c>policy-revision.v1</c>; a number under any other name is left to the schema (AC3).</summary>
+    private static readonly HashSet<string> NumberMembers = new(StringComparer.Ordinal)
+    {
+        "flaky_budget",
+        "collection_timeout_minutes",
+        "late_window_minutes",
+        "freshness_minutes",
+    };
+
     /// <summary>Longest number literal the canonical form can need (RFC 8785 §3.2.2.3 shortest round-trip double).</summary>
     internal const int MaxNumberLength = 32;
 
@@ -179,7 +188,9 @@ internal static class PolicyBodyBounds
                     [new ErrorDetail("/" + member.Name, TooManyItemsReason)]);
             }
 
-            if (value.ValueKind == JsonValueKind.Number && value.GetRawText().Length > MaxNumberLength)
+            if (value.ValueKind == JsonValueKind.Number
+                && NumberMembers.Contains(member.Name)
+                && value.GetRawText().Length > MaxNumberLength)
             {
                 return PolicyErrors.PolicyInvalid(
                     "the body carries a number literal longer than the canonical form allows",
