@@ -72,6 +72,9 @@ public sealed class IsolationProject
     /// <summary>The revision of environment <see cref="IsolationWorld.EnvironmentKey"/> (<c>{id}</c> of <c>/environment-revisions/{id}</c>).</summary>
     public required Guid EnvironmentRevisionId { get; init; }
 
+    /// <summary>The project's policy revision (<c>{id}</c> of <c>/v1/policies/{id}</c>).</summary>
+    public required Guid PolicyRevisionId { get; init; }
+
     /// <summary>The project's manifest.</summary>
     public required Guid ManifestId { get; init; }
 }
@@ -389,6 +392,14 @@ public sealed class IsolationWorld
                 },
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("revision_id").GetGuid();
 
+            var policyRevision = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/policies",
+                admin,
+                org,
+                new { flaky_budget = 0 },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("id").GetGuid();
+
             var manifest = (await SendAsync(
                 HttpMethod.Post,
                 $"/v1/projects/{project}/manifests",
@@ -436,6 +447,7 @@ public sealed class IsolationWorld
                 SuiteIds = suites,
                 SuiteRevisionIds = suiteRevisions,
                 EnvironmentRevisionId = environmentRevision,
+                PolicyRevisionId = policyRevision,
                 ManifestId = manifest,
             };
         }

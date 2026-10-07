@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Policy.Application;
 using Evidgate.Modules.Policy.Infrastructure.Persistence;
@@ -25,6 +26,13 @@ internal static class PolicyModule
 
         // 07.1.1-T2: the sole producer of policy_revision.hash (finding T1-SEC-S2).
         services.TryAddSingleton<IPolicyHasher, PolicyHasher>();
+
+        // 07.1.1-T3: the policy routes validate their bodies against the contract schema set, which is compiled on
+        // first use (the routes resolve it per request, never at start-up).
+        services.TryAddEvidgateContractValidation();
+
+        // Handlers are resolved eagerly by Mediator at start-up: they receive a Lazy, so the schema set compiles on first use.
+        services.TryAddSingleton(provider => new Lazy<ContractSchemaSet>(() => provider.GetRequiredService<ContractSchemaSet>()));
 
         return services;
     }

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "policy-revision.v1.json",
+  "title": "Policy revision v1",
+  "description": "The body of POST /v1/projects/{p}/policies (07.1.1-T3, 00 §8.6 + D-A10): the decision-rule configuration of one project — the cases and suites a run must cover, the critical cases, the skips the policy allows, the flaky budget, the required artifacts, the collection deadline and late window, the freshness bound, the quarantine list and the branch-gating references. The server canonicalises the body (RFC 8785) and hashes it into `sha256:<hex>`; content already stored for the project answers 200 with that revision, new content 201 with the next revision_no. The schema is closed: any member not listed here is refused as 422 policy_unknown_field with the member's JSON pointer in error.details[].path. The transport cap is 64 KiB.",
+  "x-max-bytes": 65536,
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "required_suites": {
+      "type": "array",
+      "maxItems": 1000,
+      "uniqueItems": true,
+      "description": "Suites whose evidence the run must carry",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "required_cases": {
+      "type": "array",
+      "maxItems": 1000,
+      "uniqueItems": true,
+      "description": "Cases whose evidence the run must carry",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "critical_cases": {
+      "type": "array",
+      "maxItems": 1000,
+      "uniqueItems": true,
+      "description": "Cases that can never be quarantined and can never be skipped (00 §8.6, DECISIONS O9)",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "allowed_skips": {
+      "type": "array",
+      "maxItems": 1000,
+      "uniqueItems": true,
+      "description": "Cases the policy allows to be skipped without making the run INCONCLUSIVE",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "flaky_budget": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "description": "How many non-critical fail → pass flips the policy tolerates before the decision becomes INCONCLUSIVE with reason flaky_budget_exceeded (00 §8.6, TL T27)"
+    },
+    "required_artifacts": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "description": "Artifact kinds the run must produce (00 §7 kind names)",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      }
+    },
+    "collection_timeout_minutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10080,
+      "description": "Deadline for a run's collection phase, in minutes"
+    },
+    "late_window_minutes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10080,
+      "description": "How long after the deadline late evidence is still accepted (00 §8.1, TL T81)"
+    },
+    "freshness_minutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 525600,
+      "description": "Maximum age of the evidence a run may pin, in minutes"
+    },
+    "quarantine_ids": {
+      "type": "array",
+      "maxItems": 1000,
+      "uniqueItems": true,
+      "description": "Quarantine entries this policy revision honours; the list is stored as given and honoured at evaluation time. The refusal of a critical case belongs to POST /v1/quarantine (07.3.1).",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "gating_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Branch policy for gated runs (DECISIONS D-A10)",
+      "properties": {
+        "default_branch": {
+          "type": "boolean",
+          "description": "Whether the repository's default branch is gated"
+        },
+        "release_branch_glob": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Glob of the release branches that are gated"
+        }
+      }
+    }
+  }
+}

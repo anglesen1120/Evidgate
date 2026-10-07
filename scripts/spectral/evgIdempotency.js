@@ -18,6 +18,8 @@ var IDEMPOTENCY_EXEMPT = {
   'post /drafts/{d}/pull-request': 'idempotent by (branch, commit) per 00 §9.3',
   'post /jobs/{j}/heartbeat':
     'naturally idempotent — the server extends only the current epoch (00 §9.3)',
+  'post /projects/{p}/policies':
+    'the RFC 8785 content hash is the idempotency key: an identical body returns the stored revision (07.1.1 §5)',
 };
 
 module.exports = function evgIdempotency(targetVal, opts, ctx) {
