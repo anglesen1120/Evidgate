@@ -85,15 +85,16 @@ internal static class PolicyRevisionRules
                 AllowTrailingCommas = false,
             });
 
+            var inexact = false;
             while (reader.Read())
             {
-                if (reader.TokenType == JsonTokenType.Number && !IsExactlyRepresentable(reader.ValueSpan))
+                if (!inexact && reader.TokenType == JsonTokenType.Number && !IsExactlyRepresentable(reader.ValueSpan))
                 {
-                    return PolicyNumberOutcome.InexactNumber;
+                    inexact = true;
                 }
             }
 
-            return PolicyNumberOutcome.Exact;
+            return inexact ? PolicyNumberOutcome.InexactNumber : PolicyNumberOutcome.Exact;
         }
         catch (JsonException)
         {

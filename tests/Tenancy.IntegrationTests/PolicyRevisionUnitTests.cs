@@ -200,6 +200,7 @@ public sealed class PolicyRevisionUnitTests
     [InlineData("not json", nameof(PolicyNumberOutcome.NotCanonicalisable))]
     [InlineData("{\"a\":1,}", nameof(PolicyNumberOutcome.NotCanonicalisable))]
     [InlineData("{\"a\":1} trailing", nameof(PolicyNumberOutcome.NotCanonicalisable))]
+    [InlineData("{\"a\":9007199254740993,", nameof(PolicyNumberOutcome.NotCanonicalisable))]
     public void ClassifyNumbers_TellsAnInexactNumberFromAMalformedBody(string body, string expected)
     {
         PolicyRevisionRules.ClassifyNumbers(body).ToString().ShouldBe(expected);
