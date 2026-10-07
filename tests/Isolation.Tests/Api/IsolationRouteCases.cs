@@ -72,21 +72,23 @@ public sealed record ProbeResponse(int Status, string? Code, string Text, JsonEl
 /// <summary>What a foreign/random request pair must answer (both halves, with the same status and error code).</summary>
 public enum ProbeExpect
 {
-    /// <summary>An org-B member, own org, an org-A object id: 404, never the row (AC1; RLS hides it).</summary>
+    /// <summary>An org-B member, own org, an org-A object id: 404 <c>not_found</c>, never the row (AC1; RLS hides it).</summary>
     NotFound,
 
     /// <summary>
     /// An org-B member naming org A (<c>{o}</c> or <c>X-Evidgate-Org</c>): refused at tenant resolution, 403 for a
-    /// non-member (TenantResolver.cs:64-70, 00 §15 2026-10-03) or 404; never 2xx. AC1's 404 applies to object ids.
+    /// non-member (TenantResolver.cs:64-70, 00 §15 2026-10-03) or 404 <c>not_found</c>; never 2xx. AC1's 404
+    /// applies to object ids.
     /// </summary>
     ForeignOrg,
 
-    /// <summary>An org-B member on an org-A project's list: 404 or 200 with zero items (CiAuthTests.cs:585-599).</summary>
+    /// <summary>An org-B member on an org-A project's list: 404 <c>not_found</c>, or a GET list's 200 with zero items (CiAuthTests.cs:585-599).</summary>
     EmptyOrNotFound,
 
     /// <summary>
-    /// A <c>ci_producer</c> of org B on an org-A id: 404 (service on a foreign org, TenantResolver.cs:84-85) or 403
-    /// (<c>project_scope_mismatch</c> / missing permission), or a list's 200 with zero items; never a row.
+    /// A <c>ci_producer</c> of org B on an org-A id: 404 <c>not_found</c> (service on a foreign org,
+    /// TenantResolver.cs:84-85) or 403 (<c>project_scope_mismatch</c> / missing permission), or a GET list's 200
+    /// with zero items; never a row.
     /// </summary>
     ServiceRefused,
 
@@ -204,7 +206,7 @@ public static class IsolationRouteCases
             var bp = b.Projects[i];
             var ap = a.Projects[i];
             walks.Add(new(Get("/v1/projects/{p}/ci-bindings"), $"org B project {bp.Slug} bindings", bAdmin, $"/v1/projects/{bp.Id}/ci-bindings?limit=1", "id",
-                Fixed([bp.BindingId]), aAdmin, $"/v1/projects/{ap.Id}/ci-bindings?limit=1"));
+                Fixed(bp.BindingIds), aAdmin, $"/v1/projects/{ap.Id}/ci-bindings?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/ingest-tokens"), $"org B project {bp.Slug} ingest tokens", bAdmin, $"/v1/projects/{bp.Id}/ingest-tokens?limit=1", "id",
                 Fixed([bp.ActiveTokenId, bp.RevokedTokenId]), aAdmin, $"/v1/projects/{ap.Id}/ingest-tokens?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/cases"), $"org B project {bp.Slug} cases", bAdmin, $"/v1/projects/{bp.Id}/cases?limit=1", "id",
@@ -214,7 +216,7 @@ public static class IsolationRouteCases
             for (var c = 0; c < bp.CaseIds.Count; c++)
             {
                 walks.Add(new(Get("/v1/cases/{c}/revisions"), $"org B case {bp.Slug}#{c} revisions", bAdmin, $"/v1/cases/{bp.CaseIds[c]}/revisions?limit=1", "id",
-                    Fixed([bp.CaseRevisionIds[c]]), aAdmin, $"/v1/cases/{ap.CaseIds[c]}/revisions?limit=1"));
+                    Fixed(bp.CaseRevisions[c]), aAdmin, $"/v1/cases/{ap.CaseIds[c]}/revisions?limit=1"));
             }
         }
 
@@ -244,17 +246,25 @@ public static class IsolationRouteCases
             // Tenantless (TenancyEndpoints.cs:57): the list is keyed by the user, never by X-Evidgate-Org.
             new(route, "lists only the caller's orgs while naming org A", runner => runner.OrgListNamingAsync(route, w)),
         ]),
-        OrgCase("GET", "/v1/orgs/{o}", o => new(HttpMethod.Get, $"/v1/orgs/{o}")),
+        OrgCase("GET", "/v1/orgs/{o}", o => new(HttpMethod.Get, $"/v1/orgs/{o}"), ownControl: true),
         OrgCase("PATCH", "/v1/orgs/{o}", o => new(HttpMethod.Patch, $"/v1/orgs/{o}", new JsonObject { ["name"] = "Intruder" }, "\"1\"")),
         OrgCase("POST", "/v1/orgs/{o}/projects", o => new(HttpMethod.Post, $"/v1/orgs/{o}/projects", new JsonObject { ["name"] = "intruder", ["slug"] = "intruder" })),
         OrgCase("GET", "/v1/orgs/{o}/projects", o => new(HttpMethod.Get, $"/v1/orgs/{o}/projects")),
-        ProjectCase("GET", "/v1/projects/{p}", p => new(HttpMethod.Get, $"/v1/projects/{p}")),
+        ProjectCase("GET", "/v1/projects/{p}", p => new(HttpMethod.Get, $"/v1/projects/{p}"), ownControl: true),
         ProjectCase("PATCH", "/v1/projects/{p}", p => new(HttpMethod.Patch, $"/v1/projects/{p}", new JsonObject { ["name"] = "intruder" }, "\"1\"")),
 
         // ---- Membership (MembershipEndpoints.cs:49-75) ---------------------------------------------------------
         OrgCase("POST", "/v1/orgs/{o}/memberships", o => new(HttpMethod.Post, $"/v1/orgs/{o}/memberships", Invite())),
-        OrgCase("GET", "/v1/orgs/{o}/memberships", o => new(HttpMethod.Get, $"/v1/orgs/{o}/memberships")),
-        MembershipCase("GET", "/v1/orgs/{o}/memberships/{m}", (o, m, _) => new(HttpMethod.Get, $"/v1/orgs/{o}/memberships/{m}")),
+        OrgCase("GET", "/v1/orgs/{o}/memberships", o => new(HttpMethod.Get, $"/v1/orgs/{o}/memberships"),
+            // S1: the route's {o} wins over X-Evidgate-Org, so {o}=B with header A lists org B's memberships only.
+            // The reverse ({o}=A with header B) is the "org A named in {o}" pair above.
+            extra: (route, w) => [new(route, "route {o} wins over X-Evidgate-Org", runner => runner.OwnListAsync(
+                route,
+                "route {o} wins over X-Evidgate-Org",
+                ForeignHeaderCaller(w),
+                new(HttpMethod.Get, $"/v1/orgs/{w.Acme2.Id}/memberships?limit=200"),
+                [.. w.Acme2.MembershipIds.Select(id => id.ToString("D"))]))]),
+        MembershipCase("GET", "/v1/orgs/{o}/memberships/{m}", (o, m, _) => new(HttpMethod.Get, $"/v1/orgs/{o}/memberships/{m}"), ownControl: true),
         MembershipCase("PATCH", "/v1/orgs/{o}/memberships/{m}", (o, m, _) =>
             new(HttpMethod.Patch, $"/v1/orgs/{o}/memberships/{m}", new JsonObject { ["status"] = "removed" }, "\"1\"")),
         MembershipCase("DELETE", "/v1/orgs/{o}/memberships/{m}", (o, m, _) => new(HttpMethod.Delete, $"/v1/orgs/{o}/memberships/{m}")),
@@ -305,15 +315,15 @@ public static class IsolationRouteCases
 
         // ---- Catalog (CatalogEndpoints.cs:39-83) ---------------------------------------------------------------
         ProjectCase("GET", "/v1/projects/{p}/cases", p => new(HttpMethod.Get, $"/v1/projects/{p}/cases"), list: true),
-        ObjectCase("GET", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}")),
+        ObjectCase("GET", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}"), ownControl: true),
         ObjectCase("PATCH", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id =>
             new(HttpMethod.Patch, $"/v1/cases/{id}", new JsonObject { ["name"] = "intruder" }, "\"1\"")),
-        ObjectCase("GET", "/v1/cases/{c}/revisions", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}/revisions")),
+        ObjectCase("GET", "/v1/cases/{c}/revisions", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}/revisions"), ownControl: true),
         ProjectCase("POST", "/v1/projects/{p}/suites", p => new(HttpMethod.Post, $"/v1/projects/{p}/suites", new JsonObject { ["name"] = "intruder", ["slug"] = "intruder" })),
         ProjectCase("GET", "/v1/projects/{p}/suites", p => new(HttpMethod.Get, $"/v1/projects/{p}/suites"), list: true),
-        ObjectCase("GET", "/v1/suites/{s}", p => Indexed("suite", p.SuiteIds), id => new(HttpMethod.Get, $"/v1/suites/{id}")),
+        ObjectCase("GET", "/v1/suites/{s}", p => Indexed("suite", p.SuiteIds), id => new(HttpMethod.Get, $"/v1/suites/{id}"), ownControl: true),
         SuiteRevisionCreateCase(),
-        ObjectCase("GET", "/v1/suite-revisions/{r}", p => Indexed("suite revision", p.SuiteRevisionIds), id => new(HttpMethod.Get, $"/v1/suite-revisions/{id}")),
+        ObjectCase("GET", "/v1/suite-revisions/{r}", p => Indexed("suite revision", p.SuiteRevisionIds), id => new(HttpMethod.Get, $"/v1/suite-revisions/{id}"), ownControl: true),
         SuiteRevisionDiffCase(),
 
         // ---- Orchestrator (OrchestratorEndpoints.cs:37-47) -----------------------------------------------------
@@ -321,7 +331,7 @@ public static class IsolationRouteCases
         ProjectCase("POST", "/v1/projects/{p}/environments/{e}/revisions", p =>
             new(HttpMethod.Post, $"/v1/projects/{p}/environments/{IsolationWorld.EnvironmentKey}/revisions", Environment())),
         ObjectCase("GET", "/v1/environment-revisions/{id}", p => [("environment revision", p.EnvironmentRevisionId)], id =>
-            new(HttpMethod.Get, $"/v1/environment-revisions/{id}")),
+            new(HttpMethod.Get, $"/v1/environment-revisions/{id}"), ownControl: true),
 
         // ---- Dev surface (SliceEndpoints.cs:29-40; recorded in ServedDocumentTests.cs:59) -------------------------
         Case("POST", "/v1/slice/run", (route, w) =>
@@ -344,19 +354,45 @@ public static class IsolationRouteCases
         return new RouteCase(route, w => member(route, Require(w)), w => service is null ? [] : service(route, Require(w)));
     }
 
-    /// <summary>A route whose tenant is <c>{o}</c>: org A's id against a random org id.</summary>
-    private static RouteCase OrgCase(string method, string template, Func<Guid, ProbeRequest> request) =>
+    /// <summary>
+    /// A route whose tenant is <c>{o}</c>: org A's id against a random org id. <paramref name="ownControl"/> adds the
+    /// positive control (org B's own <c>{o}</c> answers 200); <paramref name="extra"/> adds route-specific probes.
+    /// A list route's positive control is its full-pagination walk (<c>Lists</c>).
+    /// </summary>
+    private static RouteCase OrgCase(
+        string method,
+        string template,
+        Func<Guid, ProbeRequest> request,
+        bool ownControl = false,
+        Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>>? extra = null) =>
         Case(
             method,
             template,
-            (route, w) => [Pair(route, "org A named in {o}", ProbeExpect.ForeignOrg, OrgBAdmin(w), request(w.Acme.Id), request(Guid.CreateVersion7()))],
+            (route, w) =>
+            {
+                var probes = new List<RouteProbe>
+                {
+                    Pair(route, "org A named in {o}", ProbeExpect.ForeignOrg, OrgBAdmin(w), request(w.Acme.Id), request(Guid.CreateVersion7())),
+                };
+                if (ownControl)
+                {
+                    probes.Add(OwnObject(route, "own org answers 200", OrgBAdmin(w), request(w.Acme2.Id)));
+                }
+
+                if (extra is not null)
+                {
+                    probes.AddRange(extra(route, w));
+                }
+
+                return probes;
+            },
             (route, w) => [Pair(route, "org A named in {o}", ProbeExpect.ServiceRefused, OrgBService(w), request(w.Acme.Id), request(Guid.CreateVersion7()))]);
 
     /// <summary>
     /// A membership route: org A in <c>{o}</c> (tenant resolution refuses) and org B's own <c>{o}</c> with org A's
     /// membership in <c>{m}</c> (404). <paramref name="grants"/> uses the membership holding org A's extra grant.
     /// </summary>
-    private static RouteCase MembershipCase(string method, string template, Func<Guid, Guid, IsolationWorld, ProbeRequest> request, bool grants = false) =>
+    private static RouteCase MembershipCase(string method, string template, Func<Guid, Guid, IsolationWorld, ProbeRequest> request, bool grants = false, bool ownControl = false) =>
         Case(
             method,
             template,
@@ -376,6 +412,11 @@ public static class IsolationRouteCases
                 };
                 probes.AddRange(memberships.Select(m => Pair(route, "own {o}, " + m.Item1 + " in {m}", ProbeExpect.NotFound, OrgBAdmin(w),
                     request(w.Acme2.Id, m.Item2, w), request(w.Acme2.Id, Guid.CreateVersion7(), w))));
+                if (ownControl)
+                {
+                    probes.Add(OwnObject(route, "own membership answers 200", OrgBAdmin(w), request(w.Acme2.Id, w.Acme2.Admin.MembershipId, w)));
+                }
+
                 return probes;
             },
             (route, w) =>
@@ -384,39 +425,69 @@ public static class IsolationRouteCases
                     request(w.Acme.Id, w.Acme.Admin.MembershipId, w), request(Guid.CreateVersion7(), w.Acme.Admin.MembershipId, w)),
             ]);
 
-    /// <summary>A route scoped by <c>X-Evidgate-Org</c> only: the header naming org A against a random org id.</summary>
+    /// <summary>
+    /// A route scoped by <c>X-Evidgate-Org</c> only: the header naming org A against a random org id, plus a
+    /// <c>ci_producer</c> probe proving the header is ignored for service principals (S2). A GET list's positive
+    /// control is its full-pagination walk (<c>Lists</c>).
+    /// </summary>
     private static RouteCase HeaderCase(
         string method,
         string template,
         Func<IsolationWorld, ProbeRequest> request,
         Func<ApiRoute, IsolationWorld, RouteProbe>? ownOrg = null) =>
-        Case(method, template, (route, w) =>
-        {
-            var aHeader = ProbeCaller.Member("org-B tenant_admin (X-Evidgate-Org: A)", w.Acme2.Admin, w.Acme.Id);
-            var randomHeader = ProbeCaller.Member("org-B tenant_admin (X-Evidgate-Org: random)", w.Acme2.Admin, Guid.CreateVersion7());
-            var probes = new List<RouteProbe>
+        Case(
+            method,
+            template,
+            (route, w) =>
             {
-                new(route, "org A named in X-Evidgate-Org", runner => runner.CallerPairAsync(route, "org A named in X-Evidgate-Org", aHeader, randomHeader, request(w))),
-            };
-            if (ownOrg is not null)
-            {
-                probes.Add(ownOrg(route, w));
-            }
+                var aHeader = ForeignHeaderCaller(w);
+                var randomHeader = RandomHeaderCaller(w);
+                var probes = new List<RouteProbe>
+                {
+                    new(route, "org A named in X-Evidgate-Org", runner => runner.CallerPairAsync(route, "org A named in X-Evidgate-Org", aHeader, randomHeader, request(w))),
+                };
+                if (ownOrg is not null)
+                {
+                    probes.Add(ownOrg(route, w));
+                }
 
-            return probes;
-        });
+                return probes;
+            },
+            (route, w) =>
+            {
+                var jwt = w.Acme2.Projects[0].CiProducerJwt;
+                var withHeader = new ProbeCaller("org-B ci_producer (X-Evidgate-Org: A)", OrgHeader: w.Acme.Id, Bearer: jwt);
+                var withoutHeader = ProbeCaller.Service("org-B ci_producer", jwt);
+                return
+                [
+                    new(route, "service token ignores X-Evidgate-Org", runner => runner.ServiceHeaderIgnoredAsync(
+                        route, "service token ignores X-Evidgate-Org", withHeader, withoutHeader, request(w))),
+                ];
+            });
 
     /// <summary>
     /// A route naming a project in <c>{p}</c>: as an org-B member, each org-A project against a random id; as org
     /// B's <c>ci_producer</c> (project <c>web</c>), the sibling project <c>api</c> (403, ScopeGuard) and org A's
-    /// project against a random id.
+    /// project against a random id. A list route's positive control is its full-pagination walk (<c>Lists</c>).
     /// </summary>
-    private static RouteCase ProjectCase(string method, string template, Func<Guid, ProbeRequest> request, bool list = false) =>
+    private static RouteCase ProjectCase(string method, string template, Func<Guid, ProbeRequest> request, bool list = false, bool ownControl = false) =>
         Case(
             method,
             template,
-            (route, w) => [.. w.Acme.Projects.Select(p => Pair(route, $"org A project {p.Slug} in {{p}}",
-                list ? ProbeExpect.EmptyOrNotFound : ProbeExpect.NotFound, OrgBAdmin(w), request(p.Id), request(Guid.CreateVersion7())))],
+            (route, w) =>
+            {
+                var probes = new List<RouteProbe>();
+                probes.AddRange(w.Acme.Projects.Select(p => Pair(route, $"org A project {p.Slug} in {{p}}",
+                    list ? ProbeExpect.EmptyOrNotFound : ProbeExpect.NotFound, OrgBAdmin(w), request(p.Id), request(Guid.CreateVersion7()))));
+                probes.Add(new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
+                    route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderCaller(w), RandomHeaderCaller(w), request(w.Acme.Projects[0].Id))));
+                if (ownControl)
+                {
+                    probes.Add(OwnObject(route, "own project answers 200", OrgBAdmin(w), request(w.Acme2.Projects[0].Id)));
+                }
+
+                return probes;
+            },
             (route, w) =>
             [
                 new(route, "sibling project api of the token's org", runner => runner.ScopeMismatchAsync(
@@ -428,19 +499,33 @@ public static class IsolationRouteCases
     /// <summary>
     /// A route naming an object id: as an org-B member, every org-A object the selector yields (both projects)
     /// against a random id; as org B's <c>ci_producer</c>, org A's objects against a random id and the sibling
-    /// project's own objects (refused, never 2xx).
+    /// project's own objects (refused, never 2xx). A GET case's positive control is org B's own object
+    /// (<paramref name="ownControl"/>); a list route's is its full-pagination walk (<c>Lists</c>).
     /// </summary>
     private static RouteCase ObjectCase(
         string method,
         string template,
         Func<IsolationProject, IEnumerable<(string Label, Guid Id)>> ids,
         Func<Guid, ProbeRequest> request,
-        bool list = false) =>
+        bool list = false,
+        bool ownControl = false) =>
         Case(
             method,
             template,
-            (route, w) => [.. w.Acme.Projects.SelectMany(p => ids(p).Select(id => Pair(route, $"org A {id.Label} of project {p.Slug}",
-                list ? ProbeExpect.EmptyOrNotFound : ProbeExpect.NotFound, OrgBAdmin(w), request(id.Id), request(Guid.CreateVersion7()))))],
+            (route, w) =>
+            {
+                var probes = new List<RouteProbe>();
+                probes.AddRange(w.Acme.Projects.SelectMany(p => ids(p).Select(id => Pair(route, $"org A {id.Label} of project {p.Slug}",
+                    list ? ProbeExpect.EmptyOrNotFound : ProbeExpect.NotFound, OrgBAdmin(w), request(id.Id), request(Guid.CreateVersion7())))));
+                probes.Add(new(route, "X-Evidgate-Org: A with an org-A id", runner => runner.CallerPairAsync(
+                    route, "X-Evidgate-Org: A with an org-A id", ForeignHeaderCaller(w), RandomHeaderCaller(w), request(ids(w.Acme.Projects[0]).First().Id))));
+                if (ownControl)
+                {
+                    probes.Add(OwnObject(route, "own object answers 200", OrgBAdmin(w), request(ids(w.Acme2.Projects[0]).First().Id)));
+                }
+
+                return probes;
+            },
             (route, w) =>
             [
                 .. ids(w.Acme.Projects[0]).Select(id => Pair(route, $"org A {id.Label} of project web", ProbeExpect.ServiceRefused, OrgBService(w),
@@ -491,7 +576,10 @@ public static class IsolationRouteCases
                 Pair(route, "own revision diffed against org A's", ProbeExpect.NotSuccess, OrgBAdmin(w),
                     new(HttpMethod.Get, $"/v1/suite-revisions/{w.Acme2.Projects[0].SuiteRevisionIds[0]}/diff?against={w.Acme.Projects[0].SuiteRevisionIds[1]}"),
                     new(HttpMethod.Get, $"/v1/suite-revisions/{w.Acme2.Projects[0].SuiteRevisionIds[0]}/diff?against={Guid.CreateVersion7()}")),
-            ]);
+            ],
+            // Every suite has one revision, so org B has no own-vs-other pair in one suite; the positive control
+            // diffs org B's own revision against itself (the same URL shape, 200 with an empty diff).
+            own: p => new(HttpMethod.Get, $"/v1/suite-revisions/{p.SuiteRevisionIds[0]}/diff?against={p.SuiteRevisionIds[0]}"));
 
     /// <summary>
     /// <c>POST /v1/projects/{p}/manifests</c>: org A's project with a manifest over org A's own revisions (404),
@@ -514,6 +602,9 @@ public static class IsolationRouteCases
                         Upload(p.Id, Manifest(p)), Upload(Guid.CreateVersion7(), Manifest(p)))),
                     Pair(route, "own project, manifest over org A's revisions", ProbeExpect.NotSuccess, OrgBAdmin(w),
                         Upload(w.Acme2.Projects[0].Id, Manifest(w.Acme.Projects[0])), Upload(w.Acme2.Projects[0].Id, Random())),
+                    new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
+                        route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderCaller(w), RandomHeaderCaller(w),
+                        Upload(w.Acme.Projects[0].Id, Manifest(w.Acme.Projects[0])))),
                 ];
             },
             world =>
@@ -537,16 +628,26 @@ public static class IsolationRouteCases
         string template,
         Func<IsolationProject, IEnumerable<(string Label, Guid Id)>> ids,
         Func<Guid, IsolationProject, ProbeRequest> request,
-        Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>> extraMember) =>
+        Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>> extraMember,
+        Func<IsolationProject, ProbeRequest>? own = null) =>
         Case(
             method,
             template,
             (route, w) =>
-            [
-                .. w.Acme.Projects.SelectMany(p => ids(p).Select(id => Pair(route, $"org A {id.Label} of project {p.Slug}", ProbeExpect.NotFound, OrgBAdmin(w),
-                    request(id.Id, p), request(Guid.CreateVersion7(), p)))),
-                .. extraMember(route, w),
-            ],
+            {
+                var probes = new List<RouteProbe>();
+                probes.AddRange(w.Acme.Projects.SelectMany(p => ids(p).Select(id => Pair(route, $"org A {id.Label} of project {p.Slug}", ProbeExpect.NotFound, OrgBAdmin(w),
+                    request(id.Id, p), request(Guid.CreateVersion7(), p)))));
+                probes.Add(new(route, "X-Evidgate-Org: A with an org-A id", runner => runner.CallerPairAsync(
+                    route, "X-Evidgate-Org: A with an org-A id", ForeignHeaderCaller(w), RandomHeaderCaller(w), request(ids(w.Acme.Projects[0]).First().Id, w.Acme.Projects[0]))));
+                probes.AddRange(extraMember(route, w));
+                if (own is not null)
+                {
+                    probes.Add(OwnObject(route, "own object answers 200", OrgBAdmin(w), own(w.Acme2.Projects[0])));
+                }
+
+                return probes;
+            },
             (route, w) =>
             [
                 .. ids(w.Acme.Projects[0]).Select(id => Pair(route, $"org A {id.Label} of project web", ProbeExpect.ServiceRefused, OrgBService(w),
@@ -559,6 +660,18 @@ public static class IsolationRouteCases
 
     private static RouteProbe Pair(ApiRoute route, string name, ProbeExpect expect, ProbeCaller caller, ProbeRequest foreign, ProbeRequest random) =>
         new(route, name, runner => runner.PairAsync(route, name, expect, caller, foreign, random));
+
+    /// <summary>Org B's own object with the same URL shape: the positive control (200) for a GET object case.</summary>
+    private static RouteProbe OwnObject(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request) =>
+        new(route, name, runner => runner.OwnObjectAsync(route, name, caller, request));
+
+    /// <summary>Org B's tenant_admin naming org A in <c>X-Evidgate-Org</c> (the header-vs-route precedence probe).</summary>
+    private static ProbeCaller ForeignHeaderCaller(IsolationWorld world) =>
+        ProbeCaller.Member("org-B tenant_admin (X-Evidgate-Org: A)", Require(world).Acme2.Admin, world.Acme.Id);
+
+    /// <summary>Org B's tenant_admin naming a random org in <c>X-Evidgate-Org</c> (the control for the header probe).</summary>
+    private static ProbeCaller RandomHeaderCaller(IsolationWorld world) =>
+        ProbeCaller.Member("org-B tenant_admin (X-Evidgate-Org: random)", Require(world).Acme2.Admin, Guid.CreateVersion7());
 
     private static ApiRoute Get(string template) => new("GET", template);
 
@@ -651,14 +764,24 @@ public sealed class RouteProbeRunner
 {
     private const int MaxPages = 500;
 
+    /// <summary>The 00 §9.2 <c>error.code</c> for a hidden or missing row (<c>ApiErrorCode.NotFound</c>, ErrorEnvelope.cs:50).</summary>
+    private const string NotFoundCode = "not_found";
+
+    /// <summary>
+    /// The JSON members whose values are masked in a failure message. The ingest-token plaintext is <c>secret</c>
+    /// (<c>IngestTokenCreatedResponse.Secret</c>, CiDtos.cs:89) and the CI exchange token is <c>token</c>
+    /// (<c>CiTokenResponse.Token</c>, CiDtos.cs:112); both are snake_case on the wire (ApiHost.cs:88, SnakeCaseLower).
+    /// </summary>
     private static readonly HashSet<string> SecretMembers = new(StringComparer.OrdinalIgnoreCase)
     {
-        "token", "ingest_token", "secret", "access_token", "jwt", "binding_challenge",
+        "token", "ingest_token", "secret", "access_token", "jwt", "binding_challenge", "password", "refresh_token",
     };
 
     private readonly ApiIsolationFixture _fixture;
     private readonly HttpClient _client;
     private readonly HashSet<string> _foreignIds;
+    private readonly HashSet<string> _listTemplates;
+    private bool _foreignIdsLoaded;
 
     /// <summary>A runner over <paramref name="fixture"/>'s host; org A's object ids are the forbidden set.</summary>
     public RouteProbeRunner(ApiIsolationFixture fixture)
@@ -668,6 +791,23 @@ public sealed class RouteProbeRunner
         _client = fixture.AnonymousClient();
         _foreignIds = OwnedIds(fixture.World.Acme);
         _foreignIds.ExceptWith(OwnedIds(fixture.World.Acme2));
+        _listTemplates = [.. IsolationRouteCases.Lists(fixture.World).Select(walk => walk.Route.Template)];
+    }
+
+    /// <summary>
+    /// Adds org A's <c>audit_log</c> ids (owner query) to the forbidden set once, so an audit row whose actor or
+    /// object is not in the world is still caught (C8).
+    /// </summary>
+    private async Task EnsureForeignIdsAsync()
+    {
+        if (_foreignIdsLoaded)
+        {
+            return;
+        }
+
+        _foreignIdsLoaded = true;
+        var auditIds = await OwnerIdsAsync("select id::text from public.audit_log where org_id = @org", World.Acme.Id).ConfigureAwait(false);
+        _foreignIds.UnionWith(auditIds);
     }
 
     /// <summary>The seeded world.</summary>
@@ -681,9 +821,10 @@ public sealed class RouteProbeRunner
         ids.AddRange(org.Users.SelectMany(u => new[] { u.UserId, u.MembershipId }));
         foreach (var p in org.Projects)
         {
-            ids.AddRange([p.Id, p.BindingId, p.ActiveTokenId, p.RevokedTokenId, p.EnvironmentRevisionId, p.ManifestId]);
+            ids.AddRange([p.Id, p.ActiveTokenId, p.RevokedTokenId, p.EnvironmentRevisionId, p.ManifestId]);
+            ids.AddRange(p.BindingIds);
             ids.AddRange(p.CaseIds);
-            ids.AddRange(p.CaseRevisionIds);
+            ids.AddRange(p.CaseRevisions.SelectMany(revisions => revisions));
             ids.AddRange(p.SuiteIds);
             ids.AddRange(p.SuiteRevisionIds);
         }
@@ -700,6 +841,8 @@ public sealed class RouteProbeRunner
     {
         ArgumentNullException.ThrowIfNull(caller);
         ArgumentNullException.ThrowIfNull(request);
+
+        await EnsureForeignIdsAsync().ConfigureAwait(false);
 
         using var message = new HttpRequestMessage(request.Method, request.Url);
         if (caller.UserId is { } user)
@@ -785,6 +928,10 @@ public sealed class RouteProbeRunner
         {
             violations.Add(Describe(route, name, caller, $"existence oracle: foreign {foreign} answered {real}, random {random} answered {control}"));
         }
+        else if (!string.Equals(Shape(real), Shape(control), StringComparison.Ordinal))
+        {
+            violations.Add(Describe(route, name, caller, $"existence oracle: foreign {foreign} and random {random} answered {real} with different bodies: {Brief(real)} vs {Brief(control)}"));
+        }
 
         violations.AddRange(ForeignIdsIn(real.Text).Select(id => Describe(route, name, caller, $"{foreign} answered {real} carrying org-A id {id}")));
         return violations;
@@ -793,10 +940,10 @@ public sealed class RouteProbeRunner
         {
             var ok = expect switch
             {
-                ProbeExpect.NotFound => response.Status == 404,
-                ProbeExpect.ForeignOrg => response.Status is 403 or 404,
-                ProbeExpect.EmptyOrNotFound => response.Status == 404 || (response.Status == 200 && response.ItemCount == 0),
-                ProbeExpect.ServiceRefused => response.Status is 403 or 404 || (response.Status == 200 && response.ItemCount == 0),
+                ProbeExpect.NotFound => response.Status == 404 && response.Code == NotFoundCode,
+                ProbeExpect.ForeignOrg => response.Status == 403 || (response.Status == 404 && response.Code == NotFoundCode),
+                ProbeExpect.EmptyOrNotFound => (response.Status == 404 && response.Code == NotFoundCode) || (IsListRoute(route) && response.Status == 200 && response.ItemCount == 0),
+                ProbeExpect.ServiceRefused => (response.Status == 403 || (response.Status == 404 && response.Code == NotFoundCode)) || (IsListRoute(route) && response.Status == 200 && response.ItemCount == 0),
                 ProbeExpect.NotSuccess => !response.IsSuccess && response.Status < 500,
                 _ => false,
             };
@@ -820,7 +967,7 @@ public sealed class RouteProbeRunner
         var real = await SendAsync(foreignCaller, request).ConfigureAwait(false);
         var control = await SendAsync(randomCaller, request).ConfigureAwait(false);
         var violations = new List<string>();
-        if (real.Status is not (403 or 404))
+        if (real.Status is not (403 or 404) || (real.Status == 404 && real.Code != NotFoundCode))
         {
             violations.Add(Describe(route, name, foreignCaller, $"{request} answered {real}, expected {Expected(ProbeExpect.ForeignOrg)}: {Brief(real)}"));
         }
@@ -828,6 +975,10 @@ public sealed class RouteProbeRunner
         if (real.Status != control.Status || !string.Equals(real.Code, control.Code, StringComparison.Ordinal))
         {
             violations.Add(Describe(route, name, foreignCaller, $"existence oracle: naming org A answered {real}, naming a random org answered {control}"));
+        }
+        else if (!string.Equals(Shape(real), Shape(control), StringComparison.Ordinal))
+        {
+            violations.Add(Describe(route, name, foreignCaller, $"existence oracle: naming org A and a random org answered {real} with different bodies: {Brief(real)} vs {Brief(control)}"));
         }
 
         violations.AddRange(ForeignIdsIn(real.Text).Select(id => Describe(route, name, foreignCaller, $"{request} answered {real} carrying org-A id {id}")));
@@ -845,6 +996,71 @@ public sealed class RouteProbeRunner
         }
 
         violations.AddRange(ForeignIdsIn(response.Text).Select(id => Describe(route, name, caller, $"{request} answered {response} carrying org-A id {id}")));
+        return violations;
+    }
+
+    /// <summary>
+    /// Org B's own object with the same URL shape as the foreign probes: <paramref name="expectedStatus"/> (the
+    /// positive control that proves the probe URL matches a real route and the object is visible), and no org-A id.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> OwnObjectAsync(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request, int expectedStatus = 200)
+    {
+        ArgumentNullException.ThrowIfNull(caller);
+        ArgumentNullException.ThrowIfNull(request);
+        var response = await SendAsync(caller, request).ConfigureAwait(false);
+        var violations = new List<string>();
+        if (response.Status != expectedStatus)
+        {
+            violations.Add(Describe(route, name, caller, $"{request} answered {response}, expected {expectedStatus} (positive control): {Brief(response)}"));
+        }
+
+        violations.AddRange(ForeignIdsIn(response.Text).Select(id => Describe(route, name, caller, $"{request} answered {response} carrying org-A id {id}")));
+        return violations;
+    }
+
+    /// <summary>
+    /// Org B's own list while the caller's header names another org: the route's <c>{o}</c> wins, so 200 listing
+    /// exactly <paramref name="expected"/> and no org-A id.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> OwnListAsync(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request, IReadOnlyCollection<string> expected)
+    {
+        ArgumentNullException.ThrowIfNull(caller);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(expected);
+        var response = await SendAsync(caller, request).ConfigureAwait(false);
+        var violations = new List<string>();
+        var ids = Ids(response, "id");
+        if (response.Status != 200 || !ids.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(expected))
+        {
+            violations.Add(Describe(route, name, caller, $"{request} answered {response} listing [{string.Join(", ", ids)}], expected exactly [{string.Join(", ", expected)}]"));
+        }
+
+        violations.AddRange(ForeignIdsIn(response.Text).Select(id => Describe(route, name, caller, $"{request} answered {response} carrying org-A id {id}")));
+        return violations;
+    }
+
+    /// <summary>
+    /// A service token naming org A in <c>X-Evidgate-Org</c> answers exactly as it does without the header (the
+    /// header is ignored for service principals, TenantResolutionFilter.cs:97-98), and carries no org-A id.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> ServiceHeaderIgnoredAsync(ApiRoute route, string name, ProbeCaller withHeader, ProbeCaller withoutHeader, ProbeRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(withHeader);
+        ArgumentNullException.ThrowIfNull(withoutHeader);
+        ArgumentNullException.ThrowIfNull(request);
+        var real = await SendAsync(withHeader, request).ConfigureAwait(false);
+        var control = await SendAsync(withoutHeader, request).ConfigureAwait(false);
+        var violations = new List<string>();
+        if (real.Status != control.Status || !string.Equals(real.Code, control.Code, StringComparison.Ordinal))
+        {
+            violations.Add(Describe(route, name, withHeader, $"{request} with X-Evidgate-Org: A answered {real}, without the header answered {control}"));
+        }
+        else if (!string.Equals(Shape(real), Shape(control), StringComparison.Ordinal))
+        {
+            violations.Add(Describe(route, name, withHeader, $"{request} with X-Evidgate-Org: A answered {real}, without the header answered {control} (body shape differs)"));
+        }
+
+        violations.AddRange(ForeignIdsIn(real.Text).Select(id => Describe(route, name, withHeader, $"{request} answered {real} carrying org-A id {id}")));
         return violations;
     }
 
@@ -957,6 +1173,10 @@ public sealed class RouteProbeRunner
         if (answers[0].Status != answers[1].Status || answers[0].Code != answers[1].Code)
         {
             violations.Add(Describe(route, name, IsolationRouteCases.OrgBAdmin(world), $"member headers changed the answer: anonymous {answers[0]}, org-B member {answers[1]}"));
+        }
+        else if (!string.Equals(Shape(answers[0]), Shape(answers[1]), StringComparison.Ordinal))
+        {
+            violations.Add(Describe(route, name, IsolationRouteCases.OrgBAdmin(world), $"member headers changed the body: anonymous {answers[0]}, org-B member {answers[1]}"));
         }
 
         return violations;
@@ -1087,13 +1307,69 @@ public sealed class RouteProbeRunner
 
     private static string Expected(ProbeExpect expect) => expect switch
     {
-        ProbeExpect.NotFound => "404",
-        ProbeExpect.ForeignOrg => "403/404",
-        ProbeExpect.EmptyOrNotFound => "404 or 200 with no items",
-        ProbeExpect.ServiceRefused => "403/404 (or 200 with no items)",
+        ProbeExpect.NotFound => "404 not_found",
+        ProbeExpect.ForeignOrg => "403 or 404 not_found",
+        ProbeExpect.EmptyOrNotFound => "404 not_found or a GET list's 200 with no items",
+        ProbeExpect.ServiceRefused => "403 or 404 not_found (or a GET list's 200 with no items)",
         ProbeExpect.NotSuccess => "a 4xx refusal",
         _ => expect.ToString(),
     };
+
+    /// <summary>
+    /// A GET route the suite walks to exhaustion (<c>Lists</c>): the only routes allowed to answer 200 with zero
+    /// items (S6). An object route or a non-GET route is never in the set, so it must be refused.
+    /// </summary>
+    private bool IsListRoute(ApiRoute route) =>
+        route.Method == "GET" && _listTemplates.Contains(route.Template);
+
+    /// <summary>
+    /// The comparable shape of a refusal body: the member-name skeleton plus <c>error.message</c>. Volatile
+    /// request/trace ids are masked by name, so two refusals that differ only in such an id compare equal, while a
+    /// foreign id that changes the message or the body's members is an existence oracle (S4).
+    /// </summary>
+    private static string Shape(ProbeResponse response)
+    {
+        if (response.Json is not { } json)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"non-JSON {response.Status}");
+        }
+
+        var names = new List<string>();
+        Names(json, names);
+        var message = json.ValueKind == JsonValueKind.Object
+            && json.TryGetProperty("error", out var error)
+            && error.ValueKind == JsonValueKind.Object
+            && error.TryGetProperty("message", out var text)
+            && text.ValueKind == JsonValueKind.String
+                ? text.GetString()!
+                : string.Empty;
+
+        return string.Join(",", names) + "|" + message;
+    }
+
+    private static void Names(JsonElement element, List<string> names)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    names.Add(property.Name);
+                    Names(property.Value, names);
+                }
+
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    Names(item, names);
+                }
+
+                break;
+            default:
+                break;
+        }
+    }
 
     /// <summary>
     /// The body for a failure message: JSON with every secret-bearing member and every JWT-shaped string masked,

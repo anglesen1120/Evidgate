@@ -19,6 +19,8 @@ namespace Isolation.Tests.Api;
 /// with <see cref="IsolationSuite"/>, so the world's rows never meet another suite's.
 /// Nothing resets between test classes: every request of the suite is meant to be refused, and
 /// <see cref="SnapshotOrgAsync"/> lets a test prove that no write happened.
+/// Setup asserts the host's own connection runs as <c>evidgate_app</c> without <c>rolsuper</c> or
+/// <c>rolbypassrls</c> (AC6/§8), so a fixture that swapped in the owner string fails instead of passing green.
 /// </remarks>
 public sealed class ApiIsolationFixture : IAsyncLifetime
 {
@@ -50,6 +52,7 @@ public sealed class ApiIsolationFixture : IAsyncLifetime
         {
             await _postgres.InitializeAsync().ConfigureAwait(false);
             _database = await _postgres.CreateDatabaseAsync().ConfigureAwait(false);
+            await AssertHostRoleAsync().ConfigureAwait(false);
             _factory = new IsolationApiFactory(AppConnectionString);
 
             using var client = CreateClient();
@@ -60,6 +63,35 @@ public sealed class ApiIsolationFixture : IAsyncLifetime
         {
             await DisposeAsync().ConfigureAwait(false);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// AC6/§8: the host must run as <c>evidgate_app</c> — not a superuser and not <c>bypassrls</c> — or every
+    /// refusal probe would be meaningless. The check opens the host's own connection string, so a fixture that
+    /// swapped in the owner string fails setup instead of passing green.
+    /// </summary>
+    private async Task AssertHostRoleAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var connection = new NpgsqlConnection(AppConnectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new NpgsqlCommand(
+            "select current_user::text, rolsuper, rolbypassrls from pg_catalog.pg_roles where rolname = current_user",
+            connection);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("the API isolation fixture could not read the host role's attributes");
+        }
+
+        var user = reader.GetString(0);
+        var superuser = reader.GetBoolean(1);
+        var bypassRls = reader.GetBoolean(2);
+        if (!string.Equals(user, "evidgate_app", StringComparison.Ordinal) || superuser || bypassRls)
+        {
+            throw new InvalidOperationException(
+                $"the API isolation fixture must run as evidgate_app without rolsuper/rolbypassrls, but the host connection is '{user}' (rolsuper={superuser}, rolbypassrls={bypassRls})");
         }
     }
 
@@ -191,8 +223,16 @@ public sealed class ApiIsolationFixture : IAsyncLifetime
         new("the API isolation fixture has not been initialised");
 }
 
-/// <summary>Binds <see cref="ApiIsolationFixture"/> to the API isolation test classes (one world per collection).</summary>
-[CollectionDefinition(Name)]
+/// <summary>
+/// Binds <see cref="ApiIsolationFixture"/> to the API isolation test classes (one world per collection).
+/// <para>
+/// <c>DisableParallelization</c> keeps this collection from overlapping <see cref="IsolationSuite"/>: in the AC5
+/// reused-server mode both fixtures reset the cluster-global <c>evidgate_owner</c>/<c>evidgate_app</c> role
+/// passwords, so two instances running at once would invalidate each other's logins. The same reason the shared
+/// harness collection (<c>tests/Shared/DatabaseFixture.cs</c>) is serialised.
+/// </para>
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class ApiIsolationSuite : ICollectionFixture<ApiIsolationFixture>
 {
     /// <summary>The collection name test classes reference.</summary>

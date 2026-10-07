@@ -33,8 +33,11 @@ public sealed class IsolationProject
     /// <summary>The slug — identical in both orgs (<c>web</c>, <c>api</c>).</summary>
     public required string Slug { get; init; }
 
-    /// <summary>The project's <c>ci_binding</c> (<c>{b}</c>).</summary>
+    /// <summary>The project's first <c>ci_binding</c> (<c>{b}</c>).</summary>
     public required Guid BindingId { get; init; }
+
+    /// <summary>Every <c>ci_binding</c> of the project, <see cref="BindingId"/> first; at least two, so the list pages.</summary>
+    public required IReadOnlyList<Guid> BindingIds { get; init; }
 
     /// <summary>An active ingest token (<c>{t}</c>).</summary>
     public required Guid ActiveTokenId { get; init; }
@@ -54,8 +57,11 @@ public sealed class IsolationProject
     /// <summary>The test cases (<c>{c}</c>), in file-path order; at least three, so a list pages at limit 1 or 2.</summary>
     public required IReadOnlyList<Guid> CaseIds { get; init; }
 
-    /// <summary>One case revision per case, aligned with <see cref="CaseIds"/>.</summary>
+    /// <summary>One case revision per case, aligned with <see cref="CaseIds"/> (the first of <see cref="CaseRevisions"/>).</summary>
     public required IReadOnlyList<Guid> CaseRevisionIds { get; init; }
+
+    /// <summary>Every revision of each case, aligned with <see cref="CaseIds"/>; at least two per case, so the list pages.</summary>
+    public required IReadOnlyList<IReadOnlyList<Guid>> CaseRevisions { get; init; }
 
     /// <summary>The suites (<c>{s}</c>): <c>smoke</c> then <c>regression</c>.</summary>
     public required IReadOnlyList<Guid> SuiteIds { get; init; }
@@ -107,7 +113,7 @@ public sealed class IsolationOrg
     public IReadOnlyList<Guid> MembershipIds => [.. Users.Select(u => u.MembershipId), PendingInviteMembershipId];
 
     /// <summary>Every <c>ci_binding</c> id.</summary>
-    public IReadOnlyList<Guid> BindingIds => [.. Projects.Select(p => p.BindingId)];
+    public IReadOnlyList<Guid> BindingIds => [.. Projects.SelectMany(p => p.BindingIds)];
 
     /// <summary>Every active ingest-token id.</summary>
     public IReadOnlyList<Guid> ActiveTokenIds => [.. Projects.Select(p => p.ActiveTokenId)];
@@ -119,7 +125,7 @@ public sealed class IsolationOrg
     public IReadOnlyList<Guid> CaseIds => [.. Projects.SelectMany(p => p.CaseIds)];
 
     /// <summary>Every case-revision id.</summary>
-    public IReadOnlyList<Guid> CaseRevisionIds => [.. Projects.SelectMany(p => p.CaseRevisionIds)];
+    public IReadOnlyList<Guid> CaseRevisionIds => [.. Projects.SelectMany(p => p.CaseRevisions).SelectMany(r => r)];
 
     /// <summary>Every suite id.</summary>
     public IReadOnlyList<Guid> SuiteIds => [.. Projects.SelectMany(p => p.SuiteIds)];
@@ -152,9 +158,10 @@ public sealed class IsolationOrg
 /// <c>tests/Identity.IntegrationTests/IdentityTestData.cs</c> does): an invite only becomes
 /// active through 02.3.x's login, which is not merged, so no route can produce an active member;</item>
 /// <item>a pending invite — <c>POST /v1/orgs/{o}/memberships</c>; an extra role grant — <c>POST …/memberships/{m}/roles</c>;</item>
-/// <item>test cases — <c>ICaseIdentityService.RegisterDiscoveredAsync</c> in an <c>ITenantScope</c> (no POST route for cases);</item>
+/// <item>test cases — <c>ICaseIdentityService.RegisterDiscoveredAsync</c> in an <c>ITenantScope</c> (no POST route for
+/// cases), synced twice with changed content so every case has two revisions;</item>
 /// <item>suites + revisions, the <c>staging</c> environment revision (the environment row is created by the
-/// revision route), a manifest, a <c>ci_binding</c>, two ingest tokens (one then revoked by
+/// revision route), a manifest, two <c>ci_binding</c>s, two ingest tokens (one then revoked by
 /// <c>DELETE /v1/ingest-tokens/{t}</c>) and a <c>ci_producer</c> JWT from <c>POST /v1/ci/token</c>.</item>
 /// </list>
 /// <para>
@@ -174,7 +181,7 @@ public sealed class IsolationOrg
 /// <item>a custom role — <c>POST /v1/roles</c> is off by default (<c>EVIDGATE:Identity:CustomRolesEnabled</c>);
 /// role-id routes use the built-in role ids;</item>
 /// <item>a <c>ci_binding</c> verified with a test JWKS — the JWKS seam (<c>IGitHubJwksProvider</c>) is
-/// internal to the Identity module; the binding exists (pending), the JWT comes from the ingest-token exchange.</item>
+/// internal to the Identity module; the bindings exist (pending), the JWT comes from the ingest-token exchange.</item>
 /// </list>
 /// </remarks>
 public sealed class IsolationWorld
@@ -205,7 +212,14 @@ public sealed class IsolationWorld
     ];
 
     private const int CasesPerProject = 3;
+
+    /// <summary>Two revisions per case, so <c>/v1/cases/{c}/revisions</c> pages at limit 1.</summary>
+    private const int RevisionsPerCase = 2;
+
+    /// <summary>The commit of the first tree; the second sync uses <see cref="SecondCommitSha"/>.</summary>
     private const string CommitSha = "bbbbbbb2222222";
+
+    private const string SecondCommitSha = "ccccccc3333333";
 
     private IsolationWorld(IsolationOrg acme, IsolationOrg acme2, IReadOnlyDictionary<string, Guid> builtInRoleIds)
     {
@@ -343,10 +357,11 @@ public sealed class IsolationWorld
         private async Task<IsolationProject> SeedProjectAsync(string orgSlug, Guid org, Guid project, string projectSlug, IsolationUser admin, long repositoryId)
         {
             var (cases, caseRevisions) = await SeedCasesAsync(org, project).ConfigureAwait(false);
+            var primaryRevisions = caseRevisions.Select(revisions => revisions[0]).ToArray();
 
             var suites = new List<Guid>();
             var suiteRevisions = new List<Guid>();
-            foreach (var (suiteSlug, members) in new[] { ("smoke", caseRevisions), ("regression", caseRevisions.Take(2).ToArray()) })
+            foreach (var (suiteSlug, members) in new[] { ("smoke", primaryRevisions), ("regression", primaryRevisions.Take(2).ToArray()) })
             {
                 var suite = (await SendAsync(
                     HttpMethod.Post, $"/v1/projects/{project}/suites", admin, org, new { name = suiteSlug, slug = suiteSlug }, HttpStatusCode.Created).ConfigureAwait(false))
@@ -379,24 +394,12 @@ public sealed class IsolationWorld
                 $"/v1/projects/{project}/manifests",
                 admin,
                 org,
-                Manifest(suiteRevisions[0], caseRevisions, environmentRevision),
+                Manifest(suiteRevisions[0], primaryRevisions, environmentRevision),
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("manifest_id").GetGuid();
 
             var repository = $"{orgSlug}/{projectSlug}";
-            var binding = (await SendAsync(
-                HttpMethod.Post,
-                $"/v1/projects/{project}/ci-bindings",
-                admin,
-                org,
-                new
-                {
-                    provider = "github_actions",
-                    repository_id = repositoryId,
-                    repository_full_name = repository,
-                    allowed_ref_patterns = AllowedRefPatterns,
-                    allowed_workflow_refs = new[] { $"{repository}/.github/workflows/ci.yml@refs/heads/main" },
-                },
-                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("binding").GetProperty("id").GetGuid();
+            var binding = await CreateBindingAsync(project, admin, org, repositoryId, repository).ConfigureAwait(false);
+            var mirrorBinding = await CreateBindingAsync(project, admin, org, repositoryId + 100, $"{repository}-mirror").ConfigureAwait(false);
 
             var active = await SendAsync(
                 HttpMethod.Post, $"/v1/projects/{project}/ingest-tokens", admin, org, new { name = "active" }, HttpStatusCode.Created).ConfigureAwait(false);
@@ -419,6 +422,7 @@ public sealed class IsolationWorld
                 Id = project,
                 Slug = projectSlug,
                 BindingId = binding,
+                BindingIds = [binding, mirrorBinding],
                 ActiveTokenId = active.GetProperty("token").GetProperty("id").GetGuid(),
                 ActiveTokenSecret = secret,
                 RevokedTokenId = revoked,
@@ -427,7 +431,8 @@ public sealed class IsolationWorld
                 CiProducerJwt = exchanged.GetProperty("token").GetString()
                     ?? throw new InvalidOperationException($"seed: the ci/token exchange of project {project} returned no token"),
                 CaseIds = cases,
-                CaseRevisionIds = caseRevisions,
+                CaseRevisionIds = primaryRevisions,
+                CaseRevisions = [.. caseRevisions.Select(perCase => (IReadOnlyList<Guid>)perCase)],
                 SuiteIds = suites,
                 SuiteRevisionIds = suiteRevisions,
                 EnvironmentRevisionId = environmentRevision,
@@ -435,32 +440,33 @@ public sealed class IsolationWorld
             };
         }
 
+        /// <summary>One <c>ci_binding</c> through <c>POST /v1/projects/{p}/ci-bindings</c>; the project's list needs two.</summary>
+        private async Task<Guid> CreateBindingAsync(Guid project, IsolationUser admin, Guid org, long repositoryId, string repositoryFullName) =>
+            (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/ci-bindings",
+                admin,
+                org,
+                new
+                {
+                    provider = "github_actions",
+                    repository_id = repositoryId,
+                    repository_full_name = repositoryFullName,
+                    allowed_ref_patterns = AllowedRefPatterns,
+                    allowed_workflow_refs = new[] { $"{repositoryFullName}/.github/workflows/ci.yml@refs/heads/main" },
+                },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("binding").GetProperty("id").GetGuid();
+
         /// <summary>
         /// Registers <see cref="CasesPerProject"/> cases through the public case-identity service, as
-        /// <c>ManifestTests.SeedCasesAsync</c> does. Paths and annotation ids are the same in every
-        /// project of both orgs on purpose (they are unique per org and project only).
+        /// <c>ManifestTests.SeedCasesAsync</c> does, then syncs the same tree once more with changed content so every
+        /// case has <see cref="RevisionsPerCase"/> revisions (the list route pages at limit 1). Paths and annotation
+        /// ids are the same in every project of both orgs on purpose (they are unique per org and project only).
         /// </summary>
-        private async Task<(Guid[] Cases, Guid[] Revisions)> SeedCasesAsync(Guid org, Guid project)
+        private async Task<(Guid[] Cases, Guid[][] Revisions)> SeedCasesAsync(Guid org, Guid project)
         {
-            var files = Enumerable.Range(0, CasesPerProject).Select(i => new SourceFile(
-                string.Create(CultureInfo.InvariantCulture, $"iso/{i}.spec.ts"),
-                string.Create(CultureInfo.InvariantCulture, $"// evidgate.id: 018f2f0e-8a52-7c4b-9d3e-{i:D12}\ntest('{i}', () => {{ expect(a).toBe({i}); }});"),
-                "playwright",
-                "typescript")).ToArray();
-
-            await using (var scoped = services.CreateAsyncScope())
-            {
-                await using var scope = await scoped.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
-                    .BeginAsync(org, null, false, cancellationToken).ConfigureAwait(false);
-                var outcome = await scoped.ServiceProvider.GetRequiredService<ICaseIdentityService>()
-                    .RegisterDiscoveredAsync(project, CommitSha, files, cancellationToken).ConfigureAwait(false);
-                if (!outcome.Succeeded)
-                {
-                    throw new InvalidOperationException($"seed: case registration in project {project} failed: {outcome.Failure}");
-                }
-
-                await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
-            }
+            await RegisterTreeAsync(org, project, CommitSha, salt: 0).ConfigureAwait(false);
+            await RegisterTreeAsync(org, project, SecondCommitSha, salt: 1).ConfigureAwait(false);
 
             await using var connection = await OpenOwnerAsync().ConfigureAwait(false);
             await using var command = new NpgsqlCommand(
@@ -469,7 +475,7 @@ public sealed class IsolationWorld
                   from public.test_case c
                   join public.test_revision r on r.org_id = c.org_id and r.case_id = c.id
                  where c.org_id = @org and c.project_id = @project
-                 order by c.file_path, r.id
+                 order by c.file_path, r.created_at, r.id
                 """,
                 connection);
             command.Parameters.AddWithValue("org", org);
@@ -477,19 +483,53 @@ public sealed class IsolationWorld
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
 
             var cases = new List<Guid>();
-            var revisions = new List<Guid>();
+            var revisions = new List<List<Guid>>();
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                cases.Add(reader.GetGuid(0));
-                revisions.Add(reader.GetGuid(1));
+                var caseId = reader.GetGuid(0);
+                if (cases.Count == 0 || cases[^1] != caseId)
+                {
+                    cases.Add(caseId);
+                    revisions.Add([]);
+                }
+
+                revisions[^1].Add(reader.GetGuid(1));
             }
 
-            if (cases.Count != CasesPerProject)
+            if (cases.Count != CasesPerProject || revisions.Any(perCase => perCase.Count != RevisionsPerCase))
             {
-                throw new InvalidOperationException($"seed: project {project} has {cases.Count} case revisions, expected {CasesPerProject}");
+                throw new InvalidOperationException(
+                    $"seed: project {project} has {cases.Count} case(s) with revisions [{string.Join(", ", revisions.Select(r => r.Count))}], expected {CasesPerProject} cases of {RevisionsPerCase}");
             }
 
-            return ([.. cases], [.. revisions]);
+            return ([.. cases], [.. revisions.Select(perCase => perCase.ToArray())]);
+        }
+
+        /// <summary>
+        /// One case-identity sync of the project's tree; <paramref name="salt"/> changes the file content so the
+        /// second sync appends a revision instead of hitting the <c>(org_id, case_id, revision_hash)</c> key.
+        /// </summary>
+        private async Task RegisterTreeAsync(Guid org, Guid project, string commitSha, int salt)
+        {
+            var files = Enumerable.Range(0, CasesPerProject).Select(i => new SourceFile(
+                string.Create(CultureInfo.InvariantCulture, $"iso/{i}.spec.ts"),
+                string.Create(CultureInfo.InvariantCulture, $"// evidgate.id: 018f2f0e-8a52-7c4b-9d3e-{i:D12}\ntest('{i}', () => {{ expect(a).toBe({i + salt}); }});"),
+                "playwright",
+                "typescript")).ToArray();
+
+            await using (var scoped = services.CreateAsyncScope())
+            {
+                await using var scope = await scoped.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
+                    .BeginAsync(org, null, false, cancellationToken).ConfigureAwait(false);
+                var outcome = await scoped.ServiceProvider.GetRequiredService<ICaseIdentityService>()
+                    .RegisterDiscoveredAsync(project, commitSha, files, cancellationToken).ConfigureAwait(false);
+                if (!outcome.Succeeded)
+                {
+                    throw new InvalidOperationException($"seed: case registration in project {project} failed: {outcome.Failure}");
+                }
+
+                await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
 
         /// <summary>

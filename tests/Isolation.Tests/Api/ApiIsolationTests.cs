@@ -64,7 +64,8 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
 
     /// <summary>
     /// AC2: every served list, paged as org B to exhaustion, yields exactly org B's items (count and ids), never an
-    /// org-A id; an org-A cursor fed to org B yields no org-A item.
+    /// org-A id; an org-A cursor fed to org B yields no org-A item. Every walk with a foreign caller must execute
+    /// that cross-cursor step — a list seeded too small to page fails instead of silently skipping it.
     /// </summary>
     [Fact]
     public async Task List_OnlyOwnOrg_FullPagination()
@@ -73,7 +74,6 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
         var walks = IsolationRouteCases.Lists(fixture.World);
         var violations = new List<string>();
         var cursorChecks = 0;
-        var noForeignCursor = new List<string>();
 
         foreach (var walk in walks)
         {
@@ -105,7 +105,8 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
             {
                 foreach (var page in pages)
                 {
-                    var response = new ProbeResponse(200, null, page, System.Text.Json.JsonDocument.Parse(page).RootElement.Clone());
+                    using var document = System.Text.Json.JsonDocument.Parse(page);
+                    var response = new ProbeResponse(200, null, page, document.RootElement.Clone());
                     if (response.Json is { } json && json.TryGetProperty("items", out var items))
                     {
                         violations.AddRange(items.EnumerateArray().Select(walk.ItemCheck).OfType<string>()
@@ -124,7 +125,8 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
                 }
                 else
                 {
-                    noForeignCursor.Add($"{walk.Route} [{walk.Case}]");
+                    violations.Add(RouteProbeRunner.Describe(walk.Route, walk.Case, walk.Caller,
+                        "org A's first page had no next_cursor, so the cross-org cursor step never ran"));
                 }
             }
         }
@@ -132,16 +134,13 @@ public sealed class ApiIsolationTests(ApiIsolationFixture fixture)
         var streams = IsolationRouteCases.OwnStreams(fixture.World);
         violations.AddRange(await RunAsync(runner, streams));
 
-        var cursorNote = noForeignCursor.Count == 0
-            ? string.Empty
-            : $"{Environment.NewLine}org-A first page had no next_cursor (cross-cursor step not exercised) for {noForeignCursor.Count} walk(s): {string.Join("; ", noForeignCursor)}";
         if (cursorChecks == 0)
         {
             violations.Add("no org-A cursor was fed to org B: no walk with a foreign caller got an org-A next_cursor");
         }
 
         walks.Count.ShouldBeGreaterThan(0);
-        violations.ShouldBeEmpty(Report("full-pagination lists", walks.Count, violations) + cursorNote);
+        violations.ShouldBeEmpty(Report("full-pagination lists", walks.Count, violations));
     }
 
     /// <summary>
