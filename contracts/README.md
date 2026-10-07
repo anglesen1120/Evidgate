@@ -22,6 +22,9 @@ client and the server-side JSON Schema validation (01.3.2).
   `POST /v1/projects/{p}/manifests` request body (05.1.1-T1.1), referenced from
   `openapi.yaml` so the spec body and the schema file cannot drift.
 - `examples/` — documents used by the conventions gate.
+- `cli.md` — the `evidgate` CLI contract (04.2.1-T2, OI-04-06): exit-code
+  registry, `EVIDGATE_*` configuration and precedence, token sources, stderr
+  error codes and redaction rules. Owned across the 04.2.x stories.
 - `permissions.json` — the single source of every `resource:action` string
   (00 §2, 02 D2): the platform permission catalogue plus the nine built-in roles
   and their grants. Migration 0010 seeds it into `public.permission` /
