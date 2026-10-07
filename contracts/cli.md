@@ -13,7 +13,8 @@ holds only the process-level contract.
   [open-items register](../plans/open-items/02-catalog-ingest-runs-evidence.md).
 - 04.2.1-T1 adds the auth-exchange section: `auth login`, the token cache
   location, and the `binding_pending` / `binding_conflict` rows.
-- 04.2.2 adds `manifests upload` and `runs create`.
+- 04.2.2-T1 adds `manifests upload` and §8 (the manifest upload, its 256 KiB cap
+  and the 401 purge); 04.2.2-T2 adds `runs create`.
 - 04.2.3 adds the spool format, its caps, `EVIDGATE_SPOOL_*` and
   `EVIDGATE_SEND_DEADLINE`, and `runs finalize`.
 - 04.2.4 adds `artifacts upload` and `quickstart`.
@@ -94,6 +95,11 @@ records them here. Until then no command emits 10–19.
 (localhost, 127.0.0.1, [::1])`, or `unsupported scheme '<scheme>' (expected
 https:)`. The value is never echoed. The normalised value is
   `url.origin + url.pathname` with a trailing `/` removed.
+- `EVIDGATE_API_URL` / `--api-url` is the API root **without** the version
+  prefix. The openapi document declares `servers: - url: /v1`, so the CLI appends
+  `/v1` to every API call (`POST /v1/ci/token`, `POST /v1/projects/{p}/manifests`).
+  A value that already ends in `/v1` therefore yields `/v1/v1`; this is not
+  validated against (there is no rule forbidding it), so pass the root.
 - `EVIDGATE_CACHE_DIR` is used as-is; when unset the default is
   `%LOCALAPPDATA%\evidgate` on Windows, else `$XDG_CACHE_HOME/evidgate`, else
   `<home>/.cache/evidgate`. A relative `EVIDGATE_CACHE_DIR` is exit 3
@@ -156,13 +162,38 @@ start with `::` (a GitHub workflow command). Multi-line messages and `--verbose`
 stacks are split and each line is prefixed. Values interpolated into an error
 message (unknown command text, `parseArgs` messages, `EVIDGATE_ENV` in
 `dev_token_refused`) have control and format characters escaped as `\uXXXX`, and
-newlines never pass through.
+newlines never pass through. The escaped set is `\p{Cc}`, `\p{Cf}`, `\p{Zl}` and
+`\p{Zp}`, so U+2028 and U+2029 (line and paragraph separators) are escaped too.
 
 stderr line format:
 
 - `evidgate: error <code>: <message>`
 - `evidgate: hint: <hint>` when a hint is present
 - `evidgate: request_id: <id>` when the server returned one
+- `evidgate: detail: <detail>` once per server `error.details[]` entry, after the
+  hint/request_id lines
+
+Server-supplied text fields — the envelope `message`, `request_id` (from the body
+or the `X-Request-Id` header fallback) and each detail `path`/`reason` — are
+processed in one fixed order: (1) `redact()`, so a registered secret straddling
+the cut can never leave a clear-text prefix; (2) cap to the first 200 Unicode
+code points, never splitting a surrogate pair or an escape; (3) escape control
+characters as above.
+
+A `detail:` line is `index=<n> path=<p> reason=<r>`: `index=` is printed only when
+the entry's `index` is a number, `path=` only when its `path` is a string, and
+`reason=` only when its `reason` is a string. A detail whose `reason` is missing
+or not a string makes the whole envelope unusable, so the reply falls back to the
+command's fallback code (`request_failed` for `manifests upload`) with no
+`detail:` lines (fail closed). At most 50 `detail:` lines are printed; more
+collapse into one final `evidgate: detail: (<k> more)` line. `detail:` lines are
+printed only by project-scoped commands (`manifests upload`); the token exchange
+(`auth login`, `getToken`) never prints them.
+
+The CLI prints the server's own `path`/`reason` text, after redaction, capping and
+escaping. That no submitted value is echoed, and that a parameter is named by
+position (`#n`) rather than by value, is the server contract (05.1.1, openapi
+`createManifest`), not a CLI guarantee.
 
 | Code                  | Exit | Meaning                                                                                                                                                                             |
 | --------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -174,6 +205,9 @@ stderr line format:
 | `exchange_failed`     | 3    | a non-2xx reply without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                      |
 | `oidc_request_failed` | 3    | the `ACTIONS_ID_TOKEN_REQUEST_URL` fetch failed (non-2xx, or a body without `value`)                                                                                                |
 | `token_cache_error`   | 3    | the token cache could not be written or deleted; the message names the operation, never a token value                                                                               |
+| `manifest_unreadable` | 3    | the manifest file could not be read (missing, unreadable, not a regular file or empty); the message names the errno code, never the path or the content                             |
+| `manifest_too_large`  | 3    | the manifest file is larger than the server's 256 KiB transport cap; refused locally, before any request                                                                            |
+| `request_failed`      | 3    | a non-2xx manifest upload without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                            |
 | `binding_pending`     | 3    | 403: the repository has not presented the binding challenge yet; hint: set the repository variable `EVIDGATE_BINDING_CHALLENGE` to the challenge shown when the binding was created |
 | `binding_conflict`    | 3    | 409: this repository is already bound to another organization; hint: its admin must disable that binding first                                                                      |
 | `internal_error`      | 3    | an unexpected exception; the message is redacted, and the stack is printed only under `--verbose` (also redacted)                                                                   |
@@ -186,11 +220,13 @@ line (EPIPE on stdout exits 3 silently).
 Any other server `error.code` that matches `^[a-z][a-z0-9_]{0,63}$` is echoed
 verbatim as `error.code` (for example `token_invalid`, `token_replayed`,
 `token_unknown`, `token_revoked`, `token_expired`, `binding_mismatch`,
-`binding_disabled`, `rate_limited`, `unavailable`); a code that does not match
-becomes `exchange_failed`. `request_id` comes from the body `error.request_id`,
-else the `X-Request-Id` header. A 429 is retried once after `Retry-After`
-(clamped to 0–60 s, default 1 s); 401/403/409 are never retried. No server
-subcode changes the exit code.
+`binding_disabled`, `rate_limited`, `unavailable`, `manifest_invalid`); a code that
+does not match becomes the command's fallback code (`exchange_failed` for the
+exchange, `request_failed` for `manifests upload`). `request_id` comes from the body
+`error.request_id`, else the `X-Request-Id` header. A 429 from the token exchange
+(`POST /v1/ci/token`) is retried once after `Retry-After` (clamped to 0–60 s, default
+1 s); `manifests upload` does not retry (§8). 401/403/409 are never retried. No
+server subcode changes the exit code.
 
 - `Retry-After` is delta-seconds (digits only) or an HTTP-date; a missing header
   or any other value is 1 s.
@@ -293,5 +329,57 @@ Cache:
   atomic rename keeps the file consistent, so no lock is taken.
 - `[DECISION]` the cache is keyed by api URL + project only, so jobs of the same
   OS user on the same runner share it for that project (the scope is identical).
-- Hand-over to 04.2.2-T1: a 401 from a later project-scoped command does not
-  purge the cache yet.
+- A project-scoped command purges the cache entry when the server answers 401
+  (best-effort — a delete failure never hides the server code, which still
+  surfaces), so the next `getToken()` re-exchanges; a 403 keeps the entry, because
+  a scope refusal does not invalidate the token. First implemented by
+  `manifests upload` (§8); `runs create` (04.2.2-T2) applies the same rule.
+
+## 8. Manifest upload
+
+`evidgate manifests upload --file <path> [--json]` (04.2.2-T1) uploads one run
+manifest to `POST /v1/projects/{p}/manifests` (openapi `createManifest`, 05.1.1
+§5) and prints the stored `manifest_id` and its `manifest_hash`.
+
+Order of operations (observable):
+
+1. `--file` missing or empty is exit 3 `usage` (`missing required flag --file`),
+   with no network call.
+2. The file is read and capped BEFORE `getToken()`, so an unreadable or oversize
+   file makes no request at all — not even the token exchange. The file is opened
+   and `fstat`ed; a non-regular file, an open/read failure (the message names the
+   errno code) and an empty file are exit 3 `manifest_unreadable`. At most
+   `maxManifestBytes + 1` bytes are read — the size is never trusted from `stat`
+   alone — and more than `maxManifestBytes` is exit 3 `manifest_too_large`
+   (`the manifest file exceeds 262144 bytes`).
+3. `getToken()` (04.2.1) supplies the bearer, `createApiClient` builds the
+   redirect-refusing client, and the generated `createManifest` operation is
+   called with that client explicitly (§6). The body is the RAW file bytes — no
+   JSON re-serialisation, because the server hashes the RFC 8785 canonical form
+   and a round trip could lose number precision — sent as `application/json`
+   with a 30 s timeout (`AbortSignal.timeout(30_000)`) and no retry. The
+   `Idempotency-Key` the route requires (00 §9.1) is the SHA-256 hex of those
+   same bytes, so a retry of one manifest replays the stored 201 instead of
+   writing a second record.
+4. A 2xx body must be `{ manifest_id: <uuid>, manifest_hash: sha256:<64 hex> }`;
+   anything else is exit 3 `request_failed` and the body is never echoed.
+5. A non-2xx reply maps through §5: the server's `error.code` when it is a safe
+   identifier (else `request_failed`), the server's message redacted, capped at
+   200 code points and escaped, `request_id` from the body else the
+   `X-Request-Id` header (same treatment), and one `detail:` line per
+   `error.details[]` entry — so a 422 `manifest_invalid` passes its per-item
+   causes through. A non-2xx reply without a usable envelope is `request_failed`
+   with `the manifest upload failed (HTTP <status>)`.
+6. A 401 purges the cached CI token before the error propagates (§7); a 403 does
+   not. A transport failure, a timeout or a refused redirect is exit 3
+   `transport` with a fixed message.
+
+Output:
+
+- text: `manifest_id=<id> manifest_hash=<hash>` and nothing else on stdout.
+- `--json`: exactly one line `{"manifest_id":"…","manifest_hash":"…"}`.
+
+The cap is the server's documented transport limit: openapi `createManifest`
+("Body ≤ 256 KiB → 413") and 05.1.1 §8 (`MaxManifestBytes = 256 * 1024`). The
+CLI refuses a larger file locally, so the 413 is never reached. The manifest
+content is never echoed, not even under `--verbose`.

@@ -10,12 +10,18 @@ export interface CliErrorOptions {
   readonly hint?: string;
   /** Optional server request id, printed as `evidgate: request_id: <id>`. */
   readonly requestId?: string;
+  /**
+   * Optional per-item server detail lines, printed one per entry as
+   * `evidgate: detail: <detail>` after the hint/request_id lines (contracts/cli.md §5).
+   */
+  readonly details?: readonly string[];
 }
 
 export class CliError extends Error {
   readonly code: string;
   readonly hint?: string;
   readonly requestId?: string;
+  readonly details?: readonly string[];
 
   constructor(message: string, options: CliErrorOptions) {
     super(message);
@@ -27,15 +33,20 @@ export class CliError extends Error {
     if (options.requestId !== undefined) {
       this.requestId = options.requestId;
     }
+    if (options.details !== undefined) {
+      this.details = options.details;
+    }
   }
 }
 
-const controlOrFormat = /[\p{Cc}\p{Cf}]/gu;
+const controlOrFormat = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
 
 /**
- * Escapes Unicode control (`Cc`) and format (`Cf`) characters as `\uXXXX`, so a value
- * interpolated into a message cannot forge a log line or a GitHub `::` workflow command
- * (contracts/cli.md §5, SEC4). A newline therefore never passes through.
+ * Escapes Unicode control (`Cc`), format (`Cf`) and line/paragraph separator (`Zl`/`Zp`)
+ * characters as `\uXXXX`, so a value interpolated into a message cannot forge a log line
+ * or a GitHub `::` workflow command (contracts/cli.md §5, SEC4). A newline therefore
+ * never passes through, and neither do U+2028/U+2029, which some log viewers and
+ * JSON-lines consumers render as line breaks.
  */
 export function escapeControlCharacters(value: string): string {
   return value.replace(controlOrFormat, (character) => {
@@ -73,6 +84,9 @@ export function formatCliError(error: CliError): string {
   }
   if (error.requestId !== undefined) {
     lines.push(`evidgate: request_id: ${escapeControlCharacters(error.requestId)}`);
+  }
+  for (const detail of error.details ?? []) {
+    lines.push(`evidgate: detail: ${escapeControlCharacters(detail)}`);
   }
   return lines.join('\n');
 }

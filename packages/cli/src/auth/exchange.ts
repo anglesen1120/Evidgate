@@ -7,12 +7,13 @@
 // returned, so it can never reach a writer (T78).
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { exchangeCiToken, isErrorEnvelope, type CiTokenRequest } from '@evidgate/sdk';
+import { exchangeCiToken, type CiTokenRequest } from '@evidgate/sdk';
 
 import { createApiClient } from '../client.js';
 import { envNames, isLoopbackApiUrl, resolveTokenSource, type ResolvedConfig } from '../config.js';
-import { CliError, escapeControlCharacters, type CliErrorOptions } from '../errors.js';
+import { CliError, type CliErrorOptions } from '../errors.js';
 import { registerSecret } from '../redact.js';
+import { serverErrorFromResponse, transportError } from '../serverError.js';
 
 import { deleteCachedToken } from './tokenCache.js';
 
@@ -48,11 +49,8 @@ export class ExchangeAuthError extends CliError {
 const requestTimeoutMs = 30_000;
 const maxRetryAfterMs = 60_000;
 const defaultRetryAfterMs = 1_000;
-const maxMessageLength = 200;
 /** The audience the server's `CiAuthOptions.GithubOidcAudience` expects. */
 const githubOidcAudience = 'evidgate';
-/** A server `error.code` is echoed only when it is a safe identifier (contracts/cli.md §5). */
-const serverCodePattern = /^[a-z][a-z0-9_]{0,63}$/;
 /** Strict RFC 3339 `date-time` (openapi); a value that is not one is refused un-echoed (S1). */
 const rfc3339Pattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
 /** The `project_id` is a UUID (openapi `format: uuid`); a non-UUID is refused un-echoed (S1). */
@@ -307,29 +305,24 @@ interface EnvelopeInfo {
   readonly options: CliErrorOptions;
 }
 
-/** Reads the 00 §9.2 envelope; an unusable body becomes `exchange_failed` (never echoed). */
+/**
+ * Reads the 00 §9.2 envelope through the shared mapper; an unusable body becomes
+ * `exchange_failed` (never echoed). The two binding codes keep their remediation hint,
+ * and `error.details[]` is dropped: `/v1/ci/token` has no 422, so the exchange never
+ * emitted a `detail:` line and must not start now (contracts/cli.md §5/§7).
+ */
 function readEnvelope(error: unknown, response: Response): EnvelopeInfo {
-  const headerRequestId = response.headers.get('x-request-id') ?? undefined;
-  if (!isErrorEnvelope(error)) {
-    return {
-      message: 'the token exchange failed',
-      options:
-        headerRequestId === undefined
-          ? { code: 'exchange_failed' }
-          : { code: 'exchange_failed', requestId: headerRequestId },
-    };
-  }
-  const body = error.error;
-  const code = serverCodePattern.test(body.code) ? body.code : 'exchange_failed';
-  const requestId = body.request_id.length > 0 ? body.request_id : headerRequestId;
-  const hint = bindingHints[code];
-  const escaped = escapeControlCharacters(body.message);
+  const mapped = serverErrorFromResponse(error, response, {
+    code: 'exchange_failed',
+    message: 'the token exchange failed',
+  });
+  const hint = bindingHints[mapped.code];
   return {
-    message: escaped.length > maxMessageLength ? escaped.slice(0, maxMessageLength) : escaped,
+    message: mapped.message,
     options: {
-      code,
+      code: mapped.code,
       ...(hint !== undefined ? { hint } : {}),
-      ...(requestId !== undefined ? { requestId } : {}),
+      ...(mapped.requestId !== undefined ? { requestId: mapped.requestId } : {}),
     },
   };
 }
@@ -352,13 +345,4 @@ function retryAfterMs(header: string | null): number {
     }
   }
   return defaultRetryAfterMs;
-}
-
-/** A transport failure is reported with a fixed message; the cause may echo a URL or token. */
-function transportError(cause: unknown): CliError {
-  const timedOut =
-    cause instanceof Error && (cause.name === 'AbortError' || cause.name === 'TimeoutError');
-  return new CliError(timedOut ? 'the request timed out' : 'the request failed', {
-    code: 'transport',
-  });
 }
