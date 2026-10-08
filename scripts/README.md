@@ -21,6 +21,7 @@ Repository tooling (00 §5.2). Current scripts:
 | `exceptions.json`               | Audit allowlist keyed by advisory id (GHSA-…/CVE-…) with the accepting ADR id and optional `expires` date                                                            | 01.7.1       |
 | `sbom.sh`                       | CycloneDX SBOMs for both ecosystems into `artifacts/sbom/` (cyclonedx-npm + dotnet-CycloneDX) (01.7.1 AC7)                                                           | 01.7.1       |
 | `check-env-matrix.mjs`          | Environment-configuration lint: every `EVIDGATE_*` key consumed by the options classes vs `infra/config-matrix.json` and `infra/<env>/environment.json` (10.1.1 AC1) | 10.1.1       |
+| `lint-ci-recipe.sh`             | Customer CI recipe lint: the five FR-11-2 fork-safe rules on a GitHub workflow (YAML 1.2, `.mjs` helper); `--self-test` runs `fixtures/ci-recipes/` (11.2.1 AC1)     | 11.2.1       |
 | `smoke-environment.sh`          | Per-environment smoke test: `/internal/health/live` + `/internal/health/ready` on the internal path, loopback-only listeners (10.1.1 AC2)                            | 10.1.1       |
 | `check_features.py`             | Feature-plan structure checker (id pattern `NN.E.S`, sections, sizes)                                                                                                | plan tooling |
 | `feature_index.py`              | Feature-plan index generation                                                                                                                                        | plan tooling |

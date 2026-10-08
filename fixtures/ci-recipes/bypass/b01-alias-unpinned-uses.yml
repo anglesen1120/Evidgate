@@ -1,0 +1,20 @@
+# expect: R2-sha-pinned
+# Synthetic fixture (11.2.1-T1.2): the unpinned ref hides in an anchored env value; the step
+# only shows `uses: *ref`, which a line scanner cannot resolve.
+
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CHECKOUT_REF: &ref actions/checkout@v4
+    steps:
+      - uses: *ref
+      - run: npm test
