@@ -105,9 +105,12 @@ public sealed class TasksOptions
     /// sweep function, so the boundary is enforced by the database and not by a
     /// convention. The value is optional at boot (a Worker without it still
     /// consumes every ordinary task) and the sweep handler fails loudly, naming
-    /// this key, the first time it is needed.
+    /// this key, the first time it is needed. The setter is internal on purpose:
+    /// the configuration binder only writes public setters, so the value can only
+    /// come from <c>TasksOptionsSecretPostConfigure</c>, which resolves it through
+    /// <c>ISecretProvider</c> (10.1.1-T2).
     /// </summary>
-    public string SweepConnectionString { get; init; } = string.Empty;
+    public string SweepConnectionString { get; internal set; } = string.Empty;
 }
 
 /// <summary>One consumed queue and its concurrency limit (§7: per-queue poller).</summary>
