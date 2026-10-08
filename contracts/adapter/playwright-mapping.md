@@ -160,8 +160,8 @@ server** from the manifest (00 §7); the reporter must not derive it. Until
 `PLACEHOLDER_EXECUTION_KEY` (`'0'.repeat(64)`, valid per the envelope pattern
 `^[0-9a-f]{64}$`) behind its injectable `identity` resolver seam, and emits
 `ext.case_id`, `ext.variant_hash` and `ext.target_env` so the ingest path can
-derive the real key from them. `[DECISION]` coordinator 2026-10-07, owner to
-confirm (04.3.2 §3). `[OPEN]` until 05.2.1-T3 lands, an adapter batch cannot match
+derive the real key from them. `[DECISION]` coordinator 2026-10-07, owner confirmed
+2026-10-07 (04.3.2 §3; STATUS.md "04.3.2-T1 coordinator decisions, owner confirmed"). `[OPEN]` until 05.2.1-T3 lands, an adapter batch cannot match
 a planned execution (T10 `unknown_execution_key`).
 
 ## status
