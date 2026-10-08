@@ -1,3 +1,6 @@
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
+using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Testing;
 using Shouldly;
@@ -27,14 +30,6 @@ public sealed class SeedMatrixTests : CatalogueTestBase
     /// </summary>
     private static readonly string[] NonAssignable =
         ["billing:read", "billing:write", "event:write", "job:claim", "job:execute", "support:grant"];
-
-    /// <summary>
-    /// Roles that may hold a `sensitive` permission (AC5): the evidence readers and the
-    /// staff roles. `viewer` is explicitly excluded by 00 §2 ("No secrets") and a
-    /// service identity must never hold one.
-    /// </summary>
-    private static readonly string[] SensitiveHoldersAllowed =
-        ["billing_operator", "platform_operator", "qa_engineer", "release_approver", "tenant_admin", "test_maintainer"];
 
     public SeedMatrixTests(DatabaseFixture fixture)
         : base(fixture)
@@ -99,6 +94,164 @@ public sealed class SeedMatrixTests : CatalogueTestBase
     }
 
     /// <summary>
+    /// AC1 / T21 / T98 / T79 / AC5: the generated role × permission matrix — every
+    /// built-in role × every catalogue permission — equals the 00 §2-derived fixture
+    /// (02.2.1-T3.1), on both halves of the enforcement path: the seeded rows read as the
+    /// app role under RLS, and the real evaluator's verdict. The evaluator half runs the
+    /// per-permission <see cref="IPermissionEvaluator.EvaluateAsync"/> path the C2
+    /// authorization behaviour uses for every member-kind role × every code, plus one
+    /// <c>ResolveAsync</c> per member role (never per cell) so the set and the verdicts
+    /// must agree. Service roles are evaluated with a claim set built from the fixture, so
+    /// that half only proves the catalogue ceiling; the issued set of a real minted token
+    /// is <c>CiProducerScopeTests</c>'. Staff roles have no evaluator path in V1 (the
+    /// operator principal is a stub that denies until 02.8.1), so they are asserted on the
+    /// seed only. Every mismatching cell is reported in one failure message.
+    /// </summary>
+    [Fact]
+    public async Task Every_Role_Permission_Cell_Matches_The_Overview_Fixture()
+    {
+        var fixture = RoleMatrixFixture.Load();
+
+        // The axes are the catalogue's, so a fixture that dropped a role or a permission
+        // fails here before any cell is compared (a catalogue code missing from the
+        // fixture's axis is the drift this test exists to catch).
+        fixture.RoleCodes.ShouldBe(Catalogue.RoleCodes);
+        fixture.PermissionCodes.ShouldBe(
+            Catalogue.Codes,
+            "the fixture's permission axis must be exactly the catalogue's codes");
+
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+
+        // (a) the seeded rows, read as the app role under RLS.
+        var seeded = await ReadCatalogueAsync(org);
+        var seededCells = seeded.Grants
+            .Select(grant => (grant.RoleCode, grant.PermissionCode))
+            .ToHashSet();
+
+        // AC5: the seeded `sensitive` flags are the plan-derived set, so flipping one in
+        // contracts/permissions.json fails here.
+        IReadOnlyList<string> seededSensitive =
+        [
+            .. seeded.Permissions
+                .Where(permission => permission.Sensitive)
+                .Select(permission => permission.Code)
+                .Order(StringComparer.Ordinal),
+        ];
+        seededSensitive.ShouldBe(fixture.SensitiveCodes, "the seeded sensitive flags must be the plan-derived set (AC5)");
+
+        // (b) the real evaluator. Members are arranged before the scope opens (one scope
+        // per async flow, 00 §5.4.2); each holds exactly one role, so one resolution per
+        // role yields that role's effective set.
+        var members = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var role in fixture.RoleCodes.Where(role => fixture.KindOf(role) == "member"))
+        {
+            members[role] = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, role, cancellationToken: Token);
+        }
+
+        var evaluator = new PermissionEvaluator(Fixture.Db);
+        var evaluatorCells = new HashSet<(string Role, string Permission)>();
+        var evaluatorRoles = new HashSet<string>(StringComparer.Ordinal);
+        var memberVerdicts = new HashSet<(string Role, string Permission)>();
+        var memberRoles = fixture.RoleCodes
+            .Where(role => fixture.KindOf(role) == "member")
+            .ToHashSet(StringComparer.Ordinal);
+        var memberEvaluations = 0;
+
+        await using (var scope = await Fixture.BeginTenantScopeAsync(org, cancellationToken: Token))
+        {
+            foreach (var role in fixture.RoleCodes)
+            {
+                // Staff roles have no evaluator path in V1: the operator principal is a
+                // stub that denies until 02.8.1 ships the support grant, so they are
+                // asserted on the seed only.
+                IRequestPrincipal? principal = fixture.KindOf(role) switch
+                {
+                    "member" => RequestPrincipal.Member(members[role]),
+                    "service" => RequestPrincipal.Service(projectScope: null, [.. fixture.PermissionsOf(role)]),
+                    _ => null,
+                };
+
+                if (principal is null)
+                {
+                    continue;
+                }
+
+                evaluatorRoles.Add(role);
+                foreach (var code in await evaluator.ResolveAsync(org, principal, Token))
+                {
+                    evaluatorCells.Add((role, code));
+                }
+
+                // The per-permission path the C2 authorization behaviour actually calls
+                // (AuthorizationBehaviour resolves one code per request), for every
+                // member-kind role × every code: the set and the verdicts must agree.
+                if (!memberRoles.Contains(role))
+                {
+                    continue;
+                }
+
+                foreach (var code in fixture.PermissionCodes)
+                {
+                    memberEvaluations++;
+                    var decision = await evaluator.EvaluateAsync(
+                        code, principal, new RequestTenantContext(org, null), Token);
+                    if (decision.IsGranted)
+                    {
+                        memberVerdicts.Add((role, code));
+                    }
+                }
+            }
+        }
+
+        // Every cell, both halves, aggregated into one failure message.
+        var mismatches = new List<string>();
+        var cells = 0;
+
+        foreach (var role in fixture.RoleCodes)
+        {
+            foreach (var permission in fixture.PermissionCodes)
+            {
+                cells++;
+                var expected = fixture.Holds(role, permission);
+
+                var seededActual = seededCells.Contains((role, permission));
+                if (seededActual != expected)
+                {
+                    mismatches.Add($"seed: {role} × {permission}: expected {expected}, seeded {seededActual}");
+                }
+
+                if (evaluatorRoles.Contains(role))
+                {
+                    var setActual = evaluatorCells.Contains((role, permission));
+                    if (setActual != expected)
+                    {
+                        mismatches.Add($"evaluator set: {role} × {permission}: expected {expected}, resolved {setActual}");
+                    }
+                }
+
+                if (memberRoles.Contains(role))
+                {
+                    var verdictActual = memberVerdicts.Contains((role, permission));
+                    if (verdictActual != expected)
+                    {
+                        mismatches.Add($"evaluator verdict: {role} × {permission}: expected {expected}, granted {verdictActual}");
+                    }
+                }
+            }
+        }
+
+        var expectedCells = fixture.RoleCodes.Count * fixture.PermissionCodes.Count;
+        expectedCells.ShouldBeGreaterThan(0, "the matrix must not be empty");
+        cells.ShouldBe(expectedCells, "every role × permission cell must be compared");
+        evaluatorRoles.ShouldNotBeEmpty("the evaluator half must evaluate at least one role");
+        memberEvaluations.ShouldBe(
+            memberRoles.Count * fixture.PermissionCodes.Count,
+            "every member role × permission must be evaluated through the per-permission path");
+
+        mismatches.ShouldBeEmpty(string.Join(Environment.NewLine, mismatches));
+    }
+
+    /// <summary>
     /// W7-SEC-03: the seeded <c>role.kind</c> column is the file's — a role's kind decides
     /// who may hold it, so a seed that dropped it (or a migration that defaulted it) would
     /// silently turn `ci_producer` or `platform_operator` into a member role. Read under
@@ -126,57 +279,6 @@ public sealed class SeedMatrixTests : CatalogueTestBase
 
         seeded.Where(row => row.Kind == "member").Select(row => row.Code).Order(StringComparer.Ordinal)
             .ShouldBe(MemberRoles.Order(StringComparer.Ordinal), "the member-kind roles are exactly the roles a membership may hold");
-    }
-
-    /// <summary>
-    /// AC1's documented facts, asserted on the seeded rows: the 00 §2 role→permission
-    /// matrix as the plans state it (T21 for `project:*`, T98 for the two roles the org
-    /// creator receives, T59 for the catalogue additions, T79 for the non-assignable
-    /// codes).
-    /// </summary>
-    [Fact]
-    public async Task Documented_Role_Grants_Hold()
-    {
-        var catalogue = await ReadCatalogueAsync(await Fixture.SeedOrgAsync(cancellationToken: Token));
-        var holders = Holders(catalogue);
-
-        // T21: project:read on every member role; project:write and project:create on
-        // tenant_admin only.
-        holders["project:read"].ShouldBe(MemberRoles.Order(StringComparer.Ordinal));
-        holders["project:write"].ShouldBe(["tenant_admin"]);
-        holders["project:create"].ShouldBe(["tenant_admin"]);
-
-        // 00 §2 healing strings.
-        holders["healing:triage"].ShouldBe(["qa_engineer"]);
-        holders["healing:approve"].ShouldBe(["test_maintainer"]);
-        holders["healing:revoke"].ShouldBe(["test_maintainer"]);
-        holders["healing:configure"].ShouldBe(["tenant_admin"]);
-
-        // T58/T59: policy:read for every member role, policy:write for release_approver.
-        holders["policy:read"].ShouldBe(MemberRoles.Order(StringComparer.Ordinal));
-        holders["policy:write"].ShouldBe(["release_approver"]);
-
-        // 00 §2 staff roles.
-        holders["billing:read"].ShouldBe(["billing_operator"]);
-        holders["billing:write"].ShouldBe(["billing_operator"]);
-        holders["support:grant"].ShouldBe(["platform_operator"]);
-        holders["support:approve"].ShouldBe(["tenant_admin"]);
-        holders["usage:read"].ShouldBe(["tenant_admin"]);
-        holders["security_event:read"].ShouldBe(["tenant_admin"]);
-
-        // FR-02-7/AC4: the ci_producer set is exactly these three.
-        catalogue.Grants
-            .Where(grant => grant.RoleCode == "ci_producer")
-            .Select(grant => grant.PermissionCode)
-            .Order(StringComparer.Ordinal)
-            .ShouldBe(["artifact:write", "event:write", "run:create"]);
-
-        // T98: the two roles the org creator receives (02.1.1's POST /v1/orgs) are
-        // built-in roles this seed already carries — org creation needs no catalogue
-        // change, and both are seeded with a non-empty grant set.
-        var seededRoles = catalogue.Grants.Select(grant => grant.RoleCode).Distinct(StringComparer.Ordinal).ToList();
-        seededRoles.ShouldContain("tenant_admin");
-        seededRoles.ShouldContain("release_approver");
     }
 
     /// <summary>
@@ -209,41 +311,6 @@ public sealed class SeedMatrixTests : CatalogueTestBase
                 holder => memberRoles.Contains(holder),
                 $"'{code}' is not tenant-assignable (T79), so no member role may hold it");
         }
-    }
-
-    /// <summary>
-    /// AC5 (the seed half): a `sensitive` permission is held only by the evidence
-    /// readers and the staff roles — never by `viewer` (00 §2 "No secrets") and never by
-    /// a service identity. The full AC5 (that no catalogue permission exposes a secret
-    /// value) is 02.2.1-T3's.
-    /// </summary>
-    [Fact]
-    public async Task Sensitive_Permissions_Are_Not_Held_By_Unprivileged_Roles()
-    {
-        var catalogue = await ReadCatalogueAsync(await Fixture.SeedOrgAsync(cancellationToken: Token));
-        var holders = Holders(catalogue);
-
-        var sensitive = catalogue.Permissions
-            .Where(permission => permission.Sensitive)
-            .Select(permission => permission.Code)
-            .ToList();
-
-        sensitive.ShouldNotBeEmpty("the catalogue marks secret-adjacent permissions (AC5)");
-
-        foreach (var code in sensitive)
-        {
-            holders[code].ShouldNotContain("viewer", $"'{code}' is sensitive and viewer reads no secrets (00 §2)");
-            holders[code].ShouldBeSubsetOf(SensitiveHoldersAllowed);
-        }
-
-        // The service identities and viewer hold nothing sensitive, as a set.
-        var unprivileged = new[] { "viewer", "ci_producer", "agent" };
-        var theirGrants = catalogue.Grants
-            .Where(grant => unprivileged.Contains(grant.RoleCode, StringComparer.Ordinal))
-            .Select(grant => grant.PermissionCode)
-            .ToList();
-
-        theirGrants.ShouldNotContain(code => sensitive.Contains(code, StringComparer.Ordinal));
     }
 
     /// <summary>Reads the catalogue and the role grants through one tenant scope (the app role, under RLS).</summary>
