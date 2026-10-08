@@ -1,4 +1,5 @@
 using System.Globalization;
+using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Npgsql;
 
 namespace Evidgate.Migrator;
@@ -10,10 +11,13 @@ namespace Evidgate.Migrator;
 /// operator without the password, and <see cref="ToString"/> is what keeps an
 /// accidental interpolation of this object from leaking one (a record's
 /// generated <c>ToString</c> would print every property, including the secret).
+/// The connection string is resolved through <see cref="ISecretProvider"/>
+/// (10.1.1-T2), so a managed secret store (O3) can replace the environment
+/// without touching this type.
 /// </summary>
 public sealed class MigratorOptions
 {
-    public const string ConnectionStringVariable = "EVIDGATE_MIGRATOR__CONNECTIONSTRING";
+    public const string ConnectionStringVariable = SecretNames.MigratorConnectionString;
     public const string MigrationsPathVariable = "EVIDGATE_MIGRATOR__MIGRATIONSPATH";
     public const string CommandTimeoutVariable = "EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS";
 
@@ -35,8 +39,13 @@ public sealed class MigratorOptions
     /// <summary>Marker file used to resolve the repository root when the migrations path is not configured.</summary>
     public const string RepositoryMarkerFile = "Evidgate.slnx";
 
-    /// <summary>Owner-role connection string. Never logged, never written to a file.</summary>
-    public required string ConnectionString { get; init; }
+    /// <summary>
+    /// Owner-role connection string. Never logged, never written to a file. The
+    /// setter is not public (10.1.1-T2), so no configuration binder can write it:
+    /// <see cref="FromEnvironment"/> resolves it through <see cref="ISecretProvider"/>,
+    /// and the test fixtures reach it through <c>InternalsVisibleTo</c>.
+    /// </summary>
+    public string ConnectionString { get; internal init; } = string.Empty;
 
     /// <summary>Directory holding the migration files.</summary>
     public required string MigrationsPath { get; init; }
@@ -45,22 +54,35 @@ public sealed class MigratorOptions
     public int CommandTimeoutSeconds { get; init; } = DefaultCommandTimeoutSeconds;
 
     /// <summary>
-    /// Reads the <c>EVIDGATE_MIGRATOR__*</c> variables.
+    /// Reads the <c>EVIDGATE_MIGRATOR__*</c> variables. The connection string is
+    /// a secret and is resolved through <see cref="ISecretProvider"/> (10.1.1-T2);
+    /// the other variables are not secret and are read from the snapshot directly.
     /// </summary>
     /// <param name="environment">Environment snapshot; defaults to the process environment.</param>
     /// <param name="startDirectory">
     /// Directory the default migrations path is resolved from; defaults to the
     /// application base directory, then walks up to the repository root.
     /// </param>
+    /// <param name="secrets">
+    /// Resolves the connection string; defaults to an <see cref="EnvironmentSecretProvider"/>
+    /// over the same snapshot. This is the swap point for a managed secret store (O3).
+    /// </param>
     /// <exception cref="MigratorSetupException">A required variable is missing or a value is invalid.</exception>
     public static MigratorOptions FromEnvironment(
         IReadOnlyDictionary<string, string?>? environment = null,
-        string? startDirectory = null)
+        string? startDirectory = null,
+        ISecretProvider? secrets = null)
     {
         var values = environment ?? ProcessEnvironment();
         var errors = new List<string>();
 
-        var connectionString = Read(values, ConnectionStringVariable);
+        // 10.1.1-T2: the connection string is a secret, so it is resolved through
+        // the one secret interface instead of being read from the dictionary
+        // directly. The default provider is built over the same snapshot, so the
+        // environment stays the source; a managed store (O3) is passed in instead.
+        var provider = secrets ?? new EnvironmentSecretProvider(
+            name => values.TryGetValue(name, out var value) ? value : null);
+        var connectionString = provider.GetSecret(SecretNames.MigratorConnectionString);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             errors.Add($"missing {ConnectionStringVariable}: the owner-role connection string must come from the environment (00 §5.7 S3)");

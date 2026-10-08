@@ -7,6 +7,7 @@ using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Health;
 using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Evidgate.BuildingBlocks.Persistence.Options;
+using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
@@ -48,6 +49,9 @@ public static partial class ApiHost
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
 
         builder.Services.AddEvidgatePersistence(builder.Configuration);
+        // 10.1.1-T2: the single secret seam. Idempotent (TryAdd*), so the
+        // composition extensions that also register it change nothing here.
+        builder.Services.AddEvidgateSecrets(builder.Configuration);
 
         var otel = builder.AddEvidgateTelemetry(ServiceName);
         otel.WithTracing(tracing => tracing.AddAspNetCoreInstrumentation());
