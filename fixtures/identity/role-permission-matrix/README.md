@@ -207,6 +207,15 @@ sensitive set equals the catalogue's `sensitive` flags (both discrepancy tables 
 The catalogue was authored from the same plan text, so this is the expected outcome; the
 test exists to catch a future divergence in either direction.
 
+## Service ceiling
+
+A service principal's claims are checked against the union of the `kind: service` roles'
+grants (02.6.2), not against the role it was issued for. So a `ci_producer` claim of
+`job:claim` or `job:execute` (agent codes) is inside the ceiling and is not a 403 by
+itself; `AgentCodes_AreInsideTheServiceCeiling_SoRunCreateStillHolds` pins that, and the
+set actually issued to `ci_producer` is pinned by the minted-token test in
+`CiProducerScopeTests`.
+
 ## Rule: the role model is edited in two places together
 
 `contracts/permissions.json` is the single source of the seeded rows (02 D2), and this
