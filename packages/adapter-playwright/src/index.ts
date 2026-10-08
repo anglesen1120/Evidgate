@@ -2,7 +2,11 @@
 // export as the reporter class (node_modules/playwright/lib/runner/index.js
 // requireOrImportDefaultFunction), so `EvidgateReporter` is the default export here.
 // The named exports are the pieces the package's own tests and 04.3.2/04.3.3 extend.
-export { EvidgateReporter, type EvidgateReporterOptions } from './reporter.js';
+export {
+  EvidgateReporter,
+  MAX_WARNING_ENVELOPES,
+  type EvidgateReporterOptions,
+} from './reporter.js';
 export {
   buildCapabilityDocument,
   currentPlatform,
@@ -30,7 +34,30 @@ export {
   type ExtAllowedKey,
   type ExtFilterResult,
 } from './extFilter.js';
-export { PLACEHOLDER_EXECUTION_KEY, type Identity, type IdentityResolver } from './identity.js';
+export {
+  createIdentityResolver,
+  EVIDGATE_ID_ANNOTATION,
+  locationOf,
+  PLACEHOLDER_EXECUTION_KEY,
+  resolveIdentity,
+  TARGET_ENV_PATTERN,
+  testKey,
+  validTargetEnv,
+  type Identity,
+  type IdentityResolver,
+  type IdentityResolverDeps,
+  type VariantOutcome,
+  type WarningCode,
+  type WarningPayload,
+} from './identity.js';
+export {
+  loadSidecarIndex,
+  SIDECAR_FILE_NAME,
+  type SidecarFs,
+  type SidecarIndex,
+  type SidecarWarning,
+} from './sidecar.js';
+export { normalizeVariant, type VariantProblem, type VariantResult } from './variant.js';
 export {
   assertValidSpoolId,
   CHECKPOINT_FILE,

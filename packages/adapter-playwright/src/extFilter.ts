@@ -13,6 +13,11 @@
 //   marker     — run.log marker: run_begin | run_end
 //   capability — the capability document carrier on the first run.log envelope (AC3)
 //   category   — step.category (test.step vs pw:api vs expect …)
+//   case_id    — the resolved catalog case id (04.3.2-T1.2)
+//   variant_hash — sha256 over the canonical normalised params (04.3.2-T1.3)
+//   target_env — EVIDGATE_TARGET_ENV, else the Playwright project name (04.3.2-T1.4)
+//   identity_conflict — true when annotation and sidecar disagree (04.3.2 AC2)
+//   warn       — a warning payload on a run.log envelope (04.3.2 §5)
 export const EXT_ALLOWED_KEYS = [
   'schema',
   'title',
@@ -23,6 +28,11 @@ export const EXT_ALLOWED_KEYS = [
   'marker',
   'capability',
   'category',
+  'case_id',
+  'variant_hash',
+  'target_env',
+  'identity_conflict',
+  'warn',
 ] as const;
 
 export type ExtAllowedKey = (typeof EXT_ALLOWED_KEYS)[number];

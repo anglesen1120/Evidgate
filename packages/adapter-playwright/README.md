@@ -41,15 +41,16 @@ Playwright loads a reporter module and uses its **default export** as the report
 
 ## Options
 
-| Option          | Type                          | Default  | Meaning                                                                     |
-| --------------- | ----------------------------- | -------- | --------------------------------------------------------------------------- |
-| `spool_dir`     | `string`                      | —        | Spool root. Falls back to `EVIDGATE_SPOOL_DIR`.                             |
-| `run_id`        | `string`                      | —        | Run id. Falls back to `EVIDGATE_RUN_ID`.                                    |
-| `producer_id`   | `string`                      | —        | Producer id. **Required** (see below).                                      |
-| `steps`         | `boolean`                     | `true`   | Emit `test.step` envelopes for `result.steps`; sets `supports.step_events`. |
-| `mode`          | `'full' \| 'ingest_only'`     | `'full'` | Capability `mode`.                                                          |
-| `identity`      | `(test) => { execution_key }` | —        | Execution-identity resolver (see below).                                    |
-| `engineVersion` | `string`                      | —        | Test-only seam: overrides the detected `@playwright/test` version.          |
+| Option          | Type                      | Default  | Meaning                                                                     |
+| --------------- | ------------------------- | -------- | --------------------------------------------------------------------------- |
+| `spool_dir`     | `string`                  | —        | Spool root. Falls back to `EVIDGATE_SPOOL_DIR`.                             |
+| `run_id`        | `string`                  | —        | Run id. Falls back to `EVIDGATE_RUN_ID`.                                    |
+| `producer_id`   | `string`                  | —        | Producer id. **Required** (see below).                                      |
+| `steps`         | `boolean`                 | `true`   | Emit `test.step` envelopes for `result.steps`; sets `supports.step_events`. |
+| `mode`          | `'full' \| 'ingest_only'` | `'full'` | Capability `mode`.                                                          |
+| `identity`      | `(test) => Identity`      | —        | Execution-identity resolver; overrides the built-in mapping (see below).    |
+| `sidecarFs`     | `SidecarFs`               | —        | Test-only seam: injects the sidecar filesystem reader.                      |
+| `engineVersion` | `string`                  | —        | Test-only seam: overrides the detected `@playwright/test` version.          |
 
 ### Construction is fail-fast
 
@@ -75,10 +76,14 @@ the value (one producer per shard).
 
 ## Environment
 
-| Variable             | Used for             |
-| -------------------- | -------------------- |
-| `EVIDGATE_SPOOL_DIR` | `spool_dir` fallback |
-| `EVIDGATE_RUN_ID`    | `run_id` fallback    |
+| Variable                  | Used for                                                                    |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `EVIDGATE_SPOOL_DIR`      | `spool_dir` fallback                                                        |
+| `EVIDGATE_RUN_ID`         | `run_id` fallback                                                           |
+| `EVIDGATE_TARGET_ENV`     | `ext.target_env`; validated in the ctor, else the Playwright project name   |
+| `EVIDGATE_ALLOW_UNMAPPED` | `'1'` keeps a run without a complete identity from failing the CI job (AC2) |
+
+Every variable is read **once in the constructor**; no callback reads `process.env`.
 
 ## Spool layout
 
@@ -145,7 +150,9 @@ types; it never invents another.
 
 `attempt_no = result.retry + 1`. Callbacks never throw: a spool write failure is buffered
 and re-thrown from `onEnd`, so the Playwright run reports the reporter failure instead of
-losing evidence silently.
+losing evidence silently. Every `test.started`/`test.finished`/`test.step` envelope also
+carries the resolved identity (`ext.case_id`, `ext.variant_hash`, `ext.target_env`,
+`ext.identity_conflict` — see Identity below).
 
 ### `duration_ms`
 
@@ -191,29 +198,79 @@ this reporter is running on (`<process.platform>-<process.arch>`).
 Only declared keys reach `ext`; everything else is dropped, and a key whose name matches
 `/token|secret|password/i` is dropped and counted (`reporter.secretKeysDropped`):
 
-| Key          | Source                                                                              |
-| ------------ | ----------------------------------------------------------------------------------- |
-| `schema`     | always present; required by the envelope schema                                     |
-| `title`      | `test.title`; `step.title` only for user-authored step categories (see Step titles) |
-| `file`       | `test.location.file`                                                                |
-| `location`   | `test.location` / `step.location` `{file, line, column}`                            |
-| `project`    | `test.parent.project()?.name`                                                       |
-| `engine`     | the `@playwright/test` version                                                      |
-| `marker`     | `run.log` marker: `run_begin` \| `run_end`                                          |
-| `capability` | the capability document carrier                                                     |
-| `category`   | `step.category`                                                                     |
+| Key                 | Source                                                                              |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `schema`            | always present; required by the envelope schema                                     |
+| `title`             | `test.title`; `step.title` only for user-authored step categories (see Step titles) |
+| `file`              | `test.location.file`                                                                |
+| `location`          | `test.location` / `step.location` `{file, line, column}`                            |
+| `project`           | `test.parent.project()?.name`                                                       |
+| `engine`            | the `@playwright/test` version                                                      |
+| `marker`            | `run.log` marker: `run_begin` \| `run_end`                                          |
+| `capability`        | the capability document carrier                                                     |
+| `category`          | `step.category`                                                                     |
+| `case_id`           | the resolved catalog case id (04.3.2-T1.2)                                          |
+| `variant_hash`      | `sha256:<hex>` over the canonical normalised params (04.3.2-T1.3)                   |
+| `target_env`        | `EVIDGATE_TARGET_ENV`, else the Playwright project name (04.3.2-T1.4)               |
+| `identity_conflict` | `true` when annotation and sidecar disagree (04.3.2 AC2)                            |
+| `warn`              | a warning payload on a `run.log` envelope (04.3.2 §5)                               |
 
 The reporter builds the candidate from the raw `test`/`result`/`step` objects and runs it
 through the filter, so an unknown field (including a future Playwright field) can never
 reach the envelope.
 
-### `execution_key` placeholder (hand-over to 04.3.2-T1)
+### Identity (04.3.2-T1)
 
-The server computes `execution_key` from the manifest (00 §7); the reporter must not
-derive it. Until 04.3.2-T1 supplies the real identity mapping, the reporter emits
+Every test envelope carries the resolved identity. The full contract is
+`contracts/adapter/playwright-mapping.md`; the summary:
+
+- **`ext.case_id`** — the `evidgate.id` annotation first (the strict canonical case id
+  the server accepts: the 36-character hyphenated UUID in any version and any case,
+  lower-cased, **never** the nil UUID), else the `evidgate.cases.yaml` sidecar manifest
+  of the test file's own directory or an ancestor directory up to the suite's common
+  ancestor (03.1.1-T1). Both present and **different** is a conflict:
+  `ext.identity_conflict: true`, **no** `case_id`, and an `identity_conflict` warning
+  naming the location — never a silent pick. An annotation that is not a canonical case
+  id (including the nil UUID) is reported as `invalid_annotation` and treated as absent.
+  The sidecar index is built once at `onBegin` from the suite's test files.
+- **`ext.variant_hash`** — the server `VariantNormalizer` hash of the Playwright
+  project's declared params (`metadata.evidgate.params`; explicit and opt-in, **never**
+  derived from `use`, the project name, the title or the path): `sha256:<hex>` over the
+  RFC 8785 canonical JSON of the normalised params only. Absent params → the empty set
+  `{}`. Memoised per project, so retries and shards of one project share the hash. A
+  refused params set emits one `invalid_variant_params` warning (paths and reasons only,
+  never values) and no hash. Parity corpus: `fixtures/variant-hash/vectors.json`.
+- **`ext.target_env`** — `EVIDGATE_TARGET_ENV` (trimmed, validated against the manifest
+  `targetEnv` shape), else the Playwright project name validated the same way; an
+  invalid env value warns `invalid_target_env` and falls back, an invalid project name is
+  omitted (and warns once per project when the env value is invalid too).
+- **`ext.warn`** — the warning channel: `run.log` envelopes carrying
+  `{ code, message, path?, count? }`. Codes: `duplicate_case_id`, `identity_conflict`,
+  `invalid_annotation`, `invalid_variant_params`, `invalid_target_env`,
+  `invalid_sidecar`, `invalid_sidecar_entry`, `sidecar_conflict`, `unmapped`,
+  `warnings_truncated`. At most 100 warning envelopes per run
+  (`MAX_WARNING_ENVELOPES`); the overflow is summarised once at `onEnd`, and the two
+  `onEnd` summaries bypass the cap. A message never echoes file content or a parameter
+  value.
+- **Exit code (AC2)** — `onEnd` returns `{ status: 'failed' }` when any test lacked a
+  complete identity (no `case_id`, no `variant_hash` or no `target_env`), unless
+  `EVIDGATE_ALLOW_UNMAPPED=1`; the override applies only to a `passed` run, and the gate
+  writes one `[evidgate]` line to stderr naming the per-cause counts
+  (`N conflicted, N no case_id, N no variant_hash, N no target_env`). The causes are
+  counted independently, so one test can appear in several of them (a conflicted test has
+  no `case_id`); the leading `N test(s)` counts each test once. Playwright awaits the
+  reporter's `onEnd` result and overrides the run status with it, so a run that lost
+  identity fails the CI job instead of passing with partial evidence.
+
+`execution_key` stays server-owned (00 §7): the reporter emits
 `PLACEHOLDER_EXECUTION_KEY = '0'.repeat(64)` (valid per the schema pattern
-`^[0-9a-f]{64}$`), used for test envelopes and for `run.log` envelopes. A caller may
-inject an `identity` resolver; 04.3.2-T1 replaces the default with the real mapping.
+`^[0-9a-f]{64}$`) for test and `run.log` envelopes and never hashes it. 05.2.1-T3.1
+defines the byte layout and owns the real wiring; until then an adapter batch cannot
+match a planned execution (T10 `unknown_execution_key`). A caller may inject an
+`identity` resolver, which wins over the built-in mapping. The injected resolver is held
+to the **same completeness gate**: every identity it returns must carry `case_id`,
+`variant_hash` and `target_env`, or the run fails at `onEnd` unless
+`EVIDGATE_ALLOW_UNMAPPED=1`.
 
 ## Version guard
 
@@ -250,7 +307,12 @@ recorded here because the 1.63 type is nested.
 `npm test -w @evidgate/playwright-reporter` runs the Vitest suite (Node only, no network):
 `sequence`, `spool`, `spool-boundary`, `spool-hardening`, `callbacks`, `ext-filter`,
 `capability` (Ajv 8 against the `contracts/` schemas), `guard`, `guard-boundary`,
-`unicode`, `unknown-fields`, `identity`, `index`, `memory`, `reporter-boundary`,
-`reporter-hardening` (the review fixes: `printsToStdio`, flush-per-callback, step-title
-and `duration_ms` policy) and `reporter.e2e` (the real `playwright test` CLI on
-`test-fixtures/`).
+`unicode`, `unknown-fields`, `identity`, `identity-resolve` (the 04.3.2-T1 built-in
+mapping: annotation, sidecar, conflict, `variant_hash`, `target_env`, the warning channel
+and the `onEnd` exit code, with every emitted envelope validated against the envelope
+schema), `identity-perf` (5k parametrised tests resolve in < 500 ms), `variant` (the
+`fixtures/variant-hash/vectors.json` corpus), `sidecar` (the `evidgate.cases.yaml`
+loader), `index`, `memory`, `reporter-boundary`, `reporter-hardening` (the review fixes:
+`printsToStdio`, flush-per-callback, step-title and `duration_ms` policy) and
+`reporter.e2e` (the real `playwright test` CLI on `test-fixtures/`, including an
+annotated test and a sidecar-mapped test).

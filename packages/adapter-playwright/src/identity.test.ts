@@ -1,6 +1,8 @@
-// 04.3.1-T1.1: the execution_key placeholder and the injectable identity resolver
-// (decision 2). The server computes execution_key from the manifest; until 04.3.2-T1
-// supplies the real mapping the reporter emits the schema-valid placeholder.
+// 04.3.1-T1.1 / 04.3.2-T1.2: the `execution_key` placeholder and the injectable identity
+// resolver seam. The server computes `execution_key` from the manifest (00 §7); the
+// reporter never hashes it (04.3.2 AC4) and keeps emitting the schema-valid placeholder
+// behind the resolver. The built-in 04.3.2-T1 mapping (annotation/sidecar → `ext.case_id`,
+// `variant_hash`, `target_env`) is covered by identity-resolve.test.ts.
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -97,5 +99,26 @@ describe('execution_key identity', () => {
     for (const envelope of envelopes.filter((item) => item.type === 'run.log')) {
       expect(envelope.execution_key).toBe(PLACEHOLDER_EXECUTION_KEY);
     }
+  });
+
+  it('AC4: the built-in resolver emits ext.case_id/variant_hash/target_env, never hashes execution_key', () => {
+    const { reporter, spool } = makeReporter();
+    const annotated = {
+      id: 'test-annotated',
+      title: 'adds two numbers',
+      location: { file: 'tests/math.spec.ts', line: 3, column: 1 },
+      annotations: [{ type: 'evidgate.id', description: '11111111-1111-1111-1111-111111111111' }],
+      parent: { project: () => ({ name: 'chromium' }) },
+    } as unknown as TestCase;
+    reporter.onBegin();
+    reporter.onTestBegin(annotated, fakeResult());
+    reporter.onTestEnd(annotated, fakeResult());
+    reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+
+    const finished = readEnvelopes(spool).find((item) => item.type === 'test.finished');
+    expect(finished?.ext.case_id).toBe('11111111-1111-1111-1111-111111111111');
+    expect(finished?.ext.variant_hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(finished?.ext.target_env).toBe('chromium');
+    expect(finished?.execution_key).toBe(PLACEHOLDER_EXECUTION_KEY);
   });
 });
