@@ -21,6 +21,7 @@ ALL_STAGES=(
   build
   format
   test
+  isolation
   tsc-build
   tsc-spec
   vitest
@@ -86,6 +87,33 @@ run_stage() {
     else
       stage "dotnet test (unit, architecture, Docker integration)"
       dotnet test --no-build -c Release --solution Evidgate.slnx
+    fi
+    ;;
+  isolation)
+    # 02.9.1-T3.2 (AC6, T48): the M1 isolation gate — the RLS/composite-FK/API
+    # isolation suite as its own stage, so CI can point at one job as proof that
+    # tenant isolation held for the merge. The assembly is run directly because a
+    # project-scoped `dotnet test <csproj>` discovers zero tests under
+    # Microsoft.Testing.Platform (01.4.2-T1.6); the built runner is the xUnit v3
+    # in-process console runner, whose own `-result-junit` option writes the T48
+    # JUnit report (the MTP `--report-*` flags exist only under `dotnet test`).
+    # Every class carries [Trait("Category","Docker")], so
+    # EVIDGATE_VERIFY_SKIP_DOCKER=1 (smoke-clean-build.sh only) skips the stage
+    # exactly as the `test` stage skips its Docker tests.
+    # The `test` stage stays unchanged and still runs this suite inside the
+    # solution: excluding one project from `dotnet test --solution` needs a
+    # solution filter, and a trait filter cannot tell assemblies apart — it would
+    # leave the assembly with zero runnable tests (exit 8), the very check the
+    # skip path relies on. The duplicate run is accepted rather than weakening it.
+    if [[ "${EVIDGATE_VERIFY_SKIP_DOCKER:-}" == "1" ]]; then
+      stage "isolation (skipped: EVIDGATE_VERIFY_SKIP_DOCKER=1)"
+    else
+      stage "isolation (M1 gate: RLS, composite FK, API isolation; JUnit report)"
+      mkdir -p artifacts/test-results
+      # $ROOT-absolute: the console runner resolves the report path against the
+      # process cwd, which `dotnet run` does not guarantee to be the repo root.
+      dotnet run --project tests/Isolation.Tests -c Release --no-build -- \
+        -result-junit "$ROOT/artifacts/test-results/isolation.junit.xml"
     fi
     ;;
   tsc-build)
