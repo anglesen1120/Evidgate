@@ -53,7 +53,7 @@ import {
   type WarningPayload,
 } from './identity.js';
 import { loadSidecarIndex, type SidecarFs } from './sidecar.js';
-import { attemptOf, mapStatus, type StatusMapping } from './status.js';
+import { attemptOf, mapStatus, printable, type StatusMapping } from './status.js';
 import { SpoolWriter } from './spool.js';
 import { assertSupportedEngine, readInstalledPlaywrightVersion } from './versionGuard.js';
 
@@ -119,6 +119,8 @@ export class EvidgateReporter implements Reporter {
   private noVariantHashCount = 0;
   private noTargetEnvCount = 0;
   private warningCount = 0;
+  /** CR-2: raw statuses already reported by an `unknown_status` warning. */
+  private readonly unknownStatusesWarned = new Set<string>();
   private suppressedWarnings = 0;
   private bufferedError: Error | null = null;
   private secretKeysDroppedCount = 0;
@@ -277,13 +279,17 @@ export class EvidgateReporter implements Reporter {
           ...durationField(result.duration),
         }),
       );
-      if (mapping.unknown === true) {
-        // T2.2: a status this adapter does not know is reported as `error`, never guessed;
-        // the warning goes through the capped channel like every other per-test warning.
+      if (mapping.unknown === true && !this.unknownStatusesWarned.has(mapping.raw)) {
+        // T2.2: a status this adapter does not know is reported as `error`, never guessed.
+        // CR-2: one warning per distinct raw status, so a future status shared by many
+        // tests cannot spend the capped warning budget that identity warnings need; every
+        // attempt still carries `ext.normalized: 'error'`. SEC-3: the raw status is made
+        // printable inside the message; the envelope `status` stays verbatim.
+        this.unknownStatusesWarned.add(mapping.raw);
         const location = locationOf(test);
         this.warn({
           code: 'unknown_status',
-          message: `unknown Playwright status '${mapping.raw}' for ${location}; reported as error`,
+          message: `unknown Playwright status '${printable(mapping.raw)}' for ${location}; reported as error`,
           path: location,
         });
       }

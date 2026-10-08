@@ -10,6 +10,7 @@ import {
   attemptOf,
   errorSummary,
   mapStatus,
+  printable,
   type StatusInput,
   type StatusMapping,
 } from './status.js';
@@ -310,5 +311,57 @@ describe('attemptOf — AC5', () => {
     [2, 3],
   ])('retry %i → attempt_no %i', (retry, attempt) => {
     expect(attemptOf({ retry })).toBe(attempt);
+  });
+});
+
+describe('errorSummary — review hardening (SEC-1, SEC-2, PERF-1)', () => {
+  it.each([
+    ['NEL', 'first\u0085second'],
+    ['LINE SEPARATOR', 'first\u2028second'],
+    ['PARAGRAPH SEPARATOR', 'first\u2029second'],
+  ])('%s ends the first line', (_name, message) => {
+    expect(errorSummary([{ message }])).toBe('first');
+  });
+
+  it('removes control and BIDI characters left after the ANSI strip', () => {
+    const message = 'a\u001bc\u009b31m\u0000b\u0007\u202eevil\u2066x\u2069\u200b\tz';
+    expect(errorSummary([{ message }])).toBe('ac31mbevilx z');
+  });
+
+  it('skips an error whose first line is only control characters', () => {
+    expect(errorSummary([{ message: '\u001b\u0000\u202e' }, { message: 'real' }])).toBe('real');
+  });
+
+  it.each([
+    [
+      'page.goto: net::ERR_CONNECTION_REFUSED at https://app.test/login?token=abc123&x=1',
+      'page.goto: net::ERR_CONNECTION_REFUSED at https://app.test/login?[redacted]',
+    ],
+    [
+      'GET https://user:pw@api.test/v1/items failed',
+      'GET https://[redacted]@api.test/v1/items failed',
+    ],
+    ['opened http://h.test/p#access_token=s3cr3t', 'opened http://h.test/p#[redacted]'],
+    ['no url here: a?b=c', 'no url here: a?b=c'],
+  ])('redacts URL userinfo, query and fragment: %s', (message, expected) => {
+    expect(errorSummary([{ message }])).toBe(expected);
+  });
+
+  it('never keeps a secret query value even when the cap cuts inside the query', () => {
+    const message = `${'x'.repeat(ERROR_SUMMARY_MAX - 30)} https://h.test/p?token=${'s'.repeat(50)}`;
+    const summary = errorSummary([{ message }]);
+    expect(summary).not.toContain('token=');
+    expect(summary?.length).toBeLessThanOrEqual(ERROR_SUMMARY_MAX);
+  });
+
+  it('reads a bounded prefix of a huge multi-line message', () => {
+    const message = `first line\n${'a\n'.repeat(5_000_000)}`;
+    const started = performance.now();
+    expect(errorSummary([{ message }])).toBe('first line');
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
+  it('printable turns line terminators into spaces and drops other controls', () => {
+    expect(printable('a\r\nb\u2028c\u0000d\u202e')).toBe('a b cd');
   });
 });

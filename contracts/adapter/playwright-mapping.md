@@ -230,8 +230,11 @@ envelope's own `attempt_no` carries the attempt, and a second copy could disagre
 A raw status that is not an own key of the table (a future Playwright value, an
 empty string, a different case such as `PASSED`, or a prototype name such as
 `constructor`) maps to `ext.normalized: "error"`, keeps its raw value in `status`,
-and emits one `unknown_status` warning (see Warning channel) naming the raw status
-(≤ 64 chars) and the test `file:line:column`. The server marks an unknown status
+and emits an `unknown_status` warning (see Warning channel) naming the raw status
+(≤ 64 chars, made printable) and the test `file:line:column`. The warning is sent
+**once per distinct raw status** per run, so a future status shared by many tests
+cannot use up the capped warning budget that identity warnings need; every attempt
+still carries `ext.normalized: "error"`. The server marks an unknown status
 incomplete (00 §8.5); the reporter never guesses a mapping.
 
 ### `error_summary`
@@ -239,14 +242,30 @@ incomplete (00 §8.5); the reporter never guesses a mapping.
 `ext.error_summary` is the first line of the first `TestResult.errors` entry whose
 `message` (else `value`) has text:
 
+- At most the first 4096 UTF-16 units of the message are read, so a huge message
+  costs a bounded scan.
 - ANSI escape sequences (CSI colours, OSC hyperlinks) are stripped, then the text is
-  split on `\r\n`, `\n` or `\r` and only the **first line** is kept, trimmed.
+  cut at the first line terminator (`\r\n`, `\n`, `\r`, NEL, U+2028, U+2029) and only
+  the **first line** is kept.
+- Remaining control characters (lone ESC, C1, NUL, BEL) and format characters (BIDI
+  overrides, zero-width marks) are removed, tabs become spaces, and the line is
+  trimmed.
+- URL userinfo and the query/fragment are redacted (`https://[redacted]@host/path?[redacted]`):
+  Playwright's own first lines embed the call URL (`page.goto: … at <url>`), the
+  value class the PS1 rule already withholds from `pw:api` step titles. Scheme, host
+  and path stay.
 - Errors whose first line is empty are skipped; `stack` is never read, so no stack
   frame and no later line ever reaches `ext`.
 - Capped at **256** UTF-16 units (`ERROR_SUMMARY_MAX`), never ending on a lone high
   surrogate.
 - Absent when no error carries text. Present for any status that carries error
   text, including an xfail `passed`.
+
+Residual risk `[DECISION]` (S18 security review SEC-2): any other value a test author
+writes into the first line of an error (a thrown string, an `expect(…, message)`
+text, an assertion echoing a received value) is carried as written. T2.1 requires
+`ext.error_summary`; the first-line cap, the 256-unit cap and the URL redaction
+bound it, and no value-pattern redaction is attempted.
 
 The raw `errors`, `error` and `stack` members never reach `ext` (not allow-listed).
 
@@ -292,7 +311,7 @@ never echoes file content or a parameter value.
 | `invalid_sidecar`        | a sidecar manifest was refused (size, encoding, YAML shape, schema) or the 8 MiB aggregate budget was exhausted                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `invalid_sidecar_entry`  | one sidecar entry was refused (path outside the directory, missing file, an `evidgate.id` that is a `urn:uuid:`-prefixed or nil UUID)                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `sidecar_conflict`       | two sidecars claim the same test file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `unknown_status`         | a `TestResult.status` the status table does not know; the message names the raw status (≤ 64 chars) and the test `file:line:column`, `path` is that location; the attempt maps to `error` (§status)                                                                                                                                                                                                                                                                                                                                          |
+| `unknown_status`         | a `TestResult.status` the status table does not know, once per distinct raw status per run; the message names the raw status (≤ 64 chars, made printable) and the test `file:line:column` of its first occurrence, `path` is that location; every attempt with it maps to `error` (§status)                                                                                                                                                                                                                                                  |
 | `unmapped`               | `onEnd` summary: how many tests ended without a **complete identity** — no `case_id`, no `variant_hash` or no `target_env`, or a conflict — with the per-cause breakdown in the message (`conflicted`, `no case_id`, `no variant_hash`, `no target_env`; counted independently, so one test can appear in several)                                                                                                                                                                                                                           |
 | `warnings_truncated`     | `onEnd` summary: how many warnings the reporter's caps suppressed — the 100-envelope cap plus the sidecar loader's own warning cap                                                                                                                                                                                                                                                                                                                                                                                                           |
 

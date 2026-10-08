@@ -1,5 +1,5 @@
 // Independent QA for 04.3.2-T2: real Playwright attempts plus consumer-visible boundaries.
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -130,6 +130,12 @@ test('multiline ANSI', annotation(9), async () => { throw new Error('\\u001b[31m
 let matrix: ReturnType<typeof realRun>;
 let interrupted: ReturnType<typeof realRun>;
 beforeAll(() => {
+  // CR-1: the real runs load dist/index.js, so compile the code under test first
+  // (reporter-cli-qa.test.ts precedent); a stale or missing dist would test other code.
+  execFileSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '-b'], {
+    cwd: packageDir,
+    stdio: 'pipe',
+  });
   matrix = realRun('matrix', { 'matrix.spec.mjs': matrixSource });
   // A filesystem barrier ensures the second worker is active before maxFailures stops it.
   const started = join(realDir, 'worker-started');
@@ -143,7 +149,7 @@ beforeAll(() => {
     },
     { workers: 2, retries: 0, maxFailures: 1, timeout: 15_000 },
   );
-}, 60_000);
+}, 120_000);
 
 function finished(title: string): EventEnvelope[] {
   return matrix.events.filter(
@@ -352,27 +358,25 @@ describe('negative and boundary status QA', () => {
       'error_summary',
     );
   });
-  it('unknown statuses still finish as error after the warning cap and the overflow summary is exact', () => {
-    const events = synthetic(
-      Array.from({ length: MAX_WARNING_ENVELOPES + 3 }, () => ({ status: 'future-status' })),
-    );
+  it('unknown statuses all finish as error and warn once per distinct raw status (CR-2)', () => {
+    const statuses = [
+      ...Array.from({ length: MAX_WARNING_ENVELOPES + 3 }, () => 'future-status'),
+      'other-future',
+    ];
+    const events = synthetic(statuses.map((status) => ({ status })));
     const ends = events.filter((event) => event.type === 'test.finished');
-    expect(ends).toHaveLength(MAX_WARNING_ENVELOPES + 3);
-    for (const event of ends) {
-      expect(event.status).toBe('future-status');
-      expect(event.ext.normalized).toBe('error');
-    }
+    expect(ends.map((event) => event.status)).toEqual(statuses);
+    for (const event of ends) expect(event.ext.normalized).toBe('error');
     const warnings = events
       .filter((event) => event.type === 'run.log' && event.ext.warn !== undefined)
-      .map((event) => event.ext.warn as { code: string; count?: number });
-    expect(warnings.filter((warning) => warning.code === 'unknown_status')).toHaveLength(
-      MAX_WARNING_ENVELOPES,
-    );
-    const truncated = warnings.filter((warning) => warning.code === 'warnings_truncated');
-    expect(truncated).toHaveLength(1);
-    expect(truncated[0]?.count).toBe(3);
+      .map((event) => event.ext.warn as { code: string; message: string });
+    const unknown = warnings.filter((warning) => warning.code === 'unknown_status');
+    expect(unknown).toHaveLength(2);
+    expect(unknown[0]?.message).toContain("'future-status'");
+    expect(unknown[1]?.message).toContain("'other-future'");
+    expect(warnings.some((warning) => warning.code === 'warnings_truncated')).toBe(false);
     expect(ends.map((event) => event.attempt_no)).toEqual(
-      Array.from({ length: MAX_WARNING_ENVELOPES + 3 }, (_, index) => index + 1),
+      Array.from({ length: statuses.length }, (_, index) => index + 1),
     );
   });
   it.each(['', 'PASSED', 'constructor', '__proto__', 'toString'])(

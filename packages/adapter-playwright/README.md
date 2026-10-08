@@ -220,7 +220,7 @@ Only declared keys reach `ext`; everything else is dropped, and a key whose name
 | `normalized`        | 00 §8.3 normalised status of a `test.finished` (04.3.2-T2, mapping doc §status)     |
 | `skip_reason`       | `"fixme"` on a skipped attempt with a `fixme` annotation (04.3.2 AC6)               |
 | `xfail`             | `true` when `expectedStatus` is `failed` and the outcome is `failed`/`passed` (AC6) |
-| `error_summary`     | first line of the first error message, ANSI stripped, ≤ 256 units, no stack         |
+| `error_summary`     | first line of the first error message, sanitised, URL query redacted, ≤ 256 units   |
 
 The reporter builds the candidate from the raw `test`/`result`/`step` objects and runs it
 through the filter, so an unknown field (including a future Playwright field) can never
@@ -289,8 +289,10 @@ chars) and `ext.normalized` the 00 §8.3 value — `passed`, `failed`, `timedOut
 `result.annotations`, so one added on a retry counts). `expectedStatus: "failed"` with a
 `failed` outcome → `passed` + `ext.xfail: true`; with a `passed` outcome → `failed` +
 `ext.xfail: true` (fail closed). Any other raw status → `error` plus one `unknown_status`
-warning. `ext.error_summary` is the first line of the first error message, ANSI stripped,
-≤ 256 UTF-16 units, never a stack line. These four keys are set on `test.finished` only.
+warning per distinct raw status. `ext.error_summary` is the first line of the first error
+message (ANSI, control and BIDI characters removed, URL userinfo and query/fragment
+redacted), ≤ 256 UTF-16 units, never a stack line. These four keys are set on
+`test.finished` only.
 
 ## Version guard
 

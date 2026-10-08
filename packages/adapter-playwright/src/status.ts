@@ -54,7 +54,30 @@ const RAW_STATUS_MAX = 64;
 /** CSI sequences (colours, cursor moves) and OSC sequences (hyperlinks, titles). */
 const ANSI_PATTERN = /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g;
 
-const LINE_BREAK = /\r\n|\n|\r/;
+/** CR/LF pairs and every single-character line terminator, incl. NEL and U+2028/U+2029. */
+const LINE_BREAK = /\r\n|[\n\r\u0085\u2028\u2029]/;
+const LINE_BREAKS = /\r\n|[\n\r\u0085\u2028\u2029]/g;
+
+/**
+ * SEC-1: control characters (lone ESC, C1 such as U+009B, NUL, BEL, VT, FF) and format
+ * characters (BIDI overrides, zero-width marks) left after the ANSI strip — the
+ * `sidecar.ts` UNCLEAN precedent. Removed, so a log viewer never sees a live escape.
+ */
+const UNSAFE_CHARS = /[\p{Cc}\p{Cf}]/gu;
+
+/**
+ * PERF-1: the most UTF-16 units of one error read before stripping. A first line longer
+ * than this is cut at {@link ERROR_SUMMARY_MAX} anyway, so a multi-megabyte message costs
+ * a bounded scan instead of a split over every line.
+ */
+const ERROR_SCAN_MAX = 16 * ERROR_SUMMARY_MAX;
+
+/**
+ * SEC-2: a URL's userinfo and its query/fragment — Playwright's own first lines embed the
+ * call URL (`page.goto: net::ERR_… at https://host/path?token=…`), the same value class
+ * the PS1 rule withholds from `pw:api` step titles. Scheme, host and path stay.
+ */
+const URL_PATTERN = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/?#@]*@)?([^\s?#]*)([?#]\S*)?/gi;
 
 /**
  * Maps one attempt (AC6). Rules, in order:
@@ -97,19 +120,36 @@ export function attemptOf(result: { retry: number }): number {
 }
 
 /**
- * The first line of the first error whose message (else value) has text, with ANSI
- * escape sequences removed, trimmed and capped at {@link ERROR_SUMMARY_MAX}. Never a
- * stack line: only the first line of the message is read. `undefined` when no error
- * carries text.
+ * The first line of the first error whose message (else value) has text: read from at
+ * most {@link ERROR_SCAN_MAX} units, ANSI escape sequences removed, cut at the first line
+ * terminator, control and format characters removed, trimmed, URL userinfo and
+ * query/fragment redacted, and capped at {@link ERROR_SUMMARY_MAX}. Never a stack line:
+ * only the first line of the message is read. `undefined` when no error carries text.
  */
 export function errorSummary(errors: StatusInput['errors']): string | undefined {
   for (const error of errors ?? []) {
     const text: unknown = error?.message ?? error?.value;
     if (typeof text !== 'string') continue;
-    const firstLine = (text.replace(ANSI_PATTERN, '').split(LINE_BREAK)[0] ?? '').trim();
-    if (firstLine.length > 0) return cutUtf16(firstLine, ERROR_SUMMARY_MAX);
+    const stripped = cutUtf16(text, ERROR_SCAN_MAX).replace(ANSI_PATTERN, '');
+    const firstLine = printable(stripped.split(LINE_BREAK, 1)[0] ?? '').trim();
+    if (firstLine.length === 0) continue;
+    const redacted = cutUtf16(firstLine, ERROR_SUMMARY_MAX).replace(
+      URL_PATTERN,
+      (_match, scheme: string, userinfo: string | undefined, rest: string, tail?: string) =>
+        `${scheme}${userinfo === undefined ? '' : '[redacted]@'}${rest}` +
+        (tail === undefined ? '' : `${tail[0]}[redacted]`),
+    );
+    return cutUtf16(redacted, ERROR_SUMMARY_MAX);
   }
   return undefined;
+}
+
+/**
+ * SEC-1/SEC-3: `value` with line terminators and tabs turned into spaces and every other
+ * control or format character removed — safe to embed in one log line.
+ */
+export function printable(value: string): string {
+  return value.replace(LINE_BREAKS, ' ').replace(/\t/g, ' ').replace(UNSAFE_CHARS, '');
 }
 
 /** At most `max` UTF-16 units, never ending on a lone high surrogate. */
