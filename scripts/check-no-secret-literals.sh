@@ -306,7 +306,7 @@ ASSIGN_RE="(^|[^A-Za-z0-9_.{\$-]|(^|[^\$])\{)[\"']?[A-Za-z0-9_.-]*$SECRET_WORD[\
 ENV_SPACE_RE="^[[:space:]]*ENV[[:space:]]+[A-Za-z0-9_.-]*$SECRET_WORD[[:space:]]+$VALUE_RE"
 
 assignment_rule() {
-  local recs="$1" out l file rest n content v hit
+  local recs="$1" out l file rest n content v u hit
   out="$(refine_lines "$recs" secret-assignment -E -i -e "$ASSIGN_RE" -e "$ENV_SPACE_RE")" || exit 2
   [ -n "$out" ] || return 0
   while IFS= read -r l; do
@@ -324,7 +324,15 @@ assignment_rule() {
       v="${all%%"$SEP"*}"
       all="${all#*"$SEP"}"
       case "$v" in '{'*|'['*) continue ;; esac
-      case "$v" in *'='[!=]*) continue ;; esac
+      # A value that is itself a connection-string fragment (`Ident=…;…`) is
+      # left to connstr-password. A bare token stops at `;`, so for it the `;`
+      # must directly follow the token in the line.
+      u="$v"
+      case "$u" in '"'*'"') u="${u#\"}"; u="${u%\"}" ;; "'"*"'") u="${u#\'}"; u="${u%\'}" ;; esac
+      if [[ "$u" =~ ^[A-Za-z][A-Za-z0-9\ _.-]*= ]]; then
+        case "$u" in *';'*) continue ;; esac
+        case "$content" in *"$v;"*) continue ;; esac
+      fi
       if ! is_placeholder "$v"; then
         hit=1
         break
@@ -624,6 +632,20 @@ EOF
   pin="$(printf '%s%s' 123 456)"
   reject_case "$tmp" "infra/pin.yml" "$(printf 'pin_password: %s' "$pin")" \
     "numeric secret value" secret-assignment "$pin" || return 1
+  # Values holding `=` are literals unless they are a connection-string
+  # fragment (`Ident=…;…`).
+  local eqv
+  eqv="$(printf '%s=%s' "$pw" 'def')"
+  reject_case "$tmp" ".env.test" "$(printf 'API_KEY=%s' "$eqv")" \
+    ".env value with =" secret-assignment "$eqv" || return 1
+  reject_case "$tmp" "infra/q.yml" "$(printf 'db_password: "%s"' "$eqv")" \
+    "quoted YAML value with =" secret-assignment "$eqv" || return 1
+  reject_case "$tmp" "infra/b.yml" "$(printf 'db_password: %s' "$eqv")" \
+    "bare YAML value with =" secret-assignment "$eqv" || return 1
+  local padv
+  padv="$(printf '%s%s' 'shortpad' '==')"
+  reject_case "$tmp" "infra/p.yml" "$(printf 'ci_pepper: "%s"' "$padv")" \
+    "quoted base64 padding" secret-assignment "$padv" || return 1
   reject_case "$tmp" "src/Db.cs" "$(printf 'var cs = "Host=db;Username=app;Password = %s";' "$pw")" \
     "connection-string password" connstr-password "$pw" || return 1
   reject_case "$tmp" "src/Url.ts" "$(printf 'const u = "https://app:%s@example.invalid/";' "$pw")" \
