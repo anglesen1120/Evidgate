@@ -106,8 +106,11 @@
 //     and `$(…)`; its body is data. A mask inside another string, a comment, a
 //     heredoc body or the same segment does not count (brace groups and
 //     subshells redirected as a whole are refused by the same rule, since their
-//     segment starts with `}`/`)`). Not modelled: functions as callees, `eval`,
-//     `source`, variables set by `read`, file-descriptor variables, other
+//     segment starts with `}`/`)`). A builtin that can rebind a variable
+//     (`read`, `mapfile`, `declare`/`export`/`local`, `printf -v`, `for`,
+//     `eval`, `source`, …) drops every variable mask. Not modelled: functions
+//     as callees, file-descriptor variables, a second heredoc on one line
+//     (`cat <<A <<B`), `$GITHUB_STEP_SUMMARY` (not a command file), other
 //     interpreters fed by a heredoc (`python - <<EOF`), and
 //     `actions/github-script` (`core.exportVariable`). A recipe that needs one
 //     of those must be rewritten in the plain form; the lint's job is to keep
@@ -649,6 +652,25 @@ const ASSIGN =
 const FILE_ALIAS = /^(["']?)\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?\1$/;
 const COMPOUND_OPEN = new Set(['if', 'while', 'until', 'for', 'case', 'select', '{']);
 const COMPOUND_CLOSE = new Set(['fi', 'done', 'esac']);
+const REBINDING = new Set([
+  'read',
+  'mapfile',
+  'readarray',
+  'declare',
+  'typeset',
+  'local',
+  'export',
+  'readonly',
+  'let',
+  'for',
+  'select',
+  'eval',
+  'source',
+  '.',
+  'exec',
+  'getopts',
+  'unset',
+]);
 // Net `(` minus `)` outside quoted strings (`$(…)` and `(( … ))` count zero).
 const balance = (s) => {
   let n = 0;
@@ -738,6 +760,18 @@ function checkRun(rawScript, loc, add) {
           `${loc}.run line ${lno} uses indirect expansion \`\${!…}\`, which can name a GitHub command file — not analysable; write the plain form`,
         );
         return;
+      }
+
+      // Builtins that can rebind a variable without a plain `X=` (`read V`,
+      // `mapfile`, `declare`, `export V=…`, `printf -v`, a `for V in` loop,
+      // `eval`, `source`): every variable mask is dropped, so a later write of
+      // a rebound variable is refused instead of passed.
+      // The second word covers `while read V`, `if read V`, `! read V`.
+      if (
+        seg.split(/\s+/, 2).some((w) => REBINDING.has(w)) ||
+        (cmd === 'printf' && /\s-v\b/.test(seg))
+      ) {
+        for (const key of [...masked]) if (key.startsWith('var:')) masked.delete(key);
       }
 
       // A mask counts only in its exact form, as its own command that always runs
