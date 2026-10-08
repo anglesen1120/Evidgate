@@ -51,12 +51,17 @@
 //                               and no job `secrets:` map entry other than
 //                               `${{ secrets.GITHUB_TOKEN }}`; no
 //                               `EVIDGATE_*TOKEN*` key in any `env:` map; no
+//                               ingest-token literal (`egt_<12 alnum>_…`) in any
+//                               string; no `vars.*` expression feeding an `env:`
+//                               key or step `with:` input whose name says
+//                               token/secret/password/credential/api-key; no
 //                               credential-carrying CLI flag (`--token`,
 //                               `--ingest-token`, `--password`, `--secret`,
 //                               `--api-key`, `--credential`, … with `=` or a
-//                               following value) in a `run:` script or a step's
-//                               `with.args`; no `EVIDGATE_*TOKEN*` shell
-//                               assignment or `$GITHUB_ENV` line unless its value
+//                               following value, or `-t`/`-k` with a value on an
+//                               `evidgate` command) in a `run:` script or a
+//                               step's `with.args`; no `EVIDGATE_*TOKEN*` shell
+//                               assignment or command-file line unless its value
 //                               is a variable masked earlier in the same script.
 //
 // Text heuristics that remain, and their limits (everything above is
@@ -66,27 +71,31 @@
 //     `secrets` identifier is matched as a word not preceded by `.`; a string
 //     literal containing the word "secrets" inside an expression is a
 //     (deliberate, fail-closed) false positive.
-//   * R4 shell heuristics: scripts are read line by line (backslash
-//     continuations joined, `#` comment lines skipped). A line writes to a
-//     GitHub file when it redirects (`>`/`>>`) or `tee`s into
-//     $GITHUB_ENV / $GITHUB_OUTPUT / $GITHUB_STATE (bare, braced or quoted); a
-//     heredoc opened on that line makes its body the written payload. A value is
-//     "derived" when it is a command substitution (`$(…)`, backticks), a
-//     `${{ secrets.* }}` / `${{ steps.*.outputs.* }}` expression, a variable
-//     assigned earlier from one of those (simple `NAME=…`, `export`/`local`/
-//     `readonly`/`declare` forms, first assignment on the line only), a step/
-//     job/workflow `env:` variable whose value is such an expression, or a
-//     variable whose name matches token|secret|password|credential|key. Masked
-//     means an earlier `::add-mask::` line named the same variable, expression
-//     or command text. The output of any other command redirected straight
-//     into one of the files (`cmd >> $GITHUB_ENV`) is derived and can never be
-//     proven masked, so it is refused; only echo/printf/cat-heredoc writes can
-//     pass. Not modelled: brace groups/subshells redirected as a whole
-//     (`{ …; } >> $GITHUB_ENV`), functions, `eval`, loops, variables set by
-//     `read`, non-bash `shell:` values and writes via a file descriptor
-//     variable. A recipe that needs one of those must be rewritten in the
-//     plain form; the lint's job is to keep the published recipe simple enough
-//     to audit, not to prove arbitrary shell safe.
+//   * R4 shell heuristics. Only bash/sh bodies are analysed: a `run:` step
+//     whose effective shell (step `shell:`, else job, else workflow
+//     `defaults.run.shell`) is anything else, or that runs on a Windows runner
+//     with no shell set (default pwsh), is refused. Scripts are split into
+//     logical lines (backslash continuations joined), then into command
+//     segments on `;`, `&&`, `||`, `|`, `&` outside quotes/`$(…)`/backticks;
+//     an unquoted word-initial `#` ends the line. `${{ github.env }}` and its
+//     output/state/path siblings are read as $GITHUB_ENV etc., and a variable
+//     assigned from a command-file variable (`F=$GITHUB_ENV`) becomes one too.
+//     A segment that mentions a command file ($GITHUB_ENV / OUTPUT / STATE /
+//     PATH, bare, braced or quoted) passes only as `echo`/`printf` with a
+//     `>`/`>>` redirection or a `cat` heredoc; anything else (`tee`, `cp`,
+//     `dd of=`, `cmd >> $GITHUB_ENV`, a pipeline) is refused, because its
+//     payload cannot be proven masked. In an accepted write every command
+//     substitution, `secrets`/`steps` expression and shell variable (except
+//     runner-set GITHUB_*/RUNNER_*) must have been masked in an EARLIER
+//     segment by `echo`/`printf` whose argument starts with `::add-mask::`;
+//     a mask inside another string, a comment or the same segment does not
+//     count (brace groups and subshells redirected as a whole are refused by
+//     the same rule, since their segment starts with `}`/`)`). Not modelled:
+//     functions, `eval`, `source`, loops, variables set by `read`, `exec`
+//     redirections and file-descriptor variables. A recipe that
+//     needs one of those must be rewritten in the plain form; the lint's job is
+//     to keep the published recipe simple enough to audit, not to prove
+//     arbitrary shell safe.
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -109,13 +118,21 @@ const ALLOWED_EVENTS = new Set(['push', 'pull_request', 'workflow_dispatch', 'me
 const REMOTE_USES = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+(?:\/[^@\s]+)?@[0-9a-f]{40}$/;
 const DOCKER_USES = /^docker:\/\/[^@\s]+@sha256:[0-9a-f]{64}$/;
 const LOCAL_USES = /^\.\/\S*$/;
-const SUSPICIOUS_NAME = /token|secret|password|credential|key/i;
+// `key` alone is left out so `with: key: ${{ vars.CACHE_KEY }}` (actions/cache) stays clean.
+const CREDENTIAL_NAME = /token|secret|password|passwd|credential|api[-_]?key|private[-_]?key/i;
 const EVIDGATE_TOKEN_NAME = /^EVIDGATE_\w*TOKEN/i;
+// Ingest-token wire format `egt_<12 alnum prefix>_<secret>` (IngestTokenFormat.cs).
+const INGEST_TOKEN_LITERAL = /egt_[A-Za-z0-9]{12}_/;
+const VARS_REF = /(?<![A-Za-z0-9_.-])vars\s*(?:\.|\[)/;
 const CREDENTIAL_FLAG =
   /(?:^|[\s"'])--(?:[A-Za-z0-9]+-)*(?:token|password|passwd|secret|api-?key|credential)s?(?=[=\s"']|$)/i;
-const GITHUB_FILE =
-  /(?:>>?|\btee\s+(?:-a\s+|--append\s+)?)\s*"?\$\{?GITHUB_(?:ENV|OUTPUT|STATE)\}?"?/;
-const GITHUB_FILE_VARS = new Set(['GITHUB_ENV', 'GITHUB_OUTPUT', 'GITHUB_STATE']);
+// Short credential flags on an `evidgate` command line (`-t <value>`, `-k=<value>`).
+const SHORT_CREDENTIAL_FLAG = /(?:^|\s)-[tk](?:=\S|\s+[^-\s])/;
+// `${{ github.env }}` & co. expand to the same paths; rewritten to `$GITHUB_*` before analysis.
+const GITHUB_FILE_CONTEXT = /\$\{\{\s*github\s*\.\s*(env|output|state|path)\s*\}\}/gi;
+const GITHUB_FILE_VARS = new Set(['GITHUB_ENV', 'GITHUB_OUTPUT', 'GITHUB_STATE', 'GITHUB_PATH']);
+// Only bash/sh bodies are analysable; `bash -e {0}`-style custom bash commands count as bash.
+const ANALYSABLE_SHELL = /^(?:bash|sh)(?:\s|$)/;
 
 // ---------------------------------------------------------------------------
 // parsing
@@ -197,7 +214,6 @@ function lintData(wf) {
     return out;
   }
 
-  const wfEnv = isObj(wf.env) ? wf.env : {};
   for (const [jobId, job] of Object.entries(jobs)) {
     const jloc = `jobs.${jobId}`;
     if (!isObj(job)) {
@@ -206,7 +222,10 @@ function lintData(wf) {
     }
     if (Object.hasOwn(job, 'uses')) checkUses(job.uses, jloc, add);
     if (Object.hasOwn(job, 'secrets')) checkJobSecrets(job.secrets, jloc, add);
-    const jobEnv = isObj(job.env) ? job.env : {};
+    const jobShell = defaultShell(job) ?? defaultShell(wf);
+    const onWindows = JSON.stringify(job['runs-on'] ?? '')
+      .toLowerCase()
+      .includes('windows');
     if (!Object.hasOwn(job, 'steps')) continue;
     if (!Array.isArray(job.steps)) {
       add(PARSE, `workflow shape: ${jloc}.steps is not a list`);
@@ -219,14 +238,28 @@ function lintData(wf) {
         return;
       }
       if (Object.hasOwn(step, 'uses')) checkUses(step.uses, sloc, add);
-      const stepEnv = isObj(step.env) ? step.env : {};
       if (Object.hasOwn(step, 'run')) {
+        const shell = step.shell ?? jobShell;
         if (typeof step.run !== 'string') {
           add(PARSE, `workflow shape: ${sloc}.run is not a string`);
+        } else if (shell === undefined && onWindows) {
+          add(
+            R4,
+            `${sloc} runs on a Windows runner without \`shell:\` (default pwsh) — only bash/sh run steps are analysable; set \`shell: bash\``,
+          );
+        } else if (
+          shell !== undefined &&
+          !(typeof shell === 'string' && ANALYSABLE_SHELL.test(shell.trim()))
+        ) {
+          add(
+            R4,
+            `${sloc} uses shell ${JSON.stringify(shell)} — only bash/sh run steps are analysable; rewrite it in bash`,
+          );
         } else {
-          checkRun(step.run, { ...wfEnv, ...jobEnv, ...stepEnv }, sloc, add);
+          checkRun(step.run, sloc, add);
         }
       }
+      if (isObj(step.with)) checkVarsCredentials(step.with, `${sloc}.with`, add);
       if (
         isObj(step.with) &&
         typeof step.with.args === 'string' &&
@@ -322,6 +355,28 @@ function checkJobSecrets(secrets, loc, add) {
   }
 }
 
+function defaultShell(scope) {
+  const run = isObj(scope.defaults) && isObj(scope.defaults.run) ? scope.defaults.run : null;
+  return run && Object.hasOwn(run, 'shell') ? run.shell : undefined;
+}
+
+// `vars.*` is plain configuration, readable by anyone with repository read access
+// and printed unmasked in logs; it never carries a credential.
+function checkVarsCredentials(map, loc, add) {
+  for (const [name, value] of Object.entries(map)) {
+    if (
+      CREDENTIAL_NAME.test(name) &&
+      typeof value === 'string' &&
+      expressionsIn(value).some((e) => VARS_REF.test(e))
+    ) {
+      add(
+        R5,
+        `${loc}.${name} feeds a credential from \`vars.*\` — configuration variables are not secret storage; mint a short-lived token at run time`,
+      );
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // R5 walk over every string scalar and key
 
@@ -348,6 +403,12 @@ function secretRefs(expr) {
 
 function walk(node, path, key, add) {
   if (typeof node === 'string') {
+    if (INGEST_TOKEN_LITERAL.test(node)) {
+      add(
+        R5,
+        `${path || '<root>'} contains an Evidgate ingest-token literal (egt_…) — never commit a token`,
+      );
+    }
     const exprs = expressionsIn(node);
     if (key === 'if' && exprs.length === 0) exprs.push(node);
     for (const e of exprs) {
@@ -370,6 +431,7 @@ function walk(node, path, key, add) {
     for (const e of expressionsIn(k)) {
       for (const ref of secretRefs(e)) add(R5, `key ${p} references \`${ref}\``);
     }
+    if (key === 'env') checkVarsCredentials({ [k]: v }, path, add);
     if (key === 'env' && EVIDGATE_TOKEN_NAME.test(k)) {
       add(
         R5,
@@ -417,14 +479,69 @@ function refsIn(text) {
 
 const derivedExpr = (e) => /(?<![A-Za-z0-9_.-])(?:secrets\b|steps\s*\.)/i.test(e);
 
-function checkRun(script, env, loc, add) {
-  const masked = new Set();
-  const derived = new Set();
-  for (const [name, value] of Object.entries(env)) {
-    if (typeof value === 'string' && expressionsIn(value).some(derivedExpr)) derived.add(name);
+// Split one logical line into command segments on `;`, `&&`, `||`, `|` and `&`
+// outside quotes, `$(…)` and backticks; an unquoted `#` that starts a word ends
+// the line (comment). Quote characters are kept so later scans see the text.
+function segmentsOf(line) {
+  const segs = [];
+  let cur = '';
+  let q = null; // "'", '"' or '`'
+  let depth = 0;
+  for (let k = 0; k < line.length; k++) {
+    const c = line[k];
+    if (q) {
+      cur += c;
+      if (c === '\\' && q !== "'" && k + 1 < line.length) cur += line[++k];
+      else if (c === q) q = null;
+      continue;
+    }
+    if (c === '\\' && k + 1 < line.length) {
+      cur += c + line[++k];
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      q = c;
+      cur += c;
+      continue;
+    }
+    if (c === '$' && line[k + 1] === '(') {
+      depth++;
+      cur += '$(';
+      k++;
+      continue;
+    }
+    if (depth > 0) {
+      if (c === '(') depth++;
+      else if (c === ')') depth--;
+      cur += c;
+      continue;
+    }
+    if (c === '#' && (cur === '' || /\s$/.test(cur))) break;
+    if (c === ';' || c === '|' || c === '&') {
+      // `>&2`, `2>&1`, `&>` are redirections, not separators.
+      if (c === '&' && (/[<>]$/.test(cur) || line[k + 1] === '>')) {
+        cur += c;
+        continue;
+      }
+      if (cur.trim()) segs.push(cur.trim());
+      cur = '';
+      if ((c === '|' || c === '&') && line[k + 1] === c) k++;
+      continue;
+    }
+    cur += c;
   }
-  const isDerivedVar = (v) =>
-    !GITHUB_FILE_VARS.has(v) && (derived.has(v) || SUSPICIOUS_NAME.test(v));
+  if (cur.trim()) segs.push(cur.trim());
+  return segs;
+}
+
+function checkRun(rawScript, loc, add) {
+  // `${{ github.env }}` & co. expand to the command-file paths themselves.
+  const script = rawScript.replace(GITHUB_FILE_CONTEXT, (_m, n) => `$GITHUB_${n.toUpperCase()}`);
+  const masked = new Set();
+  const fileVars = new Set(GITHUB_FILE_VARS);
+  // A written variable must be masked earlier unless the runner itself sets it;
+  // the lint cannot tell where an arbitrary shell variable's value came from.
+  const needsMask = (v) => !fileVars.has(v) && !/^(?:GITHUB|RUNNER)_[A-Z0-9_]+$/.test(v);
   const maskedValue = (value) => {
     const r = refsIn(value);
     return (
@@ -434,95 +551,117 @@ function checkRun(script, env, loc, add) {
       r.vars.every((v) => masked.has(`var:${v}`))
     );
   };
+  const fileAlt = () => [...fileVars].join('|');
+  const writeRe = () =>
+    new RegExp(`(?:>>?|\\btee\\s+(?:-a\\s+|--append\\s+)?)\\s*"?\\$\\{?(?:${fileAlt()})\\}?"?`);
+  const refRe = () => new RegExp(`\\$\\{?(?:${fileAlt()})\\b`);
 
   const lines = logicalLines(script);
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^\s*#/.test(line) || line.trim() === '') continue;
     const lno = i + 1;
+    for (const seg of segmentsOf(lines[i])) {
+      const words = seg.split(/\s+/);
+      const cmd = words[0];
 
-    if (CREDENTIAL_FLAG.test(line)) {
-      add(
-        R5,
-        `${loc}.run line ${lno} passes a credential as a CLI argument (env-only injection, 00 §5.7 S3)`,
-      );
-    }
-
-    const maskAt = line.indexOf('::add-mask::');
-    if (maskAt >= 0) {
-      const r = refsIn(line.slice(maskAt + '::add-mask::'.length));
-      r.vars.forEach((v) => masked.add(`var:${v}`));
-      r.exprs.forEach((e) => masked.add(`expr:${e}`));
-      r.cmds.forEach((c) => masked.add(`cmd:${c}`));
-      continue;
-    }
-
-    const assign =
-      /^\s*(?:(?:export|local|readonly)\s+|declare\s+(?:-\w+\s+)*)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(
-        line,
-      );
-    if (assign) {
-      const [, name, value] = assign;
-      const r = refsIn(value);
-      if (r.cmds.length > 0 || r.exprs.some(derivedExpr) || r.vars.some(isDerivedVar))
-        derived.add(name);
-      if (EVIDGATE_TOKEN_NAME.test(name) && !maskedValue(value)) {
+      if (CREDENTIAL_FLAG.test(seg)) {
         add(
           R5,
-          `${loc}.run line ${lno} sets ${name} from something other than a masked runtime value`,
+          `${loc}.run line ${lno} passes a credential as a CLI argument (env-only injection, 00 §5.7 S3)`,
+        );
+      } else if (/(?:^|[\s/])evidgate(?:\s|$)/.test(seg) && SHORT_CREDENTIAL_FLAG.test(seg)) {
+        add(
+          R5,
+          `${loc}.run line ${lno} passes a value with a short flag (-t/-k) to evidgate; credentials are env-only (00 §5.7 S3)`,
         );
       }
-    }
 
-    if (!GITHUB_FILE.test(line)) continue;
+      // A mask counts only as its own echo/printf whose argument starts with the
+      // command (`echo "::add-mask::$X"`); it covers later segments only.
+      const maskCmd = /^(?:echo|printf)\s+(?:-[A-Za-z]+\s+)*["']?::add-mask::/.exec(seg);
+      if (maskCmd && !refRe().test(seg)) {
+        const maskAt = maskCmd[0].length - '::add-mask::'.length;
+        const r = refsIn(seg.slice(maskAt + '::add-mask::'.length));
+        r.vars.forEach((v) => masked.add(`var:${v}`));
+        r.exprs.forEach((e) => masked.add(`expr:${e}`));
+        r.cmds.forEach((c) => masked.add(`cmd:${c}`));
+        continue;
+      }
 
-    // Payload: heredoc body, or the line itself minus the redirection target.
-    const payload = [];
-    const heredoc = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
-    if (heredoc) {
-      const end = heredoc[2];
-      while (i + 1 < lines.length && lines[i + 1].trim() !== end) payload.push(lines[++i]);
-      if (i + 1 < lines.length) i++;
-    } else {
-      const cmd = line.trim().split(/\s+/)[0];
-      if (!['echo', 'printf'].includes(cmd)) {
+      const assign =
+        /^(?:(?:export|local|readonly)\s+|declare\s+(?:-\w+\s+)*)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(
+          seg,
+        );
+      if (assign) {
+        const [, name, value] = assign;
+        if (refRe().test(value)) {
+          // Indirect target: `F=$GITHUB_ENV` makes `>> "$F"` a command-file write.
+          fileVars.add(name);
+          continue;
+        }
+        if (EVIDGATE_TOKEN_NAME.test(name) && !maskedValue(value)) {
+          add(
+            R5,
+            `${loc}.run line ${lno} sets ${name} from something other than a masked runtime value`,
+          );
+        }
+      }
+
+      if (!refRe().test(seg)) continue;
+      const wr = writeRe();
+      if (!wr.test(seg) || !['echo', 'printf', 'cat'].includes(cmd)) {
         add(
           R4,
-          `${loc}.run line ${lno} redirects the output of \`${cmd}\` into a GitHub file; command output cannot be proven masked — mask it into a variable and echo that`,
+          `${loc}.run line ${lno} \`${cmd}\` touches a GitHub command file other than by echo/printf/cat-heredoc redirection; its payload cannot be proven masked — mask a variable and echo it`,
         );
         continue;
       }
-      payload.push(line.replace(GITHUB_FILE, ' '));
-    }
-    for (const p of payload) {
-      const r = refsIn(p);
-      for (const c of r.cmds) {
-        if (!masked.has(`cmd:${c}`))
-          add(
-            R4,
-            `${loc}.run line ${lno} writes command output \`$(${c})\` to a GitHub file without ::add-mask::`,
-          );
-      }
-      for (const e of r.exprs) {
-        if (derivedExpr(e) && !masked.has(`expr:${e}`))
-          add(
-            R4,
-            `${loc}.run line ${lno} writes \${{ ${e} }} to a GitHub file without ::add-mask::`,
-          );
-      }
-      for (const v of r.vars) {
-        if (isDerivedVar(v) && !masked.has(`var:${v}`))
-          add(
-            R4,
-            `${loc}.run line ${lno} writes derived value $${v} to a GitHub file without ::add-mask:: earlier in the script`,
-          );
-      }
-      const evg = /\b(EVIDGATE_\w*TOKEN\w*)=(.*)$/i.exec(p);
-      if (evg && !maskedValue(evg[2])) {
+
+      // Payload: heredoc body, or the segment minus the redirection target.
+      const payload = [];
+      const heredoc = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(seg);
+      if (heredoc) {
+        const end = heredoc[2];
+        while (i + 1 < lines.length && lines[i + 1].trim() !== end) payload.push(lines[++i]);
+        if (i + 1 < lines.length) i++;
+      } else if (cmd === 'cat') {
         add(
-          R5,
-          `${loc}.run line ${lno} exports ${evg[1]} from something other than a masked runtime value`,
+          R4,
+          `${loc}.run line ${lno} redirects the output of \`cat\` into a GitHub file; command output cannot be proven masked — mask it into a variable and echo that`,
         );
+        continue;
+      } else {
+        payload.push(seg.replace(wr, ' '));
+      }
+      for (const p of payload) {
+        const r = refsIn(p);
+        for (const c of r.cmds) {
+          if (!masked.has(`cmd:${c}`))
+            add(
+              R4,
+              `${loc}.run line ${lno} writes command output \`$(${c})\` to a GitHub file without ::add-mask::`,
+            );
+        }
+        for (const e of r.exprs) {
+          if (derivedExpr(e) && !masked.has(`expr:${e}`))
+            add(
+              R4,
+              `${loc}.run line ${lno} writes \${{ ${e} }} to a GitHub file without ::add-mask::`,
+            );
+        }
+        for (const v of r.vars) {
+          if (needsMask(v) && !masked.has(`var:${v}`))
+            add(
+              R4,
+              `${loc}.run line ${lno} writes $${v} to a GitHub file without ::add-mask:: of that variable in an earlier command`,
+            );
+        }
+        const evg = /\b(EVIDGATE_\w*TOKEN\w*)=(.*)$/i.exec(p);
+        if (evg && !maskedValue(evg[2])) {
+          add(
+            R5,
+            `${loc}.run line ${lno} exports ${evg[1]} from something other than a masked runtime value`,
+          );
+        }
       }
     }
   }

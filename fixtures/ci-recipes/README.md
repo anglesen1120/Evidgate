@@ -30,6 +30,10 @@ The first line of every file under `negative/` and `bypass/` is `# expect: <rule
 - `b04` `secrets['NAME']`; `b05` `toJSON(secrets)`; `b06` `secrets: inherit`; `b10` `secrets.NAME` in an `if:` condition without `${{ }}`; `b14` a `--ingest-token` CLI argument (R5);
 - `b07` `permissions: write-all`; `b08` a merge key `<<:` injecting a job's write scope into the workflow default (R3);
 - `b13` a heredoc writing a derived value into `$GITHUB_ENV` (R4);
+- `b15` a mask on the same line as the write; `b16` a mask inside a comment; `b24` a mask inside another echo string (R4: a mask counts only as its own earlier command);
+- `b17` a `pwsh` run step; `b18` `defaults.run.shell: python` (R4: only bash/sh bodies are analysable);
+- `b21` `cp` into `$GITHUB_ENV`; `b22` an indirect target `F=$GITHUB_ENV`; `b23` the `${{ github.env }}` context (R4);
+- `b19` a committed `egt_` ingest-token literal; `b20` `vars.*` in a credential `with:` input; `b25` `vars.*` in a credential `env:` key; `b26` a short `-t` flag on `evidgate` (R5);
 - `b11` a second YAML document; `b12` a duplicate `on:` key (`yaml-parse`: ambiguous between parsers).
 
 All files stay in prettier's own YAML style (single quotes, spaced flow braces) except `b12-duplicate-on-key.yml`: prettier's YAML parser refuses a duplicate key too, so `.prettierignore` lists that one file.

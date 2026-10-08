@@ -1,0 +1,13 @@
+# expect: R5-no-long-lived-credential
+# Synthetic fixture (11.2.1-T1.2, QA S17): a credential fed from `vars.*` into a `with:` input.
+name: x
+on:
+  pull_request:
+permissions: {}
+jobs:
+  t:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: evidgate/upload-action@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ingest-token: ${{ vars.EVIDGATE_INGEST_TOKEN }}

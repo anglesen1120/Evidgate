@@ -1,0 +1,12 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, QA S17): `${{ github.env }}` is the same file as $GITHUB_ENV.
+name: x
+on:
+  pull_request:
+permissions: {}
+jobs:
+  t:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "X=$(cat f)" >> "${{ github.env }}"
