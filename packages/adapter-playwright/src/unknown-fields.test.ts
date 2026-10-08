@@ -94,7 +94,9 @@ describe('unknown fields', () => {
       'location',
       'project',
       'schema',
+      'target_env',
       'title',
+      'variant_hash',
     ]);
     expect(reporter.secretKeysDropped).toBe(1);
   });
