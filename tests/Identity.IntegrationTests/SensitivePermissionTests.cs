@@ -1026,10 +1026,13 @@ internal static partial class SecretScanner
 }
 
 /// <summary>
-/// AC5's seeded violation: the scanner is a pure function, so its own test needs no
-/// database — a synthetic body carrying a forbidden member and a captured secret must
-/// report both, and a clean body must report nothing.
+/// AC5's seeded violation: the scanner is a pure function — a synthetic body carrying a
+/// forbidden member and a captured secret must report both, and a clean body must report
+/// nothing. Tagged <c>Docker</c> anyway: this assembly's <c>DatabaseFixture</c> assembly
+/// fixture starts a container before any test runs, so the Docker-less clean-build smoke
+/// must skip the class like every other one here.
 /// </summary>
+[Trait("Category", "Docker")]
 public sealed class SecretScannerTests
 {
     /// <summary>A body with only allowlisted members and no secret is clean; a seeded one reports both violations.</summary>
