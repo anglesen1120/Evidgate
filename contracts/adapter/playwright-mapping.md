@@ -253,7 +253,8 @@ incomplete (00 §8.5); the reporter never guesses a mapping.
 - URL userinfo and the query/fragment are redacted (`https://[redacted]@host/path?[redacted]`):
   Playwright's own first lines embed the call URL (`page.goto: … at <url>`), the
   value class the PS1 rule already withholds from `pw:api` step titles. Scheme, host
-  and path stay.
+  and path stay. Redaction runs over the whole first line before the cap, so the cap
+  never leaves a credential prefix behind.
 - Errors whose first line is empty are skipped; `stack` is never read, so no stack
   frame and no later line ever reaches `ext`.
 - Capped at **256** UTF-16 units (`ERROR_SUMMARY_MAX`), never ending on a lone high

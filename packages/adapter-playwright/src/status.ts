@@ -133,7 +133,9 @@ export function errorSummary(errors: StatusInput['errors']): string | undefined 
     const stripped = cutUtf16(text, ERROR_SCAN_MAX).replace(ANSI_PATTERN, '');
     const firstLine = printable(stripped.split(LINE_BREAK, 1)[0] ?? '').trim();
     if (firstLine.length === 0) continue;
-    const redacted = cutUtf16(firstLine, ERROR_SUMMARY_MAX).replace(
+    // Redact the whole (≤ ERROR_SCAN_MAX) line before the cap, so a cut can never fall
+    // inside userinfo and leave a credential prefix unredacted.
+    const redacted = firstLine.replace(
       URL_PATTERN,
       (_match, scheme: string, userinfo: string | undefined, rest: string, tail?: string) =>
         `${scheme}${userinfo === undefined ? '' : '[redacted]@'}${rest}` +

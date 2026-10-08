@@ -354,6 +354,14 @@ describe('errorSummary — review hardening (SEC-1, SEC-2, PERF-1)', () => {
     expect(summary?.length).toBeLessThanOrEqual(ERROR_SUMMARY_MAX);
   });
 
+  it('never keeps a userinfo prefix when the cap falls inside the credentials', () => {
+    // 240 + ' ' + 'https://' = 249 units, so a cap applied first would keep 'user:p4'.
+    const message = `${'x'.repeat(ERROR_SUMMARY_MAX - 16)} https://user:p4ssw0rd@h.test/p`;
+    const summary = errorSummary([{ message }]);
+    expect(summary).not.toContain('user:');
+    expect(summary?.length).toBeLessThanOrEqual(ERROR_SUMMARY_MAX);
+  });
+
   it('reads a bounded prefix of a huge multi-line message', () => {
     const message = `first line\n${'a\n'.repeat(5_000_000)}`;
     const started = performance.now();
