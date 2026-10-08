@@ -65,6 +65,43 @@ jobs:
           --stage format
           --stage test
 
+  # 02.9.1-T3.2 (AC6, T48): the M1 isolation gate — the RLS/composite-FK/API
+  # isolation suite as its own job, so the milestone has one check to point at as
+  # proof that tenant isolation held for the merge, and its JUnit report is the
+  # T48 dogfooding evidence. The job runs only verify.sh stages (check-ci-parity
+  # enforces it) and uploads the report even when the suite fails.
+  # Making this job a *required* check is owner-blocked under 01.7.1-T3.1: branch
+  # protection on the free private plan returns 403, so the check is wired but not
+  # yet enforced by branch protection.
+  isolation:
+    name: 'isolation (M1 gate)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # FR-01-2: the SDK (10.0.x) comes from global.json, not a floating range.
+          global-json-file: global.json
+          # AC3: NuGet cache keyed on the locked package graph.
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, isolation — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage isolation
+      - name: 'Upload the isolation JUnit report'
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: isolation-junit
+          path: artifacts/test-results/isolation.junit.xml
+          retention-days: 14
+
   web:
     name: 'verify (web)'
     runs-on: ubuntu-24.04
