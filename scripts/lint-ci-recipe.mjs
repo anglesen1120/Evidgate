@@ -53,8 +53,8 @@
 //                               `EVIDGATE_*TOKEN*` key in any `env:` map; no
 //                               ingest-token literal (`egt_<12 alnum>_…`) in any
 //                               string; no literal value and no `vars.*`
-//                               expression under an `env:` key, and no `vars.*`
-//                               feeding a step `with:` input, whose name says
+//                               expression under an `env:` key or step `with:`
+//                               input whose name says
 //                               token/secret/password/credential/api-key
 //                               (empty, true/false and digits are allowed); no
 //                               credential-carrying CLI flag (`--token`,
@@ -89,9 +89,10 @@
 //     word-initial `#` ends the line. `${{ github.env }}` and its
 //     output/state/path siblings are read as $GITHUB_ENV etc., and a variable
 //     assigned exactly a command-file variable (`F=$GITHUB_ENV`, `F="${GITHUB_ENV}"`)
-//     becomes one too; `${!…}` indirection and `::stop-commands::` are refused.
-//     A segment that mentions a command file ($GITHUB_ENV / OUTPUT / STATE /
-//     PATH, bare, braced or quoted) passes only as `echo`/`printf` with a
+//     becomes one too; `${!…}` indirection and `::stop-commands::` (also
+//     quote-split) are refused. A segment that mentions a command file
+//     ($GITHUB_ENV / OUTPUT / STATE / PATH, bare, braced, quoted, or the bare
+//     name as in `$(printenv GITHUB_ENV)`) passes only as `echo`/`printf` with a
 //     `>`/`>>` redirection or a `cat` heredoc; anything else (`tee`, `cp`,
 //     `dd of=`, `cmd >> $GITHUB_ENV`, an env-prefix `FOO=1 echo …`, a
 //     pipeline) is refused, because its payload cannot be proven masked. In an
@@ -99,12 +100,14 @@
 //     and shell variable (except runner-set GITHUB_*/RUNNER_*) must have been
 //     masked in an EARLIER segment by exactly `echo "::add-mask::$X"` (one
 //     variable, `${{ … }}` or `$(…)`, optionally double-quoted), first on its
-//     line or after `;`, not piped and not redirected; assigning X again drops
-//     its mask. A mask inside another string, a comment, a heredoc body or the
-//     same segment does not count (brace groups and subshells redirected as a
-//     whole are refused by the same rule, since their segment starts with
-//     `}`/`)`). Not modelled: functions, `eval`, `source`, loops, variables set
-//     by `read`, `exec` redirections and file-descriptor variables, other
+//     line or after `;`, not piped, not redirected and not inside an open
+//     `if`/`case`/loop/`{ }`/`( )`/function body; assigning X again (`=` or
+//     `+=`) drops its mask. A heredoc starts only at a `<<WORD` outside quotes
+//     and `$(…)`; its body is data. A mask inside another string, a comment, a
+//     heredoc body or the same segment does not count (brace groups and
+//     subshells redirected as a whole are refused by the same rule, since their
+//     segment starts with `}`/`)`). Not modelled: functions as callees, `eval`,
+//     `source`, variables set by `read`, file-descriptor variables, other
 //     interpreters fed by a heredoc (`python - <<EOF`), and
 //     `actions/github-script` (`core.exportVariable`). A recipe that needs one
 //     of those must be rewritten in the plain form; the lint's job is to keep
@@ -275,7 +278,7 @@ function lintData(wf) {
           checkRun(step.run, sloc, add);
         }
       }
-      if (isObj(step.with)) checkVarsCredentials(step.with, `${sloc}.with`, add);
+      if (isObj(step.with)) checkVarsCredentials(step.with, `${sloc}.with`, add, { literal: true });
       if (
         isObj(step.with) &&
         typeof step.with.args === 'string' &&
@@ -545,14 +548,23 @@ const derivedExpr = (e) => /(?<![A-Za-z0-9_.-])(?:secrets\b|steps\s*\.)/i.test(e
 // Split one logical line into command segments on `;`, `&&`, `||`, `|` and `&`
 // outside quotes, `$(…)` and backticks; an unquoted `#` that starts a word ends
 // the line (comment). Quote characters are kept so later scans see the text.
-// Each segment carries `sep`, the operator before it ('' for the first one).
+// Each segment carries `sep`, the operator before it ('' for the first one), and
+// `heredoc`, the `<<WORD` match of an operator found outside quotes and `$(…)`
+// (null when the segment starts no heredoc).
 function segmentsOf(line) {
   const segs = [];
   let cur = '';
   let sep = '';
+  let hd = -1; // index in `cur` of an unquoted, top-level `<<`
   let q = null; // "'", '"' or '`'
   let depth = 0;
   const last = () => (cur.length > 0 ? cur[cur.length - 1] : '');
+  const push = () => {
+    if (cur.trim()) {
+      segs.push({ text: cur.trim(), sep, heredoc: hd >= 0 ? HEREDOC.exec(cur.slice(hd)) : null });
+    }
+    hd = -1;
+  };
   for (let k = 0; k < line.length; k++) {
     const c = line[k];
     if (q) {
@@ -583,6 +595,9 @@ function segmentsOf(line) {
       continue;
     }
     if (c === '#' && (cur === '' || /\s/.test(last()))) break;
+    if (c === '<' && line[k + 1] === '<' && line[k + 2] !== '<' && last() !== '<' && hd < 0) {
+      hd = cur.length;
+    }
     if (c === ';' || c === '|' || c === '&') {
       // `>&2`, `2>&1`, `&>` are redirections, not separators.
       if (c === '&' && (last() === '<' || last() === '>' || line[k + 1] === '>')) {
@@ -594,14 +609,14 @@ function segmentsOf(line) {
         op = c + c;
         k++;
       }
-      if (cur.trim()) segs.push({ text: cur.trim(), sep });
+      push();
       sep = op;
       cur = '';
       continue;
     }
     cur += c;
   }
-  if (cur.trim()) segs.push({ text: cur.trim(), sep });
+  push();
   return segs;
 }
 
@@ -613,10 +628,13 @@ const MASK_EXACT =
   /^(?:echo|printf)\s+(?:-[A-Za-z]+\s+)*("?)::add-mask::(\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$\{\{[^}]*\}\}|\$\((?:[^()]|\([^()]*\))*\))\1$/;
 const MASK_LIKE = /^(?:echo|printf)\b[^]*::add-mask::/;
 const ASSIGN =
-  /^(?:(?:export|local|readonly)\s+|declare\s+(?:-\w+\s+)*)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
+  /^(?:(?:export|local|readonly)\s+|declare\s+(?:-\w+\s+)*)?([A-Za-z_][A-Za-z0-9_]*)\+?=(.*)$/;
 const FILE_ALIAS = /^(["']?)\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?\1$/;
+const COMPOUND_OPEN = new Set(['if', 'while', 'until', 'for', 'case', 'select', '{']);
+const COMPOUND_CLOSE = new Set(['fi', 'done', 'esac']);
 const VAR_REF = /\$\{?([A-Za-z_][A-Za-z0-9_]*)/g;
 const WRITE_REF = /(?:>>?|\btee\s+(?:-a\s+|--append\s+)?)\s*"?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?"?/g;
+const BARE_FILE_NAME = /(?<![$\w{])GITHUB_(?:ENV|OUTPUT|STATE|PATH)\b/;
 
 function checkRun(rawScript, loc, add) {
   // `${{ github.env }}` & co. expand to the command-file paths themselves.
@@ -630,7 +648,8 @@ function checkRun(rawScript, loc, add) {
     );
     return;
   }
-  if (script.includes('::stop-commands::')) {
+  // Quotes and backslashes are dropped first: `"::stop-comm""ands::"` prints the same command.
+  if (script.replace(/["'\\]/g, '').includes('::stop-commands::')) {
     add(
       R4,
       `${loc}.run uses ::stop-commands::, which stops the runner from processing ::add-mask:: — not allowed in a recipe`,
@@ -651,18 +670,25 @@ function checkRun(rawScript, loc, add) {
     );
   };
   // Set lookups instead of one alternation regex per segment: linear in the script.
-  const mentionsFile = (text) => [...text.matchAll(VAR_REF)].some((m) => fileVars.has(m[1]));
+  // A bare command-file name (`$(printenv GITHUB_ENV)`) counts as a mention too, so
+  // such a write is refused rather than missed.
+  const mentionsFile = (text) =>
+    [...text.matchAll(VAR_REF)].some((m) => fileVars.has(m[1])) || BARE_FILE_NAME.test(text);
   const writesFile = (text) => [...text.matchAll(WRITE_REF)].some((m) => fileVars.has(m[1]));
 
+  // Open compound commands (`if`, loops, `case`, `{ … }`, `( … )`, function
+  // bodies): a mask inside one may not run, so it is not credited.
+  let compound = 0;
   for (let i = 0; i < lines.length; i++) {
     const lno = i + 1;
     const segs = segmentsOf(lines[i]);
     let heredocEnd = null;
-    segs.forEach(({ text: seg, sep }, s) => {
+    segs.forEach(({ text: seg, sep, heredoc }, s) => {
       const next = s + 1 < segs.length ? segs[s + 1].sep : '';
       const cmd = seg.split(/\s+/)[0];
-      const heredoc = HEREDOC.exec(seg);
       if (heredoc && heredocEnd === null) heredocEnd = heredoc[2];
+      if (COMPOUND_OPEN.has(cmd) || cmd.startsWith('(') || /\{$/.test(seg)) compound++;
+      else if (COMPOUND_CLOSE.has(cmd) || /^[})]/.test(cmd)) compound = Math.max(0, compound - 1);
 
       if (CREDENTIAL_FLAG.test(seg)) {
         add(
@@ -689,7 +715,13 @@ function checkRun(rawScript, loc, add) {
       // later segments only.
       if (MASK_LIKE.test(seg) && !mentionsFile(seg)) {
         const exact = MASK_EXACT.exec(seg);
-        if (exact && (sep === '' || sep === ';') && next !== '|' && next !== '&') {
+        if (
+          exact &&
+          compound === 0 &&
+          (sep === '' || sep === ';') &&
+          next !== '|' &&
+          next !== '&'
+        ) {
           const r = refsIn(exact[2]);
           r.vars.forEach((v) => masked.add(`var:${v}`));
           r.exprs.forEach((e) => masked.add(`expr:${e}`));
