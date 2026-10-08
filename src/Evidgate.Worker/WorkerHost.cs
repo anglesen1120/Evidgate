@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Evidgate.BuildingBlocks.Persistence.Options;
+using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Catalog;
@@ -51,6 +52,9 @@ public static class WorkerHost
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
 
         builder.Services.AddEvidgatePersistence(builder.Configuration);
+        // 10.1.1-T2: the single secret seam. Idempotent (TryAdd*), so the
+        // composition extensions that also register it change nothing here.
+        builder.Services.AddEvidgateSecrets(builder.Configuration);
         builder.AddEvidgateTelemetry("evidgate-worker");
 
         builder.Services

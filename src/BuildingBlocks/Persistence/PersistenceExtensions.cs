@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Evidgate.BuildingBlocks.Persistence.Options;
 using Evidgate.BuildingBlocks.Persistence.Readiness;
+using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -26,6 +27,13 @@ public static class PersistenceExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+
+        // 10.1.1-T2: the connection string is a secret, so the provider and the
+        // post-configurer that resolves it are registered before the options that
+        // consume it. Idempotent (TryAdd*): the hosts and the other composition
+        // extensions call it too, and a test or a managed store (O3) replaces the
+        // single registration.
+        services.AddEvidgateSecrets(configuration);
 
         services
             .AddOptions<DatabaseOptions>()

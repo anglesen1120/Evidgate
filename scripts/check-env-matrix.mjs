@@ -13,7 +13,14 @@
 //                         WorkerSchedDataSource), and every `EVIDGATE_…` literal
 //                         left in non-comment code — an undeclared literal is an
 //                         error, so a new key cannot enter the code without a
-//                         matrix row;
+//                         matrix row. A property whose setter is not public
+//                         (`{ get; internal set; }`) is still a bound key: the
+//                         binder skips it and the options post-configurer
+//                         resolves it through ISecretProvider (10.1.1-T2). A
+//                         name registry (SecretNames) declares the literals once
+//                         and is not a consumption site; the class that
+//                         references `SecretNames.X` is, and a registry entry no
+//                         options class consumes stays an undeclared literal;
 //   .env.dev.template     the dev environment's declared configuration;
 //   infra/compose.dev.yml the dev stack's own variables.
 // Test-harness and CI-tooling switches (`EVIDGATE_S3PARITY__*`,
@@ -330,6 +337,7 @@ function discoverFromSource(root, graph) {
       return;
     }
     existing.requiredAtBoot ||= facts.requiredAtBoot;
+    existing.nonPublicSetter ||= facts.nonPublicSetter;
     existing.constraints = { ...facts.constraints, ...existing.constraints };
     existing.consumers = [...new Set([...existing.consumers, ...facts.consumers])].sort();
     if (existing.type === 'string' && facts.type !== 'string') existing.type = facts.type;
@@ -370,9 +378,14 @@ function discoverFromSource(root, graph) {
         continue;
       }
 
-      const constant = line.match(/const string (\w+)\s*=\s*"(EVIDGATE_[A-Z0-9_]+)"/);
+      const constant = line.match(/const string (\w+)\s*=\s*([^;]+);/);
       if (constant) {
-        constants.push({ name: constant[1], key: constant[2], className: current, consumers });
+        constants.push({
+          name: constant[1],
+          initializer: constant[2].trim(),
+          className: current,
+          consumers,
+        });
         continue;
       }
 
@@ -388,13 +401,20 @@ function discoverFromSource(root, graph) {
         continue;
       }
 
+      // A property whose setter is not public (`{ get; internal set; }`) is still
+      // a bound key: the configuration binder skips it, and the options
+      // post-configurer resolves it through ISecretProvider (10.1.1-T2). Its
+      // attributes still carry the key's constraints. The flag is recorded so
+      // checkMatrix can require such a key to be a secret: a non-secret setting
+      // declared this way would never be bound.
       const property = line.match(
-        /^\s*(?:public|internal)\s+(required\s+)?([\w.]+(?:\s*<[^>]+>)?\??(?:\[\])?)\s+(\w+)\s*\{\s*get;\s*(?:init;|set;)\s*\}/,
+        /^\s*(public|internal)\s+(required\s+)?([\w.]+(?:\s*<[^>]+>)?\??(?:\[\])?)\s+(\w+)\s*\{\s*get;\s*(?:(internal|private|protected)\s+)?(?:init;|set;)\s*\}/,
       );
       if (property && !line.includes('const ')) {
         info.properties.push({
-          name: property[3],
-          type: property[2].trim(),
+          name: property[4],
+          type: property[3].trim(),
+          nonPublicSetter: property[1] === 'internal' || property[5] !== undefined,
           // The C# `required` keyword is never a boot guarantee: the
           // configuration binder sets members by reflection. [Required]
           // (ValidateDataAnnotations) fails the boot only when a missing value
@@ -421,6 +441,7 @@ function discoverFromSource(root, graph) {
       record(key, {
         type: csType(property.type),
         requiredAtBoot: property.required,
+        nonPublicSetter: property.nonPublicSetter,
         constraints: property.constraints,
         consumers,
       });
@@ -443,6 +464,7 @@ function discoverFromSource(root, graph) {
       record(`${key}__<n>__${nested.name.toUpperCase()}`, {
         type: csType(nested.type),
         requiredAtBoot: nested.required,
+        nonPublicSetter: nested.nonPublicSetter,
         constraints: nested.constraints,
         consumers,
       });
@@ -460,26 +482,60 @@ function discoverFromSource(root, graph) {
     }
   }
 
+  // A name registry (SecretNames) spells each EVIDGATE_* literal once; every
+  // other class references it by qualified name. A class referenced that way is
+  // a registry, so its own declarations are names, not consumption sites: the
+  // consumer is the class that references the name. A registry entry no options
+  // class consumes stays an undeclared literal, so it is still reported.
+  const literalKeys = new Map(); // class name -> Map(member name -> key)
+  const referenced = new Set();
+  for (const constant of constants) {
+    const literal = constant.initializer.match(/^"(EVIDGATE_[A-Z0-9_]+)"$/);
+    if (literal) {
+      if (!literalKeys.has(constant.className)) literalKeys.set(constant.className, new Map());
+      literalKeys.get(constant.className).set(constant.name, literal[1]);
+      continue;
+    }
+    const reference = constant.initializer.match(/^(\w+)\.(\w+)$/);
+    if (reference) referenced.add(reference[1]);
+  }
+  const registries = new Set([...referenced].filter((name) => literalKeys.has(name)));
+  // The keys the name registry (SecretNames) declares: every secret an options
+  // class consumes must be one of them (SEC-PROV-02).
+  const registryKeys = new Set(
+    [...registries].flatMap((name) => [...literalKeys.get(name).values()]),
+  );
+
   // Explicit constants (MigratorOptions, WorkerSchedDataSource, …): the constant
   // name maps to the property it configures, with the …Variable/…Key suffix dropped.
+  // Such a key is read explicitly, not bound, so its setter visibility is not
+  // a binding fact (nonPublicSetter stays false).
   for (const constant of constants) {
+    const literal = constant.initializer.match(/^"(EVIDGATE_[A-Z0-9_]+)"$/);
+    let key = null;
+    if (literal) {
+      if (registries.has(constant.className)) continue;
+      key = literal[1];
+    } else {
+      const reference = constant.initializer.match(/^(\w+)\.(\w+)$/);
+      key = reference ? (literalKeys.get(reference[1])?.get(reference[2]) ?? null) : null;
+      if (key === null) continue;
+    }
     const info = classes.get(constant.className);
     const base = constant.name.replace(/(Variable|Key|Name)$/, '');
     const property = info?.properties.find((p) =>
       p.name.toLowerCase().startsWith(base.toLowerCase()),
     );
-    record(constant.key, {
+    record(key, {
       type: property ? csType(property.type) : 'string',
-      // A constant-keyed reader (MigratorOptions.FromEnvironment) validates by
-      // hand, so the parser cannot see its requirement; the matrix states it and
-      // names the enforcement site in `requiredBy`.
       requiredAtBoot: false,
+      nonPublicSetter: false,
       constraints: property ? property.constraints : {},
       consumers: info?.consumers ?? constant.consumers,
     });
   }
 
-  return keys;
+  return { keys, registry: literalKeys, registryKeys };
 }
 
 /** `EVIDGATE_…` literals left in non-comment source that no parser produced. */
@@ -527,7 +583,7 @@ function discoverDevStack(root) {
 
 function discover(root) {
   const graph = projectGraph(root);
-  const discovered = discoverFromSource(root, graph);
+  const { keys: discovered, registry, registryKeys } = discoverFromSource(root, graph);
   for (const key of discoverDevStack(root).keys()) {
     const existing = discovered.get(key);
     if (existing) {
@@ -543,14 +599,29 @@ function discover(root) {
       consumers: ['dev-stack'],
     });
   }
-  return discovered;
+  return { keys: discovered, registry, registryKeys };
 }
 
 // --------------------------------------------------------------------------
 // matrix and per-environment files
 // --------------------------------------------------------------------------
 
-function checkMatrix(root, discovered, envs) {
+/**
+ * True when `text` mentions `key`, directly or through a registry constant
+ * (`SecretNames.DatabaseConnectionString`). A `requiredBy` site that names the
+ * key only via the registry still counts as naming it.
+ */
+function mentionsKey(text, key, registry) {
+  if (text.includes(key)) return true;
+  for (const [className, members] of registry) {
+    for (const [member, value] of members) {
+      if (value === key && text.includes(`${className}.${member}`)) return true;
+    }
+  }
+  return false;
+}
+
+function checkMatrix(root, discovered, envs, registry, registryKeys) {
   const path = join(root, 'infra/config-matrix.json');
   if (!existsSync(path)) {
     fail('matrix', 'infra/config-matrix.json is missing');
@@ -603,9 +674,8 @@ function checkMatrix(root, discovered, envs) {
         const file = join(root, row.requiredBy);
         if (!existsSync(file))
           fail('matrix', `${row.key}: requiredBy ${row.requiredBy} does not exist`);
-        else if (!readFileSync(file, 'utf8').includes(row.key)) {
+        else if (!mentionsKey(readFileSync(file, 'utf8'), row.key, registry))
           fail('matrix', `${row.key}: requiredBy ${row.requiredBy} does not mention ${row.key}`);
-        }
       }
     }
     if (SECRET_NAME_RE.test(row.key) && row.secret !== true) {
@@ -689,6 +759,24 @@ function checkMatrix(root, discovered, envs) {
       );
     }
     if (!derived.fromSource) continue;
+    // CR-1: the binder never sets a property with a non-public setter, so only a
+    // secret the options post-configurer resolves through ISecretProvider may be
+    // declared that way; a non-secret setting would silently stay at its default.
+    if (derived.nonPublicSetter && row.secret !== true) {
+      fail(
+        'matrix',
+        `${key}: the bound property has a non-public setter, so the configuration binder never sets it; ` +
+          'only a secret:true key resolved through ISecretProvider may be declared that way',
+      );
+    }
+    // SEC-PROV-02: a secret an options class consumes is resolved by name through
+    // ISecretProvider, so it must be declared in the SecretNames registry.
+    if (row.secret === true && !registryKeys.has(key)) {
+      fail(
+        'matrix',
+        `${key}: secret:true and consumed by an options class, so it must be declared in the SecretNames registry`,
+      );
+    }
     if (row.type !== derived.type)
       fail(
         'matrix',
@@ -960,7 +1048,7 @@ function checkDevStack(root, devFile) {
 
 function lint(root) {
   const envs = ['dev', 'staging', 'prod'];
-  const discovered = discover(root);
+  const { keys: discovered, registry, registryKeys } = discover(root);
   for (const [key, facts] of discovered) {
     if (facts.consumers.length === 0) {
       fail(
@@ -976,7 +1064,7 @@ function lint(root) {
     );
   }
 
-  const rows = checkMatrix(root, discovered, envs);
+  const rows = checkMatrix(root, discovered, envs, registry, registryKeys);
   let devFile = null;
   for (const env of envs) {
     const file = checkEnvironment(root, env, rows);
@@ -1017,6 +1105,14 @@ function fixture(root) {
   );
   write('src/Evidgate.Migrator/Evidgate.Migrator.csproj', csproj([]));
   write(
+    'src/BuildingBlocks/Demo/DemoSecretNames.cs',
+    `namespace Demo;\n` +
+      `public static class DemoSecretNames\n{\n` +
+      `    public const string InternalSecret = "EVIDGATE__DEMO__INTERNALSECRET";\n` +
+      `    public const string SecretValue = "EVIDGATE__DEMO__SECRETVALUE";\n` +
+      `}\n`,
+  );
+  write(
     'src/BuildingBlocks/Demo/DemoOptions.cs',
     `namespace Demo;\n` +
       `public enum DemoMode\n{\n` +
@@ -1034,6 +1130,9 @@ function fixture(root) {
       `    public string Label { get; init; } = string.Empty;\n` +
       `    [Range(1, 10, ErrorMessage = "EVIDGATE__DEMO__RETRIES must be 1..10")]\n` +
       `    public int Retries { get; init; } = 1;\n` +
+      `    public const string InternalSecretVariable = DemoSecretNames.InternalSecret;\n` +
+      `    [MinLength(2, ErrorMessage = "EVIDGATE__DEMO__INTERNALSECRET must be at least 2 characters")]\n` +
+      `    public string InternalSecret { get; internal set; } = string.Empty;\n` +
       `    public List<RowOptions> Rows { get; init; } = [];\n` +
       `}\n` +
       `public sealed class RowOptions\n{\n` +
@@ -1096,6 +1195,12 @@ function fixture(root) {
             key: 'EVIDGATE__DEMO__RETRIES',
             type: 'integer',
             constraints: { min: 1, max: 10 },
+            source: { dev: 'environment', staging: 'environment', prod: 'environment' },
+          }),
+          row({
+            key: 'EVIDGATE__DEMO__INTERNALSECRET',
+            secret: true,
+            constraints: { minLength: 2 },
             source: { dev: 'environment', staging: 'environment', prod: 'environment' },
           }),
           row({ key: 'EVIDGATE__DEMO__ROWS__<n>__NAME' }),
@@ -1398,6 +1503,78 @@ function selfTest() {
     0,
     'check-env-matrix: ',
   );
+  expect(
+    'registry-entry-without-consumer',
+    (root) => {
+      const path = join(root, 'src/BuildingBlocks/Demo/DemoSecretNames.cs');
+      writeFileSync(
+        path,
+        readFileSync(path, 'utf8').replace(
+          'public const string InternalSecret = "EVIDGATE__DEMO__INTERNALSECRET";',
+          'public const string InternalSecret = "EVIDGATE__DEMO__INTERNALSECRET";\n' +
+            '    public const string OrphanSecret = "EVIDGATE__DEMO__ORPHANSECRET";',
+        ),
+      );
+    },
+    1,
+    'EVIDGATE__DEMO__ORPHANSECRET — every EVIDGATE_ key in source must be in the parsed options/const set',
+  );
+  expect(
+    'internal-set-secret-property-constraints',
+    (root) => {
+      const path = join(root, 'infra/config-matrix.json');
+      const matrix = readJson(path);
+      matrix.keys.find((entry) => entry.key === 'EVIDGATE__DEMO__INTERNALSECRET').constraints = {};
+      writeFileSync(path, JSON.stringify(matrix, null, 2));
+    },
+    1,
+    'E matrix: EVIDGATE__DEMO__INTERNALSECRET: constraints {} but the attributes say {"minLength":2}',
+  );
+  expect(
+    'internal-set-non-secret-property',
+    (root) => {
+      const path = join(root, 'src/BuildingBlocks/Demo/DemoOptions.cs');
+      writeFileSync(
+        path,
+        readFileSync(path, 'utf8').replace(
+          'public string Label { get; init; }',
+          'public string Label { get; internal set; }',
+        ),
+      );
+    },
+    1,
+    'E matrix: EVIDGATE__DEMO__LABEL: the bound property has a non-public setter',
+  );
+  expect(
+    'private-init-non-secret-property',
+    (root) => {
+      const path = join(root, 'src/BuildingBlocks/Demo/DemoOptions.cs');
+      writeFileSync(
+        path,
+        readFileSync(path, 'utf8').replace(
+          'public int Retries { get; init; }',
+          'public int Retries { get; private init; }',
+        ),
+      );
+    },
+    1,
+    'E matrix: EVIDGATE__DEMO__RETRIES: the bound property has a non-public setter',
+  );
+  expect(
+    'options-secret-outside-registry',
+    (root) => {
+      const path = join(root, 'src/BuildingBlocks/Demo/DemoSecretNames.cs');
+      writeFileSync(
+        path,
+        readFileSync(path, 'utf8').replace(
+          '    public const string SecretValue = "EVIDGATE__DEMO__SECRETVALUE";\n',
+          '',
+        ),
+      );
+    },
+    1,
+    'E matrix: EVIDGATE__DEMO__SECRETVALUE: secret:true and consumed by an options class, so it must be declared in the SecretNames registry',
+  );
 
   let failed = 0;
   for (const testCase of cases) {
@@ -1455,7 +1632,7 @@ root = join(root, '.');
 if (printDiscovered) {
   console.log(
     JSON.stringify(
-      [...discover(root).values()].sort((a, b) => a.key.localeCompare(b.key)),
+      [...discover(root).keys.values()].sort((a, b) => a.key.localeCompare(b.key)),
       null,
       2,
     ),
