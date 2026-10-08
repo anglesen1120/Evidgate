@@ -870,6 +870,7 @@
           "Cronos": "[0.13.0, )",
           "Dapper": "[2.1.89, )",
           "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[10.0.12, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, )",
           "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions": "[10.0.12, )",
@@ -895,6 +896,7 @@
       "evidgate.migrator": {
         "type": "Project",
         "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Npgsql": "[10.0.3, )",
           "dbup-postgresql": "[7.0.1, )"
         }

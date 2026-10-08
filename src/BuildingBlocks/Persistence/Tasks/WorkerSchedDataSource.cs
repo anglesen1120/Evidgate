@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
@@ -12,7 +13,7 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 /// </summary>
 /// <remarks>
 /// The credential comes from <see cref="TasksOptions.SweepConnectionString"/>
-/// (<c>EVIDGATE__TASKS__SWEEPCONNECTIONSTRING</c>). It is optional at boot so a
+/// (<see cref="SecretNames.TasksSweepConnectionString"/>). It is optional at boot so a
 /// worker without it still consumes ordinary tasks; the first sweep that needs it
 /// fails with the key name, which lands in the task's <c>last_error</c> and in the
 /// operator's dead-letter list rather than being invisible.
@@ -27,7 +28,7 @@ public interface IWorkerSchedDataSource
 public sealed class WorkerSchedDataSource : IWorkerSchedDataSource, IAsyncDisposable
 {
     /// <summary>Key an operator has to set; the failure message names it.</summary>
-    internal const string ConfigurationKey = "EVIDGATE__TASKS__SWEEPCONNECTIONSTRING";
+    internal const string ConfigurationKey = SecretNames.TasksSweepConnectionString;
 
     private readonly NpgsqlDataSource? _dataSource;
 
