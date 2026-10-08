@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
 
@@ -145,5 +146,29 @@ internal sealed class CiAuthOptionsValidator : IValidateOptions<CiAuthOptions>
         {
             failures.Add($"EVIDGATE:Ci:{property} is not valid base64");
         }
+    }
+}
+
+/// <summary>
+/// Resolves the CI key material through <see cref="ISecretProvider"/> after the
+/// binder has run (10.1.1-T2). The three properties have internal setters, so
+/// <c>BindConfiguration</c> skips them and this is their only writer; validation
+/// runs after post-configuration, so <see cref="CiAuthOptionsValidator"/> still sees
+/// the resolved value and still names only the key.
+/// </summary>
+internal sealed class CiAuthOptionsSecretPostConfigure : IPostConfigureOptions<CiAuthOptions>
+{
+    private readonly ISecretProvider _secrets;
+
+    public CiAuthOptionsSecretPostConfigure(ISecretProvider secrets) => _secrets = secrets;
+
+    /// <inheritdoc />
+    public void PostConfigure(string? name, CiAuthOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        options.SigningKey = _secrets.GetSecret(SecretNames.CiSigningKey);
+        options.Pepper = _secrets.GetSecret(SecretNames.CiPepper);
+        options.PreviousPepper = _secrets.GetSecret(SecretNames.CiPreviousPepper);
     }
 }

@@ -82,6 +82,44 @@ environment), restart the process, and nothing in the code changes — that is 1
 property. Rotation of ingest tokens, DB credentials, JWT keys and the HMAC pepper is
 `10.7.1-T4`'s runbook, not this one.
 
+### Secret resolution
+
+Every secret an Evidgate process resolves goes through one interface,
+`ISecretProvider.GetSecretAsync(name)` (`Evidgate.BuildingBlocks.SharedKernel.Secrets`), and is never read
+from `IConfiguration` or the environment directly. `SecretNames.All` is the registry of those names, and
+they are the existing `EVIDGATE_*` variable names — nothing was renamed: the Api/Worker database
+connection string (`EVIDGATE__DATABASE__CONNECTIONSTRING`), the task sweep connection string
+(`EVIDGATE__TASKS__SWEEPCONNECTIONSTRING`), the CI signing key, pepper and previous pepper
+(`EVIDGATE__CI__SIGNINGKEY`, `EVIDGATE__CI__PEPPER`, `EVIDGATE__CI__PREVIOUSPEPPER`) and the Migrator
+connection string (`EVIDGATE_MIGRATOR__CONNECTIONSTRING`). A name outside the registry is refused with an
+`ArgumentException` that names only the name. The registry is not the list of `secret: true` rows in
+`infra/config-matrix.json`: a matrix row that only the dev stack uses (for example the S3 keys in
+`.env.dev.template`) joins `SecretNames` when a process starts to consume it (object storage 06.1.2-T1,
+OIDC 02.3.1-T1), not before.
+
+**Api and Worker.** V1 registers `EnvironmentSecretProvider` once, with `TryAddSingleton`, in
+`AddEvidgateSecrets` (`src/BuildingBlocks/Persistence/Secrets/SecretProviderExtensions.cs`). It looks a
+secret name up in the host `IConfiguration` under its configuration key (`SecretNames.ToConfigurationKey`:
+`__` becomes `:`), so **any** configuration source the host has satisfies it — environment variables,
+`appsettings*.json`, the command line, or an in-memory test configuration. Production supplies secrets
+only through the environment. Never pass a secret on the command line (any local user sees it in `ps`)
+and never put one in a committed `appsettings*.json`: the no-secret-literals scan (§4) and the
+architecture tests fail on a committed literal. The database and sweep connection strings reach
+`DatabaseOptions`/`TasksOptions` through post-configure steps that call the provider after the binder
+has run. A value never reaches a log line, an exception message or `ToString`.
+
+**Migrator.** The Migrator is not DI-composed. `MigratorOptions.FromEnvironment`
+(`src/Evidgate.Migrator/MigratorOptions.cs`) takes an optional `secrets` parameter; when it is omitted it
+builds an `EnvironmentSecretProvider` over the same process-environment snapshot it reads its other
+variables from.
+
+**The O3 swap point.** A managed secret store (10.8.1) replaces the single `AddEvidgateSecrets`
+registration in the Api and Worker, and is passed as the `secrets` argument of
+`MigratorOptions.FromEnvironment` in the Migrator. No consumer changes, because every consumer already
+depends on `ISecretProvider` and not on where the value lives. Resolution is synchronous — options
+materialisation calls `SecretProviderSyncExtensions.GetSecret`, which relies on the provider completing
+synchronously — so a managed store must prefetch its values at boot rather than fetch on demand.
+
 ### Adding a key
 
 1. Add the property or constant to the options class (or read it explicitly and fail when it is
@@ -172,6 +210,10 @@ configure for it: the hosts serve the operational endpoints and never decide who
 node scripts/check-env-matrix.mjs
 node scripts/check-env-matrix.mjs --self-test   # the lint's own pass/fail fixtures
 
+# no literal secret committed to the repository or baked into an image (AC3)
+scripts/check-no-secret-literals.sh
+scripts/check-no-secret-literals.sh --self-test   # the scan's own pass/fail fixtures
+
 # per-environment smoke, against a running environment
 scripts/dev/up.sh                     # dev: containers + migrations + Api and Worker
 scripts/smoke-environment.sh --env dev
@@ -184,6 +226,32 @@ other than 200/503, or a port is bound to a non-loopback address); `3` when the 
 readiness is 503 because a dependency is down — a deploy pipeline can then tell a broken release from a
 database that is still starting (pass `--allow-503` to treat that as success on purpose); `2` on a usage
 error.
+
+`check-no-secret-literals.sh` scans every tracked and untracked-not-ignored file under `src/`, `tests/`,
+`packages/`, `apps/`, `scripts/`, `infra/`, `.github/` and `.husky/`, plus every `Dockerfile*` /
+`*.Dockerfile`, `compose*.yml` / `docker-compose*.yml`, `appsettings*.json`, `.env*` template and
+`.npmrc` anywhere, and the root `*.yml`/`*.yaml`/`*.json`/`*.props`/`*.config` files. Build output
+(`node_modules/`, `bin/`, `obj/`, `artifacts/`) is skipped only when it is untracked; a tracked file is
+always scanned. Every file is read as bytes, none is skipped as binary, and the scan fails closed: an
+unreadable file or any grep error exits `2`, never `0`.
+
+The rules are `pem-private-key`, `aws-access-key-id`, `github-token`, `slack-token`, `jwt`,
+`connstr-password` (a connection string with a literal password), `url-userinfo` (a URL with a literal
+`user:password`), `secret-assignment` (a configuration or shell key that names a secret assigned a
+literal value, including Dockerfile `ENV`, `export`, `env` and `-e` forms and JSON keys) and
+`secret-key-material` (in any in-scope file, C# and TypeScript included, an identifier naming a secret
+assigned a quoted base64-looking literal of 32 characters or more). Placeholders pass (`$NAME`,
+`${NAME}`, `${NAME:?message}`, `${NAME:-}`, `${{ … }}`, `<…>` and the like), but a placeholder with a
+non-empty default — `${NAME:-value}` — is a literal and fails `secret-assignment` (the self-test's
+"placeholder-default literal" case). A hit prints `file:line: <rule>` and never the matched value; the
+scan exits `0` clean, `1` on a hit and `2` on a usage, configuration or read error.
+
+Reviewed non-secrets — the local-only dev SeaweedFS identity, throwaway test credentials — are listed in
+[`../../scripts/no-secret-literals-allow.txt`](../../scripts/no-secret-literals-allow.txt), one per line:
+`<path>\t<rule id>\t<reason>[\t<line regex>]`. `<path>` is an exact repository path or a glob whose `*`
+never crosses `/` (only `**` does); `<rule id>` is exactly one rule, and the wildcard rule `*` is refused
+as a configuration error; the optional `<line regex>` is a POSIX ERE the hit line must match, so an entry
+covers the reviewed values only and any later literal in the same file still fails.
 
 ### When the lint fails
 

@@ -173,9 +173,13 @@ run_stage() {
   check-env-matrix)
     # AC1 (10.1.1-T1.1): every consumed EVIDGATE_* key has a matrix row and a
     # per-environment origin; the self-test proves the lint still rejects.
+    # AC3 (10.1.1-T2.1): no literal secret in source, Dockerfiles or infra/;
+    # the self-test proves the scan still rejects an injected dummy.
     stage "check-env-matrix"
     node scripts/check-env-matrix.mjs --self-test
     node scripts/check-env-matrix.mjs
+    scripts/check-no-secret-literals.sh --self-test
+    scripts/check-no-secret-literals.sh
     ;;
   check-dor-security)
     # AC4 (11.1.1-T2): feature plans added or changed in the change set answer

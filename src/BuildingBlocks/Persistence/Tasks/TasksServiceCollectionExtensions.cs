@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Persistence.Outbox;
+using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,11 @@ public static class TasksServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+
+        // 10.1.1-T2: the sweep connection string is a secret, so the provider and
+        // its post-configurer are registered here too — a host that composes the
+        // queue without persistence still resolves it through ISecretProvider.
+        services.AddEvidgateSecrets(configuration);
 
         services
             .AddOptions<TasksOptions>()

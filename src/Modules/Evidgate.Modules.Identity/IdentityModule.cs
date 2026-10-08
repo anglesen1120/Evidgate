@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -36,6 +37,11 @@ internal static class IdentityModule
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+
+        // 10.1.1-T2: the CI key material is a secret, so the provider and its
+        // post-configurer are registered here too — a host that composes this module
+        // without persistence still resolves the key material through ISecretProvider.
+        services.AddEvidgateSecrets(configuration);
 
         // The feature flag of 02.2.1-T2.2 (RECOMMENDATIONS 02-Q3): built-in roles
         // only in V1, so the write commands answer 403 until it is turned on. Bound
@@ -122,6 +128,10 @@ internal static class IdentityModule
             .ValidateDataAnnotations()
             .ValidateOnStart();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<CiAuthOptions>, CiAuthOptionsValidator>());
+        // 10.1.1-T2: the key material is resolved through ISecretProvider after the
+        // binder (which skips the internal setters) and before validation runs.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IPostConfigureOptions<CiAuthOptions>, CiAuthOptionsSecretPostConfigure>());
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<CiSecrets>();
