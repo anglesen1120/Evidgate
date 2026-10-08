@@ -558,6 +558,7 @@ function segmentsOf(line) {
   let hd = -1; // index in `cur` of an unquoted, top-level `<<`
   let q = null; // "'", '"' or '`'
   let depth = 0;
+  let arith = 0; // open bare `(( … ))`
   const last = () => (cur.length > 0 ? cur[cur.length - 1] : '');
   const push = () => {
     if (cur.trim()) {
@@ -592,6 +593,22 @@ function segmentsOf(line) {
       if (c === '(') depth++;
       else if (c === ')') depth--;
       cur += c;
+      continue;
+    }
+    // Bare arithmetic `(( … ))` (also `for (( …; …; … ))`): no separators and no
+    // heredoc inside; `1<<N` is a shift.
+    if (c === '(' && line[k + 1] === '(') {
+      arith++;
+      cur += '((';
+      k++;
+      continue;
+    }
+    if (arith > 0) {
+      if (c === ')' && line[k + 1] === ')') {
+        arith--;
+        cur += '))';
+        k++;
+      } else cur += c;
       continue;
     }
     if (c === '#' && (cur === '' || /\s/.test(last()))) break;
@@ -632,6 +649,15 @@ const ASSIGN =
 const FILE_ALIAS = /^(["']?)\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?\1$/;
 const COMPOUND_OPEN = new Set(['if', 'while', 'until', 'for', 'case', 'select', '{']);
 const COMPOUND_CLOSE = new Set(['fi', 'done', 'esac']);
+// Net `(` minus `)` outside quoted strings (`$(…)` and `(( … ))` count zero).
+const balance = (s) => {
+  let n = 0;
+  for (const ch of s.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, '')) {
+    if (ch === '(') n++;
+    else if (ch === ')') n--;
+  }
+  return n;
+};
 const VAR_REF = /\$\{?([A-Za-z_][A-Za-z0-9_]*)/g;
 const WRITE_REF = /(?:>>?|\btee\s+(?:-a\s+|--append\s+)?)\s*"?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?"?/g;
 const BARE_FILE_NAME = /(?<![$\w{])GITHUB_(?:ENV|OUTPUT|STATE|PATH)\b/;
@@ -679,6 +705,7 @@ function checkRun(rawScript, loc, add) {
   // Open compound commands (`if`, loops, `case`, `{ … }`, `( … )`, function
   // bodies): a mask inside one may not run, so it is not credited.
   let compound = 0;
+  let subshell = 0;
   for (let i = 0; i < lines.length; i++) {
     const lno = i + 1;
     const segs = segmentsOf(lines[i]);
@@ -687,8 +714,11 @@ function checkRun(rawScript, loc, add) {
       const next = s + 1 < segs.length ? segs[s + 1].sep : '';
       const cmd = seg.split(/\s+/)[0];
       if (heredoc && heredocEnd === null) heredocEnd = heredoc[2];
-      if (COMPOUND_OPEN.has(cmd) || cmd.startsWith('(') || /\{$/.test(seg)) compound++;
-      else if (COMPOUND_CLOSE.has(cmd) || /^[})]/.test(cmd)) compound = Math.max(0, compound - 1);
+      // Subshells are tracked by paren balance, only once one has opened, so a
+      // `case` pattern `x)` does not close anything.
+      if (cmd.startsWith('(') || subshell > 0) subshell = Math.max(0, subshell + balance(seg));
+      if (COMPOUND_OPEN.has(cmd) || /\{$/.test(seg)) compound++;
+      else if (COMPOUND_CLOSE.has(cmd) || /^\}/.test(cmd)) compound = Math.max(0, compound - 1);
 
       if (CREDENTIAL_FLAG.test(seg)) {
         add(
@@ -718,6 +748,7 @@ function checkRun(rawScript, loc, add) {
         if (
           exact &&
           compound === 0 &&
+          subshell === 0 &&
           (sep === '' || sep === ';') &&
           next !== '|' &&
           next !== '&'
@@ -754,7 +785,7 @@ function checkRun(rawScript, loc, add) {
       if (!writesFile(seg) || !['echo', 'printf', 'cat'].includes(cmd)) {
         add(
           R4,
-          `${loc}.run line ${lno} \`${cmd}\` touches a GitHub command file other than by echo/printf/cat-heredoc redirection; its payload cannot be proven masked — mask a variable and echo it`,
+          `${loc}.run line ${lno} \`${cmd}\` touches or names a GitHub command file other than by echo/printf/cat-heredoc redirection to $GITHUB_ENV/OUTPUT/STATE/PATH; its payload cannot be proven masked — mask a variable and echo it (a bare GITHUB_ENV-style word, even in a message, counts)`,
         );
         return;
       }
