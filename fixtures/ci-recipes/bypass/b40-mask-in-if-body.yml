@@ -1,0 +1,14 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, delta review S17): a mask inside a multi-line `if` body may not run.
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          V=$(cat f)
+          if false; then
+            echo "::add-mask::$V"
+          fi
+          echo "K=$V" >> $GITHUB_ENV

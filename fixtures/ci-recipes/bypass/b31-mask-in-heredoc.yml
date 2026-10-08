@@ -1,0 +1,14 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, review S17): a mask line inside another heredoc body is data, not a command.
+name: x
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          cat <<EOF > /tmp/x
+          echo "::add-mask::$V"
+          EOF
+          echo "K=$V" >> $GITHUB_ENV

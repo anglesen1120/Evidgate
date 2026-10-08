@@ -51,3 +51,8 @@ fixtures/contracts/vectors/event-envelope.v1/acc-05-max-bytes-exact.json
 fixtures/contracts/vectors/event-envelope.v1/rej-15-batch-501-items.json
 fixtures/contracts/vectors/event-envelope.v1/rej-16-over-max-bytes.json
 fixtures/contracts/vectors/event-envelope.v1/rej-01-invalid-json.json
+
+# 11.2.1-T1.2: a deliberately ambiguous workflow (a duplicate `on:` key) that the
+# recipe lint must refuse as `yaml-parse`; prettier's YAML parser refuses it too,
+# so prettier --check must skip it. The other ci-recipes fixtures stay checked.
+fixtures/ci-recipes/bypass/b12-duplicate-on-key.yml

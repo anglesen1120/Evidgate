@@ -1,0 +1,11 @@
+# expect: R5-no-long-lived-credential
+# Synthetic fixture (11.2.1-T1.2, QA S17): `-t <value>` on an evidgate command passes a credential as an argument.
+name: x
+on:
+  pull_request:
+permissions: {}
+jobs:
+  t:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: evidgate login -t "$T"

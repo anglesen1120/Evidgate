@@ -1,0 +1,10 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, review S17): `::stop-commands::` stops the runner from processing a later mask.
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          X=$(cat f); echo "::stop-commands::t"; echo "::add-mask::$X"; echo "X=$X" >> $GITHUB_ENV

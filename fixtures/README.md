@@ -9,6 +9,10 @@ Four directories hold vectors asserted by more than one runtime, which is why th
 - `variant-hash/` — the variant identity corpus (04.3.2-T1.3, AC3): one `vectors.json` of parameter sets with their expected `sha256:<hex>` digest or refusal, read by `packages/adapter-playwright/src/variant.test.ts` (the reporter) and `tests/Tenancy.IntegrationTests/VariantGoldenVectorTests.cs` (the server). Format and provenance: `fixtures/variant-hash/README.md`.
 - `contracts/` — the Corvus↔Ajv validator parity corpus (01.3.2-T2): `vectors/<schema-key>/` with `*.verdict.json` sidecars plus `divergence/` regressions, and `protocol-matrix/negotiation.v1.json`, the shared negotiation compatibility matrix of 04.7.1-T3 (AC6, T42). It has its own format (see `fixtures/contracts/README.md`) and is _not_ a `<domain>/<name>/` fixture corpus — both loaders skip it because those directories carry neither `meta.json` nor an `input.*` file.
 
+One more directory is a test input for a repository script rather than a shared vector set:
+
+- `ci-recipes/` — customer GitHub Actions workflows for the CI recipe lint (11.2.1-T1, AC1): the published fork-safe recipe `github-fork-safe.yml` plus `negative/` (one fixture per FR-11-2 rule) and `bypass/` fixtures, each naming its expected rule on an `# expect:` first line, run by `scripts/lint-ci-recipe.sh --self-test`. All synthetic; format: `fixtures/ci-recipes/README.md`. It is _not_ a `<domain>/<name>/` fixture corpus — both loaders skip it because no directory there carries `meta.json` or an `input.*` file.
+
 ## `<domain>/<name>/` fixture corpus (01.6.1-T3)
 
 One corpus, loaded identically from .NET and TypeScript (AC6):

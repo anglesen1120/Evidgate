@@ -1,0 +1,12 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, review S17): a mask after `&&` may not run.
+name: x
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          [ -n "$Z" ] && echo "::add-mask::$V"
+          echo "K=$V" >> $GITHUB_ENV

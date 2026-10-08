@@ -1,0 +1,13 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, delta review S17): `V+=…` after a mask appends an unmasked value.
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          V=$(cat f)
+          echo "::add-mask::$V"
+          V+="$(cat other)"
+          echo "K=$V" >> $GITHUB_ENV
