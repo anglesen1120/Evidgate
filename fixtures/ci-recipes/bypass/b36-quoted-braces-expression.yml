@@ -1,0 +1,12 @@
+# expect: R5-no-long-lived-credential
+# Synthetic fixture (11.2.1-T1.2, review S17): a `}}` inside an expression string literal does not end the expression.
+name: x
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo hi
+        env:
+          A: "${{ '}}' && secrets.FOO }}"

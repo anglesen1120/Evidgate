@@ -1,0 +1,12 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, review S17): `::add-mask::pre-$V` masks a different value, not $V.
+name: x
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "::add-mask::pre-$V"
+          echo "K=$V" >> $GITHUB_ENV
