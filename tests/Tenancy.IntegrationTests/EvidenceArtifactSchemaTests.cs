@@ -157,6 +157,19 @@ public sealed class EvidenceArtifactSchemaTests
         // The shape CHECK pins object_key to the row's own id, so a second row with the same key is
         // also the same id: the primary key and `unique (org_id, object_key)` both answer 23505.
         (await scope.CaptureErrorAsync(InsertArtifactSql(world.Org, world.Project, id, runId))).SqlState.ShouldBe("23505");
+
+        // Because the shape CHECK makes a duplicate key require the same id, the 23505 above can come
+        // from artifact_pkey alone: the AC3 constraint is therefore proven from the catalogue, on
+        // exactly (org_id, object_key) in that order, not from the insert.
+        (await _fixture.ConstraintsAsync(world.Database, "artifact")).ShouldContain(
+            "u:artifact_org_object_key_key:UNIQUE (org_id, object_key)",
+            "artifact needs unique (org_id, object_key) as artifact_org_object_key_key (AC3)");
+
+        // artifact_kind_policy's own uniqueness has no insert test either, so it is proven the same
+        // way: unique (org_id, project_id, kind) in that order.
+        (await _fixture.ConstraintsAsync(world.Database, "artifact_kind_policy")).ShouldContain(
+            "u:artifact_kind_policy_project_kind_key:UNIQUE (org_id, project_id, kind)",
+            "artifact_kind_policy needs unique (org_id, project_id, kind) as artifact_kind_policy_project_kind_key");
     }
 
     [Fact]
