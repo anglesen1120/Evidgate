@@ -1,0 +1,20 @@
+# expect: R3-token-permissions
+# Synthetic fixture (11.6.1-T2, S20): the job grants `id-token: write` directly and the
+# workflow runs on pull_request, so a fork pull request could request an OIDC token.
+
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: npm ci
+      - run: npm test

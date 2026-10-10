@@ -7,7 +7,7 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[INFERENCE]`. GitHub c
 ## 1. The two rules
 
 1. **SHA-pin every action and container image.** A tag or branch is mutable, so `uses: owner/action@v5` can change under you; pin the full 40-character commit SHA and keep the release tag in a `# vX.Y.Z` comment. A `docker://` image needs `@sha256:<64 hex>`. This is rule `R2-sha-pinned` in [customer-ci-recipe.md §3](customer-ci-recipe.md#3-the-five-rules), with its GitHub source.
-2. **Give `GITHUB_TOKEN` the least it needs.** Set the workflow default to `permissions: {}` (or read-only), elevate per job, and grant `id-token: write` only on the job that mints the Evidgate token (the `upload` job in the recipe and the quickstart template). This is rule `R3-token-permissions` in [customer-ci-recipe.md §3](customer-ci-recipe.md#3-the-five-rules).
+2. **Give `GITHUB_TOKEN` the least it needs.** Set the workflow default to `permissions: {}` (or read-only), elevate per job, and grant `id-token: write` only on the job that mints the Evidgate token (the `upload` job in the recipe and the quickstart template). When the workflow runs on `pull_request`, that job must also carry its own `if:` that positively requires a non-`pull_request` event (`github.event_name == 'push'`, `'workflow_dispatch'` or `'merge_group'`); the lint fails a token-minting job reachable from `pull_request` with no such guard. This is rule `R3-token-permissions` in [customer-ci-recipe.md §3](customer-ci-recipe.md#3-the-five-rules).
 
 The fork-safe recipe already follows both, and the `evidgate quickstart` template renders the same shape.
 
@@ -31,8 +31,8 @@ It exits 0 when the file is clean, 1 on a violation, 2 on a usage or I/O error (
 
 The same two rules are enforced on Evidgate's own workflows by the shipped 01.7.1-T4 artefacts:
 
-- **SHA pins (AC3).** [`scripts/check-action-pins.sh`](../../scripts/check-action-pins.sh) fails a workflow whose `uses:` is a tag or branch, or is SHA-pinned without the `# vX.Y.Z` comment (`:60-75`); it also rejects quoted or flow-style `uses` keys that would bypass the line-anchored scan (`:23-39`).
-- **Keeping pins current (AC4).** [`.github/dependabot.yml`](../../.github/dependabot.yml) configures the `github-actions` ecosystem (`:53-73`) alongside `nuget` (`:9-28`) and `npm` (`:30-51`), so a pinned action gets an update PR; `check-action-pins.sh` still requires the version comment on the new SHA.
+- **SHA pins (AC3).** [`scripts/check-action-pins.sh`](../../scripts/check-action-pins.sh) fails a workflow whose `uses:` is a tag or branch, or is SHA-pinned without a trailing comment (`:60-75`); it also rejects quoted or flow-style `uses` keys that would bypass the line-anchored scan (`:23-39`). The checker only requires a non-empty comment; keeping the release tag in a `# vX.Y.Z` comment is the convention this page recommends (§1, §2).
+- **Keeping pins current (AC4).** [`.github/dependabot.yml`](../../.github/dependabot.yml) configures the `github-actions` ecosystem (`:53-73`) alongside `nuget` (`:9-28`) and `npm` (`:30-51`), so a pinned action gets an update PR; `check-action-pins.sh` still requires a comment on the new SHA (the `# vX.Y.Z` convention).
 
 ## 5. Not covered
 

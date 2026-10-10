@@ -1,0 +1,26 @@
+# expect: R3-token-permissions
+# Synthetic fixture (11.6.1-T2, S20): the aliasing job's permissions are a YAML alias; the
+# resolved map grants `id-token: write` and the job runs on pull_request with no guard.
+
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: "github.event_name == 'push'"
+    permissions: &elevated
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: npm ci
+  test:
+    runs-on: ubuntu-latest
+    permissions: *elevated
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: npm test

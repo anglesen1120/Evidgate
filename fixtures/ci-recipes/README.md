@@ -9,7 +9,7 @@ This is _not_ a `<domain>/<name>/` fixture corpus: no directory here carries a `
 ```
 fixtures/ci-recipes/
   github-fork-safe.yml   # the published fork-safe recipe (docs/security/customer-ci-recipe.md); lints clean
-  negative/              # one fixture per FR-11-2 rule; each breaks exactly that rule and nothing else
+  negative/              # one or more fixtures per FR-11-2 rule; each breaks exactly its rule and nothing else
   bypass/                # bypass attempts: the same violations hidden behind YAML or expression spellings
 ```
 
@@ -22,6 +22,10 @@ The first line of every file under `negative/` and `bypass/` is `# expect: <rule
 - `github-fork-safe.yml` must exit 0;
 - each `negative/` fixture must exit 1 reporting its expected rule and no other rule;
 - each `bypass/` fixture must exit 1 reporting its expected rule (another rule may fire as well).
+
+## Negative fixtures
+
+`negative/` holds one fixture per rule (`r1`–`r5`), plus the R3 job-level cases added by 11.6.1-T2: a job that grants `id-token: write` while the workflow runs on `pull_request` — directly (`r3-id-token-job-on-pull-request.yml`), through a YAML alias (`r3-id-token-job-alias-on-pull-request.yml`) or as `write-all` (`r3-write-all-job-on-pull-request.yml`) — and two guards the lint refuses, a `!= 'pull_request'` negation (`r3-id-token-guard-negation.yml`) and a `|| github.event_name == 'pull_request'` disjunct (`r3-id-token-guard-pr-disjunct.yml`).
 
 ## Bypass attempts covered
 
