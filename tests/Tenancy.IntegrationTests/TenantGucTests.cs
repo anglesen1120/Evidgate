@@ -397,6 +397,14 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id)
+            values (@id, @org_id, @run_id, 1, 'shard-1')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("run_id", Guid.CreateVersion7()));
 
         await scope.CommitAsync();
     }

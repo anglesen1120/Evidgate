@@ -1,5 +1,6 @@
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.Modules.Identity.Authorization;
+using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Policy.Application.Queries;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,5 +60,25 @@ public sealed class SharedModuleTests
 
         Assert.IsType<PermissionEvaluator>(apiEvaluator);
         Assert.Equal(apiEvaluator.GetType().AssemblyQualifiedName, workerEvaluator.GetType().AssemblyQualifiedName);
+    }
+
+    /// <summary>
+    /// 04.1.2-T4.2: the Ingestion module's producer registry is composed by both entry points through
+    /// the one <c>AddIngestionModule</c> seam, so the Worker resolves the same implementation the Api
+    /// does — 05's run-create runs in the Api and the Worker's task handlers share the registration.
+    /// </summary>
+    [Fact]
+    public async Task Same_Producer_Registry_In_Api_And_Worker()
+    {
+        await using var factory = new EvidgateApiFactory(DeadConnectionString);
+        using var client = factory.CreateClient();
+
+        var apiRegistry = factory.Services.GetRequiredService<IProducerRegistry>();
+
+        using var worker = await WorkerHostFactory.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
+        var workerRegistry = worker.Services.GetRequiredService<IProducerRegistry>();
+
+        Assert.NotNull(apiRegistry);
+        Assert.Equal(apiRegistry.GetType().AssemblyQualifiedName, workerRegistry.GetType().AssemblyQualifiedName);
     }
 }

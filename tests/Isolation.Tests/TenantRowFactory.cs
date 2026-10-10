@@ -327,7 +327,7 @@ internal sealed class TenantRowFactory
             return "system";
         }
 
-        // Columns whose CHECK constraints name a closed vocabulary or a shape (migrations 0016-0028).
+        // Columns whose CHECK constraints name a closed vocabulary or a shape (migrations 0016-0029).
         var special = (table, column.Name) switch
         {
             ("public.ci_binding", "provider") or ("public.ci_token_issue", "provider") => "github_actions",
@@ -355,6 +355,8 @@ internal sealed class TenantRowFactory
             ("public.artifact", "state") => "pending_upload",
             ("public.artifact_kind_policy", "kind") => "trace",
             ("public.artifact_kind_policy", "default_sensitivity") => "normal",
+            ("public.producer_slot", "shard_index") => 1,
+            ("public.producer_slot", "producer_id") => "shard-1",
             _ => (object?)null,
         };
 
