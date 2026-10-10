@@ -213,7 +213,7 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 | 10.7.1-T1 | Dead-letter runbook for the `task` queue table: triage query, classification, safe replay, escalation — the linked action for 01.5.1-T4 and alert 10.3.1-T5 (F-10-4) | M | V1 | M2 | 01.5.1-T4 |
 | 10.7.1-T2 | Stuck run runbook: detect runs past the collection deadline, inspect lease/epoch state (00 §5.3), reconcile or cancel without inventing evidence | M | V1 | M2 | 10.3.1-T3 |
 | 10.7.1-T3 | Orphan artifact runbook: objects without `ready`, `pending_upload` past TTL, retention sweep failures (00 §8.4) | S | V1 | M2 | 10.5.1-T2 |
-| 10.7.1-T4 | Key rotation runbook: ingest tokens, CI OIDC trust, JWT signing keys, webhook secrets, database credentials, provider keys, and the ingest/API token HMAC pepper — a new `pepper_vN` signs new tokens while old versions verify until their last token expires (T5) — rotation without downtime or lost events | M | V1 | M2 | 10.1.1-T2 |
+| 10.7.1-T4 | Key rotation runbook: ingest tokens, CI OIDC trust, JWT signing keys, webhook secrets, database credentials, provider keys, and the ingest/API token HMAC pepper — a new `pepper_vN` signs new tokens while old versions verify until their last token expires (T5) — rotation without downtime or lost events; GitHub App private key and webhook secret per [`docs/runbooks/github-app-key-custody.md`](../docs/runbooks/github-app-key-custody.md) (stub from 02.4.3-T1, ADR-0007) | M | V1 | M2 | 10.1.1-T2 |
 | 10.7.1-T5 | Kill switch runbook + drill: system → tenant → project healing availability (00 §8.7, DECISIONS §5.9) flipped while ingest, runs and gates continue | M | V1 | M3 | 10.3.1-T5, 08.6.3-T1 |
 | 10.7.1-T6 | Incident process: severity ladder, on-call expectation for the pilot, communication, postmortem template with a follow-up task rule | M | V1 | M3 | 10.7.1-T1 |
 
@@ -266,7 +266,7 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 ## 10. Dependencies
 
 - **01-foundation:** CI pipeline (01.7.1-T1), `Evidgate.Migrator` DbUp runner and role split (01.4.1-T1/T2), dev stack (01.8.1-T2), `outbox`/`task` dead-letter + operator CLI (01.5.1-T4), event schema and limits (01.3.1-T2), Testcontainers.PostgreSQL harness (01.6.1-T2). Plan 10 needs the layout additions of `01 §13 CR-01-3` (`infra/`, `scripts/`).
-- **02-identity-tenancy:** token and signing keys for the rotation runbook (10.7.1-T4), audit trail for support access (§6).
+- **02-identity-tenancy:** token and signing keys for the rotation runbook (10.7.1-T4), audit trail for support access (§6), GitHub App key custody stub (02.4.3-T1).
 - **03-catalog-authoring / 05-runs-orchestration:** stuck-run detection signals and lease/epoch state for 10.7.1-T2; outbox task types for the queue-age alert.
 - **06-evidence-artifacts:** artifact lifecycle states, retention sweep and orphan reconciliation feeding 10.7.1-T3 and 10.5.1-T2.
 - **07-policy-decisions:** policy revision rollout path used by the shadow decision compare (10.2.2-T3); webhook delivery metrics for the alert set.
