@@ -16,7 +16,11 @@
 # Exit 0: no unexcepted vulnerabilities. Exit 1: lists every unexcepted finding.
 # Exit 2: a scanner failed (offline registry, missing assets, malformed JSON).
 # --self-test feeds synthetic audit JSON through the same evaluator and asserts
-# unlisted advisories fail while ADR-keyed exceptions pass (expired ones fail).
+# unlisted advisories fail while ADR-keyed exceptions pass (expired ones fail),
+# then proves the locked installs this gate reads actually refuse a drifted lock
+# (11.6.1-T1.1, AC1): `npm ci` on a stale package-lock.json and
+# `dotnet restore --locked-mode` on a stale packages.lock.json, each with a
+# consistent-lock control, in a throwaway temp tree against an empty source.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -37,7 +41,8 @@ Runs npm audit --omit=dev and dotnet list package --vulnerable
 --include-transitive, then drops findings allowlisted in
 scripts/exceptions.json keyed by advisory id. Exit 1 names every unexcepted
 vulnerability; exit 2 means a scanner itself failed. --self-test proves the
-gate offline against planted fixtures.
+gate offline against planted fixtures and proves the locked installs it reads
+reject a drifted lock (npm + NuGet).
 EOF
 }
 
@@ -185,6 +190,117 @@ PYEOF
     echo "audit-deps: dotnet list parser failed" >&2; return 2; }
 }
 
+# ---------------------------------------------------------------------------
+# Stale-lock negative check (11.6.1-T1.1, AC1). The gate above is only as
+# trustworthy as the locked install it reads: `npm ci` must refuse a
+# package-lock.json that does not match package.json, and
+# `dotnet restore --locked-mode` must refuse a packages.lock.json that does not
+# match the csproj. Both are proven here in a throwaway temp tree (never a
+# tracked file) against an EMPTY local source, so the check is offline. Each
+# negative case carries a positive control — the same fixture with a CONSISTENT
+# lock — so a fixture that fails for an unrelated reason cannot pass vacuously.
+# Returns 0 pass, 1 fail, 2 a prerequisite (npm/dotnet) is missing.
+# ---------------------------------------------------------------------------
+lockfile_self_test() {
+  if ! command -v npm >/dev/null 2>&1 || ! command -v dotnet >/dev/null 2>&1; then
+    echo "self-test: FAIL — the stale-lock check needs 'npm' and 'dotnet' on PATH" >&2
+    return 2
+  fi
+
+  local fx="$TMP/lockfiles" expect=0 out rc
+
+  # --- npm: package-lock.json stale relative to package.json ---------------
+  local npm="$fx/npm"
+  mkdir -p "$npm/dep"
+  cat > "$npm/dep/package.json" <<'EOF'
+{ "name": "lock-drift-fixture-dep", "version": "1.0.0", "license": "MIT" }
+EOF
+  cat > "$npm/package.json" <<'EOF'
+{ "name": "lock-drift-fixture", "version": "1.0.0", "private": true,
+  "dependencies": { "lock-drift-fixture-dep": "file:./dep" } }
+EOF
+  # Stale lock: the manifest declares the dependency, the lock omits it.
+  cat > "$npm/package-lock.json" <<'EOF'
+{ "name": "lock-drift-fixture", "version": "1.0.0", "lockfileVersion": 3, "requires": true,
+  "packages": { "": { "name": "lock-drift-fixture", "version": "1.0.0",
+    "dependencies": { "lock-drift-fixture-dep": "file:./dep" } } } }
+EOF
+  rc=0
+  out="$(cd "$npm" && npm ci --ignore-scripts --offline 2>&1)" || rc=$?
+  if [[ "$rc" -eq 0 ]] || ! grep -q "Missing: lock-drift-fixture-dep@1.0.0 from lock file" <<<"$out"; then
+    echo "self-test: FAIL — 'npm ci' accepted a stale package-lock.json (exit $rc)" >&2
+    printf '%s\n' "$out" >&2
+    expect=1
+  else
+    echo "self-test: PASS — stale package-lock.json fails 'npm ci' (exit $rc): $(grep -m1 'Missing: lock-drift-fixture-dep' <<<"$out")"
+  fi
+
+  # Positive control: same fixture, lock consistent with the manifest.
+  cat > "$npm/package-lock.json" <<'EOF'
+{ "name": "lock-drift-fixture", "version": "1.0.0", "lockfileVersion": 3, "requires": true,
+  "packages": {
+    "": { "name": "lock-drift-fixture", "version": "1.0.0",
+      "dependencies": { "lock-drift-fixture-dep": "file:./dep" } },
+    "dep": { "version": "1.0.0", "license": "MIT" },
+    "node_modules/lock-drift-fixture-dep": { "resolved": "dep", "link": true } } }
+EOF
+  rc=0
+  out="$(cd "$npm" && npm ci --ignore-scripts --offline 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    echo "self-test: FAIL — 'npm ci' rejected a consistent package-lock.json (exit $rc)" >&2
+    printf '%s\n' "$out" >&2
+    expect=1
+  else
+    echo "self-test: PASS — consistent package-lock.json installs offline (exit 0)"
+  fi
+
+  # --- NuGet: packages.lock.json stale relative to the csproj --------------
+  local nu="$fx/nuget"
+  mkdir -p "$nu/emptysrc"
+  cat > "$nu/fx.csproj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="LockDriftFixture.Package" Version="1.0.0" />
+  </ItemGroup>
+</Project>
+EOF
+  # Stale lock: resolved 0.9.0 while the csproj asks for 1.0.0.
+  cat > "$nu/packages.lock.json" <<'EOF'
+{ "version": 1, "dependencies": { "net10.0": { "LockDriftFixture.Package": {
+  "type": "Direct", "requested": "[0.9.0, )", "resolved": "0.9.0", "contentHash": "AAAA" } } } }
+EOF
+  rc=0
+  out="$(cd "$nu" && dotnet restore --locked-mode --source "$nu/emptysrc" 2>&1)" || rc=$?
+  if [[ "$rc" -eq 0 ]] || ! grep -q "NU1004" <<<"$out" || ! grep -q "LockDriftFixture.Package" <<<"$out"; then
+    echo "self-test: FAIL — 'dotnet restore --locked-mode' accepted a stale packages.lock.json (exit $rc)" >&2
+    printf '%s\n' "$out" >&2
+    expect=1
+  else
+    echo "self-test: PASS — stale packages.lock.json fails 'dotnet restore --locked-mode' (exit $rc): $(grep -m1 -o 'NU1004: The package reference [^ ]*' <<<"$out")"
+  fi
+
+  # Positive control: same project, lock consistent with the csproj (1.0.0).
+  cat > "$nu/packages.lock.json" <<'EOF'
+{ "version": 1, "dependencies": { "net10.0": { "LockDriftFixture.Package": {
+  "type": "Direct", "requested": "[1.0.0, )", "resolved": "1.0.0", "contentHash": "AAAA" } } } }
+EOF
+  rc=0
+  out="$(cd "$nu" && dotnet restore --locked-mode --source "$nu/emptysrc" 2>&1)" || rc=$?
+  if grep -q "NU1004" <<<"$out"; then
+    echo "self-test: FAIL — a consistent packages.lock.json still hit NU1004" >&2
+    printf '%s\n' "$out" >&2
+    expect=1
+  else
+    echo "self-test: PASS — consistent packages.lock.json clears the lock check (no NU1004; $(grep -m1 -o 'error NU[0-9]*' <<<"$out" || echo 'restore succeeded'))"
+  fi
+
+  return "$expect"
+}
+
 self_test() {
   echo "== audit-deps --self-test (unlisted advisories fail; ADR-keyed exceptions pass)"
   local fx="$TMP/selftest"
@@ -241,8 +357,19 @@ EOF
   grep -q "fail npm:tiny-pkg.*ADR-9999.*no docs/adr" "$fx/out.log" || { echo "self-test: FAIL — exception citing a missing ADR file not flagged" >&2; expect=1; }
   grep -q "fail npm:other-pkg.*not an ADR id" "$fx/out.log" || { echo "self-test: FAIL — malformed adr value not flagged" >&2; expect=1; }
   [[ "$rc" -eq 1 ]] || { echo "self-test: FAIL — exit $rc, expected 1" >&2; expect=1; }
+
+  # 11.6.1-T1.1 (AC1): the locked installs this gate reads must refuse a
+  # drifted lock. A missing npm/dotnet is a hard prerequisite failure (exit 2).
+  local lock_rc=0
+  lockfile_self_test || lock_rc=$?
+  if [[ "$lock_rc" -eq 2 ]]; then
+    return 2
+  elif [[ "$lock_rc" -ne 0 ]]; then
+    expect=1
+  fi
+
   if [[ "$expect" -eq 0 ]]; then
-    echo "self-test: PASS — unlisted advisories fail, live ADR exception passes, expired exception revokes"
+    echo "self-test: PASS — unlisted advisories fail, live ADR exception passes, expired exception revokes; stale npm + NuGet locks fail their locked installs"
   fi
   return "$expect"
 }

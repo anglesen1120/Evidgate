@@ -119,9 +119,15 @@ function npx(version: string, args: string): string {
 }
 
 /**
- * The GitHub Actions template. `permissions` grants `id-token: write` so the exchange
- * step can present the GitHub OIDC JWT; `EVIDGATE_API_URL` is a repository
- * configuration VARIABLE, the only stored setting. No `secrets.` reference exists.
+ * The GitHub Actions template. Fork-safe by construction (11.6.1-T2, mirroring
+ * `fixtures/ci-recipes/github-fork-safe.yml`): the workflow grants nothing at the top
+ * level; the credential-free `test` job runs on `pull_request` and `push`; the `upload`
+ * job that mints the token runs only on `workflow_dispatch` or a push to the default
+ * branch, inside the secretless environment `evidgate-upload`, with `contents: read` +
+ * `id-token: write` so the exchange step can present the GitHub OIDC JWT.
+ * `EVIDGATE_API_URL` is a repository configuration VARIABLE, the only stored setting.
+ * No `secrets.` reference exists. The rules and their sources are in
+ * `docs/security/customer-ci-recipe.md`.
  */
 function renderGithub(project: string, version: string): string {
   return `# Evidgate quickstart — GitHub Actions workflow (rendered by \`evidgate quickstart\`).
@@ -130,26 +136,65 @@ function renderGithub(project: string, version: string): string {
 # (Settings → Secrets and variables → Actions → Variables). No secret is stored: the
 # CLI exchanges the GitHub OIDC token for a short-lived Evidgate CI token.
 #
-# Fork pull requests get no OIDC token, so the exchange step below fails there; add
-# \`if: github.event_name != 'pull_request'\` to skip it on forks.
+# Fork-safe by construction: \`test\` runs on pull_request and holds no Evidgate setting
+# and no token; \`upload\` mints the token only on a workflow_dispatch or push from the
+# default branch. The rules and their sources: docs/security/customer-ci-recipe.md.
 name: evidgate
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+  workflow_dispatch:
 
-permissions:
-  contents: read
-  id-token: write
+# R3: nothing at workflow level; a job without its own permissions block gets nothing.
+permissions: {}
 
 jobs:
-  evidgate:
+  test:
+    if: "github.event_name != 'workflow_dispatch'"
     runs-on: ubuntu-24.04
+    # R3: read the code, nothing else. A fork pull request gets a read-only token anyway.
+    permissions:
+      contents: read
+    steps:
+      - uses: ${checkoutAction}
+        with:
+          persist-credentials: false
+      - uses: ${setupNodeAction}
+        with:
+          node-version: "22"
+      # Replace with your build and test commands. This job holds no Evidgate setting
+      # and no token, so a fork pull request runs it safely.
+      - run: npm ci
+      - run: npm test
+
+  upload:
+    needs:
+      - test
+    # Runs only on a maintainer's workflow_dispatch from the default branch (the test
+    # job is skipped then) or after a green push to the default branch. Never for a
+    # pull_request event.
+    if: "\${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test.result == 'success')) }}"
+    runs-on: ubuntu-24.04
+    # An environment with no secrets: create it with required reviewers and a
+    # deployment branch rule for \`main\` before first use — its rules gate the job and
+    # it holds nothing a compromised step could read. Referencing an environment that
+    # does not exist auto-creates it with no protection rules:
+    # https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
+    environment: evidgate-upload
+    # R3: per-job elevation. id-token write lets the CLI request the GitHub OIDC token.
+    permissions:
+      contents: read
+      id-token: write
     env:
       EVIDGATE_API_URL: \${{ vars.EVIDGATE_API_URL }}
       EVIDGATE_PROJECT: "${project}"
     steps:
       - uses: ${checkoutAction}
+        with:
+          persist-credentials: false
       - uses: ${setupNodeAction}
         with:
           node-version: "22"

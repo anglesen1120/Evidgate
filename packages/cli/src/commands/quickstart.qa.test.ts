@@ -45,9 +45,9 @@ describe('quickstart independent QA', () => {
       const output = capture();
       expect(await main(['quickstart'], { ...env, EVIDGATE_PROJECT: project }, output.io)).toBe(0);
       const workflow = parse(output.stdout.join('')) as {
-        jobs: { evidgate: { env: { EVIDGATE_PROJECT: string } } };
+        jobs: { upload: { env: { EVIDGATE_PROJECT: string } } };
       };
-      expect(workflow.jobs.evidgate.env.EVIDGATE_PROJECT).toBe(project);
+      expect(workflow.jobs.upload.env.EVIDGATE_PROJECT).toBe(project);
       expect(output.stderr.join('')).toBe('');
     },
   );
@@ -125,14 +125,16 @@ describe('quickstart independent QA', () => {
   it('keeps every action SHA identical to the existing repository CI workflow', () => {
     const workflow = parse(
       renderQuickstart({ format: 'github', project: env.EVIDGATE_PROJECT, version }),
-    ) as { jobs: { evidgate: { steps: { uses?: string }[] } } };
+    ) as { jobs: Record<string, { steps: { uses?: string }[] }> };
     const ci = readFileSync(
       new URL('../../../../.github/workflows/ci.yml', import.meta.url),
       'utf8',
     );
     const pins = [...ci.matchAll(/uses:\s*([^\s#]+)/g)].map((match) => match[1]);
-    const actions = workflow.jobs.evidgate.steps.flatMap((step) => (step.uses ? [step.uses] : []));
-    expect(actions).toHaveLength(2);
+    const actions = Object.values(workflow.jobs).flatMap((job) =>
+      job.steps.flatMap((step) => (step.uses ? [step.uses] : [])),
+    );
+    expect(actions).toHaveLength(4);
     for (const action of actions) expect(pins).toContain(action);
   });
 });
