@@ -90,9 +90,17 @@ internal sealed class ProducerRegistry(
             return Result.Success<IReadOnlyList<ProducerSlotRef>>(refs);
         }
 
-        // A concurrent registration won the race (or a partial set already existed): re-read the run's
-        // slots and answer from what is stored - the same count is the idempotent no-op, anything else
-        // is the conflict. Never a partial insert.
+        // A partial insert (0 < inserted < shardCount) means a concurrent registration wrote a
+        // different shard set into this run: the run's slot set is now mixed, so this call is a
+        // conflict and never a success. The caller rolls back, which removes the rows this call added.
+        if (inserted > 0)
+        {
+            return Result.Failure<IReadOnlyList<ProducerSlotRef>>(ProducerSlotErrors.SlotsAlreadyRegistered);
+        }
+
+        // Nothing was inserted: the run already carried a full slot set (a concurrent same-count
+        // registration won, or a retried create). Re-read and answer from what is stored - the same
+        // count is the idempotent no-op, anything else is the conflict.
         var stored = await db.QueryAsync<SlotRow>(
             ProducerSlotSql.ReadRunSlots,
             new { org_id = orgId, run_id = runId },
@@ -124,19 +132,8 @@ internal sealed class ProducerRegistry(
 
         var orgId = scopes.Require().OrgId;
 
-        // The bind is one conditional UPDATE (T9): only an unbound slot is written, so two racing first
-        // writers cannot both win - the loser's WHERE matches no row and it falls through to the check.
-        var bound = await db.QuerySingleOrDefaultAsync<SlotRow>(
-            ProducerSlotSql.BindIfUnbound,
-            new { org_id = orgId, run_id = runId, producer_id = producerId, jti = tokenJti, ci_run_ref = ciRunRef },
-            cancellationToken).ConfigureAwait(false);
-
-        if (bound is not null)
-        {
-            return Result.Success(new ProducerSlotBinding(bound.Id, bound.ShardIndex, bound.ProducerId, true));
-        }
-
-        // Nothing was bound: the slot is unknown, already bound to this identity (idempotent), or taken.
+        // Read first (P3): after the first write every call is a bound slot, so the common path is one
+        // SELECT and no UPDATE. The decision table is unchanged - unknown, idempotent, taken, or bind.
         var existing = await db.QuerySingleOrDefaultAsync<SlotRow>(
             ProducerSlotSql.ReadByProducer,
             new { org_id = orgId, run_id = runId, producer_id = producerId },
@@ -147,13 +144,41 @@ internal sealed class ProducerRegistry(
             return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.UnknownProducer);
         }
 
-        if (!string.Equals(existing.BoundTokenJti, tokenJti, StringComparison.Ordinal)
-            || !string.Equals(existing.BoundCiRunRef, ciRunRef, StringComparison.Ordinal))
+        if (existing.BoundTokenJti is not null)
         {
-            return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
+            return string.Equals(existing.BoundTokenJti, tokenJti, StringComparison.Ordinal)
+                && string.Equals(existing.BoundCiRunRef, ciRunRef, StringComparison.Ordinal)
+                ? Result.Success(new ProducerSlotBinding(existing.Id, existing.ShardIndex, existing.ProducerId, false))
+                : Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
         }
 
-        return Result.Success(new ProducerSlotBinding(existing.Id, existing.ShardIndex, existing.ProducerId, false));
+        // Unbound: the bind is one conditional UPDATE (T9) whose WHERE keeps the guard, so two racing
+        // first writers cannot both win - the loser's WHERE matches no row and falls through below.
+        var bound = await db.QuerySingleOrDefaultAsync<SlotRow>(
+            ProducerSlotSql.BindIfUnbound,
+            new { org_id = orgId, run_id = runId, producer_id = producerId, jti = tokenJti, ci_run_ref = ciRunRef },
+            cancellationToken).ConfigureAwait(false);
+
+        if (bound is not null)
+        {
+            return Result.Success(new ProducerSlotBinding(bound.Id, bound.ShardIndex, bound.ProducerId, true));
+        }
+
+        // The race was lost: one re-read decides idempotent (the winner bound this same identity) or taken.
+        var after = await db.QuerySingleOrDefaultAsync<SlotRow>(
+            ProducerSlotSql.ReadByProducer,
+            new { org_id = orgId, run_id = runId, producer_id = producerId },
+            cancellationToken).ConfigureAwait(false);
+
+        if (after is null)
+        {
+            return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.UnknownProducer);
+        }
+
+        return string.Equals(after.BoundTokenJti, tokenJti, StringComparison.Ordinal)
+            && string.Equals(after.BoundCiRunRef, ciRunRef, StringComparison.Ordinal)
+            ? Result.Success(new ProducerSlotBinding(after.Id, after.ShardIndex, after.ProducerId, false))
+            : Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
     }
 
     /// <inheritdoc />
@@ -215,7 +240,7 @@ internal static class ProducerSlotErrors
 
     /// <summary>409: the run already carries a different number of slots, so a second registration cannot be a no-op.</summary>
     internal static Error SlotsAlreadyRegistered => Error.Conflict(
-        ApiErrorCode.InvalidTransition,
+        ApiErrorCode.ProducerSlotsConflict,
         "the run already has a different number of producer slots");
 
     /// <summary>422: no slot of the run carries this producer id (T9).</summary>
@@ -242,26 +267,68 @@ internal static class ProducerSlotErrors
 /// The argument bounds of the registry, shared with the migration's CHECKs through
 /// <see cref="ProducerSlotLimits"/> so the two cannot drift (00 §5.5 C6).
 /// </summary>
-internal static partial class ProducerSlotArguments
+internal static class ProducerSlotArguments
 {
     /// <summary>True when <paramref name="producerId"/> matches the column's charset and length bound.</summary>
     internal static bool IsValidProducerId(string? producerId) =>
-        producerId is not null && ProducerIdRegex().IsMatch(producerId);
+        producerId is not null && ProducerIdRegex.IsMatch(producerId);
 
-    /// <summary>True when <paramref name="value"/> is 1..<paramref name="maxLength"/> characters.</summary>
+    /// <summary>
+    /// True when <paramref name="value"/> is 1..<paramref name="maxLength"/> characters and carries no
+    /// control character or lone surrogate: PostgreSQL rejects U+0000 in text (22021) and a lone
+    /// surrogate cannot be encoded, so either would surface as an unhandled exception instead of a
+    /// result (00 §5.5 C6).
+    /// </summary>
     internal static bool IsWithin(string? value, int maxLength) =>
-        value is not null && value.Length >= 1 && value.Length <= maxLength;
+        value is not null
+        && value.Length >= 1
+        && value.Length <= maxLength
+        && IsStorableText(value);
 
     /// <summary>True when <paramref name="value"/> is null or 1..<paramref name="maxLength"/> characters.</summary>
     internal static bool IsWithinOrNull(string? value, int maxLength) =>
         value is null || IsWithin(value, maxLength);
 
-    /// <summary>The migration's <c>producer_slot_producer_id_check</c> charset.</summary>
-    [System.Text.RegularExpressions.GeneratedRegex(
-        ProducerSlotLimits.ProducerIdPattern,
+    /// <summary>True when every character is storable: no control character and no lone surrogate.</summary>
+    private static bool IsStorableText(string value)
+    {
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+
+            if (char.IsControl(character))
+            {
+                return false;
+            }
+
+            if (char.IsSurrogate(character))
+            {
+                // A surrogate pair is fine; a lone surrogate is not.
+                if (!char.IsHighSurrogate(character)
+                    || index + 1 >= value.Length
+                    || !char.IsLowSurrogate(value[index + 1]))
+                {
+                    return false;
+                }
+
+                index++;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The migration's <c>producer_slot_producer_id_check</c> charset, built from the single shared
+    /// constant: the trailing <c>$</c> of <see cref="ProducerSlotLimits.ProducerIdPattern"/> becomes
+    /// <c>\z</c>, because .NET's <c>$</c> also matches before a trailing newline while PostgreSQL's
+    /// <c>~</c> does not. Built at runtime (not <c>[GeneratedRegex]</c>) precisely so the shared
+    /// constant stays the one source of the charset.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex ProducerIdRegex = new(
+        ProducerSlotLimits.ProducerIdPattern[..^1] + @"\z",
         System.Text.RegularExpressions.RegexOptions.CultureInvariant,
-        matchTimeoutMilliseconds: 100)]
-    private static partial System.Text.RegularExpressions.Regex ProducerIdRegex();
+        TimeSpan.FromMilliseconds(100));
 }
 
 /// <summary>The statements of the producer registry; every one runs in the caller's tenant transaction.</summary>

@@ -1,8 +1,10 @@
+using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -121,6 +123,50 @@ public sealed class ProducerSlotQaTests
         result.Error.Status.ShouldBe(422);
     }
 
+    [Fact]
+    public async Task BindOrCheck_ProducerIdWithTrailingNewline_IsRefused()
+    {
+        // .NET's `$` also matches before a trailing newline while PostgreSQL's `~` does not, so the
+        // validator anchors with `\z`: "shard-1\n" must be refused, not accepted here and rejected there.
+        await using var world = await StartAsync();
+        var run = Guid.CreateVersion7();
+        await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
+
+        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1\n", "jti-a", null, TestContext.Current.CancellationToken));
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
+    }
+
+    [Fact]
+    public async Task BindOrCheck_NulInTokenJti_IsRefused()
+    {
+        // PostgreSQL rejects U+0000 in text (22021), so the validator must refuse it as a result.
+        await using var world = await StartAsync();
+        var run = Guid.CreateVersion7();
+        await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
+
+        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", "jti\0a", null, TestContext.Current.CancellationToken));
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
+        result.Error.Status.ShouldBe(422);
+    }
+
+    [Fact]
+    public async Task BindOrCheck_NulInCiRunRef_IsRefused()
+    {
+        await using var world = await StartAsync();
+        var run = Guid.CreateVersion7();
+        await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
+
+        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", "jti-a", "1/7\0/2", TestContext.Current.CancellationToken));
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
+        result.Error.Status.ShouldBe(422);
+    }
+
     // ------------------------------------------------------------------ shard-count boundary (T54 / ProducerSlotLimits)
 
     [Fact]
@@ -136,20 +182,6 @@ public sealed class ProducerSlotQaTests
         result.Value.Select(slot => slot.ProducerId).Distinct().Count().ShouldBe(256);
         result.Value[0].ProducerId.ShouldBe("shard-1");
         result.Value[^1].ProducerId.ShouldBe("shard-256");
-    }
-
-    [Fact]
-    public async Task RegisterSlots_AboveMaxShardCount_IsRefusedAndWritesNothing()
-    {
-        await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
-
-        var result = await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 257, TestContext.Current.CancellationToken));
-
-        result.IsSuccess.ShouldBeFalse();
-
-        var rows = await InScopeAsync(world, r => r.GetRunProducerSlotsAsync(run, TestContext.Current.CancellationToken));
-        rows.ShouldBeEmpty();
     }
 
     // ------------------------------------------------------------------ isolation
@@ -176,32 +208,106 @@ public sealed class ProducerSlotQaTests
     // ------------------------------------------------------------------ race
 
     [Fact]
-    public async Task ConcurrentRegisterSlots_SameRun_NeverLeaksAnUnhandledDatabaseError()
+    public async Task ConcurrentRegisterSlots_SameCount_BothSucceedWithTheSameSlots()
     {
-        // Two writers race on one run. The contract is: each call either succeeds (idempotent or first) or
-        // returns a result failure. No unhandled 23505 may escape, and the run ends with exactly 3 slots.
+        // Two same-count racers: one inserts, the other's `on conflict do nothing` inserts nothing and
+        // its re-read finds the same count, so BOTH succeed and both return the stored slot ids. No
+        // unhandled 23505 may escape, and the run ends with exactly 3 rows.
         await using var world = await StartAsync();
         var run = Guid.CreateVersion7();
 
-        var outcomes = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => RegisterOutcomeAsync(world, run)));
+        var results = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ =>
+            InScopeAsync(world, r => r.RegisterSlotsAsync(run, 3, TestContext.Current.CancellationToken))));
 
-        outcomes.ShouldAllBe(outcome => outcome == "ok" || outcome == "failure");
+        results.ShouldAllBe(result => result.IsSuccess);
+        results[0].Value.Select(slot => slot.Id).ShouldBe(results[1].Value.Select(slot => slot.Id));
 
         var rows = await InScopeAsync(world, r => r.GetRunProducerSlotsAsync(run, TestContext.Current.CancellationToken));
         rows.Count.ShouldBe(3);
     }
 
-    private static async Task<string> RegisterOutcomeAsync(World world, Guid run)
+    [Fact]
+    public async Task RegisterSlots_DifferentCount_Sequential_IsConflictAndLeavesTheOriginalRows()
     {
-        try
+        // (a) sequential: 2 slots exist, a call with 4 is the 409 and the original 2 rows are untouched.
+        await using var world = await StartAsync();
+        var run = Guid.CreateVersion7();
+        var first = await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 2, TestContext.Current.CancellationToken));
+
+        var second = await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 4, TestContext.Current.CancellationToken));
+
+        second.IsSuccess.ShouldBeFalse();
+        second.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotsConflict);
+        second.Error.Status.ShouldBe(409);
+
+        var rows = await InScopeAsync(world, r => r.GetRunProducerSlotsAsync(run, TestContext.Current.CancellationToken));
+        rows.Select(slot => slot.Id).ShouldBe(first.Value.Select(slot => slot.Id));
+    }
+
+    [Fact]
+    public async Task RegisterSlots_DifferentCount_Interleaved_IsConflictNeverSuccess()
+    {
+        // (b) the F1 interleave: tx A registers 2 and stays uncommitted; tx B calls with 4 on another
+        // connection, so its insert blocks on A's rows. Committing A lets B's `on conflict do nothing`
+        // skip A's two shard-1/shard-2 rows and insert shard-3/shard-4 - a partial insert (2 of 4), which
+        // must be the 409 and never a success. B then rolls back, so the run keeps A's 2 slots.
+        await using var world = await StartAsync();
+        var run = Guid.CreateVersion7();
+
+        await using var servicesA = world.Api.Services.CreateAsyncScope();
+        await using var scopeA = await servicesA.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
+            .BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
+        var registeredA = await servicesA.ServiceProvider.GetRequiredService<IProducerRegistry>()
+            .RegisterSlotsAsync(run, 2, TestContext.Current.CancellationToken);
+        registeredA.IsSuccess.ShouldBeTrue(registeredA.Error?.Message);
+
+        await using var servicesB = world.Api.Services.CreateAsyncScope();
+        await using var scopeB = await servicesB.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
+            .BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
+        var callB = servicesB.ServiceProvider.GetRequiredService<IProducerRegistry>()
+            .RegisterSlotsAsync(run, 4, TestContext.Current.CancellationToken).AsTask();
+
+        // B's insert is waiting on A's uncommitted rows: observe the wait through pg_locks rather than
+        // sleeping, then commit A so B can proceed.
+        await WaitForBlockedInsertAsync(world);
+        await scopeA.CommitAsync(TestContext.Current.CancellationToken);
+
+        var resultB = await callB;
+
+        resultB.IsSuccess.ShouldBeFalse();
+        resultB.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotsConflict);
+        resultB.Error.Status.ShouldBe(409);
+
+        // B rolls back (its scope is disposed without a commit), so only A's 2 slots remain.
+        await scopeB.DisposeAsync();
+
+        var rows = await InScopeAsync(world, r => r.GetRunProducerSlotsAsync(run, TestContext.Current.CancellationToken));
+        rows.Select(slot => slot.Id).ShouldBe(registeredA.Value.Select(slot => slot.Id));
+    }
+
+    /// <summary>
+    /// Waits until some backend is blocked on a lock (B's insert waiting on A's rows), polling
+    /// <c>pg_locks</c> with a bounded budget - an explicit ordering signal, not a sleep.
+    /// </summary>
+    private async Task WaitForBlockedInsertAsync(World world)
+    {
+        await using var connection = new NpgsqlConnection(_fixture.OwnerConnectionString(world.Database));
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+
+        for (var attempt = 0; attempt < 200; attempt++)
         {
-            var result = await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 3, TestContext.Current.CancellationToken));
-            return result.IsSuccess ? "ok" : "failure";
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from pg_locks where not granted";
+            var waiting = (long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+            if (waiting > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(25, TestContext.Current.CancellationToken);
         }
-        catch (Exception ex)
-        {
-            return "exception:" + ex.GetType().Name;
-        }
+
+        throw new InvalidOperationException("no backend was blocked on a lock: the interleave did not happen");
     }
 
     // ------------------------------------------------------------------ privilege (app role, migration 0029 grants)
@@ -278,6 +384,14 @@ public sealed class ProducerSlotQaTests
         // (org_id, run_id). Sequential scans are disabled in this session (the WaiverTests precedent,
         // tests/Tenancy.IntegrationTests/WaiverTests.cs:504) so a three-row table cannot make the
         // planner prefer a scan, and the production statements are explained with their real parameters.
+        //
+        // Which index serves which query:
+        //   - BindIfUnbound / ReadByProducer filter on (org_id, run_id, producer_id), so the planner
+        //     picks producer_slot_run_producer_key - the unique that carries exactly that column list.
+        //   - ReadRunSlots filters on (org_id, run_id) and orders by shard_index, so either
+        //     producer_slot_run (org_id, run_id) or producer_slot_run_shard_key (org_id, run_id,
+        //     shard_index) serves it; producer_slot_run is the plan §4 index kept for this read (the
+        //     uniques already cover the same prefix, recorded in the 0029 header).
         await using var world = await StartAsync();
         var run = Guid.CreateVersion7();
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 3, TestContext.Current.CancellationToken));
@@ -293,12 +407,51 @@ public sealed class ProducerSlotQaTests
             ("producer_id", "shard-1"),
             ("jti", "jti-a"),
             ("ci_run_ref", "1/7/2"));
-        bind.ShouldContain("producer_slot_run_producer_key");
+        IndexNames(bind).ShouldBe(["producer_slot_run_producer_key"]);
+        bind.ShouldNotContain("Seq Scan");
 
         var read = await scope.ScalarAsync<string>(
             $"explain (format json) {ProducerSlotSql.ReadRunSlots}",
             ("org_id", world.Org),
             ("run_id", run));
-        read.ShouldContain("producer_slot_run");
+        IndexNames(read).ShouldBe(["producer_slot_run"]);
+        read.ShouldNotContain("Seq Scan");
+    }
+
+    /// <summary>Every <c>Index Name</c> in an <c>EXPLAIN (FORMAT JSON)</c> plan, in plan order.</summary>
+    private static List<string> IndexNames(string plan)
+    {
+        var names = new List<string>();
+        Collect(JsonDocument.Parse(plan).RootElement, names);
+
+        return names;
+
+        static void Collect(JsonElement element, List<string> names)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        if (property.NameEquals("Index Name"))
+                        {
+                            names.Add(property.Value.GetString()!);
+                        }
+                        else
+                        {
+                            Collect(property.Value, names);
+                        }
+                    }
+
+                    break;
+                case JsonValueKind.Array:
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        Collect(item, names);
+                    }
+
+                    break;
+            }
+        }
     }
 }

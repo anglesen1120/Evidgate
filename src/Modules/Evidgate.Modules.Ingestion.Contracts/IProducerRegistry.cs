@@ -24,7 +24,14 @@ public interface IProducerRegistry
     /// <param name="runId">The run the slots belong to.</param>
     /// <param name="shardCount">The manifest's shard count: 1..<see cref="ProducerSlotLimits.MaxShards"/>.</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
-    /// <returns>The registered slots, or a failure when the count is out of range or the run already has slots.</returns>
+    /// <returns>
+    /// The registered slots, or a failure when the count is out of range or the run already has slots.
+    /// <para>
+    /// A failure means the caller MUST roll back its transaction: a concurrent registration with a
+    /// different count can leave a partial slot set inside it (the statement inserts what it can and
+    /// the conflict is reported afterwards), so the caller must not commit the run row on a failure.
+    /// </para>
+    /// </returns>
     ValueTask<Result<IReadOnlyList<ProducerSlotRef>>> RegisterSlotsAsync(
         Guid runId,
         int shardCount,

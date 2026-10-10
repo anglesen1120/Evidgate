@@ -197,6 +197,9 @@ public static class ApiErrorCode
     /// <summary>403: a write or <c>finalize</c> names a slot bound to another token identity (00 §9.4, TL T9).</summary>
     public const string ProducerSlotTaken = "producer_slot_taken";
 
+    /// <summary>409: a run already carries a different number of producer slots, so a second registration cannot be a no-op (04.1.2-T4, T13).</summary>
+    public const string ProducerSlotsConflict = "producer_slots_conflict";
+
     /// <summary>403: a waiver may not be approved by the member who requested it (07.3.1 AC1, FR-07-8; 00 §9.3).</summary>
     public const string WaiverSelfApproval = "waiver_self_approval";
 

@@ -1,6 +1,9 @@
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Ingestion.Contracts;
+using Evidgate.Modules.Ingestion.Domain;
+using Evidgate.Modules.Ingestion.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -379,7 +382,8 @@ public sealed class ProducerSlotTests
         var second = await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 3, TestContext.Current.CancellationToken));
 
         second.IsSuccess.ShouldBeFalse();
-        second.Error!.Status.ShouldBe(409);
+        second.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotsConflict);
+        second.Error.Status.ShouldBe(409);
         (await CountAsync(world, world.Org)).ShouldBe(2);
     }
 
@@ -536,5 +540,47 @@ public sealed class ProducerSlotTests
             world, otherOrg, registry => registry.GetRunProducerSlotsAsync(runId, TestContext.Current.CancellationToken));
 
         slots.ShouldBeEmpty();
+    }
+
+    // ------------------------------------------------------------------ (f) the EF write model (T4.1)
+
+    [Fact]
+    public async Task WriteModel_RoundTripsThroughEfAndRawSql()
+    {
+        // T4.1: the entity and its configuration are the module's mapping of migration 0029, so a row
+        // written through the EF context must read back identically through EF and through raw SQL -
+        // the version default, the trigger-owned timestamps and the nullable binding columns included.
+        await using var world = await StartAsync();
+        var runId = Guid.CreateVersion7();
+        var id = Guid.CreateVersion7();
+
+        await using (var services = world.Api.Services.CreateAsyncScope())
+        {
+            await using var scope = await services.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
+                .BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
+            await using var context = services.ServiceProvider
+                .GetRequiredService<ITenantDbContextFactory<IngestionDbContext>>().Create();
+
+            await context.ProducerSlots.AddAsync(new ProducerSlot(id, world.Org, runId, 1, "shard-1"), TestContext.Current.CancellationToken);
+            (await context.SaveChangesAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+
+            var read = await context.ProducerSlots.SingleAsync(row => row.Id == id, TestContext.Current.CancellationToken);
+            read.ShardIndex.ShouldBe(1);
+            read.ProducerId.ShouldBe("shard-1");
+            read.Version.ShouldBe(1);
+            read.LastSequence.ShouldBe(0);
+            read.BoundTokenJti.ShouldBeNull();
+            read.BoundCiRunRef.ShouldBeNull();
+            read.ClosedAt.ShouldBeNull();
+            read.CreatedAt.ShouldNotBe(default);
+
+            await scope.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var raw = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        (await raw.ScalarAsync<long>("select count(*) from public.producer_slot")).ShouldBe(1);
+        (await raw.ScalarAsync<int>("select version from public.producer_slot")).ShouldBe(1);
+        (await raw.ScalarAsync<string>("select producer_id from public.producer_slot")).ShouldBe("shard-1");
+        (await raw.ScalarAsync<long>("select last_sequence from public.producer_slot")).ShouldBe(0);
     }
 }
