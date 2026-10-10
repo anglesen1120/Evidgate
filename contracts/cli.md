@@ -420,15 +420,21 @@ pin follows the package automatically.
 
 GitHub template (`--format github`, YAML):
 
-- top-level `permissions: { contents: read, id-token: write }`;
-- `on: push` and `pull_request` (a comment notes that a fork PR gets no OIDC
-  token);
-- one job `evidgate` on `ubuntu-24.04`, with `env`
-  `EVIDGATE_API_URL: ${{ vars.EVIDGATE_API_URL }}` — a repository configuration
-  **variable**, not a secret, and the only stored setting — and
+- top-level `permissions: {}` — the workflow grants nothing; each job elevates
+  for itself (11.6.1-T2, the fork-safe shape of
+  `fixtures/ci-recipes/github-fork-safe.yml`);
+- `on: push` (branches `main`), `pull_request` and `workflow_dispatch`;
+- two jobs on `ubuntu-24.04`: a credential-free `test` job on
+  `pull_request`/`push` with `permissions: { contents: read }`, and an `upload`
+  job that runs only on `workflow_dispatch` or a push to the default branch,
+  inside the environment `evidgate-upload`, with
+  `permissions: { contents: read, id-token: write }`; the `upload` job carries
+  `env` `EVIDGATE_API_URL: ${{ vars.EVIDGATE_API_URL }}` — a repository
+  configuration **variable**, not a secret, and the only stored setting — and
   `EVIDGATE_PROJECT: "<project>"` rendered literal;
-- steps: `actions/checkout` and `actions/setup-node` pinned by commit SHA (the
-  same SHAs as the repo `ci.yml`), `node-version: "22"`, then
+- steps: `actions/checkout` (with `persist-credentials: false`) and
+  `actions/setup-node` pinned by commit SHA (the same SHAs as the repo
+  `ci.yml`), `node-version: "22"`, then
   `npx --yes --package @evidgate/cli@<version> -- evidgate auth login` (OIDC via
   `ACTIONS_ID_TOKEN_REQUEST_*`, exchanged at `POST /v1/ci/token`; the token goes
   only to the 0600 cache, never printed) and

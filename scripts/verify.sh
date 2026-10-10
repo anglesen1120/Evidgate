@@ -37,6 +37,7 @@ ALL_STAGES=(
   check-dor-security
   check-ci-parity
   check-action-pins
+  check-ci-recipe
   check-codegen-drift
   check-permissions-drift
   check-rls
@@ -198,6 +199,15 @@ run_stage() {
     stage "check-action-pins"
     scripts/check-action-pins.sh
     ;;
+  check-ci-recipe)
+    # 11.6.1-T2 (hand-over from 11.2.1-T1): the customer fork-safe recipe lint.
+    # The self-test proves every rule still rejects its negative and bypass
+    # fixtures and the shipped recipe passes; then the `evidgate quickstart`
+    # GitHub template (kept equal to the renderer by a vitest test) must pass.
+    stage "check-ci-recipe"
+    scripts/lint-ci-recipe.sh --self-test
+    scripts/lint-ci-recipe.sh docs/quickstart/github-actions.yml
+    ;;
   check-codegen-drift)
     # AC1 (01.3.2-T1.3): regenerate the SDK and fail on any diff — the spec is
     # the only thing humans edit.
@@ -238,11 +248,17 @@ run_stage() {
     # --report writes artifacts/licence-report.json, which the ci.yml
     # `Upload licence report` step consumes (QA D1: an unargumented call left
     # that upload empty while the job stayed green).
+    # 11.6.1-T1 (AC2): the self-test first proves planted AGPL/unlicensed npm and
+    # NuGet packages still fail with name and licence in the log.
+    scripts/licence-scan.sh --self-test
     scripts/licence-scan.sh --report artifacts/licence-report.json
     ;;
   audit-deps)
     # AC6 (01.7.1-T4.2): vulnerability gates, exceptions.json is ADR-keyed.
     stage "audit-deps"
+    # 11.6.1-T1 (AC1): the self-test also proves a stale package-lock.json fails
+    # `npm ci` and a stale packages.lock.json fails `dotnet restore --locked-mode`.
+    scripts/audit-deps.sh --self-test
     scripts/audit-deps.sh
     ;;
   sbom)

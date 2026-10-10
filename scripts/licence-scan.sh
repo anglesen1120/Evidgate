@@ -20,9 +20,11 @@
 # Exit 2: a scanner failed — including an EMPTY inventory for an enabled
 #         ecosystem (a scanner that reports zero packages is a broken scanner,
 #         not a clean tree).
-# --self-test plants synthetic deny/warn/unknown packages (no repo changes, no
-# network beyond the local node_modules scanner) and asserts the gate detects
-# them — the AC4 evidence without a throwaway branch.
+# --self-test plants synthetic deny/warn/unknown packages and packs a real
+# AGPL/MIT NuGet fixture pair through the actual nuget-license scanner (no repo
+# changes, no network beyond the local node_modules scanner and the restored
+# tool), asserting the gate detects each denial naming its package and licence —
+# the AC4 evidence without a throwaway branch.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -283,6 +285,24 @@ PYEOF
   cat "$2.rows"
 }
 
+# '<eco>\t<name>\t<ver>\t<licence>' rows from a nuget-license JSON file. Shared
+# by the real collector and the self-test's real-scanner case.
+nuget_json_rows() {
+  python3 - "$1" <<'PYEOF'
+import json, sys
+
+data = json.load(open(sys.argv[1]))
+if not isinstance(data, list):
+    print("licence-scan: unexpected nuget-license JSON shape", file=sys.stderr)
+    sys.exit(2)
+for p in data:
+    name = p.get("PackageId") or p.get("Name") or "?"
+    ver = p.get("PackageVersion") or p.get("Version") or ""
+    lic = p.get("License") or p.get("LicenseUrl") or "UNLICENSED"
+    print("nuget\t%s\t%s\t%s" % (name, ver, lic))
+PYEOF
+}
+
 dotnet_rows() {
   local out_json="$1"
   if [[ ! -f Evidgate.slnx ]]; then
@@ -304,25 +324,112 @@ dotnet_rows() {
     echo "licence-scan: nuget-license produced no JSON (rc=$rc)" >&2
     return 2
   fi
-  python3 - "$out_json" <<'PYEOF'
-import json, sys
-
-data = json.load(open(sys.argv[1]))
-if not isinstance(data, list):
-    print("licence-scan: unexpected nuget-license JSON shape", file=sys.stderr)
-    sys.exit(2)
-with open(sys.argv[1] + ".rows", "w") as out:
-    for p in data:
-        name = p.get("PackageId") or p.get("Name") or "?"
-        ver = p.get("PackageVersion") or p.get("Version") or ""
-        lic = p.get("License") or p.get("LicenseUrl") or "UNLICENSED"
-        print("nuget\t%s\t%s\t%s" % (name, ver, lic), file=out)
-PYEOF
+  nuget_json_rows "$out_json" > "$out_json.rows"
   if [[ ! -s "$out_json.rows" ]]; then
     echo "licence-scan: nuget inventory is empty — nuget-license returned no packages (rc=$rc)" >&2
     return 2
   fi
   cat "$out_json.rows"
+}
+
+# ---------------------------------------------------------------------------
+# Real NuGet-scanner case (11.6.1-T1.1, AC2). The synthetic nuget row in
+# self_test proves the evaluator handles a nuget row; this proves the real tool
+# chain does: `dotnet pack` fixture packages (AGPL + MIT licence expressions)
+# into a local source, restore a consumer against ONLY that source with a
+# throwaway NUGET_PACKAGES, run the same `dotnet nuget-license` invocation
+# dotnet_rows uses, and feed its rows through the same evaluator. Offline: the
+# packages are local; the tool comes from the restored .config manifest.
+# Returns 0 pass, 1 fail, 2 a prerequisite (dotnet/tool) is missing.
+# ---------------------------------------------------------------------------
+nuget_scanner_self_test() {
+  local fx="$TMP/selftest/nuget-real" expect=0 rc=0
+  mkdir -p "$fx/localsrc" "$fx/consumer" "$fx/pkgs"
+
+  # 1. Pack the two fixture packages into a local source (offline).
+  local spec id lic dir
+  for spec in "PlantedAgplNuGet.Real AGPL-3.0-only" "PlantedMitNuGet.Real MIT"; do
+    id="${spec%% *}"; lic="${spec##* }"; dir="$fx/pkg-$id"
+    mkdir -p "$dir"
+    cat > "$dir/$id.csproj" <<EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>$id</PackageId>
+    <Version>1.0.0</Version>
+    <PackageLicenseExpression>$lic</PackageLicenseExpression>
+    <Authors>self-test</Authors>
+    <Description>licence-scan self-test fixture</Description>
+  </PropertyGroup>
+</Project>
+EOF
+    if ! dotnet pack "$dir/$id.csproj" -c Release -o "$fx/localsrc" > "$fx/pack.log" 2>&1; then
+      echo "self-test: FAIL — 'dotnet pack' of the $id fixture failed" >&2
+      tail -5 "$fx/pack.log" >&2
+      return 1
+    fi
+  done
+
+  # 2. Restore a consumer against ONLY the local source, into a throwaway
+  #    package folder so the user's NuGet cache is untouched.
+  cat > "$fx/consumer/consumer.csproj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="PlantedAgplNuGet.Real" Version="1.0.0" />
+    <PackageReference Include="PlantedMitNuGet.Real" Version="1.0.0" />
+  </ItemGroup>
+</Project>
+EOF
+  if ! NUGET_PACKAGES="$fx/pkgs" dotnet restore "$fx/consumer/consumer.csproj" \
+       --source "$fx/localsrc" > "$fx/restore.log" 2>&1; then
+    echo "self-test: FAIL — restoring the fixture consumer against the local source failed" >&2
+    tail -5 "$fx/restore.log" >&2
+    return 1
+  fi
+
+  # 3. Run the same scanner dotnet_rows uses (tool from .config/dotnet-tools.json).
+  if ! dotnet tool restore > "$fx/tool.log" 2>&1; then
+    echo "self-test: FAIL — 'dotnet tool restore' failed (nuget-license unavailable)" >&2
+    tail -5 "$fx/tool.log" >&2
+    return 2
+  fi
+  if ! dotnet nuget-license --input "$fx/consumer/consumer.csproj" --include-transitive \
+       --output Json --file-output "$fx/nuget.json" > "$fx/nl.log" 2>&1; then
+    echo "self-test: FAIL — 'dotnet nuget-license' failed on the fixture consumer" >&2
+    tail -5 "$fx/nl.log" >&2
+    return 1
+  fi
+  if ! nuget_json_rows "$fx/nuget.json" > "$fx/rows"; then
+    echo "self-test: FAIL — nuget-license JSON could not be parsed" >&2
+    return 1
+  fi
+
+  # 4. Same evaluator, real policy: AGPL must fail naming package + licence,
+  #    MIT must pass (positive control).
+  set +e
+  evaluate "$fx/rows" "$POLICY" "" 1 > "$fx/eval.log" 2>&1
+  rc=$?
+  set -e
+  cat "$fx/eval.log"
+  if [[ "$rc" -ne 1 ]]; then
+    echo "self-test: FAIL — real nuget-license rows exit $rc, expected 1 (AGPL fixture present)" >&2
+    expect=1
+  fi
+  if ! grep -qF "fail nuget:PlantedAgplNuGet.Real@1.0.0 AGPL-3.0-only" "$fx/eval.log"; then
+    echo "self-test: FAIL — the real scanner did not flag PlantedAgplNuGet.Real with its AGPL licence" >&2
+    expect=1
+  fi
+  if grep -q "fail.*PlantedMitNuGet.Real" "$fx/eval.log"; then
+    echo "self-test: FAIL — PlantedMitNuGet.Real (MIT) was flagged" >&2
+    expect=1
+  fi
+  if [[ "$expect" -eq 0 ]]; then
+    echo "self-test: PASS — real 'dotnet nuget-license' flags PlantedAgplNuGet.Real (AGPL-3.0-only) and passes PlantedMitNuGet.Real (MIT)"
+  fi
+  return "$expect"
 }
 
 self_test() {
@@ -389,9 +496,16 @@ PYEOF
   cat "$fx/out.log"
 
   local expect=0
-  for pkg in planted-agpl PlantedAgplNuGet planted-nolicense; do
-    if ! grep -q ":$pkg@" "$fx/out.log"; then
-      echo "self-test: FAIL — $pkg was not flagged" >&2
+  # AC2: the log must name the package AND its licence, for both ecosystems —
+  # a bare package name would not evidence 'the licence is in the log'.
+  local -a denied=(
+    "npm:planted-agpl@1.0.0 AGPL-3.0-or-later"
+    "nuget:PlantedAgplNuGet@1.0.0 AGPL-3.0-only"
+    "npm:planted-nolicense@9.9.9 UNLICENSED"
+  )
+  for want in "${denied[@]}"; do
+    if ! grep -qF "fail $want" "$fx/out.log"; then
+      echo "self-test: FAIL — '$want' was not flagged with its package name and licence" >&2
       expect=1
     fi
   done
@@ -439,16 +553,20 @@ PYEOF
 
   # Empty inventory fails closed: a stubbed nuget-license that writes '[]' must
   # make the dotnet collector exit 2, never a vacuous pass. (The npm half uses
-  # the same -s guard on its rows file.)
-  mkdir -p "$fx/fakebin"
+  # the same -s guard on its rows file.) Run it in a throwaway cwd that carries
+  # the two files dotnet_rows guards on (Evidgate.slnx, obj/project.assets.json)
+  # so the check never depends on the real tree being restored.
+  mkdir -p "$fx/fakebin" "$fx/fakeroot/obj"
   cat > "$fx/fakebin/dotnet" <<'EOF'
 #!/usr/bin/env bash
 for arg in "$@"; do case "$arg" in --file-output) n=1 ;; *) [[ "$n" -eq 1 ]] && { echo '[]' > "$arg"; n=0; } ;; esac; done
 exit 0
 EOF
   chmod +x "$fx/fakebin/dotnet"
+  : > "$fx/fakeroot/Evidgate.slnx"
+  : > "$fx/fakeroot/obj/project.assets.json"
   set +e
-  PATH="$fx/fakebin:$PATH" dotnet_rows "$fx/empty.json" > "$fx/empty-rows" 2> "$fx/empty.log"
+  ( cd "$fx/fakeroot" && PATH="$fx/fakebin:$PATH" dotnet_rows "$fx/empty.json" > "$fx/empty-rows" 2> "$fx/empty.log" )
   rc=$?
   set -e
   if [[ "$rc" -ne 2 ]] || ! grep -q "nuget inventory is empty" "$fx/empty.log"; then
@@ -457,8 +575,18 @@ EOF
     expect=1
   fi
 
+  # 11.6.1-T1.1 (AC2): the real NuGet scanner, not just the evaluator. A missing
+  # dotnet/tool is a hard prerequisite failure (exit 2).
+  local real_rc=0
+  nuget_scanner_self_test || real_rc=$?
+  if [[ "$real_rc" -eq 2 ]]; then
+    return 2
+  elif [[ "$real_rc" -ne 0 ]]; then
+    expect=1
+  fi
+
   if [[ "$expect" -eq 0 ]]; then
-    echo "self-test: PASS — planted AGPL (npm+nuget) and unlicensed packages fail; LGPL+ADR exception passes; bad exception keys and empty inventory are hard failures"
+    echo "self-test: PASS — planted AGPL (npm+nuget) and unlicensed packages fail; LGPL+ADR exception passes; bad exception keys and empty inventory are hard failures; the real nuget-license flags a packed AGPL package"
   fi
   return "$expect"
 }
