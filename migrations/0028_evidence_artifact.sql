@@ -25,6 +25,21 @@
 -- below is required before the column-level `grant update` (0027 precedent). No DELETE on either
 -- table: a removed artifact is the `state = 'deleted'` soft delete of 06.4.x, never a hard delete.
 --
+-- Row security: both tenant policies are `for all to evidgate_app`, exactly like 0005/0020-0027. A
+-- policy with no `to` clause applies to PUBLIC, which would let `evidgate_operator` (it holds the
+-- SELECT grant below) set `evidgate.org_id` and read any org. No `TO evidgate_operator` policy is
+-- created here (TL T76, D1): the grant-gated operator policy is 02.8.1's
+-- `evidgate.operator_grant_ok` form, and until it lands the operator's SELECT grant reads zero rows.
+--
+-- Bound CHECKs (the 0006-0027 `char_length`/`cardinality` style): `execution_key` is the 00 §7
+-- `sha256(case_id ‖ variant_hash ‖ target_env)` hex — lowercase, the envelope schema pattern
+-- `^[0-9a-f]{64}$` (04.3.1-T1) — `checksum` is the 06.1.1 §5 `sha256:<64 hex>` content address,
+-- `attempt_no` starts at 1 (00 §7), and the text/blob columns carry their documented bounds.
+-- `object_key` is additionally pinned to the two documented server-chosen forms: the 06.1.1 §1/AC2
+-- final key `org/<org_id>/project/<project_id>/run/<run_id>/attempt/<execution_key>/<attempt_no>/<id>`
+-- and the 06.1.2 §3 staging key `pending/<org_id>/<id>` (06.1.2 plan line 35, FR-06-2), so a client
+-- cannot name, traverse or collide with a key even by writing the table directly.
+--
 -- Idempotent like 0025/0027: `create table if not exists` / `drop ... if exists` so a re-run is a no-op.
 
 create table if not exists public.artifact (
@@ -56,6 +71,17 @@ create table if not exists public.artifact (
   constraint artifact_sensitivity_check check (sensitivity in ('normal', 'sensitive')),
   constraint artifact_scan_state_check check (scan_state in ('pending', 'clean', 'flagged')),
   constraint artifact_state_check check (state in ('pending_upload', 'uploaded', 'ready', 'rejected', 'pending_delete', 'deleted')),
+  constraint artifact_execution_key_check check (execution_key ~ '^[0-9a-f]{64}$'),
+  constraint artifact_checksum_check check (checksum ~ '^sha256:[0-9a-f]{64}$'),
+  constraint artifact_attempt_no_check check (attempt_no >= 1),
+  constraint artifact_media_type_check check (char_length(media_type) between 1 and 255),
+  constraint artifact_bytes_check check (bytes is null or bytes > 0),
+  constraint artifact_failure_code_check check (failure_code is null or char_length(failure_code) between 1 and 128),
+  constraint artifact_object_key_check check (char_length(object_key) between 1 and 1024),
+  constraint artifact_object_key_shape_check check (
+    object_key = 'pending/' || org_id::text || '/' || id::text
+    or object_key = 'org/' || org_id::text || '/project/' || project_id::text || '/run/' || run_id::text
+         || '/attempt/' || execution_key || '/' || attempt_no::text || '/' || id::text),
   constraint artifact_version_check check (version >= 1)
 );
 
@@ -64,6 +90,8 @@ create table if not exists public.artifact (
 -- the index (P4).
 create index if not exists artifact_run_idx on public.artifact (org_id, run_id) where state <> 'deleted';
 create index if not exists artifact_expiry_idx on public.artifact (expires_at) where state = 'ready';
+-- The referencing side of the composite project FK (a project or tenant delete), 0024 precedent.
+create index if not exists artifact_project_idx on public.artifact (org_id, project_id);
 
 -- The shared concurrency trigger of 0004 (M1W3-01): the database owns `updated_at` and the `version`
 -- increment, so a second tracked update in the same scope matches the incremented token.
@@ -77,8 +105,14 @@ alter table public.artifact force row level security;
 
 drop policy if exists artifact_tenant on public.artifact;
 create policy artifact_tenant on public.artifact
+  for all to evidgate_app
   using (org_id = evidgate.current_org_id())
   with check (org_id = evidgate.current_org_id());
+
+-- Deliberately no `TO evidgate_operator` policy here (TL T76, D1): the base migration does not grant
+-- the operator standing read access. The operator reaches this table only through 02.8.1's
+-- grant-gated `evidgate.operator_grant_ok` policy; until that lands the SELECT grant below reads
+-- zero rows.
 
 -- The migration role needs its own policy: `force row level security` applies to the table owner too,
 -- so an expand/contract backfill or an owner SECURITY DEFINER sweep would otherwise update zero rows
@@ -114,6 +148,8 @@ create table if not exists public.artifact_kind_policy (
   constraint artifact_kind_policy_project_fk foreign key (org_id, project_id) references public.project (org_id, id),
   constraint artifact_kind_policy_kind_check check (kind in ('trace', 'video', 'screenshot', 'raw_report', 'dom_snapshot', 'a11y_snapshot', 'patch', 'ui_hierarchy')),
   constraint artifact_kind_policy_default_sensitivity_check check (default_sensitivity in ('normal', 'sensitive')),
+  constraint artifact_kind_policy_max_bytes_check check (max_bytes > 0),
+  constraint artifact_kind_policy_media_types_check check (cardinality(media_types) between 1 and 64),
   constraint artifact_kind_policy_version_check check (version >= 1)
 );
 
@@ -127,8 +163,12 @@ alter table public.artifact_kind_policy force row level security;
 
 drop policy if exists artifact_kind_policy_tenant on public.artifact_kind_policy;
 create policy artifact_kind_policy_tenant on public.artifact_kind_policy
+  for all to evidgate_app
   using (org_id = evidgate.current_org_id())
   with check (org_id = evidgate.current_org_id());
+
+-- Deliberately no `TO evidgate_operator` policy here (TL T76, D1): the grant-gated operator policy is
+-- 02.8.1's `evidgate.operator_grant_ok` form; until it lands the SELECT grant below reads zero rows.
 
 drop policy if exists artifact_kind_policy_owner_backfill on public.artifact_kind_policy;
 create policy artifact_kind_policy_owner_backfill on public.artifact_kind_policy

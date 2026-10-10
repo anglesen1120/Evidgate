@@ -117,20 +117,27 @@ public sealed class EvidenceArtifactQaTests
         }
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        var deniedId = Guid.CreateVersion7();
+        var deniedRun = Guid.CreateVersion7();
+        var execution = new string('a', 64);
         var sql = table == "artifact"
             ? """
               insert into public.artifact
                 (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, media_type, checksum, sensitivity)
-              values (@id, @org, @project, @run, 'execution', 1, 'video', @key, 'video/webm', 'sha256:qa', 'normal')
+              values (@id, @org, @project, @run, @execution, 1, 'video', @key, 'video/webm', @checksum, 'normal')
               """
             : """
               insert into public.artifact_kind_policy
                 (id, org_id, project_id, kind, max_bytes, media_types, default_sensitivity)
               values (@id, @org, @project, 'video', 1024, array['video/webm'], 'normal')
               """;
+        // The row is otherwise valid — the key is minted for its own org/project and satisfies the
+        // 0028 shape CHECK — so the only rejection left is the row-level-security `with check`.
         var error = await scope.CaptureErrorAsync(sql,
-            ("id", Guid.CreateVersion7()), ("org", otherOrg), ("project", otherProject),
-            ("run", Guid.CreateVersion7()), ("key", "qa-other-key"));
+            ("id", deniedId), ("org", otherOrg), ("project", otherProject),
+            ("run", deniedRun), ("execution", execution),
+            ("key", $"org/{otherOrg}/project/{otherProject}/run/{deniedRun}/attempt/{execution}/1/{deniedId}"),
+            ("checksum", "sha256:" + new string('b', 64)));
         error.SqlState.ShouldBe("42501");
         error.MessageText.ShouldContain("row-level security");
     }

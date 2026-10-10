@@ -276,6 +276,16 @@ internal sealed class TenantRowFactory
             values[column.Name] = Value(table, column, isOwnId ? forcedId : null);
         }
 
+        // artifact.object_key is a function of the row's own identity (0028's shape CHECK): the
+        // server-chosen key embeds org, project, run, execution key, attempt and id, so the generic
+        // per-column rule cannot produce it — derive it from the values just resolved.
+        if (string.Equals(table, "public.artifact", StringComparison.Ordinal))
+        {
+            values["object_key"] = $"org/{values[TenantFkScan.TenantColumn]}/project/{values["project_id"]}"
+                + $"/run/{values["run_id"]}/attempt/{values["execution_key"]}/{values["attempt_no"]}"
+                + $"/{values[TenantFkScan.TenantKeyColumn]}";
+        }
+
         return values;
     }
 
@@ -338,6 +348,8 @@ internal sealed class TenantRowFactory
             ("public.waiver", "state") => "requested",
             ("public.waiver", "scope") => "case",
             ("public.artifact", "kind") => "trace",
+            ("public.artifact", "execution_key") => new string('a', 64),
+            ("public.artifact", "checksum") => "sha256:" + new string('b', 64),
             ("public.artifact", "sensitivity") => "normal",
             ("public.artifact", "scan_state") => "pending",
             ("public.artifact", "state") => "pending_upload",

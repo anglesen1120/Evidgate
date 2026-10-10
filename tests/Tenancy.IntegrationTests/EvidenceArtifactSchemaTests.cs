@@ -1,3 +1,4 @@
+using System.Globalization;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
@@ -57,29 +58,60 @@ public sealed class EvidenceArtifactSchemaTests
         return new World(api, client, database, user, org, project);
     }
 
-    /// <summary>An object key of the 06.1.1 §2 shape, minted for <paramref name="world"/>'s org and project.</summary>
-    private static string Key(World world, string executionKey, int attemptNo) =>
-        $"org/{world.Org}/project/{world.Project}/run/{Guid.CreateVersion7()}/attempt/{executionKey}/{attemptNo}/{Guid.CreateVersion7()}";
+    /// <summary>The 06.1.1 §1/AC2 final object key for one row's own identity (FR-06-1).</summary>
+    private static string FinalKey(Guid org, Guid project, Guid runId, string executionKey, int attemptNo, Guid id) =>
+        $"org/{org}/project/{project}/run/{runId}/attempt/{executionKey}/{attemptNo}/{id}";
 
-    /// <summary>One raw insert of an artifact row as the app role, with every closed-list column overridable.</summary>
+    /// <summary>The 06.1.2 §3 staging key for one row's own identity (FR-06-2).</summary>
+    private static string StagingKey(Guid org, Guid id) => $"pending/{org}/{id}";
+
+    /// <summary>
+    /// One raw insert of an artifact row as the app role. The object key defaults to the row's own
+    /// final key, so the row satisfies the 0028 shape CHECK; every closed-list and bounded column is
+    /// overridable for the negative cases.
+    /// </summary>
     private static string InsertArtifactSql(
         Guid org,
         Guid project,
-        string objectKey,
+        Guid id,
+        Guid runId,
+        string? objectKey = null,
+        string executionKey = ExecutionKey,
+        int attemptNo = 1,
         string kind = ArtifactKind.Trace,
+        string mediaType = "application/zip",
+        string checksum = Checksum,
         string sensitivity = ArtifactSensitivity.Normal,
         string scanState = ArtifactScanState.Pending,
-        string state = ArtifactState.PendingUpload) =>
+        string state = ArtifactState.PendingUpload,
+        long? bytes = null,
+        string? failureCode = null) =>
         "insert into public.artifact "
-        + "(id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, media_type, checksum, sensitivity, scan_state, state) "
-        + $"values ('{Guid.CreateVersion7()}', '{org}', '{project}', '{Guid.CreateVersion7()}', '{ExecutionKey}', 1, "
-        + $"'{kind}', '{objectKey}', 'application/zip', '{Checksum}', '{sensitivity}', '{scanState}', '{state}')";
+        + "(id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, media_type, bytes, checksum, sensitivity, scan_state, state, failure_code) "
+        + $"values ('{id}', '{org}', '{project}', '{runId}', '{executionKey}', {attemptNo}, "
+        + $"'{kind}', '{objectKey ?? FinalKey(org, project, runId, executionKey, attemptNo, id)}', '{mediaType}', "
+        + $"{(bytes is null ? "null" : bytes.Value.ToString(CultureInfo.InvariantCulture))}, '{checksum}', '{sensitivity}', '{scanState}', '{state}', "
+        + $"{(failureCode is null ? "null" : $"'{failureCode}'")})";
+
+    /// <summary>One raw insert of a kind-policy row as the app role.</summary>
+    private static string InsertPolicySql(Guid org, Guid project, string kind, string sensitivity) =>
+        "insert into public.artifact_kind_policy "
+        + "(id, org_id, project_id, kind, max_bytes, media_types, default_sensitivity) "
+        + $"values ('{Guid.CreateVersion7()}', '{org}', '{project}', '{kind}', 1024, array['application/zip'], '{sensitivity}')";
 
     /// <summary>One committed artifact row for <paramref name="world"/>'s org.</summary>
-    private async Task InsertArtifactAsync(World world, string objectKey)
+    private async Task InsertArtifactAsync(World world, Guid id, Guid runId)
     {
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        (await scope.ExecuteAsync(InsertArtifactSql(world.Org, world.Project, objectKey))).ShouldBe(1);
+        (await scope.ExecuteAsync(InsertArtifactSql(world.Org, world.Project, id, runId))).ShouldBe(1);
+        await scope.CommitAsync();
+    }
+
+    /// <summary>One committed kind-policy row for <paramref name="world"/>'s project.</summary>
+    private async Task InsertKindPolicyAsync(World world, string kind = ArtifactKind.Trace)
+    {
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        (await scope.ExecuteAsync(InsertPolicySql(world.Org, world.Project, kind, ArtifactSensitivity.Normal))).ShouldBe(1);
         await scope.CommitAsync();
     }
 
@@ -116,26 +148,30 @@ public sealed class EvidenceArtifactSchemaTests
     public async Task SecondRow_SameKey_SameOrg_Fails()
     {
         await using var world = await StartAsync();
-        var key = Key(world, "exec-a", 1);
+        var id = Guid.CreateVersion7();
+        var runId = Guid.CreateVersion7();
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
 
-        (await scope.ExecuteAsync(InsertArtifactSql(world.Org, world.Project, key))).ShouldBe(1);
-        (await scope.CaptureErrorAsync(InsertArtifactSql(world.Org, world.Project, key))).SqlState.ShouldBe("23505");
+        (await scope.ExecuteAsync(InsertArtifactSql(world.Org, world.Project, id, runId))).ShouldBe(1);
+        // The shape CHECK pins object_key to the row's own id, so a second row with the same key is
+        // also the same id: the primary key and `unique (org_id, object_key)` both answer 23505.
+        (await scope.CaptureErrorAsync(InsertArtifactSql(world.Org, world.Project, id, runId))).SqlState.ShouldBe("23505");
     }
 
     [Fact]
-    public async Task SameKey_OtherOrg_Succeeds()
+    public async Task SameKeyShape_OtherOrg_Succeeds()
     {
         await using var world = await StartAsync();
         var (otherOrg, otherProject) = await CreateOtherTenantAsync(world, "beta");
-        var key = Key(world, "exec-a", 1);
 
-        await InsertArtifactAsync(world, key);
+        await InsertArtifactAsync(world, Guid.CreateVersion7(), Guid.CreateVersion7());
 
+        // The key embeds the org, so "the same key shape in another org" is a key minted for that
+        // org: `unique (org_id, object_key)` is per org and both rows commit.
         await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), otherOrg))
         {
-            (await scope.ExecuteAsync(InsertArtifactSql(otherOrg, otherProject, key))).ShouldBe(1);
+            (await scope.ExecuteAsync(InsertArtifactSql(otherOrg, otherProject, Guid.CreateVersion7(), Guid.CreateVersion7()))).ShouldBe(1);
             await scope.CommitAsync();
         }
 
@@ -166,7 +202,7 @@ public sealed class EvidenceArtifactSchemaTests
     public async Task Select_WithoutTenantContext_ReturnsZero()
     {
         await using var world = await StartAsync();
-        await InsertArtifactAsync(world, Key(world, "exec-a", 1));
+        await InsertArtifactAsync(world, Guid.CreateVersion7(), Guid.CreateVersion7());
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database));
 
@@ -179,7 +215,7 @@ public sealed class EvidenceArtifactSchemaTests
     public async Task Select_OtherOrg_ReturnsZero()
     {
         await using var world = await StartAsync();
-        await InsertArtifactAsync(world, Key(world, "exec-a", 1));
+        await InsertArtifactAsync(world, Guid.CreateVersion7(), Guid.CreateVersion7());
 
         await using var scope = await TenantScope.BeginAsync(
             _fixture.AppConnectionString(world.Database),
@@ -187,6 +223,43 @@ public sealed class EvidenceArtifactSchemaTests
 
         (await scope.ScalarAsync<long>("select count(*) from public.artifact")).ShouldBe(0);
         (await scope.ScalarAsync<long>("select count(*) from public.artifact_kind_policy")).ShouldBe(0);
+    }
+
+    // ------------------------------------------------------------------ (d2) F1: the operator role has no policy
+
+    [Fact]
+    public async Task Operator_WithTenantSet_ReadsZeroRows()
+    {
+        await using var world = await StartAsync();
+        await InsertArtifactAsync(world, Guid.CreateVersion7(), Guid.CreateVersion7());
+        await InsertKindPolicyAsync(world);
+
+        // The operator holds the SELECT grant but no policy on either table (TL T76, D1): with FORCE
+        // row level security and `evidgate.org_id` set to the row's own org, the read is still zero.
+        await using var scope = await TenantScope.BeginAsync(_fixture.OperatorConnectionString(world.Database), world.Org);
+
+        (await scope.ScalarAsync<Guid>("select evidgate.current_org_id()")).ShouldBe(world.Org);
+        (await scope.ScalarAsync<long>("select count(*) from public.artifact")).ShouldBe(0);
+        (await scope.ScalarAsync<long>("select count(*) from public.artifact_kind_policy")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task TenantPolicies_AreScopedToTheAppRole()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+
+        // A policy with no `to` clause applies to PUBLIC; the tenant policies must name evidgate_app
+        // only, so the operator's SELECT grant reads zero rows (F1).
+        (await _fixture.PoliciesAsync(database, "artifact")).ShouldBe(
+        [
+            "artifact_owner_backfill:evidgate_owner:*:true:true",
+            "artifact_tenant:evidgate_app:*:(org_id = evidgate.current_org_id()):(org_id = evidgate.current_org_id())",
+        ]);
+        (await _fixture.PoliciesAsync(database, "artifact_kind_policy")).ShouldBe(
+        [
+            "artifact_kind_policy_owner_backfill:evidgate_owner:*:true:true",
+            "artifact_kind_policy_tenant:evidgate_app:*:(org_id = evidgate.current_org_id()):(org_id = evidgate.current_org_id())",
+        ]);
     }
 
     // ------------------------------------------------------------------ (e) AC6: the closed lists
@@ -198,7 +271,7 @@ public sealed class EvidenceArtifactSchemaTests
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
 
         (await scope.CaptureErrorAsync(
-            InsertArtifactSql(world.Org, world.Project, Key(world, "exec-a", 1), kind: "bogus"))).SqlState.ShouldBe("23514");
+            InsertArtifactSql(world.Org, world.Project, Guid.CreateVersion7(), Guid.CreateVersion7(), kind: "bogus"))).SqlState.ShouldBe("23514");
     }
 
     [Fact]
@@ -208,7 +281,7 @@ public sealed class EvidenceArtifactSchemaTests
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
 
         (await scope.CaptureErrorAsync(
-            InsertArtifactSql(world.Org, world.Project, Key(world, "exec-a", 1), scanState: "bogus"))).SqlState.ShouldBe("23514");
+            InsertArtifactSql(world.Org, world.Project, Guid.CreateVersion7(), Guid.CreateVersion7(), scanState: "bogus"))).SqlState.ShouldBe("23514");
     }
 
     [Fact]
@@ -218,7 +291,7 @@ public sealed class EvidenceArtifactSchemaTests
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
 
         (await scope.CaptureErrorAsync(
-            InsertArtifactSql(world.Org, world.Project, Key(world, "exec-a", 1), sensitivity: "bogus"))).SqlState.ShouldBe("23514");
+            InsertArtifactSql(world.Org, world.Project, Guid.CreateVersion7(), Guid.CreateVersion7(), sensitivity: "bogus"))).SqlState.ShouldBe("23514");
     }
 
     [Fact]
@@ -228,18 +301,13 @@ public sealed class EvidenceArtifactSchemaTests
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
 
         (await scope.CaptureErrorAsync(
-            InsertArtifactSql(world.Org, world.Project, Key(world, "exec-a", 1), state: "bogus"))).SqlState.ShouldBe("23514");
+            InsertArtifactSql(world.Org, world.Project, Guid.CreateVersion7(), Guid.CreateVersion7(), state: "bogus"))).SqlState.ShouldBe("23514");
     }
 
     [Fact]
     public async Task KindPolicy_KindAndSensitivity_OutsideTheirLists_FailCheck()
     {
         await using var world = await StartAsync();
-
-        static string InsertPolicySql(Guid org, Guid project, string kind, string sensitivity) =>
-            "insert into public.artifact_kind_policy "
-            + "(id, org_id, project_id, kind, max_bytes, media_types, default_sensitivity) "
-            + $"values ('{Guid.CreateVersion7()}', '{org}', '{project}', '{kind}', 1024, array['application/zip'], '{sensitivity}')";
 
         // One statement per transaction: a rejected statement aborts the transaction, so a second
         // statement in the same scope would fail with 25P02 instead of the CHECK violation.
@@ -266,8 +334,122 @@ public sealed class EvidenceArtifactSchemaTests
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
 
+        // The key is minted for the row's own project, so the shape CHECK passes and only the
+        // composite project FK can reject the row.
         (await scope.CaptureErrorAsync(
-            InsertArtifactSql(world.Org, otherProject, Key(world, "exec-a", 1)))).SqlState.ShouldBe("23503");
+            InsertArtifactSql(world.Org, otherProject, Guid.CreateVersion7(), Guid.CreateVersion7()))).SqlState.ShouldBe("23503");
+    }
+
+    // ------------------------------------------------------------------ (f2) F2/F4: the bound CHECKs and the key shape
+
+    [Fact]
+    public async Task ExecutionKey_NotLowercaseHex_FailsCheck()
+    {
+        await using var world = await StartAsync();
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+
+        // Uppercase hex is outside `^[0-9a-f]{64}$`; the key is built from the same value, so only
+        // the execution_key CHECK can reject the row.
+        (await scope.CaptureErrorAsync(
+            InsertArtifactSql(world.Org, world.Project, Guid.CreateVersion7(), Guid.CreateVersion7(), executionKey: new string('A', 64))))
+            .SqlState.ShouldBe("23514");
+    }
+
+    [Fact]
+    public async Task ExecutionKey_WithPathSeparator_FailsCheck()
+    {
+        await using var world = await StartAsync();
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+
+        (await scope.CaptureErrorAsync(
+            InsertArtifactSql(world.Org, world.Project, Guid.CreateVersion7(), Guid.CreateVersion7(), executionKey: "../../etc/passwd")))
+            .SqlState.ShouldBe("23514");
+    }
+
+    [Fact]
+    public async Task Checksum_Malformed_FailsCheck()
+    {
+        await using var world = await StartAsync();
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+
+        (await scope.CaptureErrorAsync(
+            InsertArtifactSql(world.Org, world.Project, Guid.CreateVersion7(), Guid.CreateVersion7(), checksum: "sha256:nothex")))
+            .SqlState.ShouldBe("23514");
+    }
+
+    [Fact]
+    public async Task ObjectKey_OtherOrgPrefix_FailsShapeCheck()
+    {
+        await using var world = await StartAsync();
+        var (otherOrg, otherProject) = await CreateOtherTenantAsync(world, "beta");
+        var id = Guid.CreateVersion7();
+        var runId = Guid.CreateVersion7();
+
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+
+        var error = await scope.CaptureErrorAsync(
+            InsertArtifactSql(world.Org, world.Project, id, runId, objectKey: FinalKey(otherOrg, otherProject, runId, ExecutionKey, 1, id)));
+
+        error.SqlState.ShouldBe("23514");
+        error.ConstraintName.ShouldBe("artifact_object_key_shape_check");
+    }
+
+    [Fact]
+    public async Task ObjectKey_BothDocumentedForms_AreAccepted()
+    {
+        await using var world = await StartAsync();
+        var id = Guid.CreateVersion7();
+        var runId = Guid.CreateVersion7();
+        var stagingId = Guid.CreateVersion7();
+
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+
+        // The final 06.1.1 §1/AC2 key (the default) and the 06.1.2 §3 staging key both commit.
+        (await scope.ExecuteAsync(InsertArtifactSql(world.Org, world.Project, id, runId))).ShouldBe(1);
+        (await scope.ExecuteAsync(
+            InsertArtifactSql(world.Org, world.Project, stagingId, Guid.CreateVersion7(), objectKey: StagingKey(world.Org, stagingId)))).ShouldBe(1);
+        await scope.CommitAsync();
+    }
+
+    [Theory]
+    [InlineData(0, "application/zip", null, null)]
+    [InlineData(1, "", null, null)]
+    [InlineData(1, "application/zip", 0L, null)]
+    [InlineData(1, "application/zip", null, "")]
+    public async Task Artifact_BoundChecks_RejectOutOfRange(int attemptNo, string mediaType, long? bytes, string? failureCode)
+    {
+        await using var world = await StartAsync();
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+
+        (await scope.CaptureErrorAsync(InsertArtifactSql(
+            world.Org, world.Project, Guid.CreateVersion7(), Guid.CreateVersion7(),
+            attemptNo: attemptNo, mediaType: mediaType, bytes: bytes, failureCode: failureCode))).SqlState.ShouldBe("23514");
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public async Task KindPolicy_MaxBytesNotPositive_FailsCheck(long maxBytes)
+    {
+        await using var world = await StartAsync();
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+
+        (await scope.CaptureErrorAsync(
+            "insert into public.artifact_kind_policy (id, org_id, project_id, kind, max_bytes, media_types, default_sensitivity) "
+            + $"values ('{Guid.CreateVersion7()}', '{world.Org}', '{world.Project}', 'trace', {maxBytes}, array['application/zip'], 'normal')"))
+            .SqlState.ShouldBe("23514");
+    }
+
+    [Fact]
+    public async Task KindPolicy_EmptyMediaTypes_FailsCheck()
+    {
+        await using var world = await StartAsync();
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+
+        (await scope.CaptureErrorAsync(
+            "insert into public.artifact_kind_policy (id, org_id, project_id, kind, max_bytes, media_types, default_sensitivity) "
+            + $"values ('{Guid.CreateVersion7()}', '{world.Org}', '{world.Project}', 'trace', 1024, array[]::text[], 'normal')"))
+            .SqlState.ShouldBe("23514");
     }
 
     // ------------------------------------------------------------------ (g) T1.1: indexes and grants
@@ -288,6 +470,10 @@ public sealed class EvidenceArtifactSchemaTests
                 && index.Contains("(expires_at)", StringComparison.Ordinal)
                 && index.Contains("WHERE", StringComparison.Ordinal),
             "artifact_expiry_idx must be the partial (expires_at) index of 06.1.1 §4");
+        indexes.ShouldContain(
+            index => index.StartsWith("artifact_project_idx:", StringComparison.Ordinal)
+                && index.Contains("(org_id, project_id)", StringComparison.Ordinal),
+            "artifact_project_idx must serve the composite project FK (0024 precedent)");
     }
 
     [Fact]
@@ -340,15 +526,17 @@ public sealed class EvidenceArtifactSchemaTests
         await using var scope = await scopes.BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
         var factory = services.ServiceProvider.GetRequiredService<ITenantDbContextFactory<EvidenceDbContext>>();
 
+        var id = Guid.CreateVersion7();
+        var runId = Guid.CreateVersion7();
         var artifact = new Artifact(
-            Guid.CreateVersion7(),
+            id,
             world.Org,
             world.Project,
-            Guid.CreateVersion7(),
+            runId,
             ExecutionKey,
             1,
             ArtifactKind.Trace,
-            Key(world, "exec-a", 1),
+            FinalKey(world.Org, world.Project, runId, ExecutionKey, 1, id),
             "application/zip",
             Checksum,
             ArtifactSensitivity.Normal);
