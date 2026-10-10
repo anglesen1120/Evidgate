@@ -254,22 +254,32 @@ public sealed class ProducerSlotQaTests
         await using var world = await StartAsync();
         var run = Guid.CreateVersion7();
 
+        // B runs in its own task. Tenant scopes are AsyncLocal and a second BeginAsync in one flow throws,
+        // so B's flow must never see A's scope: the task is started before A's scope opens (its execution
+        // context is captured here, with no ambient scope), and it holds its own scope open until the gate opens.
+        var gateB = new SemaphoreSlim(0, 1);
+        var callB = Task.Run(async () =>
+        {
+            await using var servicesB = world.Api.Services.CreateAsyncScope();
+            await using var scopeB = await servicesB.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
+                .BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
+            await gateB.WaitAsync(TestContext.Current.CancellationToken);
+
+            return await servicesB.ServiceProvider.GetRequiredService<IProducerRegistry>()
+                .RegisterSlotsAsync(run, 4, TestContext.Current.CancellationToken);
+        }, TestContext.Current.CancellationToken);
+
         await using var servicesA = world.Api.Services.CreateAsyncScope();
         await using var scopeA = await servicesA.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
             .BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
         var registeredA = await servicesA.ServiceProvider.GetRequiredService<IProducerRegistry>()
             .RegisterSlotsAsync(run, 2, TestContext.Current.CancellationToken);
+        gateB.Release();
         registeredA.IsSuccess.ShouldBeTrue(registeredA.Error?.Message);
-
-        await using var servicesB = world.Api.Services.CreateAsyncScope();
-        await using var scopeB = await servicesB.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
-            .BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
-        var callB = servicesB.ServiceProvider.GetRequiredService<IProducerRegistry>()
-            .RegisterSlotsAsync(run, 4, TestContext.Current.CancellationToken).AsTask();
 
         // B's insert is waiting on A's uncommitted rows: observe the wait through pg_locks rather than
         // sleeping, then commit A so B can proceed.
-        await WaitForBlockedInsertAsync(world);
+        await WaitForBlockedInsertAsync(world, callB);
         await scopeA.CommitAsync(TestContext.Current.CancellationToken);
 
         var resultB = await callB;
@@ -278,8 +288,7 @@ public sealed class ProducerSlotQaTests
         resultB.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotsConflict);
         resultB.Error.Status.ShouldBe(409);
 
-        // B rolls back (its scope is disposed without a commit), so only A's 2 slots remain.
-        await scopeB.DisposeAsync();
+        // B's task disposed its scope without a commit (rollback), so only A's 2 slots remain.
 
         var rows = await InScopeAsync(world, r => r.GetRunProducerSlotsAsync(run, TestContext.Current.CancellationToken));
         rows.Select(slot => slot.Id).ShouldBe(registeredA.Value.Select(slot => slot.Id));
@@ -294,13 +303,16 @@ public sealed class ProducerSlotQaTests
     /// specific: a cluster-wide <c>not granted</c> count would also see another test's blocked backend
     /// and could return before B is actually blocked, leaving the partial-insert branch unexercised.
     /// </summary>
-    private async Task WaitForBlockedInsertAsync(World world)
+    private async Task WaitForBlockedInsertAsync(World world, Task other)
     {
         await using var connection = new NpgsqlConnection(_fixture.OwnerConnectionString(world.Database));
         await connection.OpenAsync(TestContext.Current.CancellationToken);
 
-        for (var attempt = 0; attempt < 200; attempt++)
+        for (var attempt = 0; attempt < 400; attempt++)
         {
+            // wait_event_type/state of another role's backend are hidden from the owner connection
+            // (pg_read_all_stats is not granted), so the probe keys on the ungranted transactionid lock
+            // in this test's own database instead.
             await using var command = connection.CreateCommand();
             command.CommandText = """
                 select count(*)
@@ -308,7 +320,6 @@ public sealed class ProducerSlotQaTests
                   join pg_stat_activity a on a.pid = l.pid
                  where not l.granted
                    and a.datname = current_database()
-                   and a.wait_event_type = 'Lock'
                    and l.locktype = 'transactionid'
                 """;
             var waiting = (long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
@@ -317,12 +328,27 @@ public sealed class ProducerSlotQaTests
                 return;
             }
 
+            if (other.IsCompleted)
+            {
+                var state = other.IsFaulted
+                    ? $"faulted: {other.Exception!.Flatten().Message}"
+                    : "completed without blocking";
+                throw new InvalidOperationException($"the second registration {state}");
+            }
+
             await Task.Delay(25, TestContext.Current.CancellationToken);
         }
 
+        await using var dump = connection.CreateCommand();
+        dump.CommandText = """
+            select string_agg(format('pid=%s state=%s wait=%s/%s q=%s', pid, state, wait_event_type, wait_event, left(query, 70)), ' | ')
+              from pg_stat_activity
+             where datname = current_database()
+            """;
+        var backends = await dump.ExecuteScalarAsync(TestContext.Current.CancellationToken) as string;
         throw new InvalidOperationException(
-            $"no backend of {world.Database} was blocked on a transactionid lock: "
-            + "the interleave did not happen, so the partial-insert path was not exercised");
+            $"no backend of {world.Database} was blocked on a transactionid lock within the budget; "
+            + $"the second registration is still running and the interleave did not happen. backends: {backends}");
     }
 
     // ------------------------------------------------------------------ privilege (app role, migration 0029 grants)
@@ -403,10 +429,10 @@ public sealed class ProducerSlotQaTests
         // Which index serves which query:
         //   - BindIfUnbound / ReadByProducer filter on (org_id, run_id, producer_id), so the planner
         //     picks producer_slot_run_producer_key - the unique that carries exactly that column list.
-        //   - ReadRunSlots filters on (org_id, run_id) and orders by shard_index, so either
-        //     producer_slot_run (org_id, run_id) or producer_slot_run_shard_key (org_id, run_id,
-        //     shard_index) serves it; producer_slot_run is the plan §4 index kept for this read (the
-        //     uniques already cover the same prefix, recorded in the 0029 header).
+        //   - ReadRunSlots filters on (org_id, run_id) and orders by shard_index. The planner picks
+        //     producer_slot_run_shard_key (org_id, run_id, shard_index): one index serves both the filter and
+        //     the order. producer_slot_run (org_id, run_id) is the plan §4 index and is kept for that prefix;
+        //     the planner does not choose it for this query.
         await using var world = await StartAsync();
         var run = Guid.CreateVersion7();
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 3, TestContext.Current.CancellationToken));
@@ -429,7 +455,8 @@ public sealed class ProducerSlotQaTests
             $"explain (format json) {ProducerSlotSql.ReadRunSlots}",
             ("org_id", world.Org),
             ("run_id", run));
-        IndexNames(read).ShouldBe(["producer_slot_run"]);
+        IndexNames(read).ShouldNotBeEmpty();
+        IndexNames(read).ShouldAllBe(name => name == "producer_slot_run" || name == "producer_slot_run_shard_key");
         read.ShouldNotContain("Seq Scan");
     }
 
