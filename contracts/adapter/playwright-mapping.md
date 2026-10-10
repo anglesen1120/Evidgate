@@ -199,10 +199,10 @@ mapping is a pure, table-driven function (`mapStatus` in
 - **xfail** applies only to the two rows above. `expectedStatus: "failed"` with a
   `timedOut`, `interrupted` or `skipped` outcome maps by the plain row, without
   `xfail`.
-- `[DECISION]` 04.3.2-T2 (orchestrator, S18): an **unexpected pass**
-  (`expectedStatus: "failed"`, raw `passed`) maps to `failed` + `xfail: true` —
-  fail closed, an unexpected pass is never evidence of a PASS. Playwright itself
-  reports it as an unexpected outcome.
+- `[DECISION]` 04.3.2-T2 (orchestrator, S18), owner confirmed 2026-10-10: an
+  **unexpected pass** (`expectedStatus: "failed"`, raw `passed`) maps to `failed` +
+  `xfail: true` — fail closed, an unexpected pass is never evidence of a PASS.
+  Playwright itself reports it as an unexpected outcome.
 - **`skip` vs `fixme`:** `skip_reason: "fixme"` is set when any annotation has
   `type: "fixme"`, so `fixme` wins over `skip`; a `skip` annotation or none leaves
   `skip_reason` absent. `skip_reason` is set **only** when the raw status is
@@ -222,8 +222,9 @@ flaky test (retry 0 failed, retry 1 passed) yields `attempt_no` 1 `failed` +
 `attempt_no` 2 `passed`. A `fixme`/`skip` annotation that appears only on a retry
 does not change the numbering: `attempt_no` stays contiguous `1..n`, no gap.
 
-`attempt`, listed among the plan §3 `ext` additions, is **not** an `ext` key: the
-envelope's own `attempt_no` carries the attempt, and a second copy could disagree.
+`[DECISION]` 04.3.2-T2 (S18), owner confirmed 2026-10-10: `attempt`, listed among
+the plan §3 `ext` additions, is **not** an `ext` key: the envelope's own
+`attempt_no` carries the attempt, and a second copy could disagree.
 
 ### Unknown status
 
@@ -262,7 +263,7 @@ incomplete (00 §8.5); the reporter never guesses a mapping.
 - Absent when no error carries text. Present for any status that carries error
   text, including an xfail `passed`.
 
-Residual risk `[DECISION]` (S18 security review SEC-2): any other value a test author
+Residual risk `[DECISION]` (S18 security review SEC-2), owner confirmed 2026-10-10: any other value a test author
 writes into the first line of an error (a thrown string, an `expect(…, message)`
 text, an assertion echoing a received value) is carried as written. T2.1 requires
 `ext.error_summary`; the first-line cap, the 256-unit cap and the URL redaction
