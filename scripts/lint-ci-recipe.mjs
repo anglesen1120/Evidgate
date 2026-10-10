@@ -108,7 +108,7 @@
 //     subshells redirected as a whole are refused by the same rule, since their
 //     segment starts with `}`/`)`). A builtin that can rebind a variable
 //     (`read`, `mapfile`, `declare`/`export`/`local`, `printf -v`, `for`,
-//     `eval`, `source`, …) drops every variable mask. Not modelled: functions
+//     `eval`, `source`, `coproc`, …) drops every variable mask. Not modelled: functions
 //     as callees, file-descriptor variables, a second heredoc on one line
 //     (`cat <<A <<B`), `$GITHUB_STEP_SUMMARY` (not a command file), other
 //     interpreters fed by a heredoc (`python - <<EOF`), and
@@ -653,6 +653,7 @@ const FILE_ALIAS = /^(["']?)\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?\1$/;
 const COMPOUND_OPEN = new Set(['if', 'while', 'until', 'for', 'case', 'select', '{']);
 const COMPOUND_CLOSE = new Set(['fi', 'done', 'esac']);
 const REBINDING = new Set([
+  'coproc',
   'read',
   'mapfile',
   'readarray',

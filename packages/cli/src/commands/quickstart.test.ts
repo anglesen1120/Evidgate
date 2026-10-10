@@ -28,16 +28,20 @@ const version = packageJson.version;
 /** The sample project the committed `docs/quickstart/` examples use. */
 const sampleProject = 'my-project';
 
+interface Job {
+  readonly 'runs-on': string;
+  readonly if?: string;
+  readonly needs?: ReadonlyArray<string>;
+  readonly environment?: string;
+  readonly permissions?: Record<string, string>;
+  readonly env?: Record<string, string>;
+  readonly steps: ReadonlyArray<Record<string, unknown>>;
+}
+
 interface Workflow {
+  readonly on: Record<string, unknown>;
   readonly permissions: Record<string, string>;
-  readonly jobs: Record<
-    string,
-    {
-      readonly 'runs-on': string;
-      readonly env: Record<string, string>;
-      readonly steps: ReadonlyArray<Record<string, unknown>>;
-    }
-  >;
+  readonly jobs: Record<string, Job>;
 }
 
 interface Captured {
@@ -86,15 +90,39 @@ describe('quickstart', () => {
     resetSecrets();
   });
 
-  // AC5 / §9: the rendered workflow parses and grants exactly the OIDC permission the
-  // exchange needs, with the API URL as a repository VARIABLE and the project literal.
+  // AC5 / §9: the rendered workflow parses, grants nothing at the top level, and the
+  // token-minting job elevates per job with the API URL as a repository VARIABLE.
   it('renders a GitHub workflow that parses with the expected permissions and env', () => {
     const workflow = githubWorkflow();
-    expect(workflow.permissions).toEqual({ contents: 'read', 'id-token': 'write' });
-    const job = workflow.jobs.evidgate;
-    expect(job?.['runs-on']).toBe('ubuntu-24.04');
-    expect(job?.env.EVIDGATE_API_URL).toBe('${{ vars.EVIDGATE_API_URL }}');
-    expect(job?.env.EVIDGATE_PROJECT).toBe(sampleProject);
+    expect(workflow.permissions).toEqual({});
+    const test = workflow.jobs.test;
+    expect(test?.['runs-on']).toBe('ubuntu-24.04');
+    expect(test?.permissions).toEqual({ contents: 'read' });
+    const upload = workflow.jobs.upload;
+    expect(upload?.['runs-on']).toBe('ubuntu-24.04');
+    expect(upload?.environment).toBe('evidgate-upload');
+    expect(upload?.permissions).toEqual({ contents: 'read', 'id-token': 'write' });
+    expect(upload?.env?.EVIDGATE_API_URL).toBe('${{ vars.EVIDGATE_API_URL }}');
+    expect(upload?.env?.EVIDGATE_PROJECT).toBe(sampleProject);
+  });
+
+  // 11.6.1-T2: the rendered workflow is fork-safe — the workflow default grants no
+  // `id-token`, and the token-minting job is never triggered by a pull_request event.
+  it('keeps the token out of the workflow default and off pull_request', () => {
+    const workflow = githubWorkflow();
+    expect(workflow.permissions['id-token']).toBeUndefined();
+    expect(Object.keys(workflow.on)).not.toContain('pull_request_target');
+    expect(Object.keys(workflow.on)).not.toContain('workflow_run');
+    const minting = Object.entries(workflow.jobs).filter(
+      ([, job]) => job.permissions?.['id-token'] === 'write',
+    );
+    expect(minting).toHaveLength(1);
+    const [name, job] = minting[0] ?? [];
+    expect(name).toBe('upload');
+    expect(job?.if).toBeDefined();
+    expect(job?.if).not.toContain('pull_request');
+    expect(job?.if).toContain("github.event_name == 'workflow_dispatch'");
+    expect(job?.if).toContain("github.event_name == 'push'");
   });
 
   // AC5 / §8: no stored secret and no token-shaped value anywhere in either render.
@@ -120,11 +148,11 @@ describe('quickstart', () => {
       }
     });
 
-    const usesValues = githubWorkflow().jobs.evidgate?.steps.flatMap((step) =>
-      typeof step.uses === 'string' ? [step.uses] : [],
+    const usesValues = Object.values(githubWorkflow().jobs).flatMap((job) =>
+      job.steps.flatMap((step) => (typeof step.uses === 'string' ? [step.uses] : [])),
     );
-    expect(usesValues).toHaveLength(2);
-    for (const uses of usesValues ?? []) {
+    expect(usesValues).toHaveLength(4);
+    for (const uses of usesValues) {
       expect(uses).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
     }
 
