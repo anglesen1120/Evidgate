@@ -286,8 +286,13 @@ public sealed class ProducerSlotQaTests
     }
 
     /// <summary>
-    /// Waits until some backend is blocked on a lock (B's insert waiting on A's rows), polling
-    /// <c>pg_locks</c> with a bounded budget - an explicit ordering signal, not a sleep.
+    /// Waits until a backend of <em>this test's database</em> is blocked waiting for another
+    /// transaction (B's insert waiting on A's uncommitted conflicting rows: a unique-index conflict
+    /// waits on the other transaction's <c>transactionid</c> lock), polling
+    /// <c>pg_locks</c> joined to <c>pg_stat_activity</c> with a bounded budget - an explicit ordering
+    /// signal, not a sleep. The join and the <c>datname</c>/<c>locktype</c> filters keep the probe
+    /// specific: a cluster-wide <c>not granted</c> count would also see another test's blocked backend
+    /// and could return before B is actually blocked, leaving the partial-insert branch unexercised.
     /// </summary>
     private async Task WaitForBlockedInsertAsync(World world)
     {
@@ -297,7 +302,15 @@ public sealed class ProducerSlotQaTests
         for (var attempt = 0; attempt < 200; attempt++)
         {
             await using var command = connection.CreateCommand();
-            command.CommandText = "select count(*) from pg_locks where not granted";
+            command.CommandText = """
+                select count(*)
+                  from pg_locks l
+                  join pg_stat_activity a on a.pid = l.pid
+                 where not l.granted
+                   and a.datname = current_database()
+                   and a.wait_event_type = 'Lock'
+                   and l.locktype = 'transactionid'
+                """;
             var waiting = (long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
             if (waiting > 0)
             {
@@ -307,7 +320,9 @@ public sealed class ProducerSlotQaTests
             await Task.Delay(25, TestContext.Current.CancellationToken);
         }
 
-        throw new InvalidOperationException("no backend was blocked on a lock: the interleave did not happen");
+        throw new InvalidOperationException(
+            $"no backend of {world.Database} was blocked on a transactionid lock: "
+            + "the interleave did not happen, so the partial-insert path was not exercised");
     }
 
     // ------------------------------------------------------------------ privilege (app role, migration 0029 grants)
