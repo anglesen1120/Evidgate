@@ -137,7 +137,7 @@ function renderGithub(project: string, version: string): string {
 # CLI exchanges the GitHub OIDC token for a short-lived Evidgate CI token.
 #
 # Fork-safe by construction: \`test\` runs on pull_request and holds no Evidgate setting
-# and no token; \`upload\` mints the token only on workflow_dispatch or a push to the
+# and no token; \`upload\` mints the token only on a workflow_dispatch or push from the
 # default branch. The rules and their sources: docs/security/customer-ci-recipe.md.
 name: evidgate
 
@@ -173,12 +173,16 @@ jobs:
   upload:
     needs:
       - test
-    # Runs only on a maintainer's workflow_dispatch (the test job is skipped then) or
-    # after a green push to the default branch. Never for a pull_request event.
-    if: "\${{ !cancelled() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test.result == 'success')) }}"
+    # Runs only on a maintainer's workflow_dispatch from the default branch (the test
+    # job is skipped then) or after a green push to the default branch. Never for a
+    # pull_request event.
+    if: "\${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test.result == 'success')) }}"
     runs-on: ubuntu-24.04
-    # An environment with no secrets: its required reviewers and branch rule gate the
-    # job; it holds nothing a compromised step could read.
+    # An environment with no secrets: create it with required reviewers and a
+    # deployment branch rule for \`main\` before first use — its rules gate the job and
+    # it holds nothing a compromised step could read. Referencing an environment that
+    # does not exist auto-creates it with no protection rules:
+    # https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
     environment: evidgate-upload
     # R3: per-job elevation. id-token write lets the CLI request the GitHub OIDC token.
     permissions:

@@ -375,9 +375,18 @@ function checkJobTokenPermissions(perms, ifValue, loc, add) {
   );
 }
 
+// Fail closed on case: GitHub matches permission scope names and `read`/`write` levels
+// case-insensitively, so `Id-Token: Write` grants the same OIDC scope as `id-token: write`.
 function grantsIdTokenWrite(perms) {
-  if (perms === 'write-all') return true;
-  if (isObj(perms)) return perms['id-token'] === 'write';
+  if (typeof perms === 'string' && perms.toLowerCase() === 'write-all') return true;
+  if (isObj(perms)) {
+    return Object.entries(perms).some(
+      ([scope, level]) =>
+        scope.toLowerCase() === 'id-token' &&
+        typeof level === 'string' &&
+        level.toLowerCase() === 'write',
+    );
+  }
   return false;
 }
 
@@ -389,9 +398,15 @@ const NON_PR_EVENT_ATOM =
 
 function jobGuardedAgainstPullRequest(ifValue) {
   if (typeof ifValue !== 'string') return false;
-  let expr = ifValue.trim();
-  const wrapped = /^\$\{\{([\s\S]*)\}\}$/.exec(expr);
-  if (wrapped) expr = wrapped[1].trim();
+  const raw = ifValue.trim();
+  const wrapped = /^\$\{\{([\s\S]*)\}\}$/.exec(raw);
+  // The unwrap regex is greedy, so two `${{ }}` segments (or a segment mixed with other
+  // text) would leave a literal `}}${{` inside an atom and `&&` would then treat the
+  // guarded half as proof. Only a single `${{ }}` expression, or a bare expression with
+  // no `${{`, is provable; anything else fails closed.
+  if (raw.includes('${{') && !wrapped) return false;
+  const expr = (wrapped ? wrapped[1] : raw).trim();
+  if (expr.includes('${{') || expr.includes('}}')) return false;
   if (expr === '') return false;
   try {
     return guardedAgainstPullRequest(parseGuardExpr(tokenizeGuardExpr(expr)));
@@ -458,12 +473,21 @@ function tokenizeGuardExpr(src) {
           let depth = 0;
           let j = i;
           while (j < n) {
-            if (src[j] === '(') depth++;
-            else if (src[j] === ')' && --depth === 0) {
+            if (src[j] === "'") {
+              // Skip a single-quoted literal (and its `''` escape) so a `(` or `)`
+              // inside a function argument does not count toward the depth.
+              j++;
+              while (j < n && !(src[j] === "'" && src[j + 1] !== "'")) j += src[j] === "'" ? 2 : 1;
+              j++;
+            } else if (src[j] === '(') {
+              depth++;
+              j++;
+            } else if (src[j] === ')' && --depth === 0) {
               j++;
               break;
+            } else {
+              j++;
             }
-            j++;
           }
           if (depth !== 0) throw new Error('unbalanced parentheses');
           atom += src.slice(i, j);

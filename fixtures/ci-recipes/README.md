@@ -25,7 +25,7 @@ The first line of every file under `negative/` and `bypass/` is `# expect: <rule
 
 ## Negative fixtures
 
-`negative/` holds one fixture per rule (`r1`–`r5`), plus the R3 job-level cases added by 11.6.1-T2: a job that grants `id-token: write` while the workflow runs on `pull_request` — directly (`r3-id-token-job-on-pull-request.yml`), through a YAML alias (`r3-id-token-job-alias-on-pull-request.yml`) or as `write-all` (`r3-write-all-job-on-pull-request.yml`) — and two guards the lint refuses, a `!= 'pull_request'` negation (`r3-id-token-guard-negation.yml`) and a `|| github.event_name == 'pull_request'` disjunct (`r3-id-token-guard-pr-disjunct.yml`).
+`negative/` holds one fixture per rule (`r1`–`r5`), plus the R3 job-level cases added by 11.6.1-T2: a job that grants `id-token: write` while the workflow runs on `pull_request` — directly (`r3-id-token-job-on-pull-request.yml`), through a YAML alias (`r3-id-token-job-alias-on-pull-request.yml`), as `write-all` (`r3-write-all-job-on-pull-request.yml`) or with a non-lowercase `Id-Token: Write` (`r3-id-token-case-variant.yml`) — and four guards the lint refuses, a `!= 'pull_request'` negation (`r3-id-token-guard-negation.yml`), a `|| github.event_name == 'pull_request'` disjunct (`r3-id-token-guard-pr-disjunct.yml`), two concatenated `${{ }}` segments (`r3-id-token-guard-two-segments.yml`) and a `${{ }}` segment mixed with other text (`r3-id-token-guard-segment-and-text.yml`).
 
 ## Bypass attempts covered
 

@@ -123,6 +123,11 @@ describe('quickstart', () => {
     expect(job?.if).not.toContain('pull_request');
     expect(job?.if).toContain("github.event_name == 'workflow_dispatch'");
     expect(job?.if).toContain("github.event_name == 'push'");
+    // SEC4: the workflow_dispatch path is restricted to the default branch too, so a
+    // dispatch from a branch carrying an edited copy of the workflow cannot mint.
+    expect(job?.if).toContain(
+      "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')",
+    );
   });
 
   // AC5 / §8: no stored secret and no token-shaped value anywhere in either render.
