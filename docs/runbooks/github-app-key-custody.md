@@ -2,7 +2,7 @@
 
 Status: **stub** — owned by 10.7.1-T4 (the key-rotation runbook); the full procedure and the
 staging drill by a non-author land with 10.7.1 AC1/AC5. Decision source:
-[ADR-0007 — One Evidgate GitHub App, per-feature minimal tokens](../adr/0007-single-github-app.md).
+[ADR-0007 — Single GitHub App per environment (production + non-production)](../adr/0007-single-github-app.md).
 The custodian role is `[OPEN]` in DECISIONS §8 O11.
 
 Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`.
@@ -10,9 +10,10 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 ## 1. Scope
 
 This runbook covers the secrets that authenticate Evidgate as a GitHub App (02.4.3). There are
-two Apps (D2): a **production App** (customer-facing, public — any account can install it) and a
-**non-production App** (private — installable only on the account that owns it, the Evidgate test
-orgs, used by dev/staging/CI) ✅
+two Apps: a **production App** (owned by the Evidgate GitHub organization, customer-facing,
+public — any account can install it) and a **non-production App** (private, owned by one
+Evidgate-owned test organization — installable only on that owning account; dev, staging and CI
+share that one installation account) ✅
 ([Making a GitHub App public or private](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/making-a-github-app-public-or-private)).
 Each App has its own private key, client id, client secret, webhook secret and webhook URL. The
 production key and secrets are never loaded outside production. Secret names are versioned and
@@ -25,25 +26,33 @@ environment").
 | App private key (PEM) — one per App | yes — the single most valuable secret for the App ✅ ([Storing private keys](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps#storing-private-keys)) | the secret store only (see §3) |
 | App id — one per App | no — configuration, not a secret | `infra/config-matrix.json` (registered by 02.4.3-T2) |
 | App client id — one per App | no — configuration, not a secret | `infra/config-matrix.json` |
-| App client secret — one per App | yes — exchanged once for the OAuth `code` at install (D1) | the secret store only (see §3) |
+| App client secret — one per App | yes — exchanged once for the OAuth `code` at install | the secret store only (see §3) |
 | Webhook secret — one per App | yes | the secret store only (see §3) |
 | Webhook URL — one per App | no — configuration | `infra/config-matrix.json` |
 | Installation access tokens | no — derived, short-lived | in-memory cache only, below expiry, never persisted (02.4.3 §8) |
-| User access token (install binding) | no — derived, one-time | in memory for the single `GET /user/installations` check, then discarded; never stored (D1) |
+| User access token (install binding) | no — derived, one-time | in memory for the single `GET /user/installations` check, then discarded; never stored |
 
 The App private key signs the RS256 app JWT that mints installation access tokens ✅
 ([Generating a JSON Web Token (JWT) for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-json-web-token-jwt-for-a-github-app)).
 The webhook secret verifies the `X-Hub-Signature-256` HMAC-SHA256 header on every delivery ✅
 ([Validating webhook deliveries](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries)).
 
-Install binding (D1): the production App is registered with **Request user authorization
-(OAuth) during installation** ✅
+Install binding: **both Apps** are registered with **Request user authorization (OAuth) during
+installation** ✅
 ([Generating a user access token for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app)).
 The install callback exchanges the OAuth `code` for a user access token and binds the row only
-when the `installation_id` appears in `GET /user/installations` for that user; the user token is
-used once and discarded (never stored). The `installation_id` from the query string alone is
-never trusted ✅
+when both hold: (a) the `installation_id` appears in the paginated `GET /user/installations`
+response for the user who completed the OAuth flow, and (b) that user administers the
+installation account — for a User account, `account.id` equals the id from `GET /user`; for an
+Organization account, `GET /user/memberships/orgs/{org}` returns `state: active` and
+`role: admin` ✅
+([Get an organization membership for the authenticated user](https://docs.github.com/en/rest/orgs/members#get-an-organization-membership-for-the-authenticated-user));
+⚠️ confirm in 02.4.3-T2 that this endpoint accepts the user access token. Otherwise the callback
+returns 403 `installation_not_owned`. The user token is used once and discarded (never stored).
+The `installation_id` from the query string alone is never trusted ✅
 ([About the setup URL](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-setup-url)).
+The install-binding ownership check is `[OPEN]` DECISIONS §8 O12 (recommended `[INFERENCE]`:
+the account-admin check above).
 The App client id is configuration; the App client secret is a secret (versioned, secret store,
 rotated with the key) ✅
 ([Generating a user access token for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app)).
@@ -57,9 +66,11 @@ owner custodian of the ingest-token pepper, and O2 records a one-person team).
 
 - The custodian's GitHub account uses a passkey or a hardware security key for 2FA; a password
   plus TOTP alone is not sufficient for an account that can generate App keys.
-- The App is owned by the Evidgate GitHub organization, with a second named organization owner
-  as the recovery contact for App-admin access `[OPEN]` (O11). While the team is one person
-  (O2) there is no second owner; that is the accepted risk, stated here explicitly.
+- The production App is owned by the Evidgate GitHub organization; the non-production App is
+  owned by one Evidgate-owned test organization. Each App-owning organization has a second named
+  organization owner as the recovery contact for App-admin access `[OPEN]` (DECISIONS §8 O11).
+  While the team is one person (O2) there is no second owner; that is the accepted risk, stated
+  here explicitly.
 - The App private key, the client secret and the webhook secret are listed in the 10.1.2-T1
   secret inventory (name, owner, store, rotation cadence, break-glass holder).
 - No break-glass copy of the PEM is made. Recovery is to generate a new key at GitHub, which
@@ -126,30 +137,32 @@ old and the new secret while deliveries are in flight) is a **03.4.1-T2 receiver
 
 ## 5. Compromise response
 
-Order per D7 (GitHub forbids deleting an App's only key ✅
+Order (GitHub forbids deleting an App's only key ✅
 ([Deleting private keys](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps#deleting-private-keys))):
 
 1. Turn `github_app_enabled` off (02.4.3 §11) — this stops Evidgate's own minting but does not
    invalidate a copy of the key an attacker holds.
-2. Generate a new private key at GitHub (the old key cannot be deleted until a replacement
+2. Revoke every installation token Evidgate holds: call `DELETE /installation/token` with each
+   cached token (it revokes the token you authenticate with) ✅
+   ([REST API endpoints for GitHub App installations](https://docs.github.com/en/rest/apps/installations)).
+   Do this before any restart — a restart only discards the cached tokens, which would stay
+   valid up to 1 h.
+3. Generate a new private key at GitHub (the old key cannot be deleted until a replacement
    exists ✅
    ([Deleting private keys](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps#deleting-private-keys))).
-3. Delete the compromised key at GitHub at once — this is the revoke; it stops new app JWTs
+4. Delete the compromised key at GitHub at once — this is the revoke; it stops new app JWTs
    signed with it.
-4. Identify and close the exposure path (host, env file, backup, CI, crash dump) before loading
+5. Identify and close the exposure path (host, env file, backup, CI, crash dump) before loading
    the new key.
-5. Load the new key into the secret store and deploy/restart `Evidgate.Api` and
-   `Evidgate.Worker` (this flushes the in-memory token cache). Revoke the installation tokens
-   Evidgate holds with `DELETE /installation/token` (it revokes the token you authenticate
-   with) ✅
-   ([REST API endpoints for GitHub App installations](https://docs.github.com/en/rest/apps/installations)).
-6. Tokens an attacker minted with the stolen key cannot be enumerated or revoked by Evidgate
+6. Load the new key into the secret store and deploy/restart `Evidgate.Api` and
+   `Evidgate.Worker`.
+7. Tokens an attacker minted with the stolen key cannot be enumerated or revoked by Evidgate
    and stay valid up to 1 h after minting — the token expires after 1 hour ✅
    ([Generating an installation access token for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app)).
    State this residual window in the incident.
-7. Rotate the webhook secret and the client secret. Redeliver failed webhook deliveries since
+8. Rotate the webhook secret and the client secret. Redeliver failed webhook deliveries since
    the change, or run the 02.4.3-T3.2 reconcile task immediately.
-8. Open an incident per 10.7.1-T6 and notify affected organization admins (02.10.1) with the
+9. Open an incident per 10.7.1-T6 and notify affected organization admins (02.10.1) with the
    App id, the exposure window, and a request to review their org audit log for the App's bot
    actor.
 
