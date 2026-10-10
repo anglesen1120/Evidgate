@@ -9,7 +9,7 @@ This is _not_ a `<domain>/<name>/` fixture corpus: no directory here carries a `
 ```
 fixtures/ci-recipes/
   github-fork-safe.yml   # the published fork-safe recipe (docs/security/customer-ci-recipe.md); lints clean
-  negative/              # one fixture per FR-11-2 rule; each breaks exactly that rule and nothing else
+  negative/              # one or more fixtures per FR-11-2 rule; each breaks exactly its rule and nothing else
   bypass/                # bypass attempts: the same violations hidden behind YAML or expression spellings
 ```
 
@@ -23,6 +23,10 @@ The first line of every file under `negative/` and `bypass/` is `# expect: <rule
 - each `negative/` fixture must exit 1 reporting its expected rule and no other rule;
 - each `bypass/` fixture must exit 1 reporting its expected rule (another rule may fire as well).
 
+## Negative fixtures
+
+`negative/` holds one fixture per rule (`r1`–`r5`), plus the R3 job-level cases added by 11.6.1-T2: a job that grants `id-token: write` while the workflow runs on `pull_request` — directly (`r3-id-token-job-on-pull-request.yml`), through a YAML alias (`r3-id-token-job-alias-on-pull-request.yml`), as `write-all` (`r3-write-all-job-on-pull-request.yml`) or with a non-lowercase `Id-Token: Write` (`r3-id-token-case-variant.yml`) — and four guards the lint refuses, a `!= 'pull_request'` negation (`r3-id-token-guard-negation.yml`), a `|| github.event_name == 'pull_request'` disjunct (`r3-id-token-guard-pr-disjunct.yml`), two concatenated `${{ }}` segments (`r3-id-token-guard-two-segments.yml`) and a `${{ }}` segment mixed with other text (`r3-id-token-guard-segment-and-text.yml`).
+
 ## Bypass attempts covered
 
 - `b01` an anchored scalar resolved through `uses: *ref`; `b02` a flow-style step `{ uses: … }` (R2);
@@ -31,7 +35,7 @@ The first line of every file under `negative/` and `bypass/` is `# expect: <rule
 - `b07` `permissions: write-all`; `b08` a merge key `<<:` injecting a job's write scope into the workflow default (R3);
 - `b13` a heredoc writing a derived value into `$GITHUB_ENV` (R4);
 - `b15` a mask on the same line as the write; `b16` a mask inside a comment; `b24` a mask inside another echo string (R4: a mask counts only as its own earlier command);
-- `b28` a mask redirected to `/dev/null`; `b29` a partial mask `::add-mask::pre-$V`; `b30` a mask after `&&`; `b31` a mask line inside another heredoc body; `b33` a masked variable reassigned before the write; `b35` `::stop-commands::` before the mask; `b39` a quoted `<<EOF` that is not a heredoc; `b40` a mask inside a multi-line `if` body; `b41` `V+=…` after the mask; `b43` a quote-split `::stop-commands::`; `b45` an arithmetic shift `(( x = 1<<N ))` that is not a heredoc; `b46` `read V`, `b47` `while read V` and `b48` `export V=…` after the mask (R4: a mask counts only in its exact, unconditional form, until the variable may be rebound);
+- `b28` a mask redirected to `/dev/null`; `b29` a partial mask `::add-mask::pre-$V`; `b30` a mask after `&&`; `b31` a mask line inside another heredoc body; `b33` a masked variable reassigned before the write; `b35` `::stop-commands::` before the mask; `b39` a quoted `<<EOF` that is not a heredoc; `b40` a mask inside a multi-line `if` body; `b41` `V+=…` after the mask; `b43` a quote-split `::stop-commands::`; `b45` an arithmetic shift `(( x = 1<<N ))` that is not a heredoc; `b46` `read V`, `b47` `while read V`, `b48` `export V=…` and `b49` `coproc V { …; }` after the mask (R4: a mask counts only in its exact, unconditional form, until the variable may be rebound);
 - `b17` a `pwsh` run step; `b18` `defaults.run.shell: python`; `b34` `runs-on: ${{ matrix.os }}` without `shell:` (R4: only bash/sh bodies are analysable);
 - `b21` `cp` into `$GITHUB_ENV`; `b22` an indirect target `F=$GITHUB_ENV`; `b23` the `${{ github.env }}` context; `b27` an env-prefix assignment before the write; `b32` indirect expansion `${!F}`; `b42` a target from `$(printenv GITHUB_ENV)` (R4);
 - `b19` a committed `egt_` ingest-token literal; `b20` `vars.*` in a credential `with:` input; `b25` `vars.*` in a credential `env:` key; `b26` a short `-t` flag on `evidgate`; `b36` a `}}` inside an expression string literal; `b37` an underscore flag `--ingest_token`; `b38` a literal value under a credential-named `env:` key; `b44` the same under a credential-named `with:` input (R5);

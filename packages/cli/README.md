@@ -44,10 +44,12 @@ The rendered examples are committed and kept equal to the renderer by a test:
 - [generic shell script](../../docs/quickstart/generic.sh)
 
 The GitHub template stores no long-lived secret. `EVIDGATE_API_URL` is a
-repository **variable**, not a secret, and the job requests `id-token: write` so
-GitHub mints a short-lived OIDC JWT; the CLI exchanges that JWT at
-`POST /v1/ci/token` for a producer token that goes only to the 0600 cache and is
-never printed. The generic template names its credential only
+repository **variable**, not a secret. The workflow grants nothing at the top
+level: the credential-free `test` job runs on `pull_request`/`push`, and the
+`upload` job requests `id-token: write` only on `workflow_dispatch` or a push to
+the default branch, so GitHub mints a short-lived OIDC JWT; the CLI exchanges
+that JWT at `POST /v1/ci/token` for a producer token that goes only to the 0600
+cache and is never printed. The generic template names its credential only
 (`EVIDGATE_OIDC_TOKEN`, else a masked `EVIDGATE_INGEST_TOKEN`).
 
 Current state: the pinned `@evidgate/cli@<version>` is not installable until

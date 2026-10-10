@@ -42,7 +42,18 @@
 //                               this repo's own workflows.)
 //   R3-token-permissions        top-level `permissions:` is required and is `{}`,
 //                               `read-all`, or a map whose values are only
-//                               `read`/`none`; jobs may elevate per job.
+//                               `read`/`none`; jobs may elevate per job. When the
+//                               workflow triggers on `pull_request`, a job whose
+//                               effective permissions grant `id-token: write`
+//                               (directly, through an alias/merge, or `write-all`)
+//                               fails unless the job's own `if:` proves it cannot
+//                               run for a pull_request event: a conjunction/
+//                               disjunction in which every disjunct positively
+//                               requires `github.event_name == 'push'`,
+//                               `'workflow_dispatch'` or `'merge_group'`. A
+//                               missing `if:`, a negation (`!= 'pull_request'`),
+//                               `always()`, a function call or an unparsable
+//                               expression fails closed.
 //   R4-add-mask                 see "R4 shell heuristics" below.
 //   R5-no-long-lived-credential no `secrets` context reference other than
 //                               secrets.GITHUB_TOKEN in any `${{ }}` expression
@@ -108,7 +119,7 @@
 //     subshells redirected as a whole are refused by the same rule, since their
 //     segment starts with `}`/`)`). A builtin that can rebind a variable
 //     (`read`, `mapfile`, `declare`/`export`/`local`, `printf -v`, `for`,
-//     `eval`, `source`, …) drops every variable mask. Not modelled: functions
+//     `eval`, `source`, `coproc`, …) drops every variable mask. Not modelled: functions
 //     as callees, file-descriptor variables, a second heredoc on one line
 //     (`cat <<A <<B`), `$GITHUB_STEP_SUMMARY` (not a command file), other
 //     interpreters fed by a heredoc (`python - <<EOF`), and
@@ -223,7 +234,8 @@ function lintData(wf) {
   // `on` — a key that resolved to boolean true reaches toJS as "true".
   const onKeys = ['on', 'true'].filter((k) => Object.hasOwn(wf, k));
   if (onKeys.length === 0) add(R1, 'workflow has no `on:` trigger');
-  for (const k of onKeys) checkEvents(wf[k], add);
+  const triggers = new Set();
+  for (const k of onKeys) for (const name of checkEvents(wf[k], add)) triggers.add(name);
 
   // R3 top-level permissions.
   if (!Object.hasOwn(wf, 'permissions')) {
@@ -231,6 +243,7 @@ function lintData(wf) {
   } else {
     checkTopPermissions(wf.permissions, add);
   }
+  const prTriggered = triggers.has('pull_request');
 
   const jobs = wf.jobs;
   if (!isObj(jobs)) {
@@ -246,6 +259,12 @@ function lintData(wf) {
     }
     if (Object.hasOwn(job, 'uses')) checkUses(job.uses, jloc, add);
     if (Object.hasOwn(job, 'secrets')) checkJobSecrets(job.secrets, jloc, add);
+    if (prTriggered) {
+      // Effective permissions: the job's own block, else the workflow default (which
+      // checkTopPermissions has already limited to read/none/{}/read-all).
+      const jobPerms = Object.hasOwn(job, 'permissions') ? job.permissions : wf.permissions;
+      checkJobTokenPermissions(jobPerms, job.if, jloc, add);
+    }
     const jobShell = defaultShell(job) ?? defaultShell(wf);
     const posixRunner = knownPosixRunner(job['runs-on']);
     if (!Object.hasOwn(job, 'steps')) continue;
@@ -319,6 +338,7 @@ function checkEvents(on, add) {
       add(R1, `trigger \`${n}\` is refused: ${why}`);
     }
   }
+  return names;
 }
 
 function checkTopPermissions(p, add) {
@@ -338,6 +358,216 @@ function checkTopPermissions(p, add) {
     R3,
     `top-level permissions: ${JSON.stringify(p)} — must be {}, read-all or a read/none map; elevate per job`,
   );
+}
+
+// R3 job-level check. A job that can mint an OIDC token (`id-token: write`) must not
+// be reachable from a `pull_request` event. `perms` is the job's effective permissions
+// (its own block, else the workflow default). The only accepted guard is the job's own
+// `if:`, read as a boolean expression over `&&`/`||`/`!`/parentheses in which every
+// disjunct positively requires a non-pull_request event. A `needs:` chain is not a
+// guard: the job's own `if:` must exclude pull_request.
+function checkJobTokenPermissions(perms, ifValue, loc, add) {
+  if (!grantsIdTokenWrite(perms)) return;
+  if (jobGuardedAgainstPullRequest(ifValue)) return;
+  add(
+    R3,
+    `${loc} grants \`id-token: write\` and can run on \`pull_request\` — guard the job with an \`if:\` that requires a non-pull_request event (e.g. \`github.event_name == 'push'\`), or move the token mint to a job that cannot run for a pull_request`,
+  );
+}
+
+// Fail closed on case: GitHub matches permission scope names and `read`/`write` levels
+// case-insensitively, so `Id-Token: Write` grants the same OIDC scope as `id-token: write`.
+function grantsIdTokenWrite(perms) {
+  if (typeof perms === 'string' && perms.toLowerCase() === 'write-all') return true;
+  if (isObj(perms)) {
+    return Object.entries(perms).some(
+      ([scope, level]) =>
+        scope.toLowerCase() === 'id-token' &&
+        typeof level === 'string' &&
+        level.toLowerCase() === 'write',
+    );
+  }
+  return false;
+}
+
+// A positive `github.event_name == '<non-PR event>'` atom. The guide's allowlist is
+// push / pull_request / workflow_dispatch / merge_group, so the non-pull_request
+// events that may guard a token-minting job are these three.
+const NON_PR_EVENT_ATOM =
+  /^github\.event_name\s*==\s*(['"])(?:push|workflow_dispatch|merge_group)\1$/;
+
+function jobGuardedAgainstPullRequest(ifValue) {
+  if (typeof ifValue !== 'string') return false;
+  const raw = ifValue.trim();
+  const wrapped = /^\$\{\{([\s\S]*)\}\}$/.exec(raw);
+  // The unwrap regex is greedy, so two `${{ }}` segments (or a segment mixed with other
+  // text) would leave a literal `}}${{` inside an atom and `&&` would then treat the
+  // guarded half as proof. Only a single `${{ }}` expression, or a bare expression with
+  // no `${{`, is provable; anything else fails closed.
+  if (raw.includes('${{') && !wrapped) return false;
+  const expr = (wrapped ? wrapped[1] : raw).trim();
+  if (expr.includes('${{') || expr.includes('}}')) return false;
+  if (expr === '') return false;
+  try {
+    return guardedAgainstPullRequest(parseGuardExpr(tokenizeGuardExpr(expr)));
+  } catch {
+    return false;
+  }
+}
+
+// Tokenizer for the small boolean grammar of a job `if:`. `&&`, `||`, `!` (but not
+// `!=`) and `(`/`)` are structural; a `(` that immediately follows an identifier
+// character is a function call (`cancelled()`, `contains(…)`) and stays inside the
+// atom; any other `(` opens a group. String literals are kept whole. Anything the
+// tokenizer or parser cannot read makes the guard unprovable (fail closed).
+const GUARD_IDENT_TAIL = /[A-Za-z0-9_.\]]/;
+
+function tokenizeGuardExpr(src) {
+  const tokens = [];
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    if (/\s/.test(c)) {
+      i++;
+      continue;
+    }
+    if (src.startsWith('&&', i)) {
+      tokens.push({ t: 'and' });
+      i += 2;
+      continue;
+    }
+    if (src.startsWith('||', i)) {
+      tokens.push({ t: 'or' });
+      i += 2;
+      continue;
+    }
+    if (c === '!' && src[i + 1] !== '=') {
+      tokens.push({ t: 'not' });
+      i++;
+      continue;
+    }
+    if (c === '(') {
+      tokens.push({ t: 'lparen' });
+      i++;
+      continue;
+    }
+    if (c === ')') {
+      tokens.push({ t: 'rparen' });
+      i++;
+      continue;
+    }
+    let atom = '';
+    while (i < n) {
+      const ch = src[i];
+      if (ch === "'" || ch === '"') {
+        let j = i + 1;
+        while (j < n && src[j] !== ch) j++;
+        if (j >= n) throw new Error('unterminated string literal');
+        atom += src.slice(i, j + 1);
+        i = j + 1;
+        continue;
+      }
+      if (ch === '(') {
+        if (atom !== '' && GUARD_IDENT_TAIL.test(atom[atom.length - 1])) {
+          let depth = 0;
+          let j = i;
+          while (j < n) {
+            if (src[j] === "'") {
+              // Skip a single-quoted literal (and its `''` escape) so a `(` or `)`
+              // inside a function argument does not count toward the depth.
+              j++;
+              while (j < n && !(src[j] === "'" && src[j + 1] !== "'")) j += src[j] === "'" ? 2 : 1;
+              j++;
+            } else if (src[j] === '(') {
+              depth++;
+              j++;
+            } else if (src[j] === ')' && --depth === 0) {
+              j++;
+              break;
+            } else {
+              j++;
+            }
+          }
+          if (depth !== 0) throw new Error('unbalanced parentheses');
+          atom += src.slice(i, j);
+          i = j;
+          continue;
+        }
+        break;
+      }
+      if (ch === ')') break;
+      if (src.startsWith('&&', i) || src.startsWith('||', i)) break;
+      if (ch === '!' && src[i + 1] !== '=') break;
+      atom += ch;
+      i++;
+    }
+    if (atom.trim() === '') throw new Error('empty atom');
+    tokens.push({ t: 'atom', text: atom.trim() });
+  }
+  return tokens;
+}
+
+function parseGuardExpr(tokens) {
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const parseOr = () => {
+    let node = parseAnd();
+    while (peek() && peek().t === 'or') {
+      pos++;
+      node = { t: 'or', left: node, right: parseAnd() };
+    }
+    return node;
+  };
+  const parseAnd = () => {
+    let node = parseUnary();
+    while (peek() && peek().t === 'and') {
+      pos++;
+      node = { t: 'and', left: node, right: parseUnary() };
+    }
+    return node;
+  };
+  const parseUnary = () => {
+    if (peek() && peek().t === 'not') {
+      pos++;
+      return { t: 'not', operand: parseUnary() };
+    }
+    return parsePrimary();
+  };
+  const parsePrimary = () => {
+    const tok = peek();
+    if (!tok) throw new Error('unexpected end of expression');
+    if (tok.t === 'lparen') {
+      pos++;
+      const node = parseOr();
+      if (!peek() || peek().t !== 'rparen') throw new Error('missing `)`');
+      pos++;
+      return node;
+    }
+    if (tok.t === 'atom') {
+      pos++;
+      return { t: 'atom', text: tok.text };
+    }
+    throw new Error(`unexpected token \`${tok.t}\``);
+  };
+  const ast = parseOr();
+  if (pos !== tokens.length) throw new Error('trailing tokens');
+  return ast;
+}
+
+// True only when the expression is provably false for a `pull_request` event. `&&` is
+// excluded if either side is; `||` only if both are; a negation is never provable.
+function guardedAgainstPullRequest(node) {
+  switch (node.t) {
+    case 'atom':
+      return NON_PR_EVENT_ATOM.test(node.text);
+    case 'and':
+      return guardedAgainstPullRequest(node.left) || guardedAgainstPullRequest(node.right);
+    case 'or':
+      return guardedAgainstPullRequest(node.left) && guardedAgainstPullRequest(node.right);
+    default:
+      return false;
+  }
 }
 
 function checkUses(uses, loc, add) {
@@ -653,6 +883,7 @@ const FILE_ALIAS = /^(["']?)\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?\1$/;
 const COMPOUND_OPEN = new Set(['if', 'while', 'until', 'for', 'case', 'select', '{']);
 const COMPOUND_CLOSE = new Set(['fi', 'done', 'esac']);
 const REBINDING = new Set([
+  'coproc',
   'read',
   'mapfile',
   'readarray',

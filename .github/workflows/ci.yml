@@ -159,10 +159,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
-      # check-contract-conventions.sh runs `npx spectral lint` — devDeps required.
+      # check-contract-conventions.sh runs `npx spectral lint` and check-ci-recipe
+      # (lint-ci-recipe.mjs) imports `yaml` — devDeps required.
       - name: 'Install npm workspaces (locked)'
         run: npm ci --ignore-scripts
-      - name: 'Layout, sources, ADR, links, contracts, env matrix, DoR, parity, pins, image pins — verify.sh stages'
+      - name: 'Layout, sources, ADR, links, contracts, env matrix, DoR, parity, pins, recipe lint, image pins — verify.sh stages'
         run: >-
           ./scripts/verify.sh
           --stage check-layout
@@ -175,6 +176,7 @@ jobs:
           --stage check-dor-security
           --stage check-ci-parity
           --stage check-action-pins
+          --stage check-ci-recipe
           --stage image-pins
 
   # 10.2.1-T1 (AC1, AC5): the three service images build for the runner's platform

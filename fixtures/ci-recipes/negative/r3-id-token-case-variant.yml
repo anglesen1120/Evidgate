@@ -1,0 +1,18 @@
+# expect: R3-token-permissions
+# Synthetic fixture (11.6.1-T2, S20): the job grants `id-token: write` with a non-lowercase
+# key and value (`Id-Token: Write`) and no `if:`; the lint matches the scope and level
+# case-insensitively and fails closed.
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      Id-Token: Write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: npm ci
