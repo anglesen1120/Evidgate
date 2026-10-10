@@ -1,0 +1,10 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, delta review S17): a command-file path from `$(printenv GITHUB_ENV)`.
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "K=$(cat t)" >> "$(printenv GITHUB_ENV)"

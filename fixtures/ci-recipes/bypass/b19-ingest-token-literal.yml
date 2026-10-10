@@ -1,0 +1,13 @@
+# expect: R5-no-long-lived-credential
+# Synthetic fixture (11.2.1-T1.2, QA S17): a committed `egt_` ingest-token literal.
+name: x
+on:
+  pull_request:
+permissions: {}
+jobs:
+  t:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: evidgate manifests upload
+        env:
+          EVIDGATE_INGEST: egt_AbCdEf123456_c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0c2Vj

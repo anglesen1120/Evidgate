@@ -1,0 +1,12 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, delta review S17): an arithmetic shift `(( x = 1<<N ))` is not a heredoc and must not hide later lines.
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          V=$(cat t)
+          (( x = 1<<N ))
+          echo "K=$V" >> $GITHUB_ENV

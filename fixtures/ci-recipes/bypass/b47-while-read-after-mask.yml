@@ -1,0 +1,14 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, final review S17): `while read V` rebinds a masked variable inside the loop.
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          V=$(cat f)
+          echo "::add-mask::$V"
+          while read V; do
+            echo "K=$V" >> $GITHUB_ENV
+          done < g

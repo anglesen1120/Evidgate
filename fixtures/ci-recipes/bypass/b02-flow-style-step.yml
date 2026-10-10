@@ -1,0 +1,17 @@
+# expect: R2-sha-pinned
+# Synthetic fixture (11.2.1-T1.2): a flow-style step mapping instead of a block `- uses:` line.
+
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - { uses: actions/checkout@v4 }
+      - run: npm test

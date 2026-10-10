@@ -1,0 +1,12 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, QA S17): a mask on the same line as the write no longer exempts the line; the write of command output stays unmasked.
+name: x
+on:
+  pull_request:
+permissions: {}
+jobs:
+  t:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "::add-mask::$X"; echo "Y=$(cat g)" >> "$GITHUB_ENV"

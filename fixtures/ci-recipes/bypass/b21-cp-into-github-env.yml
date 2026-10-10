@@ -1,0 +1,12 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, QA S17): `cp` into $GITHUB_ENV writes an unprovable payload.
+name: x
+on:
+  pull_request:
+permissions: {}
+jobs:
+  t:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          cp creds.env "$GITHUB_ENV"

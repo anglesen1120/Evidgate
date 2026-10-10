@@ -1,0 +1,22 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2): a heredoc body written to $GITHUB_ENV carries the derived value.
+
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          session="$(./scripts/mint-session.sh)"
+          cat >> "$GITHUB_ENV" <<EOF
+          UPLOAD_SESSION=$session
+          EOF
+      - run: npm test

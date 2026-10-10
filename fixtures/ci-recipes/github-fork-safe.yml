@@ -1,0 +1,133 @@
+# Evidgate fork-safe GitHub Actions recipe (11.2.1-T1). Guide and sources:
+# docs/security/customer-ci-recipe.md. Check it with: scripts/lint-ci-recipe.sh <this file>
+#
+# Two jobs, two trust levels:
+#   test   - runs on pull_request (including fork pull requests) and push. It holds no
+#            Evidgate credential and no secret, and only uploads its results as a
+#            workflow artifact (data).
+#   upload - runs only on workflow_dispatch (a maintainer starts it with the run id of a
+#            tested run) or on push to the default branch. It never checks out code,
+#            downloads the artifact as data, and mints a project-scoped, short-lived
+#            ci_producer token through the GitHub OIDC exchange.
+#
+# The rules, one per lint rule id:
+#   R1-no-pull-request-target   - only push, pull_request and workflow_dispatch trigger
+#                                 this workflow; never pull_request_target or workflow_run.
+#   R2-sha-pinned               - every action is pinned to a full 40-character commit SHA;
+#                                 the comment after it names the release tag.
+#   R3-token-permissions        - the workflow-level GITHUB_TOKEN has no permission at all;
+#                                 each job asks for the least it needs.
+#   R4-add-mask                 - no run step writes a derived value to GITHUB_ENV,
+#                                 GITHUB_OUTPUT or GITHUB_STATE; the Evidgate CLI writes the
+#                                 minted token to GITHUB_ENV only after ::add-mask::.
+#   R5-no-long-lived-credential - no secrets reference and no stored Evidgate credential: the
+#                                 stored settings are configuration VARIABLES (EVIDGATE_API_URL,
+#                                 and the single-use EVIDGATE_BINDING_CHALLENGE until the
+#                                 binding is active); the token is minted at run time.
+#
+# Repository setup (once): bind the repository to the project (POST
+# /v1/projects/{p}/ci-bindings) with allowed refs ["refs/heads/main"] and allowed workflow
+# refs ["<owner>/<repo>/.github/workflows/<this file>@refs/heads/main"]; create the
+# environment "evidgate-upload" with NO secrets, required reviewers, and deployment
+# branches limited to main.
+name: 'evidgate-fork-safe'
+
+on:
+  pull_request:
+  push:
+    branches:
+      - 'main'
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run id of the tested run whose results to upload'
+        required: true
+        type: 'string'
+
+# R3: nothing at workflow level; a job without its own permissions block gets nothing.
+permissions: {}
+
+jobs:
+  test:
+    if: "github.event_name != 'workflow_dispatch'"
+    runs-on: 'ubuntu-24.04'
+    # R3: read the code, nothing else. A fork pull request gets a read-only token anyway.
+    permissions:
+      contents: 'read'
+    steps:
+      # R2: SHA-pinned. persist-credentials false keeps the token out of .git/config.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - run: 'npm ci'
+      # The suite runs with no Evidgate setting at all: no API URL, no token.
+      - run: 'npx playwright test'
+      # Results leave the job as an artifact (data); the upload job never executes them.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: '${{ !cancelled() }}'
+        with:
+          name: 'evidgate-results'
+          path: |
+            test-results/
+            evidgate-manifest.json
+          if-no-files-found: 'error'
+          retention-days: 7
+
+  upload:
+    needs:
+      - 'test'
+    # Runs for a maintainer's workflow_dispatch (test is skipped then) or after a green
+    # push to main. Never for a pull_request event.
+    if: "${{ !cancelled() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test.result == 'success')) }}"
+    runs-on: 'ubuntu-24.04'
+    # An environment with no secrets: its required reviewers and branch rule gate the
+    # job; it holds nothing a compromised step could read.
+    environment: 'evidgate-upload'
+    # R3: per-job elevation. actions read downloads the artifact of another run;
+    # id-token write lets the CLI request the GitHub OIDC token for the exchange.
+    permissions:
+      contents: 'read'
+      actions: 'read'
+      id-token: 'write'
+    env:
+      EVIDGATE_API_URL: '${{ vars.EVIDGATE_API_URL }}'
+      # A configuration VARIABLE, needed only for the first exchange that activates the
+      # binding (it is single-use); delete the variable once the binding is active.
+      EVIDGATE_BINDING_CHALLENGE: '${{ vars.EVIDGATE_BINDING_CHALLENGE }}'
+      EVIDGATE_PROJECT: 'my-project'
+    steps:
+      # No checkout: no pull request code runs in this job.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      # The run id comes from a maintainer's input; refuse anything that is not a number.
+      - name: 'Check the run id'
+        env:
+          RUN_ID: '${{ inputs.run_id || github.run_id }}'
+        run: |
+          case "$RUN_ID" in
+            "" | *[!0-9]*)
+              echo "run id must be a number" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: 'evidgate-results'
+          path: 'evidgate-results'
+          run-id: '${{ inputs.run_id || github.run_id }}'
+          github-token: '${{ github.token }}'
+      # R4/R5: exchange the GitHub OIDC token at POST /v1/ci/token for a project-scoped
+      # ci_producer token (at most 60 minutes, never refreshed). The CLI prints
+      # ::add-mask:: for the token, then appends EVIDGATE_CI_TOKEN to GITHUB_ENV. No
+      # credential is passed as an argument.
+      - run: 'npx --yes --package @evidgate/cli@0.0.0 -- evidgate auth login --github-env'
+      # The artifact is data: the API validates it like any other upload.
+      - run: 'npx --yes --package @evidgate/cli@0.0.0 -- evidgate manifests upload --file evidgate-results/evidgate-manifest.json'
+      # Not yet available - these steps land with their owning tasks:
+      #   runs create (04.2.2-T2)
+      #   events send + runs finalize (04.2.3-T1/T2)
+      #   artifacts upload (04.2.4-T1)

@@ -1,0 +1,12 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, review S17): `${!F}` can name a command file and is refused.
+name: x
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          F=GITHUB_ENV
+          echo "K=$(cat t)" >> "${!F}"

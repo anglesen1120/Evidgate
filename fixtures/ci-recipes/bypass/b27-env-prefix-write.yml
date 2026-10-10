@@ -1,0 +1,11 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, review S17): an env-prefix assignment (`FOO=1 echo … >> $GITHUB_ENV`) must not hide the write.
+name: x
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          FOO=1 echo "TOKEN=$(cat /tmp/secret)" >> $GITHUB_ENV
