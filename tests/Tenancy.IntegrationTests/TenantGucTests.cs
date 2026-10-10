@@ -373,6 +373,28 @@ public sealed class TenantGucTests
             ("org_id", orgId),
             ("membership_id", membershipId),
             ("role_id", Guid.CreateVersion7()));
+        await scope.ExecuteAsync(
+            """
+            insert into public.artifact
+                (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, media_type, checksum, sensitivity)
+            values (@id, @org_id, @project_id, @run_id, @execution_key, 1, 'trace', @object_key, 'application/zip', @checksum, 'normal')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("run_id", Guid.CreateVersion7()),
+            ("execution_key", new string('a', 64)),
+            ("object_key", $"org/{orgId}/project/{projectId}/run/{Guid.CreateVersion7()}/attempt/{new string('a', 64)}/1/{Guid.CreateVersion7()}"),
+            ("checksum", "sha256:" + new string('b', 64)));
+        await scope.ExecuteAsync(
+            """
+            insert into public.artifact_kind_policy
+                (id, org_id, project_id, kind, max_bytes, media_types, default_sensitivity)
+            values (@id, @org_id, @project_id, 'trace', 1048576, array['application/zip'], 'normal')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
 
         await scope.CommitAsync();
     }

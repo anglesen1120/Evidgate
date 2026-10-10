@@ -160,7 +160,7 @@ internal sealed class Artifact
         string? state = null,
         DateTimeOffset? expiresAt = null,
         string? failureCode = null,
-        int version = 0,
+        int version = 1,
         DateTimeOffset createdAt = default,
         DateTimeOffset updatedAt = default)
     {

@@ -20,7 +20,7 @@ internal sealed class ArtifactKindPolicy
         string defaultSensitivity,
         bool rejectOnSecret = false,
         bool captureEnabled = true,
-        int version = 0,
+        int version = 1,
         DateTimeOffset createdAt = default,
         DateTimeOffset updatedAt = default)
     {
