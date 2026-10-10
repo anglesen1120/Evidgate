@@ -1,13 +1,15 @@
-# Playwright adapter mapping — identity (04.3.2-T1)
+# Playwright adapter mapping — identity and status (04.3.2-T1, 04.3.2-T2)
 
 How `@evidgate/playwright-reporter` (04.3.1-T1) maps a Playwright run to the
-identity fields of the 00 §9.4 event envelope. This file covers **identity only**
+identity and status fields of the 00 §9.4 event envelope. The identity part
 (`ext.case_id`, `ext.variant_hash`, `ext.target_env`, `ext.identity_conflict` and
-the `ext.warn` channel); the status mapping (retries, `timedOut`, interrupted,
-`skip` vs `fixme`) is 04.3.2-T2 and lands in the `## status` section of this file.
+the `ext.warn` channel) is 04.3.2-T1; the status mapping (retries, `timedOut`,
+interrupted, `skip` vs `fixme`, xfail, `ext.error_summary`) is 04.3.2-T2 and is
+the [`## status`](#status) section below.
 
-Sources: 00 §7 (identifier contract), 00 §9.4 (envelope), 03.1.1-T1 (annotation
-and sidecar), 03.2.1-T2.1 (`VariantNormalizer`), 04.3.2 §3/§5/§6, 05.2.1-T3
+Sources: 00 §7 (identifier contract), 00 §8.3 (normalised status), 00 §9.4
+(envelope), 03.1.1-T1 (annotation and sidecar), 03.2.1-T2.1 (`VariantNormalizer`),
+04.3.2 §2 AC5–AC7/§3/§5/§6, 05.2.1-T3
 (`execution_key`). Legend: ✅ verified with a link · ⚠️ unverified ·
 `[INFERENCE]` · `[DECISION]` · `[OPEN]`.
 
@@ -158,27 +160,140 @@ server** from the manifest (00 §7); the reporter must not derive it. Until
 `PLACEHOLDER_EXECUTION_KEY` (`'0'.repeat(64)`, valid per the envelope pattern
 `^[0-9a-f]{64}$`) behind its injectable `identity` resolver seam, and emits
 `ext.case_id`, `ext.variant_hash` and `ext.target_env` so the ingest path can
-derive the real key from them. `[DECISION]` coordinator 2026-10-07, owner to
-confirm (04.3.2 §3). `[OPEN]` until 05.2.1-T3 lands, an adapter batch cannot match
+derive the real key from them. `[DECISION]` coordinator 2026-10-07, owner confirmed
+2026-10-07 (04.3.2 §3; STATUS.md "04.3.2-T1 coordinator decisions, owner confirmed"). `[OPEN]` until 05.2.1-T3 lands, an adapter batch cannot match
 a planned execution (T10 `unknown_execution_key`).
+
+## status
+
+Each Playwright attempt (`onTestEnd`) becomes one `test.finished` envelope. The
+raw `TestResult.status` is **never overwritten**: it travels in the envelope
+`status`; the 00 §8.3 normalised value goes to `ext.normalized` (FR-04-6). The
+mapping is a pure, table-driven function (`mapStatus` in
+`packages/adapter-playwright/src/status.ts`).
+
+✅ Playwright 1.63 types (`node_modules/playwright/types/testReporter.d.ts`,
+`"version": "1.63.0"`): `TestResult.status` is
+`"passed"|"failed"|"timedOut"|"skipped"|"interrupted"`, `TestResult.retry` is the
+0-based retry, `TestResult.annotations` and `TestCase.annotations` are
+`Array<{type, description?, …}>`, `TestResult.errors` is `Array<TestError>`
+(`message?`, `value?`, `stack?`), `TestCase.expectedStatus` uses the same five values.
+
+### Status table (AC6)
+
+| Raw `status`  | `expectedStatus` | Annotations                      | `ext.normalized` | Other `ext`                        |
+| ------------- | ---------------- | -------------------------------- | ---------------- | ---------------------------------- |
+| `passed`      | not `failed`     | any                              | `passed`         | —                                  |
+| `failed`      | not `failed`     | any                              | `failed`         | —                                  |
+| `timedOut`    | any              | any                              | `timed_out`      | —                                  |
+| `interrupted` | any              | any                              | `error`          | —                                  |
+| `skipped`     | any              | `skip`, or none                  | `skipped`        | —                                  |
+| `skipped`     | any              | `fixme` (with or without `skip`) | `skipped`        | `skip_reason: "fixme"`             |
+| `failed`      | `failed`         | any                              | `passed`         | `xfail: true`                      |
+| `passed`      | `failed`         | any                              | `failed`         | `xfail: true` (`[DECISION]` below) |
+| anything else | any              | any                              | `error`          | + one `unknown_status` warning     |
+
+- **`interrupted` vs `timedOut`** stay distinct in both fields: `interrupted` →
+  `error` (the run was stopped, the attempt has no verdict), `timedOut` →
+  `timed_out`.
+- **xfail** applies only to the two rows above. `expectedStatus: "failed"` with a
+  `timedOut`, `interrupted` or `skipped` outcome maps by the plain row, without
+  `xfail`.
+- `[DECISION]` 04.3.2-T2 (orchestrator, S18), owner confirmed 2026-10-10: an
+  **unexpected pass** (`expectedStatus: "failed"`, raw `passed`) maps to `failed` +
+  `xfail: true` — fail closed, an unexpected pass is never evidence of a PASS.
+  Playwright itself reports it as an unexpected outcome.
+- **`skip` vs `fixme`:** `skip_reason: "fixme"` is set when any annotation has
+  `type: "fixme"`, so `fixme` wins over `skip`; a `skip` annotation or none leaves
+  `skip_reason` absent. `skip_reason` is set **only** when the raw status is
+  `skipped` — a `fixme` annotation on a `failed` attempt sets nothing.
+- **Annotation source:** `test.annotations` followed by `result.annotations`. A
+  `fixme`/`skip` added at runtime on a retry (only in that attempt's
+  `result.annotations`) therefore counts for that attempt and not for earlier ones.
+- **Raw status length:** the envelope `status` is the raw value verbatim; only a
+  value longer than 64 UTF-16 units (the schema `maxLength`) is cut to 64, never
+  ending on a lone high surrogate (then 63).
+
+### Retries and `attempt_no` (AC5, AC7)
+
+`attempt_no = result.retry + 1` (`attemptOf`) on both `test.started` and
+`test.finished`. Every attempt is its own event pair; statuses are never merged. A
+flaky test (retry 0 failed, retry 1 passed) yields `attempt_no` 1 `failed` +
+`attempt_no` 2 `passed`. A `fixme`/`skip` annotation that appears only on a retry
+does not change the numbering: `attempt_no` stays contiguous `1..n`, no gap.
+
+`[DECISION]` 04.3.2-T2 (S18), owner confirmed 2026-10-10: `attempt`, listed among
+the plan §3 `ext` additions, is **not** an `ext` key: the envelope's own
+`attempt_no` carries the attempt, and a second copy could disagree.
+
+### Unknown status
+
+A raw status that is not an own key of the table (a future Playwright value, an
+empty string, a different case such as `PASSED`, or a prototype name such as
+`constructor`) maps to `ext.normalized: "error"`, keeps its raw value in `status`,
+and emits an `unknown_status` warning (see Warning channel) naming the raw status
+(≤ 64 chars, made printable) and the test `file:line:column`. The warning is sent
+**once per distinct raw status** per run, so a future status shared by many tests
+cannot use up the capped warning budget that identity warnings need; every attempt
+still carries `ext.normalized: "error"`. The server marks an unknown status
+incomplete (00 §8.5); the reporter never guesses a mapping.
+
+### `error_summary`
+
+`ext.error_summary` is the first line of the first `TestResult.errors` entry whose
+`message` (else `value`) has text:
+
+- At most the first 4096 UTF-16 units of the message are read, so a huge message
+  costs a bounded scan.
+- ANSI escape sequences (CSI colours, OSC hyperlinks) are stripped, then the text is
+  cut at the first line terminator (`\r\n`, `\n`, `\r`, NEL, U+2028, U+2029) and only
+  the **first line** is kept.
+- Remaining control characters (lone ESC, C1, NUL, BEL) and format characters (BIDI
+  overrides, zero-width marks) are removed, tabs become spaces, and the line is
+  trimmed.
+- URL userinfo and the query/fragment are redacted (`https://[redacted]@host/path?[redacted]`):
+  Playwright's own first lines embed the call URL (`page.goto: … at <url>`), the
+  value class the PS1 rule already withholds from `pw:api` step titles. Scheme, host
+  and path stay. Redaction runs over the whole first line before the cap, so the cap
+  never leaves a credential prefix behind.
+- Errors whose first line is empty are skipped; `stack` is never read, so no stack
+  frame and no later line ever reaches `ext`.
+- Capped at **256** UTF-16 units (`ERROR_SUMMARY_MAX`), never ending on a lone high
+  surrogate.
+- Absent when no error carries text. Present for any status that carries error
+  text, including an xfail `passed`.
+
+Residual risk `[DECISION]` (S18 security review SEC-2), owner confirmed 2026-10-10: any other value a test author
+writes into the first line of an error (a thrown string, an `expect(…, message)`
+text, an assertion echoing a received value) is carried as written. T2.1 requires
+`ext.error_summary`; the first-line cap, the 256-unit cap and the URL redaction
+bound it, and no value-pattern redaction is attempted.
+
+The raw `errors`, `error` and `stack` members never reach `ext` (not allow-listed).
 
 ## `ext` keys this adapter emits
 
 Only allow-listed keys reach `ext` (04 §6); everything else is dropped, and a key
 whose name matches `/token|secret|password/i` is dropped and counted
-(`reporter.secretKeysDropped`). The identity keys:
+(`reporter.secretKeysDropped`). The identity and status keys:
 
-| Key                 | Type     | When                                                                    |
-| ------------------- | -------- | ----------------------------------------------------------------------- |
-| `case_id`           | `string` | the resolved case id (lower-case UUID); absent when unmapped/conflicted |
-| `variant_hash`      | `string` | `sha256:<64 hex>`; absent when the params set is refused                |
-| `target_env`        | `string` | the validated target env; absent when neither source is valid           |
-| `identity_conflict` | `true`   | annotation and sidecar disagree; never `false`, never with `case_id`    |
-| `warn`              | `object` | a warning payload on a `run.log` envelope (see below)                   |
+| Key                 | Type      | When                                                                       |
+| ------------------- | --------- | -------------------------------------------------------------------------- |
+| `case_id`           | `string`  | the resolved case id (lower-case UUID); absent when unmapped/conflicted    |
+| `variant_hash`      | `string`  | `sha256:<64 hex>`; absent when the params set is refused                   |
+| `target_env`        | `string`  | the validated target env; absent when neither source is valid              |
+| `identity_conflict` | `true`    | annotation and sidecar disagree; never `false`, never with `case_id`       |
+| `warn`              | `object`  | a warning payload on a `run.log` envelope (see below)                      |
+| `normalized`        | `string`  | 00 §8.3 normalised status (§status); `test.finished` only                  |
+| `skip_reason`       | `"fixme"` | raw `skipped` with a `fixme` annotation; `test.finished` only              |
+| `xfail`             | `true`    | `expectedStatus: "failed"` with a `failed`/`passed` outcome; never `false` |
+| `error_summary`     | `string`  | first error line, ≤ 256 UTF-16 units, no stack; `test.finished` only       |
 
 `case_id`, `variant_hash`, `target_env` and `identity_conflict` are set on
-`test.started`, `test.finished` and `test.step` envelopes; `warn` is set on
-`run.log` envelopes. `ext` remains an open object that requires only `schema`
+`test.started`, `test.finished` and `test.step` envelopes; `normalized`,
+`skip_reason`, `xfail` and `error_summary` only on `test.finished` (never on
+`test.started`, even when the `TestResult` has same-named own members); `warn` is
+set on `run.log` envelopes. `ext` remains an open object that requires only `schema`
 (`playwright/1`), so these keys need no envelope-schema change; every emitted
 envelope still validates against `contracts/schemas/event-envelope.v1.json`.
 
@@ -198,6 +313,7 @@ never echoes file content or a parameter value.
 | `invalid_sidecar`        | a sidecar manifest was refused (size, encoding, YAML shape, schema) or the 8 MiB aggregate budget was exhausted                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `invalid_sidecar_entry`  | one sidecar entry was refused (path outside the directory, missing file, an `evidgate.id` that is a `urn:uuid:`-prefixed or nil UUID)                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `sidecar_conflict`       | two sidecars claim the same test file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `unknown_status`         | a `TestResult.status` the status table does not know, once per distinct raw status per run; the message names the raw status (≤ 64 chars, made printable) and the test `file:line:column` of its first occurrence, `path` is that location; every attempt with it maps to `error` (§status)                                                                                                                                                                                                                                                  |
 | `unmapped`               | `onEnd` summary: how many tests ended without a **complete identity** — no `case_id`, no `variant_hash` or no `target_env`, or a conflict — with the per-cause breakdown in the message (`conflicted`, `no case_id`, `no variant_hash`, `no target_env`; counted independently, so one test can appear in several)                                                                                                                                                                                                                           |
 | `warnings_truncated`     | `onEnd` summary: how many warnings the reporter's caps suppressed — the 100-envelope cap plus the sidecar loader's own warning cap                                                                                                                                                                                                                                                                                                                                                                                                           |
 

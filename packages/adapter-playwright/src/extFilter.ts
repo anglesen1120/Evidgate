@@ -18,6 +18,11 @@
 //   target_env — EVIDGATE_TARGET_ENV, else the Playwright project name (04.3.2-T1.4)
 //   identity_conflict — true when annotation and sidecar disagree (04.3.2 AC2)
 //   warn       — a warning payload on a run.log envelope (04.3.2 §5)
+//   normalized — the 00 §8.3 normalised status of a test.finished (04.3.2-T2.1, AC6)
+//   skip_reason — "fixme" for a skipped test whose annotations include fixme (AC6)
+//   xfail      — true when expectedStatus is "failed" and the attempt passed or failed (AC6)
+//   error_summary — first line of the first error message, ANSI-stripped, ≤ 256 chars;
+//              never a stack line (04.3.2-T2.1)
 export const EXT_ALLOWED_KEYS = [
   'schema',
   'title',
@@ -33,6 +38,10 @@ export const EXT_ALLOWED_KEYS = [
   'target_env',
   'identity_conflict',
   'warn',
+  'normalized',
+  'skip_reason',
+  'xfail',
+  'error_summary',
 ] as const;
 
 export type ExtAllowedKey = (typeof EXT_ALLOWED_KEYS)[number];
