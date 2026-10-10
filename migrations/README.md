@@ -27,7 +27,8 @@ The playbook for changing a table without breaking the running version is
   `membership_role` tables, `0012` is 02.1.1-T2's slug grammar (DECISIONS §8.1
   D-A1), `0013` is 02.1.1-T3's tenant limit columns and `0014` is 02.6.1-T3's first
   `evidgate_resolve` resolvers, `0015` is 02.7.1-T1's `audit_log`, `0026` is 04.7.1-T2's
-  `adapter_capability` and `0027` is 07.3.1-T1's `waiver`); a gap means two branches
+  `adapter_capability`, `0027` is 07.3.1-T1's `waiver` and `0028` is 06.1.1-T1's
+  `artifact`/`artifact_kind_policy`); a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and

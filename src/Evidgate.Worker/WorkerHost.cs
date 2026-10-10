@@ -6,6 +6,7 @@ using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Catalog;
+using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Identity;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
@@ -74,6 +75,8 @@ public static class WorkerHost
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
         builder.Services.AddOrchestratorModule();
+        // 06.1.1-T1: the evidence module, so every handler the Api composes resolves here too.
+        builder.Services.AddEvidenceModule();
         // 07.1.1-T1: the policy module, so every handler the Api composes resolves here too.
         builder.Services.AddPolicyModule();
         // 02.2.1-T1.2: both entry points compose the same module set (00 §5.1 A1).

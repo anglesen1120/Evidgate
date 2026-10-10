@@ -4,9 +4,21 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Mediator.Abstractions" />
+    <!-- 06.1.1-T1: EF Core 10 write model (00 §5.5 C4); no EF migrations, the schema is plain SQL in migrations/. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Evidence.Contracts\Evidgate.Modules.Evidence.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+    <!-- 06.1.1-T1: EvidgateDbContext and AddEvidgateDbContext (01.4.2-T1.3). -->
+    <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+  </ItemGroup>
+  <!-- 01.1.2-T2.1: internal implementation, opened to the two composition roots and the tests. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Evidgate.Api" />
+    <InternalsVisibleTo Include="Evidgate.Worker" />
+    <InternalsVisibleTo Include="Hosts.IntegrationTests" />
+    <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
   </ItemGroup>
 </Project>
