@@ -148,11 +148,14 @@ types; it never invents another.
 | `onTestEnd`   | `test.finished` (`status` = raw `result.status`) + one `test.step` per step when `steps` is true; flushes the batch |
 | `onEnd`       | `run.log` `run_end` (`status` = run status) + flush + checkpoint                                                    |
 
-`attempt_no = result.retry + 1`. Callbacks never throw: a spool write failure is buffered
+`attempt_no = result.retry + 1`, one `test.finished` per attempt (never a merged status).
+Callbacks never throw: a spool write failure is buffered
 and re-thrown from `onEnd`, so the Playwright run reports the reporter failure instead of
 losing evidence silently. Every `test.started`/`test.finished`/`test.step` envelope also
 carries the resolved identity (`ext.case_id`, `ext.variant_hash`, `ext.target_env`,
-`ext.identity_conflict` — see Identity below).
+`ext.identity_conflict` — see Identity below); every `test.finished` also carries the
+mapped status (`ext.normalized`, `ext.skip_reason`, `ext.xfail`, `ext.error_summary` — see
+Status below).
 
 ### `duration_ms`
 
@@ -214,6 +217,10 @@ Only declared keys reach `ext`; everything else is dropped, and a key whose name
 | `target_env`        | `EVIDGATE_TARGET_ENV`, else the Playwright project name (04.3.2-T1.4)               |
 | `identity_conflict` | `true` when annotation and sidecar disagree (04.3.2 AC2)                            |
 | `warn`              | a warning payload on a `run.log` envelope (04.3.2 §5)                               |
+| `normalized`        | 00 §8.3 normalised status of a `test.finished` (04.3.2-T2, mapping doc §status)     |
+| `skip_reason`       | `"fixme"` on a skipped attempt with a `fixme` annotation (04.3.2 AC6)               |
+| `xfail`             | `true` when `expectedStatus` is `failed` and the outcome is `failed`/`passed` (AC6) |
+| `error_summary`     | first line of the first error message, sanitised, URL query redacted, ≤ 256 units   |
 
 The reporter builds the candidate from the raw `test`/`result`/`step` objects and runs it
 through the filter, so an unknown field (including a future Playwright field) can never
@@ -247,8 +254,8 @@ Every test envelope carries the resolved identity. The full contract is
 - **`ext.warn`** — the warning channel: `run.log` envelopes carrying
   `{ code, message, path?, count? }`. Codes: `duplicate_case_id`, `identity_conflict`,
   `invalid_annotation`, `invalid_variant_params`, `invalid_target_env`,
-  `invalid_sidecar`, `invalid_sidecar_entry`, `sidecar_conflict`, `unmapped`,
-  `warnings_truncated`. At most 100 warning envelopes per run
+  `invalid_sidecar`, `invalid_sidecar_entry`, `sidecar_conflict`, `unknown_status`,
+  `unmapped`, `warnings_truncated`. At most 100 warning envelopes per run
   (`MAX_WARNING_ENVELOPES`); the overflow is summarised once at `onEnd`, and the two
   `onEnd` summaries bypass the cap. A message never echoes file content or a parameter
   value.
@@ -272,6 +279,21 @@ to the **same completeness gate**: every identity it returns must carry `case_id
 `variant_hash` and `target_env`, or the run fails at `onEnd` unless
 `EVIDGATE_ALLOW_UNMAPPED=1`.
 
+### Status (04.3.2-T2)
+
+The full table is `contracts/adapter/playwright-mapping.md` §status; the summary: the
+envelope `status` is the raw `TestResult.status` verbatim (cut only past the schema's 64
+chars) and `ext.normalized` the 00 §8.3 value — `passed`, `failed`, `timedOut` →
+`timed_out`, `interrupted` → `error`, `skipped` → `skipped` (with `ext.skip_reason:
+"fixme"` when a `fixme` annotation is present; annotations are `test.annotations` then
+`result.annotations`, so one added on a retry counts). `expectedStatus: "failed"` with a
+`failed` outcome → `passed` + `ext.xfail: true`; with a `passed` outcome → `failed` +
+`ext.xfail: true` (fail closed). Any other raw status → `error` plus one `unknown_status`
+warning per distinct raw status. `ext.error_summary` is the first line of the first error
+message (ANSI, control and BIDI characters removed, URL userinfo and query/fragment
+redacted), ≤ 256 UTF-16 units, never a stack line. These four keys are set on
+`test.finished` only.
+
 ## Version guard
 
 At construction the reporter reads the installed `@playwright/test` version from its
@@ -287,16 +309,20 @@ Confirmed against the installed package
 (`node_modules/playwright/types/testReporter.d.ts`, re-exported by
 `@playwright/test/reporter`), resolving OI-04-01:
 
-| Fact                     | Verified shape                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------- |
-| `TestResult.retry`       | `retry: number` — 0-based; `attempt_no = retry + 1`                             |
-| `TestResult.status`      | `"passed" \| "failed" \| "timedOut" \| "skipped" \| "interrupted"` (raw string) |
-| `TestResult.duration`    | `duration: number` (milliseconds)                                               |
-| `TestResult.steps`       | `steps: Array<TestStep>` — **nested**; `TestStep.steps` is `Array<TestStep>`    |
-| `TestResult.attachments` | `Array<{ name: string; contentType: string; path?: string; body?: Buffer }>`    |
-| `TestStep`               | `title`, `category`, `duration`, `location?`, `steps`, `params?`, `subtitle?`   |
-| `TestCase`               | `title`, `location: {file, line, column}`, `parent: Suite`, `id`, `tags`, …     |
-| `Suite.project()`        | `FullProject \| undefined`; `FullProject.name` is the project name              |
+| Fact                      | Verified shape                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `TestResult.retry`        | `retry: number` — 0-based; `attempt_no = retry + 1`                                |
+| `TestResult.status`       | `"passed" \| "failed" \| "timedOut" \| "skipped" \| "interrupted"` (raw string)    |
+| `TestResult.annotations`  | `Array<{ type: string; description?: string; … }>` — added at runtime, per attempt |
+| `TestResult.errors`       | `Array<TestError>`; `TestError` has `message?`, `value?`, `stack?`                 |
+| `TestCase.expectedStatus` | `"passed" \| "failed" \| "timedOut" \| "skipped" \| "interrupted"`                 |
+| `TestCase.annotations`    | `Array<{ type: string; description?: string; … }>`                                 |
+| `TestResult.duration`     | `duration: number` (milliseconds)                                                  |
+| `TestResult.steps`        | `steps: Array<TestStep>` — **nested**; `TestStep.steps` is `Array<TestStep>`       |
+| `TestResult.attachments`  | `Array<{ name: string; contentType: string; path?: string; body?: Buffer }>`       |
+| `TestStep`                | `title`, `category`, `duration`, `location?`, `steps`, `params?`, `subtitle?`      |
+| `TestCase`                | `title`, `location: {file, line, column}`, `parent: Suite`, `id`, `tags`, …        |
+| `Suite.project()`         | `FullProject \| undefined`; `FullProject.name` is the project name                 |
 
 `result.steps` is walked recursively (depth-first, parent before child) and lazily, so
 every nested step is emitted without materialising the whole tree; the decision is
@@ -313,6 +339,8 @@ and the `onEnd` exit code, with every emitted envelope validated against the env
 schema), `identity-perf` (5k parametrised tests resolve in < 500 ms), `variant` (the
 `fixtures/variant-hash/vectors.json` corpus), `sidecar` (the `evidgate.cases.yaml`
 loader), `index`, `memory`, `reporter-boundary`, `reporter-hardening` (the review fixes:
-`printsToStdio`, flush-per-callback, step-title and `duration_ms` policy) and
-`reporter.e2e` (the real `playwright test` CLI on `test-fixtures/`, including an
-annotated test and a sidecar-mapped test).
+`printsToStdio`, flush-per-callback, step-title and `duration_ms` policy), `status-map`
+(the 04.3.2-T2 AC6 table, unknown statuses and `error_summary`), `retry` (attempts 1..n,
+flaky and fixme-on-retry through the reporter), `status-reporter` (unknown status warning,
+xfail, `interrupted` vs `timedOut`) and `reporter.e2e` (the real `playwright test` CLI on
+`test-fixtures/`, including an annotated test and a sidecar-mapped test).

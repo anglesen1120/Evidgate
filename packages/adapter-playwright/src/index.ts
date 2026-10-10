@@ -59,6 +59,16 @@ export {
 } from './sidecar.js';
 export { normalizeVariant, type VariantProblem, type VariantResult } from './variant.js';
 export {
+  attemptOf,
+  ERROR_SUMMARY_MAX,
+  errorSummary,
+  mapStatus,
+  STATUS_TABLE,
+  type NormalizedStatus,
+  type StatusInput,
+  type StatusMapping,
+} from './status.js';
+export {
   assertValidSpoolId,
   CHECKPOINT_FILE,
   CHECKPOINT_TMP_FILE,
