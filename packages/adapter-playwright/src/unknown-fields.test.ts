@@ -90,8 +90,12 @@ describe('unknown fields', () => {
     ]);
     expect(Object.keys(finished?.ext ?? {}).sort()).toEqual([
       'engine',
+      // 04.3.2-T2.1: `errors: [{ message: 'boom' }]` yields `error_summary`; every
+      // test.finished carries `normalized`.
+      'error_summary',
       'file',
       'location',
+      'normalized',
       'project',
       'schema',
       'target_env',

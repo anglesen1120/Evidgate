@@ -17,6 +17,11 @@
 // `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`;
 // the gate also writes one `[evidgate]` line to stderr, naming the per-cause counts, so a
 // CI log explains the failure, and it overrides the status only for a `passed` run (S3/C3).
+//
+// 04.3.2-T2.1/T2.2: each attempt is its own `test.finished` with `attempt_no = retry + 1`
+// (AC5); the envelope `status` is the raw Playwright status and `ext.normalized` (plus
+// `skip_reason`/`xfail`/`error_summary` when they apply) carries the 00 §8.3 mapping
+// (AC6). An unknown raw status maps to `error` and emits one `unknown_status` warning.
 import type {
   FullConfig,
   FullResult,
@@ -38,6 +43,7 @@ import {
 import { filterExt } from './extFilter.js';
 import {
   createIdentityResolver,
+  locationOf,
   PLACEHOLDER_EXECUTION_KEY,
   testKey,
   validTargetEnv,
@@ -47,6 +53,7 @@ import {
   type WarningPayload,
 } from './identity.js';
 import { loadSidecarIndex, type SidecarFs } from './sidecar.js';
+import { attemptOf, mapStatus, printable, type StatusMapping } from './status.js';
 import { SpoolWriter } from './spool.js';
 import { assertSupportedEngine, readInstalledPlaywrightVersion } from './versionGuard.js';
 
@@ -112,6 +119,8 @@ export class EvidgateReporter implements Reporter {
   private noVariantHashCount = 0;
   private noTargetEnvCount = 0;
   private warningCount = 0;
+  /** CR-2: raw statuses already reported by an `unknown_status` warning. */
+  private readonly unknownStatusesWarned = new Set<string>();
   private suppressedWarnings = 0;
   private bufferedError: Error | null = null;
   private secretKeysDroppedCount = 0;
@@ -241,7 +250,7 @@ export class EvidgateReporter implements Reporter {
       this.writer.append(
         this.draft({
           type: 'test.started',
-          attempt_no: result.retry + 1,
+          attempt_no: attemptOf(result),
           execution_key: identity.execution_key,
           ext: this.testExt(test, result, identity),
         }),
@@ -251,19 +260,39 @@ export class EvidgateReporter implements Reporter {
 
   onTestEnd(test: TestCase, result: TestResult): void {
     this.guard(() => {
-      const attemptNo = result.retry + 1;
+      const attemptNo = attemptOf(result);
       const identity = this.identityOf(test);
       this.noteIdentity(test, identity);
+      const mapping = mapStatus({
+        status: result.status,
+        expectedStatus: test.expectedStatus,
+        annotations: [...(test.annotations ?? []), ...(result.annotations ?? [])],
+        errors: result.errors,
+      });
       this.writer.append(
         this.draft({
           type: 'test.finished',
           attempt_no: attemptNo,
           execution_key: identity.execution_key,
-          status: result.status,
-          ext: this.testExt(test, result, identity),
+          status: mapping.raw,
+          ext: this.testExt(test, result, identity, mapping),
           ...durationField(result.duration),
         }),
       );
+      if (mapping.unknown === true && !this.unknownStatusesWarned.has(mapping.raw)) {
+        // T2.2: a status this adapter does not know is reported as `error`, never guessed.
+        // CR-2: one warning per distinct raw status, so a future status shared by many
+        // tests cannot spend the capped warning budget that identity warnings need; every
+        // attempt still carries `ext.normalized: 'error'`. SEC-3: the raw status is made
+        // printable inside the message; the envelope `status` stays verbatim.
+        this.unknownStatusesWarned.add(mapping.raw);
+        const location = locationOf(test);
+        this.warn({
+          code: 'unknown_status',
+          message: `unknown Playwright status '${printable(mapping.raw)}' for ${location}; reported as error`,
+          path: location,
+        });
+      }
       if (this.stepsEnabled) {
         // PS6: walk the step tree lazily, appending per step, so the working set stays
         // at the flush threshold instead of materialising a step array and a draft array.
@@ -425,7 +454,17 @@ export class EvidgateReporter implements Reporter {
     );
   }
 
-  private testExt(test: TestCase, result: TestResult, identity: Identity): ExtPayload {
+  /**
+   * The `ext` of a test envelope. The four status keys are set explicitly — `undefined`
+   * (absent) on `test.started` — after the Playwright members, so a same-named member of
+   * `TestResult` can never reach `ext` in their place (04.3.2-T2.1).
+   */
+  private testExt(
+    test: TestCase,
+    result: TestResult,
+    identity: Identity,
+    mapping?: StatusMapping,
+  ): ExtPayload {
     return this.applyExtFilter({
       ...ownMembers(test),
       ...ownMembers(result),
@@ -437,6 +476,10 @@ export class EvidgateReporter implements Reporter {
       variant_hash: identity.variant_hash,
       target_env: identity.target_env,
       identity_conflict: identity.identity_conflict,
+      normalized: mapping?.normalized,
+      skip_reason: mapping?.skip_reason,
+      xfail: mapping?.xfail,
+      error_summary: mapping?.error_summary,
     });
   }
 

@@ -55,6 +55,8 @@ export type WarningCode =
   | 'invalid_sidecar_entry'
   | 'sidecar_conflict'
   | 'unmapped'
+  // 04.3.2-T2.2: a raw Playwright status the status table does not know.
+  | 'unknown_status'
   | 'warnings_truncated';
 
 /** The payload carried under `ext.warn` on a warning `run.log` envelope. */
