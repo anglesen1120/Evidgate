@@ -163,7 +163,7 @@ jobs:
       # (lint-ci-recipe.mjs) imports `yaml` — devDeps required.
       - name: 'Install npm workspaces (locked)'
         run: npm ci --ignore-scripts
-      - name: 'Layout, sources, ADR, links, contracts, env matrix, DoR, parity, pins, recipe lint, image pins — verify.sh stages'
+      - name: 'Layout, sources, ADR, links, contracts, env matrix, DoR, threat model, parity, pins, recipe lint, image pins — verify.sh stages'
         run: >-
           ./scripts/verify.sh
           --stage check-layout
@@ -174,6 +174,7 @@ jobs:
           --stage check-contract-conventions
           --stage check-env-matrix
           --stage check-dor-security
+          --stage check-threat-model
           --stage check-ci-parity
           --stage check-action-pins
           --stage check-ci-recipe
