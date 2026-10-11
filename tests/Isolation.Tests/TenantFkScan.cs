@@ -196,9 +196,19 @@ internal static class TenantFkScan
             var referenced = (string[])foreignKey.PrincipalColumns.Clone();
             Array.Sort(referenced, StringComparer.Ordinal);
 
-            if (foreignKey.Columns.Length != 2
-                || !referenced.AsSpan().SequenceEqual(TenantKeyColumns)
-                || !PairsTenantKey(foreignKey.Columns, foreignKey.PrincipalColumns))
+            // A composite tenant key is (org_id, <id>) referencing (org_id, id) — the 00 §5.4.6
+            // shape. A key with MORE columns is also a tenant key when it references a unique key of
+            // the principal that includes org_id and the dependent's org_id pairs with the
+            // principal's org_id: `case_attempt_planned_execution_fk (org_id, run_id, execution_key)
+            // -> planned_execution (org_id, run_id, execution_key)` (0032) is exactly that — the
+            // principal's own unique key, so no row can point at another org's planned execution.
+            var isTenantKey = referenced.AsSpan().Contains(TenantColumn, StringComparer.Ordinal)
+                && PairsOrgId(foreignKey.Columns, foreignKey.PrincipalColumns)
+                && (foreignKey.Columns.Length == 2
+                    ? referenced.AsSpan().SequenceEqual(TenantKeyColumns) && PairsTenantKey(foreignKey.Columns, foreignKey.PrincipalColumns)
+                    : ReferencesUniqueKey(schema, foreignKey));
+
+            if (!isTenantKey)
             {
                 findings.Add(new TenantFkFinding(
                     table,
@@ -235,5 +245,37 @@ internal static class TenantFkScan
         }
 
         return pairsOrgId && pairsId;
+    }
+
+    /// <summary>
+    /// The dependent's <c>org_id</c> pairs with the principal's <c>org_id</c>, position by position —
+    /// the half of the tenant-key shape every composite tenant key must have, whatever its width.
+    /// </summary>
+    private static bool PairsOrgId(string[] columns, string[] principalColumns)
+    {
+        for (var index = 0; index < columns.Length; index++)
+        {
+            if (string.Equals(principalColumns[index], TenantColumn, StringComparison.Ordinal)
+                && string.Equals(columns[index], TenantColumn, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The key's principal columns are exactly a unique key of the principal table (order-insensitive),
+    /// so the reference can only ever match a row of the dependent's own org — the multi-column form of
+    /// the composite tenant key (0032's <c>case_attempt_planned_execution_fk</c>).
+    /// </summary>
+    private static bool ReferencesUniqueKey(TenantSchema schema, ScannedForeignKey foreignKey)
+    {
+        var referenced = (string[])foreignKey.PrincipalColumns.Clone();
+        Array.Sort(referenced, StringComparer.Ordinal);
+
+        return schema.UniqueKeysOf(foreignKey.PrincipalTable)
+            .Any(key => key.Columns.AsSpan().SequenceEqual(referenced));
     }
 }

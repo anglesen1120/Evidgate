@@ -441,6 +441,17 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("run_id", runId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.case_attempt
+                (id, org_id, run_id, execution_key, case_id, attempt_no, raw_status, normalized_status)
+            values (@id, @org_id, @run_id, @execution_key, @case_id, 1, 'passed', 'passed')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("run_id", runId),
+            ("execution_key", new string('a', 64)),
+            ("case_id", caseId));
 
         await scope.CommitAsync();
     }
