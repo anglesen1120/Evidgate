@@ -295,9 +295,10 @@ internal sealed class CreateRunCommandHandler(
 
         // (5) the policy revision the run pins (07.1.1-T4.2, FR-07-2). The active revision's id is stored on
         // run.policy_revision_id, and the two values its body sets replace the EVIDGATE:Runs defaults; a project with no
-        // active revision keeps the defaults and a null pin. The read takes the public.project row FOR SHARE inside this
-        // same tenant transaction (the lock quarantine writes take), so a concurrent activation (which takes the same row
-        // FOR NO KEY UPDATE) cannot change the answer before this transaction commits.
+        // active revision keeps the defaults and a null pin. The read is one lock-free statement inside this same tenant
+        // transaction (finding F4): it takes no project row lock, so this run create never holds the row a concurrent
+        // activation locks FOR NO KEY UPDATE, and a pin of the revision active at this transaction's commit is the
+        // expected READ COMMITTED ordering.
         var activePolicy = await policies.GetActivePolicyAsync(command.ProjectId, cancellationToken).ConfigureAwait(false);
         var collectionTimeout = activePolicy?.CollectionTimeoutMinutes is { } policyTimeout
             ? TimeSpan.FromMinutes(policyTimeout)

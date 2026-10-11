@@ -2,6 +2,8 @@
 #pragma warning disable CA1861
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Shouldly;
 using Xunit;
@@ -69,6 +71,24 @@ public sealed class PolicyRunPinningTests
             $"/v1/projects/{project ?? world.Project}/policy-activation",
             caller ?? world.Admin,
             body);
+    }
+
+    /// <summary>Sends a raw JSON body verbatim, so a literal like <c>30.0</c> or <c>3e1</c> reaches the server unchanged.</summary>
+    private static async Task<ApiAnswer> SendRawAsync(
+        HttpClient client,
+        HttpMethod method,
+        string url,
+        Action<HttpRequestHeaders> caller,
+        string raw)
+    {
+        using var request = new HttpRequestMessage(method, url);
+        caller(request.Headers);
+        request.Content = new StringContent(raw, Encoding.UTF8, "application/json");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(string.IsNullOrEmpty(text) ? "{}" : text);
+
+        return new ApiAnswer(response.StatusCode, document.RootElement.Clone(), response.Headers);
     }
 
     /// <summary>The pin stored on one run.</summary>
@@ -201,6 +221,38 @@ public sealed class PolicyRunPinningTests
         (await LateWindowAsync(world, second.Id("run_id"))).ShouldBe(1440);
     }
 
+    /// <summary>
+    /// 07.1.1 AC4 / finding F1: a revision whose body writes an integer field with a scale or an exponent
+    /// (<c>30.0</c>, <c>3e1</c>) is accepted by the create route and activated; the reader casts the stored
+    /// <c>jsonb</c> through <c>numeric</c>, so <c>'30.0'::int</c> (SQLSTATE 22P02) can never turn a run create
+    /// into a 500. The pin and the two values the body sets are read back from the run row.
+    /// </summary>
+    [Fact]
+    public async Task FloatLiteralPolicyValues_AreAcceptedAndPinnedAsIntegers()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+
+        // Sent verbatim: jsonb keeps the literal's scale, so the stored body still reads back "30.0".
+        var created = await SendRawAsync(
+            world.Client,
+            HttpMethod.Post,
+            $"/v1/projects/{world.Project}/policies",
+            world.Admin,
+            """{"collection_timeout_minutes":30.0,"late_window_minutes":3e1}""");
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+        var revision = created.Id();
+
+        (await ActivateAsync(world, revision)).Status.ShouldBe(HttpStatusCode.OK);
+
+        var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
+        answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
+        var runId = answer.Id("run_id");
+
+        (await RunPinAsync(world, runId)).ShouldBe(revision);
+        (await DeadlineOffsetAsync(world, runId)).ShouldBe(1800d);
+        (await LateWindowAsync(world, runId)).ShouldBe(30);
+    }
+
     /// <summary>An active revision of another project in the same org is never pinned (the pin is per project).</summary>
     [Fact]
     public async Task AnotherProjectsRevision_IsNeverPinned()
@@ -226,8 +278,9 @@ public sealed class PolicyRunPinningTests
     }
 
     /// <summary>
-    /// A concurrent activation and run create take conflicting locks on the project row (FOR NO KEY UPDATE vs
-    /// FOR SHARE): neither deadlocks, both succeed, and the run pins a revision that was active at some commit (R1 or R2).
+    /// A concurrent activation and run create do not deadlock or time out: the run-create read takes no project row
+    /// lock (finding F4), so the activation's FOR NO KEY UPDATE never waits on it. Both succeed, the run pins a
+    /// revision that was active at some commit (R1 or R2), and exactly one revision is active afterwards.
     /// </summary>
     [Fact]
     public async Task ConcurrentActivationAndRunCreate_PinIsARevisionThatWasActive()
@@ -250,6 +303,7 @@ public sealed class PolicyRunPinningTests
         create.Status.ShouldBe(HttpStatusCode.Created, create.ErrorMessage);
 
         (await RunPinAsync(world, create.Id("run_id"))).ShouldBeOneOf(r1, r2);
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision where state = 'active'")).ShouldBe(1);
     }
 
     /// <summary>Only <c>release_approver</c> (policy:write) may activate; every other member role is refused 403.</summary>

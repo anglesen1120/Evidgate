@@ -83,9 +83,11 @@ internal sealed class PolicyRevisionContent
 /// </para>
 /// <para>
 /// A body whose hash is already on file is answered without the project row lock (07.1.1-T4, P2): the lock-free
-/// lookup runs first and returns the stored row, so a replayed identical POST takes no lock. The lookup joins the
-/// project, so a missing or soft-deleted project still falls through to the locked path and its 404, and a body
-/// not yet on file still goes through the locked path, which re-checks the hash after taking the lock.
+/// lookup runs first and returns the stored row, so a replayed identical POST skips the project row lock — the
+/// audit row the handler describes is still written under the org's advisory lock, in the same tenant
+/// transaction. The lookup joins the project, so a missing or soft-deleted project still falls through to the
+/// locked path and its 404, and a body not yet on file still goes through the locked path, which re-checks the
+/// hash after taking the lock.
 /// </para>
 /// </summary>
 internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor scopes, IPolicyHasher hasher)
@@ -168,10 +170,11 @@ internal sealed class PolicyRevisionStore(ITenantDb db, ITenantScopeAccessor sco
         var orgId = scopes.Require().OrgId;
 
         // Lock-free fast path (07.1.1-T4, P2): a body already on file returns the stored row without the project
-        // row lock, so a replayed identical POST takes no lock. The lookup joins the project, so a missing or
-        // soft-deleted project finds no row and falls through to the locked path, which answers 404. An If-Match
-        // request is not served here: a stale precondition must still be 412, and that decision needs the head the
-        // locked path reads under the lock.
+        // row lock, so a replayed identical POST skips that lock — the audit row the handler describes is still
+        // written under the org's advisory lock, in the same tenant transaction. The lookup joins the project, so
+        // a missing or soft-deleted project finds no row and falls through to the locked path, which answers 404.
+        // An If-Match request is not served here: a stale precondition must still be 412, and that decision needs
+        // the head the locked path reads under the lock.
         if (expectedHeadId is null)
         {
             var onFile = await db.QuerySingleOrDefaultAsync<AppendRow>(

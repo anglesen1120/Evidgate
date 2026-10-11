@@ -7,11 +7,12 @@ namespace Evidgate.Modules.Policy.Contracts;
 public interface IPolicyContracts
 {
     /// <summary>
-    /// Resolves the policy revision a new run pins (07.1.1-T4.2, FR-07-2). Takes a <c>FOR SHARE</c> lock on the
-    /// <c>public.project</c> row first, the lock quarantine writes already take, so a concurrent activation (which takes the same
-    /// row <c>FOR NO KEY UPDATE</c>) cannot change the answer before the caller's transaction commits. Returns null when the
-    /// project has no active revision, and also when the project is missing or soft-deleted (the caller has already refused
-    /// those).
+    /// Resolves the policy revision a new run pins (07.1.1-T4.2, FR-07-2). One lock-free read of the project's
+    /// activation pointer and the revision it names (finding F4): the read takes no row lock, so a run that overlaps an
+    /// activation and pins the revision that was active at its own commit is a legitimate READ COMMITTED ordering, and a
+    /// run create never holds the project row the activation locks <c>FOR NO KEY UPDATE</c>. Returns null when the
+    /// project has no active revision, and also when the project is missing or soft-deleted (the caller has already
+    /// refused those).
     /// </summary>
     /// <param name="projectId">The project the run is created in.</param>
     /// <param name="cancellationToken">Cancellation.</param>

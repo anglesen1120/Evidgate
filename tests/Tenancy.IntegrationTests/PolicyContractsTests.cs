@@ -205,4 +205,37 @@ public sealed class PolicyContractsTests
         (await ReadAsync(world, world.Project))!.PolicyRevisionId.ShouldBe(mine);
         (await ReadAsync(world, otherProject))!.PolicyRevisionId.ShouldBe(theirs.Id());
     }
+
+    /// <summary>
+    /// Finding F3 (defence in depth): the pointer's foreign key is org-scoped, so a pointer to another project's
+    /// revision is representable. The read still answers null for it, because the revision is joined on the pointer's
+    /// own project. The pointer is inserted as owner, bypassing the store's own project predicate.
+    /// </summary>
+    [Fact]
+    public async Task PointerToAnotherProjectsRevision_ReturnsNull()
+    {
+        await using var world = await StartAsync();
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
+
+        // This project owns the revision; the other project's pointer is made to name it directly.
+        var (mine, _) = await CreateRevisionAsync(world, """{"flaky_budget":3}""");
+
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            await owner.ExecuteAsync(
+                """
+                insert into public.policy_activation (id, org_id, project_id, policy_revision_id, mode, activated_by)
+                values (gen_random_uuid(), @org_id, @project_id, @policy_revision_id, 'advisory', @activated_by)
+                """,
+                ("org_id", world.Org),
+                ("project_id", otherProject),
+                ("policy_revision_id", mine),
+                ("activated_by", world.User));
+            await owner.CommitAsync();
+        }
+
+        // The pointer is org-valid but project-mismatched, so the other project has no active policy.
+        (await ReadAsync(world, otherProject)).ShouldBeNull();
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_activation")).ShouldBe(1);
+    }
 }

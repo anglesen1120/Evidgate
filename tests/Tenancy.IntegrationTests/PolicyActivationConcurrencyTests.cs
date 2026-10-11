@@ -13,9 +13,12 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// 07.1.1-T4.1/T4.2 concurrency through the real host and a real PostgreSQL: the project row lock the
-/// activation takes <c>FOR NO KEY UPDATE</c> serialises it against the quarantine create and the run-create
-/// reader (both <c>FOR SHARE</c>), so a case in the activated revision's critical list can never be both
-/// quarantined and activated, two simultaneous activations leave exactly one active row, and no pair deadlocks.
+/// activation takes <c>FOR NO KEY UPDATE</c> serialises it against the quarantine create (which takes the same
+/// row <c>FOR SHARE</c>), so a case in the activated revision's critical list can never be both quarantined and
+/// activated, two simultaneous activations leave exactly one active row, a project row held past
+/// <c>lock_timeout</c> is refused 503 busy with no write, and no pair deadlocks. The run-create reader takes no
+/// lock (finding F4), so it is never serialised against the activation: it sees a revision that was active at
+/// some commit.
 /// </summary>
 /// <remarks>
 /// Every racing pair runs under <see cref="Task.WhenAll(System.Threading.Tasks.Task[])"/> with a 60-second
@@ -169,11 +172,10 @@ public sealed class PolicyActivationConcurrencyTests
         await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry where state = 'active'");
 
     /// <summary>
-    /// Reads the active policy through <see cref="IPolicyContracts"/> in its own tenant transaction and holds the
-    /// project row <c>FOR SHARE</c> for <paramref name="hold"/> before it commits — the run-create read a
-    /// concurrent activation must wait for.
+    /// Reads the active policy through <see cref="IPolicyContracts"/> in its own tenant transaction — the run-create
+    /// read of finding F4: it takes no project row lock, so it never waits on a concurrent activation.
     /// </summary>
-    private static async Task<ActivePolicy?> ReadWhileHoldingAsync(World world, TimeSpan hold)
+    private static async Task<ActivePolicy?> ReadAsync(World world)
     {
         await using var services = world.Api.Services.CreateAsyncScope();
         var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
@@ -181,7 +183,6 @@ public sealed class PolicyActivationConcurrencyTests
         var contracts = services.ServiceProvider.GetRequiredService<IPolicyContracts>();
 
         var policy = await contracts.GetActivePolicyAsync(world.Project, TestContext.Current.CancellationToken);
-        await Task.Delay(hold, TestContext.Current.CancellationToken);
         await scope.CommitAsync(TestContext.Current.CancellationToken);
 
         return policy;
@@ -243,6 +244,12 @@ public sealed class PolicyActivationConcurrencyTests
 
     // ------------------------------------------------------------------ (c) activation vs the run-create reader
 
+    /// <summary>
+    /// The run-create reader and an activation do not deadlock or time out. The reader takes no project row lock
+    /// (finding F4), so the activation's <c>FOR NO KEY UPDATE</c> never waits on it; the reader's snapshot is a
+    /// committed active revision (one that was active at some commit, never a torn pointer), and exactly one
+    /// revision is active afterwards.
+    /// </summary>
     [Fact]
     public async Task Activation_RacingAReaderViaPolicyContracts_DoesNotDeadlock_AndTheReaderSeesACommittedPolicy()
     {
@@ -251,17 +258,47 @@ public sealed class PolicyActivationConcurrencyTests
         (await ActivateAsync(world, first)).Status.ShouldBe(HttpStatusCode.OK);
         var second = await CreateRevisionAsync(world, BodyB);
 
-        // The reader opens first and holds the project row FOR SHARE for 200 ms; the activation's
-        // FOR NO KEY UPDATE waits for it and both complete — no deadlock.
-        var reader = ReadWhileHoldingAsync(world, TimeSpan.FromMilliseconds(200));
+        var reader = ReadAsync(world);
         var activation = ActivateAsync(world, second);
         await Task.WhenAll(reader, activation).WaitAsync(RaceTimeout, TestContext.Current.CancellationToken);
 
         (await activation).Status.ShouldBe(HttpStatusCode.OK);
         var seen = await reader;
         seen.ShouldNotBeNull();
-        // The reader's snapshot is a revision that was active at some commit, never a torn pointer.
         new[] { first, second }.ShouldContain(seen!.PolicyRevisionId);
         (await ActiveCountAsync(world)).ShouldBe(1);
+    }
+
+    // ------------------------------------------------------------------ (d) the project row held past lock_timeout
+
+    /// <summary>
+    /// 07.1.1 §8 lock-timeout row: an activation that cannot take the project row <c>FOR NO KEY UPDATE</c> within
+    /// <c>lock_timeout</c> (5 s) answers 503 <c>unavailable</c> and writes nothing — the revision stays draft, no
+    /// audit row and no pointer. The row is held here on an owner connection, which bypasses the store.
+    /// </summary>
+    [Fact]
+    public async Task Activation_ProjectRowHeldPastLockTimeout_Is503Busy_AndWritesNothing()
+    {
+        await using var world = await StartAsync();
+        var revision = await CreateRevisionAsync(world, BodyA);
+
+        // The holder keeps the project row locked FOR NO KEY UPDATE until this scope is disposed (rolled back).
+        await using var holder = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
+        (await holder.ScalarAsync<int>(
+            "select 1 from public.project where id = @project_id for no key update",
+            ("project_id", world.Project))).ShouldBe(1);
+
+        var answer = await ActivateAsync(world, revision)
+            .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        answer.Status.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        answer.ErrorCode.ShouldBe("unavailable");
+
+        // The refusal happens before any write.
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select state from public.policy_revision where id = '{revision}'")).ShouldBe("draft");
+        (await ActivationAuditRowsAsync(world)).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_activation")).ShouldBe(0);
     }
 }

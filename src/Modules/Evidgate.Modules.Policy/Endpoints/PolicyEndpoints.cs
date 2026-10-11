@@ -25,6 +25,12 @@ public static class PolicyEndpoints
     /// <summary>The policy-revision transport cap (the schema's <c>x-max-bytes</c>).</summary>
     internal const int MaxPolicyBytes = 64 * 1024;
 
+    /// <summary>
+    /// The activation transport cap (07.1.1-T4 F2c): the body is a revision id and an optional mode, so 4 KiB
+    /// is ample and the 64 KiB revision cap is not read for a ~100-byte request.
+    /// </summary>
+    internal const int MaxActivationBytes = 4 * 1024;
+
     internal const int DefaultLimit = 50;
 
     internal const int MaxLimit = 200;
@@ -100,7 +106,7 @@ public static class PolicyEndpoints
             return Result.Failure<PolicyActivationDto>(Unauthenticated);
         }
 
-        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxPolicyBytes, cancellationToken).ConfigureAwait(false);
+        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxActivationBytes, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
         {
             return Result.Failure<PolicyActivationDto>(tooLarge);

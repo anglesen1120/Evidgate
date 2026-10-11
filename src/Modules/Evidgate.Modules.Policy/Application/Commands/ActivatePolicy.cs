@@ -9,6 +9,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Policy.Contracts;
+using Evidgate.Modules.Policy.Domain;
 using Mediator;
 
 namespace Evidgate.Modules.Policy.Application.Commands;
@@ -19,7 +20,7 @@ namespace Evidgate.Modules.Policy.Application.Commands;
 /// permission the revision append requires, so a member who may write a revision may activate one.
 /// </summary>
 /// <param name="ProjectId">The project from the route.</param>
-/// <param name="Body">The raw request body, capped and parsed in the handler.</param>
+/// <param name="Body">The raw request body, read under the route's 4 KiB cap (<c>PolicyEndpoints.MaxActivationBytes</c>) and parsed in the handler.</param>
 internal sealed record ActivatePolicyCommand(Guid ProjectId, ReadOnlyMemory<byte> Body) : ICommand<Result<PolicyActivationDto>>;
 
 /// <summary>
@@ -27,6 +28,13 @@ internal sealed record ActivatePolicyCommand(Guid ProjectId, ReadOnlyMemory<byte
 /// the activation store, then describe the audit row. Everything the store writes commits in the caller's
 /// tenant transaction, the audit row included, so a refused activation writes nothing (AC: exactly one
 /// audit row per successful call, none per refusal).
+/// <para>
+/// The body is the route's 4 KiB request (<c>PolicyEndpoints.MaxActivationBytes</c>), and the handler parses
+/// it with the append route's two edges: a member name or string that jsonb cannot carry (a lone surrogate
+/// or U+0000) is a 422 before the walk touches it (<c>PolicyRevisionRules.HasUnstorableText</c>, 07.1.1-T4
+/// F2a), and a body of many unknown members is answered with at most <see cref="MaxDetails"/> capped paths
+/// (07.1.1-T4 F2b), so a hostile body cannot turn a small refusal into an unbounded envelope.
+/// </para>
 /// </summary>
 [AuditedAction("policy.activate")]
 [Permission(Permissions.Policy.Write)]
@@ -39,6 +47,12 @@ internal sealed class ActivatePolicyCommandHandler(
 {
     /// <summary>The only mode this story accepts; <c>enforcing</c> lands with 07.7.1 (07.1.1 §6).</summary>
     private const string Advisory = "advisory";
+
+    /// <summary>At most this many details are echoed, so a body of many unknown members stays bounded (07.1.1-T4 F2b).</summary>
+    private const int MaxDetails = 20;
+
+    /// <summary>Longest member name echoed as a detail path; a longer one is cut (07.1.1-T4 F2b, the 200 of <c>PolicyBodyPaths.Of</c>).</summary>
+    private const int MaxPathLength = 200;
 
     /// <summary>Runs the activation.</summary>
     /// <param name="command">The command.</param>
@@ -101,7 +115,9 @@ internal sealed class ActivatePolicyCommandHandler(
     /// <summary>
     /// Parses the body: <c>policy_revision_id</c> is required and must be a UUID; <c>mode</c> is optional
     /// and defaults to <c>advisory</c>. <c>enforcing</c> is refused 422 until 07.7.1 (07.1.1 §6). The body
-    /// is closed against unknown members by the same reading the manifest routes use (00 §5.5 edge).
+    /// is closed against unknown members by the same reading the manifest routes use (00 §5.5 edge), a
+    /// name or string jsonb cannot carry is refused 422 before the walk reads it (07.1.1-T4 F2a), and the
+    /// unknown-member details are capped in number and path length (07.1.1-T4 F2b).
     /// </summary>
     private static (ActivatePolicyRequest? Request, Error? Error) Parse(ReadOnlyMemory<byte> body)
     {
@@ -121,6 +137,15 @@ internal sealed class ActivatePolicyCommandHandler(
             if (root.ValueKind != JsonValueKind.Object)
             {
                 return (null, Error.Invalid("the request body must be a JSON object"));
+            }
+
+            // The append route's guard (07.1.1-T4 F2a): GetString() and member.Name below throw on a lone
+            // surrogate or U+0000, so the body is refused 422 here rather than escaping as a 500.
+            if (PolicyRevisionRules.HasUnstorableText(root))
+            {
+                return (null, Error.Invalid(
+                    "the request body carries a string that cannot be stored",
+                    [new ErrorDetail(string.Empty, "invalid_value")]));
             }
 
             var details = new List<ErrorDetail>();
@@ -157,9 +182,18 @@ internal sealed class ActivatePolicyCommandHandler(
 
             foreach (var member in root.EnumerateObject())
             {
+                if (details.Count >= MaxDetails)
+                {
+                    // Cap reached: stop enumerating, so a body of many unknown members costs one bounded list.
+                    break;
+                }
+
                 if (member.Name is not ("policy_revision_id" or "mode"))
                 {
-                    details.Add(new ErrorDetail(member.Name, "unknown_member"));
+                    var name = member.Name;
+                    details.Add(new ErrorDetail(
+                        name.Length > MaxPathLength ? name[..MaxPathLength] : name,
+                        "unknown_member"));
                 }
             }
 

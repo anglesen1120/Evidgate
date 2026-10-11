@@ -11,8 +11,9 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// QA exploratory and negative tests for <c>POST /v1/projects/{p}/policy-activation</c> (07.1.1-T4): body-shape
-/// boundaries, the body size cap, a soft-deleted project, a cross-org caller, refusals writing no audit row, the
-/// retired-to-active refusal, one audit row per successful re-activation, and the app role's write grant on <c>run</c>.
+/// boundaries, the unstorable-text guard and the unknown-member detail cap, the 4 KiB body size cap, a soft-deleted
+/// project, a cross-org caller, refusals writing no audit row, the retired-to-active refusal, one audit row per
+/// successful re-activation, and the app role's write grant on <c>run</c>.
 /// </summary>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
@@ -156,13 +157,63 @@ public sealed class PolicyActivationQaTests
         }
     }
 
-    [Fact]
-    public async Task Activation_BodyOverSixtyFourKibibytes_Is413_AndWritesNothing()
+    [Theory]
+    [InlineData("""{"policy_revision_id":"\ud800"}""")]
+    [InlineData("""{"\ud800":1}""")]
+    public async Task Activation_LoneSurrogate_Is422_AndWritesNothing(string raw)
     {
         await using var world = await StartAsync();
         var revision = await CreateRevisionAsync(world, BodyA);
-        var pad = new string('x', 64 * 1024);
+
+        var answer = await ActivateRawAsync(world, raw);
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await ActiveCountAsync(world)).ShouldBe(0L);
+        (await AuditCountAsync(world)).ShouldBe(0L);
+        (await StateAsync(world, revision)).ShouldBe("draft");
+    }
+
+    [Fact]
+    public async Task Activation_ManyUnknownMembers_Are422_WithAtMostTwentyDetails()
+    {
+        await using var world = await StartAsync();
+        var revision = await CreateRevisionAsync(world, BodyA);
+        var members = string.Join(',', Enumerable.Range(0, 400).Select(i => $"\"m{i}\":1"));
+        var raw = $$"""{"policy_revision_id":"{{revision}}",{{members}}}""";
+        Encoding.UTF8.GetByteCount(raw).ShouldBeLessThanOrEqualTo(4 * 1024);
+
+        var answer = await ActivateRawAsync(world, raw);
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        answer.Body.GetProperty("error").GetProperty("details").GetArrayLength().ShouldBe(20);
+        (await ActiveCountAsync(world)).ShouldBe(0L);
+        (await AuditCountAsync(world)).ShouldBe(0L);
+    }
+
+    [Fact]
+    public async Task Activation_LongUnknownMemberName_Is422_WithThePathCappedAtTwoHundred()
+    {
+        await using var world = await StartAsync();
+        var revision = await CreateRevisionAsync(world, BodyA);
+        var raw = $$"""{"policy_revision_id":"{{revision}}","{{new string('n', 300)}}":1}""";
+
+        var answer = await ActivateRawAsync(world, raw);
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        var details = answer.Body.GetProperty("error").GetProperty("details");
+        details.GetArrayLength().ShouldBe(1);
+        details[0].GetProperty("path").GetString()!.Length.ShouldBe(200);
+        details[0].GetProperty("reason").GetString().ShouldBe("unknown_member");
+    }
+
+    [Fact]
+    public async Task Activation_BodyOverFourKibibytes_Is413_AndWritesNothing()
+    {
+        await using var world = await StartAsync();
+        var revision = await CreateRevisionAsync(world, BodyA);
+        var pad = new string('x', 4 * 1024);
         var raw = $$"""{"policy_revision_id":"{{revision}}","pad":"{{pad}}"}""";
+        Encoding.UTF8.GetByteCount(raw).ShouldBeGreaterThan(4 * 1024);
 
         var answer = await ActivateRawAsync(world, raw);
 
