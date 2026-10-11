@@ -35,6 +35,12 @@ public static class EvidgateTelemetry
     /// <summary>Counter of adapter capabilities refused at first send, tagged by code and protocol-major bucket (04.7.1-T2).</summary>
     public const string AdapterCapabilityRejectedMetricName = "evidgate_adapter_capability_rejected_total";
 
+    /// <summary>Counter of case attempts written inside a caller's tenant transaction, tagged by normalised status (05.3.3-T2.1).</summary>
+    public const string CaseAttemptWrittenMetricName = "evidgate_case_attempt_written_total";
+
+    /// <summary>Counter of dependant case attempts marked <c>blocked</c> because their setup failed (05.3.3-T2.2).</summary>
+    public const string CaseAttemptBlockedBySetupMetricName = "evidgate_case_attempt_blocked_by_setup_total";
+
     /// <summary>Histogram of pipeline-handler durations in milliseconds (01.4.2-T4.1, the C2 telemetry stage).</summary>
     public const string PipelineDurationMetricName = "evidgate.pipeline.duration";
 
@@ -62,6 +68,16 @@ public static class EvidgateTelemetry
         AdapterCapabilityRejectedMetricName,
         unit: "{capability}",
         description: "Adapter capabilities refused at first send, by code and protocol-major bucket (04.7.1). Never labelled with a document value, adapter name or hash.");
+
+    private static readonly Counter<long> CaseAttemptsWritten = Meter.CreateCounter<long>(
+        CaseAttemptWrittenMetricName,
+        unit: "{attempt}",
+        description: "Case attempts written inside a caller's tenant transaction, by normalised status (05.3.3). Never labelled with a raw status, case name or execution key.");
+
+    private static readonly Counter<long> CaseAttemptsBlockedBySetup = Meter.CreateCounter<long>(
+        CaseAttemptBlockedBySetupMetricName,
+        unit: "{attempt}",
+        description: "Dependant case attempts marked blocked because their setup failed (05.3.3-T2.2). No labels.");
 
     private static readonly Histogram<double> PipelineDurations = Meter.CreateHistogram<double>(
         PipelineDurationMetricName,
@@ -114,6 +130,39 @@ public static class EvidgateTelemetry
             1,
             new KeyValuePair<string, object?>("code", code),
             new KeyValuePair<string, object?>("protocol_major", ProtocolMajorBucket(protocolMajor)));
+
+    /// <summary>
+    /// Counts <paramref name="count"/> case attempts written inside the caller's tenant transaction, by
+    /// <paramref name="normalizedStatus"/> (05.3.3-T2.1 step 6). The label is the closed normalised vocabulary only —
+    /// never a raw status, case name or execution key — and the count is a write count: a later rollback of the
+    /// caller's transaction is not subtracted.
+    /// </summary>
+    /// <param name="normalizedStatus">One of the six normalised statuses; never a raw producer value.</param>
+    /// <param name="count">The rows written; zero or less is a no-op.</param>
+    public static void RecordCaseAttemptWritten(string normalizedStatus, long count)
+    {
+        if (count <= 0)
+        {
+            return;
+        }
+
+        CaseAttemptsWritten.Add(count, new KeyValuePair<string, object?>("normalized_status", normalizedStatus));
+    }
+
+    /// <summary>
+    /// Counts <paramref name="count"/> dependant attempts marked <c>blocked</c> because their setup failed
+    /// (05.3.3-T2.2 step d). No labels.
+    /// </summary>
+    /// <param name="count">The rows written; zero or less is a no-op.</param>
+    public static void RecordCaseAttemptBlockedBySetup(long count)
+    {
+        if (count <= 0)
+        {
+            return;
+        }
+
+        CaseAttemptsBlockedBySetup.Add(count);
+    }
 
     /// <summary>Bounds the protocol-major label to <c>1</c>–<c>8</c> (the majors a v1 server can see) or <c>other</c>, so the tag stays low-cardinality.</summary>
     private static string ProtocolMajorBucket(int? protocolMajor) => protocolMajor switch
