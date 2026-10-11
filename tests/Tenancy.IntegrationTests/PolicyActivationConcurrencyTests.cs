@@ -221,7 +221,7 @@ public sealed class PolicyActivationConcurrencyTests
             quarantined.ErrorCode.ShouldBe("critical_case_not_quarantinable");
         }
 
-        (await ActiveCountAsync(world)).ShouldBe(1);
+        (await ActiveCountAsync(world)).ShouldBe(activationWon ? 1 : 0);
         (await ActiveQuarantineRowsAsync(world)).ShouldBe(quarantineWon ? 1 : 0);
     }
 
