@@ -411,7 +411,7 @@
     {
       "key": "EVIDGATE__OBJECT__ENDPOINT",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "dev-stack", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -431,7 +431,7 @@
     {
       "key": "EVIDGATE__OBJECT__REGION",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "dev-stack", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -451,7 +451,7 @@
     {
       "key": "EVIDGATE__OBJECT__BUCKET",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "dev-stack", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -491,7 +491,7 @@
     {
       "key": "EVIDGATE__OBJECT__FORCEPATHSTYLE",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "dev-stack", "worker"],
       "type": "boolean",
       "requiredAtBoot": false,
       "constraints": {},
@@ -511,7 +511,7 @@
     {
       "key": "EVIDGATE__OBJECT__ACCESSKEY",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "dev-stack", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -531,7 +531,7 @@
     {
       "key": "EVIDGATE__OBJECT__SECRETKEY",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "dev-stack", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
