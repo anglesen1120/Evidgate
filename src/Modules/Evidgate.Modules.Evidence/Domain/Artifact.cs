@@ -64,6 +64,25 @@ internal static class ArtifactSensitivity
         IsKnown(value)
             ? value
             : throw new ArgumentOutOfRangeException(nameof(value), value, "sensitivity is outside the 00 §7 closed list (06.1.1 §4)");
+
+    /// <summary>
+    /// The static per-kind fallback a minted artifact inherits when the project has no <c>artifact_kind_policy</c>
+    /// row for its kind (06.1.1 §10 T2 Notes item 3, FR-06-5). The map is the one TL ruling T57(a) fixes
+    /// (<c>plans/features/README.md</c> §3; 06.2.1 §5/§8): <c>trace</c>, <c>dom_snapshot</c>, <c>a11y_snapshot</c> and
+    /// <c>patch</c> carry request bodies, cookies or page text and default to <see cref="Sensitive"/>;
+    /// <c>video</c>, <c>screenshot</c>, <c>raw_report</c> and <c>ui_hierarchy</c> default to <see cref="Normal"/>.
+    /// A project may lower a default-<c>sensitive</c> kind to <c>normal</c> only through the audited
+    /// <c>PUT /v1/projects/{p}/artifact-kind-policy/{kind}</c> override (06.2.1-T1), never by omission.
+    /// </summary>
+    /// <param name="kind">One of <see cref="ArtifactKind.All"/>.</param>
+    /// <returns>The kind's default sensitivity.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The kind is outside the 00 §7 closed list.</exception>
+    public static string ForKind(string kind) =>
+        ArtifactKind.Ensure(kind) switch
+        {
+            ArtifactKind.Trace or ArtifactKind.DomSnapshot or ArtifactKind.A11ySnapshot or ArtifactKind.Patch => Sensitive,
+            _ => Normal,
+        };
 }
 
 /// <summary>The closed list of <c>artifact.scan_state</c> (00 §7, T19): the masking scan starts at <c>pending</c>.</summary>

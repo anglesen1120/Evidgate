@@ -211,4 +211,16 @@ public static class ApiErrorCode
 
     /// <summary>409: an active quarantine entry for that case already exists in the project (07.3.1 §5, T23).</summary>
     public const string QuarantineConflict = "quarantine_conflict";
+
+    /// <summary>422: the mint command carried a client-supplied object key; keys are server-chosen only (06.1.1 AC1, FR-06-1).</summary>
+    public const string ObjectKeyNotAllowed = "object_key_not_allowed";
+
+    /// <summary>422: the artifact <c>kind</c> is outside the 00 §7 closed list (06.1.1 §5).</summary>
+    public const string KindUnknown = "kind_unknown";
+
+    /// <summary>422: the declared checksum is not <c>sha256:&lt;64 lowercase hex&gt;</c> (06.1.1 §5).</summary>
+    public const string ChecksumInvalid = "checksum_invalid";
+
+    /// <summary>422: the declared artifact size is not positive (06.1.1 §5).</summary>
+    public const string SizeOutOfRange = "size_out_of_range";
 }
