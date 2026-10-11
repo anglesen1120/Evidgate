@@ -116,6 +116,90 @@ public sealed class PolicyRevisionImmutabilityTests
         }
     }
 
+    // ------------------------------------------------------------------ (b2) the 07.1.1-T4 column grant and index
+
+    [Fact]
+    public async Task AppRole_ColumnGrant_AllowsTheTwoLifecycleMoves_AndRefusesEverythingElse()
+    {
+        await using var world = await StartAsync();
+        var appended = await AppendAsync(world, Body("a"));
+        var where = $"where id = '{appended.Id}'";
+
+        // body, hash and the identity columns stay outside the app role's `UPDATE (state)` grant (0033): 42501
+        // before the immutability trigger is reached.
+        foreach (var set in new[]
+        {
+            "body = '{\"x\":1}'::jsonb",
+            $"hash = '{Hash('b')}'",
+            $"org_id = '{Guid.CreateVersion7()}'",
+            $"project_id = '{Guid.CreateVersion7()}'",
+            "revision_no = 9",
+        })
+        {
+            await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+            (await scope.CaptureErrorAsync($"update public.policy_revision set {set} {where}")).SqlState.ShouldBe("42501", set);
+        }
+
+        // draft -> active is granted, and the database owns the version bump (the 07.1.1-T4 activation path).
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync($"update public.policy_revision set state = 'active' {where}")).ShouldBe(1);
+            (await scope.ScalarAsync<int>($"select version from public.policy_revision {where}")).ShouldBe(2);
+            await scope.CommitAsync();
+        }
+
+        // active -> draft is outside the state machine: 23514, whoever issues it.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.CaptureErrorAsync($"update public.policy_revision set state = 'draft' {where}")).SqlState.ShouldBe("23514");
+        }
+
+        // active -> retired is the other granted move.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync($"update public.policy_revision set state = 'retired' {where}")).ShouldBe(1);
+            await scope.CommitAsync();
+        }
+
+        // retired -> active is terminal: the trigger refuses it even though the column grant allows the statement.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.CaptureErrorAsync($"update public.policy_revision set state = 'active' {where}")).SqlState.ShouldBe("23514");
+        }
+    }
+
+    [Fact]
+    public async Task OneActiveRevisionPerProject_IsEnforcedByThePartialUniqueIndex_AndIsPerProject()
+    {
+        await using var world = await StartAsync();
+        var first = await AppendAsync(world, Body("a"));
+        var second = await AppendAsync(world, Body("b"));
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "second");
+        var inOther = await AppendAsync(world with { Project = otherProject }, Body("a"));
+
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync($"update public.policy_revision set state = 'active' where id = '{first.Id}'")).ShouldBe(1);
+            await scope.CommitAsync();
+        }
+
+        // A second active row in the same project is refused by policy_revision_active_key (23505).
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.CaptureErrorAsync($"update public.policy_revision set state = 'active' where id = '{second.Id}'"))
+                .SqlState.ShouldBe("23505");
+        }
+
+        // The index is per project, so the same move is allowed for another project of the org.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync($"update public.policy_revision set state = 'active' where id = '{inOther.Id}'")).ShouldBe(1);
+            await scope.CommitAsync();
+        }
+
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision where state = 'active'")).ShouldBe(2);
+    }
+
     // ------------------------------------------------------------------ (c) owner role: the trigger
 
     [Fact]

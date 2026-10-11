@@ -757,6 +757,73 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/policy-activation:
+    post:
+      operationId: activatePolicyRevision
+      tags: [policies]
+      summary: Activate a policy revision for the project
+      description: >-
+        Moves the project's policy pointer (07.1.1-T4, FR-07-2, T93): the
+        revision named in the body becomes `active`, the previously active one
+        becomes `retired`, and every run created afterwards pins the new
+        revision. The body is `{policy_revision_id, mode?}`; `mode` defaults to
+        `advisory` and `enforcing` is refused `422` until 07.7.1 (the database
+        already accepts the column value). Activating the revision that is
+        already active answers `200` with `changed: false` (the mode is still
+        re-stamped) and still writes exactly one audit row; a `retired` revision
+        is `409 invalid_transition`; an unknown, another project's or another
+        tenant's revision is `404`. A revision whose `critical_cases` names a
+        case with an active quarantine entry in the project is refused `422
+        critical_case_quarantined` with the offending case ids in
+        `error.details[].path`; a `critical_cases` entry that is not a case UUID
+        is `422` with a pointer to that entry. A credential scoped to another
+        project is `403 project_scope_mismatch`; a project row another writer
+        holds past the lock timeout is `503 unavailable`. No `Idempotency-Key`
+        is required: activating the same revision twice is naturally idempotent
+        (`changed: false`, one audit row per call).
+      x-permission: policy:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [policy_revision_id]
+              properties:
+                policy_revision_id: { type: string, format: uuid }
+                mode: { type: string, enum: [advisory, enforcing], default: advisory }
+      responses:
+        '200':
+          description: The project's policy pointer after the call
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyActivationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /projects/{p}/policies:
     post:
       operationId: createPolicyRevision
@@ -4781,6 +4848,31 @@ components:
         created_by: { type: string, format: uuid }
         created_at: { type: string, format: date-time }
         version: { type: integer }
+    PolicyActivationDto:
+      type: object
+      description: >-
+        The project's policy pointer after `POST /v1/projects/{p}/policy-activation` (07.1.1-T4); a run
+        created afterwards pins `policy_revision_id`.
+      required:
+        [
+          project_id,
+          policy_revision_id,
+          hash,
+          mode,
+          activated_by,
+          activated_at,
+          previous_policy_revision_id,
+          changed,
+        ]
+      properties:
+        project_id: { type: string, format: uuid }
+        policy_revision_id: { type: string, format: uuid }
+        hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        mode: { type: string, enum: [advisory, enforcing] }
+        activated_by: { type: string, format: uuid }
+        activated_at: { type: string, format: date-time }
+        previous_policy_revision_id: { type: [string, 'null'], format: uuid }
+        changed: { type: boolean }
     PolicyRevisionSummaryDto:
       type: object
       description: A policy revision without its body (07.1.1-T3 list rows).

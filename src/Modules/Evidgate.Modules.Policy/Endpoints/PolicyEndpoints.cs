@@ -41,6 +41,10 @@ public static class PolicyEndpoints
             .Produces<PolicyRevisionDto>(StatusCodes.Status200OK)
             .WithSummary("Create an immutable, hashed policy revision (07.1.1)");
 
+        group.MapPost("/projects/{p}/policy-activation", ActivatePolicyAsync)
+            .Produces<PolicyActivationDto>(StatusCodes.Status200OK)
+            .WithSummary("Activate a policy revision for the project; runs created afterwards pin it (07.1.1)");
+
         group.MapGet("/policies/{id}", GetPolicyRevisionAsync)
             .Produces<PolicyRevisionDto>(StatusCodes.Status200OK)
             .WithSummary("One policy revision; ETag is its id (07.1.1)");
@@ -80,6 +84,29 @@ public static class PolicyEndpoints
         }
 
         return result;
+    }
+
+    private static async Task<Result<PolicyActivationDto>> ActivatePolicyAsync(
+        Guid p,
+        HttpContext context,
+        IRequestPrincipalAccessor principals,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        // Same edge as the append route: an anonymous caller is refused before any byte of the body is read,
+        // and the pipeline's permission check runs in the handler.
+        if (principals.Current is null)
+        {
+            return Result.Failure<PolicyActivationDto>(Unauthenticated);
+        }
+
+        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxPolicyBytes, cancellationToken).ConfigureAwait(false);
+        if (tooLarge is not null)
+        {
+            return Result.Failure<PolicyActivationDto>(tooLarge);
+        }
+
+        return await mediator.Send(new ActivatePolicyCommand(p, bytes), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Result<PolicyRevisionDto>> GetPolicyRevisionAsync(

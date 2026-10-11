@@ -215,6 +215,9 @@ public static class ApiErrorCode
     /// <summary>422: the case is on the active policy revision's critical list and can never be quarantined (07.3.1 AC4, T23).</summary>
     public const string CriticalCaseNotQuarantinable = "critical_case_not_quarantinable";
 
+    /// <summary>422: the revision lists a critical case that has an active quarantine entry in the project (07.1.1-T4.1, owner decision Q2).</summary>
+    public const string CriticalCaseQuarantined = "critical_case_quarantined";
+
     /// <summary>409: an active quarantine entry for that case already exists in the project (07.3.1 §5, T23).</summary>
     public const string QuarantineConflict = "quarantine_conflict";
 

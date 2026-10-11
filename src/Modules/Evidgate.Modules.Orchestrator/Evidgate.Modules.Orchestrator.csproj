@@ -14,6 +14,8 @@
     <ProjectReference Include="..\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
     <ProjectReference Include="..\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
     <ProjectReference Include="..\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
+    <!-- 07.1.1-T4.2: the run-create handler pins the active policy revision through the Policy module's contracts. -->
+    <ProjectReference Include="..\Evidgate.Modules.Policy.Contracts\Evidgate.Modules.Policy.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
     <!-- 05.1.1/05.1.2: tenant transaction (Dapper), the C2 pipeline seams, the Corvus schema set and RFC 8785 hashing. -->

@@ -488,9 +488,9 @@ public sealed class RunSchemaTests
     // ------------------------------------------------------------------ (d) run CHECK boundaries
 
     [Theory]
-    [InlineData(0)]
+    [InlineData(-1)]
     [InlineData(525601)]
-    public async Task LateWindowMinutes_OutOfRange_FailsCheck(int minutes)
+    public async Task LateWindowMinutes_OutsideWidenedBounds_FailsCheck(int minutes)
     {
         await using var world = await StartAsync();
         var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
@@ -500,6 +500,26 @@ public sealed class RunSchemaTests
 
         error.SqlState.ShouldBe("23514");
         error.ConstraintName.ShouldBe("run_late_window_minutes_check");
+    }
+
+    // 0033 widens the bound to 0..525600 (owner decision Q4): both ends are accepted values, not refusals.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(525600)]
+    public async Task LateWindowMinutes_WidenedBounds_AreAccepted(int minutes)
+    {
+        await using var world = await StartAsync();
+        var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
+
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync(InsertRunSql(world.Org, world.Project, parents, lateWindowMinutes: minutes))).ShouldBe(1);
+            await scope.CommitAsync();
+        }
+
+        (await _fixture.ScalarAsync<int>(
+            world.Database,
+            $"select late_window_minutes from public.run where org_id = '{world.Org}'")).ShouldBe(minutes);
     }
 
     [Fact]
