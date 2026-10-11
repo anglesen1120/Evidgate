@@ -52,6 +52,7 @@ public sealed class RunCreationQaExtraTests
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/projects/{project ?? world.Project}/runs");
         (caller ?? world.Admin)(request.Headers);
+        request.Headers.Add("Idempotency-Key", NewKey());
         request.Content = new StringContent(body, Encoding.UTF8, "application/json");
         using var response = await world.Client.SendAsync(request, TestContext.Current.CancellationToken);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);

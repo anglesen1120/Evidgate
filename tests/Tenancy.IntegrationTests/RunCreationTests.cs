@@ -112,15 +112,27 @@ public sealed class RunCreationTests
         return document.RootElement.GetProperty("manifest_id").GetGuid();
     }
 
-    private static async Task<ApiAnswer> CreateRunAsync(
+    /// <summary>
+    /// One <c>POST /v1/projects/{p}/runs</c>. Every call carries an <c>Idempotency-Key</c> (05.2.1-T2): a fresh one by
+    /// default, or <paramref name="idempotencyKey"/> to replay/conflict, or none at all when
+    /// <paramref name="omitIdempotencyKey"/> is set (the missing-header case).
+    /// </summary>
+    internal static async Task<ApiAnswer> CreateRunAsync(
         World world,
         string body,
         Action<HttpRequestHeaders>? caller = null,
         Guid? project = null,
-        HttpClient? client = null)
+        HttpClient? client = null,
+        string? idempotencyKey = null,
+        bool omitIdempotencyKey = false)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/projects/{project ?? world.Project}/runs");
         (caller ?? world.Admin)(request.Headers);
+        if (!omitIdempotencyKey)
+        {
+            request.Headers.Add("Idempotency-Key", idempotencyKey ?? NewKey());
+        }
+
         request.Content = new StringContent(body, Encoding.UTF8, "application/json");
         using var response = await (client ?? world.Client).SendAsync(request, TestContext.Current.CancellationToken);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -129,17 +141,20 @@ public sealed class RunCreationTests
         return new ApiAnswer(response.StatusCode, document.RootElement.Clone(), response.Headers);
     }
 
-    private static string RunBody(Guid manifestId) => $$"""{"manifest_id":"{{manifestId}}"}""";
+    internal static string RunBody(Guid manifestId) => $$"""{"manifest_id":"{{manifestId}}"}""";
 
     private static List<JsonElement> Details(ApiAnswer answer) =>
         [.. answer.Body.GetProperty("error").GetProperty("details").EnumerateArray()];
 
-    private async Task AssertNoRunRowsAsync(World world)
+    private Task AssertNoRunRowsAsync(World world) => AssertNoRunRowsAsync(_fixture, world);
+
+    /// <summary>No run, planned execution, producer slot or outbox row exists for the world's database.</summary>
+    internal static async Task AssertNoRunRowsAsync(PostgresTenancyFixture fixture, World world)
     {
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.planned_execution")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.outbox")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.planned_execution")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.outbox")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ AC1, AC7
