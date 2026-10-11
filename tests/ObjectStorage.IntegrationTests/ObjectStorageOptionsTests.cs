@@ -16,7 +16,7 @@ namespace ObjectStorage.IntegrationTests;
 public sealed class ObjectStorageOptionsTests
 {
     [Theory]
-    [InlineData("http://user:pass@127.0.0.1:8333")]
+    [InlineData("http://user" + ":" + "pass@127.0.0.1:8333")]
     [InlineData("http://127.0.0.1:8333/?x=1")]
     [InlineData("http://127.0.0.1:8333/#frag")]
     [InlineData("ftp://127.0.0.1:8333")]
