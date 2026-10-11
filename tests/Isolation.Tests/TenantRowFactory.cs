@@ -379,6 +379,15 @@ internal sealed class TenantRowFactory
                 Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
             ("public.planned_execution", "variant_hash") => "sha256:" + new string('a', 64),
             ("public.planned_execution", "shard_id") => "shard-1",
+            // case_attempt's execution_key is the 00 §7 sha256 hex and its unique key is
+            // (org_id, run_id, execution_key, attempt_no), so a constant would collide with the valid
+            // row the corrupt attempt inserts just before it: a fresh 64-hex value per generated row.
+            // Its composite FK to planned_execution fills the column from the parent, so this rule is
+            // only reached when the parent lookup did not set it.
+            ("public.case_attempt", "execution_key") =>
+                Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+            ("public.case_attempt", "raw_status") => "passed",
+            ("public.case_attempt", "normalized_status") => "passed",
             _ => (object?)null,
         };
 

@@ -29,8 +29,9 @@ The playbook for changing a table without breaking the running version is
   `evidgate_resolve` resolvers, `0015` is 02.7.1-T1's `audit_log`, `0026` is 04.7.1-T2's
   `adapter_capability`, `0027` is 07.3.1-T1's `waiver`, `0028` is 06.1.1-T1's
   `artifact`/`artifact_kind_policy`, `0029` is 04.1.2-T4's `producer_slot`, `0030` is 07.3.1-T2's
-  `quarantine_entry` plus its `quarantine:write` catalogue permission and `0031` is 05.2.1-T1's
-  `run`/`planned_execution` plus the deferred `artifact`/`producer_slot` run keys); a gap means two branches
+  `quarantine_entry` plus its `quarantine:write` catalogue permission, `0031` is 05.2.1-T1's
+  `run`/`planned_execution` plus the deferred `artifact`/`producer_slot` run keys and `0032` is
+  05.3.3-T1's `case_attempt` plus the deferred `artifact` attempt key); a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
