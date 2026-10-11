@@ -736,8 +736,10 @@ public static class IsolationRouteCases
     /// <summary>
     /// <c>POST /v1/artifacts/upload-url</c>: the run is named in the body, not the path, and the route carries no
     /// project in its URL. Org A's run id in the body against a random run id — the same 404 <c>not_found</c> for
-    /// both, so another tenant's run is never resolved (AC1). The caller must hold <c>artifact:write</c> (org B's
-    /// <c>tenant_admin</c> and its <c>ci_producer</c> both do).
+    /// both, so another tenant's run is never resolved (AC1). The route is project-scoped by the credential, not
+    /// by its path: org B's header-scoped <c>tenant_admin</c> names no project and is refused 403
+    /// <c>project_required</c> for the foreign and the random run alike (no oracle); org B's <c>ci_producer</c>
+    /// (project <c>web</c>) gets the 404 <c>not_found</c> the AC names.
     /// </summary>
     private static RouteCase EvidenceUploadUrlCase()
     {
@@ -761,7 +763,7 @@ public static class IsolationRouteCases
                 var w = Require(world);
                 return
                 [
-                    Pair(route, "org A's run id in the body", ProbeExpect.NotFound, OrgBAdmin(w),
+                    Pair(route, "org A's run id in the body", ProbeExpect.NotSuccess, OrgBAdmin(w),
                         Create(w.Acme.Projects[0].ManifestId), Create(Guid.CreateVersion7())),
                 ];
             },
