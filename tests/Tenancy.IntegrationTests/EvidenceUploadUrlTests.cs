@@ -456,6 +456,35 @@ public sealed class EvidenceUploadUrlTests
         (await ArtifactRowsAsync(world)).ShouldBe(1);
     }
 
+    [Fact]
+    public async Task UploadUrl_DifferentIdentitySameKey_409_NoUploadUrl()
+    {
+        await using var world = await StartAsync(Writer());
+        var runId = await SeedRunAsync(world, ExecutionKey);
+        await InsertKindPolicyAsync(world, "trace");
+        var key = NewKey();
+
+        var first = await UploadUrlAsync(world, Body(runId), key);
+
+        // A second principal of the same project replays the key with the same body: the token identity is part of
+        // the idempotency hash (F3), so it is a conflict and never receives the first caller's presigned URL.
+        await using var other = TenancyApiFactory.WithPrincipal(
+            _fixture.AppConnectionString(world.Database), world.Org, world.Project, Writer(OtherJti), ObjectStorage);
+        using var otherClient = other.CreateClient();
+        var conflict = await otherClient.SendAsync(HttpMethod.Post, "/v1/artifacts/upload-url", _ => { }, Body(runId), key);
+
+        var replay = await UploadUrlAsync(world, Body(runId), key);
+
+        first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
+        conflict.Status.ShouldBe(HttpStatusCode.Conflict);
+        conflict.ErrorCode.ShouldBe("idempotency_conflict");
+        conflict.Body.GetRawText().ShouldNotContain("upload_url");
+        replay.Status.ShouldBe(HttpStatusCode.OK, replay.ErrorMessage);
+        replay.Id("artifact_id").ShouldBe(first.Id("artifact_id"));
+        replay.Text("upload_url").ShouldBe(first.Text("upload_url"));
+        (await ArtifactRowsAsync(world)).ShouldBe(1);
+    }
+
     // ------------------------------------------------------------------ the kind policy
 
     [Fact]

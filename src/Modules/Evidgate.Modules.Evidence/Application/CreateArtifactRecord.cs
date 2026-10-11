@@ -156,7 +156,12 @@ internal sealed partial class CreateArtifactRecordHandler(
 /// </summary>
 internal sealed class ArtifactMinter(ITenantDbContextFactory<EvidenceDbContext> contexts)
 {
-    /// <summary>Mints one artifact row for the ambient tenant scope; returns its id, final key and state.</summary>
+    /// <summary>
+    /// Mints one artifact row for the ambient tenant scope; returns its id, final key and state.
+    /// <paramref name="sensitivity"/> lets a caller that already read the kind policy (06.1.2's upload-url
+    /// handler) pass its <c>default_sensitivity</c> in, so the row is not read twice; when it is null the policy is
+    /// read here, which is the only path <see cref="CreateArtifactRecordHandler"/> takes.
+    /// </summary>
     public async ValueTask<ArtifactRecord> MintAsync(
         Guid orgId,
         Guid projectId,
@@ -167,11 +172,12 @@ internal sealed class ArtifactMinter(ITenantDbContextFactory<EvidenceDbContext> 
         string mediaType,
         long declaredBytes,
         string checksum,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? sensitivity = null)
     {
         await using var context = contexts.Create();
 
-        var sensitivity = await context.KindPolicies
+        var resolved = sensitivity ?? await context.KindPolicies
             .Where(policy => policy.OrgId == orgId && policy.ProjectId == projectId && policy.Kind == kind)
             .Select(policy => policy.DefaultSensitivity)
             .SingleOrDefaultAsync(cancellationToken)
@@ -193,7 +199,7 @@ internal sealed class ArtifactMinter(ITenantDbContextFactory<EvidenceDbContext> 
                 objectKey,
                 mediaType,
                 checksum,
-                sensitivity,
+                resolved,
                 bytes: declaredBytes,
                 scanState: ArtifactScanState.Pending,
                 state: ArtifactState.PendingUpload),

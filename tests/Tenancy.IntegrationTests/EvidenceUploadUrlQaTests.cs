@@ -227,7 +227,7 @@ public sealed class EvidenceUploadUrlQaTests
         answer.ErrorCode.ShouldBe("checksum_invalid");
         (await ArtifactRowsAsync(world)).ShouldBe(0);
 
-        // The slot is bound by the registry before the checksum is checked; the refusal must roll that bind back.
+        // The checksum shape check runs before the producer-slot bind (F1), so the slot is never bound.
         (await SlotBindingAsync(world, runId)).ShouldBeNull();
     }
 
@@ -317,15 +317,63 @@ public sealed class EvidenceUploadUrlQaTests
     [Fact]
     public async Task UploadUrl_KindWithoutPolicyRow_IsKindDisabled_NotKindUnknown()
     {
-        // The policy is the only authority: an unknown kind with no policy row fails closed as kind_disabled
-        // (coordinator ruling), so kind_unknown is only reachable once a policy row exists for the kind.
+        // The policy is the only authority: a KNOWN kind with no policy row fails closed as kind_disabled
+        // (coordinator ruling). An unknown kind is refused earlier as kind_unknown (see the test below).
+        await using var world = await StartAsync(Writer());
+        var runId = await SeedRunAsync(world, ExecutionKey);
+
+        var answer = await UploadUrlAsync(world, Body(runId, attemptNo: 1, bytes: Cap, kind: "trace"), Guid.NewGuid().ToString("N"));
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        answer.ErrorCode.ShouldBe("kind_disabled");
+        (await ArtifactRowsAsync(world)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task UploadUrl_UnknownKind_IsKindUnknown_422_NoRow_SlotUnbound()
+    {
+        // The kind shape check runs before any database work (F1), so an unknown kind is kind_unknown even with no
+        // policy row, and the producer slot is never touched.
         await using var world = await StartAsync(Writer());
         var runId = await SeedRunAsync(world, ExecutionKey);
 
         var answer = await UploadUrlAsync(world, Body(runId, attemptNo: 1, bytes: Cap, kind: "bogus_kind"), Guid.NewGuid().ToString("N"));
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        answer.ErrorCode.ShouldBe("kind_disabled");
+        answer.ErrorCode.ShouldBe("kind_unknown");
+        (await ArtifactRowsAsync(world)).ShouldBe(0);
+        (await SlotBindingAsync(world, runId)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task UploadUrl_OverLongKindAndChecksum_AreRequestInvalid_422()
+    {
+        // The validator caps the kind at 64 and the checksum at 128 code points (F4): an over-long value is a
+        // request_invalid before the handler runs, while an at-cap malformed value still gets its named code.
+        await using var world = await StartAsync(Writer());
+        var runId = await SeedRunAsync(world, ExecutionKey);
+        await InsertKindPolicyAsync(world, "trace");
+
+        var overLongKind = await UploadUrlAsync(
+            world, Body(runId, attemptNo: 1, bytes: Cap, kind: new string('k', 65)), Guid.NewGuid().ToString("N"));
+        var overLongChecksum = await UploadUrlAsync(
+            world, Body(runId, attemptNo: 1, bytes: Cap, checksum: "sha256:" + new string('b', 122)), Guid.NewGuid().ToString("N"));
+
+        overLongKind.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        overLongKind.ErrorCode.ShouldBe("request_invalid");
+        overLongChecksum.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        overLongChecksum.ErrorCode.ShouldBe("request_invalid");
+
+        var atCapKind = await UploadUrlAsync(
+            world, Body(runId, attemptNo: 1, bytes: Cap, kind: new string('k', 64)), Guid.NewGuid().ToString("N"));
+        var atCapChecksum = await UploadUrlAsync(
+            world, Body(runId, attemptNo: 1, bytes: Cap, checksum: "sha256:" + new string('b', 121)), Guid.NewGuid().ToString("N"));
+
+        atCapKind.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        atCapKind.ErrorCode.ShouldBe("kind_unknown");
+        atCapChecksum.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        atCapChecksum.ErrorCode.ShouldBe("checksum_invalid");
+
         (await ArtifactRowsAsync(world)).ShouldBe(0);
     }
 

@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
@@ -26,8 +25,10 @@ namespace Evidgate.Modules.Evidence.Application;
 /// <para>
 /// <paramref name="CredentialId"/> and <paramref name="CiRunRef"/> are the caller's token identity, resolved by the
 /// endpoint from <c>IRequestPrincipalAccessor</c> and passed in so the handler can bind the producer slot (T9/T85)
-/// without a second principal lookup. They are server-derived, never request input, and are excluded from the
-/// idempotency hash (a re-minted token with a new <c>jti</c> must still replay the original response).
+/// without a second principal lookup. They are server-derived, never request input, and are part of the idempotency
+/// hash: a replay of the same <c>Idempotency-Key</c> by a different token identity is a 409
+/// <c>idempotency_conflict</c>, so one principal can never receive another's stored presigned URL without the
+/// producer-slot check. They are never serialized into a response or the request DTO.
 /// </para>
 /// </summary>
 /// <param name="RunId">The run the artifact was captured in.</param>
@@ -50,8 +51,8 @@ internal sealed record RequestArtifactUploadUrl(
     string MediaType,
     long DeclaredBytes,
     string Checksum,
-    [property: JsonIgnore] string? CredentialId,
-    [property: JsonIgnore] string? CiRunRef,
+    string? CredentialId,
+    string? CiRunRef,
     string IdempotencyKey)
     : ICommand<Result<UploadUrlResponse>>, IIdempotentCommand;
 
@@ -59,13 +60,20 @@ internal sealed record RequestArtifactUploadUrl(
 /// Shape validation of <see cref="RequestArtifactUploadUrl"/> (C2 stage 2, before the tenant transaction): the
 /// execution key, the attempt number, the media type and the producer id, all of which the database also constrains
 /// (<c>artifact_execution_key_check</c>, <c>artifact_attempt_no_check</c>, <c>artifact_media_type_check</c>,
-/// <c>producer_slot_producer_id_check</c>). Reasons are the lower_snake vocabulary the other validators use
-/// (00 §9.2); the named 422 codes are produced by the handler through <see cref="EvidenceErrors"/>, because a
-/// validator failure can only ever surface as <c>request_invalid</c> with the code as a detail reason (the
-/// <c>Error.Unprocessable</c> contract).
+/// <c>producer_slot_producer_id_check</c>), plus generous caps on the <c>kind</c> and <c>checksum</c> length so a
+/// multi-megabyte string is refused as <c>request_invalid</c> before it reaches the handler. Reasons are the
+/// lower_snake vocabulary the other validators use (00 §9.2); the named 422 codes are produced by the handler
+/// through <see cref="EvidenceErrors"/>, because a validator failure can only ever surface as
+/// <c>request_invalid</c> with the code as a detail reason (the <c>Error.Unprocessable</c> contract).
 /// </summary>
 internal sealed class RequestArtifactUploadUrlValidator : AbstractValidator<RequestArtifactUploadUrl>
 {
+    /// <summary>The generous cap on the <c>kind</c> length in code points; a longer value is a client error.</summary>
+    private const int MaxKindLength = 64;
+
+    /// <summary>The generous cap on the <c>checksum</c> length in code points; a longer value is a client error.</summary>
+    private const int MaxChecksumLength = 128;
+
     /// <summary>Builds the rules.</summary>
     public RequestArtifactUploadUrlValidator()
     {
@@ -85,14 +93,25 @@ internal sealed class RequestArtifactUploadUrlValidator : AbstractValidator<Requ
             .Must(producerId => producerId is not null
                 && producerId.Length is >= 1 and <= ProducerSlotLimits.MaxProducerIdLength)
             .WithErrorCode("invalid_length");
+
+        // Only the length is bounded here: a null or in-range malformed value still reaches the handler and gets
+        // its named code (kind_unknown / checksum_invalid), while an over-long one is a request_invalid.
+        RuleFor(command => command.Kind)
+            .Must(kind => kind is null || kind.EnumerateRunes().Count() <= MaxKindLength)
+            .WithErrorCode("invalid_length");
+
+        RuleFor(command => command.Checksum)
+            .Must(checksum => checksum is null || checksum.EnumerateRunes().Count() <= MaxChecksumLength)
+            .WithErrorCode("invalid_length");
     }
 }
 
 /// <summary>
-/// Handler of <see cref="RequestArtifactUploadUrl"/> (06.1.2 §5): inside ONE tenant transaction, (1) the run scope,
-/// (2) the kind policy, (3) the planned <c>(execution_key, attempt_no)</c> pair, (4) the producer-slot binding,
-/// (5) the mint and (6) the presign. Every refusal is a named 00 §9.2 code; the presigned URL is a bearer
-/// credential and is never logged, thrown or audited (S3).
+/// Handler of <see cref="RequestArtifactUploadUrl"/> (06.1.2 §5): the pure in-memory shape refusals first (kind,
+/// checksum, size, token identity), then inside ONE tenant transaction (1) the run scope, (2) the kind policy,
+/// (3) the planned <c>(execution_key, attempt_no)</c> pair, (4) the producer-slot binding, (5) the mint and
+/// (6) the presign. Every refusal is a named 00 §9.2 code; the presigned URL is a bearer credential and is never
+/// logged, thrown or audited (S3).
 /// </summary>
 /// <remarks>
 /// The audit action is <c>artifact.mint</c>: this command mints the same <c>artifact</c> row as
@@ -118,6 +137,31 @@ internal sealed class RequestArtifactUploadUrlHandler(
     public async ValueTask<Result<UploadUrlResponse>> Handle(RequestArtifactUploadUrl command, CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Evidence, nameof(RequestArtifactUploadUrl));
+
+        // The pure in-memory refusals run before any statement is built (F1): the kind, the checksum and the size,
+        // in the same relative order as CreateArtifactRecord (06.1.1 §5), then the caller's token identity. A
+        // malformed body therefore costs no database work, kind_unknown is reachable, and the answer no longer
+        // depends on the run's or the slot's state.
+        if (!ArtifactKind.IsKnown(command.Kind))
+        {
+            return Result.Failure<UploadUrlResponse>(EvidenceErrors.KindUnknown);
+        }
+
+        if (!ArtifactShape.IsChecksum(command.Checksum))
+        {
+            return Result.Failure<UploadUrlResponse>(EvidenceErrors.ChecksumInvalid);
+        }
+
+        if (command.DeclaredBytes <= 0)
+        {
+            return Result.Failure<UploadUrlResponse>(EvidenceErrors.SizeOutOfRange);
+        }
+
+        // A caller with no token identity can never bind a slot, so it is refused before the registry is called.
+        if (command.CredentialId is null)
+        {
+            return Result.Failure<UploadUrlResponse>(EvidenceErrors.NoTokenIdentity);
+        }
 
         var scope = scopes.Require();
         if (scope.ProjectId is not { } projectId)
@@ -165,14 +209,8 @@ internal sealed class RequestArtifactUploadUrlHandler(
         }
 
         // (4) Bind the producer slot to the caller's token identity on the first accepted write (T9/T85). The
-        // identity is the credential's jti plus the CI run reference; a caller with no token identity can never
-        // bind a slot, so it is refused before the registry is called. The registry's own error is returned
+        // identity is the credential's jti plus the CI run reference. The registry's own error is returned
         // verbatim (unknown_producer 422, producer_slot_taken 403), and a failure rolls the tenant transaction back.
-        if (command.CredentialId is null)
-        {
-            return Result.Failure<UploadUrlResponse>(EvidenceErrors.NoTokenIdentity);
-        }
-
         var binding = await producers.BindOrCheckAsync(
             command.RunId,
             command.ProducerId,
@@ -184,23 +222,9 @@ internal sealed class RequestArtifactUploadUrlHandler(
             return Result.Failure<UploadUrlResponse>(binding.Error!);
         }
 
-        // (5) The shape checks that produce the named 06.1.1 §5 codes, then the mint. The upload-url body carries
-        // no client object key, so object_key_not_allowed is structurally unreachable on this path.
-        if (!ArtifactKind.IsKnown(command.Kind))
-        {
-            return Result.Failure<UploadUrlResponse>(EvidenceErrors.KindUnknown);
-        }
-
-        if (!ArtifactShape.IsChecksum(command.Checksum))
-        {
-            return Result.Failure<UploadUrlResponse>(EvidenceErrors.ChecksumInvalid);
-        }
-
-        if (command.DeclaredBytes <= 0)
-        {
-            return Result.Failure<UploadUrlResponse>(EvidenceErrors.SizeOutOfRange);
-        }
-
+        // (5) The mint. The upload-url body carries no client object key, so object_key_not_allowed is
+        // structurally unreachable on this path. The policy row read above already carries the sensitivity, so the
+        // minter is spared a second read of it (F2).
         var record = await minter.MintAsync(
             scope.OrgId,
             projectId,
@@ -211,7 +235,8 @@ internal sealed class RequestArtifactUploadUrlHandler(
             command.MediaType,
             command.DeclaredBytes,
             command.Checksum,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            policy.DefaultSensitivity).ConfigureAwait(false);
 
         // (6) Presign the staging key. The URL is a bearer credential: it is never logged, thrown or audited (S3).
         // The idempotency store keeps this response body — including the URL — for the key's lifetime, which is why
