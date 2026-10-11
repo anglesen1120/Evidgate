@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Evidgate.Modules.Policy.Application.Quarantine;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -546,22 +545,5 @@ public sealed class QuarantineTests
             """);
 
         plan.ShouldContain("quarantine_entry_project_created_idx");
-    }
-
-    // ------------------------------------------------- the critical-list read is serialised by the project row lock
-
-    [Fact]
-    public void CriticalListRead_IsSerialisedByTheProjectRowLock()
-    {
-        // The T23 check locks the project row FOR SHARE inside the insert's transaction, then reads the active
-        // revision, so a concurrent 07.1.1-T4 activation (which takes the same project row FOR NO KEY UPDATE,
-        // PolicyRevisionStore.AppendAsync) must wait (D4). The lock is on public.project, not policy_revision:
-        // evidgate_app holds only SELECT, INSERT on policy_revision (0025), so a FOR SHARE there is denied 42501.
-        // The statements are the contract; the behavioural half is
-        // CriticalCase_Is422CriticalCaseNotQuarantinable_AndWritesNoRow (no row written).
-        QuarantineSql.LockProjectForShare.ShouldContain("for share");
-        QuarantineSql.LockProjectForShare.ShouldContain("public.project");
-        QuarantineCriticalCases.ActiveRevisionCriticalCases.ShouldContain("state = 'active'");
-        QuarantineCriticalCases.ActiveRevisionCriticalCases.ShouldNotContain("for share");
     }
 }

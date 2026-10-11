@@ -36,7 +36,7 @@ internal sealed record QuarantineEntryPage(IReadOnlyList<QuarantineEntry> Items,
 /// <param name="ProjectId">The project the entry belongs to.</param>
 /// <param name="CaseId">The catalog case the entry excludes from gating.</param>
 /// <param name="Owner">The member accountable for the quarantine.</param>
-/// <param name="Reason">Justification, 1–2000 characters, no NUL.</param>
+/// <param name="Reason">Justification, 1–2000 Unicode code points, no NUL or lone surrogate.</param>
 /// <param name="ExpiresAt">A date-time strictly in the future.</param>
 internal sealed record QuarantineEntryCreateRequest(
     Guid ProjectId,
@@ -62,9 +62,9 @@ internal static class QuarantineErrors
         ApiErrorCode.ProjectScopeMismatch,
         "the credential is scoped to a different project");
 
-    /// <summary>422: the named owner is not a membership of this organization (the FK backs it; never a 500).</summary>
+    /// <summary>422: the named owner is not an active membership of this organization (the FK backs it; never a 500).</summary>
     internal static Error UnknownOwner => Error.Invalid(
-        "the owner is not a member of this organization",
+        "the owner is not an active member of this organization",
         [new ErrorDetail("owner", "unknown")]);
 
     /// <summary>422: the case is on the active policy revision's critical list and can never be quarantined (AC4, T23).</summary>
@@ -112,9 +112,11 @@ internal static class QuarantineScopeGuard
 /// <c>UPDATE</c> — a <c>FOR SHARE</c> on <c>policy_revision</c> is denied 42501. 07.1.1-T4's activation must contend
 /// on the same lock: the append path already takes the project row <c>FOR NO KEY UPDATE</c>
 /// (<c>PolicyRevisionStore.AppendAsync</c>), which conflicts with this <c>FOR SHARE</c>.
-/// The list is the revision body's <c>critical_cases</c> array (<c>contracts/schemas/policy-revision.v1.json</c>); an
-/// item that is not UUID-shaped (a fixture path such as <c>checkout/guest</c>) simply never matches the request's
-/// canonical lower-case UUID text.
+/// The list is the revision body's <c>critical_cases</c> array (<c>contracts/schemas/policy-revision.v1.json</c>);
+/// each string item is parsed as a UUID (<see cref="Guid.TryParse(string, out Guid)"/> accepts the N/D/B/P/X text
+/// forms and is case-insensitive), so a critical entry written in any of those forms still matches the request's
+/// case id. An item that is not UUID-shaped (a fixture path such as <c>checkout/guest</c>) never parses and so
+/// never matches.
 /// </summary>
 internal static class QuarantineCriticalCases
 {
@@ -132,7 +134,11 @@ internal static class QuarantineCriticalCases
            and state = 'active'
         """;
 
-    /// <summary>True when <paramref name="caseId"/> is on the list (case-insensitive on the canonical UUID text).</summary>
+    /// <summary>
+    /// True when <paramref name="caseId"/> is on the list. Each string item is parsed as a UUID, so the match is
+    /// independent of the text form (hyphenated, no-hyphen, braced, parenthesised) and of case; a non-UUID item
+    /// never parses and never matches.
+    /// </summary>
     internal static bool Contains(string? criticalCasesJson, Guid caseId)
     {
         if (string.IsNullOrEmpty(criticalCasesJson))
@@ -140,7 +146,6 @@ internal static class QuarantineCriticalCases
             return false;
         }
 
-        var canonical = caseId.ToString("D");
         using var document = JsonDocument.Parse(criticalCasesJson);
         if (document.RootElement.ValueKind != JsonValueKind.Array)
         {
@@ -150,7 +155,8 @@ internal static class QuarantineCriticalCases
         foreach (var item in document.RootElement.EnumerateArray())
         {
             if (item.ValueKind == JsonValueKind.String
-                && string.Equals(item.GetString(), canonical, StringComparison.OrdinalIgnoreCase))
+                && Guid.TryParse(item.GetString()?.Trim(), out var parsed)
+                && parsed == caseId)
             {
                 return true;
             }
@@ -200,8 +206,12 @@ internal static class QuarantineSql
            and id = @case_id
         """;
 
-    /// <summary>The owner's membership in the org; the FK backs it, so a missing owner is a 422 here, never a 500.</summary>
-    internal const string OwnerExists = "select 1 from public.membership where org_id = @org_id and id = @owner";
+    /// <summary>
+    /// The owner's <b>active</b> membership in the org (0011 <c>membership_status_check</c>: only <c>active</c>
+    /// counts, so a pending invite or a removed/revoked/expired row is refused); the FK backs the row's existence,
+    /// so a missing owner is a 422 here, never a 500.
+    /// </summary>
+    internal const string OwnerExists = "select 1 from public.membership where org_id = @org_id and id = @owner and status = 'active'";
 
     /// <summary>
     /// The create: only the granted columns are named, so the app role can never insert a removed/expired entry nor

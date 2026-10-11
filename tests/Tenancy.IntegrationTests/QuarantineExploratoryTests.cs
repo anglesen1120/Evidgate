@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -115,6 +116,25 @@ public sealed class QuarantineExploratoryTests
         return membershipId;
     }
 
+    /// <summary>
+    /// Inserts an <c>active</c> <c>policy_revision</c> carrying <paramref name="criticalCases"/> as the owner role
+    /// (activation is 07.1.1-T4, not merged). Copied from <c>QuarantineTests.InsertRevisionAsync</c>.
+    /// </summary>
+    private async Task InsertActiveRevisionAsync(World world, IReadOnlyList<string> criticalCases)
+    {
+        var id = Guid.CreateVersion7();
+        var body = JsonSerializer.Serialize(new { critical_cases = criticalCases });
+        var hash = "sha256:" + new string('a', 64);
+
+        await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
+        (await owner.ExecuteAsync(
+            $"""
+            insert into public.policy_revision (id, org_id, project_id, revision_no, hash, body, state, created_by)
+            values ('{id}', '{world.Org}', '{world.Project}', 1, '{hash}', '{body}'::jsonb, 'active', '{world.User}')
+            """)).ShouldBe(1);
+        await owner.CommitAsync();
+    }
+
     /// <summary>A string of <paramref name="codePoints"/> emoji: each is one character but two UTF-16 units.</summary>
     private static string Emoji(int codePoints)
     {
@@ -187,6 +207,34 @@ public sealed class QuarantineExploratoryTests
         var answer = await CreateAsync(world, Body(world, reason: Emoji(2001)));
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+    }
+
+    /// <summary>
+    /// A lone surrogate cannot be stored in PostgreSQL text (it would be replaced by U+FFFD on the wire), so it is
+    /// refused, never a 500. The raw JSON carries the <c>\ud800</c> escape because a <c>JsonContent</c> round-trip
+    /// would have replaced the surrogate before it left the client; the JSON binding refuses it with 400 before the
+    /// handler, and the handler's own <c>HasUnstorableText</c> rule is the defence in depth behind that.
+    /// </summary>
+    [Fact]
+    public async Task Reason_WithALoneSurrogate_IsRefused_NotA500()
+    {
+        await using var world = await StartAsync();
+        var expires = DateTimeOffset.UtcNow.AddDays(7).ToString("O");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/quarantine");
+        world.AsMaintainer(request.Headers);
+        request.Headers.Add("Idempotency-Key", NewKey());
+        request.Content = new StringContent(
+            $$"""{"project_id":"{{world.Project}}","case_id":"{{world.Case}}","owner":"{{world.MaintainerMembership}}","reason":"a\ud800b","expires_at":"{{expires}}"}""",
+            Encoding.UTF8,
+            "application/json");
+
+        using var response = await world.Client.SendAsync(request, TestContext.Current.CancellationToken);
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        var status = (int)response.StatusCode;
+        (status is 400 or 422).ShouldBeTrue(text);
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ expires_at offset
@@ -274,5 +322,109 @@ public sealed class QuarantineExploratoryTests
 
         answer.Status.ShouldNotBe(HttpStatusCode.OK);
         ((int)answer.Status).ShouldBeLessThan(500);
+    }
+
+    // ------------------------------------------------------------------ critical list: UUID text forms (F1)
+
+    /// <summary>
+    /// The critical-list match must parse each item as a UUID, not compare canonical text: an active revision that
+    /// lists the case in the no-hyphen (N), braced (B), whitespace-padded (D) or upper-case form still refuses the
+    /// write with 422 <c>critical_case_not_quarantinable</c> and writes no row (T23, AC4).
+    /// </summary>
+    [Theory]
+    [InlineData("N")]
+    [InlineData("B")]
+    [InlineData("D")]
+    [InlineData("upper")]
+    public async Task CriticalCase_InANonCanonicalUuidTextForm_IsRefused422_AndWritesNoRow(string form)
+    {
+        await using var world = await StartAsync();
+        var text = form switch
+        {
+            "N" => world.Case.ToString("N"),
+            "B" => world.Case.ToString("B"),
+            "D" => $"  {world.Case:D}  ",
+            "upper" => world.Case.ToString("D").ToUpperInvariant(),
+            _ => throw new ArgumentOutOfRangeException(nameof(form)),
+        };
+        await InsertActiveRevisionAsync(world, [text]);
+
+        var answer = await CreateAsync(world, Body(world));
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("critical_case_not_quarantinable");
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+    }
+
+    /// <summary>A critical item that is not a UUID never parses, so it never matches and the write is allowed.</summary>
+    [Fact]
+    public async Task CriticalList_WithANonUuidItem_DoesNotMatch_AndTheWriteIs201()
+    {
+        await using var world = await StartAsync();
+        await InsertActiveRevisionAsync(world, ["checkout/guest"]);
+
+        var answer = await CreateAsync(world, Body(world));
+
+        answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
+    }
+
+    // ------------------------------------------------------------------ service principal (SEC-F3)
+
+    /// <summary>
+    /// A service principal carries no user id, so it can never remove an entry: the handler refuses it with the
+    /// same 403 <c>forbidden</c> the create uses. The real evaluator refuses <c>quarantine:write</c> to a service
+    /// token before the handler, so this test reaches the handler through the grant-all evaluator (the existing
+    /// pattern for handler-level rules) and pins the defence-in-depth check itself.
+    /// </summary>
+    [Fact]
+    public async Task Remove_ByAServicePrincipalWithoutUserId_Is403()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        using var client = api.CreateClient();
+
+        var user = Guid.CreateVersion7();
+        var orgAnswer = await client.SendAsync(
+            HttpMethod.Post, "/v1/orgs", TenancyApiFactory.Caller(user: user, email: "acme@example.test"), new { name = "acme", slug = "acme" }, NewKey());
+        orgAnswer.Status.ShouldBe(HttpStatusCode.Created, orgAnswer.ErrorMessage);
+        var org = orgAnswer.Id();
+
+        var projectAnswer = await client.SendAsync(
+            HttpMethod.Post, $"/v1/orgs/{org}/projects", TenancyApiFactory.Caller(org: org, user: user), new { name = "checkout", slug = "checkout" }, NewKey());
+        projectAnswer.Status.ShouldBe(HttpStatusCode.Created, projectAnswer.ErrorMessage);
+        var project = projectAnswer.Id();
+
+        var caseId = Guid.CreateVersion7();
+        var owner = Guid.CreateVersion7();
+        var membership = Guid.CreateVersion7();
+        await using (var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
+        {
+            await scope.ExecuteAsync(
+                "insert into public.membership (id, org_id, user_id, invited_email, status) values (@id, @org_id, @user_id, @email, 'active')",
+                ("id", membership), ("org_id", org), ("user_id", owner), ("email", $"m-{owner:N}@example.test"));
+            await scope.ExecuteAsync(
+                """
+                insert into public.test_case (id, org_id, project_id, annotation_id, name, framework, first_seen_commit)
+                values (@id, @org_id, @project_id, @annotation_id, @name, 'playwright', 'abcdef0')
+                """,
+                ("id", caseId), ("org_id", org), ("project_id", project), ("annotation_id", Guid.CreateVersion7()), ("name", "case 0"));
+            await scope.CommitAsync();
+        }
+
+        var member = TenancyApiFactory.Caller(org: org, user: user);
+        var created = await client.SendAsync(
+            HttpMethod.Post,
+            "/v1/quarantine",
+            member,
+            new { project_id = project, case_id = caseId, owner = membership, reason = "known failing case", expires_at = DateTimeOffset.UtcNow.AddDays(7) },
+            NewKey());
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+        var entry = created.Id();
+
+        var service = TenancyApiFactory.Caller(org: org, project: project, serviceScope: project, servicePermissions: ["quarantine:write"]);
+        var answer = await client.SendAsync(HttpMethod.Delete, $"/v1/quarantine/{entry}", service, null, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.Forbidden, answer.ErrorMessage);
+        (await _fixture.ScalarAsync<string>(database, $"select state from public.quarantine_entry where id = '{entry}'")).ShouldBe("active");
     }
 }

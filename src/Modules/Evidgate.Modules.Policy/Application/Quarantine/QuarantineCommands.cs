@@ -18,7 +18,7 @@ namespace Evidgate.Modules.Policy.Application.Quarantine;
 /// <param name="ProjectId">The project the entry belongs to.</param>
 /// <param name="CaseId">The catalog case the entry excludes from gating.</param>
 /// <param name="Owner">The member accountable for the quarantine.</param>
-/// <param name="Reason">Justification, 1–2000 characters, no NUL.</param>
+/// <param name="Reason">Justification, 1–2000 Unicode code points, no NUL or lone surrogate.</param>
 /// <param name="ExpiresAt">A date-time strictly in the future.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1).</param>
 internal sealed record CreateQuarantineEntryCommand(
@@ -132,10 +132,13 @@ internal sealed class CreateQuarantineEntryCommandHandler(
                 },
                 cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("the quarantine insert returned no row");
         }
-        catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.UniqueViolation)
+        catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.UniqueViolation
+            && error.ConstraintName == "quarantine_entry_active_case_key")
         {
             // The partial unique index (org_id, project_id, case_id) WHERE state = 'active' is the authority: an
             // unswept expired entry still counts as active, so a second create for the case is 409 (07.3.1 §5).
+            // Only that index maps to quarantine_conflict; any other unique violation (e.g. the primary key) is a
+            // real bug and must propagate rather than be masked as a conflict.
             return Result.Failure<QuarantineEntry>(QuarantineErrors.Conflict);
         }
 
@@ -167,11 +170,11 @@ internal sealed class CreateQuarantineEntryCommandHandler(
         {
             details.Add(new ErrorDetail("reason", "empty"));
         }
-        else if (command.Reason.Length > QuarantineRules.ReasonMaxLength)
+        else if (QuarantineRules.CharacterCount(command.Reason) > QuarantineRules.ReasonMaxLength)
         {
             details.Add(new ErrorDetail("reason", "too_long"));
         }
-        else if (command.Reason.Contains('\0'))
+        else if (QuarantineRules.HasUnstorableText(command.Reason))
         {
             details.Add(new ErrorDetail("reason", "invalid_value"));
         }
@@ -200,10 +203,10 @@ internal sealed record RemoveQuarantineEntryCommand(Guid QuarantineId, string Id
     : ICommand<Result<QuarantineEntry>>, IIdempotentCommand;
 
 /// <summary>
-/// Handler of <see cref="RemoveQuarantineEntryCommand"/>: one conditional statement moves <c>active</c> to
-/// <c>removed</c> and returns the row, so two concurrent removes race on the row and exactly one wins (AC6). A row
-/// that is unknown, another tenant's, outside the credential's project scope, or not <c>active</c> matches nothing
-/// and is 404 <c>not_found</c> — never a silent no-op 200.
+/// Handler of <see cref="RemoveQuarantineEntryCommand"/>: the caller must be a member, then one conditional
+/// statement moves <c>active</c> to <c>removed</c> and returns the row, so two concurrent removes race on the row
+/// and exactly one wins (AC6). A row that is unknown, another tenant's, outside the credential's project scope, or
+/// not <c>active</c> matches nothing and is 404 <c>not_found</c> — never a silent no-op 200.
 /// </summary>
 [AuditedAction("quarantine.remove")]
 [Permission(Permissions.Quarantine.Write)]
@@ -218,6 +221,13 @@ internal sealed class RemoveQuarantineEntryCommandHandler(
     public async ValueTask<Result<QuarantineEntry>> Handle(RemoveQuarantineEntryCommand command, CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Policy, nameof(RemoveQuarantineEntryCommand));
+
+        // The same member gate as the create (defence in depth): a service principal carries no user id, so it can
+        // never remove an entry even if a future permission change let it past the evaluator.
+        if (principals.Current?.UserId is null)
+        {
+            return Result.Failure<QuarantineEntry>(Error.Forbidden("only a member may remove a quarantine entry"));
+        }
 
         var removed = await db.QuerySingleOrDefaultAsync<QuarantineEntry>(
             QuarantineSql.Remove,
