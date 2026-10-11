@@ -113,7 +113,7 @@ public static class OrchestratorEndpoints
             return Result.Failure<RunCreated>(tooLarge);
         }
 
-        return await mediator.Send(new CreateRunCommand(p, bytes), cancellationToken).ConfigureAwait(false);
+        return await mediator.Send(new CreateRunCommand(p, bytes, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Result<EnvironmentRevisionCreated>> CreateEnvironmentRevisionAsync(
