@@ -150,6 +150,7 @@ public class SecretLiteralTests
     [InlineData("var value = configuration.GetSection(\"EVIDGATE:Database\")[\"ConnectionString\"];")]
     [InlineData("var value = configuration.GetSection(\"EVIDGATE:Database\")[\"connectionstring\"];")]
     [InlineData("var value = section.GetValue<string>(\"PEPPER\");")]
+    [InlineData("var k = configuration[\"AccessKey\"]?.Contains(\"SecretKey\", StringComparison.Ordinal);")]
     public void Synthetic_Property_Read_Is_Detected(string text)
     {
         var files = new (string Path, string Text)[] { ("src/Evidgate.Api/Bypass.cs", text) };
@@ -163,6 +164,17 @@ public class SecretLiteralTests
         var files = new (string Path, string Text)[]
         {
             ("src/BuildingBlocks/Observability/Redaction/Markers.cs", "string[] markers =\n[\n    \"connectionstring\",\n    \"dsn\",\n];"),
+        };
+
+        SecretLiteralRules.FindViolations(files, ExemptPaths).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Property_Name_As_A_Detector_Argument_Is_Not_A_Read()
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/BuildingBlocks/SharedKernel/Security/Detector.cs", "return flat.Contains(\"secretkey\", StringComparison.Ordinal);"),
         };
 
         SecretLiteralRules.FindViolations(files, ExemptPaths).ShouldBeEmpty();

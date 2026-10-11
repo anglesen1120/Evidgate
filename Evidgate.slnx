@@ -7,6 +7,7 @@
   <Project Path="src/Evidgate.Worker/Evidgate.Worker.csproj" />
   <Project Path="src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csproj" />
   <Project Path="src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+  <Project Path="src/BuildingBlocks/ObjectStorage/Evidgate.BuildingBlocks.ObjectStorage.csproj" />
   <Project Path="src/BuildingBlocks/Observability/Evidgate.BuildingBlocks.Observability.csproj" />
   <Project Path="src/BuildingBlocks/Persistence/Evidgate.BuildingBlocks.Persistence.csproj" />
   <Project Path="src/BuildingBlocks/Pipeline/Evidgate.BuildingBlocks.Pipeline.csproj" />

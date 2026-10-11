@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -53,17 +52,13 @@ internal sealed record ArtifactRecord(Guid ArtifactId, string ObjectKey, string 
 /// only ever surface as <c>request_invalid</c> with the code as a detail reason (the <c>Error.Unprocessable</c>
 /// contract).
 /// </summary>
-internal sealed partial class CreateArtifactRecordValidator : AbstractValidator<CreateArtifactRecord>
+internal sealed class CreateArtifactRecordValidator : AbstractValidator<CreateArtifactRecord>
 {
-    /// <summary>The 00 §7 execution-key shape: sha256 hex, lowercase (the 0028 CHECK).</summary>
-    [GeneratedRegex("\\A[0-9a-f]{64}\\z", RegexOptions.CultureInvariant)]
-    private static partial Regex ExecutionKeyShape();
-
     /// <summary>Builds the rules.</summary>
     public CreateArtifactRecordValidator()
     {
         RuleFor(command => command.ExecutionKey)
-            .Must(key => key is not null && ExecutionKeyShape().IsMatch(key))
+            .Must(ArtifactShape.IsExecutionKey)
             .WithErrorCode("invalid_format")
             .When(command => command.ClientObjectKey is null);
 
@@ -73,8 +68,7 @@ internal sealed partial class CreateArtifactRecordValidator : AbstractValidator<
             .When(command => command.ClientObjectKey is null);
 
         RuleFor(command => command.MediaType)
-            // Postgres char_length counts code points, not UTF-16 units (0028 artifact_media_type_check).
-            .Must(mediaType => mediaType is not null && mediaType.EnumerateRunes().Count() is >= 1 and <= 255)
+            .Must(ArtifactShape.IsMediaType)
             .WithErrorCode("invalid_length")
             .When(command => command.ClientObjectKey is null);
     }
@@ -82,23 +76,19 @@ internal sealed partial class CreateArtifactRecordValidator : AbstractValidator<
 
 /// <summary>
 /// Handler of <see cref="CreateArtifactRecord"/>: the four 06.1.1 §5 refusals in the C2 order (client key, kind,
-/// checksum, size) return before any statement is built, then the row is minted — <c>default_sensitivity</c>
-/// resolved server-side from <c>artifact_kind_policy</c> with the <see cref="ArtifactSensitivity.ForKind"/>
-/// fallback, the key minted by <see cref="ArtifactKeyMinter"/>, and the row inserted in state
-/// <c>pending_upload</c> with <c>scan_state</c> <c>pending</c> and no attempt (AC2, T17, T19).
+/// checksum, size) return before any statement is built, then the row is minted through <see cref="ArtifactMinter"/>
+/// — <c>default_sensitivity</c> resolved server-side from <c>artifact_kind_policy</c> with the
+/// <see cref="ArtifactSensitivity.ForKind"/> fallback, the key minted by <see cref="ArtifactKeyMinter"/>, and the
+/// row inserted in state <c>pending_upload</c> with <c>scan_state</c> <c>pending</c> and no attempt (AC2, T17, T19).
 /// </summary>
 [AuditedAction("artifact.mint")]
 [Permission(Permissions.Artifact.Write)]
 internal sealed partial class CreateArtifactRecordHandler(
-    ITenantDbContextFactory<EvidenceDbContext> contexts,
+    ArtifactMinter minter,
     ITenantScopeAccessor scopes,
     IAuditTrail audit)
     : ICommandHandler<CreateArtifactRecord, Result<ArtifactRecord>>
 {
-    /// <summary>The 00 §7 checksum shape: <c>sha256:</c> and 64 lowercase hex characters, anchored with <c>\z</c>.</summary>
-    [GeneratedRegex("\\Asha256:[0-9a-f]{64}\\z", RegexOptions.CultureInvariant)]
-    private static partial Regex ChecksumShape();
-
     /// <inheritdoc />
     public async ValueTask<Result<ArtifactRecord>> Handle(CreateArtifactRecord command, CancellationToken cancellationToken)
     {
@@ -117,7 +107,7 @@ internal sealed partial class CreateArtifactRecordHandler(
             return Result.Failure<ArtifactRecord>(EvidenceErrors.KindUnknown);
         }
 
-        if (command.Checksum is null || !ChecksumShape().IsMatch(command.Checksum))
+        if (!ArtifactShape.IsChecksum(command.Checksum))
         {
             return Result.Failure<ArtifactRecord>(EvidenceErrors.ChecksumInvalid);
         }
@@ -134,33 +124,83 @@ internal sealed partial class CreateArtifactRecordHandler(
             return Result.Failure<ArtifactRecord>(EvidenceErrors.ProjectRequired);
         }
 
-        var orgId = scope.OrgId;
+        var record = await minter.MintAsync(
+            scope.OrgId,
+            projectId,
+            command.RunId,
+            command.ExecutionKey,
+            command.AttemptNo,
+            command.Kind,
+            command.MediaType,
+            command.DeclaredBytes,
+            command.Checksum,
+            cancellationToken).ConfigureAwait(false);
 
+        audit.Describe(new AuditObject("artifact", record.ArtifactId.ToString("D")));
+
+        return Result.Success(record, 201);
+    }
+}
+
+/// <summary>
+/// The mint core of 06.1.1-T2, shared by <see cref="CreateArtifactRecordHandler"/> and 06.1.2's
+/// <c>RequestArtifactUploadUrlHandler</c>. A nested <c>IMediator.Send</c> is impossible — a second tenant scope
+/// throws (<c>NpgsqlTenantScopeFactory</c>) — so the two handlers call this service instead, and each describes
+/// its own single audit entry, so exactly one audit row is written per request.
+/// <para>
+/// It resolves <c>default_sensitivity</c> from <c>artifact_kind_policy</c> with the
+/// <see cref="ArtifactSensitivity.ForKind"/> fallback, mints the server-chosen final key, and inserts the row in
+/// state <c>pending_upload</c> with <c>scan_state</c> <c>pending</c>, no attempt and the declared size persisted
+/// (06.1.2-T2 compares it at <c>complete</c>). The caller has already validated the shape and the run scope.
+/// </para>
+/// </summary>
+internal sealed class ArtifactMinter(ITenantDbContextFactory<EvidenceDbContext> contexts)
+{
+    /// <summary>
+    /// Mints one artifact row for the ambient tenant scope; returns its id, final key and state.
+    /// <paramref name="sensitivity"/> lets a caller that already read the kind policy (06.1.2's upload-url
+    /// handler) pass its <c>default_sensitivity</c> in, so the row is not read twice; when it is null the policy is
+    /// read here, which is the only path <see cref="CreateArtifactRecordHandler"/> takes.
+    /// </summary>
+    public async ValueTask<ArtifactRecord> MintAsync(
+        Guid orgId,
+        Guid projectId,
+        Guid runId,
+        string executionKey,
+        int attemptNo,
+        string kind,
+        string mediaType,
+        long declaredBytes,
+        string checksum,
+        CancellationToken cancellationToken,
+        string? sensitivity = null)
+    {
         await using var context = contexts.Create();
 
-        var sensitivity = await context.KindPolicies
-            .Where(policy => policy.OrgId == orgId && policy.ProjectId == projectId && policy.Kind == command.Kind)
+        var resolved = sensitivity ?? await context.KindPolicies
+            .Where(policy => policy.OrgId == orgId && policy.ProjectId == projectId && policy.Kind == kind)
             .Select(policy => policy.DefaultSensitivity)
             .SingleOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false)
-            ?? ArtifactSensitivity.ForKind(command.Kind);
+            ?? ArtifactSensitivity.ForKind(kind);
 
         var artifactId = Guid.CreateVersion7();
-        var objectKey = ArtifactKeyMinter.Mint(orgId, projectId, command.RunId, command.ExecutionKey, command.AttemptNo, artifactId);
+        var objectKey = ArtifactKeyMinter.Mint(orgId, projectId, runId, executionKey, attemptNo, artifactId);
 
         await context.Artifacts.AddAsync(
             new Artifact(
                 artifactId,
                 orgId,
                 projectId,
-                command.RunId,
-                command.ExecutionKey,
-                command.AttemptNo,
-                command.Kind,
+                runId,
+                executionKey,
+                attemptNo,
+                kind,
                 objectKey,
-                command.MediaType,
-                command.Checksum,
-                sensitivity,
+                mediaType,
+                checksum,
+                resolved,
+                bytes: declaredBytes,
                 scanState: ArtifactScanState.Pending,
                 state: ArtifactState.PendingUpload),
             cancellationToken).ConfigureAwait(false);
@@ -169,8 +209,6 @@ internal sealed partial class CreateArtifactRecordHandler(
         // unique violation is left to surface as an infrastructure fault rather than masked as a 409.
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        audit.Describe(new AuditObject("artifact", artifactId.ToString("D")));
-
-        return Result.Success(new ArtifactRecord(artifactId, objectKey, ArtifactState.PendingUpload), 201);
+        return new ArtifactRecord(artifactId, objectKey, ArtifactState.PendingUpload);
     }
 }

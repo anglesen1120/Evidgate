@@ -899,6 +899,19 @@ export type QuarantineEntryPage = {
 };
 
 /**
+ * 200 body of `POST /v1/artifacts/upload-url` (06.1.2 §5, AC1). `object_key` is the `pending/<org_id>/<artifact_id>` staging key the client `PUT`s to; `required_headers` are the signed headers the client must send verbatim (`Content-Length` = the declared `bytes`, `x-amz-checksum-sha256` = the base64 of the declared digest); `expires_at` is at most 15 minutes out.
+ */
+export type UploadUrlResponse = {
+    artifact_id: string;
+    object_key: string;
+    upload_url: string;
+    required_headers: {
+        [key: string]: string;
+    };
+    expires_at: string;
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -1706,11 +1719,13 @@ export type FinalizeRunResponses = {
 export type CreateArtifactUploadUrlData = {
     body: {
         run_id: string;
-        attempt_id?: string;
+        producer_id: string;
+        execution_key: string;
+        attempt_no: number;
         kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
         media_type: string;
-        size_bytes: number;
-        checksum: string;
+        bytes: number;
+        sha256: string;
     };
     headers: {
         /**
@@ -1741,6 +1756,10 @@ export type CreateArtifactUploadUrlErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
      * 413 too large (00 §9.2)
      */
     413: ErrorEnvelope;
@@ -1764,10 +1783,7 @@ export type CreateArtifactUploadUrlResponses = {
     /**
      * Upload URL issued
      */
-    201: {
-        artifact_id: string;
-        upload_url: string;
-    };
+    200: UploadUrlResponse;
 };
 
 export type CreateArtifactUploadUrlResponse = CreateArtifactUploadUrlResponses[keyof CreateArtifactUploadUrlResponses];

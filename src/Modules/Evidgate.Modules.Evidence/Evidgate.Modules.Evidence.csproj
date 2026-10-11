@@ -10,13 +10,25 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
   </ItemGroup>
+  <!-- 06.1.2-T1: the artifact routes (00 §5.5 `Endpoints/`), like the Orchestrator module. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Evidence.Contracts\Evidgate.Modules.Evidence.Contracts.csproj" />
+    <!-- 06.1.2-T1: IProducerRegistry (producer-slot binding, T9/T85); another module's .Contracts only (00 §5.5). -->
+    <ProjectReference Include="..\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
+    <!-- 06.1.2-T1: IRunPlanReader (run scope + planned execution, T10/T17); another module's .Contracts only. -->
+    <ProjectReference Include="..\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <!-- 06.1.1-T1: EvidgateDbContext and AddEvidgateDbContext (01.4.2-T1.3). -->
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <!-- 06.1.1-T2: EvidgateTelemetry.StartModuleActivity (module span, 00 §5.5 C2 stage 1). -->
     <ProjectReference Include="..\..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <!-- 06.1.2-T1: IObjectStorage.PresignPut and AddEvidgateObjectStorage (EVIDGATE__OBJECT__*, 00 §9.3). -->
+    <ProjectReference Include="..\..\BuildingBlocks\ObjectStorage\Evidgate.BuildingBlocks.ObjectStorage.csproj" />
+    <!-- 06.1.2-T1: IRequestPrincipalAccessor (the caller's token identity, T9/T85). -->
+    <ProjectReference Include="..\..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
   </ItemGroup>
   <!-- 01.1.2-T2.1: internal implementation, opened to the two composition roots and the tests. -->
   <ItemGroup>

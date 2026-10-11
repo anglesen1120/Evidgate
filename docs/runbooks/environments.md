@@ -69,6 +69,13 @@ boot-required, because the missing value leaves the option valid: `EVIDGATE__WOR
 defaults to `0.0.0.0`, so an environment that says nothing boots, and the matrix records
 `requiredAtBoot: false` for it.
 
+A third mechanism exists for options a host may never touch: the object-storage options
+(`EVIDGATE__OBJECT__*`, 06.1.2-T1) are validated **lazily**, when `IObjectStorage` is first resolved,
+not at host start — so a host that never serves an upload boots with no object-storage configuration at
+all, and every one of those rows is `requiredAtBoot: false`. The endpoint override is checked there too:
+it must be an absolute http(s) URL with no userinfo, query or fragment, so a crafted value cannot
+redirect a signed request at another host (SSRF-by-config).
+
 `required` is the lint's per-environment rule: the environment must declare the key whatever the boot
 would do without it. That is how a security-relevant default stays visible — every environment declares
 the Worker's bind address and the OTLP endpoint even though both have a usable default (or an optional
@@ -90,12 +97,15 @@ from `IConfiguration` or the environment directly. `SecretNames.All` is the regi
 they are the existing `EVIDGATE_*` variable names — nothing was renamed: the Api/Worker database
 connection string (`EVIDGATE__DATABASE__CONNECTIONSTRING`), the task sweep connection string
 (`EVIDGATE__TASKS__SWEEPCONNECTIONSTRING`), the CI signing key, pepper and previous pepper
-(`EVIDGATE__CI__SIGNINGKEY`, `EVIDGATE__CI__PEPPER`, `EVIDGATE__CI__PREVIOUSPEPPER`) and the Migrator
+(`EVIDGATE__CI__SIGNINGKEY`, `EVIDGATE__CI__PEPPER`, `EVIDGATE__CI__PREVIOUSPEPPER`), the object-storage
+identity (`EVIDGATE__OBJECT__ACCESSKEY`, `EVIDGATE__OBJECT__SECRETKEY`) and the Migrator
 connection string (`EVIDGATE_MIGRATOR__CONNECTIONSTRING`). A name outside the registry is refused with an
 `ArgumentException` that names only the name. The registry is not the list of `secret: true` rows in
 `infra/config-matrix.json`: a matrix row that only the dev stack uses (for example the S3 keys in
-`.env.dev.template`) joins `SecretNames` when a process starts to consume it (object storage 06.1.2-T1,
-OIDC 02.3.1-T1), not before.
+`.env.dev.template`) joins `SecretNames` when a process starts to consume it (OIDC 02.3.1-T1), not
+before. The object-storage identity is the worked example: the dev stack's `EVIDGATE_S3_*` keys stay
+`dev-stack`-only, while the runtime options of 06.1.2-T1 resolve `EVIDGATE__OBJECT__ACCESSKEY` and
+`EVIDGATE__OBJECT__SECRETKEY` through the provider and are declared `secret: true`.
 
 **Api and Worker.** V1 registers `EnvironmentSecretProvider` once, with `TryAddSingleton`, in
 `AddEvidgateSecrets` (`src/BuildingBlocks/Persistence/Secrets/SecretProviderExtensions.cs`). It looks a
