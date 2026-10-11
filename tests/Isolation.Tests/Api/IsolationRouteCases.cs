@@ -223,6 +223,8 @@ public static class IsolationRouteCases
                 Fixed(bp.SuiteIds), aAdmin, $"/v1/projects/{ap.Id}/suites?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/waivers"), $"org B project {bp.Slug} waivers", bAdmin, $"/v1/projects/{bp.Id}/waivers?limit=1", "id",
                 Fixed(bp.WaiverIds), aAdmin, $"/v1/projects/{ap.Id}/waivers?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/quarantine"), $"org B project {bp.Slug} quarantine entries", bAdmin, $"/v1/projects/{bp.Id}/quarantine?limit=1", "id",
+                Fixed(bp.QuarantineIds), aAdmin, $"/v1/projects/{ap.Id}/quarantine?limit=1"));
             for (var c = 0; c < bp.CaseIds.Count; c++)
             {
                 walks.Add(new(Get("/v1/cases/{c}/revisions"), $"org B case {bp.Slug}#{c} revisions", bAdmin, $"/v1/cases/{bp.CaseIds[c]}/revisions?limit=1", "id",
@@ -355,6 +357,11 @@ public static class IsolationRouteCases
         WaiverStateCase("approve"),
         WaiverStateCase("revoke"),
         ProjectCase("GET", "/v1/projects/{p}/waivers", p => new(HttpMethod.Get, $"/v1/projects/{p}/waivers"), list: true),
+
+        // ---- Policy quarantine (QuarantineEndpoints.cs; 07.3.1-T2) ---------------------------------------------
+        QuarantineCreateCase(),
+        QuarantineRemoveCase(),
+        ProjectCase("GET", "/v1/projects/{p}/quarantine", p => new(HttpMethod.Get, $"/v1/projects/{p}/quarantine"), list: true),
 
         // ---- Dev surface (SliceEndpoints.cs:29-40; recorded in ServedDocumentTests.cs:59) -------------------------
         Case("POST", "/v1/slice/run", (route, w) =>
@@ -750,6 +757,85 @@ public static class IsolationRouteCases
             });
     }
 
+    /// <summary>
+    /// <c>POST /v1/quarantine</c>: the project is named in the body, the org in <c>X-Evidgate-Org</c>. Org A's
+    /// project against a random project id (404, no row written), plus the header naming org A. The caller must
+    /// hold <c>quarantine:write</c> (<c>test_maintainer</c> only, D1), so the member probes use org B's maintainer.
+    /// </summary>
+    private static RouteCase QuarantineCreateCase()
+    {
+        var route = new ApiRoute("POST", "/v1/quarantine");
+        static ProbeRequest Create(Guid project, Guid caseId, Guid owner) => new(HttpMethod.Post, "/v1/quarantine", new JsonObject
+        {
+            ["project_id"] = project.ToString(),
+            ["case_id"] = caseId.ToString(),
+            ["owner"] = owner.ToString(),
+            ["reason"] = "isolation probe",
+            ["expires_at"] = DateTimeOffset.UtcNow.AddDays(30).ToString("O", CultureInfo.InvariantCulture),
+        });
+
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                var owner = w.Acme2.User("test_maintainer").MembershipId;
+                return
+                [
+                    .. w.Acme.Projects.Select(p => Pair(route, $"org A project {p.Slug} in the body", ProbeExpect.NotFound, OrgBMaintainer(w),
+                        Create(p.Id, p.CaseIds[0], owner), Create(Guid.CreateVersion7(), p.CaseIds[0], owner))),
+                    new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
+                        route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderMaintainer(w), RandomHeaderMaintainer(w),
+                        Create(w.Acme.Projects[0].Id, w.Acme.Projects[0].CaseIds[0], owner))),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                var owner = w.Acme2.User("test_maintainer").MembershipId;
+                return
+                [
+                    Pair(route, "org A project web in the body", ProbeExpect.ServiceRefused, OrgBService(w),
+                        Create(w.Acme.Projects[0].Id, w.Acme.Projects[0].CaseIds[0], owner), Create(Guid.CreateVersion7(), w.Acme.Projects[0].CaseIds[0], owner)),
+                ];
+            });
+    }
+
+    /// <summary>
+    /// <c>DELETE /v1/quarantine/{q}</c>: org A's entries against random ids, the header probe, and one own-entry
+    /// control (200). The caller must hold <c>quarantine:write</c>, so the member probes use org B's maintainer.
+    /// </summary>
+    private static RouteCase QuarantineRemoveCase()
+    {
+        var route = new ApiRoute("DELETE", "/v1/quarantine/{q}");
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                var own = w.Acme2.Projects[0];
+                var probes = new List<RouteProbe>();
+                probes.AddRange(w.Acme.Projects.SelectMany(p => Indexed("quarantine entry", p.QuarantineIds).Select(id => Pair(route, $"org A {id.Label} of project {p.Slug}", ProbeExpect.NotFound, OrgBMaintainer(w),
+                    new(HttpMethod.Delete, $"/v1/quarantine/{id.Id}"), new(HttpMethod.Delete, $"/v1/quarantine/{Guid.CreateVersion7()}")))));
+                probes.Add(new(route, "X-Evidgate-Org: A with an org-A quarantine id", runner => runner.CallerPairAsync(
+                    route, "X-Evidgate-Org: A with an org-A quarantine id", ForeignHeaderMaintainer(w), RandomHeaderMaintainer(w),
+                    new(HttpMethod.Delete, $"/v1/quarantine/{w.Acme.Projects[0].QuarantineEntryId}"))));
+                probes.Add(OwnObject(route, "own quarantine entry removed by its maintainer answers 200", OrgBMaintainer(w), new(HttpMethod.Delete, $"/v1/quarantine/{own.QuarantineIds[1]}")));
+                return probes;
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    .. Indexed("quarantine entry", w.Acme.Projects[0].QuarantineIds).Select(id => Pair(route, $"org A {id.Label} of project web", ProbeExpect.ServiceRefused, OrgBService(w),
+                        new(HttpMethod.Delete, $"/v1/quarantine/{id.Id}"), new(HttpMethod.Delete, $"/v1/quarantine/{Guid.CreateVersion7()}"))),
+                    .. Indexed("quarantine entry", w.Acme2.Projects[1].QuarantineIds).Select(id => new RouteProbe(route, $"sibling project api's {id.Label}", runner => runner.RefusedAsync(
+                        route, $"sibling project api's {id.Label}", OrgBService(w), new(HttpMethod.Delete, $"/v1/quarantine/{id.Id}"), allowed: [403, 404]))),
+                ];
+            });
+    }
+
     /// <summary><see cref="ObjectCase"/> whose request also needs the object's project, plus extra member probes.</summary>
     private static RouteCase ObjectCaseWith(
         string method,
@@ -800,6 +886,18 @@ public static class IsolationRouteCases
     /// <summary>Org B's tenant_admin naming a random org in <c>X-Evidgate-Org</c> (the control for the header probe).</summary>
     private static ProbeCaller RandomHeaderCaller(IsolationWorld world) =>
         ProbeCaller.Member("org-B tenant_admin (X-Evidgate-Org: random)", Require(world).Acme2.Admin, Guid.CreateVersion7());
+
+    /// <summary>Org B's <c>test_maintainer</c> naming org B: the only member role holding <c>quarantine:write</c> (D1).</summary>
+    private static ProbeCaller OrgBMaintainer(IsolationWorld world) =>
+        ProbeCaller.Member("org-B test_maintainer (X-Evidgate-Org: B)", Require(world).Acme2.User("test_maintainer"), world.Acme2.Id);
+
+    /// <summary>Org B's <c>test_maintainer</c> naming org A in <c>X-Evidgate-Org</c> (the header-vs-route precedence probe).</summary>
+    private static ProbeCaller ForeignHeaderMaintainer(IsolationWorld world) =>
+        ProbeCaller.Member("org-B test_maintainer (X-Evidgate-Org: A)", Require(world).Acme2.User("test_maintainer"), world.Acme.Id);
+
+    /// <summary>Org B's <c>test_maintainer</c> naming a random org in <c>X-Evidgate-Org</c> (the control for the header probe).</summary>
+    private static ProbeCaller RandomHeaderMaintainer(IsolationWorld world) =>
+        ProbeCaller.Member("org-B test_maintainer (X-Evidgate-Org: random)", Require(world).Acme2.User("test_maintainer"), Guid.CreateVersion7());
 
     private static ApiRoute Get(string template) => new("GET", template);
 
@@ -959,6 +1057,7 @@ public sealed class RouteProbeRunner
             ids.AddRange(p.SuiteIds);
             ids.AddRange(p.SuiteRevisionIds);
             ids.AddRange(p.WaiverIds);
+            ids.AddRange(p.QuarantineIds);
         }
 
         ids.AddRange(org.Projects.Select(p => p.PolicyRevisionId));

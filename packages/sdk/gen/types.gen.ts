@@ -846,6 +846,40 @@ export type WaiverPage = {
 };
 
 /**
+ * One quarantine entry (07.3.1-T2, 00 §8.8): a case excluded from gating while its failure stays visible. `state` is returned as stored (`active`, `expired`, `removed`).
+ */
+export type QuarantineEntry = {
+    id: string;
+    project_id: string;
+    case_id: string;
+    owner: string;
+    reason: string;
+    state: 'active' | 'expired' | 'removed';
+    expires_at: string;
+    created_at: string;
+    updated_at: string;
+};
+
+/**
+ * Body of `POST /v1/quarantine` (07.3.1-T2 §5). `expires_at` must be strictly in the future; `reason` is 1..2000 characters; `case_id` must be a case of `project_id` and `owner` a membership of the org.
+ */
+export type QuarantineEntryCreateRequest = {
+    project_id: string;
+    case_id: string;
+    owner: string;
+    reason: string;
+    expires_at: string;
+};
+
+/**
+ * 00 §9.1 cursor page of `QuarantineEntry`, keyset-ordered on `(created_at, id)` ascending.
+ */
+export type QuarantineEntryPage = {
+    items: Array<QuarantineEntry>;
+    next_cursor: string | null;
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -1186,6 +1220,8 @@ export type JobId = string;
 export type CandidateId = string;
 
 export type WaiverId = string;
+
+export type QuarantineEntryId = string;
 
 export type ExchangeCiTokenData = {
     body?: CiTokenRequest;
@@ -6030,3 +6066,168 @@ export type ListProjectWaiversResponses = {
 };
 
 export type ListProjectWaiversResponse = ListProjectWaiversResponses[keyof ListProjectWaiversResponses];
+
+export type CreateQuarantineEntryData = {
+    body: QuarantineEntryCreateRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/quarantine';
+};
+
+export type CreateQuarantineEntryErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateQuarantineEntryError = CreateQuarantineEntryErrors[keyof CreateQuarantineEntryErrors];
+
+export type CreateQuarantineEntryResponses = {
+    /**
+     * Case quarantined
+     */
+    201: QuarantineEntry;
+};
+
+export type CreateQuarantineEntryResponse = CreateQuarantineEntryResponses[keyof CreateQuarantineEntryResponses];
+
+export type RemoveQuarantineEntryData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        q: string;
+    };
+    query?: never;
+    url: '/quarantine/{q}';
+};
+
+export type RemoveQuarantineEntryErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RemoveQuarantineEntryError = RemoveQuarantineEntryErrors[keyof RemoveQuarantineEntryErrors];
+
+export type RemoveQuarantineEntryResponses = {
+    /**
+     * Entry removed
+     */
+    200: QuarantineEntry;
+};
+
+export type RemoveQuarantineEntryResponse = RemoveQuarantineEntryResponses[keyof RemoveQuarantineEntryResponses];
+
+export type ListQuarantineEntriesData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/quarantine';
+};
+
+export type ListQuarantineEntriesErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListQuarantineEntriesError = ListQuarantineEntriesErrors[keyof ListQuarantineEntriesErrors];
+
+export type ListQuarantineEntriesResponses = {
+    /**
+     * Page of quarantine entries
+     */
+    200: QuarantineEntryPage;
+};
+
+export type ListQuarantineEntriesResponse = ListQuarantineEntriesResponses[keyof ListQuarantineEntriesResponses];

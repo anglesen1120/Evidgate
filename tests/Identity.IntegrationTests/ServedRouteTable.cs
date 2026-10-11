@@ -509,6 +509,7 @@ internal sealed record RouteRequestContext(
     Guid EnvironmentRevisionId,
     Guid PolicyRevisionId,
     Guid WaiverId,
+    Guid QuarantineId,
     Guid CiBindingId,
     Guid IngestTokenId)
 {
@@ -516,6 +517,7 @@ internal sealed record RouteRequestContext(
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -667,6 +669,11 @@ internal static class RouteRequests
         Add("POST", "/v1/waivers/{w}/revoke", ctx => new(HttpMethod.Post, $"/v1/waivers/{ctx.WaiverId}/revoke", IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/waivers", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/waivers"));
 
+        // ---- Quarantine --------------------------------------------------------------------------------------
+        Add("POST", "/v1/quarantine", ctx => new(HttpMethod.Post, "/v1/quarantine", Quarantine(ctx), IdempotencyKey: Key()));
+        Add("DELETE", "/v1/quarantine/{q}", ctx => new(HttpMethod.Delete, $"/v1/quarantine/{ctx.QuarantineId}", IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/quarantine", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/quarantine"));
+
         // ---- Dev surface (absent from the spec; allowlisted in ServedRouteTable) ------------------------------
         Add("POST", "/v1/slice/run", ctx => new(HttpMethod.Post, "/v1/slice/run",
             new JsonObject { ["project_ref"] = ctx.ProjectId.ToString() }));
@@ -696,6 +703,15 @@ internal static class RouteRequests
         ["project_id"] = ctx.ProjectId.ToString(),
         ["scope"] = "case",
         ["target_id"] = ctx.CaseId.ToString(),
+        ["reason"] = "probe",
+        ["expires_at"] = DateTimeOffset.UtcNow.AddDays(30).ToString("O", CultureInfo.InvariantCulture),
+    };
+
+    private static JsonObject Quarantine(RouteRequestContext ctx) => new()
+    {
+        ["project_id"] = ctx.ProjectId.ToString(),
+        ["case_id"] = ctx.CaseId.ToString(),
+        ["owner"] = ctx.MembershipId.ToString(),
         ["reason"] = "probe",
         ["expires_at"] = DateTimeOffset.UtcNow.AddDays(30).ToString("O", CultureInfo.InvariantCulture),
     };

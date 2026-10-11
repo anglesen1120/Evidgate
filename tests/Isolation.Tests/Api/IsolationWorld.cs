@@ -89,6 +89,12 @@ public sealed class IsolationProject
 
     /// <summary>The first waiver (<c>{w}</c>), requested by the org's admin; <see cref="WaiverIds"/>[0].</summary>
     public Guid WaiverId => WaiverIds[0];
+
+    /// <summary>The project's quarantine entries (<c>{q}</c> of <c>/v1/quarantine/{q}</c>), in seeding order; at least two, so the list pages.</summary>
+    public required IReadOnlyList<Guid> QuarantineIds { get; init; }
+
+    /// <summary>The first quarantine entry (<c>{q}</c>), created by the org's <c>test_maintainer</c>; <see cref="QuarantineIds"/>[0].</summary>
+    public Guid QuarantineEntryId => QuarantineIds[0];
 }
 
 /// <summary>One seeded org: its admin, members, projects and every id a route can name.</summary>
@@ -243,6 +249,9 @@ public sealed class IsolationWorld
     /// <summary>Two waivers per project, so <c>/v1/projects/{p}/waivers</c> pages at limit 1 and the approve and revoke controls never share a row.</summary>
     private const int WaiversPerProject = 2;
 
+    /// <summary>Two quarantine entries per project, so <c>/v1/projects/{p}/quarantine</c> pages at limit 1 and the remove control never shares a row.</summary>
+    private const int QuarantinesPerProject = 2;
+
     /// <summary>The commit of the first tree; the second sync uses <see cref="SecondCommitSha"/>.</summary>
     private const string CommitSha = "bbbbbbb2222222";
 
@@ -379,10 +388,12 @@ public sealed class IsolationWorld
             approver = approver with { RoleCodes = [.. approver.RoleCodes, "viewer"] };
             members[members.FindIndex(m => m.Label == "release_approver")] = approver;
 
+            var maintainer = members.Single(m => m.Label == "test_maintainer");
+
             var seeded = new List<IsolationProject>();
             for (var i = 0; i < projects.Count; i++)
             {
-                seeded.Add(await SeedProjectAsync(slug, org, projects[i], ProjectSlugs[i], admin, 7000 + (orgIndex * 10) + i).ConfigureAwait(false));
+                seeded.Add(await SeedProjectAsync(slug, org, projects[i], ProjectSlugs[i], admin, maintainer, 7000 + (orgIndex * 10) + i).ConfigureAwait(false));
             }
 
             return new IsolationOrg
@@ -399,7 +410,7 @@ public sealed class IsolationWorld
             };
         }
 
-        private async Task<IsolationProject> SeedProjectAsync(string orgSlug, Guid org, Guid project, string projectSlug, IsolationUser admin, long repositoryId)
+        private async Task<IsolationProject> SeedProjectAsync(string orgSlug, Guid org, Guid project, string projectSlug, IsolationUser admin, IsolationUser maintainer, long repositoryId)
         {
             var (cases, caseRevisions) = await SeedCasesAsync(org, project).ConfigureAwait(false);
             var primaryRevisions = caseRevisions.Select(revisions => revisions[0]).ToArray();
@@ -469,6 +480,27 @@ public sealed class IsolationWorld
                     HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("id").GetGuid());
             }
 
+            // Quarantine writes need `quarantine:write`, held by `test_maintainer` only (D1), so the maintainer
+            // seeds them; the project's active policy revision carries no critical cases, so every case is allowed.
+            var quarantines = new List<Guid>();
+            for (var i = 0; i < QuarantinesPerProject; i++)
+            {
+                quarantines.Add((await SendAsync(
+                    HttpMethod.Post,
+                    "/v1/quarantine",
+                    maintainer,
+                    org,
+                    new
+                    {
+                        project_id = project,
+                        case_id = cases[i % cases.Length],
+                        owner = maintainer.MembershipId,
+                        reason = $"isolation quarantine {i}",
+                        expires_at = DateTimeOffset.UtcNow.AddDays(30),
+                    },
+                    HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("id").GetGuid());
+            }
+
             var repository = $"{orgSlug}/{projectSlug}";
             var (binding, challenge) = await CreateBindingAsync(project, admin, org, repositoryId, repository).ConfigureAwait(false);
             var (mirrorBinding, _) = await CreateBindingAsync(project, admin, org, repositoryId + 100, $"{repository}-mirror").ConfigureAwait(false);
@@ -529,6 +561,7 @@ public sealed class IsolationWorld
                 PolicyRevisionId = policyRevision,
                 ManifestId = manifest,
                 WaiverIds = waivers,
+                QuarantineIds = quarantines,
             };
         }
 

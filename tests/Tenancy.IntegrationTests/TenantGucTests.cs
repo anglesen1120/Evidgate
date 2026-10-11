@@ -373,6 +373,16 @@ public sealed class TenantGucTests
             ("org_id", orgId),
             ("membership_id", membershipId),
             ("role_id", Guid.CreateVersion7()));
+        await scope.ExecuteAsync(
+            """
+            insert into public.quarantine_entry (id, org_id, project_id, case_id, owner, reason, expires_at)
+            values (@id, @org_id, @project_id, @case_id, @owner, 'probe', now() + interval '1 hour')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("case_id", caseId),
+            ("owner", membershipId));
         var artifactId = Guid.CreateVersion7();
         var artifactRunId = Guid.CreateVersion7();
         await scope.ExecuteAsync(

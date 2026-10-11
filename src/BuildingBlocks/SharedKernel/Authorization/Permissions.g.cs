@@ -209,6 +209,14 @@ public static class Permissions
         public const string Write = "project:write";
     }
 
+    /// <summary>The <c>quarantine</c> resource.</summary>
+    public static class Quarantine
+    {
+        /// quarantine:write — Create or remove a quarantine entry; never for a case on the active policy's critical
+        /// list (T23, 07.3.1).
+        public const string Write = "quarantine:write";
+    }
+
     /// <summary>The <c>role</c> resource.</summary>
     public static class Role
     {
@@ -343,6 +351,7 @@ public static class Permissions
         "project:create",
         "project:read",
         "project:write",
+        "quarantine:write",
         "role:read",
         "role:write",
         "run:cancel",
@@ -405,6 +414,7 @@ public static class Permissions
         "project:create",
         "project:read",
         "project:write",
+        "quarantine:write",
         "role:read",
         "role:write",
         "run:cancel",

@@ -148,6 +148,8 @@ public static partial class ApiHost
         app.MapPolicyEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.3.1-T1: the waiver routes of 07.3.1 §5, same filters.
         app.MapWaiverEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // 07.3.1-T2: the quarantine routes of 07.3.1 §5, same filters.
+        app.MapQuarantineEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.7.1-T3.1: the audit list and export, same filters.
         app.MapAuditEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.4.1/02.4.2: CI bindings and ingest tokens (admin), and the pre-tenant credential exchange, which

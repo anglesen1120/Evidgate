@@ -20,6 +20,9 @@ public sealed class PolicyPermissionContractTests
         ("createPolicyRevision", "CreatePolicyRevisionCommandHandler", "policy:write"),
         ("getPolicyRevision", "GetPolicyRevisionQueryHandler", "policy:read"),
         ("listPolicyRevisions", "ListPolicyRevisionsQueryHandler", "policy:read"),
+        ("createQuarantineEntry", "CreateQuarantineEntryCommandHandler", "quarantine:write"),
+        ("removeQuarantineEntry", "RemoveQuarantineEntryCommandHandler", "quarantine:write"),
+        ("listQuarantineEntries", "ListQuarantineEntriesQueryHandler", "policy:read"),
     ];
 
     [Fact]

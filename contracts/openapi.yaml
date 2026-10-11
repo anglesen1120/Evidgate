@@ -3651,6 +3651,132 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /quarantine:
+    post:
+      operationId: createQuarantineEntry
+      tags: [policy]
+      summary: Quarantine a case; a critical case is refused 422 (07.3.1-T2)
+      description: >-
+        Excludes one case from gating while its failure stays visible (00 §8.8). The caller
+        must be a member of the org (`X-Evidgate-Org` selects it when the caller has more
+        than one) and hold `quarantine:write` (`test_maintainer`); the project must be in the
+        credential's scope and exist, else 404 (also for another tenant's project). `case_id`
+        must be a case of that project (else 404 `not_found`) and `owner` a membership of the
+        org (else 422 with `error.details[]`). A case on the active policy revision's
+        critical list can never be quarantined: 422 `critical_case_not_quarantinable`, and no
+        row is written (T23). An active entry for the case already exists: 409
+        `quarantine_conflict`. `expires_at` must be strictly in the future and `reason`
+        1..2000 characters, else 422. Idempotency-Key required.
+      x-permission: quarantine:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuarantineEntryCreateRequest'
+      responses:
+        '201':
+          description: Case quarantined
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuarantineEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /quarantine/{q}:
+    delete:
+      operationId: removeQuarantineEntry
+      tags: [policy]
+      summary: Remove a quarantine entry; a non-active entry is 404 (07.3.1-T2)
+      description: >-
+        Moves an `active` entry to `removed` (terminal) and returns it. The caller must hold
+        `quarantine:write` (`test_maintainer`). An entry that is unknown, another tenant's,
+        outside the credential's project scope, or not `active` (already `removed` or
+        `expired`) is 404 `not_found`, never a silent no-op 200 (AC6). Idempotency-Key
+        required.
+      x-permission: quarantine:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/QuarantineEntryId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: Entry removed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuarantineEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/quarantine:
+    get:
+      operationId: listQuarantineEntries
+      tags: [policy]
+      summary: Cursor page of a project's quarantine entries (07.3.1-T2)
+      description: >-
+        Every member role, including `viewer`, may read (T58). The stored `state` is returned
+        as is (`active`, `expired`, `removed`); the page is keyset-ordered on
+        `(created_at, id)` ascending. Another tenant's project, or a project outside the
+        credential's scope, is 404; a `limit` outside 1..200 or a malformed `cursor` is 422.
+      x-permission: policy:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of quarantine entries
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuarantineEntryPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 components:
   securitySchemes:
     sessionCookie:
@@ -3945,6 +4071,13 @@ components:
         format: uuid
     WaiverId:
       name: w
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    QuarantineEntryId:
+      name: q
       in: path
       required: true
       schema:
@@ -5315,6 +5448,55 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/WaiverDto' }
+        next_cursor: { type: [string, 'null'] }
+    QuarantineEntry:
+      type: object
+      description: >-
+        One quarantine entry (07.3.1-T2, 00 §8.8): a case excluded from gating while its
+        failure stays visible. `state` is returned as stored (`active`, `expired`, `removed`).
+      required:
+        [
+          id,
+          project_id,
+          case_id,
+          owner,
+          reason,
+          state,
+          expires_at,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        case_id: { type: string, format: uuid }
+        owner: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+        state: { type: string, enum: [active, expired, removed] }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    QuarantineEntryCreateRequest:
+      type: object
+      description: >-
+        Body of `POST /v1/quarantine` (07.3.1-T2 §5). `expires_at` must be strictly in the
+        future; `reason` is 1..2000 characters; `case_id` must be a case of `project_id` and
+        `owner` a membership of the org.
+      required: [project_id, case_id, owner, reason, expires_at]
+      properties:
+        project_id: { type: string, format: uuid }
+        case_id: { type: string, format: uuid }
+        owner: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+        expires_at: { type: string, format: date-time }
+    QuarantineEntryPage:
+      type: object
+      description: 00 §9.1 cursor page of `QuarantineEntry`, keyset-ordered on `(created_at, id)` ascending.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/QuarantineEntry' }
         next_cursor: { type: [string, 'null'] }
 security:
   - sessionCookie: []

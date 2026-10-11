@@ -313,6 +313,23 @@ public sealed class SeedMatrixTests : CatalogueTestBase
         }
     }
 
+    /// <summary>
+    /// 07.3.1-T2: the quarantine write permission is `test_maintainer`-only and separate
+    /// from `policy:write` — `release_approver` (which owns `policy:write`) must not hold
+    /// `quarantine:write`, and `test_maintainer` must not hold `policy:write`, so a
+    /// quarantine write never carries waiver or policy-revision power. Pinned by name so
+    /// the split is visible, not only implied by the full matrix.
+    /// </summary>
+    [Fact]
+    public async Task Quarantine_Write_Is_TestMaintainer_Only_And_Separate_From_Policy_Write()
+    {
+        var catalogue = await ReadCatalogueAsync(await Fixture.SeedOrgAsync(cancellationToken: Token));
+        var holders = Holders(catalogue);
+
+        holders["quarantine:write"].ShouldBe(["test_maintainer"]);
+        holders["policy:write"].ShouldBe(["release_approver"]);
+    }
+
     /// <summary>Reads the catalogue and the role grants through one tenant scope (the app role, under RLS).</summary>
     private async Task<CatalogueRead> ReadCatalogueAsync(Guid orgId)
     {

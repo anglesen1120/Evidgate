@@ -265,6 +265,20 @@ internal sealed class TenantRowFactory
             }
         }
 
+        // quarantine_entry's partial unique index (org_id, project_id, case_id) WHERE state = 'active'
+        // is not a composite-FK target, so the schema scan above never sees it — but it would reject the
+        // corrupt row with 23505 before the composite FK under test is reached: the corrupt row differs
+        // from the valid row inserted just before it only in `owner`, and the app role cannot write
+        // `state` to move it out of the index (its INSERT grant omits that column). The corrupt row
+        // therefore takes a case of its own org, so the composite FK is the only rejection.
+        if (corruptedForeignKey is not null
+            && string.Equals(table, "public.quarantine_entry", StringComparison.Ordinal)
+            && !string.Equals(corruptedForeignKey, "quarantine_entry_case_fk", StringComparison.Ordinal))
+        {
+            var ownCase = await CreateAsync("public.test_case", org, forcedId: null, cancellationToken);
+            values["case_id"] = ownCase.Values[TenantFkScan.TenantKeyColumn];
+        }
+
         foreach (var column in _schema.ColumnsOf(table))
         {
             if (values.ContainsKey(column.Name) || !column.NotNull || column.HasDefault)
@@ -347,6 +361,7 @@ internal sealed class TenantRowFactory
             ("public.adapter_capability", "mode") => "full",
             ("public.waiver", "state") => "requested",
             ("public.waiver", "scope") => "case",
+            ("public.quarantine_entry", "state") => "active",
             ("public.artifact", "kind") => "trace",
             ("public.artifact", "execution_key") => new string('a', 64),
             ("public.artifact", "checksum") => "sha256:" + new string('b', 64),
