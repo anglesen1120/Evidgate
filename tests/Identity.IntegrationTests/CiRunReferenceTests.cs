@@ -23,6 +23,7 @@ namespace Identity.IntegrationTests;
 /// cases are built with the same key but arbitrary claims, because the minter only ever
 /// writes a well-formed run.
 /// </remarks>
+[Trait("Category", "Docker")]
 public sealed class CiRunReferenceTests
 {
     private static readonly Guid OrgId = Guid.Parse("11111111-1111-7111-8111-111111111111");
