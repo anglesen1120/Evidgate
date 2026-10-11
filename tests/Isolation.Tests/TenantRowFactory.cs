@@ -341,7 +341,7 @@ internal sealed class TenantRowFactory
             return "system";
         }
 
-        // Columns whose CHECK constraints name a closed vocabulary or a shape (migrations 0016-0029).
+        // Columns whose CHECK constraints name a closed vocabulary or a shape (migrations 0016-0031).
         var special = (table, column.Name) switch
         {
             ("public.ci_binding", "provider") or ("public.ci_token_issue", "provider") => "github_actions",
@@ -372,6 +372,13 @@ internal sealed class TenantRowFactory
             ("public.artifact_kind_policy", "default_sensitivity") => "normal",
             ("public.producer_slot", "shard_index") => 1,
             ("public.producer_slot", "producer_id") => "shard-1",
+            // planned_execution's execution_key is the 00 §7 sha256 hex and its unique key is
+            // (org_id, run_id, execution_key), so a constant would collide with the valid row the
+            // corrupt attempt inserts just before it: a fresh 64-hex value per generated row.
+            ("public.planned_execution", "execution_key") =>
+                Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+            ("public.planned_execution", "variant_hash") => "sha256:" + new string('a', 64),
+            ("public.planned_execution", "shard_id") => "shard-1",
             _ => (object?)null,
         };
 

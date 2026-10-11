@@ -81,4 +81,64 @@ internal static class OrchestratorSql
           join public.project p on p.org_id = r.org_id and p.id = r.project_id and p.status <> 'deleted'
          where r.id = @revision_id
         """;
+
+    // ------------------------------------------------------------------ 05.2.1 run creation
+
+    /// <summary>
+    /// The manifest a run is created from, by id and project, in one statement (05.2.1 §5). RLS makes another
+    /// tenant's manifest invisible, so an unknown or foreign id is the same 404. The handler derives the planned
+    /// executions and the shard ranges from the immutable document's own copy of <c>shard_plan</c>: the manifest
+    /// verifier already validated that copy at upload (05.1.1 §5), so <c>shard_plan</c> and <c>planned_count</c> are
+    /// not projected a second time.
+    /// </summary>
+    internal const string RunManifest = """
+        select suite_revision_id, environment_revision_id, document::text as document
+          from public.manifest
+         where org_id = @org_id and project_id = @project_id and id = @manifest_id
+        """;
+
+    /// <summary>
+    /// Whether the manifest's suite and environment revisions resolve in this project, in one statement and with no
+    /// row lock (05.2.1 AC5): the composite FKs enforce existence at insert, but the check runs first so an
+    /// unresolved reference is a 422 <c>manifest_invalid</c> before any write. The suite revision is project-scoped
+    /// through its suite, exactly like the manifest upload's check.
+    /// </summary>
+    internal const string RunRevisionTargets = """
+        select exists (select 1
+                         from public.suite_revision r
+                         join public.suite s on s.org_id = r.org_id and s.id = r.suite_id
+                        where r.id = @suite_revision_id and s.project_id = @project_id) as suite_known,
+               exists (select 1 from public.environment_revision
+                        where id = @environment_revision_id and project_id = @project_id) as environment_known
+        """;
+
+    /// <summary>
+    /// The run row (05.2.1 §4, T13/T88/T93). <c>state</c> is <c>queued</c> because the producer slots commit in this
+    /// same transaction; <c>collection_deadline_at</c> is computed on the database clock (<c>now()</c>, the same clock
+    /// <c>created_at</c> defaults to) so the two can never disagree; <c>policy_revision_id</c> is null until
+    /// 07.1.1-T4 pins one; <c>ci_run_ref</c> comes from the caller's OIDC claims, never the body.
+    /// </summary>
+    internal const string InsertRun = """
+        insert into public.run
+               (id, org_id, project_id, manifest_id, policy_revision_id, suite_revision_id, environment_revision_id,
+                ci_run_ref, components, purpose, state, collection_deadline_at, late_window_minutes)
+        values (@id, @org_id, @project_id, @manifest_id, null, @suite_revision_id, @environment_revision_id,
+                @ci_run_ref::jsonb, @components::jsonb, 'regular', 'queued',
+                now() + @collection_timeout::interval, @late_window_minutes)
+        """;
+
+    /// <summary>
+    /// Every planned execution of the run in one batch insert (05.2.1 §5, 00 §5.7 P2): the rows travel as ONE
+    /// <c>jsonb</c> text parameter expanded by <c>jsonb_to_recordset</c>, so the statement count is constant in the
+    /// manifest's size and no array parameter reaches the read-only tenant Dapper path (the
+    /// <c>StringArrayTypeHandler</c> refuses array writes; precedent <c>SuiteReadSql.InsertMembers</c>).
+    /// <c>required</c> defaults true (the column default).
+    /// </summary>
+    internal const string InsertPlannedExecutions = """
+        insert into public.planned_execution
+               (id, org_id, run_id, execution_key, case_revision_id, variant_hash, target_env, shard_id, required)
+        select r.id, @org_id, @run_id, r.execution_key, r.case_revision_id, r.variant_hash, r.target_env, r.shard_id, true
+          from jsonb_to_recordset(@rows::jsonb)
+               as r(id uuid, execution_key text, case_revision_id uuid, variant_hash text, target_env text, shard_id text)
+        """;
 }

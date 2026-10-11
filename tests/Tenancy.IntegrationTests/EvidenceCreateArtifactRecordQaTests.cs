@@ -5,7 +5,9 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Domain;
 using Mediator;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -104,6 +106,10 @@ public sealed class EvidenceCreateArtifactRecordQaTests
 
     private Task<long> RowsAsync(World world) =>
         _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.artifact");
+
+    /// <summary>One committed run row for <paramref name="org"/> (0031's composite key needs it on every write).</summary>
+    private async Task<Guid> CreateRunAsync(World world, Guid org) =>
+        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, org);
 
     private Task<string> ColumnAsync(World world, Guid artifactId, string column) =>
         _fixture.ScalarAsync<string>(world.Database, $"select {column} from public.artifact where id = '{artifactId}'");
@@ -205,8 +211,9 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     {
         await using var world = await StartAsync();
 
-        (await MintAsync(world, Command(bytes: 1))).IsSuccess.ShouldBeTrue("bytes = 1 is the smallest positive size");
-        (await MintAsync(world, Command(bytes: long.MaxValue))).IsSuccess.ShouldBeTrue("bytes = long.MaxValue fits the bigint column");
+        var run = await CreateRunAsync(world, world.Org);
+        (await MintAsync(world, Command(runId: run, bytes: 1))).IsSuccess.ShouldBeTrue("bytes = 1 is the smallest positive size");
+        (await MintAsync(world, Command(runId: run, bytes: long.MaxValue))).IsSuccess.ShouldBeTrue("bytes = long.MaxValue fits the bigint column");
         ShouldBeRefused(await MintAsync(world, Command(bytes: long.MinValue)), 422, "size_out_of_range", "bytes = long.MinValue");
 
         (await RowsAsync(world)).ShouldBe(2);
@@ -221,8 +228,9 @@ public sealed class EvidenceCreateArtifactRecordQaTests
 
         ShouldBeRefused(await MintAsync(world, Command(mediaType: "")), 422, null, "empty media type");
         ShouldBeRefused(await MintAsync(world, Command(mediaType: new string('a', 256))), 422, null, "256 ASCII characters");
-        (await MintAsync(world, Command(mediaType: new string('a', 255)))).IsSuccess.ShouldBeTrue("255 ASCII characters");
-        (await MintAsync(world, Command(mediaType: new string('é', 255)))).IsSuccess.ShouldBeTrue("255 BMP characters");
+        var run = await CreateRunAsync(world, world.Org);
+        (await MintAsync(world, Command(runId: run, mediaType: new string('a', 255)))).IsSuccess.ShouldBeTrue("255 ASCII characters");
+        (await MintAsync(world, Command(runId: run, mediaType: new string('é', 255)))).IsSuccess.ShouldBeTrue("255 BMP characters");
 
         (await RowsAsync(world)).ShouldBe(2);
     }
@@ -236,8 +244,9 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     {
         await using var world = await StartAsync();
         var astral255 = string.Concat(Enumerable.Repeat("😀", 255));
+        var run = await CreateRunAsync(world, world.Org);
 
-        (await MintAsync(world, Command(mediaType: astral255))).IsSuccess.ShouldBeTrue(
+        (await MintAsync(world, Command(runId: run, mediaType: astral255))).IsSuccess.ShouldBeTrue(
             "255 code points is within the 0028 char_length CHECK; the validator counts code points, not UTF-16 units");
     }
 
@@ -262,15 +271,33 @@ public sealed class EvidenceCreateArtifactRecordQaTests
             "the client-key refusal comes first in the C2 order, ahead of the shape rules");
     }
 
-    // ------------------------------------------------------------------ run id: existence is not checked at T2
+    // ------------------------------------------------------------------ run id: 0031's composite key enforces existence
 
     [Fact]
-    public async Task RunId_OfAnUnknownRun_IsAccepted_AtT2_ByDesign()
+    public async Task RunId_OfAnUnknownRun_IsRefusedByTheRunFk()
     {
         await using var world = await StartAsync();
 
-        (await MintAsync(world, Command(runId: Guid.CreateVersion7()))).IsSuccess.ShouldBeTrue(
-            "06.1.1 T2 Notes 2: run existence is owned by 06.1.2, so an unknown run id is accepted here");
+        // 0031's artifact_run_fk is a plain (non-deferrable) composite key, so an unknown run is refused at the
+        // write itself. The handler does not translate it — HTTP mapping is 06.1.2's — so the database failure
+        // surfaces as the EF write exception.
+        var failure = await Should.ThrowAsync<DbUpdateException>(
+            () => MintAsync(world, Command(runId: Guid.CreateVersion7())));
+
+        var postgres = failure.InnerException.ShouldBeOfType<PostgresException>();
+        postgres.SqlState.ShouldBe("23503");
+        postgres.ConstraintName.ShouldBe("artifact_run_fk");
+
+        (await RowsAsync(world)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task RunId_OfASeededRun_IsAccepted()
+    {
+        await using var world = await StartAsync();
+
+        (await MintAsync(world, Command(runId: await CreateRunAsync(world, world.Org)))).IsSuccess.ShouldBeTrue(
+            "a run row of the same org satisfies the composite key");
     }
 
     // ------------------------------------------------------------------ sensitivity: static fallback per kind (T57(a))
@@ -298,9 +325,10 @@ public sealed class EvidenceCreateArtifactRecordQaTests
             expected.ContainsKey(kind).ShouldBeTrue($"kind {kind} has no expected fallback");
         }
 
+        var run = await CreateRunAsync(world, world.Org);
         foreach (var (kind, sensitivity) in expected)
         {
-            var result = await MintAsync(world, Command(kind: kind));
+            var result = await MintAsync(world, Command(runId: run, kind: kind));
             result.IsSuccess.ShouldBeTrue(kind);
 
             (await ColumnAsync(world, result.Value.ArtifactId, "sensitivity")).ShouldBe(sensitivity, $"fallback for {kind}");
@@ -314,8 +342,9 @@ public sealed class EvidenceCreateArtifactRecordQaTests
         await InsertKindPolicyAsync(world.Database, world.Org, world.Project, ArtifactKind.Trace, ArtifactSensitivity.Normal);
         await InsertKindPolicyAsync(world.Database, world.Org, world.Project, ArtifactKind.Screenshot, ArtifactSensitivity.Sensitive);
 
-        var trace = await MintAsync(world, Command(kind: ArtifactKind.Trace));
-        var screenshot = await MintAsync(world, Command(kind: ArtifactKind.Screenshot));
+        var run = await CreateRunAsync(world, world.Org);
+        var trace = await MintAsync(world, Command(runId: run, kind: ArtifactKind.Trace));
+        var screenshot = await MintAsync(world, Command(runId: run, kind: ArtifactKind.Screenshot));
 
         (await ColumnAsync(world, trace.Value.ArtifactId, "sensitivity")).ShouldBe(ArtifactSensitivity.Normal,
             "a sensitive-by-default kind lowered to normal by the project policy row");
@@ -334,8 +363,9 @@ public sealed class EvidenceCreateArtifactRecordQaTests
         await InsertKindPolicyAsync(world.Database, world.Org, otherProject, ArtifactKind.Video, ArtifactSensitivity.Sensitive);
         await InsertKindPolicyAsync(world.Database, otherOrg, otherOrgProject, ArtifactKind.Screenshot, ArtifactSensitivity.Sensitive);
 
-        var video = await MintAsync(world, Command(kind: ArtifactKind.Video));
-        var screenshot = await MintAsync(world, Command(kind: ArtifactKind.Screenshot));
+        var run = await CreateRunAsync(world, world.Org);
+        var video = await MintAsync(world, Command(runId: run, kind: ArtifactKind.Video));
+        var screenshot = await MintAsync(world, Command(runId: run, kind: ArtifactKind.Screenshot));
 
         (await ColumnAsync(world, video.Value.ArtifactId, "sensitivity")).ShouldBe(ArtifactSensitivity.Normal,
             "a policy row on a sibling project must not change this project's fallback");
@@ -349,7 +379,7 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     public async Task MintedRow_PersistsTheServerChosenKey_AndTheContractColumns()
     {
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world, world.Org);
 
         var result = await MintAsync(world, Command(runId: run));
         result.IsSuccess.ShouldBeTrue();
@@ -376,8 +406,9 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     {
         await using var world = await StartAsync();
 
-        var first = await MintAsync(world, Command());
-        var second = await MintAsync(world, Command());
+        var run = await CreateRunAsync(world, world.Org);
+        var first = await MintAsync(world, Command(runId: run));
+        var second = await MintAsync(world, Command(runId: run));
 
         first.Value.ArtifactId.ShouldNotBe(second.Value.ArtifactId);
         first.Value.ObjectKey.ShouldNotBe(second.Value.ObjectKey);

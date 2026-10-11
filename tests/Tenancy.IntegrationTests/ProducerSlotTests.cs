@@ -71,6 +71,14 @@ public sealed class ProducerSlotTests
         await scope.CommitAsync();
     }
 
+    /// <summary>One committed run row for <paramref name="world"/>'s org (0031's composite run key).</summary>
+    private async Task<Guid> CreateRunAsync(World world) =>
+        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, world.Org);
+
+    /// <summary>One committed run row for <paramref name="org"/> (0031's composite run key).</summary>
+    private async Task<Guid> CreateRunAsync(World world, Guid org) =>
+        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, org);
+
     /// <summary>An org and a project in it, created through the real routes.</summary>
     private static async Task<Guid> CreateOtherOrgAsync(World world, string slug)
     {
@@ -161,7 +169,7 @@ public sealed class ProducerSlotTests
     public async Task Select_WithoutTenantContext_ReturnsZero()
     {
         await using var world = await StartAsync();
-        await InsertSlotAsync(world, Guid.CreateVersion7());
+        await InsertSlotAsync(world, await CreateRunAsync(world));
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database));
 
@@ -172,7 +180,7 @@ public sealed class ProducerSlotTests
     public async Task Select_OtherOrg_ReturnsZero()
     {
         await using var world = await StartAsync();
-        await InsertSlotAsync(world, Guid.CreateVersion7());
+        await InsertSlotAsync(world, await CreateRunAsync(world));
         var otherOrg = await CreateOtherOrgAsync(world, "other");
 
         (await CountAsync(world, otherOrg)).ShouldBe(0);
@@ -182,7 +190,7 @@ public sealed class ProducerSlotTests
     public async Task Operator_WithTenantSet_ReadsZeroRows()
     {
         await using var world = await StartAsync();
-        await InsertSlotAsync(world, Guid.CreateVersion7());
+        await InsertSlotAsync(world, await CreateRunAsync(world));
 
         // The operator holds the SELECT grant but no policy (TL T76, D1): with FORCE row level
         // security and `evidgate.org_id` set to the row's own org, the read is still zero.
@@ -221,7 +229,7 @@ public sealed class ProducerSlotTests
     public async Task SecondRow_SameRunProducer_Fails()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         await InsertSlotAsync(world, runId);
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
@@ -235,7 +243,7 @@ public sealed class ProducerSlotTests
     public async Task SecondRow_SameRunShard_Fails()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         await InsertSlotAsync(world, runId);
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
@@ -249,12 +257,12 @@ public sealed class ProducerSlotTests
     public async Task SameProducer_OtherOrg_Succeeds()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         await InsertSlotAsync(world, runId);
         var otherOrg = await CreateOtherOrgAsync(world, "other");
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), otherOrg);
-        (await scope.ExecuteAsync(InsertSlotSql(otherOrg, runId))).ShouldBe(1);
+        (await scope.ExecuteAsync(InsertSlotSql(otherOrg, await CreateRunAsync(world, otherOrg)))).ShouldBe(1);
         await scope.CommitAsync();
     }
 
@@ -266,7 +274,7 @@ public sealed class ProducerSlotTests
         await using var world = await StartAsync();
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        var error = await scope.CaptureErrorAsync(InsertSlotSql(world.Org, Guid.CreateVersion7(), shardIndex: shardIndex));
+        var error = await scope.CaptureErrorAsync(InsertSlotSql(world.Org, await CreateRunAsync(world), shardIndex: shardIndex));
 
         error.SqlState.ShouldBe("23514");
         error.ConstraintName.ShouldBe("producer_slot_shard_index_check");
@@ -281,7 +289,7 @@ public sealed class ProducerSlotTests
         await using var world = await StartAsync();
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        var error = await scope.CaptureErrorAsync(InsertSlotSql(world.Org, Guid.CreateVersion7(), producerId: producerId));
+        var error = await scope.CaptureErrorAsync(InsertSlotSql(world.Org, await CreateRunAsync(world), producerId: producerId));
 
         error.SqlState.ShouldBe("23514");
         error.ConstraintName.ShouldBe("producer_slot_producer_id_check");
@@ -294,7 +302,7 @@ public sealed class ProducerSlotTests
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
         var error = await scope.CaptureErrorAsync(
-            InsertSlotSql(world.Org, Guid.CreateVersion7(), boundTokenJti: new string('a', 257)));
+            InsertSlotSql(world.Org, await CreateRunAsync(world), boundTokenJti: new string('a', 257)));
 
         error.SqlState.ShouldBe("23514");
         error.ConstraintName.ShouldBe("producer_slot_bound_token_jti_check");
@@ -306,7 +314,7 @@ public sealed class ProducerSlotTests
         await using var world = await StartAsync();
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        var error = await scope.CaptureErrorAsync(InsertSlotSql(world.Org, Guid.CreateVersion7(), lastSequence: -1));
+        var error = await scope.CaptureErrorAsync(InsertSlotSql(world.Org, await CreateRunAsync(world), lastSequence: -1));
 
         error.SqlState.ShouldBe("23514");
         error.ConstraintName.ShouldBe("producer_slot_last_sequence_check");
@@ -318,7 +326,7 @@ public sealed class ProducerSlotTests
     public async Task RegisterSlots_PerShard_SameTx()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
 
         // The slots are written inside the caller's transaction (T13): a rollback takes them away, so
         // the run row and its slots commit or not at all.
@@ -346,7 +354,7 @@ public sealed class ProducerSlotTests
     public async Task RegisterSlots_CommitsWithTheCaller()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
 
         var result = await InScopeAsync(
             world, world.Org, registry => registry.RegisterSlotsAsync(runId, 2, TestContext.Current.CancellationToken));
@@ -359,7 +367,7 @@ public sealed class ProducerSlotTests
     public async Task RegisterSlots_SameCount_IsIdempotent()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
 
         var first = await InScopeAsync(
             world, world.Org, registry => registry.RegisterSlotsAsync(runId, 2, TestContext.Current.CancellationToken));
@@ -376,7 +384,7 @@ public sealed class ProducerSlotTests
     public async Task RegisterSlots_DifferentCount_Conflicts()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
 
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 2, TestContext.Current.CancellationToken));
         var second = await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 3, TestContext.Current.CancellationToken));
@@ -433,7 +441,7 @@ public sealed class ProducerSlotTests
     public async Task BindOrCheck_FirstBind_SetsJti_ThenSameIdentityIsIdempotent()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
 
         var first = await InScopeAsync(world, world.Org, registry =>
@@ -455,7 +463,7 @@ public sealed class ProducerSlotTests
     public async Task BindOrCheck_ForeignJti_403()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
         await InScopeAsync(world, world.Org, registry =>
             registry.BindOrCheckAsync(runId, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
@@ -474,7 +482,7 @@ public sealed class ProducerSlotTests
     public async Task BindOrCheck_CiRunRefMismatch_403()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
         await InScopeAsync(world, world.Org, registry =>
             registry.BindOrCheckAsync(runId, "shard-1", "jti-a", "1/7/2", TestContext.Current.CancellationToken));
@@ -491,7 +499,7 @@ public sealed class ProducerSlotTests
     public async Task BindOrCheck_ConcurrentFirstBinders_ExactlyOneWins()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
 
         // Two first writers race for the same unbound slot: the conditional UPDATE is the arbiter, so
@@ -511,7 +519,7 @@ public sealed class ProducerSlotTests
     public async Task GetRunProducerSlots_ReturnsTheRunsSlots()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 2, TestContext.Current.CancellationToken));
         await InScopeAsync(world, world.Org, registry =>
             registry.BindOrCheckAsync(runId, "shard-2", "jti-a", null, TestContext.Current.CancellationToken));
@@ -532,7 +540,7 @@ public sealed class ProducerSlotTests
     public async Task GetRunProducerSlots_OtherOrg_ReturnsEmpty()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
         var otherOrg = await CreateOtherOrgAsync(world, "other");
 
@@ -551,7 +559,7 @@ public sealed class ProducerSlotTests
         // written through the EF context must read back identically through EF and through raw SQL -
         // the version default, the trigger-owned timestamps and the nullable binding columns included.
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         var id = Guid.CreateVersion7();
 
         await using (var services = world.Api.Services.CreateAsyncScope())

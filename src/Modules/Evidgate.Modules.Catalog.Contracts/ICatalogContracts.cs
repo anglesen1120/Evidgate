@@ -30,6 +30,25 @@ public interface ICatalogContracts
     ValueTask<IReadOnlySet<Guid>> FindCaseRevisionsAsync(Guid projectId, IReadOnlyCollection<Guid> caseRevisionIds, CancellationToken cancellationToken);
 
     /// <summary>
+    /// The case each of <paramref name="caseRevisionIds"/> belongs to (05.2.1-T1.3): <c>case_revision_id → case_id</c> for the
+    /// revisions of cases of <paramref name="projectId"/> visible to the tenant. One bounded statement however many ids; ids
+    /// that are unknown, or belong to another project or tenant, are simply absent from the answer.
+    /// </summary>
+    /// <param name="projectId">The project.</param>
+    /// <param name="caseRevisionIds">The ids to look up.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyDictionary<Guid, Guid>> GetCaseIdsAsync(Guid projectId, IReadOnlyCollection<Guid> caseRevisionIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The <c>variant_hash</c> of each planned execution's parameters (05.2.1-T1.3), index-aligned with
+    /// <paramref name="variantParams"/>: the same <c>sha256:</c> the suite-member path stores for that variant, or null when
+    /// the parameters are not a variant object or the normaliser refuses them (a secret-shaped key or value, a nested
+    /// object). Pure: no I/O and no tenant scope.
+    /// </summary>
+    /// <param name="variantParams">The <c>variant.params</c> object of each planned execution.</param>
+    IReadOnlyList<string?> NormalizeVariantHashes(IReadOnlyList<System.Text.Json.JsonElement> variantParams);
+
+    /// <summary>
     /// The <c>data_isolation</c> the revision's environment requirements declare (<c>isolated</c> when omitted), or null
     /// when the revision does not exist for this tenant. The single isolation source (00 §15).
     /// </summary>

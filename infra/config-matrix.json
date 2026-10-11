@@ -409,6 +409,49 @@
       "note": "boot-time RLS self-check switch (02.6.1-T1.4): Required (default) refuses to start unless every non-exempt table is under database-enforced isolation; Disabled exists only for hosts that boot without a database (contract/shutdown suites) and is logged at Warning on every boot. A deployable environment never sets Disabled — the config lint enforces that through forbiddenValues, not through this note."
     },
     {
+      "key": "EVIDGATE__RUNS__DEFAULTCOLLECTIONTIMEOUT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "collection deadline offset applied at run create when no policy revision is pinned (05.2.1 AC12, T93): run.collection_deadline_at = created_at + this value, computed on the database clock. A TimeSpan literal (02:00:00 = 2 h, the default; ⚠️ tuned ≈ p95 × 1.5). 07.1.1-T4 replaces it with the pinned policy's collection_timeout once the run-pinning handshake lands. Bounded at boot to more than 00:00:00 and at most 366 days (the scale of the 525600-minute late-window cap) by RunsOptions.CollectionTimeoutAttribute: a non-positive value would place collection_deadline_at at or before created_at on the immutable column, and an extreme value would overflow the interval arithmetic. No constraints block: the lint derives constraints from C# attributes, and no DataAnnotations range carries a TimeSpan."
+    },
+    {
+      "key": "EVIDGATE__RUNS__DEFAULTLATEWINDOWMINUTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 525600
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "late-window snapshot written at run create when no policy revision is pinned (05.2.1 AC12, T93/T62): run.late_window_minutes, immutable after create. Default 1440 (24 h). 07.1.1-T4 copies the pinned policy's late window instead."
+    },
+    {
       "key": "EVIDGATE__TASKS__BACKOFFBASESECONDS",
       "scope": "runtime",
       "consumers": ["api", "worker"],

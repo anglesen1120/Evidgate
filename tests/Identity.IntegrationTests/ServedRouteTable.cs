@@ -508,6 +508,7 @@ internal sealed record RouteRequestContext(
     Guid CaseRevisionId,
     Guid EnvironmentRevisionId,
     Guid PolicyRevisionId,
+    Guid ManifestId,
     Guid WaiverId,
     Guid QuarantineId,
     Guid CiBindingId,
@@ -517,6 +518,7 @@ internal sealed record RouteRequestContext(
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -652,6 +654,8 @@ internal static class RouteRequests
         // ---- Orchestrator ------------------------------------------------------------------------------------
         Add("POST", "/v1/projects/{p}/manifests", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/manifests",
             Manifest(ctx), IdempotencyKey: Key()));
+        Add("POST", "/v1/projects/{p}/runs", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/runs",
+            Run(ctx), IdempotencyKey: Key()));
         Add("POST", "/v1/projects/{p}/environments/{e}/revisions", ctx =>
             new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/environments/staging/revisions", Environment(), IdempotencyKey: Key()));
         Add("GET", "/v1/environment-revisions/{id}", ctx =>
@@ -714,6 +718,11 @@ internal static class RouteRequests
         ["owner"] = ctx.MembershipId.ToString(),
         ["reason"] = "probe",
         ["expires_at"] = DateTimeOffset.UtcNow.AddDays(30).ToString("O", CultureInfo.InvariantCulture),
+    };
+
+    private static JsonObject Run(RouteRequestContext ctx) => new()
+    {
+        ["manifest_id"] = ctx.ManifestId.ToString(),
     };
 
     private static JsonObject Manifest(RouteRequestContext ctx) => new()

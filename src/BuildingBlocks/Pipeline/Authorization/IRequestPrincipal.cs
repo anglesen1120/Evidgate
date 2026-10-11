@@ -24,6 +24,18 @@ public enum PrincipalKind
 }
 
 /// <summary>
+/// The CI run a <c>ci_producer</c> token was minted for (T88): the four claims the
+/// exchange copied from the verified GitHub OIDC token. Null for an ingest-token
+/// credential and for any token that does not carry all four claims, so a caller can
+/// never supply one through request input.
+/// </summary>
+/// <param name="Provider">The CI provider; <c>github_actions</c> for a run-carrying token.</param>
+/// <param name="RepositoryId">GitHub's numeric repository id.</param>
+/// <param name="RunId">GitHub's numeric workflow-run id.</param>
+/// <param name="RunAttempt">GitHub's run attempt (1-based).</param>
+public sealed record CiRunReference(string Provider, long RepositoryId, long RunId, int RunAttempt);
+
+/// <summary>
 /// The authenticated caller of the current request, as the entry point resolved it
 /// (02.6.2's principal-resolution step publishes it next to the request tenant,
 /// exactly like <c>IRequestTenantContext</c>). The C2 authorization stage reads
@@ -63,6 +75,13 @@ public interface IRequestPrincipal
 
     /// <summary>The token id (<c>jti</c>) of a service credential; the audit actor id (02.7.1). Null for other kinds.</summary>
     string? CredentialId { get; }
+
+    /// <summary>
+    /// The CI run this service credential was minted for (T88), or null when the token
+    /// carries none (an ingest token) or does not carry all four claims. Never taken from
+    /// request input; the default keeps every other principal kind and test stand-in null.
+    /// </summary>
+    CiRunReference? CiRun => null;
 }
 
 /// <summary>
@@ -81,7 +100,8 @@ public sealed class RequestPrincipal : IRequestPrincipal
         Guid? projectScope,
         IReadOnlyCollection<string> claimedPermissions,
         string? verifiedEmail = null,
-        string? credentialId = null)
+        string? credentialId = null,
+        CiRunReference? ciRun = null)
     {
         Kind = kind;
         UserId = userId;
@@ -89,6 +109,7 @@ public sealed class RequestPrincipal : IRequestPrincipal
         ClaimedPermissions = claimedPermissions;
         VerifiedEmail = verifiedEmail;
         CredentialId = credentialId;
+        CiRun = ciRun;
     }
 
     /// <summary>A human member of the org the request runs as.</summary>
@@ -97,13 +118,14 @@ public sealed class RequestPrincipal : IRequestPrincipal
 
     /// <summary>
     /// A service identity: the permission set its token carries, optionally scoped
-    /// to exactly one project.
+    /// to exactly one project, and optionally bound to the CI run its token was minted
+    /// for (T88).
     /// </summary>
-    public static RequestPrincipal Service(Guid? projectScope, IReadOnlyCollection<string> claimedPermissions, string? credentialId = null)
+    public static RequestPrincipal Service(Guid? projectScope, IReadOnlyCollection<string> claimedPermissions, string? credentialId = null, CiRunReference? ciRun = null)
     {
         ArgumentNullException.ThrowIfNull(claimedPermissions);
 
-        return new RequestPrincipal(PrincipalKind.ServicePrincipal, userId: null, projectScope, claimedPermissions, credentialId: credentialId);
+        return new RequestPrincipal(PrincipalKind.ServicePrincipal, userId: null, projectScope, claimedPermissions, credentialId: credentialId, ciRun: ciRun);
     }
 
     /// <summary>
@@ -129,4 +151,7 @@ public sealed class RequestPrincipal : IRequestPrincipal
     public string? VerifiedEmail { get; }
 
     public string? CredentialId { get; }
+
+    /// <inheritdoc />
+    public CiRunReference? CiRun { get; }
 }

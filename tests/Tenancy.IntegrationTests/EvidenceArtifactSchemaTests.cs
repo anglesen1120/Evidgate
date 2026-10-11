@@ -107,6 +107,14 @@ public sealed class EvidenceArtifactSchemaTests
         await scope.CommitAsync();
     }
 
+    /// <summary>One committed run row for <paramref name="world"/>'s org (0031's composite run key).</summary>
+    private async Task<Guid> CreateRunAsync(World world) =>
+        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, world.Org);
+
+    /// <summary>One committed run row for <paramref name="org"/> (0031's composite run key).</summary>
+    private async Task<Guid> CreateRunAsync(World world, Guid org) =>
+        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, org);
+
     /// <summary>One committed kind-policy row for <paramref name="world"/>'s project.</summary>
     private async Task InsertKindPolicyAsync(World world, string kind = ArtifactKind.Trace)
     {
@@ -149,7 +157,7 @@ public sealed class EvidenceArtifactSchemaTests
     {
         await using var world = await StartAsync();
         var id = Guid.CreateVersion7();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
 
@@ -178,13 +186,13 @@ public sealed class EvidenceArtifactSchemaTests
         await using var world = await StartAsync();
         var (otherOrg, otherProject) = await CreateOtherTenantAsync(world, "beta");
 
-        await InsertArtifactAsync(world, Guid.CreateVersion7(), Guid.CreateVersion7());
+        await InsertArtifactAsync(world, Guid.CreateVersion7(), await CreateRunAsync(world));
 
         // The key embeds the org, so "the same key shape in another org" is a key minted for that
         // org: `unique (org_id, object_key)` is per org and both rows commit.
         await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), otherOrg))
         {
-            (await scope.ExecuteAsync(InsertArtifactSql(otherOrg, otherProject, Guid.CreateVersion7(), Guid.CreateVersion7()))).ShouldBe(1);
+            (await scope.ExecuteAsync(InsertArtifactSql(otherOrg, otherProject, Guid.CreateVersion7(), await CreateRunAsync(world, otherOrg)))).ShouldBe(1);
             await scope.CommitAsync();
         }
 
@@ -215,7 +223,7 @@ public sealed class EvidenceArtifactSchemaTests
     public async Task Select_WithoutTenantContext_ReturnsZero()
     {
         await using var world = await StartAsync();
-        await InsertArtifactAsync(world, Guid.CreateVersion7(), Guid.CreateVersion7());
+        await InsertArtifactAsync(world, Guid.CreateVersion7(), await CreateRunAsync(world));
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database));
 
@@ -228,7 +236,7 @@ public sealed class EvidenceArtifactSchemaTests
     public async Task Select_OtherOrg_ReturnsZero()
     {
         await using var world = await StartAsync();
-        await InsertArtifactAsync(world, Guid.CreateVersion7(), Guid.CreateVersion7());
+        await InsertArtifactAsync(world, Guid.CreateVersion7(), await CreateRunAsync(world));
 
         await using var scope = await TenantScope.BeginAsync(
             _fixture.AppConnectionString(world.Database),
@@ -244,7 +252,7 @@ public sealed class EvidenceArtifactSchemaTests
     public async Task Operator_WithTenantSet_ReadsZeroRows()
     {
         await using var world = await StartAsync();
-        await InsertArtifactAsync(world, Guid.CreateVersion7(), Guid.CreateVersion7());
+        await InsertArtifactAsync(world, Guid.CreateVersion7(), await CreateRunAsync(world));
         await InsertKindPolicyAsync(world);
 
         // The operator holds the SELECT grant but no policy on either table (TL T76, D1): with FORCE
@@ -396,7 +404,7 @@ public sealed class EvidenceArtifactSchemaTests
         await using var world = await StartAsync();
         var (otherOrg, otherProject) = await CreateOtherTenantAsync(world, "beta");
         var id = Guid.CreateVersion7();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
 
@@ -412,7 +420,7 @@ public sealed class EvidenceArtifactSchemaTests
     {
         await using var world = await StartAsync();
         var id = Guid.CreateVersion7();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         var stagingId = Guid.CreateVersion7();
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
@@ -420,7 +428,7 @@ public sealed class EvidenceArtifactSchemaTests
         // The final 06.1.1 §1/AC2 key (the default) and the 06.1.2 §3 staging key both commit.
         (await scope.ExecuteAsync(InsertArtifactSql(world.Org, world.Project, id, runId))).ShouldBe(1);
         (await scope.ExecuteAsync(
-            InsertArtifactSql(world.Org, world.Project, stagingId, Guid.CreateVersion7(), objectKey: StagingKey(world.Org, stagingId)))).ShouldBe(1);
+            InsertArtifactSql(world.Org, world.Project, stagingId, await CreateRunAsync(world), objectKey: StagingKey(world.Org, stagingId)))).ShouldBe(1);
         await scope.CommitAsync();
     }
 
@@ -540,7 +548,7 @@ public sealed class EvidenceArtifactSchemaTests
         var factory = services.ServiceProvider.GetRequiredService<ITenantDbContextFactory<EvidenceDbContext>>();
 
         var id = Guid.CreateVersion7();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
         var artifact = new Artifact(
             id,
             world.Org,

@@ -92,6 +92,10 @@ internal static class SchemaConventionScan
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only first-write facts (04.7.1-T2; migration 0026): a capability row records what an adapter declared the first time it was seen and is never updated (the revoked UPDATE says so), so it keeps `first_seen_at` only — no created_at/updated_at/version and no version trigger. Its tenant key and RLS are NOT exempt."),
         new SchemaExemption(
+            "public.planned_execution",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only plan rows (05.2.1-T1; migration 0031): a planned execution is written once inside the run-create transaction and never updated (05.5.1's rerun inserts new rows), so it keeps no created_at/updated_at/version and carries no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
+        new SchemaExemption(
             "public.rls_probe",
             SchemaRule.VersionTrigger,
             "The tenancy template of migration 0003 predates the shared trigger function (0004, M1W3-01) and 0003 is checksum-locked, so the trigger cannot be added there; 0004/0005 are the copy source for module tables."),

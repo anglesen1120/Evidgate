@@ -98,6 +98,10 @@ public sealed class EvidenceCreateArtifactRecordTests
     private async Task<long> RowsAsync(World world) =>
         await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.artifact");
 
+    /// <summary>One committed run row for <paramref name="world"/>'s org, so 0031's composite key is satisfied.</summary>
+    private async Task<Guid> CreateRunAsync(World world) =>
+        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, world.Org);
+
     // ------------------------------------------------------------------ AC1: the client key is refused
 
     [Fact]
@@ -195,7 +199,7 @@ public sealed class EvidenceCreateArtifactRecordTests
     public async Task Mint_WithPlannedPair_AttemptIdNull()
     {
         await using var world = await StartAsync();
-        var runId = Guid.CreateVersion7();
+        var runId = await CreateRunAsync(world);
 
         var result = await MintAsync(world, runId);
 
@@ -226,8 +230,8 @@ public sealed class EvidenceCreateArtifactRecordTests
         await using var world = await StartAsync();
 
         // No artifact_kind_policy row: the static T57(a) fallback applies — trace is sensitive, screenshot normal.
-        var trace = await MintAsync(world, Guid.CreateVersion7(), kind: ArtifactKind.Trace);
-        var screenshot = await MintAsync(world, Guid.CreateVersion7(), kind: ArtifactKind.Screenshot);
+        var trace = await MintAsync(world, await CreateRunAsync(world), kind: ArtifactKind.Trace);
+        var screenshot = await MintAsync(world, await CreateRunAsync(world), kind: ArtifactKind.Screenshot);
 
         (await _fixture.ScalarAsync<string>(world.Database, $"select sensitivity from public.artifact where id = '{trace.Value.ArtifactId}'"))
             .ShouldBe(ArtifactSensitivity.Sensitive);
@@ -244,7 +248,7 @@ public sealed class EvidenceCreateArtifactRecordTests
         // carries no sensitivity field, so the client cannot influence it.
         await InsertKindPolicyAsync(world, ArtifactKind.Trace, ArtifactSensitivity.Normal);
 
-        var result = await MintAsync(world, Guid.CreateVersion7(), kind: ArtifactKind.Trace);
+        var result = await MintAsync(world, await CreateRunAsync(world), kind: ArtifactKind.Trace);
 
         (await _fixture.ScalarAsync<string>(world.Database, $"select sensitivity from public.artifact where id = '{result.Value.ArtifactId}'"))
             .ShouldBe(ArtifactSensitivity.Normal);
