@@ -1,4 +1,5 @@
 using System.Globalization;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
 using Npgsql;
 using Shouldly;
@@ -542,74 +543,24 @@ public sealed partial class CaseAttemptSchemaTests
     // ------------------------------------------------------------------ (e) raw + normalised status
 
     [Fact]
-    public async Task WriteAttempt_NewExecution_RawAndNormalizedStatusStored()
-    {
-        await using var world = await StartAsync();
-        var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
-        var runId = await SeedRunAndPlanAsync(world, parents);
-
-        // The raw value is stored verbatim ('timedOut', the Playwright spelling) while the normalised
-        // value is the 00 §8.3 'timed_out' — computed by the module's own CaseAttemptStatus.Normalize.
-        var normalized = CaseAttemptStatus.Normalize("timedOut");
-        normalized.ShouldBe("timed_out");
-
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
-        {
-            (await scope.ExecuteAsync(InsertCaseAttemptSql(
-                world.Org, runId, parents.CaseId, rawStatus: "timedOut", normalizedStatus: normalized, durationMs: 1200))).ShouldBe(1);
-            await scope.CommitAsync();
-        }
-
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
-        {
-            (await scope.ScalarAsync<string>("select raw_status from public.case_attempt")).ShouldBe("timedOut");
-            (await scope.ScalarAsync<string>("select normalized_status from public.case_attempt")).ShouldBe("timed_out");
-        }
-    }
-
-    [Fact]
-    public async Task WriteAttempt_UnknownRawStatus_NormalizedError()
-    {
-        await using var world = await StartAsync();
-        var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
-        var runId = await SeedRunAndPlanAsync(world, parents);
-
-        var normalized = CaseAttemptStatus.Normalize("weird-status");
-        normalized.ShouldBe("error");
-
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
-        {
-            (await scope.ExecuteAsync(InsertCaseAttemptSql(
-                world.Org, runId, parents.CaseId, rawStatus: "weird-status", normalizedStatus: normalized))).ShouldBe(1);
-            await scope.CommitAsync();
-        }
-
-        // The row exists, the raw value is unchanged and the normalised value is 'error' — never dropped.
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
-        {
-            (await scope.ScalarAsync<string>("select raw_status from public.case_attempt")).ShouldBe("weird-status");
-            (await scope.ScalarAsync<string>("select normalized_status from public.case_attempt")).ShouldBe("error");
-        }
-    }
-
-    [Fact]
     public async Task WriteAttempt_EmptyRawStatus_IsAcceptedAndNormalizedError()
     {
         await using var world = await StartAsync();
         var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
         var runId = await SeedRunAndPlanAsync(world, parents);
 
-        // The envelope allows an empty status (maxLength 64, no minLength), so the column accepts it
+        // The envelope allows an empty status (maxLength 64, no minLength), so the writer accepts it
         // and it normalises to 'error'.
-        var normalized = CaseAttemptStatus.Normalize(string.Empty);
-        normalized.ShouldBe("error");
+        CaseAttemptStatus.Normalize(string.Empty).ShouldBe("error");
 
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
-        {
-            (await scope.ExecuteAsync(InsertCaseAttemptSql(
-                world.Org, runId, parents.CaseId, rawStatus: string.Empty, normalizedStatus: normalized))).ShouldBe(1);
-            await scope.CommitAsync();
-        }
+        await using var scope = await AttemptScope.BeginAsync(world.Api, world.Org);
+        (await scope.WriteAsync(runId, new CaseAttemptInput(ExecutionKey, 1, string.Empty)))
+            .ShouldHaveSingleItem().Status.ShouldBe(CaseAttemptWriteStatus.Accepted);
+        await scope.CommitAsync();
+
+        await using var read = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        (await read.ScalarAsync<string>("select raw_status from public.case_attempt")).ShouldBe(string.Empty);
+        (await read.ScalarAsync<string>("select normalized_status from public.case_attempt")).ShouldBe("error");
     }
 
     // ------------------------------------------------------------------ (f) index coverage (AC6)

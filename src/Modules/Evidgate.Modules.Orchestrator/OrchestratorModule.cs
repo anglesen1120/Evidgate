@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.Modules.Orchestrator.Application.Attempts;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
@@ -41,6 +42,12 @@ internal static class OrchestratorModule
             .BindConfiguration(RunsOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        // 05.3.3-T2: the case-attempt writer and the blocked-dependant resolver 04's event-batch commit calls
+        // inside its own tenant transaction. Scoped like every other module service; the writer and the resolver
+        // take the ambient scope through ITenantDb/ITenantScopeAccessor, never a connection of their own.
+        services.TryAddScoped<ICaseAttemptWriter, CaseAttemptWriter>();
+        services.TryAddScoped<IBlockedAttemptResolver, BlockedAttemptResolver>();
 
         return services;
     }
