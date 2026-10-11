@@ -12,6 +12,7 @@ Four directories hold vectors asserted by more than one runtime, which is why th
 One more directory is a test input for a repository script rather than a shared vector set:
 
 - `ci-recipes/` — customer GitHub Actions workflows for the CI recipe lint (11.2.1-T1, AC1): the published fork-safe recipe `github-fork-safe.yml` plus `negative/` (one fixture per FR-11-2 rule) and `bypass/` fixtures, each naming its expected rule on an `# expect:` first line, run by `scripts/lint-ci-recipe.sh --self-test`. All synthetic; format: `fixtures/ci-recipes/README.md`. It is _not_ a `<domain>/<name>/` fixture corpus — both loaders skip it because no directory there carries `meta.json` or an `input.*` file.
+- `threat-model/` — synthetic threat-model documents for `scripts/check-threat-model.sh --self-test` (11.1.1-T1.3): `ok/` must pass, each `negative/*.md` must fail with the substring in its sibling `*.expect`. Not a `<domain>/<name>/` corpus (no `meta.json`); format: `fixtures/threat-model/README.md`.
 
 ## `<domain>/<name>/` fixture corpus (01.6.1-T3)
 
