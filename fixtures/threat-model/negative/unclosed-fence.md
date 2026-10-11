@@ -202,4 +202,3 @@ Fixture model: every module and boundary carries at least one dispositioned thre
 
 ```text
 This fence is never closed, so everything after it would be swallowed.
-
