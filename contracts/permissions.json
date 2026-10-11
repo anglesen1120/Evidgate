@@ -50,7 +50,7 @@
       "code": "test_maintainer",
       "name": "Test maintainer",
       "kind": "member",
-      "description": "Approves tests and healing; owns case/suite/fixture writes (00 §2, 03 §4.5). Cannot approve a sensitive candidate they authored (DECISIONS §5.5) — a two-person rule enforced by the approval flow, not by a permission.",
+      "description": "Approves tests and healing; owns case/suite/fixture writes and quarantine writes (00 §2, 03 §4.5, 07.3.1). Cannot approve a sensitive candidate they authored (DECISIONS §5.5) — a two-person rule enforced by the approval flow, not by a permission.",
       "permissions": [
         "agent_pool:read",
         "ai_draft:request",
@@ -71,6 +71,7 @@
         "organization:read",
         "policy:read",
         "project:read",
+        "quarantine:write",
         "role:read",
         "run:cancel",
         "run:create",
@@ -508,6 +509,15 @@
       "resource": "project",
       "action": "write",
       "description": "Change project settings such as retention and the artifact kind policy (T21: tenant_admin).",
+      "sensitive": false,
+      "reserved": false,
+      "tenant_assignable": true
+    },
+    {
+      "code": "quarantine:write",
+      "resource": "quarantine",
+      "action": "write",
+      "description": "Create or remove a quarantine entry; never for a case on the active policy's critical list (T23, 07.3.1).",
       "sensitive": false,
       "reserved": false,
       "tenant_assignable": true

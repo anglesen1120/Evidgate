@@ -14,11 +14,14 @@ namespace Identity.IntegrationTests;
 /// <c>truncate … cascade</c> over every application table, which empties
 /// <c>permission</c>, <c>role</c> and <c>role_permission</c> exactly like any other
 /// table. Those rows are migration-owned reference data (built-ins are never deleted,
-/// 02 §8), not test fixtures, so this base re-applies the seed block of
-/// <c>migrations/0010_identity_permission_catalogue.sql</c> as <c>evidgate_owner</c>
-/// after each reset. The seed is read from the migration file itself — never copied
-/// into the test project — so the tests assert against the very bytes the database is
-/// seeded from, and the migration's idempotency is exercised on every test.
+/// 02 §8), not test fixtures, so this base re-applies the catalogue seed of every
+/// migration that carries one — <c>0010_identity_permission_catalogue.sql</c> owns the
+/// base catalogue and <c>0030_policy_add_quarantine_entry.sql</c> adds
+/// <c>quarantine:write</c> — after each reset. A migration that seeds the catalogue wraps
+/// its rows in a <c>do $seed$ … $seed$;</c> block, and the seed is read from the migration
+/// files themselves — never copied into the test project — so the tests assert against the
+/// very bytes the database is seeded from, and each migration's idempotency is exercised on
+/// every test.
 /// </para>
 /// <para>
 /// The suite joins <see cref="HarnessSuite"/> (one container and one database per
@@ -27,13 +30,10 @@ namespace Identity.IntegrationTests;
 /// </remarks>
 public abstract class CatalogueTestBase : IAsyncLifetime
 {
-    /// <summary>The migration that owns the catalogue tables and their seed.</summary>
-    private const string CatalogueMigration = "0010_identity_permission_catalogue.sql";
-
-    /// <summary>Start of the migration's seed block (one <c>do</c> statement).</summary>
+    /// <summary>Start of a migration's catalogue seed block (one <c>do</c> statement).</summary>
     private const string SeedStart = "do $seed$";
 
-    /// <summary>End of the migration's seed block, including the statement terminator.</summary>
+    /// <summary>End of the seed block, including the statement terminator.</summary>
     private const string SeedEnd = "$seed$;";
 
     protected CatalogueTestBase(DatabaseFixture fixture)
@@ -69,19 +69,37 @@ public abstract class CatalogueTestBase : IAsyncLifetime
     /// <summary>Seeds the catalogue rows through the harness's owner seam.</summary>
     protected async Task SeedCatalogueAsync()
     {
-        var path = Path.Combine(DatabaseFixture.MigrationsPath, CatalogueMigration);
-        var migration = await File.ReadAllTextAsync(path, Token);
-
-        var start = migration.IndexOf(SeedStart, StringComparison.Ordinal);
-        var end = migration.IndexOf(SeedEnd, StringComparison.Ordinal);
-
-        if (start < 0 || end < start)
+        // Every migration that seeds the catalogue wraps its rows in a `do $seed$ … $seed$;` block (0010 owns the
+        // base catalogue, 0030 adds `quarantine:write`). Respawn's blanket truncate empties `permission`, `role` and
+        // `role_permission` like any other table, so every such block is re-applied here, in migration order, after
+        // each reset. The seed is read from the migration files themselves, never copied into the test project.
+        var seeds = 0;
+        foreach (var path in Directory.EnumerateFiles(DatabaseFixture.MigrationsPath, "*.sql").Order(StringComparer.Ordinal))
         {
-            throw new InvalidOperationException(
-                $"'{CatalogueMigration}' no longer carries its seed block ('{SeedStart}' … '{SeedEnd}'): "
-                + "the catalogue suites re-apply it after every reset and must fail loudly when it moves.");
+            var migration = await File.ReadAllTextAsync(path, Token);
+
+            var start = migration.IndexOf(SeedStart, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                continue;
+            }
+
+            var end = migration.IndexOf(SeedEnd, start, StringComparison.Ordinal);
+            if (end < start)
+            {
+                throw new InvalidOperationException(
+                    $"'{Path.GetFileName(path)}' opens a catalogue seed block ('{SeedStart}') but never closes it ('{SeedEnd}').");
+            }
+
+            await Fixture.SeedAsync(migration[start..(end + SeedEnd.Length)], [], Token);
+            seeds++;
         }
 
-        await Fixture.SeedAsync(migration[start..(end + SeedEnd.Length)], [], Token);
+        if (seeds == 0)
+        {
+            throw new InvalidOperationException(
+                $"no migration under '{DatabaseFixture.MigrationsPath}' carries a catalogue seed block "
+                + $"('{SeedStart}' … '{SeedEnd}'): the catalogue suites re-apply them after every reset and must fail loudly when the marker moves.");
+        }
     }
 }

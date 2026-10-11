@@ -39,6 +39,7 @@ precedence is the one 00 §2 itself sets:
 1. **00 §2** (`plans/00-overview.md:46-60`) — the nine built-in roles and their limits
    (lines 50-58), and the permission strings paragraph (line 60) that names the holder of
    `healing:*`, `project:read`/`project:write`, `policy:read`/`policy:write`,
+   `quarantine:write`,
    `ingest_token:read`, `service_identity:*`, `support:read`, `membership:read`,
    `sso:*`, `agent_pool:*`, `job:cleanup`, `webhook:*`, `billing:*`, `project:create`,
    `environment:write`, `security_event:read`.
@@ -58,7 +59,7 @@ precedence is the one 00 §2 itself sets:
    is excluded for `viewer` by 00 §2:50 "No secrets" and for `tenant_admin` by 00 §2:54,
    so the other three member roles hold it). These grants are marked `basis: inferred` in
    the section below, so the cells the plans leave implicit are visible.
-4. **The `permissions` axis** is every catalogue code the plans name — all 55 codes of
+4. **The `permissions` axis** is every catalogue code the plans name — all 56 codes of
    `contracts/permissions.json` appear somewhere in `plans/`, so the axis equals the
    catalogue's code list. The matrix test asserts that equality, so a catalogue code the
    fixture omits fails before any cell is compared.
@@ -89,7 +90,7 @@ merely names the permission.
   `artifact:read_sensitive` is inferred). The holder is derived from the surrounding plan
   text, and `source` points at the owner of the authoritative text.
 
-73 of the 118 grants are `explicit`; the 45 `inferred` ones are listed here. The
+74 of the 119 grants are `explicit`; the 45 `inferred` ones are listed here. The
 `RoleMatrixFixture.InferredGrants` property exposes the same list.
 
 | Role                | Permission                | Citation (owner of the authoritative text) |

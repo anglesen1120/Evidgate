@@ -205,4 +205,10 @@ public static class ApiErrorCode
 
     /// <summary>409: the waiver is not in a state, or is past its expiry, that allows the requested transition (07.3.1 §6).</summary>
     public const string WaiverStateConflict = "waiver_state_conflict";
+
+    /// <summary>422: the case is on the active policy revision's critical list and can never be quarantined (07.3.1 AC4, T23).</summary>
+    public const string CriticalCaseNotQuarantinable = "critical_case_not_quarantinable";
+
+    /// <summary>409: an active quarantine entry for that case already exists in the project (07.3.1 §5, T23).</summary>
+    public const string QuarantineConflict = "quarantine_conflict";
 }
