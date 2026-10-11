@@ -406,6 +406,32 @@ public sealed class RunCreationTests
         tooLarge.ErrorCode.ShouldBe("request_invalid");
     }
 
+    /// <summary>
+    /// F1: a number jsonb cannot hold is a body error before any write. `1e9999999` is a few bytes but Postgres
+    /// refuses the cast (22003), so it must be 422 (not a 500) and leave no row; a large but representable exponent is
+    /// stored.
+    /// </summary>
+    [Fact]
+    public async Task CreateRun_Components_UnstorableNumber_422_NoRows()
+    {
+        await using var world = await StartAsync(_fixture);
+
+        var overflow = await CreateRunAsync(
+            world,
+            $$$"""{"manifest_id":"{{{world.ManifestId}}}","components":{"a":1e9999999}}""");
+        overflow.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        overflow.ErrorCode.ShouldBe("request_invalid");
+        Details(overflow).Single().GetProperty("path").GetString().ShouldBe("/components");
+        await AssertNoRunRowsAsync(world);
+
+        var accepted = await CreateRunAsync(
+            world,
+            $$$"""{"manifest_id":"{{{world.ManifestId}}}","components":{"a":1.5e10}}""");
+        accepted.Status.ShouldBe(HttpStatusCode.Created, accepted.ErrorMessage);
+        (await _fixture.ScalarAsync<bool>(world.Database, "select (components ->> 'a')::numeric = 15000000000 from public.run"))
+            .ShouldBeTrue();
+    }
+
     // ------------------------------------------------------------------ 404, 403
 
     [Fact]

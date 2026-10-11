@@ -86,13 +86,13 @@ internal static class OrchestratorSql
 
     /// <summary>
     /// The manifest a run is created from, by id and project, in one statement (05.2.1 §5). RLS makes another
-    /// tenant's manifest invisible, so an unknown or foreign id is the same 404. The document carries the planned
-    /// executions and the shard plan the handler derives from; <c>shard_plan</c> is read too so the derivation never
-    /// trusts the document's own copy.
+    /// tenant's manifest invisible, so an unknown or foreign id is the same 404. The handler derives the planned
+    /// executions and the shard ranges from the immutable document's own copy of <c>shard_plan</c>: the manifest
+    /// verifier already validated that copy at upload (05.1.1 §5), so <c>shard_plan</c> and <c>planned_count</c> are
+    /// not projected a second time.
     /// </summary>
     internal const string RunManifest = """
-        select suite_revision_id, environment_revision_id, shard_plan::text as shard_plan, document::text as document,
-               planned_count
+        select suite_revision_id, environment_revision_id, document::text as document
           from public.manifest
          where org_id = @org_id and project_id = @project_id and id = @manifest_id
         """;

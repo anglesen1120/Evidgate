@@ -71,6 +71,13 @@
 -- object. `state` and `purpose` enumerate their full 00 §8.1 / T67 vocabularies now, so no later
 -- migration widens them.
 --
+-- Indexes: `run` gets `run_project_created_idx` for the 09 list query; `planned_execution` gets no
+-- standalone `(org_id, run_id)` index. The unique constraint
+-- `planned_execution_run_execution_key (org_id, run_id, execution_key)` is left-prefixed by
+-- `(org_id, run_id)` and already serves the 05.3.2 reconcile read (P4) — every planned row of one
+-- run — so a second index on the same prefix would only add write cost to each of the up-to-10000
+-- rows one run inserts (F2).
+--
 -- Idempotent like 0025/0027-0030: `create table if not exists` / `drop ... if exists` / guarded
 -- `do` blocks, so a re-run is a no-op.
 
@@ -186,8 +193,9 @@ create table if not exists public.planned_execution (
     shard_id ~ '^shard-[1-9][0-9]*$' and char_length(shard_id) <= 128)
 );
 
--- The reconcile scan of 05.3.2 reads every planned row of one run (P4).
-create index if not exists planned_execution_run_idx on public.planned_execution (org_id, run_id);
+-- No standalone (org_id, run_id) index: the unique constraint `planned_execution_run_execution_key`
+-- above is left-prefixed by (org_id, run_id), so it serves the 05.3.2 reconcile read (P4) — every
+-- planned row of one run — and a second index on that prefix would only add write cost (F2).
 
 alter table public.planned_execution enable row level security;
 alter table public.planned_execution force row level security;

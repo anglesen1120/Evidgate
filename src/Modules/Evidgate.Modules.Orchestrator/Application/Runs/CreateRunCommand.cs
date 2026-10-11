@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -66,6 +67,15 @@ internal sealed class CreateRunCommandHandler(
 
     /// <summary>The longest <c>release</c> name, in code points (Postgres <c>char_length</c> semantics).</summary>
     internal const int MaxReleaseRunes = 128;
+
+    /// <summary>
+    /// The largest absolute decimal exponent a numeric literal in <c>components</c> may carry. PostgreSQL stores
+    /// <c>jsonb</c> numbers as <c>numeric</c>, whose exponent is bounded (about 131072 digits before the radix point
+    /// and 16383 after); a literal such as <c>1e9999999</c> is a handful of bytes but the cast raises SQLSTATE 22003,
+    /// which would surface as a 500. This bound sits far inside those limits and far above anything component
+    /// metadata holds, so it refuses only values the database cannot store.
+    /// </summary>
+    internal const long MaxComponentNumberExponent = 1000;
 
     internal const string UnknownCaseRevision = "unknown_case_revision";
     internal const string UnknownSuiteRevision = "unknown_suite_revision";
@@ -158,6 +168,15 @@ internal sealed class CreateRunCommandHandler(
             {
                 return BodyInvalid(
                     $"components must be at most {MaxComponentsBytes} bytes serialised",
+                    [new ErrorDetail("/components", InvalidValue)]);
+            }
+
+            // A number the jsonb column cannot hold is refused here, before any write: a literal like `1e9999999` is
+            // a few bytes but Postgres refuses the cast with 22003, which would escape the tenant transaction as a 500.
+            if (HasUnstorableNumber(componentsElement))
+            {
+                return BodyInvalid(
+                    "components carries a number that cannot be stored",
                     [new ErrorDetail("/components", InvalidValue)]);
             }
 
@@ -373,6 +392,34 @@ internal sealed class CreateRunCommandHandler(
         throw new InvalidOperationException($"planned execution {index} is not inside any shard of the manifest");
     }
 
+    /// <summary>True when any number anywhere inside <paramref name="element"/> has an exponent jsonb cannot hold.</summary>
+    private static bool HasUnstorableNumber(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Number => NumberOverflows(element.GetRawText()),
+        JsonValueKind.Array => element.EnumerateArray().Any(HasUnstorableNumber),
+        JsonValueKind.Object => element.EnumerateObject().Any(member => HasUnstorableNumber(member.Value)),
+        _ => false,
+    };
+
+    /// <summary>
+    /// True when the JSON number token <paramref name="raw"/> (already accepted by <see cref="JsonDocument.Parse"/>)
+    /// carries a decimal exponent outside <see cref="MaxComponentNumberExponent"/>, or one too large to parse. A token
+    /// with no exponent, or a small one, is representable: the 8 KiB <c>components</c> cap bounds its digit count far
+    /// below jsonb's 131072-digit limit.
+    /// </summary>
+    private static bool NumberOverflows(string raw)
+    {
+        var marker = raw.AsSpan().IndexOfAny('e', 'E');
+        if (marker < 0)
+        {
+            return false;
+        }
+
+        return !long.TryParse(raw.AsSpan(marker + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var exponent)
+               || exponent < -MaxComponentNumberExponent
+               || exponent > MaxComponentNumberExponent;
+    }
+
     private static Result<RunCreated> BodyInvalid(string message, IReadOnlyList<ErrorDetail> details) =>
         Result.Failure<RunCreated>(Error.Invalid(message, details));
 
@@ -389,11 +436,7 @@ internal sealed class CreateRunCommandHandler(
 
         public Guid? EnvironmentRevisionId { get; set; }
 
-        public string ShardPlan { get; set; } = string.Empty;
-
         public string Document { get; set; } = string.Empty;
-
-        public int PlannedCount { get; set; }
     }
 
     /// <summary>Whether the manifest's suite and environment revisions resolve in the project.</summary>

@@ -426,7 +426,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "collection deadline offset applied at run create when no policy revision is pinned (05.2.1 AC12, T93): run.collection_deadline_at = created_at + this value, computed on the database clock. A TimeSpan literal (02:00:00 = 2 h, the default; ⚠️ tuned ≈ p95 × 1.5). 07.1.1-T4 replaces it with the pinned policy's collection_timeout once the run-pinning handshake lands."
+      "note": "collection deadline offset applied at run create when no policy revision is pinned (05.2.1 AC12, T93): run.collection_deadline_at = created_at + this value, computed on the database clock. A TimeSpan literal (02:00:00 = 2 h, the default; ⚠️ tuned ≈ p95 × 1.5). 07.1.1-T4 replaces it with the pinned policy's collection_timeout once the run-pinning handshake lands. Bounded at boot to more than 00:00:00 and at most 366 days (the scale of the 525600-minute late-window cap) by RunsOptions.CollectionTimeoutAttribute: a non-positive value would place collection_deadline_at at or before created_at on the immutable column, and an extreme value would overflow the interval arithmetic. No constraints block: the lint derives constraints from C# attributes, and no DataAnnotations range carries a TimeSpan."
     },
     {
       "key": "EVIDGATE__RUNS__DEFAULTLATEWINDOWMINUTES",

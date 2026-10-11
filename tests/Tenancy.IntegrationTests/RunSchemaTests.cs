@@ -316,8 +316,12 @@ public sealed class RunSchemaTests
 
         (await _fixture.IndexesAsync(database, "run"))
             .Any(index => index.StartsWith("run_project_created_idx:", StringComparison.Ordinal)).ShouldBeTrue();
-        (await _fixture.IndexesAsync(database, "planned_execution"))
-            .Any(index => index.StartsWith("planned_execution_run_idx:", StringComparison.Ordinal)).ShouldBeTrue();
+
+        // F2: no standalone planned_execution_run_idx. The reconcile read of 05.3.2 (every planned row
+        // of one run) is served by the unique constraint's own index, left-prefixed by (org_id, run_id).
+        var plannedIndexes = await _fixture.IndexesAsync(database, "planned_execution");
+        plannedIndexes.Any(index => index.StartsWith("planned_execution_run_execution_key:", StringComparison.Ordinal)).ShouldBeTrue();
+        plannedIndexes.Any(index => index.StartsWith("planned_execution_run_idx:", StringComparison.Ordinal)).ShouldBeFalse();
     }
 
     [Fact]
