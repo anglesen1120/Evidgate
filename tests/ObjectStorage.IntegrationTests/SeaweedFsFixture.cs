@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
+using System.Xml.Linq;
 using Amazon.S3;
 using Amazon.S3.Model;
 using DotNet.Testcontainers.Builders;
@@ -27,10 +29,19 @@ public sealed class SeaweedFsFixture : IAsyncLifetime
     private readonly FileInfo _configFile = new(
         Path.Combine(RepositoryRoot(), "infra", "seaweedfs", "s3-config.json"));
 
+    private readonly FileInfo _lifecycleFile = new(
+        Path.Combine(RepositoryRoot(), "infra", "seaweedfs", "pending-lifecycle.xml"));
+
     private IContainer? _container;
 
     /// <summary>The endpoint-agnostic target the assertion set runs against this container.</summary>
     internal S3ParityTarget Target { get; private set; } = null!;
+
+    /// <summary>
+    /// The <c>pending/</c> 24 h lifecycle rule the fixture put on the bucket, read
+    /// from the committed XML the dev stack uploads (AC7).
+    /// </summary>
+    internal PendingLifecycleRule PendingLifecycle { get; private set; } = null!;
 
     public async ValueTask InitializeAsync()
     {
@@ -65,6 +76,7 @@ public sealed class SeaweedFsFixture : IAsyncLifetime
         };
 
         await CreateBucketAsync();
+        await ApplyPendingLifecycleAsync();
     }
 
     public async ValueTask DisposeAsync()
@@ -89,6 +101,61 @@ public sealed class SeaweedFsFixture : IAsyncLifetime
             // Reused container state is fine — the bucket is the same.
         }
     }
+
+    /// <summary>
+    /// Puts the committed <c>pending/</c> 24 h lifecycle rule on the bucket — the
+    /// same rule <c>scripts/dev/up.sh</c> applies to the dev bucket (AC7). The rule
+    /// is parsed from <c>infra/seaweedfs/pending-lifecycle.xml</c>, the file the dev
+    /// stack uploads verbatim, so the fixture and the dev stack cannot drift apart.
+    /// </summary>
+    private async Task ApplyPendingLifecycleAsync()
+    {
+        PendingLifecycle = ReadPendingLifecycle(_lifecycleFile);
+
+        using var client = Target.CreateClient();
+        await client.PutLifecycleConfigurationAsync(new PutLifecycleConfigurationRequest
+        {
+            BucketName = Target.Bucket,
+            Configuration = new LifecycleConfiguration
+            {
+                Rules =
+                [
+                    new LifecycleRule
+                    {
+                        Id = PendingLifecycle.Id,
+                        Filter = new LifecycleFilter
+                        {
+                            LifecycleFilterPredicate = new LifecyclePrefixPredicate
+                            {
+                                Prefix = PendingLifecycle.Prefix,
+                            },
+                        },
+                        Status = LifecycleRuleStatus.Enabled,
+                        Expiration = new LifecycleRuleExpiration { Days = PendingLifecycle.ExpirationDays },
+                    },
+                ],
+            },
+        });
+    }
+
+    /// <summary>Reads the rule out of the committed lifecycle XML (the dev stack's file).</summary>
+    private static PendingLifecycleRule ReadPendingLifecycle(FileInfo lifecycleFile)
+    {
+        var rule = XDocument.Load(lifecycleFile.FullName).Root?.Element("Rule")
+            ?? throw new InvalidOperationException($"'{lifecycleFile.Name}' has no Rule element");
+
+        return new PendingLifecycleRule(
+            Required(rule, "ID"),
+            Required(rule.Element("Filter"), "Prefix"),
+            int.Parse(Required(rule.Element("Expiration"), "Days"), CultureInfo.InvariantCulture));
+    }
+
+    private static string Required(XElement? parent, string name) =>
+        parent?.Element(name)?.Value
+        ?? throw new InvalidOperationException($"the lifecycle rule has no '{name}' element");
+
+    /// <summary>The <c>pending/</c> lifecycle rule the fixture applied, read from the committed XML (AC7).</summary>
+    internal sealed record PendingLifecycleRule(string Id, string Prefix, int ExpirationDays);
 
     /// <summary>
     /// Reads the access key/secret the container's S3 gateway will accept, so the

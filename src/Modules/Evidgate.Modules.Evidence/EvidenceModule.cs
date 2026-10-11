@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
@@ -23,6 +24,15 @@ internal static class EvidenceModule
 
         // 06.1.1-T2: C2 stage-2 shape validation of the mint command (resolved by ValidationBehaviour).
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateArtifactRecord>, CreateArtifactRecordValidator>());
+
+        // 06.1.2-T1: C2 stage-2 shape validation of the upload-url command.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<RequestArtifactUploadUrl>, RequestArtifactUploadUrlValidator>());
+
+        // 06.1.2-T1: the mint core shared by both artifact commands (06.1.1-T2 and 06.1.2-T1).
+        services.TryAddScoped<ArtifactMinter>();
+
+        // 06.1.2-T1: the S3-compatible presign adapter, bound from EVIDGATE__OBJECT__* (00 §9.3).
+        services.AddEvidgateObjectStorage();
 
         return services;
     }

@@ -33,7 +33,17 @@ public enum PrincipalKind
 /// <param name="RepositoryId">GitHub's numeric repository id.</param>
 /// <param name="RunId">GitHub's numeric workflow-run id.</param>
 /// <param name="RunAttempt">GitHub's run attempt (1-based).</param>
-public sealed record CiRunReference(string Provider, long RepositoryId, long RunId, int RunAttempt);
+public sealed record CiRunReference(string Provider, long RepositoryId, long RunId, int RunAttempt)
+{
+    /// <summary>
+    /// The exact string the producer registry stores and compares in <c>producer_slot.bound_ci_run_ref</c>:
+    /// <c>{repository_id}/{run_id}/{run_attempt}</c> (migrations/0029 comment; the <c>1/7/2</c> test value).
+    /// The provider is deliberately not part of it — the slot's binding is the GitHub run identity, and the
+    /// comparison is exact, so a retry that changes the reference is a different identity (T9/T88).
+    /// </summary>
+    public string ToBindingReference() =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{RepositoryId}/{RunId}/{RunAttempt}");
+}
 
 /// <summary>
 /// The authenticated caller of the current request, as the entry point resolved it

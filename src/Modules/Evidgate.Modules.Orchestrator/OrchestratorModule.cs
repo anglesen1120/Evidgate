@@ -4,6 +4,7 @@ using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
 using Evidgate.Modules.Orchestrator.Infrastructure;
+using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -22,6 +23,10 @@ internal static class OrchestratorModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<IRunRegistry, InMemoryRunRegistry>();
+
+        // 06.1.2-T1: the read-only run-scope lookup upload-url needs (00 §5.5 C5: another module reaches the
+        // Orchestrator only through its .Contracts project).
+        services.TryAddScoped<IRunPlanReader, RunPlanReader>();
 
         // 05.1.1/05.1.2: the manifest and environment-revision routes validate their bodies against the contract schema
         // set, which is compiled on first use (the routes resolve it per request, never at start-up).

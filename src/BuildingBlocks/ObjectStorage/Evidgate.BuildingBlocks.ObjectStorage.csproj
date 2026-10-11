@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Evidgate.BuildingBlocks.ObjectStorage</RootNamespace>
+  </PropertyGroup>
+  <!-- 06.1.2-T1: the S3-compatible object-storage adapter (presigned PUT). AWSSDK.S3
+       is the S3 API client (DECISIONS §4, ADR-0002 row); Microsoft.Extensions.Hosting
+       brings Options/DI/Configuration (BindConfiguration) like the other BuildingBlocks. -->
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 10.1.1-T2: ISecretProvider/SecretNames live in SharedKernel (dependency-free);
+         the access/secret keys are resolved through the provider, never bound. -->
+    <ProjectReference Include="..\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
+  <!-- 06.1.2-T1: the integration suite builds the real adapter and the options
+       validator/post-configurer directly against the SeaweedFS fixture. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="ObjectStorage.IntegrationTests" />
+  </ItemGroup>
+</Project>

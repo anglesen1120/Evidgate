@@ -70,6 +70,29 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
 
     private IReadOnlyDictionary<string, string?>? _overrides;
 
+    /// <summary>The caller a <see cref="WithPrincipal"/> host publishes for every request (06.1.2-T1).</summary>
+    private (Guid Org, Guid Project, IRequestPrincipal Principal)? _publishedPrincipal;
+
+    /// <summary>Extra in-memory configuration a <see cref="WithPrincipal"/> host adds (06.1.2-T1).</summary>
+    private IReadOnlyDictionary<string, string?>? _extraConfiguration;
+
+    /// <summary>
+    /// A host whose requests carry <paramref name="principal"/> — a service principal with a
+    /// <c>CredentialId</c> (the slot-binding identity, T9) and an optional <c>CiRunReference</c>, which the
+    /// <c>X-Test-*</c> header stand-in cannot express — plus optional extra configuration (06.1.2-T1).
+    /// </summary>
+    public static TenancyApiFactory WithPrincipal(
+        string appConnectionString,
+        Guid org,
+        Guid project,
+        IRequestPrincipal principal,
+        IReadOnlyDictionary<string, string?>? configuration = null) =>
+        new(appConnectionString, realEvaluator: true, realResolver: true)
+        {
+            _publishedPrincipal = (org, project, principal),
+            _extraConfiguration = configuration,
+        };
+
     /// <summary>Every command Npgsql executed for this host, whitespace-normalised, in order.</summary>
     public StatementLog Statements { get; } = new();
 
@@ -190,6 +213,12 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
             });
         }
 
+        if (_extraConfiguration is not null)
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(_extraConfiguration));
+        }
+
         builder.ConfigureTestServices(services =>
         {
             if (_realResolver)
@@ -207,6 +236,13 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
             else
             {
                 services.AddSingleton<IStartupFilter>(new RequestContextStartupFilter());
+            }
+
+            if (_publishedPrincipal is { } published)
+            {
+                // Runs after RequestContextStartupFilter, so it replaces the header-derived caller.
+                services.AddSingleton<IStartupFilter>(
+                    new PublishedPrincipalStartupFilter(published.Org, published.Project, published.Principal));
             }
 
             // The same app-role data source, with a logger that records each command.
@@ -267,6 +303,31 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
                     principalScope?.Dispose();
                     tenantScope?.Dispose();
                 }
+            });
+
+            next(app);
+        };
+    }
+
+    /// <summary>
+    /// Publishes a fixed caller and tenant for every request (06.1.2-T1): the header stand-in cannot
+    /// express a service principal's <c>CredentialId</c> or its <c>CiRunReference</c>.
+    /// </summary>
+    private sealed class PublishedPrincipalStartupFilter(Guid org, Guid project, IRequestPrincipal principal) : IStartupFilter
+    {
+        /// <inheritdoc />
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use(async (context, nextMiddleware) =>
+            {
+                using var tenantScope = context.RequestServices
+                    .GetRequiredService<IRequestTenantContextSetter>()
+                    .Publish(org, project);
+                using var principalScope = context.RequestServices
+                    .GetRequiredService<IRequestPrincipalSetter>()
+                    .Publish(principal);
+
+                await nextMiddleware().ConfigureAwait(false);
             });
 
             next(app);
