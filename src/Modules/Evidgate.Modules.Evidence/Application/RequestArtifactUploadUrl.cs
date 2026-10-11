@@ -139,7 +139,7 @@ internal sealed class RequestArtifactUploadUrlHandler(
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Evidence, nameof(RequestArtifactUploadUrl));
 
         // The pure in-memory refusals run before any statement is built (F1): the kind, the checksum and the size,
-        // in the same relative order as CreateArtifactRecord (06.1.1 §5), then the caller's token identity. A
+        // in the same relative order as CreateArtifactRecord (06.1.1 §5). A
         // malformed body therefore costs no database work, kind_unknown is reachable, and the answer no longer
         // depends on the run's or the slot's state.
         if (!ArtifactKind.IsKnown(command.Kind))
@@ -155,12 +155,6 @@ internal sealed class RequestArtifactUploadUrlHandler(
         if (command.DeclaredBytes <= 0)
         {
             return Result.Failure<UploadUrlResponse>(EvidenceErrors.SizeOutOfRange);
-        }
-
-        // A caller with no token identity can never bind a slot, so it is refused before the registry is called.
-        if (command.CredentialId is null)
-        {
-            return Result.Failure<UploadUrlResponse>(EvidenceErrors.NoTokenIdentity);
         }
 
         var scope = scopes.Require();
@@ -206,6 +200,13 @@ internal sealed class RequestArtifactUploadUrlHandler(
         if (!run.Planned)
         {
             return Result.Failure<UploadUrlResponse>(EvidenceErrors.UnknownExecutionKey);
+        }
+
+        // A caller with no token identity can never bind a slot: refuse it before the registry is called. It sits
+        // after the run and policy checks so an unknown run stays the 404 every principal gets, never a 403 oracle.
+        if (command.CredentialId is null)
+        {
+            return Result.Failure<UploadUrlResponse>(EvidenceErrors.NoTokenIdentity);
         }
 
         // (4) Bind the producer slot to the caller's token identity on the first accepted write (T9/T85). The
