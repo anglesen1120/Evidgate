@@ -1,6 +1,7 @@
 using System.Globalization;
 using Amazon;
 using Amazon.Runtime;
+using Amazon.Runtime.Endpoints;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Options;
@@ -58,14 +59,25 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
             BucketName = options.Bucket,
             Key = request.ObjectKey,
             Verb = HttpVerb.PUT,
-            Expires = expiresAt.UtcDateTime,
             Protocol = ProtocolFor(options.Endpoint),
         };
         var contentLengthValue = request.ContentLength.ToString(CultureInfo.InvariantCulture);
         presign.Headers[ContentLengthHeaderName] = contentLengthValue;
         presign.Headers[ChecksumHeaderName] = checksumBase64;
 
-        var url = new Uri(_client.Value.GetPreSignedURL(presign), UriKind.Absolute);
+        var client = _client.Value;
+
+        // The SDK signs X-Amz-Expires as (Expires - CorrectClockSkew.GetCorrectedUtcNowForEndpoint(endpoint)),
+        // not (Expires - DateTime.UtcNow): a per-endpoint skew correction recorded from an earlier response (an
+        // emulator whose clock is behind ours) would push the signed lifetime past the configured cap. Sign
+        // against the same corrected clock the SDK reads, so the signed lifetime is exactly the configured
+        // seconds. X-Amz-Date stays the local clock, so ExpiresAt (local now + the cap) is what the URL carries.
+        var endpoint = client.Config
+            .DetermineServiceOperationEndpoint(new ServiceOperationEndpointParameters(presign)).URL;
+        presign.Expires = CorrectClockSkew.GetCorrectedUtcNowForEndpoint(endpoint)
+            .AddSeconds(options.PresignExpirySeconds);
+
+        var url = new Uri(client.GetPreSignedURL(presign), UriKind.Absolute);
 
         return new PresignedPut(
             url,

@@ -466,7 +466,7 @@ paths:
         `execution_key` must be a planned execution of the run (422
         `unknown_execution_key`; T10/T17); the kind policy must allow the kind,
         the media type and the declared size (422 `kind_disabled` /
-        `media_type_not_allowed`, 413 `too_large`). The returned `object_key` is
+        `media_type_not_allowed`, 413 `payload_too_large`). The returned `object_key` is
         the `pending/<org_id>/<artifact_id>` staging key, `required_headers`
         must be sent verbatim with the `PUT`, and the URL expires within 15
         minutes. The `Idempotency-Key` is a header, never a body member (T92).

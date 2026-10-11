@@ -247,18 +247,20 @@ internal sealed class RequestArtifactUploadUrlHandler(
     }
 
     /// <summary>
-    /// True when <paramref name="mediaType"/> — parameters stripped, trimmed, compared case-insensitively — is one
-    /// of the policy's accepted types (06.1.2 §5).
+    /// True when <paramref name="mediaType"/> is one of the policy's accepted types (06.1.2 §5): the bare type
+    /// (parameters after <c>;</c> stripped) is compared case-insensitively and <em>verbatim</em> — surrounding
+    /// whitespace and control characters are not trimmed away, so the string the policy accepts is exactly the
+    /// string that is persisted. A control character anywhere in the type is refused.
     /// </summary>
     private static bool MediaTypeAllowed(string[] allowed, string? mediaType)
     {
-        if (mediaType is null)
+        if (mediaType is null || !ArtifactShape.HasNoControlCharacter(mediaType))
         {
             return false;
         }
 
-        var bare = mediaType.Split(';', 2)[0].Trim();
-        return allowed.Any(candidate => string.Equals(candidate.Trim(), bare, StringComparison.OrdinalIgnoreCase));
+        var bare = mediaType.Split(';', 2)[0];
+        return allowed.Any(candidate => string.Equals(candidate, bare, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>The 64 lowercase hex characters of a validated <c>sha256:&lt;hex&gt;</c> checksum (the presign form).</summary>

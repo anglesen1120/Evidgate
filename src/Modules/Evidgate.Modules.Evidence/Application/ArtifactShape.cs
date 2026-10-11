@@ -31,4 +31,15 @@ internal static partial class ArtifactShape
     /// </summary>
     public static bool IsMediaType(string? value) =>
         value is not null && value.EnumerateRunes().Count() is >= 1 and <= 255;
+
+    /// <summary>
+    /// True when <paramref name="value"/> carries no control or format character. A media type is compared to the
+    /// kind policy verbatim, so a trailing newline or a NUL must never be trimmed into a match (06.1.2 §5).
+    /// </summary>
+    public static bool HasNoControlCharacter(string? value) =>
+        value is not null && NoControlCharacterShape().IsMatch(value);
+
+    /// <summary>The 00 §7 media-type shape: no control or format character, anchored with <c>\z</c>.</summary>
+    [GeneratedRegex("\\A[^\\p{Cc}\\p{Cf}]+\\z", RegexOptions.CultureInvariant)]
+    private static partial Regex NoControlCharacterShape();
 }

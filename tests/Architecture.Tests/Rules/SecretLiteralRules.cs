@@ -112,6 +112,16 @@ public static class SecretLiteralRules
         RegexOptions.CultureInvariant);
 
     /// <summary>
+    /// A line that feeds the quoted name to a string detector
+    /// (<c>flat.Contains("secretkey", StringComparison.Ordinal)</c>): the name is the
+    /// detector's own vocabulary, never a configuration read. The detector is the
+    /// <c>SecretShape</c> seam's own rule, so the property-name pattern must not flag it.
+    /// </summary>
+    private static readonly Regex DetectorArgumentLine = new(
+        "\\bContains\\s*\\(\\s*\"(?:ConnectionString|SweepConnectionString|SigningKey|Pepper|PreviousPepper|AccessKey|SecretKey)\"\\s*,",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>
     /// Returns one line per violation, naming the file and the rule. A file whose
     /// path is in <paramref name="exemptPaths"/> is skipped.
     /// </summary>
@@ -176,7 +186,7 @@ public static class SecretLiteralRules
             var lineEnd = text.IndexOf('\n', match.Index);
             var line = text[lineStart..(lineEnd < 0 ? text.Length : lineEnd)];
 
-            if (!CollectionElementLine.IsMatch(line))
+            if (!CollectionElementLine.IsMatch(line) && !DetectorArgumentLine.IsMatch(line))
             {
                 return true;
             }
