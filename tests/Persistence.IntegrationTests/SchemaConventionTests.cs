@@ -312,6 +312,83 @@ public sealed class SchemaConventionTests
         violation.Detail.ShouldContain("org_id");
     }
 
+    /// <summary>
+    /// AC5/00 §5.4.1, the wide half: a tenant key with more than two columns is a
+    /// tenant key when its principal columns include <c>org_id</c>, the dependent's
+    /// <c>org_id</c> pairs with the principal's <c>org_id</c>, and the principal
+    /// columns are a unique key of the principal — 0032's
+    /// <c>case_attempt_planned_execution_fk (org_id, run_id, execution_key) →
+    /// planned_execution (org_id, run_id, execution_key)</c> is exactly that shape,
+    /// and the migrated-schema test alone would not prove the scan accepts it.
+    /// </summary>
+    [Fact]
+    public async Task Wide_Composite_Tenant_FK_Passes()
+    {
+        var scan = await ScanFixtureAsync(
+            """
+            create table fixture_conventions.wide_tenant_fk (
+              org_id uuid not null,
+              id uuid not null,
+              run_id uuid not null,
+              execution_key text not null,
+              created_at timestamptz not null default now(),
+              updated_at timestamptz not null default now(),
+              version integer not null default 1,
+              constraint wide_tenant_fk_pkey primary key (org_id, id),
+              constraint wide_tenant_fk_planned_fk
+                foreign key (org_id, run_id, execution_key)
+                references public.planned_execution (org_id, run_id, execution_key)
+            );
+            alter table fixture_conventions.wide_tenant_fk enable row level security;
+            alter table fixture_conventions.wide_tenant_fk force row level security;
+            create trigger wide_tenant_fk_set_updated_at_and_version
+              before update on fixture_conventions.wide_tenant_fk
+              for each row execute function public.set_updated_at_and_version();
+            """);
+
+        FixtureViolations(scan).ShouldBeEmpty(string.Join(" | ", FixtureViolations(scan)));
+        scan.BusinessTables.ShouldContain("fixture_conventions.wide_tenant_fk");
+    }
+
+    /// <summary>
+    /// AC5/00 §5.4.1, the wide half's negative: the relaxation must not become a
+    /// blanket exemption for any key with more than two columns. Here the principal
+    /// columns are still a unique key of <c>public.planned_execution</c> (PostgreSQL
+    /// matches a referenced column list to a unique index regardless of the declared
+    /// order, so this is valid DDL), but the dependent's <c>org_id</c> pairs with the
+    /// principal's <c>run_id</c> — a key that can never match a row of the
+    /// dependent's own org, so it must still be reported.
+    /// </summary>
+    [Fact]
+    public async Task Mispaired_Wide_Composite_FK_Fails()
+    {
+        var scan = await ScanFixtureAsync(
+            """
+            create table fixture_conventions.mispaired_wide_fk (
+              org_id uuid not null,
+              id uuid not null,
+              run_id uuid not null,
+              execution_key text not null,
+              created_at timestamptz not null default now(),
+              updated_at timestamptz not null default now(),
+              version integer not null default 1,
+              constraint mispaired_wide_fk_pkey primary key (org_id, id),
+              constraint mispaired_wide_fk_planned_fk
+                foreign key (org_id, run_id, execution_key)
+                references public.planned_execution (run_id, org_id, execution_key)
+            );
+            alter table fixture_conventions.mispaired_wide_fk enable row level security;
+            alter table fixture_conventions.mispaired_wide_fk force row level security;
+            create trigger mispaired_wide_fk_set_updated_at_and_version
+              before update on fixture_conventions.mispaired_wide_fk
+              for each row execute function public.set_updated_at_and_version();
+            """);
+
+        var violation = OnlyViolation(scan, "fixture_conventions.mispaired_wide_fk", SchemaRule.CompositeForeignKey);
+        violation.Detail.ShouldContain("mispaired_wide_fk_planned_fk");
+        violation.Detail.ShouldContain("org_id");
+    }
+
     /// <summary>00 §7: <c>created_at</c>, <c>updated_at</c> and <c>version</c> are missing here, and all three are reported.</summary>
     [Fact]
     public async Task Missing_Audit_Columns_Fail()

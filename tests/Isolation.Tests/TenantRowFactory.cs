@@ -105,6 +105,12 @@ internal sealed class TenantRowFactory
     // A fresh number per generated revision: corrupting one key reuses the row's other parents, so a constant would collide.
     private static int _revisionNo;
 
+    // A fresh attempt number per generated attempt row: case_attempt's unique key is
+    // (org_id, run_id, execution_key, attempt_no), and the corrupt row reuses the valid row's
+    // run_id and execution_key, so a constant would collide on that key before the composite FK
+    // under test is reached.
+    private static int _attemptNo;
+
     private readonly TenantSchema _schema;
     private readonly TenantInsertExecutor _insert;
     private readonly Dictionary<(string Table, Guid Org), GeneratedRow> _created = [];
@@ -386,6 +392,11 @@ internal sealed class TenantRowFactory
             // only reached when the parent lookup did not set it.
             ("public.case_attempt", "execution_key") =>
                 Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+            // case_attempt's unique key is (org_id, run_id, execution_key, attempt_no) and the corrupt
+            // row reuses the valid row's run_id and execution_key, so a constant attempt_no would
+            // collide on that key (23505) before the composite FK under test is reached: a fresh
+            // number per generated row, like planned_execution's execution_key above.
+            ("public.case_attempt", "attempt_no") => Interlocked.Increment(ref _attemptNo),
             ("public.case_attempt", "raw_status") => "passed",
             ("public.case_attempt", "normalized_status") => "passed",
             _ => (object?)null,

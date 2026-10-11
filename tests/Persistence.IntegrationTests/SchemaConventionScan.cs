@@ -148,7 +148,7 @@ internal static class SchemaConventionScan
             if (businessTables.Contains(table.Name))
             {
                 CheckTenantKey(table, uniqueKeys, violations);
-                CheckForeignKeys(table, businessTables, foreignKeys, violations);
+                CheckForeignKeys(table, businessTables, foreignKeys, uniqueKeys, violations);
                 CheckRowLevelSecurity(table, violations);
                 CheckAuditColumns(table, columns, violations);
             }
@@ -195,6 +195,7 @@ internal static class SchemaConventionScan
         TableShape table,
         HashSet<string> businessTables,
         IReadOnlyList<ForeignKeyShape> foreignKeys,
+        Dictionary<string, List<string[]>> uniqueKeys,
         List<SchemaViolation> violations)
     {
         if (IsExempt(table.Name, SchemaRule.CompositeForeignKey))
@@ -222,9 +223,18 @@ internal static class SchemaConventionScan
             // `(org_id, project_id) → (id, org_id)` references the same unique key
             // set while pairing org_id with the target's id, so the set comparison
             // alone would bless a key that can never match a real row.
-            var isCompositeTenantKey = foreignKey.Columns.Length == 2
-                && referenced.AsSpan().SequenceEqual(TenantKeyColumns)
-                && PairsTenantKey(foreignKey.Columns, foreignKey.PrincipalColumns);
+            //
+            // A key with MORE columns is also a tenant key when it references a
+            // unique key of the principal that includes org_id and the dependent's
+            // org_id pairs with the principal's org_id: `case_attempt_planned_execution_fk
+            // (org_id, run_id, execution_key) -> planned_execution (org_id, run_id,
+            // execution_key)` (0032) is exactly that — the principal's own unique key,
+            // so no row can point at another org's planned execution.
+            var isCompositeTenantKey = referenced.AsSpan().Contains("org_id", StringComparer.Ordinal)
+                && PairsOrgId(foreignKey.Columns, foreignKey.PrincipalColumns)
+                && (foreignKey.Columns.Length == 2
+                    ? referenced.AsSpan().SequenceEqual(TenantKeyColumns) && PairsTenantKey(foreignKey.Columns, foreignKey.PrincipalColumns)
+                    : ReferencesUniqueKey(uniqueKeys, foreignKey));
 
             if (!isCompositeTenantKey)
             {
@@ -236,6 +246,43 @@ internal static class SchemaConventionScan
                     + "00 §5.4.1/§5.4.6: a tenant FK is (org_id, <id>) referencing (org_id, id)"));
             }
         }
+    }
+
+    /// <summary>
+    /// The dependent's <c>org_id</c> pairs with the principal's <c>org_id</c>, position
+    /// by position — the half of the tenant-key shape every composite tenant key must
+    /// have, whatever its width.
+    /// </summary>
+    private static bool PairsOrgId(string[] columns, string[] principalColumns)
+    {
+        for (var index = 0; index < columns.Length; index++)
+        {
+            if (string.Equals(principalColumns[index], "org_id", StringComparison.Ordinal)
+                && string.Equals(columns[index], "org_id", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The key's principal columns are exactly a unique key of the principal table
+    /// (order-insensitive), so the reference can only ever match a row of the
+    /// dependent's own org — the multi-column form of the composite tenant key
+    /// (0032's <c>case_attempt_planned_execution_fk</c>).
+    /// </summary>
+    private static bool ReferencesUniqueKey(
+        Dictionary<string, List<string[]>> uniqueKeys,
+        ForeignKeyShape foreignKey)
+    {
+        var referenced = new string[foreignKey.PrincipalColumns.Length];
+        foreignKey.PrincipalColumns.CopyTo(referenced, 0);
+        Array.Sort(referenced, StringComparer.Ordinal);
+
+        return uniqueKeys.TryGetValue(foreignKey.PrincipalTable, out var keys)
+            && keys.Any(key => key.AsSpan().SequenceEqual(referenced));
     }
 
     /// <summary>
