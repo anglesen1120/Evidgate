@@ -222,7 +222,12 @@ paths:
       description: >-
         Locks manifest, policy, suite and environment; writes run + planned
         executions + outbox in one transaction (00 §9.3). `Idempotency-Key`
-        required (00 §9.1).
+        required (00 §9.1). A manifest that does not resolve (unknown, or
+        another tenant's) is 404 `not_found`; an unresolved suite or
+        environment revision is 422 `manifest_invalid` with `details[]`; a
+        manifest whose planned executions collide on `execution_key` is 422
+        `execution_key_conflict`; naming a `release` is 422
+        `release_unresolvable` at M1 (the release tables land with 05.6.1).
       x-permission: run:create
       x-version: v1
       parameters:
@@ -234,16 +239,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [manifest_id]
-              properties:
-                manifest_id:
-                  type: string
-                  format: uuid
-                release_id:
-                  type: string
-                  format: uuid
-                  description: Optional release binding (05)
+              $ref: '#/components/schemas/CreateRunRequest'
       responses:
         '201':
           description: Run created
@@ -253,12 +249,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [run_id]
-                properties:
-                  run_id:
-                    type: string
-                    format: uuid
+                $ref: '#/components/schemas/RunCreated'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -267,6 +258,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -4243,6 +4236,34 @@ components:
           type: [string, 'null']
         reprocess_label:
           type: [string, 'null']
+    CreateRunRequest:
+      type: object
+      additionalProperties: false
+      required: [manifest_id]
+      properties:
+        manifest_id:
+          type: string
+          format: uuid
+        release:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: >-
+            Optional release name; at M1 it resolves to 422
+            `release_unresolvable` (05.6.1 owns the write-bind).
+        components:
+          type: object
+          description: Optional build identifiers for the run's components.
+    RunCreated:
+      type: object
+      required: [run_id, state]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [queued]
     Decision:
       type: object
       description: Evaluation decision or `pending` (00 §8.5/§9.3); `decision` values are upper case (00 §7).

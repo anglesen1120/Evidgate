@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Security.Claims;
+using System.Text.Json;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
@@ -47,6 +49,9 @@ internal sealed record MintedCiToken(string Token, DateTimeOffset ExpiresAt);
 internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecrets secrets, TimeProvider clock)
 {
     internal const string TokenUse = "ci_producer";
+
+    /// <summary>The provider of a token minted from a verified GitHub Actions OIDC token (T88).</summary>
+    private const string GithubActionsProvider = "github_actions";
 
     private static readonly JsonWebTokenHandler Handler = new() { MapInboundClaims = false };
 
@@ -157,7 +162,26 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
             return null;
         }
 
-        return new AuthenticatedCaller(RequestPrincipal.Service(project, permissions, jti), org, project);
+        return new AuthenticatedCaller(RequestPrincipal.Service(project, permissions, jti, TryGetCiRun(jwt)), org, project);
+    }
+
+    /// <summary>
+    /// The CI run claims of a GitHub-minted token (T88), or null when the token is not a
+    /// <c>github_actions</c> one or any of the four claims is missing or malformed. The ids
+    /// are read tolerantly (JSON string or number), matching the minter and
+    /// <see cref="GitHubOidcValidator"/>; nothing here is taken from request input.
+    /// </summary>
+    private static CiRunReference? TryGetCiRun(JsonWebToken jwt)
+    {
+        if (!TryGetString(jwt, "provider", out var provider) || provider != GithubActionsProvider
+            || !TryGetLong(jwt, "repository_id", out var repositoryId) || repositoryId <= 0
+            || !TryGetLong(jwt, "run_id", out var runId) || runId <= 0
+            || !TryGetInt(jwt, "run_attempt", out var runAttempt) || runAttempt < 1)
+        {
+            return null;
+        }
+
+        return new CiRunReference(provider, repositoryId, runId, runAttempt);
     }
 
     private static bool TryGetString(JsonWebToken jwt, string name, out string value)
@@ -179,6 +203,43 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
         value = default;
 
         return TryGetString(jwt, name, out var text) && Guid.TryParse(text, out value);
+    }
+
+    /// <summary>
+    /// Reads a numeric claim as a <see cref="long"/>. The minter writes numbers, but a
+    /// string is accepted too (GitHub sends ids as JSON strings), matching
+    /// <see cref="GitHubOidcValidator"/>'s reader.
+    /// </summary>
+    private static bool TryGetLong(JsonWebToken jwt, string name, out long value)
+    {
+        value = 0;
+
+        if (jwt.TryGetPayloadValue<string>(name, out var text))
+        {
+            return long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out value);
+        }
+
+        if (jwt.TryGetPayloadValue<JsonElement>(name, out var element) && element.ValueKind == JsonValueKind.Number)
+        {
+            return element.TryGetInt64(out value);
+        }
+
+        return false;
+    }
+
+    /// <summary>Reads a numeric claim as an <see cref="int"/>, refusing anything outside its range.</summary>
+    private static bool TryGetInt(JsonWebToken jwt, string name, out int value)
+    {
+        value = 0;
+
+        if (!TryGetLong(jwt, name, out var wide) || wide is < int.MinValue or > int.MaxValue)
+        {
+            return false;
+        }
+
+        value = (int)wide;
+
+        return true;
     }
 }
 

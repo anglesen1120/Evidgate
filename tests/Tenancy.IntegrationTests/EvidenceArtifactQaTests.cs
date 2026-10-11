@@ -39,7 +39,7 @@ public sealed class EvidenceArtifactQaTests
         return new World(api, client, database, user, org, project, Guid.CreateVersion7());
     }
 
-    private static async Task InsertAsync(TenantScope scope, string table, Guid id, Guid org, Guid project, string kind = "trace")
+    private static async Task InsertAsync(TenantScope scope, string table, Guid id, Guid org, Guid project, Guid run, string kind = "trace")
     {
         var sql = table == "artifact"
             ? """
@@ -52,7 +52,6 @@ public sealed class EvidenceArtifactQaTests
                 (id, org_id, project_id, kind, max_bytes, media_types, default_sensitivity)
               values (@id, @org, @project, @kind, 1024, array['application/zip'], 'normal')
               """;
-        var run = Guid.CreateVersion7();
         var execution = new string('a', 64);
         (await scope.ExecuteAsync(sql,
             ("id", id), ("org", org), ("project", project), ("kind", kind), ("run", run),
@@ -63,9 +62,13 @@ public sealed class EvidenceArtifactQaTests
     private async Task SeedAsync(World world, string table)
     {
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        await InsertAsync(scope, table, world.RowId, world.Org, world.Project);
+        await InsertAsync(scope, table, world.RowId, world.Org, world.Project, await CreateRunAsync(world, world.Org));
         await scope.CommitAsync();
     }
+
+    /// <summary>One committed run row for <paramref name="org"/> (0031's composite run key).</summary>
+    private async Task<Guid> CreateRunAsync(World world, Guid org) =>
+        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, org);
 
     [Theory]
     [InlineData("artifact", "object_key = 'replacement'")]
@@ -112,7 +115,7 @@ public sealed class EvidenceArtifactQaTests
         // The row is otherwise valid: first prove it can be committed under its own tenant.
         await using (var ownScope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), otherOrg))
         {
-            await InsertAsync(ownScope, table, id, otherOrg, otherProject);
+            await InsertAsync(ownScope, table, id, otherOrg, otherProject, await CreateRunAsync(world, otherOrg));
             await ownScope.CommitAsync();
         }
 
@@ -181,9 +184,9 @@ public sealed class EvidenceArtifactQaTests
         await using var world = await StartAsync();
         var secondProject = await CreateProjectAsync(world.Client, world.User, world.Org, "second-project");
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        await InsertAsync(scope, "artifact_kind_policy", Guid.CreateVersion7(), world.Org, world.Project);
-        await InsertAsync(scope, "artifact_kind_policy", Guid.CreateVersion7(), world.Org, world.Project, "video");
-        await InsertAsync(scope, "artifact_kind_policy", Guid.CreateVersion7(), world.Org, secondProject);
+        await InsertAsync(scope, "artifact_kind_policy", Guid.CreateVersion7(), world.Org, world.Project, Guid.CreateVersion7());
+        await InsertAsync(scope, "artifact_kind_policy", Guid.CreateVersion7(), world.Org, world.Project, Guid.CreateVersion7(), "video");
+        await InsertAsync(scope, "artifact_kind_policy", Guid.CreateVersion7(), world.Org, secondProject, Guid.CreateVersion7());
         (await scope.ScalarAsync<long>("select count(*) from public.artifact_kind_policy")).ShouldBe(3);
     }
 

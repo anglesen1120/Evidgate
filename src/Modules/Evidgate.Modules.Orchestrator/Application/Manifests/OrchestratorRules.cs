@@ -13,6 +13,23 @@ internal static class OrchestratorErrors
 
     internal static Error EnvironmentRevisionNotFound => Error.NotFound("no environment revision with that id is visible to this tenant");
 
+    /// <summary>404: no manifest with that id is visible to this tenant (05.2.1 §5) — the same code for unknown and for another tenant's.</summary>
+    internal static Error ManifestNotFound => Error.NotFound("no manifest with that id is visible to this tenant");
+
+    /// <summary>
+    /// 422 <c>release_unresolvable</c> (05.2.1 AC10, T15): a request naming a <c>release</c> is syntactically valid but
+    /// the <c>release</c>/<c>release_run</c> tables land with 05.6.1 at M2, so at M1 the field never resolves.
+    /// </summary>
+    internal static Error ReleaseUnresolvable => Error.Unprocessable(
+        ApiErrorCode.ReleaseUnresolvable,
+        "the release cannot be resolved at this milestone");
+
+    /// <summary>422 <c>execution_key_conflict</c> (05.2.1 AC6): two planned executions of the manifest share an execution key.</summary>
+    internal static Error ExecutionKeyConflict(IReadOnlyList<ErrorDetail> details) => Error.Unprocessable(
+        ApiErrorCode.ExecutionKeyConflict,
+        "two planned executions of the manifest share an execution key",
+        details);
+
     internal static Error ProjectScopeMismatch => Error.Denied(ApiErrorCode.ProjectScopeMismatch, "the credential is scoped to a different project");
 
     internal static Error Busy => new(ApiErrorCode.Unavailable, "the environment is being changed by another request; retry shortly", StatusCodes.Status503ServiceUnavailable);

@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Manifests;
+using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
@@ -27,6 +28,9 @@ public static class OrchestratorEndpoints
     /// <summary>The environment-revision transport cap (the schema's <c>x-max-bytes</c>).</summary>
     internal const int MaxEnvironmentBytes = 64 * 1024;
 
+    /// <summary>The run-create transport cap (05.2.1 §5): the body is a manifest id, an optional release and components.</summary>
+    internal const int MaxRunBytes = 64 * 1024;
+
     /// <summary>Maps the routes and returns the <c>/v1</c> group so the host can apply its filters (00 §5.5 C8).</summary>
     public static RouteGroupBuilder MapOrchestratorEndpoints(this IEndpointRouteBuilder routes)
     {
@@ -38,6 +42,12 @@ public static class OrchestratorEndpoints
             .Produces<ManifestAccepted>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status200OK)
             .WithSummary("Upload and verify a run manifest (05.1.1)");
+
+        group.MapPost("/projects/{p}/runs", CreateRunAsync)
+            .Accepts<CreateRunRequest>("application/json")
+            .Produces<RunCreated>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
+            .WithSummary("Create a run from a verified manifest in one transaction (05.2.1)");
 
         group.MapPost("/projects/{p}/environments/{e}/revisions", CreateEnvironmentRevisionAsync)
             .Produces<EnvironmentRevisionCreated>(StatusCodes.Status201Created)
@@ -81,6 +91,29 @@ public static class OrchestratorEndpoints
         }
 
         return result;
+    }
+
+    private static async Task<Result<RunCreated>> CreateRunAsync(
+        Guid p,
+        HttpContext context,
+        IRequestPrincipalAccessor principals,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        // Nothing of the body is read for a caller who is nobody; parsing and validation run in the handler, after the
+        // pipeline's permission check (05.2.1 §5).
+        if (principals.Current is null)
+        {
+            return Result.Failure<RunCreated>(Unauthenticated);
+        }
+
+        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxRunBytes, cancellationToken).ConfigureAwait(false);
+        if (tooLarge is not null)
+        {
+            return Result.Failure<RunCreated>(tooLarge);
+        }
+
+        return await mediator.Send(new CreateRunCommand(p, bytes), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Result<EnvironmentRevisionCreated>> CreateEnvironmentRevisionAsync(

@@ -59,13 +59,17 @@ public sealed class ProducerSlotQaTests
         return result;
     }
 
+    /// <summary>One committed run row for <paramref name="world"/>'s org (0031's composite run key).</summary>
+    private async Task<Guid> CreateRunAsync(World world) =>
+        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, world.Org);
+
     // ------------------------------------------------------------------ boundary: bound CHECKs vs the registry
 
     [Fact]
     public async Task BindOrCheck_TokenJtiAtMaxLength256_Binds()
     {
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
         var jti = new string('j', 256);
@@ -81,7 +85,7 @@ public sealed class ProducerSlotQaTests
         // Plan contract: an invalid identity is refused as a result. The bound CHECK (1..256) must not
         // surface as an unhandled PostgresException (23514) escaping the registry.
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
         var jti = new string('j', 257);
@@ -97,7 +101,7 @@ public sealed class ProducerSlotQaTests
     {
         // bound_token_jti CHECK requires length >= 1. An empty jti must be refused as a result.
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
         var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", string.Empty, null, TestContext.Current.CancellationToken));
@@ -113,7 +117,7 @@ public sealed class ProducerSlotQaTests
         // An empty producer_id is outside the column's 1..128 charset, so it is refused as a result
         // before any SQL; `unknown_producer` stays reserved for a well-formed id with no slot (AC4).
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
         var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, string.Empty, "jti-a", null, TestContext.Current.CancellationToken));
@@ -129,7 +133,7 @@ public sealed class ProducerSlotQaTests
         // .NET's `$` also matches before a trailing newline while PostgreSQL's `~` does not, so the
         // validator anchors with `\z`: "shard-1\n" must be refused, not accepted here and rejected there.
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
         var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1\n", "jti-a", null, TestContext.Current.CancellationToken));
@@ -143,7 +147,7 @@ public sealed class ProducerSlotQaTests
     {
         // PostgreSQL rejects U+0000 in text (22021), so the validator must refuse it as a result.
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
         var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", "jti\0a", null, TestContext.Current.CancellationToken));
@@ -157,7 +161,7 @@ public sealed class ProducerSlotQaTests
     public async Task BindOrCheck_NulInCiRunRef_IsRefused()
     {
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
         var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", "jti-a", "1/7\0/2", TestContext.Current.CancellationToken));
@@ -173,7 +177,7 @@ public sealed class ProducerSlotQaTests
     public async Task RegisterSlots_AtMaxShardCount256_RegistersEveryShard()
     {
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
 
         var result = await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 256, TestContext.Current.CancellationToken));
 
@@ -191,8 +195,8 @@ public sealed class ProducerSlotQaTests
     {
         // The run-scoped unique and the run-scoped bind mean "shard-1" in run A and in run B are two slots.
         await using var world = await StartAsync();
-        var runA = Guid.CreateVersion7();
-        var runB = Guid.CreateVersion7();
+        var runA = await CreateRunAsync(world);
+        var runB = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(runA, 1, TestContext.Current.CancellationToken));
         await InScopeAsync(world, r => r.RegisterSlotsAsync(runB, 1, TestContext.Current.CancellationToken));
 
@@ -214,7 +218,7 @@ public sealed class ProducerSlotQaTests
         // its re-read finds the same count, so BOTH succeed and both return the stored slot ids. No
         // unhandled 23505 may escape, and the run ends with exactly 3 rows.
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
 
         var results = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ =>
             InScopeAsync(world, r => r.RegisterSlotsAsync(run, 3, TestContext.Current.CancellationToken))));
@@ -231,7 +235,7 @@ public sealed class ProducerSlotQaTests
     {
         // (a) sequential: 2 slots exist, a call with 4 is the 409 and the original 2 rows are untouched.
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         var first = await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 2, TestContext.Current.CancellationToken));
 
         var second = await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 4, TestContext.Current.CancellationToken));
@@ -252,7 +256,7 @@ public sealed class ProducerSlotQaTests
         // skip A's two shard-1/shard-2 rows and insert shard-3/shard-4 - a partial insert (2 of 4), which
         // must be the 409 and never a success. B then rolls back, so the run keeps A's 2 slots.
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
 
         // B runs in its own task. Tenant scopes are AsyncLocal and a second BeginAsync in one flow throws,
         // so B's flow must never see A's scope: the task is started before A's scope opens (its execution
@@ -357,7 +361,7 @@ public sealed class ProducerSlotQaTests
     public async Task AppRole_CannotUpdateShardIndex()
     {
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
@@ -372,7 +376,7 @@ public sealed class ProducerSlotQaTests
     public async Task AppRole_CannotDeleteSlots()
     {
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
@@ -389,7 +393,7 @@ public sealed class ProducerSlotQaTests
         // The comparison is exact, so adding a CI reference to a slot first bound without one is a
         // different identity: producer_slot_taken, never a silent re-bind (BindOrCheckAsync XML doc).
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
         await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
 
@@ -405,7 +409,7 @@ public sealed class ProducerSlotQaTests
     {
         // The other direction: dropping the CI reference is equally a different identity.
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
         await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", "jti-a", "1/7/2", TestContext.Current.CancellationToken));
 
@@ -434,7 +438,7 @@ public sealed class ProducerSlotQaTests
         //     the order. producer_slot_run (org_id, run_id) is the plan §4 index and is kept for that prefix;
         //     the planner does not choose it for this query.
         await using var world = await StartAsync();
-        var run = Guid.CreateVersion7();
+        var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 3, TestContext.Current.CancellationToken));
         await _fixture.ExecuteAsync(world.Database, "analyze public.producer_slot");
 

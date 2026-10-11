@@ -43,6 +43,25 @@ export type RunSummary = {
     reprocess_label?: string | null;
 };
 
+export type CreateRunRequest = {
+    manifest_id: string;
+    /**
+     * Optional release name; at M1 it resolves to 422 `release_unresolvable` (05.6.1 owns the write-bind).
+     */
+    release?: string;
+    /**
+     * Optional build identifiers for the run's components.
+     */
+    components?: {
+        [key: string]: unknown;
+    };
+};
+
+export type RunCreated = {
+    run_id: string;
+    state: 'queued';
+};
+
 /**
  * Evaluation decision or `pending` (00 §8.5/§9.3); `decision` values are upper case (00 §7).
  */
@@ -1389,13 +1408,7 @@ export type ListRunsResponses = {
 export type ListRunsResponse = ListRunsResponses[keyof ListRunsResponses];
 
 export type CreateRunData = {
-    body: {
-        manifest_id: string;
-        /**
-         * Optional release binding (05)
-         */
-        release_id?: string;
-    };
+    body: CreateRunRequest;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -1431,6 +1444,10 @@ export type CreateRunErrors = {
      */
     409: ErrorEnvelope;
     /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
      */
     422: ErrorEnvelope;
@@ -1450,9 +1467,7 @@ export type CreateRunResponses = {
     /**
      * Run created
      */
-    201: {
-        run_id: string;
-    };
+    201: RunCreated;
 };
 
 export type CreateRunResponse = CreateRunResponses[keyof CreateRunResponses];

@@ -70,7 +70,7 @@ export const listRuns = <ThrowOnError extends boolean = false>(options: Options<
 /**
  * Create a run
  *
- * Locks manifest, policy, suite and environment; writes run + planned executions + outbox in one transaction (00 §9.3). `Idempotency-Key` required (00 §9.1).
+ * Locks manifest, policy, suite and environment; writes run + planned executions + outbox in one transaction (00 §9.3). `Idempotency-Key` required (00 §9.1). A manifest that does not resolve (unknown, or another tenant's) is 404 `not_found`; an unresolved suite or environment revision is 422 `manifest_invalid` with `details[]`; a manifest whose planned executions collide on `execution_key` is 422 `execution_key_conflict`; naming a `release` is 422 `release_unresolvable` at M1 (the release tables land with 05.6.1).
  */
 export const createRun = <ThrowOnError extends boolean = false>(options: Options<CreateRunData, ThrowOnError>): RequestResult<CreateRunResponses, CreateRunErrors, ThrowOnError> => (options.client ?? client).post<CreateRunResponses, CreateRunErrors, ThrowOnError>({
     security: [{

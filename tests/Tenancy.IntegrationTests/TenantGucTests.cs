@@ -258,12 +258,13 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("case_id", caseId));
+        var testRevisionId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
             insert into public.test_revision (id, org_id, case_id, revision_hash, commit_sha, file_path, framework, content_sha256, assertion_hash)
             values (@id, @org_id, @case_id, @hash, 'abcdef0', 'a', 'playwright', @hash, @hash)
             """,
-            ("id", Guid.CreateVersion7()),
+            ("id", testRevisionId),
             ("org_id", orgId),
             ("case_id", caseId),
             ("hash", "sha256:" + new string('a', 64)));
@@ -323,17 +324,43 @@ public sealed class TenantGucTests
             ("project_id", projectId),
             ("environment_id", environmentId),
             ("hash", "sha256:" + new string('c', 64)));
+        var manifestId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
             insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, verified_by)
             values (@id, @org_id, @project_id, @hash, 1, @suite_revision_id, @environment_revision_id, '{}', '{}', '{}', 0, '{}', 'probe')
             """,
-            ("id", Guid.CreateVersion7()),
+            ("id", manifestId),
             ("org_id", orgId),
             ("project_id", projectId),
             ("hash", "sha256:" + new string('d', 64)),
             ("suite_revision_id", suiteRevisionId),
             ("environment_revision_id", environmentRevisionId));
+        var runId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.run
+                (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id, collection_deadline_at, late_window_minutes)
+            values (@id, @org_id, @project_id, @manifest_id, @suite_revision_id, @environment_revision_id, now() + interval '2 hours', 1440)
+            """,
+            ("id", runId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("manifest_id", manifestId),
+            ("suite_revision_id", suiteRevisionId),
+            ("environment_revision_id", environmentRevisionId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.planned_execution
+                (id, org_id, run_id, execution_key, case_revision_id, variant_hash, target_env, shard_id)
+            values (@id, @org_id, @run_id, @execution_key, @case_revision_id, @variant_hash, 'staging', 'shard-1')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("run_id", runId),
+            ("execution_key", new string('a', 64)),
+            ("case_revision_id", testRevisionId),
+            ("variant_hash", "sha256:" + new string('b', 64)));
         await scope.ExecuteAsync(
             """
             insert into public.policy_revision (id, org_id, project_id, revision_no, hash, body, created_by)
@@ -384,7 +411,6 @@ public sealed class TenantGucTests
             ("case_id", caseId),
             ("owner", membershipId));
         var artifactId = Guid.CreateVersion7();
-        var artifactRunId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
             insert into public.artifact
@@ -394,9 +420,9 @@ public sealed class TenantGucTests
             ("id", artifactId),
             ("org_id", orgId),
             ("project_id", projectId),
-            ("run_id", artifactRunId),
+            ("run_id", runId),
             ("execution_key", new string('a', 64)),
-            ("object_key", $"org/{orgId}/project/{projectId}/run/{artifactRunId}/attempt/{new string('a', 64)}/1/{artifactId}"),
+            ("object_key", $"org/{orgId}/project/{projectId}/run/{runId}/attempt/{new string('a', 64)}/1/{artifactId}"),
             ("checksum", "sha256:" + new string('b', 64)));
         await scope.ExecuteAsync(
             """
@@ -414,7 +440,7 @@ public sealed class TenantGucTests
             """,
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
-            ("run_id", Guid.CreateVersion7()));
+            ("run_id", runId));
 
         await scope.CommitAsync();
     }

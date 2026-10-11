@@ -340,6 +340,7 @@ public static class IsolationRouteCases
 
         // ---- Orchestrator (OrchestratorEndpoints.cs:37-47) -----------------------------------------------------
         ManifestCase(),
+        RunCreateCase(),
         ProjectCase("POST", "/v1/projects/{p}/environments/{e}/revisions", p =>
             new(HttpMethod.Post, $"/v1/projects/{p}/environments/{IsolationWorld.EnvironmentKey}/revisions", Environment())),
         ObjectCase("GET", "/v1/environment-revisions/{id}", p => [("environment revision", p.EnvironmentRevisionId)], id =>
@@ -671,6 +672,60 @@ public static class IsolationRouteCases
                         route, "sibling project api of the OIDC token's org", OrgBServiceOidc(w), Upload(w.Acme2.Projects[1].Id, Manifest(w.Acme2.Projects[1])), requireScopeCode: true)),
                     Pair(route, "org A project web in {p} (OIDC token)", ProbeExpect.ServiceRefused, OrgBServiceOidc(w),
                         Upload(w.Acme.Projects[0].Id, Manifest(w.Acme.Projects[0])), Upload(Guid.CreateVersion7(), Manifest(w.Acme.Projects[0]))),
+                ];
+            });
+    }
+
+    /// <summary>
+    /// <c>POST /v1/projects/{p}/runs</c>: org A's project with org A's manifest (404), and org B's own project
+    /// naming org A's manifest id in the body — the same 404 as a random id, so another tenant's manifest is
+    /// never resolved (AC1). The caller must hold <c>run:create</c> (org B's <c>tenant_admin</c> and its
+    /// <c>ci_producer</c> both do).
+    /// </summary>
+    private static RouteCase RunCreateCase()
+    {
+        var route = new ApiRoute("POST", "/v1/projects/{p}/runs");
+        static ProbeRequest Create(Guid project, Guid manifest) => new(HttpMethod.Post, $"/v1/projects/{project}/runs",
+            new JsonObject { ["manifest_id"] = manifest.ToString() });
+
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    .. w.Acme.Projects.Select(p => Pair(route, $"org A project {p.Slug} in {{p}}", ProbeExpect.NotFound, OrgBAdmin(w),
+                        Create(p.Id, p.ManifestId), Create(Guid.CreateVersion7(), p.ManifestId))),
+                    Pair(route, "own project, org A's manifest id in the body", ProbeExpect.NotFound, OrgBAdmin(w),
+                        Create(w.Acme2.Projects[0].Id, w.Acme.Projects[0].ManifestId), Create(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
+                    new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
+                        route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderCaller(w), RandomHeaderCaller(w),
+                        Create(w.Acme.Projects[0].Id, w.Acme.Projects[0].ManifestId))),
+                    new(route, "own project, own manifest accepted", async runner =>
+                    {
+                        var response = await runner.SendAsync(OrgBAdmin(w), Create(w.Acme2.Projects[0].Id, w.Acme2.Projects[0].ManifestId));
+                        var violations = new List<string>();
+                        if (response.Status != 201)
+                        {
+                            violations.Add(RouteProbeRunner.Describe(route, "own project, own manifest accepted", OrgBAdmin(w), $"answered {response}, expected 201"));
+                        }
+
+                        return violations;
+                    }),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    new(route, "sibling project api of the token's org", runner => runner.ScopeMismatchAsync(
+                        route, "sibling project api of the token's org", OrgBService(w), Create(w.Acme2.Projects[1].Id, w.Acme2.Projects[1].ManifestId), requireScopeCode: true)),
+                    Pair(route, "org A project web in {p}", ProbeExpect.ServiceRefused, OrgBService(w),
+                        Create(w.Acme.Projects[0].Id, w.Acme.Projects[0].ManifestId), Create(Guid.CreateVersion7(), w.Acme.Projects[0].ManifestId)),
+                    Pair(route, "own project, org A's manifest id in the body", ProbeExpect.NotFound, OrgBService(w),
+                        Create(w.Acme2.Projects[0].Id, w.Acme.Projects[0].ManifestId), Create(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
                 ];
             });
     }
