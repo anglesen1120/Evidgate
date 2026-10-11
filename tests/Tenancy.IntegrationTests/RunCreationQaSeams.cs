@@ -102,7 +102,8 @@ internal static class RunCreationSeams
         Guid org,
         Guid project,
         IRequestPrincipal principal,
-        string body)
+        string body,
+        string? idempotencyKey = null)
     {
         await using var services = api.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
@@ -110,6 +111,8 @@ internal static class RunCreationSeams
         using var principalScope = provider.GetRequiredService<IRequestPrincipalSetter>().Publish(principal);
 
         return await provider.GetRequiredService<IMediator>()
-            .Send(new CreateRunCommand(project, Encoding.UTF8.GetBytes(body)), TestContext.Current.CancellationToken);
+            .Send(
+                new CreateRunCommand(project, Encoding.UTF8.GetBytes(body), idempotencyKey ?? RegistryApi.NewKey()),
+                TestContext.Current.CancellationToken);
     }
 }
