@@ -139,4 +139,38 @@ internal static class SuiteReadSql
         insert into public.suite (id, org_id, project_id, name, slug)
         values (@id, @org_id, @project_id, @name, @slug)
         """;
+
+    /// <summary>
+    /// Every member of a suite revision that depends on <c>(case_revision_id, variant_hash)</c> directly or transitively
+    /// (05.3.3-T2.2), one recursive statement however deep the graph. The walk starts from the root member's children and
+    /// follows <c>case_dependency</c> within the revision; <c>UNION</c> (not <c>UNION ALL</c>) folds a repeated member, so
+    /// a cycle a manual insert could plant still terminates. The root member is excluded from the answer (it is not a
+    /// dependant of itself even when a cycle walks back to it), and the result is ordered for a stable read.
+    /// </summary>
+    internal const string Dependants = """
+        with recursive root(member_id) as (
+            select m.id
+              from public.suite_member m
+              join public.variant v on v.org_id = m.org_id and v.id = m.variant_id
+             where m.suite_revision_id = @suite_revision_id
+               and m.case_revision_id = @case_revision_id
+               and v.variant_hash = @variant_hash
+        ), walk(member_id) as (
+            select d.child_member_id
+              from public.case_dependency d
+              join root r on r.member_id = d.parent_member_id
+             where d.suite_revision_id = @suite_revision_id
+            union
+            select d.child_member_id
+              from public.case_dependency d
+              join walk w on w.member_id = d.parent_member_id
+             where d.suite_revision_id = @suite_revision_id
+        )
+        select distinct m.case_revision_id, v.variant_hash
+          from walk w
+          join public.suite_member m on m.id = w.member_id
+          join public.variant v on v.org_id = m.org_id and v.id = m.variant_id
+         where w.member_id not in (select r.member_id from root r)
+         order by m.case_revision_id, v.variant_hash
+        """;
 }

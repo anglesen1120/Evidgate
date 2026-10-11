@@ -112,5 +112,19 @@ internal sealed class CatalogContracts(ITenantDb db) : ICatalogContracts
         return hashes;
     }
 
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<DependantMember>> GetDependantsAsync(Guid suiteRevisionId, Guid caseRevisionId, string variantHash, CancellationToken cancellationToken)
+    {
+        // One recursive statement however deep the graph (a UNION walk that terminates over a cycle); RLS scopes it to the
+        // tenant, so another tenant's revision or member simply yields no rows. The Dapper read path refuses array
+        // parameters, and none is needed: the root is one (case_revision_id, variant_hash) pair.
+        var rows = await db.QueryAsync<DependantMember>(
+            SuiteReadSql.Dependants,
+            new { suite_revision_id = suiteRevisionId, case_revision_id = caseRevisionId, variant_hash = variantHash },
+            cancellationToken).ConfigureAwait(false);
+
+        return [.. rows];
+    }
+
     private sealed record CaseRevisionRow(Guid CaseRevisionId, Guid CaseId);
 }

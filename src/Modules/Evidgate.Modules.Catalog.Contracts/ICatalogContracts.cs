@@ -55,4 +55,17 @@ public interface ICatalogContracts
     /// <param name="suiteRevisionId">The revision.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     ValueTask<string?> GetDataIsolationAsync(Guid suiteRevisionId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every member of <paramref name="suiteRevisionId"/> that depends, directly or transitively, on the member
+    /// <c>(caseRevisionId, variantHash)</c> through <c>case_dependency</c> (05.3.3-T2.2): the parent is the setup, the child the
+    /// dependant. One statement however deep the graph (a <c>UNION</c> walk that terminates on its own even over a cycle, which
+    /// 03.2.1-T3 refuses at write time); the root is never part of the answer; an unknown revision or member, or another tenant's, is an
+    /// empty answer. Bounded by the revision's member count.
+    /// </summary>
+    /// <param name="suiteRevisionId">The suite revision the run executes.</param>
+    /// <param name="caseRevisionId">The failed member's test revision.</param>
+    /// <param name="variantHash">The failed member's variant hash.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyList<DependantMember>> GetDependantsAsync(Guid suiteRevisionId, Guid caseRevisionId, string variantHash, CancellationToken cancellationToken);
 }
