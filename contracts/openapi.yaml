@@ -5454,18 +5454,7 @@ components:
       description: >-
         One quarantine entry (07.3.1-T2, 00 §8.8): a case excluded from gating while its
         failure stays visible. `state` is returned as stored (`active`, `expired`, `removed`).
-      required:
-        [
-          id,
-          project_id,
-          case_id,
-          owner,
-          reason,
-          state,
-          expires_at,
-          created_at,
-          updated_at,
-        ]
+      required: [id, project_id, case_id, owner, reason, state, expires_at, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         project_id: { type: string, format: uuid }
