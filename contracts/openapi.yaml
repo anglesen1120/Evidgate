@@ -222,7 +222,9 @@ paths:
       description: >-
         Locks manifest, policy, suite and environment; writes run + planned
         executions + outbox in one transaction (00 §9.3). `Idempotency-Key`
-        required (00 §9.1). A manifest that does not resolve (unknown, or
+        required (00 §9.1): a retry with the same key and the same canonical
+        body replays the original response, a different body is 409
+        `idempotency_conflict` (AC3/AC4). A manifest that does not resolve (unknown, or
         another tenant's) is 404 `not_found`; an unresolved suite or
         environment revision is 422 `manifest_invalid` with `details[]`; a
         manifest whose planned executions collide on `execution_key` is 422
