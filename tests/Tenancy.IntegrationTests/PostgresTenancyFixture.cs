@@ -21,10 +21,18 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
 {
     private const string DatabaseOwnerRole = "evidgate_owner";
 
+    // One fresh migrated database per test lives in this single container; PostgreSQL's cumulative-statistics
+    // shared memory (posix DSA in /dev/shm) grows by doubling with the database count and, at the Docker default of
+    // 64 MB, fails with 53100 "could not resize shared memory segment" once the suite passes ~750 databases.
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(ContainerImages.Postgres)
         .WithDatabase("evidgate")
         .WithUsername("postgres")
         .WithPassword("postgres")
+        .WithCreateParameterModifier(parameters =>
+        {
+            ArgumentNullException.ThrowIfNull(parameters.HostConfig);
+            parameters.HostConfig.ShmSize = 512L * 1024 * 1024;
+        })
         .Build();
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
