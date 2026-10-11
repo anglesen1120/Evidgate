@@ -14,6 +14,7 @@ Where each kind of documentation lives (plan 01.9.1-T3). A path not listed here 
 | Dev setup quickstart | [`dev-setup.md`](dev-setup.md) | Prerequisites, `scripts/dev/up.sh`, ports and `.env.dev` mapping, troubleshooting; owned by 01.8.1 |
 | CI quickstart examples | [`quickstart/`](quickstart/) — `github-actions.yml` and `generic.sh` | Rendered by `evidgate quickstart` and kept equal to the renderer by a test; owned by 04.2.4-T2 |
 | Customer-facing security guides | [`security/`](security/) — [`security/customer-ci-recipe.md`](security/customer-ci-recipe.md), the fork-safe CI recipe and its rules, and [`security/ci-recipe.md`](security/ci-recipe.md), SHA-pinning and least-privilege for a customer's own repository | Owned by plan 11 (security); the recipe file lives in `../fixtures/ci-recipes/` and is checked by `scripts/lint-ci-recipe.sh` (11.2.1-T1, 11.6.1-T2) |
+| Threat model | [`security/threat-model-v1.md`](security/threat-model-v1.md) | Owned by plan 11 (security); the versioned STRIDE threat model over every module and trust boundary, re-reviewed at each milestone exit and checked by [`../scripts/check-threat-model.sh`](../scripts/check-threat-model.sh) (11.1.1-T1) |
 | Source design | [`source/`](source/) | Original Vietnamese design the plan set supersedes where DECISIONS.md §9 lists a delta |
 | Repo guide | [`../AGENTS.md`](../AGENTS.md) | Authority order, editing rules, legend |
 

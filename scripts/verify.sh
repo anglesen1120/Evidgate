@@ -35,6 +35,7 @@ ALL_STAGES=(
   check-contract-conventions
   check-env-matrix
   check-dor-security
+  check-threat-model
   check-ci-parity
   check-action-pins
   check-ci-recipe
@@ -187,6 +188,14 @@ run_stage() {
     # the four DoR security questions.
     stage "check-dor-security"
     scripts/check-dor-security.sh
+    ;;
+  check-threat-model)
+    # AC1/AC2/AC3/AC7 (11.1.1-T1.3): the threat-model completeness lint. The
+    # self-test proves every negative fixture still fails and the ok fixture
+    # passes; then the real model (docs/security/threat-model-v1.md) must be green.
+    stage "check-threat-model"
+    scripts/check-threat-model.sh --self-test
+    scripts/check-threat-model.sh
     ;;
   check-ci-parity)
     # AC2 (01.7.1-T1.4): the workflow must run these stages and nothing else from
