@@ -14,7 +14,7 @@ internal static partial class CaseAttemptRules
     /// <summary>The reason token of a malformed execution key (05.3.3-T2.1 step 2).</summary>
     internal const string ExecutionKeyInvalid = "execution_key_invalid";
 
-    /// <summary>The reason token of an attempt number below 1 (05.3.3-T2.1 step 2).</summary>
+    /// <summary>The reason token of an attempt number outside <c>1..<see cref="ICaseAttemptWriter.MaxAttemptNo"/></c> (05.3.3-T2.1 step 2).</summary>
     internal const string AttemptNoInvalid = "attempt_no_invalid";
 
     /// <summary>The reason token of an unstorable raw status (05.3.3-T2.1 step 2).</summary>
@@ -52,7 +52,7 @@ internal static partial class CaseAttemptRules
             return ExecutionKeyInvalid;
         }
 
-        if (attempt.AttemptNo < 1)
+        if (attempt.AttemptNo < 1 || attempt.AttemptNo > ICaseAttemptWriter.MaxAttemptNo)
         {
             return AttemptNoInvalid;
         }

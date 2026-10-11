@@ -189,6 +189,87 @@ public sealed class CaseAttemptWriterTests
         (await CountRowsAsync(world, plan.RunId)).ShouldBe(1);
     }
 
+    [Fact]
+    public async Task WriteAttempt_RefusedBatch_KeepsInBatchDuplicate_ZeroStatements()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world);
+        var planned = plan.Executions[0];
+
+        await using var scope = await AttemptScope.BeginAsync(world.Api, world.Org);
+        world.Api.Statements.Clear();
+
+        // One malformed attempt refuses the whole batch, so no statement runs and nothing is written. The in-batch
+        // same-payload replay keeps its Duplicate (its payload equality needed no statement, C1); the two undecided
+        // entries stay the advisory Accepted the pre-pass set, because the caller rolls back on the refusal.
+        var outcomes = await scope.WriteAsync(
+            plan.RunId,
+            new CaseAttemptInput(planned.ExecutionKey, 1, "passed"),
+            new CaseAttemptInput(planned.ExecutionKey, 1, "passed"),
+            new CaseAttemptInput(new string('z', 64), 1, "passed"));
+
+        outcomes[0].Status.ShouldBe(CaseAttemptWriteStatus.Accepted);
+        outcomes[1].Status.ShouldBe(CaseAttemptWriteStatus.Duplicate);
+        outcomes[1].IsRefusal.ShouldBeFalse();
+        outcomes[2].Status.ShouldBe(CaseAttemptWriteStatus.Invalid);
+        outcomes[2].Reason.ShouldBe("execution_key_invalid");
+        outcomes.ShouldContain(outcome => outcome.IsRefusal);
+
+        CaseAttemptStatements(world).ShouldBeEmpty();
+        (await CountRowsAsync(world, plan.RunId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WriteAttempt_InBatchReplay_OfUnplannedSlot_ReportsUnknownExecution()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world);
+
+        // The slot's first occurrence turns out an unknown execution after statement 2, so its in-batch same-payload
+        // replay reports the same refusal instead of Duplicate (C2).
+        await using var scope = await AttemptScope.BeginAsync(world.Api, world.Org);
+        var outcomes = await scope.WriteAsync(
+            plan.RunId,
+            new CaseAttemptInput(UnplannedKey, 1, "passed"),
+            new CaseAttemptInput(UnplannedKey, 1, "passed"));
+
+        outcomes[0].Status.ShouldBe(CaseAttemptWriteStatus.UnknownExecution);
+        outcomes[1].Status.ShouldBe(CaseAttemptWriteStatus.UnknownExecution);
+        outcomes[1].IsRefusal.ShouldBeTrue();
+        (await CountRowsAsync(world, plan.RunId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WriteAttempt_InBatchReplay_OfStoredDifferentPayload_ReportsDuplicateDifferentPayload()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world);
+        var planned = plan.Executions[0];
+
+        await using (var first = await AttemptScope.BeginAsync(world.Api, world.Org))
+        {
+            (await first.WriteAsync(plan.RunId, new CaseAttemptInput(planned.ExecutionKey, 1, "passed")))
+                .ShouldHaveSingleItem().Status.ShouldBe(CaseAttemptWriteStatus.Accepted);
+            await first.CommitAsync();
+        }
+
+        // The stored row differs from the batch payload, so the slot's first occurrence is DuplicateDifferentPayload
+        // after statement 2 and its in-batch same-payload replay reports the same refusal (C2); the stored row is
+        // untouched.
+        await using var second = await AttemptScope.BeginAsync(world.Api, world.Org);
+        var outcomes = await second.WriteAsync(
+            plan.RunId,
+            new CaseAttemptInput(planned.ExecutionKey, 1, "failed"),
+            new CaseAttemptInput(planned.ExecutionKey, 1, "failed"));
+
+        outcomes[0].Status.ShouldBe(CaseAttemptWriteStatus.DuplicateDifferentPayload);
+        outcomes[1].Status.ShouldBe(CaseAttemptWriteStatus.DuplicateDifferentPayload);
+        outcomes[1].IsRefusal.ShouldBeTrue();
+        (await CountRowsAsync(world, plan.RunId)).ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(world.Database, $"select raw_status from public.case_attempt where run_id = '{plan.RunId}'"))
+            .ShouldBe("passed");
+    }
+
     // ------------------------------------------------------------------ normalisation
 
     [Fact]
@@ -416,6 +497,28 @@ public sealed class CaseAttemptWriterTests
             () => writer.WriteAttemptsAsync(Guid.CreateVersion7(), [], TestContext.Current.CancellationToken).AsTask());
         await Should.ThrowAsync<ArgumentException>(
             () => writer.WriteAttemptsAsync(Guid.CreateVersion7(), attempts, TestContext.Current.CancellationToken).AsTask());
+    }
+
+    [Fact]
+    public async Task WriteAttempt_NullElement_Throws_ZeroStatements()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world);
+
+        // No tenant scope is open, so an ArgumentNullException here proves the element guard runs before
+        // scopes.Require() like the batch-size guard, and the message names the offending index.
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var writer = services.ServiceProvider.GetRequiredService<ICaseAttemptWriter>();
+
+        var error = await Should.ThrowAsync<ArgumentNullException>(
+            () => writer.WriteAttemptsAsync(
+                plan.RunId,
+                new CaseAttemptInput[] { null! },
+                TestContext.Current.CancellationToken).AsTask());
+
+        error.ParamName.ShouldBe("attempts");
+        error.Message.ShouldContain("attempts[0]");
+        CaseAttemptStatements(world).ShouldBeEmpty();
     }
 
     // ------------------------------------------------------------------ AC5 visibility

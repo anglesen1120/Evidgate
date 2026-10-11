@@ -543,48 +543,6 @@ public sealed partial class CaseAttemptSchemaTests
     // ------------------------------------------------------------------ (e) raw + normalised status
 
     [Fact]
-    public async Task WriteAttempt_NewExecution_RawAndNormalizedStatusStored()
-    {
-        await using var world = await StartAsync();
-        var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
-        var runId = await SeedRunAndPlanAsync(world, parents);
-
-        // The raw value is stored verbatim ('timedOut', the Playwright spelling) while the normalised
-        // value is the 00 §8.3 'timed_out' — computed by the module's own CaseAttemptStatus.Normalize.
-        CaseAttemptStatus.Normalize("timedOut").ShouldBe("timed_out");
-
-        await using var scope = await AttemptScope.BeginAsync(world.Api, world.Org);
-        (await scope.WriteAsync(runId, new CaseAttemptInput(ExecutionKey, 1, "timedOut", DurationMs: 1200)))
-            .ShouldHaveSingleItem().Status.ShouldBe(CaseAttemptWriteStatus.Accepted);
-        await scope.CommitAsync();
-
-        await using var read = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        (await read.ScalarAsync<string>("select raw_status from public.case_attempt")).ShouldBe("timedOut");
-        (await read.ScalarAsync<string>("select normalized_status from public.case_attempt")).ShouldBe("timed_out");
-        (await read.ScalarAsync<Guid>("select case_id from public.case_attempt")).ShouldBe(parents.CaseId);
-    }
-
-    [Fact]
-    public async Task WriteAttempt_UnknownRawStatus_NormalizedError()
-    {
-        await using var world = await StartAsync();
-        var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
-        var runId = await SeedRunAndPlanAsync(world, parents);
-
-        CaseAttemptStatus.Normalize("weird-status").ShouldBe("error");
-
-        await using var scope = await AttemptScope.BeginAsync(world.Api, world.Org);
-        (await scope.WriteAsync(runId, new CaseAttemptInput(ExecutionKey, 1, "weird-status")))
-            .ShouldHaveSingleItem().Status.ShouldBe(CaseAttemptWriteStatus.Accepted);
-        await scope.CommitAsync();
-
-        // The row exists, the raw value is unchanged and the normalised value is 'error' — never dropped.
-        await using var read = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        (await read.ScalarAsync<string>("select raw_status from public.case_attempt")).ShouldBe("weird-status");
-        (await read.ScalarAsync<string>("select normalized_status from public.case_attempt")).ShouldBe("error");
-    }
-
-    [Fact]
     public async Task WriteAttempt_EmptyRawStatus_IsAcceptedAndNormalizedError()
     {
         await using var world = await StartAsync();

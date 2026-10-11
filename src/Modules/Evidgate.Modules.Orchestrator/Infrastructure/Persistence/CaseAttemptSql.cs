@@ -14,7 +14,10 @@ internal static class CaseAttemptSql
     /// The planned-execution join makes an unplanned key insert nothing, the run join enforces the scope's project
     /// visibility, and <c>case_id</c> comes from the planned row's <c>test_revision</c> — never from the caller.
     /// <c>ON CONFLICT … DO NOTHING RETURNING id</c> is the duplicate detection: a slot that already holds a row is
-    /// simply absent from the answer, never a caught unique violation.
+    /// simply absent from the answer, never a caught unique violation. The explicit
+    /// <c>order by r.execution_key, r.attempt_no</c> makes concurrent batches take the unique-key locks in one global
+    /// <c>(execution_key, attempt_no)</c> order, so two transactions with overlapping slots cannot deadlock on the
+    /// conflict check.
     /// </summary>
     internal const string InsertAttempts = """
         insert into public.case_attempt
@@ -32,6 +35,7 @@ internal static class CaseAttemptSql
            and (@project_id::uuid is null or ru.project_id = @project_id::uuid)
           join public.test_revision tr
             on tr.org_id = pe.org_id and tr.id = pe.case_revision_id
+        order by r.execution_key, r.attempt_no
         on conflict (org_id, run_id, execution_key, attempt_no) do nothing
         returning id
         """;
@@ -81,7 +85,9 @@ internal static class CaseAttemptSql
     /// Statement B of <c>ResolveDependantsAsync</c> (05.3.3-T2.2 step c): one insert for every dependant this run
     /// plans in the SAME <c>target_env</c> as the failed setup and that has no attempt yet. A dependant outside the
     /// plan, in another environment, or already attempted gets no row; the failed setup itself is excluded; the
-    /// <c>NOT EXISTS</c> guard and the conflict clause make a repeated call write nothing (idempotent).
+    /// <c>NOT EXISTS</c> guard and the conflict clause make a repeated call write nothing (idempotent). The explicit
+    /// <c>order by pe.execution_key</c> takes the unique-key locks in the same global order as
+    /// <see cref="InsertAttempts"/>, so the two statements cannot deadlock against each other.
     /// </summary>
     internal const string InsertBlockedAttempts = """
         insert into public.case_attempt
@@ -96,6 +102,7 @@ internal static class CaseAttemptSql
             on tr.org_id = pe.org_id and tr.id = pe.case_revision_id
          where not exists (select 1 from public.case_attempt a
                             where a.org_id = @org_id and a.run_id = @run_id and a.execution_key = pe.execution_key)
+        order by pe.execution_key
         on conflict (org_id, run_id, execution_key, attempt_no) do nothing
         returning execution_key
         """;

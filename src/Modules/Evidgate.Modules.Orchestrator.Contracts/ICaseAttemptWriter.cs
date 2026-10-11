@@ -11,6 +11,13 @@ public interface ICaseAttemptWriter
     const int MaxBatchSize = 500;
 
     /// <summary>
+    /// The largest <see cref="CaseAttemptInput.AttemptNo"/> one call accepts: a producer cannot mint unlimited immutable
+    /// attempt slots per execution (0032's <c>attempt_no</c> CHECK only requires <c>&gt;= 1</c>), so a number above this
+    /// bound is <see cref="CaseAttemptWriteStatus.Invalid"/> with reason <c>attempt_no_invalid</c>.
+    /// </summary>
+    const int MaxAttemptNo = 100;
+
+    /// <summary>
     /// Persists <paramref name="attempts"/> of <paramref name="runId"/> and answers one outcome per attempt, index-aligned.
     /// <para>
     /// One validation pass runs first; when any attempt is <see cref="CaseAttemptWriteStatus.Invalid"/> or repeats an earlier slot of
@@ -19,11 +26,21 @@ public interface ICaseAttemptWriter
     /// some attempt was not inserted, to tell a duplicate (same payload) from a different payload or an unknown execution. The caller
     /// MUST roll back its transaction when any outcome <see cref="CaseAttemptWriteOutcome.IsRefusal"/>.
     /// </para>
+    /// <para>
+    /// The caller owns the run's lifecycle: this writer only checks that the run exists and is visible to the caller's scope, so
+    /// rejecting a closed or frozen run is the caller's duty. On a refused batch (any outcome
+    /// <see cref="CaseAttemptWriteOutcome.IsRefusal"/>) the outcomes of the entries that are not refusals are advisory only —
+    /// nothing may be committed. An attempt that repeats an earlier slot of the same batch is answered with the final outcome of
+    /// that first occurrence (<see cref="CaseAttemptWriteStatus.Duplicate"/>,
+    /// <see cref="CaseAttemptWriteStatus.DuplicateDifferentPayload"/> or
+    /// <see cref="CaseAttemptWriteStatus.UnknownExecution"/>).
+    /// </para>
     /// </summary>
     /// <param name="runId">The run the attempts belong to; it must be visible to the caller's scope.</param>
     /// <param name="attempts">1..<see cref="MaxBatchSize"/> attempts.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     /// <exception cref="ArgumentException"><paramref name="attempts"/> is empty or longer than <see cref="MaxBatchSize"/>.</exception>
+    /// <exception cref="ArgumentNullException">An element of <paramref name="attempts"/> is null.</exception>
     /// <exception cref="InvalidOperationException">No tenant scope is open (the tenant-scope guard throws before any statement).</exception>
     ValueTask<IReadOnlyList<CaseAttemptWriteOutcome>> WriteAttemptsAsync(
         Guid runId,
@@ -44,8 +61,16 @@ public interface IBlockedAttemptResolver
     /// <c>blocked</c>) for each that has no attempt yet. Idempotent: a repeated call writes nothing and returns an empty list.
     /// <para>
     /// Nothing is written, and an empty list is returned, when the run or the execution is unknown to the scope or the execution has no
-    /// <c>failed</c>, <c>timed_out</c> or <c>error</c> attempt in this run. Which attempt of a retried setup counts as the final failure is
-    /// the caller's decision (04.1.1/07.4.2): it calls this once it has decided the setup failed.
+    /// <c>failed</c>, <c>timed_out</c> or <c>error</c> attempt in this run. The caller MUST call this only once it has decided the setup
+    /// execution's <b>final</b> attempt failed (04.1.1/07.4.2), never after a non-final failed attempt of a setup that may still pass on a
+    /// retry: the call is effectively irreversible for slot 1. It writes <c>blocked</c> at <c>attempt_no = 1</c>, so a later producer
+    /// attempt 1 for that dependant becomes <see cref="CaseAttemptWriteStatus.DuplicateDifferentPayload"/> — a refusal the caller must
+    /// roll back — and a dependant that already has any attempt is left untouched.
+    /// </para>
+    /// <para>
+    /// Blocking therefore covers slot 1 of dependants that have no attempt yet. A producer-asserted later attempt
+    /// (<c>attempt_no &gt;= 2</c>) or an attempt written before the resolver ran is producer evidence for the rollup (06/07) to judge,
+    /// not something this resolver rewrites.
     /// </para>
     /// </summary>
     /// <param name="runId">The run.</param>

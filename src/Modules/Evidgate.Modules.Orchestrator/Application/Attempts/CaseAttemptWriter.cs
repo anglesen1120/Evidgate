@@ -35,6 +35,18 @@ internal sealed class CaseAttemptWriter(ITenantDb db, ITenantScopeAccessor scope
                 nameof(attempts));
         }
 
+        // A null element is a caller mistake too, so it is reported with the batch arguments and before the scope
+        // guard, never as a NullReferenceException inside the pre-pass or the SQL.
+        for (var index = 0; index < attempts.Count; index++)
+        {
+            if (attempts[index] is null)
+            {
+                throw new ArgumentNullException(
+                    nameof(attempts),
+                    $"attempts[{index}] is null; a case-attempt batch holds no null element.");
+            }
+        }
+
         // The tenant-scope guard runs before any statement (AC1): with no open scope this throws and nothing is sent.
         var scope = scopes.Require();
 
@@ -58,12 +70,19 @@ internal sealed class CaseAttemptWriter(ITenantDb db, ITenantScopeAccessor scope
             if (firstOccurrence.TryGetValue(slot, out var first))
             {
                 // The slot repeats inside the batch: the first occurrence is the candidate, so a later one with the
-                // same payload is an idempotent replay and a different payload is a refusal (T50).
+                // same payload is an idempotent replay and a different payload is a refusal (T50). A same-payload
+                // replay remembers its index: if the first occurrence turns out a refusal in statement 2, this entry
+                // reports the same refusal instead of Duplicate (C2).
                 var status = candidates[first].Payload == payload
                     ? CaseAttemptWriteStatus.Duplicate
                     : CaseAttemptWriteStatus.DuplicateDifferentPayload;
                 outcomes[index] = new CaseAttemptWriteOutcome(status);
                 refusal |= status == CaseAttemptWriteStatus.DuplicateDifferentPayload;
+                if (status == CaseAttemptWriteStatus.Duplicate)
+                {
+                    candidates[first].DuplicateIndexes.Add(index);
+                }
+
                 continue;
             }
 
@@ -74,15 +93,19 @@ internal sealed class CaseAttemptWriter(ITenantDb db, ITenantScopeAccessor scope
 
         if (refusal)
         {
-            // Nothing was written, so no attempt is a persisted fact: every non-refusing attempt reports Accepted and
-            // the caller MUST roll back because at least one outcome IsRefusal (05.3.3-T2.1 step 3). The refusing
-            // attempts keep their Invalid/DuplicateDifferentPayload outcome.
+            // Nothing was written, so no attempt is a persisted fact: every entry that was not decided is the advisory
+            // Accepted the pre-pass set and the caller MUST roll back because at least one outcome IsRefusal
+            // (05.3.3-T2.1 step 3). The refusing attempts keep their Invalid / DuplicateDifferentPayload outcome, and an
+            // in-batch same-payload replay keeps its Duplicate (C1) — its payload equality was decided without any
+            // statement, so a refusal elsewhere in the batch does not turn it into an advisory Accepted.
             for (var index = 0; index < outcomes.Length; index++)
             {
-                if (!outcomes[index].IsRefusal)
+                if (outcomes[index].IsRefusal || outcomes[index].Status == CaseAttemptWriteStatus.Duplicate)
                 {
-                    outcomes[index] = new CaseAttemptWriteOutcome(CaseAttemptWriteStatus.Accepted);
+                    continue;
                 }
+
+                outcomes[index] = new CaseAttemptWriteOutcome(CaseAttemptWriteStatus.Accepted);
             }
 
             return outcomes;
@@ -174,6 +197,24 @@ internal sealed class CaseAttemptWriter(ITenantDb db, ITenantScopeAccessor scope
                     : CaseAttemptWriteStatus.DuplicateDifferentPayload);
         }
 
+        // C2: a later in-batch occurrence of a slot ends with the slot's FINAL outcome. When the first occurrence is a
+        // refusal after statement 2 — UnknownExecution, or DuplicateDifferentPayload against a stored row that differs —
+        // every in-batch same-payload replay of that slot reports the same refusal instead of Duplicate. An in-batch
+        // different-payload replay is already DuplicateDifferentPayload and never reaches here (it refuses the batch in
+        // the pre-pass), and a written first occurrence leaves its replays as Duplicate.
+        foreach (var candidate in unwritten)
+        {
+            if (!outcomes[candidate.Index].IsRefusal)
+            {
+                continue;
+            }
+
+            foreach (var replayIndex in candidate.DuplicateIndexes)
+            {
+                outcomes[replayIndex] = outcomes[candidate.Index];
+            }
+        }
+
         return outcomes;
     }
 
@@ -219,7 +260,14 @@ internal sealed class CaseAttemptWriter(ITenantDb db, ITenantScopeAccessor scope
     private readonly record struct SlotKey(string ExecutionKey, int AttemptNo);
 
     /// <summary>One distinct slot of the batch: the first occurrence, its index in the caller's list, its new id and payload.</summary>
-    private sealed record Candidate(int Index, SlotKey Slot, Guid Id, CaseAttemptPayload Payload);
+    private sealed record Candidate(int Index, SlotKey Slot, Guid Id, CaseAttemptPayload Payload)
+    {
+        /// <summary>
+        /// The indexes of the later in-batch occurrences that repeated this slot's first payload (C2). When statement 2
+        /// classifies the first occurrence as a refusal they report the same refusal instead of <c>Duplicate</c>.
+        /// </summary>
+        internal List<int> DuplicateIndexes { get; } = [];
+    }
 
     /// <summary>One row of statement 1 as the <c>jsonb_to_recordset</c> batch reads it (the wire names are the column names).</summary>
     private sealed record InsertRow(

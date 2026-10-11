@@ -202,7 +202,7 @@ public sealed class CaseAttemptWriterQaTests
     // ------------------------------------------------------------------ attempt_no boundaries
 
     [Fact]
-    public async Task WriteAttempt_AttemptNoBoundaries_NegativeRefused_MaxAccepted()
+    public async Task WriteAttempt_AttemptNoBoundaries_NegativeAndOverMaxRefused_MaxAccepted()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world);
@@ -214,14 +214,27 @@ public sealed class CaseAttemptWriterQaTests
         negative.Status.ShouldBe(CaseAttemptWriteStatus.Invalid);
         negative.Reason.ShouldBe("attempt_no_invalid");
 
-        (await scope.WriteAsync(plan.RunId, new CaseAttemptInput(key, int.MaxValue, "passed")))
+        // The top of the accepted range: a producer may mint attempt_no up to MaxAttemptNo, no further.
+        (await scope.WriteAsync(plan.RunId, new CaseAttemptInput(key, ICaseAttemptWriter.MaxAttemptNo, "passed")))
             .ShouldHaveSingleItem().Status.ShouldBe(CaseAttemptWriteStatus.Accepted);
+
+        world.Api.Statements.Clear();
+        foreach (var overMax in new[] { ICaseAttemptWriter.MaxAttemptNo + 1, int.MaxValue })
+        {
+            var refused = (await scope.WriteAsync(plan.RunId, new CaseAttemptInput(key, overMax, "passed"))).ShouldHaveSingleItem();
+            refused.Status.ShouldBe(CaseAttemptWriteStatus.Invalid);
+            refused.Reason.ShouldBe("attempt_no_invalid");
+            refused.IsRefusal.ShouldBeTrue();
+            // The validation pass refuses before any statement, so an over-max slot writes nothing.
+            CaseAttemptStatements(world).ShouldBeEmpty();
+        }
+
         await scope.CommitAsync();
 
         (await _fixture.ScalarAsync<int>(
             world.Database,
             $"select attempt_no from public.case_attempt where run_id = '{plan.RunId}'"))
-            .ShouldBe(int.MaxValue);
+            .ShouldBe(ICaseAttemptWriter.MaxAttemptNo);
     }
 
     // ------------------------------------------------------------------ execution_key shape boundaries

@@ -5,7 +5,7 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// resolves it from the planned execution row of <see cref="ExecutionKey"/> (05.3.3-T1 decision 4).
 /// </summary>
 /// <param name="ExecutionKey">The planned execution's key, <c>^[0-9a-f]{64}$</c> (00 §7).</param>
-/// <param name="AttemptNo">The attempt number, starting at 1 (00 §7).</param>
+/// <param name="AttemptNo">The attempt number, starting at 1 and at most <see cref="ICaseAttemptWriter.MaxAttemptNo"/> (00 §7).</param>
 /// <param name="RawStatus">The status exactly as the producer sent it (0..64 code points, no U+0000); stored verbatim, never overwritten.</param>
 /// <param name="StartedAt">When the attempt started, or null.</param>
 /// <param name="FinishedAt">When the attempt finished, or null; never before <paramref name="StartedAt"/>.</param>
@@ -40,7 +40,7 @@ public enum CaseAttemptWriteStatus
     /// <summary>The run is not visible to the tenant/project scope, or it has no planned execution with this key (T90).</summary>
     UnknownExecution,
 
-    /// <summary>The attempt is malformed (see <see cref="CaseAttemptWriteOutcome.Reason"/>); nothing was written.</summary>
+    /// <summary>The attempt is malformed (see <see cref="CaseAttemptWriteOutcome.Reason"/>); nothing was written. An <c>attempt_no</c> outside <c>1..<see cref="ICaseAttemptWriter.MaxAttemptNo"/></c> is one such case.</summary>
     Invalid,
 }
 
