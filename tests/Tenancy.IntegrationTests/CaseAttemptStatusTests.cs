@@ -35,7 +35,9 @@ public sealed class CaseAttemptStatusTests
     /// <summary>Raw values outside the table: every one maps to <c>error</c>, never dropped (05.3.3-T1.2).</summary>
     public static TheoryData<string?> UnknownRawStatuses => new()
     {
-        null,
+        // xUnit v3's TheoryData<T>.Add takes a non-nullable T in its base type's nullable context, so a bare null
+        // literal is CS8625; the null-forgiving operator keeps the null row (the value is still null at runtime).
+        null!,
         "",
         " passed",
         "PASSED",
@@ -56,7 +58,7 @@ public sealed class CaseAttemptStatusTests
         "skipped",
         "interrupted",
         "error",
-        null,
+        null!,
         "",
         " passed",
         "PASSED",
@@ -72,7 +74,7 @@ public sealed class CaseAttemptStatusTests
     /// <summary>Every raw value this suite exercises, for the closed-set check.</summary>
     public static TheoryData<string?> EveryRawStatus => new()
     {
-        null,
+        null!,
         "",
         " passed",
         "PASSED",
@@ -129,8 +131,8 @@ public sealed class CaseAttemptStatusTests
     [MemberData(nameof(EveryRawStatus))]
     public void Normalize_AnyRawStatus_ReturnsAValueInAll(string? raw)
     {
-        CaseAttemptStatus.Normalize(raw).ShouldBeOneOf(CaseAttemptStatus.All);
-        CaseAttemptStatus.Normalize(raw, xfail: true).ShouldBeOneOf(CaseAttemptStatus.All);
+        CaseAttemptStatus.Normalize(raw).ShouldBeOneOf([.. CaseAttemptStatus.All]);
+        CaseAttemptStatus.Normalize(raw, xfail: true).ShouldBeOneOf([.. CaseAttemptStatus.All]);
     }
 
     /// <summary>
