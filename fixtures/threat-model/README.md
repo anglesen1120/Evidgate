@@ -12,7 +12,7 @@ fixtures/threat-model/
   negative/   # models the lint must reject (exit 1), each with a sibling *.expect
 ```
 
-`ok/minimal.md` is a small but fully valid model: all 22 catalogue ids (11 modules, 11 boundaries) with one threat row each, a register entry per state, the ritual slot and log tables, and the §7 summary table.
+`ok/minimal.md` is a small but fully valid model: all 22 catalogue ids (11 modules, 11 boundaries) with one threat row each, a register entry per state, the ritual slot and log tables, the §7 summary table, and a citation of every 00 §5.7 security rule S1..S8.
 
 ## `*.expect` convention
 
@@ -20,11 +20,12 @@ Every `negative/<name>.md` has a sibling `negative/<name>.expect` holding the ex
 
 - the real model must exit 0;
 - each `ok/` fixture must exit 0;
-- each `negative/` fixture must exit 1 and print its `.expect` substring.
+- each `negative/` fixture must exit 1 and print its `.expect` substring (a non-empty `.expect` is required, and every `.md` needs its `.expect` and vice versa);
+- the run fails when there are no negative or no ok fixtures.
 
 ## Negative fixtures
 
-One fixture per lint rule (38 in all):
+One fixture per lint rule (54 negative fixtures in all):
 
 - `missing-module-section` — a required module's catalogue row and section are both gone;
 - `catalogue-row-without-section` — a catalogue id with no `### <id> — <name>` heading;
@@ -42,20 +43,38 @@ One fixture per lint rule (38 in all):
 - `implemented-path-backslash` — an `[implemented: …]` path containing a backslash;
 - `implemented-path-directory` — an `[implemented: …]` path that is a directory (`scripts`);
 - `implemented-path-escape` — an `[implemented: …]` path with a `..` segment;
+- `implemented-path-untracked` — an `[implemented: …]` path that exists but is gitignored (`node_modules/.package-lock.json`);
+- `implemented-tag-unclosed` — an `[implemented: …` tag with no closing bracket;
+- `implemented-tag-empty` — an `[implemented: ]` tag with no path;
 - `accepted-missing-rr` — an `accepted:` citing an RR with no register entry;
 - `accepted-open-decision-rr` — an `accepted:` citing an `open-decision` register entry;
 - `accepted-no-rr` — an `accepted:` that cites no RR at all;
 - `accepted-rr-text-only` — an `accepted:` whose RR id is not the first token after the colon;
 - `register-accepted-no-owner` — an accepted register entry with an empty owner;
+- `register-accepted-no-rationale` — an accepted register entry with an empty rationale;
 - `register-bad-review-date` — a register entry whose `Reviewed` is not an ISO date;
 - `register-impossible-date` — a register entry whose `Reviewed` is a well-shaped but impossible date (`2026-13-45`);
 - `register-bad-next-review` — a register entry whose `Next review` is neither `M2`/`M3` nor an ISO date;
+- `register-next-before-reviewed` — a register entry whose `Next review` date is before `Reviewed`;
 - `register-open-no-open-marker` — an `open-decision` rationale without `[OPEN]`;
 - `register-open-bad-receiving` — an `open-decision` receiving task that no area plan defines;
 - `duplicate-register-id` — two register rows sharing one `RR-<n>` id;
 - `uncited-rr` — a register entry no threat row cites;
 - `duplicate-threat-id` — the same `TH-<suffix>-<n>` id in two sections;
+- `duplicate-section-id` — two `### M-identity` sections;
+- `duplicate-catalogue-id` — two catalogue rows sharing one id;
 - `bad-stride` — a STRIDE cell with a letter outside `S T R I D E`;
+- `threat-row-seven-cells` — a threat row with 7 cells (exactly 6 are required);
+- `stray-table-row` — a threat row after a blank line, outside the one parsed table;
+- `non-table-line-in-table` — a non-pipe, non-blank line inside a threat table;
+- `duplicate-threat-table` — a second threat table with the same header in one section;
+- `html-comment` — an HTML comment (a commented-out section must not satisfy a check);
+- `indented-code-block` — a 4-space indented code block;
+- `fence-wrong-marker` — a backtick fence "closed" with a tilde run, so it stays unclosed;
+- `fence-short-close` — a 4-backtick fence "closed" by a 3-backtick run, so it stays unclosed;
+- `cell-too-large` — a table cell over the 8 KiB cap;
+- (generated at run time, not stored: a model file over the 2 MiB cap);
+- `rule-s6-uncited` — no threat row cites 00 §5.7 rule S6;
 - `ritual-missing-m3` — the milestone slot table without its `M3` row;
 - `ritual-bad-date` — a slot row whose `Last review` is neither an ISO date nor `pending`;
 - `ritual-impossible-date` — a slot row whose `Last review` is a well-shaped but impossible date (`2026-02-30`);

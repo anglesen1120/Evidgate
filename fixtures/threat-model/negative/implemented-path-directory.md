@@ -70,9 +70,9 @@ Fixture model: every module and boundary carries at least one dispositioned thre
 
 ### M-evidence — Evidence
 
-| ID            | STRIDE | Threat                | Attacker           | Impact          | Disposition                                                           |
-| ------------- | ------ | --------------------- | ------------------ | --------------- | --------------------------------------------------------------------- |
-| TH-evidence-1 | I      | Artifact content leak | Malicious artifact | Data disclosure | control: split viewer origins and sandboxed CSP — 06.3.3-T1 [planned] |
+| ID            | STRIDE | Threat                | Attacker           | Impact          | Disposition                                                                        |
+| ------------- | ------ | --------------------- | ------------------ | --------------- | ---------------------------------------------------------------------------------- |
+| TH-evidence-1 | I      | Artifact content leak | Malicious artifact | Data disclosure | control: split viewer origins and sandboxed CSP (00 §5.7 S3) — 06.3.3-T1 [planned] |
 
 ### M-policy — Policy
 
@@ -94,8 +94,8 @@ Fixture model: every module and boundary carries at least one dispositioned thre
 
 ### M-audit — Audit
 
-| ID         | STRIDE | Threat            | Attacker | Impact             | Disposition                                                                 |
-| ---------- | ------ | ----------------- | -------- | ------------------ | --------------------------------------------------------------------------- |
+| ID         | STRIDE | Threat            | Attacker | Impact             | Disposition                                                       |
+| ---------- | ------ | ----------------- | -------- | ------------------ | ----------------------------------------------------------------- |
 | TH-audit-1 | R      | Audit repudiation | Insider  | Untraceable action | control: append-only audit log — 02.7.1-T1 [implemented: scripts] |
 
 ### M-notifications — Notifications
@@ -108,9 +108,9 @@ Fixture model: every module and boundary carries at least one dispositioned thre
 
 ### B-web — Browser to API
 
-| ID       | STRIDE | Threat         | Attacker          | Impact        | Disposition                                                |
-| -------- | ------ | -------------- | ----------------- | ------------- | ---------------------------------------------------------- |
-| TH-web-1 | S      | Session hijack | External attacker | Impersonation | control: cookie flags and CSRF token — 02.3.1-T1 [planned] |
+| ID       | STRIDE | Threat         | Attacker          | Impact        | Disposition                                                                 |
+| -------- | ------ | -------------- | ----------------- | ------------- | --------------------------------------------------------------------------- |
+| TH-web-1 | S      | Session hijack | External attacker | Impersonation | control: cookie flags and CSRF token (00 §5.7 S2, S7) — 02.3.1-T1 [planned] |
 
 ### B-cli-adapters — CLI and adapters to API
 
@@ -144,27 +144,27 @@ Fixture model: every module and boundary carries at least one dispositioned thre
 
 ### B-database — API and worker to PostgreSQL
 
-| ID            | STRIDE | Threat              | Attacker | Impact          | Disposition                                             |
-| ------------- | ------ | ------------------- | -------- | --------------- | ------------------------------------------------------- |
-| TH-database-1 | T      | Direct DB tampering | Insider  | Data corruption | control: least-privilege DB roles — 02.6.1-T1 [planned] |
+| ID            | STRIDE | Threat              | Attacker | Impact          | Disposition                                                              |
+| ------------- | ------ | ------------------- | -------- | --------------- | ------------------------------------------------------------------------ |
+| TH-database-1 | T      | Direct DB tampering | Insider  | Data corruption | control: least-privilege DB roles (00 §5.7 S1, S8) — 02.6.1-T1 [planned] |
 
 ### B-ci — Customer CI to API
 
-| ID      | STRIDE | Threat          | Attacker     | Impact           | Disposition                                             |
-| ------- | ------ | --------------- | ------------ | ---------------- | ------------------------------------------------------- |
-| TH-ci-1 | S      | CI secret theft | Malicious PR | Credential theft | control: fork-safe workflow rules — 11.2.1-T4 [planned] |
+| ID      | STRIDE | Threat          | Attacker     | Impact           | Disposition                                                          |
+| ------- | ------ | --------------- | ------------ | ---------------- | -------------------------------------------------------------------- |
+| TH-ci-1 | S      | CI secret theft | Malicious PR | Credential theft | control: fork-safe workflow rules (00 §5.7 S6) — 11.2.1-T4 [planned] |
 
 ### B-artifact-parsers — Untrusted artifact content to parsers
 
-| ID                    | STRIDE | Threat       | Attacker           | Impact            | Disposition                                                |
-| --------------------- | ------ | ------------ | ------------------ | ----------------- | ---------------------------------------------------------- |
-| TH-artifact-parsers-1 | D      | Parser crash | Malicious artifact | Denial of service | control: parser hardening and limits — 06.3.3-T1 [planned] |
+| ID                    | STRIDE | Threat       | Attacker           | Impact            | Disposition                                                             |
+| --------------------- | ------ | ------------ | ------------------ | ----------------- | ----------------------------------------------------------------------- |
+| TH-artifact-parsers-1 | D      | Parser crash | Malicious artifact | Denial of service | control: parser hardening and limits (00 §5.7 S5) — 06.3.3-T1 [planned] |
 
 ### B-webhook-out — API to webhook receivers
 
-| ID               | STRIDE | Threat           | Attacker          | Impact       | Disposition                                           |
-| ---------------- | ------ | ---------------- | ----------------- | ------------ | ----------------------------------------------------- |
-| TH-webhook-out-1 | S      | Webhook spoofing | External attacker | Forged event | control: HMAC webhook signature — 02.7.1-T1 [planned] |
+| ID               | STRIDE | Threat           | Attacker          | Impact       | Disposition                                                        |
+| ---------------- | ------ | ---------------- | ----------------- | ------------ | ------------------------------------------------------------------ |
+| TH-webhook-out-1 | S      | Webhook spoofing | External attacker | Forged event | control: HMAC webhook signature (00 §5.7 S4) — 02.7.1-T1 [planned] |
 
 ### B-operator — Operator to tenant data
 

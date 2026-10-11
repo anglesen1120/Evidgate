@@ -56,3 +56,11 @@ fixtures/contracts/vectors/event-envelope.v1/rej-01-invalid-json.json
 # recipe lint must refuse as `yaml-parse`; prettier's YAML parser refuses it too,
 # so prettier --check must skip it. The other ci-recipes fixtures stay checked.
 fixtures/ci-recipes/bypass/b12-duplicate-on-key.yml
+
+# 11.1.1-T1: threat-model negative fixtures whose defect is markdown that
+# prettier would repair (unclosed or mismatched code fences, a stray line inside
+# a table). The checker must refuse them as written, so prettier must skip them.
+fixtures/threat-model/negative/unclosed-fence.md
+fixtures/threat-model/negative/fence-short-close.md
+fixtures/threat-model/negative/fence-wrong-marker.md
+fixtures/threat-model/negative/non-table-line-in-table.md
