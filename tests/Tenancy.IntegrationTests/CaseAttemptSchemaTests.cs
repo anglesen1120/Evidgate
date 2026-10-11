@@ -19,7 +19,7 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class CaseAttemptSchemaTests
+public sealed partial class CaseAttemptSchemaTests
 {
     /// <summary>The migration under test, re-run by the existing-row-safety cases.</summary>
     private const string MigrationFile = "0032_orchestration_case_attempt.sql";
@@ -177,14 +177,23 @@ public sealed class CaseAttemptSchemaTests
             + $"{(attemptId is null ? "null" : $"'{attemptId}'")}, 'trace', 'pending/{org}/{id}', 'application/zip', '{VariantHash}', 'normal')";
     }
 
-    /// <summary>A committed run plus its planned execution for <paramref name="world"/>'s org.</summary>
-    private async Task<Guid> SeedRunAndPlanAsync(World world, Parents parents, string executionKey = ExecutionKey)
+    /// <summary>A committed run plus its planned execution for <paramref name="world"/>'s own org.</summary>
+    private Task<Guid> SeedRunAndPlanAsync(World world, Parents parents, string executionKey = ExecutionKey) =>
+        SeedRunAndPlanAsync(world, world.Org, world.Project, parents, executionKey);
+
+    /// <summary>
+    /// A committed run plus its planned execution for one tenant, written as the app role under that
+    /// tenant's own scope. <paramref name="parents"/> must be the parents seeded for
+    /// <paramref name="org"/>/<paramref name="project"/>: the run's composite manifest key refuses a
+    /// run that names another tenant's manifest/suite/environment.
+    /// </summary>
+    private async Task<Guid> SeedRunAndPlanAsync(World world, Guid org, Guid project, Parents parents, string executionKey = ExecutionKey)
     {
         var runId = Guid.CreateVersion7();
 
-        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        (await scope.ExecuteAsync(InsertRunSql(world.Org, world.Project, parents, runId))).ShouldBe(1);
-        (await scope.ExecuteAsync(InsertPlannedExecutionSql(world.Org, runId, parents.TestRevisionId, executionKey))).ShouldBe(1);
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), org);
+        (await scope.ExecuteAsync(InsertRunSql(org, project, parents, runId))).ShouldBe(1);
+        (await scope.ExecuteAsync(InsertPlannedExecutionSql(org, runId, parents.TestRevisionId, executionKey))).ShouldBe(1);
         await scope.CommitAsync();
 
         return runId;
@@ -355,7 +364,7 @@ public sealed class CaseAttemptSchemaTests
         var theirs = await SeedParentsAsync(world.Database, otherOrg, otherProject);
         // Their run plans a DIFFERENT execution key, so the only key that can reject the row below is
         // the composite planned-execution key: (otherOrg, theirRun, ExecutionKey) has no planned row.
-        var theirRun = await SeedRunAndPlanAsync(world, theirs, OtherExecutionKey);
+        var theirRun = await SeedRunAndPlanAsync(world, otherOrg, otherProject, theirs, OtherExecutionKey);
 
         // The row is filed under the other org but names this org's execution key on their run.
         var error = await CaptureAppErrorAsync(
@@ -363,6 +372,15 @@ public sealed class CaseAttemptSchemaTests
 
         error.SqlState.ShouldBe("23503");
         error.ConstraintName.ShouldBe("case_attempt_planned_execution_fk");
+
+        // Positive control: the same row with the key their run did plan is accepted, so the refusal
+        // above is the cross-org mismatch and not a bad seed.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), otherOrg))
+        {
+            (await scope.ExecuteAsync(InsertCaseAttemptSql(
+                otherOrg, theirRun, theirs.CaseId, executionKey: OtherExecutionKey))).ShouldBe(1);
+            await scope.CommitAsync();
+        }
     }
 
     [Fact]
@@ -372,13 +390,23 @@ public sealed class CaseAttemptSchemaTests
         var mine = await SeedParentsAsync(world.Database, world.Org, world.Project);
         var (otherOrg, otherProject) = await CreateOtherTenantAsync(world, "beta");
         var theirs = await SeedParentsAsync(world.Database, otherOrg, otherProject);
-        var theirRun = await SeedRunAndPlanAsync(world, theirs);
+        var theirRun = await SeedRunAndPlanAsync(world, otherOrg, otherProject, theirs);
 
+        // The row is filed under the other org and names their run and their planned key, but points
+        // at this org's case: only the composite case key can reject it.
         var error = await CaptureAppErrorAsync(
             world, otherOrg, InsertCaseAttemptSql(otherOrg, theirRun, mine.CaseId));
 
         error.SqlState.ShouldBe("23503");
         error.ConstraintName.ShouldBe("case_attempt_case_fk");
+
+        // Positive control: the same row naming their own case is accepted, so the refusal above is
+        // the cross-org mismatch and not a bad seed.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), otherOrg))
+        {
+            (await scope.ExecuteAsync(InsertCaseAttemptSql(otherOrg, theirRun, theirs.CaseId))).ShouldBe(1);
+            await scope.CommitAsync();
+        }
     }
 
     [Fact]
@@ -397,13 +425,26 @@ public sealed class CaseAttemptSchemaTests
         }
 
         var (otherOrg, otherProject) = await CreateOtherTenantAsync(world, "beta");
-        var theirRun = await SeedRunAndPlanAsync(world, await SeedParentsAsync(world.Database, otherOrg, otherProject));
+        var theirs = await SeedParentsAsync(world.Database, otherOrg, otherProject);
+        var theirRun = await SeedRunAndPlanAsync(world, otherOrg, otherProject, theirs);
 
+        // The artifact is filed under the other org and names their run, but points at this org's
+        // attempt: only the composite attempt key can reject it.
         var error = await CaptureAppErrorAsync(
             world, otherOrg, InsertArtifactSql(otherOrg, otherProject, theirRun, attemptId));
 
         error.SqlState.ShouldBe("23503");
         error.ConstraintName.ShouldBe("artifact_attempt_fk");
+
+        // Positive control: an artifact under the other org naming their own attempt is accepted, so
+        // the refusal above is the cross-org mismatch and not a bad seed.
+        var theirAttemptId = Guid.CreateVersion7();
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), otherOrg))
+        {
+            (await scope.ExecuteAsync(InsertCaseAttemptSql(otherOrg, theirRun, theirs.CaseId, id: theirAttemptId))).ShouldBe(1);
+            (await scope.ExecuteAsync(InsertArtifactSql(otherOrg, otherProject, theirRun, theirAttemptId))).ShouldBe(1);
+            await scope.CommitAsync();
+        }
     }
 
     [Fact]
