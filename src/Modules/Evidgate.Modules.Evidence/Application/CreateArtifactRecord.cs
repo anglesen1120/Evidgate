@@ -64,15 +64,19 @@ internal sealed partial class CreateArtifactRecordValidator : AbstractValidator<
     {
         RuleFor(command => command.ExecutionKey)
             .Must(key => key is not null && ExecutionKeyShape().IsMatch(key))
-            .WithErrorCode("invalid_format");
+            .WithErrorCode("invalid_format")
+            .When(command => command.ClientObjectKey is null);
 
         RuleFor(command => command.AttemptNo)
             .GreaterThanOrEqualTo(1)
-            .WithErrorCode("out_of_range");
+            .WithErrorCode("out_of_range")
+            .When(command => command.ClientObjectKey is null);
 
         RuleFor(command => command.MediaType)
-            .Must(mediaType => mediaType is not null && mediaType.Length is >= 1 and <= 255)
-            .WithErrorCode("invalid_length");
+            // Postgres char_length counts code points, not UTF-16 units (0028 artifact_media_type_check).
+            .Must(mediaType => mediaType is not null && mediaType.EnumerateRunes().Count() is >= 1 and <= 255)
+            .WithErrorCode("invalid_length")
+            .When(command => command.ClientObjectKey is null);
     }
 }
 

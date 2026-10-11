@@ -1,6 +1,9 @@
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
+using Evidgate.Modules.Evidence.Application;
+using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Evidgate.Modules.Evidence;
 
@@ -17,6 +20,9 @@ internal static class EvidenceModule
 
         // 06.1.1-T1: the EF write model of artifacts and their kind policies (00 §5.5 C4).
         services.AddEvidgateDbContext<EvidenceDbContext>(typeof(EvidenceDbContext).Assembly);
+
+        // 06.1.1-T2: C2 stage-2 shape validation of the mint command (resolved by ValidationBehaviour).
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateArtifactRecord>, CreateArtifactRecordValidator>());
 
         return services;
     }

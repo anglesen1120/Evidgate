@@ -20,7 +20,7 @@ namespace Evidgate.Modules.Evidence.Domain;
 internal static partial class ArtifactKeyMinter
 {
     /// <summary>The 00 §7 execution-key shape: sha256 hex, lowercase (the 0028 <c>artifact_execution_key_check</c>).</summary>
-    [GeneratedRegex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("\\A[0-9a-f]{64}\\z", RegexOptions.CultureInvariant)]
     private static partial Regex ExecutionKeyShape();
 
     /// <summary>
