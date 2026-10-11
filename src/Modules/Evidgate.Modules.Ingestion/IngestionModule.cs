@@ -1,9 +1,11 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Application.Commands;
 using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Ingestion.Domain;
 using Evidgate.Modules.Ingestion.Infrastructure;
+using Evidgate.Modules.Ingestion.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -32,6 +34,13 @@ internal static class IngestionModule
         // 04.7.1-T2.2/T2.3: the capability store and the registration path shared by both entries.
         services.TryAddScoped<AdapterCapabilityStore>();
         services.TryAddScoped<AdapterCapabilityRegistrar>();
+
+        // 04.1.2-T4.1: the EF write model of producer slots (00 §5.5 C4).
+        services.AddEvidgateDbContext<IngestionDbContext>(typeof(IngestionDbContext).Assembly);
+
+        // 04.1.2-T4.2: the producer registry 05's run-create, 06.1.2's upload-url and 05.3.2-T1's
+        // finalize call (T9/T54/T85).
+        services.TryAddScoped<IProducerRegistry, ProducerRegistry>();
 
         // The capability body validates against contracts/adapter/capability.v1.json; the compiled set is built on
         // first use, so a host that never registers a capability pays nothing at start-up.
