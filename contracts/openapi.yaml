@@ -778,13 +778,16 @@ paths:
         `error.details[].path`; a `critical_cases` entry that is not a case UUID
         is `422` with a pointer to that entry. A credential scoped to another
         project is `403 project_scope_mismatch`; a project row another writer
-        holds past the lock timeout is `503 unavailable`. No `Idempotency-Key`
-        is required: activating the same revision twice is naturally idempotent
-        (`changed: false`, one audit row per call).
+        holds past the lock timeout is `503 unavailable`. `Idempotency-Key`
+        required (00 §9.1): a retry with the same key and the same body replays
+        the original response and writes no second audit row, a different body
+        is `409 idempotency_conflict`; a re-activation of the active revision
+        with a new key is still `200` with `changed: false` and audited.
       x-permission: policy:write
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/XsrfToken'
       requestBody:
         required: true

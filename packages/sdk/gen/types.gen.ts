@@ -2072,7 +2072,11 @@ export type ActivatePolicyRevisionData = {
         policy_revision_id: string;
         mode?: 'advisory' | 'enforcing';
     };
-    headers?: {
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
         /**
          * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
          */

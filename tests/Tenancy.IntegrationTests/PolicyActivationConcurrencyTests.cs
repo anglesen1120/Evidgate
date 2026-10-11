@@ -127,7 +127,8 @@ public sealed class PolicyActivationConcurrencyTests
             HttpMethod.Post,
             $"/v1/projects/{world.Project}/policy-activation",
             world.Admin,
-            $$"""{"policy_revision_id":"{{revisionId}}"}""");
+            $$"""{"policy_revision_id":"{{revisionId}}"}""",
+            NewKey());
 
     private static Task<ApiAnswer> QuarantineAsync(World world, Guid caseId) =>
         world.Client.SendAsync(
@@ -144,16 +145,22 @@ public sealed class PolicyActivationConcurrencyTests
             },
             NewKey());
 
-    /// <summary>Sends a raw body verbatim; the activation route takes no <c>Idempotency-Key</c>.</summary>
+    /// <summary>Sends a raw body verbatim; an <c>Idempotency-Key</c> is added only when one is supplied (the activation route requires one, the revision route takes none).</summary>
     private static async Task<ApiAnswer> SendRawAsync(
         HttpClient client,
         HttpMethod method,
         string url,
         Action<HttpRequestHeaders> caller,
-        string raw)
+        string raw,
+        string? idempotencyKey = null)
     {
         using var request = new HttpRequestMessage(method, url);
         caller(request.Headers);
+        if (idempotencyKey is not null)
+        {
+            request.Headers.Add("Idempotency-Key", idempotencyKey);
+        }
+
         request.Content = new StringContent(raw, Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);

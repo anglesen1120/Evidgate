@@ -667,7 +667,7 @@ internal static class RouteRequests
         Add("GET", "/v1/policies/{id}", ctx => new(HttpMethod.Get, $"/v1/policies/{ctx.PolicyRevisionId}"));
         Add("GET", "/v1/policies/{id}/revisions", ctx => new(HttpMethod.Get, $"/v1/policies/{ctx.PolicyRevisionId}/revisions"));
         Add("POST", "/v1/projects/{p}/policy-activation", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/policy-activation",
-            new JsonObject { ["policy_revision_id"] = ctx.PolicyRevisionId.ToString("D") }));
+            new JsonObject { ["policy_revision_id"] = ctx.PolicyRevisionId.ToString("D") }, IdempotencyKey: Key()));
 
         // ---- Waivers -----------------------------------------------------------------------------------------
         Add("POST", "/v1/waivers", ctx => new(HttpMethod.Post, "/v1/waivers", Waiver(ctx), IdempotencyKey: Key()));

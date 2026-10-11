@@ -70,30 +70,46 @@ public sealed class PolicyActivationTests
         return created.Id();
     }
 
-    /// <summary>Activates <paramref name="revisionId"/> in <paramref name="project"/> as the admin.</summary>
+    /// <summary>
+    /// Activates <paramref name="revisionId"/> in <paramref name="project"/> as the admin. Every call carries an
+    /// <c>Idempotency-Key</c> (07.1.1-T4, 00 §9.1): a fresh one by default, or <paramref name="idempotencyKey"/> to
+    /// replay/conflict, or none at all when <paramref name="omitIdempotencyKey"/> is set (the missing-header case).
+    /// </summary>
     private static Task<ApiAnswer> ActivateAsync(
         World world,
         Guid revisionId,
         Guid? project = null,
         Action<HttpRequestHeaders>? caller = null,
-        string? rawBody = null) =>
+        string? rawBody = null,
+        string? idempotencyKey = null,
+        bool omitIdempotencyKey = false) =>
         SendRawAsync(
             world.Client,
             HttpMethod.Post,
             $"/v1/projects/{project ?? world.Project}/policy-activation",
             caller ?? world.Admin,
-            rawBody ?? $$"""{"policy_revision_id":"{{revisionId}}"}""");
+            rawBody ?? $$"""{"policy_revision_id":"{{revisionId}}"}""",
+            omitIdempotencyKey ? null : idempotencyKey ?? NewKey());
 
-    /// <summary>Sends a raw body verbatim; the activation route takes no <c>Idempotency-Key</c>.</summary>
+    /// <summary>
+    /// Sends a raw body verbatim. An <c>Idempotency-Key</c> header is added only when <paramref name="idempotencyKey"/>
+    /// is non-null: the activation route requires one, the revision route takes none.
+    /// </summary>
     private static async Task<ApiAnswer> SendRawAsync(
         HttpClient client,
         HttpMethod method,
         string url,
         Action<HttpRequestHeaders> caller,
-        string raw)
+        string raw,
+        string? idempotencyKey = null)
     {
         using var request = new HttpRequestMessage(method, url);
         caller(request.Headers);
+        if (idempotencyKey is not null)
+        {
+            request.Headers.Add("Idempotency-Key", idempotencyKey);
+        }
+
         request.Content = new StringContent(raw, Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -101,6 +117,8 @@ public sealed class PolicyActivationTests
 
         return new ApiAnswer(response.StatusCode, document.RootElement.Clone(), response.Headers);
     }
+
+    private static string NewKey() => Guid.NewGuid().ToString("N");
 
     private async Task<string> StateAsync(World world, Guid revisionId) =>
         await _fixture.ScalarAsync<string>(
@@ -368,18 +386,60 @@ public sealed class PolicyActivationTests
     }
 
     [Fact]
-    public async Task Activate_IsNaturalIdempotent_AndNeverRequiresAnIdempotencyKey()
+    public async Task Activate_MissingIdempotencyKey_Is400_AndWritesNothing()
     {
         await using var world = await StartAsync();
         var revision = await CreateRevisionAsync(world, BodyA);
 
-        var first = await ActivateAsync(world, revision);
-        var replay = await ActivateAsync(world, revision);
+        var refused = await ActivateAsync(world, revision, omitIdempotencyKey: true);
+
+        refused.Status.ShouldBe(HttpStatusCode.BadRequest);
+        refused.ErrorCode.ShouldBe("request_invalid");
+        (await StateAsync(world, revision)).ShouldBe("draft");
+        (await ActivationAuditRowsAsync(world)).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_activation")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Activate_SameKeySameBody_ReplaysTheResponse_AndWritesNoSecondAuditRow()
+    {
+        await using var world = await StartAsync();
+        var revision = await CreateRevisionAsync(world, BodyA);
+        var key = NewKey();
+
+        var first = await ActivateAsync(world, revision, idempotencyKey: key);
+        var replay = await ActivateAsync(world, revision, idempotencyKey: key);
 
         first.Status.ShouldBe(HttpStatusCode.OK);
         replay.Status.ShouldBe(HttpStatusCode.OK);
-        replay.Body.GetProperty("changed").GetBoolean().ShouldBeFalse();
-        (await ActivationAuditRowsAsync(world)).ShouldBe(2);
+        // The stored response is revived verbatim, so the replayed body is byte-identical and the pointer did not move twice.
+        replay.Body.GetRawText().ShouldBe(first.Body.GetRawText());
+        (await StateAsync(world, revision)).ShouldBe("active");
+        (await PointerAsync(world)).ShouldBe(revision);
+        (await ActivationAuditRowsAsync(world)).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            "select count(*) from public.idempotency_record where operation = 'policy:activate'")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Activate_SameKeyDifferentBody_Is409_AndTheActiveRevisionIsUnchanged()
+    {
+        await using var world = await StartAsync();
+        var first = await CreateRevisionAsync(world, BodyA);
+        var second = await CreateRevisionAsync(world, BodyB);
+        var key = NewKey();
+
+        (await ActivateAsync(world, first, idempotencyKey: key)).Status.ShouldBe(HttpStatusCode.OK);
+
+        var conflict = await ActivateAsync(world, second, idempotencyKey: key);
+
+        conflict.Status.ShouldBe(HttpStatusCode.Conflict);
+        conflict.ErrorCode.ShouldBe("idempotency_conflict");
+        (await StateAsync(world, first)).ShouldBe("active");
+        (await StateAsync(world, second)).ShouldBe("draft");
+        (await PointerAsync(world)).ShouldBe(first);
+        (await ActivationAuditRowsAsync(world)).ShouldBe(1);
     }
 
     [Fact]

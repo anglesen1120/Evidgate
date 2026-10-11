@@ -70,7 +70,8 @@ public sealed class PolicyRunPinningTests
             HttpMethod.Post,
             $"/v1/projects/{project ?? world.Project}/policy-activation",
             caller ?? world.Admin,
-            body);
+            body,
+            NewKey());
     }
 
     /// <summary>Sends a raw JSON body verbatim, so a literal like <c>30.0</c> or <c>3e1</c> reaches the server unchanged.</summary>

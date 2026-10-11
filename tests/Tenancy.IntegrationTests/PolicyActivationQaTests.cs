@@ -71,7 +71,8 @@ public sealed class PolicyActivationQaTests
             HttpMethod.Post,
             $"/v1/projects/{project ?? world.Project}/policy-activation",
             caller ?? world.Admin,
-            raw);
+            raw,
+            NewKey());
 
     private static Task<ApiAnswer> ActivateAsync(World world, Guid revisionId, Action<HttpRequestHeaders>? caller = null, Guid? project = null) =>
         ActivateRawAsync(world, $$"""{"policy_revision_id":"{{revisionId}}"}""", caller, project);
@@ -81,10 +82,16 @@ public sealed class PolicyActivationQaTests
         HttpMethod method,
         string url,
         Action<HttpRequestHeaders> caller,
-        string raw)
+        string raw,
+        string? idempotencyKey = null)
     {
         using var request = new HttpRequestMessage(method, url);
         caller(request.Headers);
+        if (idempotencyKey is not null)
+        {
+            request.Headers.Add("Idempotency-Key", idempotencyKey);
+        }
+
         request.Content = new StringContent(raw, Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);

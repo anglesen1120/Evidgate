@@ -112,7 +112,7 @@ public static class PolicyEndpoints
             return Result.Failure<PolicyActivationDto>(tooLarge);
         }
 
-        return await mediator.Send(new ActivatePolicyCommand(p, bytes), cancellationToken).ConfigureAwait(false);
+        return await mediator.Send(new ActivatePolicyCommand(p, bytes, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Result<PolicyRevisionDto>> GetPolicyRevisionAsync(
@@ -216,6 +216,9 @@ public static class PolicyEndpoints
 
     /// <summary>The <c>If-Match</c> header, or null when the caller sent none (00 §9.1).</summary>
     private static string? IfMatch(HttpContext context) => Blank(context.Request.Headers.IfMatch.ToString());
+
+    /// <summary>The <c>Idempotency-Key</c> header (00 §9.1); an absent header is the empty string the C2 stage refuses.</summary>
+    private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
 
     private static string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
 

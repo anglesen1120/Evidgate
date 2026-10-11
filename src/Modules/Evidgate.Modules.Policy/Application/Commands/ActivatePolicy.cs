@@ -1,4 +1,6 @@
+using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
@@ -6,6 +8,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
+using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Policy.Contracts;
@@ -21,7 +24,45 @@ namespace Evidgate.Modules.Policy.Application.Commands;
 /// </summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Body">The raw request body, read under the route's 4 KiB cap (<c>PolicyEndpoints.MaxActivationBytes</c>) and parsed in the handler.</param>
-internal sealed record ActivatePolicyCommand(Guid ProjectId, ReadOnlyMemory<byte> Body) : ICommand<Result<PolicyActivationDto>>;
+/// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1).</param>
+internal sealed record ActivatePolicyCommand(
+    Guid ProjectId,
+    [property: JsonIgnore] ReadOnlyMemory<byte> Body,
+    string IdempotencyKey)
+    : ICommand<Result<PolicyActivationDto>>, IIdempotentCommand
+{
+    /// <summary>The 00 §7 operation the key is claimed for: stable across a rename.</summary>
+    string IIdempotentCommand.Operation => "policy:activate";
+
+    /// <summary>
+    /// The request identity the idempotency store hashes, computed from <see cref="Body"/> on first serialization
+    /// (inside the C2 idempotency stage, never at the HTTP edge): the RFC 8785 digest of the body
+    /// (<see cref="CanonicalHash"/>), so member order and whitespace differences replay rather than conflict. A body
+    /// that cannot be canonicalized — invalid JSON, a duplicate member name, a lone surrogate — falls back to
+    /// <c>raw-sha256:&lt;hex&gt;</c> of the raw bytes, so the request still reaches the handler, which answers its normal
+    /// 422/400 (a failure Result is never stored).
+    /// </summary>
+    public string BodyHash => ComputeBodyHash(Body);
+
+    private static string ComputeBodyHash(ReadOnlyMemory<byte> body)
+    {
+        try
+        {
+            return CanonicalHash.Compute(body.Span);
+        }
+        catch (JsonCanonicalizationException)
+        {
+            return RawSha256(body);
+        }
+        catch (JsonException)
+        {
+            return RawSha256(body);
+        }
+    }
+
+    private static string RawSha256(ReadOnlyMemory<byte> body) =>
+        "raw-sha256:" + Convert.ToHexStringLower(SHA256.HashData(body.Span));
+}
 
 /// <summary>
 /// The activation command (07.1.1 §6): resolve the caller, hold the project scope, parse the body, run
