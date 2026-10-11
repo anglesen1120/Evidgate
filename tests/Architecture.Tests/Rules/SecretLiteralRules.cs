@@ -18,7 +18,7 @@ namespace Architecture.Tests.Rules;
 public static class SecretLiteralRules
 {
     /// <summary>
-    /// The six secret keys in both spellings the code could use: the
+    /// The secret keys in both spellings the code could use: the
     /// environment-variable name and its <c>IConfiguration</c> form.
     /// </summary>
     public static IReadOnlyList<string> ForbiddenLiterals { get; } =
@@ -29,12 +29,16 @@ public static class SecretLiteralRules
         "EVIDGATE__CI__PEPPER",
         "EVIDGATE__CI__PREVIOUSPEPPER",
         "EVIDGATE_MIGRATOR__CONNECTIONSTRING",
+        "EVIDGATE__OBJECT__ACCESSKEY",
+        "EVIDGATE__OBJECT__SECRETKEY",
         "EVIDGATE:Database:ConnectionString",
         "EVIDGATE:Tasks:SweepConnectionString",
         "EVIDGATE:Ci:SigningKey",
         "EVIDGATE:Ci:Pepper",
         "EVIDGATE:Ci:PreviousPepper",
         "EVIDGATE_MIGRATOR:CONNECTIONSTRING",
+        "EVIDGATE:Object:AccessKey",
+        "EVIDGATE:Object:SecretKey",
     ];
 
     /// <summary>The <c>IConfiguration</c> extension that reads a connection string by name.</summary>
@@ -95,7 +99,7 @@ public static class SecretLiteralRules
     /// doc <c>cref="SigningKey"</c> from being mistaken for a read.
     /// </summary>
     private static readonly Regex ForbiddenPropertyPattern = new(
-        "(?<![=\\w])\"(ConnectionString|SweepConnectionString|SigningKey|Pepper|PreviousPepper)\"",
+        "(?<![=\\w])\"(ConnectionString|SweepConnectionString|SigningKey|Pepper|PreviousPepper|AccessKey|SecretKey)\"",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>

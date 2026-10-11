@@ -31,6 +31,12 @@ public static class SecretNames
     /// <summary>Owner-role connection string of the deploy-time Migrator.</summary>
     public const string MigratorConnectionString = "EVIDGATE_MIGRATOR__CONNECTIONSTRING";
 
+    /// <summary>Access key of the object-storage identity (06.1.2-T1).</summary>
+    public const string ObjectAccessKey = "EVIDGATE__OBJECT__ACCESSKEY";
+
+    /// <summary>Secret key of the object-storage identity (06.1.2-T1).</summary>
+    public const string ObjectSecretKey = "EVIDGATE__OBJECT__SECRETKEY";
+
     private static readonly string[] Names =
     [
         DatabaseConnectionString,
@@ -39,6 +45,8 @@ public static class SecretNames
         CiPepper,
         CiPreviousPepper,
         MigratorConnectionString,
+        ObjectAccessKey,
+        ObjectSecretKey,
     ];
 
     /// <summary>Every known secret name; a name outside this list is rejected by the provider.</summary>

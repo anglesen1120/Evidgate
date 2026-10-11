@@ -409,6 +409,146 @@
       "note": "boot-time RLS self-check switch (02.6.1-T1.4): Required (default) refuses to start unless every non-exempt table is under database-enforced isolation; Disabled exists only for hosts that boot without a database (contract/shutdown suites) and is logged at Warning on every boot. A deployable environment never sets Disabled — the config lint enforces that through forbiddenValues, not through this note."
     },
     {
+      "key": "EVIDGATE__OBJECT__ENDPOINT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "absolute http(s) S3 endpoint of the object store (06.1.2-T1); empty selects the AWS regional endpoint of the region row. Dev points it at the local SeaweedFS gateway; staging and prod leave it unset until 10.1.1-T3 provisions the bucket. The options validator accepts only an absolute http(s) URL with no userinfo, query or fragment, so a crafted value cannot redirect the signed request at another host (SSRF-by-config)."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__REGION",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "SigV4 signing region of the object store (06.1.2-T1). Dev uses the SeaweedFS gateway's us-east-1; staging and prod set the provider region, which is [OPEN] until 10.8.1 (O3) and is a residency criterion for plan 11."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__BUCKET",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "bucket the pending/ staging keys live in (06.1.2-T1). Dev uses the same bucket scripts/dev/up.sh creates and puts the pending/ 24 h lifecycle rule on; staging and prod get their own bucket with versioning and lifecycle from 10.1.1-T3 and 10.5.1-T2."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__PRESIGNEXPIRYSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "lifetime of a presigned PUT in seconds (06.1.2-T1, 00 §9.3: at most 15 minutes); option default 900, and the options validator accepts 1..900 only. No environment sets it: the default is the contract."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__FORCEPATHSTYLE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "boolean",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "path-style S3 addressing (06.1.2-T1); option default true, which every S3-compatible emulator needs. Dev states it explicitly because SeaweedFS requires it; a real provider accepts virtual-host style, so staging and prod keep the default."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__ACCESSKEY",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "access key of the object-storage identity (06.1.2-T1), resolved through ISecretProvider by the options post-configurer and never bound from IConfiguration. Dev uses the local-only SeaweedFS identity that scripts/dev/up.sh asserts equals infra/seaweedfs/s3-config.json; staging and prod hold their own credential in the provider secret store (10.1.1-T3)."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__SECRETKEY",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "secret key of the object-storage identity (06.1.2-T1), resolved through ISecretProvider by the options post-configurer and never bound from IConfiguration. Dev uses the local-only SeaweedFS identity that scripts/dev/up.sh asserts equals infra/seaweedfs/s3-config.json; staging and prod hold their own credential in the provider secret store (10.1.1-T3)."
+    },
+    {
       "key": "EVIDGATE__RUNS__DEFAULTCOLLECTIONTIMEOUT",
       "scope": "runtime",
       "consumers": ["api", "worker"],
