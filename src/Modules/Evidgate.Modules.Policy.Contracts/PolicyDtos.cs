@@ -53,3 +53,28 @@ public sealed record PolicyRevisionSummaryDto(
 public sealed record PolicyRevisionListResponse(
     IReadOnlyList<PolicyRevisionSummaryDto> Items,
     string? NextCursor);
+
+/// <summary>
+/// Wire shape of <c>POST /v1/projects/{p}/policy-activation</c> (07.1.1 §5, T4.1): the project's policy
+/// pointer after the call. A run created afterwards pins <c>PolicyRevisionId</c>.
+/// </summary>
+/// <param name="ProjectId">The project whose pointer moved.</param>
+/// <param name="PolicyRevisionId">The revision that is now the project's active policy.</param>
+/// <param name="Hash">Its content address, <c>sha256:&lt;64 lower-case hex&gt;</c> (00 §7).</param>
+/// <param name="Mode">The stored mode: <c>advisory</c> (the only value this story accepts).</param>
+/// <param name="ActivatedBy">The member that activated it.</param>
+/// <param name="ActivatedAt">When the pointer was written, UTC.</param>
+/// <param name="PreviousPolicyRevisionId">
+/// The revision this call retired, or null when nothing changed (the target was already active, or the
+/// project had no active revision).
+/// </param>
+/// <param name="Changed">True when this call moved the pointer; false when the target was already active.</param>
+public sealed record PolicyActivationDto(
+    Guid ProjectId,
+    Guid PolicyRevisionId,
+    string Hash,
+    string Mode,
+    Guid ActivatedBy,
+    DateTimeOffset ActivatedAt,
+    Guid? PreviousPolicyRevisionId,
+    bool Changed);

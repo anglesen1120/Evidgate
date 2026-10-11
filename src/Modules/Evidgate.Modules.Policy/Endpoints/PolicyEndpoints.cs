@@ -25,6 +25,12 @@ public static class PolicyEndpoints
     /// <summary>The policy-revision transport cap (the schema's <c>x-max-bytes</c>).</summary>
     internal const int MaxPolicyBytes = 64 * 1024;
 
+    /// <summary>
+    /// The activation transport cap (07.1.1-T4 F2c): the body is a revision id and an optional mode, so 4 KiB
+    /// is ample and the 64 KiB revision cap is not read for a ~100-byte request.
+    /// </summary>
+    internal const int MaxActivationBytes = 4 * 1024;
+
     internal const int DefaultLimit = 50;
 
     internal const int MaxLimit = 200;
@@ -40,6 +46,10 @@ public static class PolicyEndpoints
             .Produces<PolicyRevisionDto>(StatusCodes.Status201Created)
             .Produces<PolicyRevisionDto>(StatusCodes.Status200OK)
             .WithSummary("Create an immutable, hashed policy revision (07.1.1)");
+
+        group.MapPost("/projects/{p}/policy-activation", ActivatePolicyAsync)
+            .Produces<PolicyActivationDto>(StatusCodes.Status200OK)
+            .WithSummary("Activate a policy revision for the project; runs created afterwards pin it (07.1.1)");
 
         group.MapGet("/policies/{id}", GetPolicyRevisionAsync)
             .Produces<PolicyRevisionDto>(StatusCodes.Status200OK)
@@ -80,6 +90,29 @@ public static class PolicyEndpoints
         }
 
         return result;
+    }
+
+    private static async Task<Result<PolicyActivationDto>> ActivatePolicyAsync(
+        Guid p,
+        HttpContext context,
+        IRequestPrincipalAccessor principals,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        // Same edge as the append route: an anonymous caller is refused before any byte of the body is read,
+        // and the pipeline's permission check runs in the handler.
+        if (principals.Current is null)
+        {
+            return Result.Failure<PolicyActivationDto>(Unauthenticated);
+        }
+
+        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxActivationBytes, cancellationToken).ConfigureAwait(false);
+        if (tooLarge is not null)
+        {
+            return Result.Failure<PolicyActivationDto>(tooLarge);
+        }
+
+        return await mediator.Send(new ActivatePolicyCommand(p, bytes, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Result<PolicyRevisionDto>> GetPolicyRevisionAsync(
@@ -183,6 +216,9 @@ public static class PolicyEndpoints
 
     /// <summary>The <c>If-Match</c> header, or null when the caller sent none (00 §9.1).</summary>
     private static string? IfMatch(HttpContext context) => Blank(context.Request.Headers.IfMatch.ToString());
+
+    /// <summary>The <c>Idempotency-Key</c> header (00 §9.1); an absent header is the empty string the C2 stage refuses.</summary>
+    private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
 
     private static string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
 

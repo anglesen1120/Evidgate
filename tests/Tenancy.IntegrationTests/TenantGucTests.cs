@@ -361,16 +361,27 @@ public sealed class TenantGucTests
             ("execution_key", new string('a', 64)),
             ("case_revision_id", testRevisionId),
             ("variant_hash", "sha256:" + new string('b', 64)));
+        var policyRevisionId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
             insert into public.policy_revision (id, org_id, project_id, revision_no, hash, body, created_by)
             values (@id, @org_id, @project_id, 1, @hash, '{}', @created_by)
             """,
-            ("id", Guid.CreateVersion7()),
+            ("id", policyRevisionId),
             ("org_id", orgId),
             ("project_id", projectId),
             ("hash", "sha256:" + new string('e', 64)),
             ("created_by", Guid.CreateVersion7()));
+        await scope.ExecuteAsync(
+            """
+            insert into public.policy_activation (id, org_id, project_id, policy_revision_id, activated_by)
+            values (@id, @org_id, @project_id, @policy_revision_id, @activated_by)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("policy_revision_id", policyRevisionId),
+            ("activated_by", Guid.CreateVersion7()));
         await scope.ExecuteAsync(
             """
             insert into public.adapter_capability (id, org_id, name, protocol_major, protocol_minor, engine_family, engine_version, platforms, supports, mode)

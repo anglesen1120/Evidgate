@@ -271,6 +271,17 @@ internal sealed class TenantRowFactory
             }
         }
 
+        // policy_activation's unique key is (org_id, project_id): one activation per project. A row that shares a
+        // project with another row of the same org trips that key (23505) before the composite foreign key the
+        // suite checks, so each generated row gets a project of its own. When the project foreign key is the one
+        // under test, the project id IS the corruption and must keep pointing at the other org's project.
+        if (string.Equals(table, "public.policy_activation", StringComparison.Ordinal)
+            && !string.Equals(corruptedForeignKey, "policy_activation_project_fk", StringComparison.Ordinal))
+        {
+            var ownProject = await CreateAsync("public.project", org, forcedId: null, cancellationToken);
+            values["project_id"] = ownProject.Values[TenantFkScan.TenantKeyColumn];
+        }
+
         // quarantine_entry's partial unique index (org_id, project_id, case_id) WHERE state = 'active'
         // is not a composite-FK target, so the schema scan above never sees it — but it would reject the
         // corrupt row with 23505 before the composite FK under test is reached: the corrupt row differs

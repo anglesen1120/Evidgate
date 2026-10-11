@@ -145,7 +145,7 @@ public sealed class QuarantineQaTests
         return userId;
     }
 
-    /// <summary>Inserts a <c>policy_revision</c> in a chosen state as the owner (activation is 07.1.1-T4, not merged).</summary>
+    /// <summary>Inserts a <c>policy_revision</c> in a chosen state as the owner: activation merged with 07.1.1-T4 and the API refuses to activate a revision whose critical case is under an active quarantine (Q2), so the state is seeded directly.</summary>
     private async Task<Guid> InsertRevisionAsync(World world, string state, IReadOnlyList<string> criticalCases, int revisionNo = 1)
     {
         var id = Guid.CreateVersion7();

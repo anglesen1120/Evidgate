@@ -30,9 +30,11 @@ internal sealed record CreatePolicyRevisionCommand(
 /// <summary>
 /// Handler of <see cref="CreatePolicyRevisionCommand"/>. The body is parsed, validated against
 /// <c>policy-revision.v1</c> and checked against the domain rules before the store is called, so the store's own
-/// guards are unreachable from HTTP. A body whose canonical form is already on file returns the stored revision
-/// with 200 (AC1); new content gets the next number with 201. A stale <c>If-Match</c> is 412 and writes nothing
-/// (AC5), decided under the store's project row lock.
+/// guards are unreachable from HTTP. The validated body and the content address <see cref="IPolicyHasher"/>
+/// computed for it travel to the store as one <see cref="PolicyRevisionContent"/>, so the parse, the number scan
+/// and the canonicalisation run once per POST (07.1.1-T4, CR4/P1). A body whose canonical form is already on file
+/// returns the stored revision with 200 (AC1); new content gets the next number with 201. A stale <c>If-Match</c>
+/// is 412 and writes nothing (AC5), decided under the store's project row lock.
 /// </summary>
 [AuditedAction("policy_revision.create")]
 [Permission(Permissions.Policy.Write)]
@@ -61,7 +63,7 @@ internal sealed class CreatePolicyRevisionCommandHandler(
             return Result.Failure<PolicyRevisionDto>(Error.Forbidden("policy:write is held by a member"));
         }
 
-        if (Validate(command.Body, schemas.Value, hasher, out var body) is { } bodyError)
+        if (Validate(command.Body, schemas.Value, hasher, out var content) is { } bodyError)
         {
             return Result.Failure<PolicyRevisionDto>(bodyError);
         }
@@ -77,7 +79,7 @@ internal sealed class CreatePolicyRevisionCommandHandler(
             expectedHeadId = expected;
         }
 
-        var appended = await store.AppendAsync(command.ProjectId, body, createdBy, cancellationToken, expectedHeadId)
+        var appended = await store.AppendAsync(command.ProjectId, content, createdBy, cancellationToken, expectedHeadId)
             .ConfigureAwait(false);
         if (!appended.IsSuccess)
         {
@@ -115,15 +117,17 @@ internal sealed class CreatePolicyRevisionCommandHandler(
     /// <summary>
     /// Null when the body is a storable JSON object the schema accepts and the domain rules admit, else the 422.
     /// The order is the route's: JSON, then the cheap bounds pre-check (finding S1), then the schema (an unknown
-    /// member is its own code, AC3), then the rules the store would otherwise enforce with an exception.
+    /// member is its own code, AC3), then the rules the store would otherwise enforce with an exception. The body
+    /// is parsed, scanned and canonicalised once here; the returned <see cref="PolicyRevisionContent"/> carries the
+    /// address <see cref="IPolicyHasher"/> computed from it, so the store repeats none of that work (CR4/P1).
     /// </summary>
     private static Error? Validate(
         ReadOnlyMemory<byte> bytes,
         ContractSchemaSet schemas,
         IPolicyHasher hasher,
-        out string body)
+        out PolicyRevisionContent content)
     {
-        body = string.Empty;
+        content = null!;
 
         JsonDocument document;
         try
@@ -168,7 +172,7 @@ internal sealed class CreatePolicyRevisionCommandHandler(
             }
         }
 
-        body = Encoding.UTF8.GetString(bytes.Span);
+        var body = Encoding.UTF8.GetString(bytes.Span);
 
         switch (PolicyRevisionRules.ClassifyNumbers(body))
         {
@@ -184,7 +188,9 @@ internal sealed class CreatePolicyRevisionCommandHandler(
 
         try
         {
-            hasher.Hash(body);
+            // The one canonicalisation of the POST: the hasher computes the address the store will write, from the
+            // very body it stores, so the store takes a value it cannot forge (finding T1-SEC-S2, CR4/P1).
+            content = PolicyRevisionContent.Create(body, hasher);
         }
         catch (JsonCanonicalizationException)
         {

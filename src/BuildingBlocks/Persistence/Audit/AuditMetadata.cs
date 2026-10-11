@@ -30,6 +30,9 @@ public static partial class AuditMetadata
         "range_days",
         "reason",
         "outcome",
+        // 07.1.1-T4.1: the activation records which revision it moved the pointer from and the mode it stored.
+        "previous_id",
+        "mode",
     };
 
     /// <summary>Throws if <paramref name="metadata"/> breaks the allowlist; returns it otherwise.</summary>

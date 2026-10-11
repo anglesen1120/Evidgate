@@ -391,6 +391,20 @@ export type PolicyRevisionDto = {
 };
 
 /**
+ * The project's policy pointer after `POST /v1/projects/{p}/policy-activation` (07.1.1-T4); a run created afterwards pins `policy_revision_id`.
+ */
+export type PolicyActivationDto = {
+    project_id: string;
+    policy_revision_id: string;
+    hash: string;
+    mode: 'advisory' | 'enforcing';
+    activated_by: string;
+    activated_at: string;
+    previous_policy_revision_id: string | null;
+    changed: boolean;
+};
+
+/**
  * A policy revision without its body (07.1.1-T3 list rows).
  */
 export type PolicyRevisionSummaryDto = {
@@ -2068,6 +2082,74 @@ export type GetEnvironmentRevisionResponses = {
 };
 
 export type GetEnvironmentRevisionResponse = GetEnvironmentRevisionResponses[keyof GetEnvironmentRevisionResponses];
+
+export type ActivatePolicyRevisionData = {
+    body: {
+        policy_revision_id: string;
+        mode?: 'advisory' | 'enforcing';
+    };
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/policy-activation';
+};
+
+export type ActivatePolicyRevisionErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ActivatePolicyRevisionError = ActivatePolicyRevisionErrors[keyof ActivatePolicyRevisionErrors];
+
+export type ActivatePolicyRevisionResponses = {
+    /**
+     * The project's policy pointer after the call
+     */
+    200: PolicyActivationDto;
+};
+
+export type ActivatePolicyRevisionResponse = ActivatePolicyRevisionResponses[keyof ActivatePolicyRevisionResponses];
 
 export type CreatePolicyRevisionData = {
     body: PolicyRevisionV1;

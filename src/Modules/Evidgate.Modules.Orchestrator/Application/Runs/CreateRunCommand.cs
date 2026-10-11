@@ -21,6 +21,7 @@ using Evidgate.Modules.Orchestrator.Application.Manifests;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
 using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
+using Evidgate.Modules.Policy.Contracts;
 using Mediator;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -83,8 +84,9 @@ internal sealed record CreateRunCommand(
 
 /// <summary>
 /// Handler of <see cref="CreateRunCommand"/> (05.2.1-T1): validate the body, load the manifest, check its suite and
-/// environment revisions resolve, derive the planned executions (server-side <c>execution_key</c>), then write
-/// <c>run</c> + one <c>planned_execution</c> per manifest entry + one <c>producer_slot</c> per shard (through
+/// environment revisions resolve, derive the planned executions (server-side <c>execution_key</c>), resolve the active
+/// policy revision the run pins (07.1.1-T4.2, through <see cref="IPolicyContracts"/>), then write <c>run</c> + one
+/// <c>planned_execution</c> per manifest entry + one <c>producer_slot</c> per shard (through
 /// <see cref="IProducerRegistry"/>) + the <c>run.created</c> outbox row — all in the one C2 tenant transaction. Any
 /// failure <see cref="Result"/> or exception leaves no row (00 §5.5 C1/C7/D2, AC2). The C2 idempotency stage claims the
 /// <c>Idempotency-Key</c> in that same transaction (05.2.1-T2), so the <c>idempotency_record</c> commits or rolls back
@@ -96,7 +98,10 @@ internal sealed record CreateRunCommand(
 /// <c>orchestrator.run.created</c> with no handler yet — the worker's claimer filters on its handler set, so the row
 /// stays <c>queued</c> until 05.3.1 registers one (01.5.1 §11); [DECISION] <c>components</c> is capped at 8 KiB
 /// serialised, stricter than the column's 64 KiB CHECK; [DECISION] a manifest whose <c>environment_revision_id</c> is
-/// null is refused 422 because <c>run.environment_revision_id</c> is NOT NULL.
+/// null is refused 422 because <c>run.environment_revision_id</c> is NOT NULL; [DECISION] the pinned policy values are
+/// read once, before the run INSERT, and written once — nothing updates <c>run.policy_revision_id</c>,
+/// <c>collection_deadline_at</c> or <c>late_window_minutes</c> afterwards (FR-07-2), so a later activation never moves
+/// an existing run's pin.
 /// </remarks>
 [AuditedAction("run.create")]
 [Permission(Permissions.Run.Create)]
@@ -106,6 +111,7 @@ internal sealed class CreateRunCommandHandler(
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant,
     ICatalogContracts catalog,
+    IPolicyContracts policies,
     IProducerRegistry producers,
     IOutboxWriter outbox,
     IOptions<RunsOptions> options,
@@ -287,7 +293,19 @@ internal sealed class CreateRunCommandHandler(
 
         var set = planned!;
 
-        // (5) the writes, all inside the one C2 tenant transaction.
+        // (5) the policy revision the run pins (07.1.1-T4.2, FR-07-2). The active revision's id is stored on
+        // run.policy_revision_id, and the two values its body sets replace the EVIDGATE:Runs defaults; a project with no
+        // active revision keeps the defaults and a null pin. The read is one lock-free statement inside this same tenant
+        // transaction (finding F4): it takes no project row lock, so this run create never holds the row a concurrent
+        // activation locks FOR NO KEY UPDATE, and a pin of the revision active at this transaction's commit is the
+        // expected READ COMMITTED ordering.
+        var activePolicy = await policies.GetActivePolicyAsync(command.ProjectId, cancellationToken).ConfigureAwait(false);
+        var collectionTimeout = activePolicy?.CollectionTimeoutMinutes is { } policyTimeout
+            ? TimeSpan.FromMinutes(policyTimeout)
+            : options.Value.DefaultCollectionTimeout;
+        var lateWindowMinutes = activePolicy?.LateWindowMinutes ?? options.Value.DefaultLateWindowMinutes;
+
+        // (6) the writes, all inside the one C2 tenant transaction.
         var runId = Guid.CreateVersion7();
         var ciRun = principals.Current?.CiRun;
 
@@ -299,6 +317,7 @@ internal sealed class CreateRunCommandHandler(
                 org_id = orgId,
                 project_id = command.ProjectId,
                 manifest_id = manifestId,
+                policy_revision_id = activePolicy?.PolicyRevisionId,
                 suite_revision_id = manifest.SuiteRevisionId,
                 environment_revision_id = environmentRevisionId,
                 ci_run_ref = ciRun is null
@@ -311,8 +330,8 @@ internal sealed class CreateRunCommandHandler(
                         run_attempt = ciRun.RunAttempt,
                     }),
                 components = components?.GetRawText() ?? "{}",
-                collection_timeout = options.Value.DefaultCollectionTimeout,
-                late_window_minutes = options.Value.DefaultLateWindowMinutes,
+                collection_timeout = collectionTimeout,
+                late_window_minutes = lateWindowMinutes,
             },
             cancellationToken).ConfigureAwait(false);
 

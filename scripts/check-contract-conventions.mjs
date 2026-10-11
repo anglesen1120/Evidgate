@@ -46,6 +46,7 @@ const EXPECTED = [
   ['/projects/{p}/policies', 'post', 'policy:write', 'v1'],
   ['/policies/{id}', 'get', 'policy:read', 'v1'],
   ['/policies/{id}/revisions', 'get', 'policy:read', 'v1'],
+  ['/projects/{p}/policy-activation', 'post', 'policy:write', 'v1'],
   ['/runs/{r}/reports/{report_id}/comparison', 'get', 'run:read', 'v1'],
   ['/runs/{r}/reprocess', 'post', 'run:create', 'v1'],
   ['/projects/{p}/releases', 'post', 'run:create', 'v1'],

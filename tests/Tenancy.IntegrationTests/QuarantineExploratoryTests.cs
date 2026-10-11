@@ -117,8 +117,9 @@ public sealed class QuarantineExploratoryTests
     }
 
     /// <summary>
-    /// Inserts an <c>active</c> <c>policy_revision</c> carrying <paramref name="criticalCases"/> as the owner role
-    /// (activation is 07.1.1-T4, not merged). Copied from <c>QuarantineTests.InsertRevisionAsync</c>.
+    /// Inserts an <c>active</c> <c>policy_revision</c> carrying <paramref name="criticalCases"/> as the owner role:
+    /// activation merged with 07.1.1-T4 and the API refuses to activate a revision whose critical case is under an
+    /// active quarantine (Q2), so the state is seeded directly. Copied from <c>QuarantineTests.InsertRevisionAsync</c>.
     /// </summary>
     private async Task InsertActiveRevisionAsync(World world, IReadOnlyList<string> criticalCases)
     {

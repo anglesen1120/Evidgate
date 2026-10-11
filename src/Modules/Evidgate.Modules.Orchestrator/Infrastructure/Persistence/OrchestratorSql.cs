@@ -115,14 +115,15 @@ internal static class OrchestratorSql
     /// <summary>
     /// The run row (05.2.1 §4, T13/T88/T93). <c>state</c> is <c>queued</c> because the producer slots commit in this
     /// same transaction; <c>collection_deadline_at</c> is computed on the database clock (<c>now()</c>, the same clock
-    /// <c>created_at</c> defaults to) so the two can never disagree; <c>policy_revision_id</c> is null until
-    /// 07.1.1-T4 pins one; <c>ci_run_ref</c> comes from the caller's OIDC claims, never the body.
+    /// <c>created_at</c> defaults to) so the two can never disagree; <c>policy_revision_id</c> is the active revision
+    /// 07.1.1-T4.2 pins (null when the project has no active policy); <c>ci_run_ref</c> comes from the caller's OIDC
+    /// claims, never the body.
     /// </summary>
     internal const string InsertRun = """
         insert into public.run
                (id, org_id, project_id, manifest_id, policy_revision_id, suite_revision_id, environment_revision_id,
                 ci_run_ref, components, purpose, state, collection_deadline_at, late_window_minutes)
-        values (@id, @org_id, @project_id, @manifest_id, null, @suite_revision_id, @environment_revision_id,
+        values (@id, @org_id, @project_id, @manifest_id, @policy_revision_id::uuid, @suite_revision_id, @environment_revision_id,
                 @ci_run_ref::jsonb, @components::jsonb, 'regular', 'queued',
                 now() + @collection_timeout::interval, @late_window_minutes)
         """;

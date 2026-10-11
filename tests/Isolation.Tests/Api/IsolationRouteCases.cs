@@ -348,6 +348,9 @@ public static class IsolationRouteCases
 
         // ---- Policy (PolicyEndpoints.cs; 07.1.1-T3) -------------------------------------------------------------
         ProjectCase("POST", "/v1/projects/{p}/policies", p => new(HttpMethod.Post, $"/v1/projects/{p}/policies", Policy())),
+        // 07.1.1-T4: the probe sends an unknown revision id, so every cross-tenant attempt is the same 404
+        // (the route is project-scoped; the isolation suite asserts the 404, not the happy path).
+        ProjectCase("POST", "/v1/projects/{p}/policy-activation", p => new(HttpMethod.Post, $"/v1/projects/{p}/policy-activation", Activation(Guid.CreateVersion7()))),
         ObjectCase("GET", "/v1/policies/{id}", p => [("policy revision", p.PolicyRevisionId)], id =>
             new(HttpMethod.Get, $"/v1/policies/{id}"), ownControl: true),
         ObjectCase("GET", "/v1/policies/{id}/revisions", p => [("policy revision", p.PolicyRevisionId)], id =>
@@ -1049,6 +1052,9 @@ public static class IsolationRouteCases
 
     /// <summary>The minimal valid <c>policy-revision.v1</c> body a probe sends (the shape the seeder creates, <see cref="IsolationWorld"/>).</summary>
     private static JsonObject Policy() => new() { ["flaky_budget"] = 0 };
+
+    /// <summary>The activation body a probe sends (07.1.1-T4): an unknown revision id, so the route answers 404 to every tenant.</summary>
+    private static JsonObject Activation(Guid revisionId) => new() { ["policy_revision_id"] = revisionId.ToString("D") };
 
     private static JsonObject Manifest(IsolationProject project) =>
         Manifest(project.SuiteRevisionIds[0], project.CaseRevisionIds, project.EnvironmentRevisionId);

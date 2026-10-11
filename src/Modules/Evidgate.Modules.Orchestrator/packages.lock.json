@@ -258,6 +258,9 @@
       "evidgate.modules.orchestrator.contracts": {
         "type": "Project"
       },
+      "evidgate.modules.policy.contracts": {
+        "type": "Project"
+      },
       "Corvus.Json.Validator": {
         "type": "CentralTransitive",
         "requested": "[5.6.1, )",

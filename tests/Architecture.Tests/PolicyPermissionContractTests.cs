@@ -18,6 +18,7 @@ public sealed class PolicyPermissionContractTests
     private static readonly (string OperationId, string HandlerName, string Permission)[] Operations =
     [
         ("createPolicyRevision", "CreatePolicyRevisionCommandHandler", "policy:write"),
+        ("activatePolicyRevision", "ActivatePolicyCommandHandler", "policy:write"),
         ("getPolicyRevision", "GetPolicyRevisionQueryHandler", "policy:read"),
         ("listPolicyRevisions", "ListPolicyRevisionsQueryHandler", "policy:read"),
         ("createQuarantineEntry", "CreateQuarantineEntryCommandHandler", "quarantine:write"),
