@@ -228,9 +228,8 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     }
 
     /// <summary>
-    /// 0028 bounds <c>media_type</c> with <c>char_length between 1 and 255</c>, which counts code points. The
-    /// validator measures <c>string.Length</c> (UTF-16 code units). 255 emoji are 255 code points (accepted by the
-    /// CHECK) but 510 code units, so the validator refuses a value the schema allows.
+    /// 0028 bounds <c>media_type</c> with <c>char_length between 1 and 255</c>, which counts code points; the
+    /// validator counts runes too. 255 emoji are 255 code points (accepted) but 510 UTF-16 code units.
     /// </summary>
     [Fact]
     public async Task MediaType_255CodePoints_WithAstralCharacters_IsAccepted_BecauseTheCheckCountsCodePoints()
@@ -239,7 +238,7 @@ public sealed class EvidenceCreateArtifactRecordQaTests
         var astral255 = string.Concat(Enumerable.Repeat("😀", 255));
 
         (await MintAsync(world, Command(mediaType: astral255))).IsSuccess.ShouldBeTrue(
-            "255 code points is within the 0028 char_length CHECK; the validator should not measure UTF-16 units");
+            "255 code points is within the 0028 char_length CHECK; the validator counts code points, not UTF-16 units");
     }
 
     [Fact]
@@ -249,16 +248,6 @@ public sealed class EvidenceCreateArtifactRecordQaTests
         var astral256 = string.Concat(Enumerable.Repeat("😀", 256));
 
         ShouldBeRefused(await MintAsync(world, Command(mediaType: astral256)), 422, null, "256 code points");
-    }
-
-    [Fact]
-    public async Task MediaType_255CodePoints_WithAstralCharacters_IsAccepted()
-    {
-        await using var world = await StartAsync();
-        var astral255 = string.Concat(Enumerable.Repeat("😀", 255));
-
-        (await MintAsync(world, Command(mediaType: astral255))).IsSuccess.ShouldBeTrue(
-            "Postgres char_length counts code points, so 255 astral characters (510 UTF-16 units) fit the CHECK");
     }
 
     [Fact]
@@ -437,8 +426,8 @@ public sealed class EvidenceCreateArtifactRecordQaTests
 }
 
 /// <summary>
-/// Pure unit probe of the minter's execution-key guard (no container). The handler validates with <c>\z</c>, but
-/// the minter validates with <c>$</c>, which also matches before a trailing newline.
+/// Pure unit probe of the minter's execution-key guard (no container): the minter anchors with <c>\A…\z</c>, so a
+/// trailing newline is refused.
 /// </summary>
 public sealed class EvidenceArtifactMinterQaTests
 {
