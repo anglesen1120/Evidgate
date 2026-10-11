@@ -178,6 +178,24 @@ public static class SecretLiteralRules
         return violations;
     }
 
+    /// <summary>
+    /// True when the quoted name at <paramref name="position"/> is the argument of a
+    /// detector call. The exclusion covers only that call's span, so a real
+    /// configuration read elsewhere on the same line is still reported.
+    /// </summary>
+    private static bool IsDetectorArgument(string line, int position)
+    {
+        foreach (Match detector in DetectorArgumentLine.Matches(line))
+        {
+            if (position >= detector.Index && position < detector.Index + detector.Length)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool ReadsSecretProperty(string text)
     {
         foreach (Match match in ForbiddenPropertyPattern.Matches(text))
@@ -186,7 +204,7 @@ public static class SecretLiteralRules
             var lineEnd = text.IndexOf('\n', match.Index);
             var line = text[lineStart..(lineEnd < 0 ? text.Length : lineEnd)];
 
-            if (!CollectionElementLine.IsMatch(line) && !DetectorArgumentLine.IsMatch(line))
+            if (!CollectionElementLine.IsMatch(line) && !IsDetectorArgument(line, match.Index - lineStart))
             {
                 return true;
             }
