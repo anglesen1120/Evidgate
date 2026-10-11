@@ -142,4 +142,23 @@ internal static class OrchestratorSql
           from jsonb_to_recordset(@rows::jsonb)
                as r(id uuid, execution_key text, case_revision_id uuid, variant_hash text, target_env text, shard_id text)
         """;
+
+    // ------------------------------------------------------------------ 06.1.2 upload-url run scope
+
+    /// <summary>
+    /// The run's project, that project's state and whether the named execution key is planned, in one statement
+    /// (06.1.2 §5, <c>IRunPlanReader</c>). RLS makes another tenant's run invisible, so an unknown or foreign id is
+    /// the same null; the caller compares the returned project with its own scope, so a run of another project of
+    /// the same org is refused too. <c>planned_execution</c> has no <c>attempt_no</c> column, so only the key's
+    /// membership is answered here.
+    /// </summary>
+    internal const string RunPlan = """
+        select r.project_id as project_id,
+               p.status as project_state,
+               exists (select 1 from public.planned_execution pe
+                        where pe.org_id = r.org_id and pe.run_id = r.id and pe.execution_key = @execution_key) as planned
+          from public.run r
+          join public.project p on p.org_id = r.org_id and p.id = r.project_id
+         where r.id = @run_id
+        """;
 }

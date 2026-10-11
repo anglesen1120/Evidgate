@@ -19,6 +19,34 @@
       "origin": "default",
       "from": "not set: the option default Required applies, so a prod boot that cannot confirm tenant isolation refuses to start (00 §5.4, 02.6.1-T1.4). Setting Disabled in prod is forbidden"
     },
+    "EVIDGATE__OBJECT__ENDPOINT": {
+      "origin": "default",
+      "from": "not set: the S3-compatible endpoint is [OPEN] until O3 (10.8.1) picks the provider; an empty value selects the AWS regional endpoint of EVIDGATE__OBJECT__REGION"
+    },
+    "EVIDGATE__OBJECT__REGION": {
+      "origin": "environment",
+      "from": "the provider region injected at deploy; [OPEN] until O3 (10.8.1) — it is also a residency criterion for plan 11"
+    },
+    "EVIDGATE__OBJECT__BUCKET": {
+      "origin": "environment",
+      "from": "the prod bucket injected at deploy and provisioned by 10.1.1-T3 with versioning and lifecycle (10.5.1-T2); prod has its own bucket, never staging's (FR-10-1)"
+    },
+    "EVIDGATE__OBJECT__PRESIGNEXPIRYSECONDS": {
+      "origin": "default",
+      "from": "option default 900 (00 §9.3: at most 15 minutes)"
+    },
+    "EVIDGATE__OBJECT__FORCEPATHSTYLE": {
+      "origin": "default",
+      "from": "not set: the option default true applies; a real provider accepts path-style addressing, and the value is revisited with the provider choice in O3"
+    },
+    "EVIDGATE__OBJECT__ACCESSKEY": {
+      "origin": "secret-store",
+      "from": "provider secret store (10.1.1-T3), injected as an environment variable at deploy; prod's own object-storage identity — no credential is shared with staging (AC4)"
+    },
+    "EVIDGATE__OBJECT__SECRETKEY": {
+      "origin": "secret-store",
+      "from": "provider secret store (10.1.1-T3); prod's own object-storage identity, distinct from staging's (AC4)"
+    },
     "EVIDGATE__TASKS__BACKOFFBASESECONDS": {
       "origin": "default",
       "from": "option default 5"

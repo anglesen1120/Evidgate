@@ -367,6 +367,9 @@ public static class IsolationRouteCases
         QuarantineRemoveCase(),
         ProjectCase("GET", "/v1/projects/{p}/quarantine", p => new(HttpMethod.Get, $"/v1/projects/{p}/quarantine"), list: true),
 
+        // ---- Evidence (EvidenceEndpoints.cs:28; 06.1.2) ---------------------------------------------------------
+        EvidenceUploadUrlCase(),
+
         // ---- Dev surface (SliceEndpoints.cs:29-40; recorded in ServedDocumentTests.cs:59) -------------------------
         Case("POST", "/v1/slice/run", (route, w) =>
         [
@@ -729,6 +732,51 @@ public static class IsolationRouteCases
                         Create(w.Acme.Projects[0].Id, w.Acme.Projects[0].ManifestId), Create(Guid.CreateVersion7(), w.Acme.Projects[0].ManifestId)),
                     Pair(route, "own project, org A's manifest id in the body", ProbeExpect.NotFound, OrgBService(w),
                         Create(w.Acme2.Projects[0].Id, w.Acme.Projects[0].ManifestId), Create(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
+                ];
+            });
+    }
+
+    /// <summary>
+    /// <c>POST /v1/artifacts/upload-url</c>: the run is named in the body, not the path, and the route carries no
+    /// project in its URL. Org A's run id in the body against a random run id — the same 404 <c>not_found</c> for
+    /// both, so another tenant's run is never resolved (AC1). The route is project-scoped by the credential, not
+    /// by its path: org B's header-scoped <c>tenant_admin</c> names no project and is refused 403
+    /// <c>project_required</c> for the foreign and the random run alike (no oracle); org B's <c>ci_producer</c>
+    /// (project <c>web</c>) gets the 404 <c>not_found</c> the AC names.
+    /// </summary>
+    private static RouteCase EvidenceUploadUrlCase()
+    {
+        var route = new ApiRoute("POST", "/v1/artifacts/upload-url");
+        static ProbeRequest Create(Guid run) => new(HttpMethod.Post, "/v1/artifacts/upload-url", new JsonObject
+        {
+            ["run_id"] = run.ToString(),
+            ["producer_id"] = "probe-producer",
+            ["execution_key"] = new string('a', 64),
+            ["attempt_no"] = 1,
+            ["kind"] = "trace",
+            ["media_type"] = "application/json",
+            ["bytes"] = 1024,
+            ["sha256"] = "sha256:" + new string('b', 64),
+        });
+
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "org A's run id in the body", ProbeExpect.NotSuccess, OrgBAdmin(w),
+                        Create(w.Acme.Projects[0].ManifestId), Create(Guid.CreateVersion7())),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "org A's run id in the body", ProbeExpect.ServiceRefused, OrgBService(w),
+                        Create(w.Acme.Projects[0].ManifestId), Create(Guid.CreateVersion7())),
                 ];
             });
     }

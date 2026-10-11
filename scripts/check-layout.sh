@@ -127,6 +127,7 @@ fi
 cat > "$TMP/expected-proj" <<'EOF'
 src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csproj
 src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj
+src/BuildingBlocks/ObjectStorage/Evidgate.BuildingBlocks.ObjectStorage.csproj
 src/BuildingBlocks/Observability/Evidgate.BuildingBlocks.Observability.csproj
 src/BuildingBlocks/Persistence/Evidgate.BuildingBlocks.Persistence.csproj
 src/BuildingBlocks/Pipeline/Evidgate.BuildingBlocks.Pipeline.csproj

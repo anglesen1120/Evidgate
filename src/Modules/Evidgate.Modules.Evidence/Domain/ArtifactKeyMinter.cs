@@ -55,4 +55,16 @@ internal static partial class ArtifactKeyMinter
             CultureInfo.InvariantCulture,
             $"org/{org:D}/project/{project:D}/run/{run:D}/attempt/{executionKey}/{attemptNo}/{artifactId:D}");
     }
+
+    /// <summary>
+    /// The deterministic staging key of one artifact (06.1.2 §5): <c>pending/&lt;org_id&gt;/&lt;artifact_id&gt;</c>,
+    /// the other form the 0028 <c>artifact_object_key_shape_check</c> accepts. The row keeps the final key
+    /// (<see cref="Mint"/>); this is the key the client <c>PUT</c>s to and the key the presign signs, so a
+    /// client can never name it and the promotion to the final key is a server-side copy (FR-06-1, T86).
+    /// </summary>
+    /// <param name="org">The owning organization (<c>evidgate.org_id</c>).</param>
+    /// <param name="artifactId">The artifact's own UUIDv7 id.</param>
+    /// <returns>The server-chosen staging key.</returns>
+    public static string StagingKey(Guid org, Guid artifactId) =>
+        string.Create(CultureInfo.InvariantCulture, $"pending/{org:D}/{artifactId:D}");
 }

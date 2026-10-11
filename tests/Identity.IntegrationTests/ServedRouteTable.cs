@@ -680,6 +680,10 @@ internal static class RouteRequests
         Add("DELETE", "/v1/quarantine/{q}", ctx => new(HttpMethod.Delete, $"/v1/quarantine/{ctx.QuarantineId}", IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/quarantine", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/quarantine"));
 
+        // ---- Evidence ----------------------------------------------------------------------------------------
+        Add("POST", "/v1/artifacts/upload-url", _ => new(HttpMethod.Post, "/v1/artifacts/upload-url",
+            UploadUrl(), IdempotencyKey: Key()));
+
         // ---- Dev surface (absent from the spec; allowlisted in ServedRouteTable) ------------------------------
         Add("POST", "/v1/slice/run", ctx => new(HttpMethod.Post, "/v1/slice/run",
             new JsonObject { ["project_ref"] = ctx.ProjectId.ToString() }));
@@ -725,6 +729,23 @@ internal static class RouteRequests
     private static JsonObject Run(RouteRequestContext ctx) => new()
     {
         ["manifest_id"] = ctx.ManifestId.ToString(),
+    };
+
+    /// <summary>
+    /// The <c>POST /v1/artifacts/upload-url</c> body (06.1.2 §5): the run is addressed in the body, not the path,
+    /// so a fresh id is used - the route answers 404 <c>not_found</c> for an unknown run, which is what the
+    /// ci-producer and isolation matrices expect (never a 403). The rest is a shape-valid body.
+    /// </summary>
+    private static JsonObject UploadUrl() => new()
+    {
+        ["run_id"] = Guid.CreateVersion7().ToString(),
+        ["producer_id"] = "probe-producer",
+        ["execution_key"] = new string('a', 64),
+        ["attempt_no"] = 1,
+        ["kind"] = "trace",
+        ["media_type"] = "application/json",
+        ["bytes"] = 1024,
+        ["sha256"] = "sha256:" + new string('b', 64),
     };
 
     private static JsonObject Manifest(RouteRequestContext ctx) => new()

@@ -232,4 +232,16 @@ public static class ApiErrorCode
 
     /// <summary>422: the declared artifact size is not positive (06.1.1 §5).</summary>
     public const string SizeOutOfRange = "size_out_of_range";
+
+    /// <summary>422: the request named an <c>execution_key</c> that is not a planned execution of the run (00 §9.4, TL T10/T17).</summary>
+    public const string UnknownExecutionKey = "unknown_execution_key";
+
+    /// <summary>409: the project is being deleted, so a new upload is refused (06.4.4 AC2; the <c>deleted</c> project state at M1).</summary>
+    public const string ProjectDeleting = "project_deleting";
+
+    /// <summary>422: the declared media type is not in the kind policy's allowlist (06.1.2 AC1, 06.1.2-T3).</summary>
+    public const string MediaTypeNotAllowed = "media_type_not_allowed";
+
+    /// <summary>422: capture of the artifact kind is switched off for the project, or the project has no policy row for it (06.1.2 AC1, 06.2.2 AC2).</summary>
+    public const string KindDisabled = "kind_disabled";
 }

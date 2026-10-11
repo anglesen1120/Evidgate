@@ -18,7 +18,7 @@ namespace Architecture.Tests.Rules;
 public static class SecretLiteralRules
 {
     /// <summary>
-    /// The six secret keys in both spellings the code could use: the
+    /// The secret keys in both spellings the code could use: the
     /// environment-variable name and its <c>IConfiguration</c> form.
     /// </summary>
     public static IReadOnlyList<string> ForbiddenLiterals { get; } =
@@ -29,12 +29,16 @@ public static class SecretLiteralRules
         "EVIDGATE__CI__PEPPER",
         "EVIDGATE__CI__PREVIOUSPEPPER",
         "EVIDGATE_MIGRATOR__CONNECTIONSTRING",
+        "EVIDGATE__OBJECT__ACCESSKEY",
+        "EVIDGATE__OBJECT__SECRETKEY",
         "EVIDGATE:Database:ConnectionString",
         "EVIDGATE:Tasks:SweepConnectionString",
         "EVIDGATE:Ci:SigningKey",
         "EVIDGATE:Ci:Pepper",
         "EVIDGATE:Ci:PreviousPepper",
         "EVIDGATE_MIGRATOR:CONNECTIONSTRING",
+        "EVIDGATE:Object:AccessKey",
+        "EVIDGATE:Object:SecretKey",
     ];
 
     /// <summary>The <c>IConfiguration</c> extension that reads a connection string by name.</summary>
@@ -95,7 +99,7 @@ public static class SecretLiteralRules
     /// doc <c>cref="SigningKey"</c> from being mistaken for a read.
     /// </summary>
     private static readonly Regex ForbiddenPropertyPattern = new(
-        "(?<![=\\w])\"(ConnectionString|SweepConnectionString|SigningKey|Pepper|PreviousPepper)\"",
+        "(?<![=\\w])\"(ConnectionString|SweepConnectionString|SigningKey|Pepper|PreviousPepper|AccessKey|SecretKey)\"",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>
@@ -106,6 +110,16 @@ public static class SecretLiteralRules
     private static readonly Regex CollectionElementLine = new(
         "^[ \\t]*\"\\w+\",?[ \\t]*\\r?$",
         RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// A line that feeds the quoted name to a string detector
+    /// (<c>flat.Contains("secretkey", StringComparison.Ordinal)</c>): the name is the
+    /// detector's own vocabulary, never a configuration read. The detector is the
+    /// <c>SecretShape</c> seam's own rule, so the property-name pattern must not flag it.
+    /// </summary>
+    private static readonly Regex DetectorArgumentLine = new(
+        "\\bContains\\s*\\(\\s*\"(?:ConnectionString|SweepConnectionString|SigningKey|Pepper|PreviousPepper|AccessKey|SecretKey)\"\\s*,",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Returns one line per violation, naming the file and the rule. A file whose
@@ -164,6 +178,24 @@ public static class SecretLiteralRules
         return violations;
     }
 
+    /// <summary>
+    /// True when the quoted name at <paramref name="position"/> is the argument of a
+    /// detector call. The exclusion covers only that call's span, so a real
+    /// configuration read elsewhere on the same line is still reported.
+    /// </summary>
+    private static bool IsDetectorArgument(string line, int position)
+    {
+        foreach (Match detector in DetectorArgumentLine.Matches(line))
+        {
+            if (position >= detector.Index && position < detector.Index + detector.Length)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool ReadsSecretProperty(string text)
     {
         foreach (Match match in ForbiddenPropertyPattern.Matches(text))
@@ -172,7 +204,7 @@ public static class SecretLiteralRules
             var lineEnd = text.IndexOf('\n', match.Index);
             var line = text[lineStart..(lineEnd < 0 ? text.Length : lineEnd)];
 
-            if (!CollectionElementLine.IsMatch(line))
+            if (!CollectionElementLine.IsMatch(line) && !IsDetectorArgument(line, match.Index - lineStart))
             {
                 return true;
             }

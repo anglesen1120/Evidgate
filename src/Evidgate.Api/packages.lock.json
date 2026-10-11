@@ -47,6 +47,11 @@
           "OpenTelemetry.Api.ProviderBuilderExtensions": "[1.19.0, 2.0.0)"
         }
       },
+      "AWSSDK.Core": {
+        "type": "Transitive",
+        "resolved": "4.0.102.6",
+        "contentHash": "YwUi9qpz/OHqwEgsf8I5jj1aC/xkkjmF91R8Yx6yD66dhOiORgQJynYQk0fzI4xdhBgUaw8SRGbMkLRrvL+CNA=="
+      },
       "CommunityToolkit.HighPerformance": {
         "type": "Transitive",
         "resolved": "8.3.0",
@@ -278,6 +283,13 @@
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
         }
       },
+      "evidgate.buildingblocks.objectstorage": {
+        "type": "Project",
+        "dependencies": {
+          "AWSSDK.S3": "[4.0.103.4, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
+        }
+      },
       "evidgate.buildingblocks.observability": {
         "type": "Project",
         "dependencies": {
@@ -345,10 +357,14 @@
       "evidgate.modules.evidence": {
         "type": "Project",
         "dependencies": {
+          "Evidgate.BuildingBlocks.ObjectStorage": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Ingestion.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Orchestrator.Contracts": "[1.0.0, )",
           "FluentValidation": "[12.1.1, )",
           "Mediator.Abstractions": "[3.0.2, )",
           "Microsoft.EntityFrameworkCore": "[10.0.12, )",
@@ -479,6 +495,15 @@
       },
       "evidgate.modules.usage.contracts": {
         "type": "Project"
+      },
+      "AWSSDK.S3": {
+        "type": "CentralTransitive",
+        "requested": "[4.0.103.4, )",
+        "resolved": "4.0.103.4",
+        "contentHash": "qi8NkWG7s6GkNePTWSxP51O6AaTEWquin4X4L82plMte8bTFL2A1/osRfr6DBmvmSOc8y0orx25jJXg9gcbMIQ==",
+        "dependencies": {
+          "AWSSDK.Core": "[4.0.102.6, 5.0.0)"
+        }
       },
       "Corvus.Json.Validator": {
         "type": "CentralTransitive",
