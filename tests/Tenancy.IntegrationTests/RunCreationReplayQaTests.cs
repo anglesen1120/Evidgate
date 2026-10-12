@@ -168,34 +168,35 @@ public sealed class RunCreationReplayQaTests
         (await CountsAsync(world)).ShouldBe(before);
     }
 
-    // ------------------------------------------------------------------ duplicate member names must never smuggle a replay
+    // ------------------------------------------------------------------ duplicate member names resolve by last-wins
 
     [Fact]
-    public async Task DuplicatePurposeMembers_NeverStoreAReplayRun()
+    public async Task DuplicatePurposeMembers_PinnedOutcome()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
 
-        // JsonDocument.Parse accepts duplicate names. Whichever value the handler reads, no run may ever store purpose=replay
-        // (replay is refused until 08.4.3), and a replay-first body must not reach the create path.
-        var replayFirst = await RunCreationTests.CreateRunAsync(
+        // JsonDocument.Parse accepts duplicate names and JsonElement.TryGetProperty matches the LAST one (documented:
+        // "the last such definition"), so the handler reads the final "purpose" and the two orderings diverge. The
+        // idempotency BodyHash cannot canonicalize a duplicate name (RFC 8785 rejects it with JsonCanonicalizationException),
+        // so it falls back to raw-sha256 and the request still reaches the handler — the parse, not the hash, decides.
+        // Neither ordering may ever store purpose = 'replay'.
+
+        // regular last: the handler reads "regular", so this is an ordinary create that stores the default.
+        var regularLast = await RunCreationTests.CreateRunAsync(
             world,
             Body(world.ManifestId, ",\"purpose\":\"replay\",\"purpose\":\"regular\""));
-        var regularFirst = await RunCreationTests.CreateRunAsync(
+        regularLast.Status.ShouldBe(HttpStatusCode.Created, regularLast.ErrorMessage);
+
+        // replay last: the handler reads "replay" and refuses it like any replay (no grant store until 08.4.3).
+        var replayLast = await RunCreationTests.CreateRunAsync(
             world,
             Body(world.ManifestId, ",\"purpose\":\"regular\",\"purpose\":\"replay\""));
+        replayLast.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        replayLast.ErrorCode.ShouldBe("replay_grant_invalid");
 
-        foreach (var answer in new[] { replayFirst, regularFirst })
-        {
-            if (answer.Status == HttpStatusCode.Created)
-            {
-                continue;
-            }
-
-            answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        }
-
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run where purpose = 'replay'"))
-            .ShouldBe(0);
+        // Only the regular-last body stored a run, and its stored purpose is 'regular' — never a replay.
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(world.Database, "select purpose from public.run")).ShouldBe("regular");
     }
 
     // ------------------------------------------------------------------ the refusals leave the key and the regular path intact

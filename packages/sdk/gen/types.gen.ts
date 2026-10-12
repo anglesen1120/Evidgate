@@ -54,7 +54,7 @@ export type CreateRunRequest = {
      */
     purpose?: 'regular' | 'replay';
     /**
-     * Optional grant id issued by 08.4.3; meaningful only with `purpose: replay`, where it must name a valid, unexpired grant bound to this project. With `regular` (or an absent `purpose`) it is 422 `invalid_value` (05.2.1-T5).
+     * Optional grant id issued by 08.4.3; meaningful only with `purpose: replay`, where it must name a valid, unexpired grant bound to this project. With `regular` (or an absent `purpose`) it is 422 `request_invalid` (`details[]` reason `invalid_value`, path `/replay_grant_id`; 05.2.1-T5).
      */
     replay_grant_id?: string;
     /**

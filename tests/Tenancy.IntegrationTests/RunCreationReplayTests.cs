@@ -65,7 +65,7 @@ public sealed class RunCreationReplayTests
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var before = await CountsAsync(world);
 
-        // (a) A random grant id: there is no grant store yet, so nothing can match.
+        // (a) A random grant id: there is no grant store until 08.4.3, so no id — random or not — can match.
         var random = await RunCreationTests.CreateRunAsync(
             world,
             Body(world.ManifestId, ",\"purpose\":\"replay\",\"replay_grant_id\":\"" + Guid.CreateVersion7() + "\""));
@@ -79,12 +79,13 @@ public sealed class RunCreationReplayTests
         missing.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         missing.ErrorCode.ShouldBe("replay_grant_invalid");
 
-        // (c) A well-formed (and unexpired by construction) grant id: still refused until 08.4.3.
-        var wellFormed = await RunCreationTests.CreateRunAsync(
+        // (c) The nil UUID: a well-formed shape that is never issued. It is parsed (so it is not request_invalid) and
+        // then refused by the grant check, the same as any other well-formed id.
+        var nil = await RunCreationTests.CreateRunAsync(
             world,
-            Body(world.ManifestId, ",\"purpose\":\"replay\",\"replay_grant_id\":\"" + Guid.CreateVersion7() + "\""));
-        wellFormed.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        wellFormed.ErrorCode.ShouldBe("replay_grant_invalid");
+            Body(world.ManifestId, ",\"purpose\":\"replay\",\"replay_grant_id\":\"00000000-0000-0000-0000-000000000000\""));
+        nil.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        nil.ErrorCode.ShouldBe("replay_grant_invalid");
 
         before.ShouldAllBe(count => count == 0);
         (await CountsAsync(world)).ShouldBe(before, "a refused replay writes no run, planned execution, slot, outbox, idempotency or audit row");
@@ -223,6 +224,9 @@ public sealed class RunCreationReplayTests
         await using var world = await RunCreationTests.StartAsync(_fixture);
         await using var other = await RunCreationTests.StartAsync(_fixture, slug: "rival");
 
+        // Forward-looking pin for 08.4.3: while every replay is refused (no grant store), both answers below are the
+        // same 422 replay_grant_invalid, so this cannot fail yet — it pins the cross-project isolation for the day the
+        // grant reader lands and a foreign id (which must not resolve) and an own id (which may) can be told apart.
         // Two run ids that really exist — one in another org's project, one in this very project.
         var otherRun = await RunCreationTests.CreateRunAsync(other, RunCreationTests.RunBody(other.ManifestId));
         otherRun.Status.ShouldBe(HttpStatusCode.Created, otherRun.ErrorMessage);
