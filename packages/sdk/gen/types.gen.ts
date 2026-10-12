@@ -90,6 +90,43 @@ export type EventBatch = {
 };
 
 /**
+ * The 200 body of `POST /v1/runs/{r}/events` (00 §9.4): the batch row this call wrote, its counts and one ack per event in request order. A resend answers 200 with `accepted: 0` and every ack `duplicate`; no metering row is written for it (04.8.1 §4).
+ */
+export type BatchAckResult = {
+    /**
+     * The `event_batch` row written by this accepted batch.
+     */
+    batch_id: string;
+    /**
+     * How many events were newly committed.
+     */
+    accepted: number;
+    /**
+     * How many events were already on file with the identical canonical payload.
+     */
+    duplicates: number;
+    acks: Array<EventAck>;
+};
+
+/**
+ * One event's per-event acknowledgement (00 §9.4), in request order.
+ */
+export type EventAck = {
+    /**
+     * The 0-based position of the event in the request (`details[].index` uses the same numbering).
+     */
+    index: number;
+    /**
+     * The event's client-assigned id.
+     */
+    event_id: string;
+    /**
+     * `accepted` when this batch committed the row, `duplicate` when it was already on file with the identical canonical payload.
+     */
+    ack: 'accepted' | 'duplicate';
+};
+
+/**
  * One entry of the permission catalogue (00 §2). The catalogue holds no secrets: `sensitive` describes the permission, it is never a value.
  */
 export type PermissionView = {
@@ -1674,12 +1711,7 @@ export type PostRunEventsResponses = {
     /**
      * Per-event acknowledgements
      */
-    200: {
-        acks: Array<{
-            index: number;
-            status: 'accepted' | 'duplicate';
-        }>;
-    };
+    200: BatchAckResult;
 };
 
 export type PostRunEventsResponse = PostRunEventsResponses[keyof PostRunEventsResponses];

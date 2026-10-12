@@ -201,7 +201,7 @@ public sealed class ProducerSlotTests
     }
 
     [Fact]
-    public async Task AppRole_HasNoDelete_AndOnlyTheBindingUpdateColumns()
+    public async Task AppRole_HasNoDelete_AndOnlyTheGrantedUpdateColumns()
     {
         var database = await _fixture.CreateDatabaseAsync();
 
@@ -215,9 +215,15 @@ public sealed class ProducerSlotTests
         (await _fixture.ScalarAsync<bool>(
             database,
             "select has_column_privilege('evidgate_app', 'public.producer_slot', 'bound_ci_run_ref', 'update')")).ShouldBeTrue();
+        // `last_sequence` was granted by 0034 (04.1.1-T1): the ingest handler's slot write names exactly
+        // that column, and 0029's header handed the grant to this task. No grant on `version`/`updated_at`:
+        // the shared trigger assigns them without a column privilege.
         (await _fixture.ScalarAsync<bool>(
             database,
-            "select has_column_privilege('evidgate_app', 'public.producer_slot', 'last_sequence', 'update')")).ShouldBeFalse();
+            "select has_column_privilege('evidgate_app', 'public.producer_slot', 'last_sequence', 'update')")).ShouldBeTrue();
+        (await _fixture.ScalarAsync<bool>(
+            database,
+            "select has_column_privilege('evidgate_app', 'public.producer_slot', 'version', 'update')")).ShouldBeFalse();
         (await _fixture.ScalarAsync<bool>(
             database,
             "select has_column_privilege('evidgate_app', 'public.producer_slot', 'closed_at', 'update')")).ShouldBeFalse();

@@ -111,6 +111,12 @@ internal sealed class TenantRowFactory
     // under test is reached.
     private static int _attemptNo;
 
+    // A fresh sequence per generated event row: event's unique key is
+    // (org_id, run_id, producer_id, sequence), and the corrupt row reuses the valid row's run_id and
+    // producer_id (both the manifest-derived "shard-1"), so a constant would collide on that key before
+    // the composite FK under test is reached.
+    private static long _sequence;
+
     private readonly TenantSchema _schema;
     private readonly TenantInsertExecutor _insert;
     private readonly Dictionary<(string Table, Guid Org), GeneratedRow> _created = [];
@@ -410,6 +416,17 @@ internal sealed class TenantRowFactory
             ("public.case_attempt", "attempt_no") => Interlocked.Increment(ref _attemptNo),
             ("public.case_attempt", "raw_status") => "passed",
             ("public.case_attempt", "normalized_status") => "passed",
+            // event's execution_key is the 00 §7 sha256 hex (0034 CHECK ^[0-9a-f]{64}$), its type is the
+            // envelope's dotted lower_snake shape and its payload_hash is the 00 §7 RFC 8785 content
+            // address (0034 CHECK ^sha256:[0-9a-f]{64}$): the generic text rule satisfies none of the three.
+            ("public.event", "execution_key") => new string('a', 64),
+            ("public.event", "type") => "test.step",
+            ("public.event", "payload_hash") => "sha256:" + new string('a', 64),
+            // event's unique key is (org_id, run_id, producer_id, sequence) and the corrupt row reuses the
+            // valid row's run_id and producer_id, so a constant sequence would collide on that key (23505)
+            // before the composite FK under test is reached: a fresh number per generated row, like
+            // case_attempt's attempt_no above.
+            ("public.event", "sequence") => Interlocked.Increment(ref _sequence),
             _ => (object?)null,
         };
 

@@ -251,6 +251,21 @@ public static class ApiErrorCode
     /// <summary>422: capture of the artifact kind is switched off for the project, or the project has no policy row for it (06.1.2 AC1, 06.2.2 AC2).</summary>
     public const string KindDisabled = "kind_disabled";
 
+    /// <summary>422: the event batch is not a well-formed envelope batch — schema, canonicalisation or per-event shape (04.1.1 AC1/AC4, 00 §9.4).</summary>
+    public const string EventInvalid = "event_invalid";
+
+    /// <summary>422: an event of the batch reuses a <c>(run, producer, sequence)</c> slot already stored for the run (04.1.1 AC6).</summary>
+    public const string SequenceReused = "sequence_reused";
+
+    /// <summary>409: an <c>event_id</c> of the batch is already stored with a different canonical payload (04.1.1 AC5, T50).</summary>
+    public const string DuplicateDifferentPayload = "duplicate_different_payload";
+
+    /// <summary>409: the run is <c>complete</c>/<c>incomplete</c>, so it no longer accepts events (04.1.1 §5, 00 §8.3).</summary>
+    public const string RunClosed = "run_closed";
+
+    /// <summary>413: the event batch exceeds the route's 1 MiB transport cap (04.1.1 AC7, 00 §9.3).</summary>
+    public const string BatchTooLarge = "batch_too_large";
+
     /// <summary>404: no such artifact in the caller's project — unknown, another tenant's or another project's (06.1.2-T2 AC6, §5).</summary>
     public const string ArtifactNotFound = "artifact_not_found";
 

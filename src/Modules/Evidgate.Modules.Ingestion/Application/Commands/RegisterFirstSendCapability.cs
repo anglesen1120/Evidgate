@@ -14,9 +14,9 @@ namespace Evidgate.Modules.Ingestion.Application.Commands;
 
 /// <summary>
 /// The 04.7.1-T2.3 first-send seam: register the capability a producer sends as the first envelope of a run.
-/// The future events handler (04.1.1-T1) calls this before it accepts the first event; the envelope is the
-/// 00 §9.4 form the reporter sends (<c>kind</c> <c>run.log</c>, <c>sequence</c> 1, <c>ext.schema</c> and
-/// <c>ext.capability</c>).
+/// The events handler (04.1.1-T1) calls the same seam through <see cref="FirstSendCapabilityService"/> before
+/// it accepts the first event; the envelope is the 00 §9.4 form the reporter sends (<c>type</c> <c>run.log</c>,
+/// <c>sequence</c> 1, <c>ext.schema</c> and <c>ext.capability</c>).
 /// </summary>
 /// <param name="FirstEnvelope">The raw UTF-8 first envelope (≤ the <c>event-envelope.v1</c> 1 MiB transport cap).</param>
 internal sealed record RegisterFirstSendCapability([property: JsonIgnore] ReadOnlyMemory<byte> FirstEnvelope)
@@ -37,7 +37,7 @@ internal sealed record FirstSendCapabilityOutcome(bool Registered, Guid? Capabil
 [Permission(Permissions.Event.Write)]
 internal sealed class RegisterFirstSendCapabilityHandler(
     Lazy<ContractSchemaSet> schemas,
-    AdapterCapabilityRegistrar registrar,
+    FirstSendCapabilityService firstSend,
     IAuditTrail audit)
     : ICommandHandler<RegisterFirstSendCapability, Result<FirstSendCapabilityOutcome>>
 {
@@ -72,30 +72,22 @@ internal sealed class RegisterFirstSendCapabilityHandler(
 
         using (envelope)
         {
-            var extraction = FirstSendCapabilityExtractor.Extract(envelope.RootElement);
-
-            if (!extraction.IsCarrier)
-            {
-                if (extraction.Errors.Count == 0)
-                {
-                    // Not a capability carrier: nothing was registered, so no audit row is appended.
-                    audit.Suppress();
-
-                    return Result.Success(new FirstSendCapabilityOutcome(false, null));
-                }
-
-                return Reject(CapabilityBody.Invalid(
-                    "the first envelope's capability carrier is malformed",
-                    extraction.Errors));
-            }
-
-            var registered = await registrar
-                .RegisterAsync(extraction.AdapterName!, extraction.Document, cancellationToken, "/ext/capability")
+            var registered = await firstSend
+                .RegisterAsync(envelope.RootElement, cancellationToken)
                 .ConfigureAwait(false);
 
-            return registered.IsSuccess
-                ? Result.Success(new FirstSendCapabilityOutcome(true, registered.Value.Id))
-                : Result.Failure<FirstSendCapabilityOutcome>(registered.Error!);
+            if (!registered.IsSuccess)
+            {
+                return Reject(registered.Error!);
+            }
+
+            if (!registered.Value.Registered)
+            {
+                // Not a capability carrier: nothing was registered, so no audit row is appended.
+                audit.Suppress();
+            }
+
+            return registered;
         }
     }
 

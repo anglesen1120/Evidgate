@@ -356,6 +356,17 @@ paths:
         (`details` names both majors), and a natural-key conflict with a stored
         row that differs in `engine_family`/`platforms`/`supports`/`mode` is
         409 `capability_conflict`; all `retryable: false`.
+        Batch refusals: 422 `event_invalid` (schema, canonicalisation or
+        per-event shape; `details[].index` names the event), 422
+        `unknown_execution_key` (an `execution_key` is not a planned execution
+        of the run; every failing index is listed), 422 `sequence_reused` (a
+        `(run, producer, sequence)` slot is already stored), 422
+        `unknown_producer` (the run has no such producer slot) and 403
+        `producer_slot_taken` (the slot is bound to another token identity);
+        409 `duplicate_different_payload` (an `event_id` is stored with a
+        different canonical payload), 409 `run_closed` (the run is `complete`
+        or `incomplete`) and 413 `batch_too_large` (over the route's 1 MiB
+        transport cap). All `retryable: false`.
       x-permission: event:write
       x-version: v1
       parameters:
@@ -376,20 +387,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [acks]
-                properties:
-                  acks:
-                    type: array
-                    items:
-                      type: object
-                      required: [index, status]
-                      properties:
-                        index:
-                          type: integer
-                        status:
-                          type: string
-                          enum: [accepted, duplicate]
+                $ref: '#/components/schemas/BatchAckResult'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4442,6 +4440,50 @@ components:
           items:
             $ref: './schemas/event-envelope.v1.json#/$defs/event'
       x-max-bytes: 1048576
+    BatchAckResult:
+      type: object
+      description: >-
+        The 200 body of `POST /v1/runs/{r}/events` (00 §9.4): the batch row this
+        call wrote, its counts and one ack per event in request order. A resend
+        answers 200 with `accepted: 0` and every ack `duplicate`; no metering
+        row is written for it (04.8.1 §4).
+      required: [batch_id, accepted, duplicates, acks]
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+          description: The `event_batch` row written by this accepted batch.
+        accepted:
+          type: integer
+          minimum: 0
+          description: How many events were newly committed.
+        duplicates:
+          type: integer
+          minimum: 0
+          description: How many events were already on file with the identical canonical payload.
+        acks:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventAck'
+    EventAck:
+      type: object
+      description: One event's per-event acknowledgement (00 §9.4), in request order.
+      required: [index, event_id, ack]
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          description: The 0-based position of the event in the request (`details[].index` uses the same numbering).
+        event_id:
+          type: string
+          format: uuid
+          description: The event's client-assigned id.
+        ack:
+          type: string
+          enum: [accepted, duplicate]
+          description: >-
+            `accepted` when this batch committed the row, `duplicate` when it was
+            already on file with the identical canonical payload.
     PermissionView:
       type: object
       description: >-

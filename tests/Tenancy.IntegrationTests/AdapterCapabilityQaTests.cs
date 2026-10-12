@@ -46,7 +46,7 @@ public sealed class AdapterCapabilityQaTests(PostgresTenancyFixture fixture)
         """)!.AsObject();
 
     private static string Carrier(string schema, string document) =>
-        "{\"kind\":\"run.log\",\"sequence\":1,\"ext\":{\"schema\":" + JsonSerializer.Serialize(schema) + ",\"capability\":" + document + "}}";
+        "{\"type\":\"run.log\",\"sequence\":1,\"ext\":{\"schema\":" + JsonSerializer.Serialize(schema) + ",\"capability\":" + document + "}}";
 
     private static async Task<Result<AdapterCapabilityRegistered>> RegisterAsync(World world, string document, Guid? org = null)
     {
