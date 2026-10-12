@@ -23,6 +23,28 @@ internal static class ParsingLimits
     /// byte the profile knows, so the <c>complete</c> hot path never pulls a whole object.
     /// </summary>
     public const int SniffPrefixBytes = 4096;
+
+    /// <summary>The most entries one archive may hold (06.3.1 AC3); more is <c>entry_count_exceeded</c>.</summary>
+    public const int MaxZipEntries = 10_000;
+
+    /// <summary>
+    /// The most expanded bytes the profile counts across one archive, its nested archives included (06.3.1
+    /// AC3). Counted from the bytes actually read, never from an entry's declared length, so a lying header
+    /// cannot slip past it; exceeding it is the 413 <c>size_exceeded</c>.
+    /// </summary>
+    public const long MaxExpandedBytes = 512L * 1024 * 1024;
+
+    /// <summary>
+    /// The most a single entry may expand against its compressed bytes (06.3.1 AC3): a 100:1 entry is a
+    /// decompression bomb; exceeding it is <c>compression_ratio_exceeded</c>.
+    /// </summary>
+    public const int MaxCompressionRatio = 100;
+
+    /// <summary>
+    /// The deepest a zip may nest another zip (06.3.1 AC3): a zip-in-zip is level 2, a zip inside that is
+    /// refused with <c>nesting_exceeded</c>.
+    /// </summary>
+    public const int MaxNesting = 2;
 }
 
 /// <summary>
@@ -60,6 +82,16 @@ internal static class ParsingFailure
             "the content is larger than the artifact kind's byte limit",
         ParsingFailureReason.Timeout =>
             "the document took longer to parse than the server-side parser profile allows",
+        ParsingFailureReason.UnsafeEntryName =>
+            "the archive contains an entry whose name is not safe to extract",
+        ParsingFailureReason.DuplicateEntry =>
+            "the archive contains two entries that resolve to the same path",
+        ParsingFailureReason.EntryCountExceeded =>
+            "the archive contains more entries than the server-side parser profile allows",
+        ParsingFailureReason.CompressionRatioExceeded =>
+            "an archive entry expands by more than the server-side parser profile allows",
+        ParsingFailureReason.NestingExceeded =>
+            "the archive nests archives deeper than the server-side parser profile allows",
         _ =>
             "the document is not well-formed",
     };

@@ -139,11 +139,12 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
             throw StorageFailure("head", exception);
         }
 
-        return new ObjectHead(metadata.ContentLength, ChecksumHex(metadata.ChecksumSHA256));
+        return new ObjectHead(metadata.ContentLength, ChecksumHex(metadata.ChecksumSHA256), metadata.ETag);
     }
 
     /// <inheritdoc />
-    public async Task<byte[]?> ReadPrefixAsync(string objectKey, int maxBytes, CancellationToken cancellationToken)
+    public async Task<byte[]?> ReadPrefixAsync(
+        string objectKey, int maxBytes, CancellationToken cancellationToken, string? ifMatch = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ValidateObjectKey(objectKey, nameof(objectKey));
@@ -158,13 +159,17 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
         try
         {
             // The range bounds the response: the store sends at most maxBytes, so the read below can never
-            // pull a whole artifact into memory (00 §5.7 P1, 06.3.1 AC5).
+            // pull a whole artifact into memory (00 §5.7 P1, 06.3.1 AC5). When ifMatch names the ETag the
+            // preceding HEAD reported, the GET is conditional (If-Match), so the bytes returned are that
+            // object: a store that finds a replacement answers 412, which the caller fails closed on
+            // (06.3.1-T2.2) — it is not the 404-is-an-outcome path below.
             using var response = await _client.Value.GetObjectAsync(
                 new GetObjectRequest
                 {
                     BucketName = options.Bucket,
                     Key = objectKey,
                     ByteRange = new ByteRange(0, maxBytes - 1),
+                    EtagToMatch = ifMatch,
                 },
                 cancellationToken).ConfigureAwait(false);
 

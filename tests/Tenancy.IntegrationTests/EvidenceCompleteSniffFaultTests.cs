@@ -362,6 +362,12 @@ internal sealed class FaultInjectingObjectStorage : IObjectStorage, IDisposable
     public HashSet<string> AbsentPrefixKeys { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Keys whose conditional prefix read answers <c>412 PreconditionFailed</c> (the object no longer carries the
+    /// ETag the preceding <c>HEAD</c> reported), regardless of the store (06.3.1-T2.2).
+    /// </summary>
+    public HashSet<string> PreconditionFailedKeys { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Replaces the prefix response for a key's nth read (1-based) when it returns a non-null array; returning
     /// <c>null</c> delegates to the store. Set after the artifact is minted so the final key is known.
     /// </summary>
@@ -398,7 +404,8 @@ internal sealed class FaultInjectingObjectStorage : IObjectStorage, IDisposable
         Inner().HeadAsync(objectKey, cancellationToken);
 
     /// <inheritdoc />
-    public Task<byte[]?> ReadPrefixAsync(string objectKey, int maxBytes, CancellationToken cancellationToken)
+    public Task<byte[]?> ReadPrefixAsync(
+        string objectKey, int maxBytes, CancellationToken cancellationToken, string? ifMatch = null)
     {
         Interlocked.Increment(ref _prefixReads);
         var index = _readsPerKey.AddOrUpdate(objectKey, 1, (_, previous) => previous + 1);
@@ -408,12 +415,17 @@ internal sealed class FaultInjectingObjectStorage : IObjectStorage, IDisposable
             return Task.FromResult<byte[]?>(null);
         }
 
+        if (PreconditionFailedKeys.Contains(objectKey))
+        {
+            throw new ObjectStorageException("read-prefix", "PreconditionFailed", HttpStatusCode.PreconditionFailed);
+        }
+
         if (PrefixOverride?.Invoke(objectKey, index) is { } replacement)
         {
             return Task.FromResult<byte[]?>(replacement);
         }
 
-        return Inner().ReadPrefixAsync(objectKey, maxBytes, cancellationToken);
+        return Inner().ReadPrefixAsync(objectKey, maxBytes, cancellationToken, ifMatch);
     }
 
     /// <inheritdoc />
