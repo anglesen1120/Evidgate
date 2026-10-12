@@ -53,6 +53,8 @@ internal sealed class ProducerSlotConfiguration : IEntityTypeConfiguration<Produ
         builder.Property(row => row.BoundCiRunRef).HasColumnName("bound_ci_run_ref");
         builder.Property(row => row.LastSequence).HasColumnName("last_sequence").HasDefaultValue(0L);
         builder.Property(row => row.ClosedAt).HasColumnName("closed_at");
+        builder.Property(row => row.DeclaredLastSequence).HasColumnName("declared_last_sequence");
+        builder.Property(row => row.DeclaredCount).HasColumnName("declared_count");
         builder.Property(row => row.Version).HasColumnName("version").HasDefaultValue(1).IsConcurrencyToken();
         builder.Property(row => row.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         builder.Property(row => row.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");

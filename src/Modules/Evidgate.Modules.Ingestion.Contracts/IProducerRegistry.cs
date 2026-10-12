@@ -8,10 +8,11 @@ namespace Evidgate.Modules.Ingestion.Contracts;
 /// token identity by the first accepted write of any kind (an event batch or 06.1.2's
 /// <c>upload-url</c>, T85). Every cross-module call goes through this project only (00 §5.5 C5).
 /// <para>
-/// The contract is the 04.1.2-T4 half of the story: it registers the slots and answers the binding
-/// question. The enforcement that turns a <c>producer_slot_taken</c>/<c>unknown_producer</c> answer
-/// into a rejected batch is 04.1.2-T5's; <c>CloseSlotAsync</c> (T68) and the
-/// <c>declared_last_sequence</c>/<c>declared_count</c> columns are T5's as well.
+/// 04.1.2-T4 registered the slots and answered the binding question; 04.1.2-T5 added the enforcement
+/// that turns a <c>producer_slot_taken</c>/<c>unknown_producer</c> answer into a rejected batch on
+/// <em>every</em> write path (the event batch and 06.1.2's <c>upload-url</c>, T85), the T88 comparison
+/// of the caller's CI claims with <c>run.ci_run_ref</c>, and <c>CloseSlotAsync</c> (T68) with the
+/// <c>declared_last_sequence</c>/<c>declared_count</c> columns (migration 0035).
 /// </para>
 /// </summary>
 public interface IProducerRegistry
@@ -70,6 +71,39 @@ public interface IProducerRegistry
         string producerId,
         string tokenJti,
         string? ciRunRef,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Closes the slot of <paramref name="producerId"/> once, storing the shard's declared values (T68,
+    /// AC9). The close is idempotent on <c>producer_slot.closed_at</c>: a repeat call by the same
+    /// identity returns the values already stored, with no update and no version bump, so a duplicate
+    /// finalize is a 202-equivalent no-op (05.3.2 AC6/D3). The statement is one conditional
+    /// <c>UPDATE … WHERE closed_at IS NULL</c> whose <c>WHERE</c> carries the whole identity guard, so
+    /// two racing finalizes cannot both write.
+    /// </summary>
+    /// <param name="runId">The run the slot belongs to.</param>
+    /// <param name="producerId">The manifest shard's deterministic producer id (T54).</param>
+    /// <param name="tokenJti">The caller's token id (an id, never the token itself; S3).</param>
+    /// <param name="ciRunRef">The caller's GitHub <c>(repository_id, run_id, run_attempt)</c> reference, or null (T88).</param>
+    /// <param name="declaredLastSequence">The highest producer sequence the shard declares it sent; <c>&gt;= 0</c>.</param>
+    /// <param name="declaredCount">How many events the shard declares it sent; <c>&gt;= 0</c>.</param>
+    /// <param name="cancellationToken">The request's cancellation token.</param>
+    /// <returns>
+    /// The slot's closure (the stored declared values and <c>closed_at</c>, with <see cref="ProducerSlotClosure.Closed"/>
+    /// true only when this call wrote them), or a failure: <c>request_invalid</c> (422) when a declared value is
+    /// outside the column bound, <c>unknown_producer</c> (422) when the run has no such slot,
+    /// <c>producer_slot_taken</c> (403) when the slot is bound to another jti or CI reference, when the run's CI
+    /// reference (T88) does not match the caller's, or when the slot was never bound — only the bound identity
+    /// may finalize it (T9). 05.3.2-T1's handler binds through <see cref="BindOrCheckAsync"/> before it closes,
+    /// so a finalize arriving before the events still closes the slot (05.3.2 AC7).
+    /// </returns>
+    ValueTask<Result<ProducerSlotClosure>> CloseSlotAsync(
+        Guid runId,
+        string producerId,
+        string tokenJti,
+        string? ciRunRef,
+        long declaredLastSequence,
+        int declaredCount,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -135,6 +169,23 @@ public sealed record ProducerSlotRef(Guid Id, int ShardIndex, string ProducerId)
 /// <param name="Bound">True when this call wrote the binding; false when the slot was already bound to the same identity.</param>
 public sealed record ProducerSlotBinding(Guid Id, int ShardIndex, string ProducerId, bool Bound);
 
+/// <summary>The outcome of <see cref="IProducerRegistry.CloseSlotAsync"/> (T68, AC9).</summary>
+/// <param name="Id">The slot row's id.</param>
+/// <param name="ShardIndex">The 1-based manifest shard index.</param>
+/// <param name="ProducerId">The deterministic producer id (T54).</param>
+/// <param name="ClosedAt">When the slot was closed; the value already stored on an idempotent repeat.</param>
+/// <param name="DeclaredLastSequence">The stored declared high-water mark (T68); the first close's value on a repeat.</param>
+/// <param name="DeclaredCount">The stored declared count (T68); the first close's value on a repeat.</param>
+/// <param name="Closed">True when this call wrote the close; false when the slot was already closed (the idempotent no-op).</param>
+public sealed record ProducerSlotClosure(
+    Guid Id,
+    int ShardIndex,
+    string ProducerId,
+    DateTimeOffset ClosedAt,
+    long DeclaredLastSequence,
+    int DeclaredCount,
+    bool Closed);
+
 /// <summary>One slot of a run, as <see cref="IProducerRegistry.GetRunProducerSlotsAsync"/> returns it.</summary>
 /// <param name="Id">The slot row's id.</param>
 /// <param name="ShardIndex">The 1-based manifest shard index.</param>
@@ -142,10 +193,14 @@ public sealed record ProducerSlotBinding(Guid Id, int ShardIndex, string Produce
 /// <param name="Bound">True when a first accepted write has bound the slot (T9).</param>
 /// <param name="ClosedAt">When <c>CloseSlotAsync</c> closed the slot (T68); null while open.</param>
 /// <param name="LastSequence">The highest sequence the slot has stored; 0 before the first write.</param>
+/// <param name="DeclaredLastSequence">The declared high-water mark <c>CloseSlotAsync</c> stored (T68); null while open.</param>
+/// <param name="DeclaredCount">The declared count <c>CloseSlotAsync</c> stored (T68); null while open.</param>
 public sealed record ProducerSlotView(
     Guid Id,
     int ShardIndex,
     string ProducerId,
     bool Bound,
     DateTimeOffset? ClosedAt,
-    long LastSequence);
+    long LastSequence,
+    long? DeclaredLastSequence,
+    int? DeclaredCount);

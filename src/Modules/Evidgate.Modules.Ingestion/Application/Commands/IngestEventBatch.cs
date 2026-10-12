@@ -202,10 +202,18 @@ internal sealed class IngestEventBatchHandler(
                 "the project is suspended"));
         }
 
-        // D6 (fail closed): a complete or incomplete run has closed its event window; a canceled run still
-        // accepts events and marks them after_cancel (T12). The late-window write is 04.1.1-T4.2's.
+        // T12/T81 (replacing 04.1.1's D6 fail-closed for the incomplete case): a canceled run still accepts
+        // events and marks them after_cancel (T12); an incomplete run still accepts late evidence inside its
+        // late window and marks it late = true, because the run row's own immutable window (T93) is what
+        // closes it - after the window the run answers 409 run_closed (T81). A complete run is closed: its
+        // window runs "since completion" and the run row stores no completion instant (T101's run.completed_at
+        // is 05.3.1's to add), so nothing here could open it. The state and the window are read from the run
+        // row taken FOR SHARE (T91), so a committed cancel or completion can never be missed.
         var afterCancel = string.Equals(scope.RunState, "canceled", StringComparison.Ordinal);
-        if (scope.RunState is "complete" or "incomplete")
+        var late = string.Equals(scope.RunState, "incomplete", StringComparison.Ordinal) && scope.LateWindowOpen;
+        var closed = (string.Equals(scope.RunState, "complete", StringComparison.Ordinal) || string.Equals(scope.RunState, "incomplete", StringComparison.Ordinal))
+            && !late;
+        if (closed)
         {
             return Result.Failure<BatchAckResult>(Error.Conflict(
                 ApiErrorCode.RunClosed,
@@ -328,6 +336,7 @@ internal sealed class IngestEventBatchHandler(
                 org_id = orgId,
                 run_id = command.RunId,
                 after_cancel = afterCancel,
+                late,
                 events = JsonSerializer.Serialize(rows),
             },
             cancellationToken).ConfigureAwait(false)).ToHashSet();
@@ -557,11 +566,11 @@ internal sealed class IngestEventBatchHandler(
         insert into public.event (
             id, org_id, run_id, event_id, producer_id, sequence, job_id, epoch, execution_key,
             attempt_no, type, raw_status, normalized_status, duration_ms, occurred_at, payload_hash,
-            payload, artifact_ids, after_cancel)
+            payload, artifact_ids, after_cancel, late)
         select
             x.id, @org_id, @run_id, x.event_id, x.producer_id, x.sequence, x.job_id, x.epoch,
             x.execution_key, x.attempt_no, x.type, x.raw_status, x.normalized_status, x.duration_ms,
-            x.occurred_at, x.payload_hash, x.payload::jsonb, x.artifact_ids, @after_cancel
+            x.occurred_at, x.payload_hash, x.payload::jsonb, x.artifact_ids, @after_cancel, @late
         from jsonb_to_recordset(@events::jsonb) as x (
             id uuid, event_id uuid, producer_id text, sequence bigint, job_id uuid, epoch bigint,
             execution_key text, attempt_no integer, type text, raw_status text, normalized_status text,

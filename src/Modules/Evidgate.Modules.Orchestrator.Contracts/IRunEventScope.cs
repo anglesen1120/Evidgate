@@ -50,4 +50,16 @@ public interface IRunEventScope
 /// execution the caller rejects per event; <c>planned_execution</c> has no <c>attempt_no</c> column, so only
 /// membership is answered here.
 /// </param>
-public sealed record RunEventScope(Guid ProjectId, string ProjectState, string RunState, IReadOnlySet<string> PlannedKeys);
+/// <param name="LateWindowOpen">
+/// True when <c>now()</c> is at or before the run's late-window end, <c>collection_deadline_at + late_window_minutes</c>
+/// (T81/T93): the caller stores an event that arrives in that window with <c>late = true</c>. The end is computed in
+/// the database against the transaction clock, so the caller's clock never decides the boundary. Both instants are
+/// columns of the locked run row (<c>late_window_minutes</c> is the immutable snapshot 07.1.1-T4.2 pinned at run
+/// create), so the answer cannot race a policy change.
+/// </param>
+public sealed record RunEventScope(
+    Guid ProjectId,
+    string ProjectState,
+    string RunState,
+    IReadOnlySet<string> PlannedKeys,
+    bool LateWindowOpen);

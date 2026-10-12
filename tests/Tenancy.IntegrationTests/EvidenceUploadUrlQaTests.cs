@@ -423,6 +423,37 @@ public sealed class EvidenceUploadUrlQaTests
     }
 
     [Fact]
+    public async Task UploadUrl_PathFirstWriteBindsTheSlot_ThenForeignIdentityIsForbidden()
+    {
+        // T85/T9: 06.1.2's route is a first-write path of its own - the first accepted upload-url claims the
+        // slot through the same BindOrCheckAsync the event batch uses, and the foreign identity is refused.
+        await using var world = await StartAsync(Writer(Jti));
+        var runId = await SeedRunAsync(world, ExecutionKey);
+        await InsertKindPolicyAsync(world, "trace");
+
+        var accepted = await UploadUrlAsync(world, Body(runId, attemptNo: 1, bytes: Cap), Guid.NewGuid().ToString("N"));
+
+        accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
+        (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
+
+        await using var second = TenancyApiFactory.WithPrincipal(
+            _fixture.AppConnectionString(world.Database), world.Org, world.Project, Writer(OtherJti), ObjectStorage);
+        using var secondClient = second.CreateClient();
+
+        var foreign = await secondClient.SendAsync(
+            HttpMethod.Post,
+            "/v1/artifacts/upload-url",
+            _ => { },
+            Body(runId, attemptNo: 2, bytes: Cap),
+            Guid.NewGuid().ToString("N"));
+
+        foreign.Status.ShouldBe(HttpStatusCode.Forbidden, foreign.ErrorMessage);
+        foreign.ErrorCode.ShouldBe("producer_slot_taken");
+        (await ArtifactRowsAsync(world)).ShouldBe(1);
+        (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
+    }
+
+    [Fact]
     public async Task UploadUrl_SameKeyConcurrent_NoServerError_OneArtifactRow()
     {
         await using var world = await StartAsync(Writer());

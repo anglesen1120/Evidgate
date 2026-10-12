@@ -85,6 +85,17 @@ internal sealed class ThrowingProducerRegistry(IProducerRegistry inner) : IProdu
         inner.BindOrCheckAsync(runId, producerId, tokenJti, ciRunRef, cancellationToken);
 
     /// <inheritdoc />
+    public ValueTask<Result<ProducerSlotClosure>> CloseSlotAsync(
+        Guid runId,
+        string producerId,
+        string tokenJti,
+        string? ciRunRef,
+        long declaredLastSequence,
+        int declaredCount,
+        CancellationToken cancellationToken) =>
+        inner.CloseSlotAsync(runId, producerId, tokenJti, ciRunRef, declaredLastSequence, declaredCount, cancellationToken);
+
+    /// <inheritdoc />
     public ValueTask<IReadOnlyList<ProducerSlotView>> GetRunProducerSlotsAsync(Guid runId, CancellationToken cancellationToken) =>
         inner.GetRunProducerSlotsAsync(runId, cancellationToken);
 }

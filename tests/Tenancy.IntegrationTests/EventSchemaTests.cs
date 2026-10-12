@@ -413,9 +413,19 @@ public sealed class EventSchemaTests
 
         (await _fixture.ScalarAsync<long>(world.Database, "select last_sequence from public.producer_slot")).ShouldBe(7);
 
-        // Every other column stays outside the app role's grants: `closed_at` is 04.1.2-T5's, `version` is
-        // the shared trigger's, and a slot is never deleted.
-        (await CaptureAppErrorAsync(world, world.Org, "update public.producer_slot set closed_at = now()"))
+        // Every other column stays outside the app role's grants: `closed_at` and the two declared values
+        // are 0035's (04.1.2-T5's `CloseSlotAsync` names exactly those three columns), `version` is the
+        // shared trigger's, and a slot is never deleted.
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            "select has_column_privilege('evidgate_app', 'public.producer_slot', 'closed_at', 'update')")).ShouldBeTrue();
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            "select has_column_privilege('evidgate_app', 'public.producer_slot', 'declared_last_sequence', 'update')")).ShouldBeTrue();
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            "select has_column_privilege('evidgate_app', 'public.producer_slot', 'declared_count', 'update')")).ShouldBeTrue();
+        (await CaptureAppErrorAsync(world, world.Org, "update public.producer_slot set producer_id = 'shard-9'"))
             .SqlState.ShouldBe("42501");
         (await CaptureAppErrorAsync(world, world.Org, "update public.producer_slot set version = 9"))
             .SqlState.ShouldBe("42501");

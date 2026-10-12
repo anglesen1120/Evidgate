@@ -28,6 +28,8 @@ internal sealed class ProducerSlot
         string? boundCiRunRef = null,
         long lastSequence = 0,
         DateTimeOffset? closedAt = null,
+        long? declaredLastSequence = null,
+        int? declaredCount = null,
         int version = 1,
         DateTimeOffset createdAt = default,
         DateTimeOffset updatedAt = default)
@@ -41,6 +43,8 @@ internal sealed class ProducerSlot
         BoundCiRunRef = boundCiRunRef;
         LastSequence = lastSequence;
         ClosedAt = closedAt;
+        DeclaredLastSequence = declaredLastSequence;
+        DeclaredCount = declaredCount;
         Version = version;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
@@ -72,6 +76,12 @@ internal sealed class ProducerSlot
 
     /// <summary>When <c>CloseSlotAsync</c> closed the slot (T68); null while open.</summary>
     public DateTimeOffset? ClosedAt { get; }
+
+    /// <summary>The declared high-water mark <c>CloseSlotAsync</c> stored (T68, migration 0035); null while open.</summary>
+    public long? DeclaredLastSequence { get; }
+
+    /// <summary>The declared count <c>CloseSlotAsync</c> stored (T68, migration 0035); null while open.</summary>
+    public int? DeclaredCount { get; }
 
     /// <summary>Optimistic-concurrency token (00 §7); the trigger owns the increment.</summary>
     public int Version { get; }
