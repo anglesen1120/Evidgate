@@ -89,6 +89,33 @@ public sealed class SeaweedFsStore : IAsyncLifetime
         {
             // Reused container state is fine — it is the same bucket.
         }
+
+        await WarmUpAsync();
+    }
+
+    /// <summary>
+    /// SeaweedFS allocates its first volume lazily, and under a loaded full gate the very first write can
+    /// answer 500 after a long wait ("no writable volumes") — which would fail whichever test happens to
+    /// upload first. One probe write, retried until the store accepts it, makes every later write ordinary.
+    /// </summary>
+    private async Task WarmUpAsync()
+    {
+        const string probeKey = "warm-up/probe";
+        var deadline = DateTime.UtcNow.AddSeconds(120);
+
+        while (true)
+        {
+            try
+            {
+                await PutAsync(probeKey, [1]);
+                await DeleteAsync(probeKey);
+                return;
+            }
+            catch (AmazonServiceException) when (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1));
+            }
+        }
     }
 
     public async ValueTask DisposeAsync()
