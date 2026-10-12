@@ -3,13 +3,17 @@
 // the wire answer of an unsupported or malformed encoding, and the one counter + one log line per refusal.
 #pragma warning disable CA1861
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.Metrics;
+using System.Globalization;
 using System.IO.Compression;
 using System.Net;
 using System.Text;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.Modules.Ingestion.Application;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shouldly;
@@ -84,8 +88,9 @@ public sealed class IngestLimitsTests
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
         using var listener = RejectionListener(out var reasons);
 
-        // 50 MiB of zeros from a compressed body of ~200 KiB: the ratio cap is the first guard under the
-        // 20:1 default, and the decode aborts there — no write, no inflated body.
+        // 50 MiB of zeros compresses to about 50 KiB (deflate caps near 1032:1), so the ratio cap is the first
+        // guard under the 20:1 default and the decode aborts at about 1 MiB expanded (20 × 50 KiB) — no write,
+        // no inflated body.
         var bomb = GzipOf(new byte[50 * 1024 * 1024]);
 
         var answer = await PostGzipAsync(world, bomb, requestId: "req-bomb-1");
@@ -95,6 +100,45 @@ public sealed class IngestLimitsTests
         (await EventRowsAsync(world)).ShouldBe(0);
         (await world.CountAsync("event_batch")).ShouldBe(0);
         reasons.ShouldContain(IngestBatchRejection.RatioExceeded);
+    }
+
+    // ---------------------------------------------------------------- §9 row: limit_boundaries (gzip expanded cap)
+
+    [Fact]
+    public async Task gzip_expanded_cap_boundary_is_exact_and_one_byte_over_is_413()
+    {
+        // The expanded-size boundary is exercised through the real host with the option's lower bound (1 MiB)
+        // configured — the same IngestionLimitsOptionsTests configuration seam. At the 8 MiB default the window
+        // is a knife edge: the 1 MiB as-sent cap forces the compression ratio to sit between 8:1 and 20:1, and a
+        // payload at the 8:1 edge compresses to (just over) the 1 MiB transport cap. The option's [Range] floor
+        // is 1 MiB, where the window is wide (the payload below compresses to ~780 KiB, ratio ~1.3:1), so the
+        // boundary is built there and the expanded-size cap — not the ratio cap — is the one that decides.
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var host = world.Host.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration(
+            (_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["EVIDGATE:Ingestion:MaxExpandedBytes"] = ExpandedCap.ToString(CultureInfo.InvariantCulture),
+            })));
+        using var client = host.CreateClient();
+        using var listener = RejectionListener(out var reasons);
+
+        // Exactly the cap: decoded and accepted by both caps. The decoded bytes are not a valid batch, so the
+        // route answers 422 event_invalid — never 413, and the limit counter is not touched.
+        var atCap = await PostGzipAsync(client, world.RunId, GzipOf(RepetitiveText(ExpandedCap)));
+
+        atCap.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, atCap.ErrorMessage);
+        atCap.ErrorCode.ShouldBe("event_invalid");
+        reasons.ShouldBeEmpty();
+        (await EventRowsAsync(world)).ShouldBe(0);
+
+        // One decoded byte over the cap: 413 expanded_too_large, one counter measurement, zero rows.
+        var overCap = await PostGzipAsync(client, world.RunId, GzipOf(RepetitiveText(ExpandedCap + 1)));
+
+        overCap.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge, overCap.ErrorMessage);
+        overCap.ErrorCode.ShouldBe("batch_too_large");
+        reasons.ShouldHaveSingleItem().ShouldBe(IngestBatchRejection.ExpandedTooLarge);
+        (await EventRowsAsync(world)).ShouldBe(0);
+        (await world.CountAsync("event_batch")).ShouldBe(0);
     }
 
     // ---------------------------------------------------------------- a valid gzip batch
@@ -237,11 +281,16 @@ public sealed class IngestLimitsTests
         byte[] compressed,
         string? requestId = null,
         string encoding = "gzip") =>
-        IngestQaRequests.PostAsync(
-            world.Client,
-            world.RunId,
-            GzipContent(compressed, encoding),
-            requestId);
+        PostGzipAsync(world.Client, world.RunId, compressed, requestId, encoding);
+
+    /// <summary>One <c>Content-Encoding: gzip</c> request of the given compressed body on an arbitrary client.</summary>
+    private static Task<ApiAnswer> PostGzipAsync(
+        HttpClient client,
+        Guid runId,
+        byte[] compressed,
+        string? requestId = null,
+        string encoding = "gzip") =>
+        IngestQaRequests.PostAsync(client, runId, GzipContent(compressed, encoding), requestId);
 
     private static ByteArrayContent GzipContent(byte[] compressed, string encoding)
     {
@@ -273,6 +322,30 @@ public sealed class IngestLimitsTests
         {
             state = (state * 1664525u) + 1013904223u;
             bytes[i] = (byte)(state >> 24);
+        }
+
+        return bytes;
+    }
+
+    /// <summary>The <c>IngestionLimits.MaxExpandedBytes</c> floor (its <c>[Range]</c> lower bound), 1 MiB.</summary>
+    private const int ExpandedCap = 1_048_576;
+
+    private static readonly byte[] Alphabet =
+        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"u8.ToArray();
+
+    /// <summary>
+    /// Deterministic bytes of <paramref name="length"/> drawn from a 62-symbol alphabet: a body at the
+    /// expanded cap gzips to about 780 KiB, which is under the 1 MiB as-sent cap and far above the
+    /// <c>cap / 20</c> a 20:1 ratio needs, so the expanded-size cap is the one that decides.
+    /// </summary>
+    private static byte[] RepetitiveText(int length)
+    {
+        var bytes = new byte[length];
+        var state = 0x2545F491u;
+        for (var i = 0; i < length; i++)
+        {
+            state = (state * 1664525u) + 1013904223u;
+            bytes[i] = Alphabet[(byte)(state >> 24) % Alphabet.Length];
         }
 
         return bytes;

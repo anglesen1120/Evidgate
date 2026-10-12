@@ -140,7 +140,8 @@ public static class IngestionEndpoints
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(buffer);
+            // The buffer held the tenant's request body, so it is cleared before it is pooled.
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
         }
     }
 

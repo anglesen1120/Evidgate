@@ -18,18 +18,19 @@ namespace Evidgate.Modules.Ingestion.Application;
 /// <item>The output is read in bounded chunks and the caps are checked before a chunk is kept, so the
 /// decoded buffer never holds more than <see cref="IngestionLimits.MaxExpandedBytes"/> bytes and the
 /// decode aborts within one chunk past the cap (the 50 MiB-from-20 KiB bomb).</item>
-/// <item>The compressed bytes are served to the inflater one byte at a time
-/// (<see cref="SingleByteStream"/>). That is the only way the managed API exposes the exact end of the
-/// first gzip member: with a whole-buffer feed the inflater reads ahead, and .NET's <c>GZipStream</c>
-/// then either transparently concatenates the next member or silently ignores trailing bytes. With a
-/// one-byte feed the inflater consumes exactly the member, so more bytes left unread than the member's
-/// own trailer is proof of a second member or trailing data — both refused (<c>gzip_invalid</c>), never
-/// ignored.</item>
+/// <item>The member is framed here rather than by .NET's <c>GZipStream</c>: the header is skipped by hand,
+/// the raw deflate stream is inflated one byte at a time (<see cref="SingleByteStream"/>), and the bytes
+/// the inflater consumed pin the deflate end exactly. A single member must then be exactly
+/// header + deflate + trailer; any other length is a second member, a repeated trailer or trailing data,
+/// all refused (<c>gzip_invalid</c>), never ignored. <c>GZipStream</c> cannot make that check: after a
+/// member it probes for a following one and consumes any tail of eight bytes or fewer, so
+/// <c>member || its own 8-byte trailer</c> would look like a clean member and its last eight bytes would
+/// still validate as the trailer.</item>
 /// </list>
 /// <para>
 /// Truncation is the one case zlib does not report (its strict-validation switch is off by default), so
-/// the decoded body is checked against the gzip trailer: a complete member ends exactly at the body's
-/// last eight bytes, and the trailer carries the CRC-32 and the ISIZE of what was decoded.
+/// the decoded body is checked against the gzip trailer at the exact member end: the trailer carries the
+/// CRC-32 and the ISIZE of what was decoded, and both must match.
 /// </para>
 /// </summary>
 internal static class EventBodyDecoder
@@ -59,21 +60,32 @@ internal static class EventBodyDecoder
             return DecodedBody.Refused(IngestBatchRejection.GzipInvalid, 0);
         }
 
+        // The deflate stream starts after the member's header; a body whose header is absent or malformed
+        // cannot be a member.
+        if (!TrySkipGzipHeader(compressed.Span, out var headerLength))
+        {
+            return DecodedBody.Refused(IngestBatchRejection.GzipInvalid, 0);
+        }
+
         var maxExpanded = limits.MaxExpandedBytes;
         var ratioCap = (long)limits.MaxExpansionRatio * compressed.Length;
 
         var chunk = ArrayPool<byte>.Shared.Rent(ChunkSize);
         byte[]? output = null;
         var expanded = 0;
+        var deflateBytes = 0;
 
         try
         {
-            using (var source = new SingleByteStream(compressed))
-            using (var gzip = new GZipStream(source, CompressionMode.Decompress))
+            // Only the deflate stream is inflated, so the inflater stops at the exact deflate end instead of
+            // probing for another member the way GZipStream does (that probe is what let a repeated trailer
+            // pass). One byte per read makes Served the exact byte length the deflate stream consumed.
+            using (var source = new SingleByteStream(compressed[headerLength..]))
+            using (var inflater = new DeflateStream(source, CompressionMode.Decompress))
             {
                 while (true)
                 {
-                    var read = gzip.Read(chunk, 0, chunk.Length);
+                    var read = inflater.Read(chunk, 0, chunk.Length);
                     if (read == 0)
                     {
                         break;
@@ -97,16 +109,21 @@ internal static class EventBodyDecoder
                     expanded = next;
                 }
 
-                // One byte per read means the inflater consumed exactly the first member: the trailer may
-                // be left unread (its consumption depends on the inflater's own buffering), but anything
-                // beyond it is a second member or trailing data, never silently ignored.
-                if (compressed.Length - source.Served > TrailerLength)
-                {
-                    Return(ref output);
-                    return DecodedBody.Refused(IngestBatchRejection.GzipInvalid, expanded);
-                }
+                // One byte per read means the inflater consumed exactly the deflate stream: headerLength plus
+                // Served is the exact deflate end. A single member is exactly header + deflate + trailer, so
+                // anything else — a second member, a repeated trailer, any trailing byte — is refused, never
+                // ignored: the framing of the body has to be exact.
+                deflateBytes = source.Served;
             }
 
+            if (headerLength + deflateBytes + TrailerLength != compressed.Length)
+            {
+                Return(ref output);
+                return DecodedBody.Refused(IngestBatchRejection.GzipInvalid, expanded);
+            }
+
+            // The position check above pinned the trailer to the body's last eight bytes: it is this
+            // member's own trailer, so its CRC-32 and ISIZE must match what was decoded.
             if (!TrailerMatches(compressed.Span, output, expanded))
             {
                 Return(ref output);
@@ -119,14 +136,102 @@ internal static class EventBodyDecoder
         }
         catch (InvalidDataException)
         {
-            // zlib refused the container: bad header, corrupt deflate data, wrong CRC/ISIZE.
+            // zlib refused the deflate stream: corrupt data or an incomplete stream.
             Return(ref output);
             return DecodedBody.Refused(IngestBatchRejection.GzipInvalid, expanded);
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(chunk);
+            ArrayPool<byte>.Shared.Return(chunk, clearArray: true);
         }
+    }
+
+    /// <summary>
+    /// Locates the first byte of a gzip member's deflate stream: the 10-byte fixed header (RFC 1952 §2.3.1)
+    /// plus the optional FEXTRA/FNAME/FCOMMENT/FHCRC fields its flags announce. False when the bytes are not
+    /// a gzip header, so a non-member is refused before anything is inflated.
+    /// </summary>
+    private static bool TrySkipGzipHeader(ReadOnlySpan<byte> data, out int headerLength)
+    {
+        headerLength = 0;
+
+        // ID1, ID2 (magic), CM (deflate) and the reserved FLG bits must all match (RFC 1952 §2.3.1).
+        if (data.Length < 10
+            || data[0] != 0x1F
+            || data[1] != 0x8B
+            || data[2] != 0x08
+            || (data[3] & 0xE0) != 0)
+        {
+            return false;
+        }
+
+        var flags = data[3];
+        var index = 10;
+
+        if ((flags & 0x04) != 0) // FEXTRA: a 2-byte little-endian length and that many bytes.
+        {
+            if (index + 2 > data.Length)
+            {
+                return false;
+            }
+
+            index += 2 + (data[index] | (data[index + 1] << 8));
+            if (index > data.Length)
+            {
+                return false;
+            }
+        }
+
+        if ((flags & 0x08) != 0) // FNAME: a NUL-terminated name.
+        {
+            index = SkipZeroTerminated(data, index);
+            if (index < 0)
+            {
+                return false;
+            }
+        }
+
+        if ((flags & 0x10) != 0) // FCOMMENT: a NUL-terminated comment.
+        {
+            index = SkipZeroTerminated(data, index);
+            if (index < 0)
+            {
+                return false;
+            }
+        }
+
+        if ((flags & 0x02) != 0) // FHCRC: the low 16 bits of the header's CRC-32, little-endian.
+        {
+            if (index + 2 > data.Length)
+            {
+                return false;
+            }
+
+            var stored = (ushort)(data[index] | (data[index + 1] << 8));
+            if (stored != (ushort)Crc32(data[..index]))
+            {
+                return false;
+            }
+
+            index += 2;
+        }
+
+        headerLength = index;
+        return true;
+    }
+
+    /// <summary>The index just past the next NUL byte, or -1 when the span holds none.</summary>
+    private static int SkipZeroTerminated(ReadOnlySpan<byte> data, int start)
+    {
+        for (var i = start; i < data.Length; i++)
+        {
+            if (data[i] == 0)
+            {
+                return i + 1;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>Grows the decoded buffer geometrically, never past <paramref name="maxExpanded"/> bytes.</summary>
@@ -142,13 +247,16 @@ internal static class EventBodyDecoder
         if (buffer is not null)
         {
             Array.Copy(buffer, grown, used);
-            ArrayPool<byte>.Shared.Return(buffer);
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
         }
 
         buffer = grown;
     }
 
-    /// <summary>Returns a rented buffer to the pool and clears the reference.</summary>
+    /// <summary>
+    /// Returns a rented buffer to the pool and clears the reference. The decoded bytes are tenant data, so
+    /// the buffer is cleared before it is pooled.
+    /// </summary>
     private static void Return(ref byte[]? buffer)
     {
         if (buffer is null)
@@ -156,14 +264,14 @@ internal static class EventBodyDecoder
             return;
         }
 
-        ArrayPool<byte>.Shared.Return(buffer);
+        ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
         buffer = null;
     }
 
     /// <summary>
-    /// True when the body's last eight bytes are the gzip trailer of what was decoded: a complete member
-    /// ends there (zlib already verified the CRC/ISIZE), while a truncated member ends mid-stream and its
-    /// tail is deflate data, not a trailer. RFC 1952 §2.3.1 stores both fields little-endian.
+    /// True when the body's last eight bytes are the gzip trailer of what was decoded. The caller has
+    /// already framed the member, so those bytes are this member's own trailer and both fields must match
+    /// what was decoded; RFC 1952 §2.3.1 stores them little-endian.
     /// </summary>
     private static bool TrailerMatches(ReadOnlySpan<byte> compressed, byte[]? output, int expanded)
     {
@@ -171,19 +279,16 @@ internal static class EventBodyDecoder
         var crc = BinaryPrimitives.ReadUInt32LittleEndian(trailer);
         var isize = BinaryPrimitives.ReadUInt32LittleEndian(trailer[4..]);
 
-        return isize == (uint)expanded && crc == Crc32(output, expanded);
+        return isize == (uint)expanded && crc == Crc32(output.AsSpan(0, expanded));
     }
 
-    /// <summary>The reflected IEEE CRC-32 (RFC 1952 §8) of the first <paramref name="length"/> bytes.</summary>
-    private static uint Crc32(byte[]? data, int length)
+    /// <summary>The reflected IEEE CRC-32 (RFC 1952 §8) of <paramref name="data"/>.</summary>
+    private static uint Crc32(ReadOnlySpan<byte> data)
     {
         var crc = uint.MaxValue;
-        if (data is not null)
+        foreach (var value in data)
         {
-            for (var i = 0; i < length; i++)
-            {
-                crc = (crc >> 8) ^ CrcTable[(crc ^ data[i]) & 0xFF];
-            }
+            crc = (crc >> 8) ^ CrcTable[(crc ^ value) & 0xFF];
         }
 
         return ~crc;
@@ -208,9 +313,9 @@ internal static class EventBodyDecoder
 
     /// <summary>
     /// Serves the compressed bytes one at a time, so the inflater can never read past the end of the
-    /// first gzip member (<see cref="Served"/> then equals that member's exact byte length). Not seekable
-    /// on purpose: a seekable base stream would let <c>DeflateStream</c> rewind an ambiguous trailing
-    /// <c>0x1F</c> probe, which is exactly the trailing-data case this class must see.
+    /// deflate stream (<see cref="Served"/> then equals that stream's exact byte length). Not seekable on
+    /// purpose: a seekable base stream would let the inflater rewind to the exact end of the compressed
+    /// data, which would hide the trailing bytes this class must count.
     /// </summary>
     private sealed class SingleByteStream(ReadOnlyMemory<byte> data) : Stream
     {
@@ -304,7 +409,8 @@ internal sealed class DecodedBody : IDisposable
         _buffer = null;
         if (buffer is not null)
         {
-            ArrayPool<byte>.Shared.Return(buffer);
+            // The decoded bytes are the tenant's request body, so the buffer is cleared before it is pooled.
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
         }
     }
 }

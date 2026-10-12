@@ -68,6 +68,56 @@ public sealed class EventBodyDecoderUnitTests
     }
 
     [Fact]
+    public void member_with_a_filename_header_field_is_accepted()
+    {
+        // RFC 1952 §2.3.1: FLG bit 3 (FNAME) inserts a NUL-terminated name before the deflate data. The
+        // decoder skips the header itself, so an optional field must not be mistaken for body bytes.
+        var payload = Encoding.UTF8.GetBytes(
+            """{"schema_version":1,"events":[{"event_id":"0198a0f0-0000-7000-8000-000000000002","sequence":1}]}""");
+        var member = GzipOf(payload);
+        var name = "batch.json"u8.ToArray();
+        var withName = new byte[member.Length + name.Length + 1];
+        member.AsSpan(0, 10).CopyTo(withName);
+        withName[3] |= 0x08;
+        name.CopyTo(withName.AsSpan(10));
+        withName[10 + name.Length] = 0;
+        member.AsSpan(10).CopyTo(withName.AsSpan(11 + name.Length));
+
+        using var decoded = EventBodyDecoder.DecodeGzip(withName, Defaults());
+
+        decoded.Reason.ShouldBeNull();
+        decoded.Bytes.ToArray().ShouldBe(payload);
+    }
+
+    [Fact]
+    public void member_with_a_header_crc_is_accepted_and_a_wrong_one_is_refused()
+    {
+        // RFC 1952 §2.3.1: FLG bit 1 (FHCRC) stores the low 16 bits of the header's CRC-32. The decoder
+        // frames the header itself, so it must validate that field (zlib did) — a wrong one is not a member.
+        var payload = Encoding.UTF8.GetBytes("""{"schema_version":1,"events":[]}""");
+        var member = GzipOf(payload);
+        var header = member.AsSpan(0, 10).ToArray();
+        header[3] |= 0x02;
+        var crc = (ushort)Crc32(header);
+
+        var valid = new byte[member.Length + 2];
+        header.CopyTo(valid, 0);
+        valid[10] = (byte)crc;
+        valid[11] = (byte)(crc >> 8);
+        member.AsSpan(10).CopyTo(valid.AsSpan(12));
+
+        using var accepted = EventBodyDecoder.DecodeGzip(valid, Defaults());
+
+        accepted.Reason.ShouldBeNull();
+        accepted.Bytes.ToArray().ShouldBe(payload);
+
+        valid[10] ^= 0xFF;
+        using var refused = EventBodyDecoder.DecodeGzip(valid, Defaults());
+
+        refused.Reason.ShouldBe(IngestBatchRejection.GzipInvalid);
+    }
+
+    [Fact]
     public void trailer_isize_is_little_endian()
     {
         // RFC 1952 §2.3.1: both trailer fields are little-endian. Reading them big-endian would make every
@@ -181,6 +231,60 @@ public sealed class EventBodyDecoderUnitTests
     }
 
     [Fact]
+    public void member_followed_by_a_copy_of_its_own_trailer_is_refused()
+    {
+        // The regression of DECISIONS §8.1 D-A8: .NET's GZipStream probes for a next member after the
+        // trailer, so a tail that repeats the trailer's own eight bytes looked like a clean member and the
+        // last eight bytes of the body still validated as the trailer. The exact framing must refuse it.
+        var member = GzipOf("payload"u8.ToArray());
+        var withRepeatedTrailer = new byte[member.Length + 8];
+        member.CopyTo(withRepeatedTrailer, 0);
+        member.AsSpan(member.Length - 8).CopyTo(withRepeatedTrailer.AsSpan(member.Length));
+
+        using var decoded = EventBodyDecoder.DecodeGzip(withRepeatedTrailer, Defaults());
+
+        decoded.Reason.ShouldBe(IngestBatchRejection.GzipInvalid);
+    }
+
+    [Fact]
+    public void member_followed_by_eight_zero_bytes_is_refused()
+    {
+        var member = GzipOf("payload"u8.ToArray());
+        var withZeros = new byte[member.Length + 8];
+        member.CopyTo(withZeros, 0);
+
+        using var decoded = EventBodyDecoder.DecodeGzip(withZeros, Defaults());
+
+        decoded.Reason.ShouldBe(IngestBatchRejection.GzipInvalid);
+    }
+
+    [Fact]
+    public void member_followed_by_a_single_byte_is_refused()
+    {
+        var member = GzipOf("payload"u8.ToArray());
+        var withOneByte = new byte[member.Length + 1];
+        member.CopyTo(withOneByte, 0);
+
+        using var decoded = EventBodyDecoder.DecodeGzip(withOneByte, Defaults());
+
+        decoded.Reason.ShouldBe(IngestBatchRejection.GzipInvalid);
+    }
+
+    [Fact]
+    public void member_followed_by_its_trailer_and_garbage_is_refused()
+    {
+        var member = GzipOf("payload"u8.ToArray());
+        var withTail = new byte[member.Length + 8 + 4];
+        member.CopyTo(withTail, 0);
+        member.AsSpan(member.Length - 8).CopyTo(withTail.AsSpan(member.Length));
+        "junk"u8.CopyTo(withTail.AsSpan(member.Length + 8));
+
+        using var decoded = EventBodyDecoder.DecodeGzip(withTail, Defaults());
+
+        decoded.Reason.ShouldBe(IngestBatchRejection.GzipInvalid);
+    }
+
+    [Fact]
     public void truncated_member_is_refused()
     {
         // Incompressible bytes, so the 20:1 ratio cannot fire first and the truncated trailer is what the
@@ -242,6 +346,22 @@ public sealed class EventBodyDecoderUnitTests
         }
 
         return bytes;
+    }
+
+    /// <summary>The reflected IEEE CRC-32 of RFC 1952 §8 (the decoder's own table is private).</summary>
+    private static uint Crc32(byte[] data)
+    {
+        var crc = uint.MaxValue;
+        foreach (var value in data)
+        {
+            crc ^= value;
+            for (var bit = 0; bit < 8; bit++)
+            {
+                crc = (crc & 1) != 0 ? 0xEDB88320u ^ (crc >> 1) : crc >> 1;
+            }
+        }
+
+        return ~crc;
     }
 
     /// <summary>
