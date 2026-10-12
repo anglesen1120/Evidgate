@@ -226,6 +226,50 @@ public sealed class EventBatchParserUnitTests
         result.Errors[0].Reason.ShouldBe(reason);
     }
 
+    // ---- closed member sets (additionalProperties: false) -----------------------------------
+
+    [Theory]
+    [InlineData("meta")]
+    [InlineData("payload")]
+    public void Unknown_Event_Member_Is_Refused_At_Its_Path(string name)
+    {
+        var result = Parse(Batch(EventPlus(name, "\"x\"")));
+
+        result.IsAccepted.ShouldBeFalse();
+        result.Events.ShouldBeEmpty();
+        result.Errors.Count.ShouldBe(1);
+        result.Errors[0].Path.ShouldBe("/events/0/" + name);
+        result.Errors[0].Reason.ShouldBe("unknown_member");
+        result.Errors[0].Index.ShouldBe(0);
+    }
+
+    [Fact]
+    public void Legacy_Kind_Member_Is_Refused_Like_Any_Unknown_Event_Member()
+    {
+        // The S33 `kind` -> `type` carrier fix: the closed envelope has no `kind`, so an old reporter
+        // that still sends it is refused rather than silently accepted (and hashed).
+        var result = Parse(Batch(EventPlus("kind", "\"test.started\"")));
+
+        result.IsAccepted.ShouldBeFalse();
+        result.Errors.Count.ShouldBe(1);
+        result.Errors[0].Path.ShouldBe("/events/0/kind");
+        result.Errors[0].Reason.ShouldBe("unknown_member");
+        result.Errors[0].Index.ShouldBe(0);
+    }
+
+    [Fact]
+    public void Unknown_Batch_Member_Is_Refused_At_Its_Path()
+    {
+        var result = Parse("{\"schema_version\":1,\"kind\":\"batch\",\"events\":[" + ValidEvent() + "]}");
+
+        result.IsAccepted.ShouldBeFalse();
+        result.Events.ShouldBeEmpty();
+        result.Errors.Count.ShouldBe(1);
+        result.Errors[0].Path.ShouldBe("/kind");
+        result.Errors[0].Reason.ShouldBe("unknown_member");
+        result.Errors[0].Index.ShouldBeNull();
+    }
+
     // ---- hostile JSON -----------------------------------------------------------------------
 
     [Fact]
@@ -570,6 +614,14 @@ public sealed class EventBatchParserUnitTests
         var members = BaseMembers()
             .Where(member => !string.Equals(member.Name, name, StringComparison.Ordinal))
             .ToList();
+        members.Add((name, value));
+        return Event(members.ToArray());
+    }
+
+    /// <summary>An event carrying the base members plus one extra member (an unknown envelope member).</summary>
+    private static string EventPlus(string name, string value)
+    {
+        var members = BaseMembers().ToList();
         members.Add((name, value));
         return Event(members.ToArray());
     }

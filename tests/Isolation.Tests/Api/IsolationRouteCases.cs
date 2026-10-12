@@ -807,7 +807,7 @@ public static class IsolationRouteCases
                     ["attempt_no"] = 1,
                     ["type"] = "run.log",
                     ["occurred_at"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
-                    ["payload"] = new JsonObject { ["message"] = "probe" },
+                    ["ext"] = new JsonObject { ["schema"] = "playwright/1" },
                 },
             },
         });

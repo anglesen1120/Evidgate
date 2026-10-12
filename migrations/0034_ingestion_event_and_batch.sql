@@ -53,7 +53,8 @@
 --   * `raw_status` — `0..64`, the 0032 decision verbatim: the envelope declares `status` with
 --     `maxLength: 64` and NO `minLength`, so an empty producer status is a value the producer may
 --     legally send and must be storable; `normalized_status` enumerates the full 00 §8.3 vocabulary
---     (nullable — 04.1.1-T1 leaves it NULL, 05.3.3 owns normalisation, D8).
+--     (nullable — T1 writes it for `test.finished` only, from a local copy of 05.3.3's normalisation
+--     table; NULL for every other event type. 05.3.3 owns the rule, D8).
 --   * `sequence >= 0`, `attempt_no >= 1`, `epoch`/`duration_ms` non-negative when set, `payload` a
 --     jsonb object (0031's `components` bound), and `event_batch`'s counts/bytes non-negative with a
 --     1..128 `request_id`.
@@ -239,12 +240,12 @@ revoke all on public.event_batch from evidgate_worker_sched;
 -- `FOR SHARE` included — the rule 07.3.1's `QuarantineSupport` records for its `policy_revision`
 -- lock ("a row lock needs UPDATE — a `FOR SHARE` on `policy_revision` is denied 42501"). 0031
 -- revoked UPDATE on `run` and granted only SELECT/INSERT, so the lock would be refused 42501.
--- [DECISION] (2026-10-13; coordinator PANEL-CHOICE pending — A `update (state)` / B
--- `update (updated_at)` / C no lock): B, the narrowest grant that unlocks the row without granting
--- any write power over run state. `updated_at` is assigned by the shared
+-- [DECISION] (2026-10-13; approved: B (coordinator PANEL-CHOICE, 2026-10-13) — the panel offered A
+-- `update (state)` / B `update (updated_at)` / C no lock): B, the narrowest grant that unlocks the row
+-- without granting any write power over run state. `updated_at` is assigned by the shared
 -- `set_updated_at_and_version` trigger on every UPDATE, so the app role cannot choose its value, and
 -- `state` stays outside its grants (`grant update (state) on public.run` is 05.3.1's own, guarded
--- grant — 0031:53). Should the panel choose A or C, this one line is the only change.
+-- grant — 0031:53).
 -- ---------------------------------------------------------------------------------------------------
 
 grant update (last_sequence) on public.producer_slot to evidgate_app;

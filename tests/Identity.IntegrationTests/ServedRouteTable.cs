@@ -695,6 +695,7 @@ internal static class RouteRequests
                 {
                     new JsonObject
                     {
+                        ["schema_version"] = 1,
                         ["event_id"] = Guid.CreateVersion7().ToString(),
                         ["producer_id"] = "probe-producer",
                         ["sequence"] = 1,
@@ -702,7 +703,7 @@ internal static class RouteRequests
                         ["attempt_no"] = 1,
                         ["type"] = "run.log",
                         ["occurred_at"] = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
-                        ["payload"] = new JsonObject { ["message"] = "probe" },
+                        ["ext"] = new JsonObject { ["schema"] = "playwright/1" },
                     },
                 },
             }));

@@ -15,11 +15,14 @@ namespace Evidgate.Modules.Ingestion.Domain.Events;
 /// 00 §9.2 <c>index</c> and <c>path</c> of the offending member.
 /// </summary>
 /// <remarks>
-/// The Corvus edge validation (00 §5.5 Edge) runs before this parser, and the parser re-checks the
-/// 00 §9.4 required members, the closed <c>type</c> set and the schema's value bounds anyway: it never
-/// trusts the edge to have run. Members the schema does not name are not re-checked here —
-/// <c>additionalProperties: false</c> is the edge's row and the parser extracts the known members only,
-/// so one failure never produces two different <c>details[]</c> rows. When
+/// The Corvus edge validation (00 §5.5 Edge) does <b>not</b> run on this route, so this parser is the
+/// only gate: it re-checks the 00 §9.4 required members, the closed <c>type</c> set, the schema's value
+/// bounds and the schema's <c>additionalProperties: false</c>. A member the envelope schema does not
+/// name (the legacy <c>kind</c>, a typo) is refused as <c>unknown_member</c> — at the batch level
+/// (<c>/&lt;name&gt;</c>) and at the event level (<c>/events/&lt;i&gt;/&lt;name&gt;</c>) — so it is
+/// never hashed into <c>payload_hash</c> and never silently kept; <c>ext</c> stays open, as the schema
+/// leaves it. Only the first unnamed member of each level is reported: the batch is refused whole, so
+/// one pointer is enough and the error body stays bounded. When
 /// <see cref="EventBatchParseResult.Errors"/> is non-empty the batch is rejected whole (422
 /// <c>event_invalid</c>) and <see cref="EventBatchParseResult.Events"/> is empty, because a batch commits
 /// all of its events or none (AC1/AC3).
@@ -43,6 +46,40 @@ internal static partial class EventBatchParser
         TestFinished,
         RunLog,
         ProducerHeartbeat,
+    };
+
+    /// <summary>
+    /// The closed member set of <c>$defs/batch</c> (contracts/schemas/event-envelope.v1.json,
+    /// <c>additionalProperties: false</c>). The route carries no Corvus edge, so this parser is the only
+    /// place the closed batch envelope is enforced.
+    /// </summary>
+    private static readonly HashSet<string> BatchMembers = new(StringComparer.Ordinal)
+    {
+        "schema_version",
+        "events",
+    };
+
+    /// <summary>
+    /// The closed member set of <c>$defs/event</c> (contracts/schemas/event-envelope.v1.json,
+    /// <c>additionalProperties: false</c>). <c>ext</c> is a member here, but the schema leaves the
+    /// <c>ext</c> object itself open, so its keys are not checked.
+    /// </summary>
+    private static readonly HashSet<string> EventMembers = new(StringComparer.Ordinal)
+    {
+        "schema_version",
+        "event_id",
+        "producer_id",
+        "sequence",
+        "job_id",
+        "epoch",
+        "execution_key",
+        "attempt_no",
+        "type",
+        "status",
+        "duration_ms",
+        "occurred_at",
+        "artifact_ids",
+        "ext",
     };
 
     /// <summary>
@@ -119,6 +156,19 @@ internal static partial class EventBatchParser
                 return EventBatchParseResult.Rejected(errors);
             }
 
+            // additionalProperties: false of $defs/batch: the batch envelope names only schema_version and
+            // events, and this route has no Corvus edge to enforce it, so an unnamed member (the legacy
+            // `kind`, a typo) is refused here instead of being accepted and carried. The first one is
+            // reported and the batch is refused whole, like every other batch-level failure.
+            foreach (var member in root.EnumerateObject())
+            {
+                if (!BatchMembers.Contains(member.Name))
+                {
+                    errors.Add(new ErrorDetail("/" + member.Name, "unknown_member"));
+                    return EventBatchParseResult.Rejected(errors);
+                }
+            }
+
             var parsed = new List<ParsedEvent>(count);
             string? batchProducer = null;
             var producerMismatchReported = false;
@@ -167,6 +217,19 @@ internal static partial class EventBatchParser
         {
             errors.Add(new ErrorDetail(path, "invalid_type", index));
             return null;
+        }
+
+        // additionalProperties: false of $defs/event: a member the envelope schema does not name (the
+        // legacy `kind`, a typo) is refused before it can reach payload_hash — the hash is taken over the
+        // element as received, so an unnamed member would otherwise be folded into the content address.
+        // `ext` stays open: the schema does not restrict its keys, so they are not checked here.
+        foreach (var member in element.EnumerateObject())
+        {
+            if (!EventMembers.Contains(member.Name))
+            {
+                errors.Add(new ErrorDetail(path + "/" + member.Name, "unknown_member", index));
+                return null;
+            }
         }
 
         // U+0000 and an unpaired surrogate reach neither jsonb nor the RFC 8785 form (04.7.1-T2.2/T2.3

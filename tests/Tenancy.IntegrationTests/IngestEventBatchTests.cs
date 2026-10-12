@@ -544,6 +544,26 @@ public sealed class IngestEventBatchTests
         (await world.CountAsync("adapter_capability")).ShouldBe(1);
         (await world.ScalarAsync<string>("select name from public.adapter_capability")).ShouldBe("playwright");
         (await world.ScalarAsync<int>("select protocol_major from public.adapter_capability")).ShouldBe(1);
+
+        // S-1: the org-level adapter_capability write of a first-send batch is audited with the handler's audited
+        // action, naming the capability row it registered (the ordinary-batch suppression is lifted for it).
+        (await world.ScalarAsync<long>(
+            $"select count(*) from public.audit_log where org_id = '{world.Org:D}' and action = 'event.batch.ingest' "
+            + "and object_type = 'adapter_capability'")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ordinary_batch_writes_no_audit_row()
+    {
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+
+        var answer = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+
+        // An ordinary batch carries no security decision: its event_batch row is the record, so no audit row.
+        (await world.ScalarAsync<long>("select count(*) from public.audit_log where action = 'event.batch.ingest'"))
+            .ShouldBe(0);
     }
 
     /// <summary>The sequence-1 <c>run.log</c> capability carrier of a run (04.7.1-T2.3), with a real execution key.</summary>
@@ -651,9 +671,13 @@ public sealed class IngestEventBatchTests
     }
 
     [Fact]
-    public async Task blocked_dependants_resolved_once_for_failed_setup()
+    public async Task failed_setup_does_not_block_dependants()
     {
-        // A is the setup, B depends on A (the resolver walks case_dependency); both are planned executions of the run.
+        // A is the setup, B depends on A (case_dependency); both are planned executions of the run. The events
+        // route does not call IBlockedAttemptResolver: no producer signal marks a failed attempt as the final
+        // one (contracts/adapter/playwright-mapping.md §Retries: every attempt is its own event pair, `attempt`
+        // is not an ext key), and a non-final failed attempt of a setup that may still pass must never block its
+        // dependants (ICaseAttemptWriter.cs). The blocked-dependants pass is deferred to 04.1.1-T4 / 05.3.3.
         await using var world = await IngestTestWorld.StartAsync(
             _fixture, IngestTestWorld.Writer(), planned: 2, edges: [(0, 1)]);
 
@@ -666,16 +690,89 @@ public sealed class IngestEventBatchTests
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
 
-        // The failed setup's attempt and one blocked attempt for its dependant, in the same transaction.
+        // Only the failed setup's own attempt is written; the dependant is neither blocked nor attempted.
+        (await world.CountAsync("case_attempt")).ShouldBe(1);
         (await world.ScalarAsync<string>(
             $"select normalized_status from public.case_attempt where run_id = '{world.RunId:D}' and execution_key = '{failed.ExecutionKey}'"))
             .ShouldBe("failed");
-        (await world.ScalarAsync<string>(
-            $"select normalized_status from public.case_attempt where run_id = '{world.RunId:D}' and execution_key = '{dependant.ExecutionKey}'"))
-            .ShouldBe("blocked");
+        (await world.CountAsync("case_attempt", where: $"execution_key = '{dependant.ExecutionKey}'")).ShouldBe(0);
+        (await world.CountAsync("case_attempt", where: "normalized_status = 'blocked'")).ShouldBe(0);
+    }
 
-        // The resolver is idempotent: the blocked row is written once.
+    [Fact]
+    public async Task retry_failed_then_passed_leaves_dependants_unblocked()
+    {
+        // A flaky setup: attempt 1 failed, attempt 2 passed, both in one batch. Without a final-attempt signal the
+        // route must not block the dependant, and the retry's pass is stored as its own attempt slot.
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), planned: 2, edges: [(0, 1)]);
+
+        var setup = world.Plan.Executions[0];
+        var dependant = world.Plan.Executions[1];
+
+        var answer = await PostEventsAsync(
+            world,
+            Batch(
+                Event(Guid.CreateVersion7(), setup.ExecutionKey, sequence: 1, attemptNo: 1, status: "failed"),
+                Event(Guid.CreateVersion7(), setup.ExecutionKey, sequence: 2, attemptNo: 2, status: "passed")));
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+
         (await world.CountAsync("case_attempt")).ShouldBe(2);
+        (await world.ScalarAsync<string>(
+            $"select normalized_status from public.case_attempt where execution_key = '{setup.ExecutionKey}' and attempt_no = 1"))
+            .ShouldBe("failed");
+        (await world.ScalarAsync<string>(
+            $"select normalized_status from public.case_attempt where execution_key = '{setup.ExecutionKey}' and attempt_no = 2"))
+            .ShouldBe("passed");
+        (await world.CountAsync("case_attempt", where: $"execution_key = '{dependant.ExecutionKey}'")).ShouldBe(0);
+        (await world.CountAsync("case_attempt", where: "normalized_status = 'blocked'")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task resend_of_failed_batch_writes_no_attempt_and_no_slot_update()
+    {
+        // P2: the same batch resent is acked `duplicate`; an event already stored by an earlier batch must reach
+        // neither the case-attempt writer nor the producer_slot high-water mark, and the skipped slot update
+        // leaves producer_slot.version untouched (the shared trigger would bump it on a no-op update).
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+
+        var body = Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1, status: "failed"));
+
+        var first = await PostEventsAsync(world, body);
+        first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
+        (await world.CountAsync("case_attempt")).ShouldBe(1);
+        var version = await world.ScalarAsync<int>("select version from public.producer_slot where producer_id = 'shard-1'");
+
+        var resend = await PostEventsAsync(world, body);
+        resend.Status.ShouldBe(HttpStatusCode.OK, resend.ErrorMessage);
+        resend.Body.GetProperty("duplicates").GetInt32().ShouldBe(1);
+
+        (await world.CountAsync("case_attempt")).ShouldBe(1);
+        (await EventRowsAsync(world)).ShouldBe(1);
+        (await world.ScalarAsync<int>("select version from public.producer_slot where producer_id = 'shard-1'"))
+            .ShouldBe(version);
+    }
+
+    [Fact]
+    public async Task normalized_status_only_written_for_test_finished()
+    {
+        // F3: 00 §8.3 defines a normalised status only for a finished attempt's outcome; every other type carries
+        // no verdict, so event.normalized_status stays NULL for it.
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+
+        var answer = await PostEventsAsync(
+            world,
+            Batch(
+                Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1, type: "test.step", status: null),
+                Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 2, status: "failed")));
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+
+        (await world.ScalarAsync<string?>("select normalized_status from public.event where type = 'test.step'"))
+            .ShouldBeNull();
+        (await world.ScalarAsync<string>("select normalized_status from public.event where type = 'test.finished'"))
+            .ShouldBe("failed");
     }
 
     // ------------------------------------------------------------------ S3: no event body in the logs

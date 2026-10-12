@@ -60,11 +60,14 @@ internal sealed record EventAck(int Index, Guid EventId, string Ack);
 /// Handler of <see cref="IngestEventBatch"/> (04.1.1-T1, task file §5/§8): the whole batch is validated,
 /// canonicalised and committed atomically, and the ack of an event exists only after the commit.
 /// <para>
-/// Audit: the handler declares the rule's <c>[AuditedAction]</c> and then suppresses the row itself. The
-/// ingest route is the highest-frequency mutation in the system (500 events per call) and carries no
+/// Audit: an ordinary batch declares the rule's <c>[AuditedAction]</c> and then suppresses the row itself.
+/// The ingest route is the highest-frequency mutation in the system (500 events per call) and carries no
 /// security decision of its own, so the durable record of the batch is its <c>event_batch</c> row
 /// (actor-visible counts, bytes, request id) plus the <c>usage.batch_accepted</c> outbox row — one audit
-/// row per accepted batch would flood the trail for no reviewer value (00 §5.7 P5).
+/// row per accepted batch would flood the trail for no reviewer value (00 §5.7 P5). The one exception is
+/// the org-level <c>adapter_capability</c> write of a first-send batch: it is audited exactly like the
+/// 04.7.1-T2.3 route's own registration, so the suppression decision is taken only after the capability
+/// step (S-1).
 /// </para>
 /// </summary>
 [AuditedAction("event.batch.ingest")]
@@ -75,7 +78,6 @@ internal sealed class IngestEventBatchHandler(
     IRunEventScope runScopes,
     IProducerRegistry producers,
     ICaseAttemptWriter attempts,
-    IBlockedAttemptResolver blocked,
     IOutboxWriter outbox,
     ITenantDb db,
     ITenantScopeAccessor scopes,
@@ -131,10 +133,6 @@ internal sealed class IngestEventBatchHandler(
         CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Ingestion, nameof(IngestEventBatch));
-
-        // The batch's own event_batch row is its durable evidence; see the class doc for why no audit row
-        // is appended for a hot-path, non-security mutation.
-        audit.Suppress();
 
         // (a) The edge cap comes from the schema itself (event-envelope.v1's x-max-bytes), so the limit has
         // one home. The parser enforces the per-event and per-batch rules below it (00 §5.5 C6).
@@ -236,6 +234,7 @@ internal sealed class IngestEventBatchHandler(
         // (e) The first-send capability seam (04.7.1-T2.3, D11): a sequence-1 run.log carrier registers its
         // capability before any event row, and a refusal rolls the whole batch back. The envelope is already
         // parsed, so the service runs on the JsonElement and the body is never parsed twice.
+        Guid? capabilityId = null;
         if (events[0] is { Type: EventBatchParser.RunLog, Sequence: 1 } carrier
             && carrier.Element.ValueKind == JsonValueKind.Object
             && carrier.Element.TryGetProperty("ext", out var carrierExt)
@@ -247,6 +246,21 @@ internal sealed class IngestEventBatchHandler(
             {
                 return Result.Failure<BatchAckResult>(capability.Error!);
             }
+
+            capabilityId = capability.Value.CapabilityId;
+        }
+
+        // The audit decision of the batch (S-1), taken only now that the capability step is known: a batch that
+        // registered an org-level adapter_capability row is audited like the 04.7.1-T2.3 route (the row names the
+        // capability), while an ordinary batch suppresses the [AuditedAction] row (its event_batch row and the
+        // usage outbox row are the durable record; see the class doc).
+        if (capabilityId is { } registeredCapability)
+        {
+            audit.Describe(new AuditObject("adapter_capability", registeredCapability.ToString("D")));
+        }
+        else
+        {
+            audit.Suppress();
         }
 
         var orgId = scopes.Require().OrgId;
@@ -296,7 +310,11 @@ internal sealed class IngestEventBatchHandler(
             e.AttemptNo,
             e.Type,
             e.RawStatus,
-            Normalize(e.RawStatus, e.Xfail),
+            // 00 §8.3 defines a normalised status only for a finished attempt's outcome; the other types
+            // (test.started/test.step/run.log/…) carry no verdict, so the column stays NULL for them (F3).
+            string.Equals(e.Type, EventBatchParser.TestFinished, StringComparison.Ordinal)
+                ? Normalize(e.RawStatus, e.Xfail)
+                : null,
             e.DurationMs,
             e.OccurredAt,
             e.PayloadHash,
@@ -386,10 +404,13 @@ internal sealed class IngestEventBatchHandler(
             }
         }
 
-        // (g) Case attempts: the writer dedupes itself, so every test.finished event of the batch is passed
-        // and the caller rolls back on any refusal (AC5).
+        // (g) Case attempts: the writer dedupes itself, so every test.finished event this batch actually
+        // inserted is passed and the caller rolls back on any refusal (AC5). An event already stored by an
+        // earlier batch (acked `duplicate` after the read-back) is excluded: only newly accepted events reach
+        // the attempt writer (P2).
         var attemptSlots = toInsert
-            .Where(e => string.Equals(e.Type, EventBatchParser.TestFinished, StringComparison.Ordinal)
+            .Where(e => insertedIds.Contains(e.EventId)
+                && string.Equals(e.Type, EventBatchParser.TestFinished, StringComparison.Ordinal)
                 && e.RawStatus is not null)
             .Select(e => new AttemptSlot(e.Index, new CaseAttemptInput(
                 e.ExecutionKey,
@@ -435,36 +456,30 @@ internal sealed class IngestEventBatchHandler(
                         [new ErrorDetail($"/events/{index}/status", outcome.Reason ?? "invalid", index)])),
                 };
             }
-
-            // The resolver runs only after the writer, once per distinct execution whose final attempt this
-            // batch decided failed (05.3.3-T2.2, AC4). The finality rule of 04.1.1-T4/05.3.3 is not derivable
-            // from the batch alone, so the conservative reading is applied: a failing test.finished blocks its
-            // dependants (recorded as an open item in the task file's Notes).
-            foreach (var key in toInsert
-                .Where(e => string.Equals(e.Type, EventBatchParser.TestFinished, StringComparison.Ordinal)
-                    && IsFailed(e.RawStatus, e.Xfail))
-                .Select(e => e.ExecutionKey)
-                .Distinct(StringComparer.Ordinal))
-            {
-                await blocked.ResolveDependantsAsync(command.RunId, key, cancellationToken).ConfigureAwait(false);
-            }
         }
 
-        // (h) The producer's high-water mark, one statement for every producer of the batch.
-        var slotMaxima = toInsert
-            .GroupBy(e => e.ProducerId, StringComparer.Ordinal)
-            .Select(group => new SlotMax(group.Key, group.Max(e => e.Sequence)))
-            .ToList();
+        // (h) The producer's high-water mark, one statement for every producer of the batch. Only newly
+        // accepted events count, and a batch that accepted nothing (every event a duplicate of an earlier
+        // batch) writes no slot row at all: the update would be a no-op that still bumps
+        // producer_slot.version through the shared trigger (P2).
+        if (accepted > 0)
+        {
+            var slotMaxima = toInsert
+                .Where(e => insertedIds.Contains(e.EventId))
+                .GroupBy(e => e.ProducerId, StringComparer.Ordinal)
+                .Select(group => new SlotMax(group.Key, group.Max(e => e.Sequence)))
+                .ToList();
 
-        await db.ExecuteAsync(
-            UpdateSlotSql,
-            new
-            {
-                org_id = orgId,
-                run_id = command.RunId,
-                slots = JsonSerializer.Serialize(slotMaxima),
-            },
-            cancellationToken).ConfigureAwait(false);
+            await db.ExecuteAsync(
+                UpdateSlotSql,
+                new
+                {
+                    org_id = orgId,
+                    run_id = command.RunId,
+                    slots = JsonSerializer.Serialize(slotMaxima),
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
 
         // (i) The batch's own audit row (C5).
         var batchId = Guid.CreateVersion7();
@@ -518,33 +533,24 @@ internal sealed class IngestEventBatchHandler(
 
     /// <summary>
     /// The server-side status normalisation of 05.3.3 (<c>CaseAttemptStatus.Normalize</c>) mirrored for the
-    /// two readers that live in this module: the <c>event.normalized_status</c> column (00 §8.3) and the
-    /// predicate that decides whether a failed setup blocks its dependants. The rule lives in the
-    /// Orchestrator module's domain and is not reachable across the module edge, so the table is repeated
-    /// here; it is the closed vocabulary of <c>contracts/adapter/playwright-mapping.md</c> §status and must
-    /// change with it (recorded as an open item in the task file's Notes).
+    /// one reader that lives in this module: the <c>event.normalized_status</c> column of a <c>test.finished</c>
+    /// event (00 §8.3). The rule lives in the Orchestrator module's domain and is not reachable across the
+    /// module edge at runtime, so the table is repeated here; it is the closed vocabulary of
+    /// <c>contracts/adapter/playwright-mapping.md</c> §status and must change with it (recorded as an open item
+    /// in the task file's Notes). It is an exact mirror — including null/empty/unknown mapping to <c>error</c> —
+    /// and a parity unit test (<c>IngestEventBatchNormalizeParityTests</c>) pins it to
+    /// <c>CaseAttemptStatus.Normalize</c> over the whole vocabulary.
     /// </summary>
-    private static string? Normalize(string? raw, bool xfail)
+    internal static string Normalize(string? raw, bool xfail) => raw switch
     {
-        if (raw is null)
-        {
-            return null;
-        }
-
-        return raw switch
-        {
-            "passed" => xfail ? "failed" : "passed",
-            "failed" => xfail ? "passed" : "failed",
-            "timedOut" or "timed_out" => "timed_out",
-            "skipped" => "skipped",
-            "interrupted" or "error" => "error",
-            // Anything else normalises to error: an unknown producer value is a failure, never a pass.
-            _ => "error",
-        };
-    }
-
-    private static bool IsFailed(string? raw, bool xfail) =>
-        Normalize(raw, xfail) is "failed" or "timed_out" or "error";
+        "passed" => xfail ? "failed" : "passed",
+        "failed" => xfail ? "passed" : "failed",
+        "timedOut" or "timed_out" => "timed_out",
+        "skipped" => "skipped",
+        "interrupted" or "error" => "error",
+        // Anything else normalises to error: an unknown producer value is a failure, never a pass.
+        _ => "error",
+    };
 
     /// <summary>One statement for the whole batch; the parameter is the batch as a JSON array (S1).</summary>
     private const string InsertEventsSql = """
