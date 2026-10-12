@@ -16,6 +16,7 @@ using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Identity;
 using Evidgate.Modules.Identity.Endpoints;
 using Evidgate.Modules.Ingestion;
+using Evidgate.Modules.Ingestion.Endpoints;
 using Evidgate.Modules.Orchestrator;
 using Evidgate.Modules.Policy;
 using Evidgate.Modules.Catalog.Endpoints;
@@ -147,6 +148,7 @@ public static partial class ApiHost
         app.MapOrchestratorEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 06.1.2-T1: the artifact upload-url route, same filters.
         app.MapEvidenceEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        app.MapIngestionEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.1.1-T3: the policy revision routes, same filters.
         app.MapPolicyEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.3.1-T1: the waiver routes of 07.3.1 §5, same filters.

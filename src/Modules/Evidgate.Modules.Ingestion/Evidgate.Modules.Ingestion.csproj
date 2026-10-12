@@ -12,6 +12,18 @@
     <!-- 04.7.1-T2.2/T2.3: the tenant transaction (Dapper) and the Corvus schema set the capability body validates against. -->
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+    <!-- 04.1.1-T1: the run event scope, the case-attempt writer and the blocked-attempt resolver the events
+         handler calls (00 §5.5 C5: cross-module calls go through a module's .Contracts project only). -->
+    <ProjectReference Include="..\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
+    <!-- 04.1.1-T1: the events route is the module's first pipeline-guarded route, so the handler reads the
+         ambient caller (IRequestPrincipalAccessor) and declares [Permission] from the C2 building block. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
+    <!-- 04.1.1-T1: the per-event payload_hash is the RFC 8785 canonical hash of the received envelope. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 04.1.1-T1: the events endpoint is the module's first ASP.NET Core route (00 §5.5 C8). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <!--
     01.1.2-T2.1: the module implementation stays internal (00 §5.5), so the two

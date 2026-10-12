@@ -130,6 +130,15 @@ public sealed record Error(
     /// <summary>409: a conflict with the caller's own earlier request, e.g. a reused <c>Idempotency-Key</c>.</summary>
     public static Error Conflict(string code, string message) => new(code, message, 409);
 
+    /// <summary>
+    /// 409 with the 00 §9.2 per-item details: the batch case, where the offending item is one
+    /// <c>events[]</c> index rather than the whole request (04.1.1 AC5:
+    /// <c>duplicate_different_payload</c> names the index whose <c>event_id</c> is already stored
+    /// with another payload).
+    /// </summary>
+    public static Error Conflict(string code, string message, IReadOnlyList<ErrorDetail> details) =>
+        new(code, message, 409, false, details);
+
     /// <summary>404: the addressed resource does not exist (also for another tenant's id, 00 §9.2).</summary>
     public static Error NotFound(string message) => new(ApiErrorCode.NotFound, message, 404);
 

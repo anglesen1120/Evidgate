@@ -6,12 +6,17 @@ namespace Evidgate.Modules.Ingestion.Domain;
 
 /// <summary>
 /// The 04.7.1-T2.3 first-send seam: a pure extractor over the first envelope of a run. The reporter
-/// (<c>packages/adapter-playwright</c>) sends its capability as the first envelope — <c>kind</c>
+/// (<c>packages/adapter-playwright</c>) sends its capability as the first envelope — <c>type</c>
 /// <c>run.log</c>, <c>sequence</c> 1, <c>ext.schema</c> <c>&lt;adapter-name&gt;/&lt;protocol-major&gt;</c>
-/// and <c>ext.capability</c> the <c>capability.v1</c> document — so the future events handler (04.1.1-T1)
+/// and <c>ext.capability</c> the <c>capability.v1</c> document — so the events handler (04.1.1-T1)
 /// calls this before accepting the first event. An envelope that carries no capability is not a carrier
 /// (no registration); a carrier whose shape is wrong is a 422 <c>capability_invalid</c> with the path of
-/// the offending member (<c>/kind</c>, <c>/ext/schema</c> or <c>/ext/capability</c>).
+/// the offending member (<c>/type</c>, <c>/ext/schema</c> or <c>/ext/capability</c>).
+/// <para>
+/// The member is <c>type</c>, not <c>kind</c> (S33 fix): <c>contracts/schemas/event-envelope.v1.json</c>
+/// is closed (<c>additionalProperties: false</c>) and the Playwright adapter sends <c>type</c>, so reading
+/// <c>kind</c> made every real carrier look like a plain envelope and no capability was ever registered.
+/// </para>
 /// </summary>
 internal static partial class FirstSendCapabilityExtractor
 {
@@ -30,21 +35,21 @@ internal static partial class FirstSendCapabilityExtractor
     internal static FirstSendExtraction Extract(JsonElement envelope)
     {
         if (envelope.ValueKind != JsonValueKind.Object
-            || !envelope.TryGetProperty("kind", out var kind)
-            || kind.ValueKind != JsonValueKind.String)
+            || !envelope.TryGetProperty("type", out var type)
+            || type.ValueKind != JsonValueKind.String)
         {
-            // Not the capability carrier: an envelope without a string kind has nothing to register.
+            // Not the capability carrier: an envelope without a string type has nothing to register.
             return FirstSendExtraction.NotACarrier;
         }
 
         // A lone surrogate in a carrier string makes GetString throw; the shared guard turns it into a
         // 422 before the decode, exactly as the capability body does (UnstorableText.Contains).
-        if (UnstorableText.Contains(kind))
+        if (UnstorableText.Contains(type))
         {
-            return FirstSendExtraction.Invalid([new ErrorDetail("/kind", "invalid_value")]);
+            return FirstSendExtraction.Invalid([new ErrorDetail("/type", "invalid_value")]);
         }
 
-        if (!string.Equals(kind.GetString(), "run.log", StringComparison.Ordinal)
+        if (!string.Equals(type.GetString(), "run.log", StringComparison.Ordinal)
             || !envelope.TryGetProperty("sequence", out var sequence)
             || sequence.ValueKind != JsonValueKind.Number
             || !sequence.TryGetInt32(out var number)

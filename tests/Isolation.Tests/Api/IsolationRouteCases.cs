@@ -379,6 +379,7 @@ public static class IsolationRouteCases
 
         // ---- Evidence (EvidenceEndpoints.cs:28; 06.1.2) ---------------------------------------------------------
         EvidenceUploadUrlCase(),
+        EventBatchCase(),
         EvidenceCompleteCase(),
 
         // ---- Dev surface (SliceEndpoints.cs:29-40; recorded in ServedDocumentTests.cs:59) -------------------------
@@ -788,6 +789,58 @@ public static class IsolationRouteCases
                 [
                     Pair(route, "org A's run id in the body", ProbeExpect.ServiceRefused, OrgBService(w),
                         Create(w.Acme.Projects[0].ManifestId), Create(Guid.CreateVersion7())),
+                ];
+            });
+    }
+
+    /// <summary>
+    /// <c>POST /v1/runs/{r}/events</c> (04.1.1-T1): the run is named in the path, the org in
+    /// <c>X-Evidgate-Org</c>. A fresh run id is used on purpose - the handler reads the run under the caller's
+    /// tenant scope first, so an org-A run addressed by org B is the 404 <c>not_found</c> the isolation rule
+    /// names (never a 403), exactly as 06.1.2's upload-url probe does.
+    /// </summary>
+    private static RouteCase EventBatchCase()
+    {
+        var route = new ApiRoute("POST", "/v1/runs/{r}/events");
+        static ProbeRequest Create(Guid run) => new(HttpMethod.Post, $"/v1/runs/{run}/events", new JsonObject
+        {
+            ["events"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    // The probe must be a schema-valid envelope, otherwise the parser answers 422
+                    // /events/0/schema_version before the run lookup can answer 404.
+                    ["schema_version"] = 1,
+                    ["event_id"] = Guid.CreateVersion7().ToString(),
+                    ["producer_id"] = "probe-producer",
+                    ["sequence"] = 1,
+                    ["execution_key"] = new string('a', 64),
+                    ["attempt_no"] = 1,
+                    ["type"] = "run.log",
+                    ["occurred_at"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                    ["ext"] = new JsonObject { ["schema"] = "playwright/1" },
+                },
+            },
+        });
+
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "org A's run id in the path", ProbeExpect.NotSuccess, OrgBAdmin(w),
+                        Create(Guid.CreateVersion7()), Create(Guid.CreateVersion7())),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "org A's run id in the path", ProbeExpect.ServiceRefused, OrgBService(w),
+                        Create(Guid.CreateVersion7()), Create(Guid.CreateVersion7())),
                 ];
             });
     }

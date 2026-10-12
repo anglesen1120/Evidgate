@@ -28,6 +28,11 @@ internal static class OrchestratorModule
         // Orchestrator only through its .Contracts project).
         services.TryAddScoped<IRunPlanReader, RunPlanReader>();
 
+        // 04.1.1-T1: the in-transaction run-scope lookup the atomic event-batch commit calls — the run row FOR SHARE
+        // plus the planned-execution membership probe. Scoped like every other module service; it takes the ambient
+        // scope through ITenantDb/ITenantScopeAccessor, never a connection of its own.
+        services.TryAddScoped<IRunEventScope, RunEventScopeReader>();
+
         // 05.1.1/05.1.2: the manifest and environment-revision routes validate their bodies against the contract schema
         // set, which is compiled on first use (the routes resolve it per request, never at start-up).
         services.TryAddEvidgateContractValidation();
