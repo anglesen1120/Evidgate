@@ -76,6 +76,13 @@ all, and every one of those rows is `requiredAtBoot: false`. The endpoint overri
 it must be an absolute http(s) URL with no userinfo, query or fragment, so a crafted value cannot
 redirect a signed request at another host (SSRF-by-config).
 
+A third kind of row is a non-secret **tunable safety cap**: the ingestion limit options
+(`EVIDGATE__INGESTION__MAXEXPANDEDBYTES` and `EVIDGATE__INGESTION__MAXEXPANSIONRATIO`, 04.1.1-T3) are
+ordinary bound integers with a safe default (8 MiB expanded, 20:1 gzip ratio), so no environment provides
+them — every row is `source: default`, `required: false`, `requiredAtBoot: false` — while the matrix still
+records the option's `[Range]` bounds (1 MiB..64 MiB and 1..1000), which the lint derives from the
+attributes.
+
 `required` is the lint's per-environment rule: the environment must declare the key whatever the boot
 would do without it. That is how a security-relevant default stays visible — every environment declares
 the Worker's bind address and the OTLP endpoint even though both have a usable default (or an optional

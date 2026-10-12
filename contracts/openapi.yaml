@@ -365,8 +365,19 @@ paths:
         `producer_slot_taken` (the slot is bound to another token identity);
         409 `duplicate_different_payload` (an `event_id` is stored with a
         different canonical payload), 409 `run_closed` (the run is `complete`
-        or `incomplete`) and 413 `batch_too_large` (over the route's 1 MiB
-        transport cap). All `retryable: false`.
+        or `incomplete`) and 413 `batch_too_large`. `batch_too_large` is the
+        one answer to every limit breach, refused before any write: more than
+        500 events, a raw body over the route's 1 MiB transport cap (the cap
+        counts the bytes as sent — for `Content-Encoding: gzip` the compressed
+        bytes, before decompression), or a gzip body whose decoded size passes
+        the expanded-size cap (8 MiB) or the expansion ratio (20:1, DECISIONS
+        §8.1 D-A8; both are `EVIDGATE__INGESTION__*` options, 04.1.1-T3).
+        `Content-Encoding: gzip` is decoded under those caps; any other or a
+        stacked encoding is 422 `request_invalid` (detail path
+        `Content-Encoding`, reason `unsupported`) and a malformed, multi-member
+        or trailing-data gzip is 422 `request_invalid` (same path, reason
+        `invalid_gzip`) — a body is never silently ignored or partly decoded.
+        All `retryable: false`.
       x-permission: event:write
       x-version: v1
       parameters:
