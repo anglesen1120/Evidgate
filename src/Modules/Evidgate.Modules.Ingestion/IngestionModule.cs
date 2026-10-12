@@ -35,6 +35,10 @@ internal static class IngestionModule
         services.TryAddScoped<AdapterCapabilityStore>();
         services.TryAddScoped<AdapterCapabilityRegistrar>();
 
+        // 04.1.1-T1 (D11): the first-send seam both the raw-bytes command (04.7.1-T2.3) and the events
+        // handler call, so the first envelope is parsed once per request either way.
+        services.TryAddScoped<FirstSendCapabilityService>();
+
         // 04.1.2-T4.1: the EF write model of producer slots (00 §5.5 C4).
         services.AddEvidgateDbContext<IngestionDbContext>(typeof(IngestionDbContext).Assembly);
 

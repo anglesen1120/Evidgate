@@ -463,6 +463,29 @@ public sealed class TenantGucTests
             ("run_id", runId),
             ("execution_key", new string('a', 64)),
             ("case_id", caseId));
+        // The 04.1.1-T1 tables (migration 0034): one event and its batch receipt, both naming the slot
+        // inserted above, so the tenant tables this suite discovers are never empty.
+        await scope.ExecuteAsync(
+            """
+            insert into public.event
+                (id, org_id, run_id, event_id, producer_id, sequence, execution_key, attempt_no, type, payload_hash)
+            values (@id, @org_id, @run_id, @event_id, 'shard-1', 1, @execution_key, 1, 'test.step', @payload_hash)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("run_id", runId),
+            ("event_id", Guid.CreateVersion7()),
+            ("execution_key", new string('a', 64)),
+            ("payload_hash", "sha256:" + new string('b', 64)));
+        await scope.ExecuteAsync(
+            """
+            insert into public.event_batch
+                (id, org_id, run_id, producer_id, event_count, bytes_in, bytes_expanded, accepted, duplicate, request_id)
+            values (@id, @org_id, @run_id, 'shard-1', 1, 256, 256, 1, 0, 'probe-request')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("run_id", runId));
 
         await scope.CommitAsync();
     }

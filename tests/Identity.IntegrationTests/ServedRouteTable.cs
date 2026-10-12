@@ -684,6 +684,29 @@ internal static class RouteRequests
         Add("POST", "/v1/artifacts/upload-url", _ => new(HttpMethod.Post, "/v1/artifacts/upload-url",
             UploadUrl(), IdempotencyKey: Key()));
 
+        // ---- Ingestion ---------------------------------------------------------------------------------------
+        // 04.1.1-T1: the run is addressed in the path, so a fresh id is used - the route answers 404 not_found
+        // for an unknown run (never a 403), which is what the viewer and ci-producer matrices expect. The body
+        // is a shape-valid one-event batch.
+        Add("POST", "/v1/runs/{r}/events", _ => new(HttpMethod.Post, $"/v1/runs/{Guid.CreateVersion7()}/events",
+            new JsonObject
+            {
+                ["events"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["event_id"] = Guid.CreateVersion7().ToString(),
+                        ["producer_id"] = "probe-producer",
+                        ["sequence"] = 1,
+                        ["execution_key"] = new string('a', 64),
+                        ["attempt_no"] = 1,
+                        ["type"] = "run.log",
+                        ["occurred_at"] = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+                        ["payload"] = new JsonObject { ["message"] = "probe" },
+                    },
+                },
+            }));
+
         // ---- Dev surface (absent from the spec; allowlisted in ServedRouteTable) ------------------------------
         Add("POST", "/v1/slice/run", ctx => new(HttpMethod.Post, "/v1/slice/run",
             new JsonObject { ["project_ref"] = ctx.ProjectId.ToString() }));

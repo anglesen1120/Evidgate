@@ -100,6 +100,14 @@ internal static class SchemaConventionScan
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Immutable attempt rows (05.3.3-T1; migration 0032): an attempt is written once inside 04's event-commit transaction and never updated (a correction is a new attempt_no, C6, and the revoked UPDATE says so), so it keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
         new SchemaExemption(
+            "public.event",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only event rows (04.1.1-T1; migration 0034): an event is written once inside the ingest transaction and never updated or deleted (the revoked UPDATE/DELETE say so, C6), so it keeps `received_at` only — no created_at/updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.event_batch",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only batch receipts (04.1.1-T1; migration 0034): a batch row is the immutable receipt of the batch that wrote its events (the revoked UPDATE/DELETE say so), so it keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FK and RLS are NOT exempt."),
+        new SchemaExemption(
             "public.rls_probe",
             SchemaRule.VersionTrigger,
             "The tenancy template of migration 0003 predates the shared trigger function (0004, M1W3-01) and 0003 is checksum-locked, so the trigger cannot be added there; 0004/0005 are the copy source for module tables."),

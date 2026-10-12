@@ -6,14 +6,21 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace Evidgate.Modules.Ingestion.Infrastructure.Persistence;
 
 /// <summary>
-/// The EF write model of the ingestion module (00 §5.5 C4): the producer slots of 04.1.2-T4.
-/// Created per command through <see cref="ITenantDbContextFactory{TContext}"/>, so it runs on the
-/// request's tenant connection and transaction and RLS scopes every statement.
+/// The EF write model of the ingestion module (00 §5.5 C4): the producer slots of 04.1.2-T4 and the
+/// event / event-batch rows of 04.1.1-T1. Created per command through
+/// <see cref="ITenantDbContextFactory{TContext}"/>, so it runs on the request's tenant connection and
+/// transaction and RLS scopes every statement.
 /// </summary>
 internal sealed class IngestionDbContext(DbContextOptions<IngestionDbContext> options) : EvidgateDbContext(options)
 {
     /// <summary>The run's producer slots.</summary>
     public DbSet<ProducerSlot> ProducerSlots => Set<ProducerSlot>();
+
+    /// <summary>The tenant's accepted events (migration 0034, 04.1.1-T1).</summary>
+    public DbSet<Event> Events => Set<Event>();
+
+    /// <summary>The tenant's ingest batch receipts (migration 0034, 04.1.1-T1).</summary>
+    public DbSet<EventBatch> EventBatches => Set<EventBatch>();
 }
 
 /// <summary>
