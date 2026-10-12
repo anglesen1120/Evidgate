@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using Amazon;
 using Amazon.Runtime;
 using Amazon.Runtime.Endpoints;
@@ -9,16 +10,21 @@ using Microsoft.Extensions.Options;
 namespace Evidgate.BuildingBlocks.ObjectStorage;
 
 /// <summary>
-/// The <c>AWSSDK.S3</c> implementation of <see cref="IObjectStorage"/> (06.1.2-T1).
-/// Presigning is SigV4 arithmetic over the request — no network call — so the
-/// adapter is safe to call from a request handler. The S3 client is created once,
-/// lazily and thread-safely, and disposed with the adapter.
+/// The <c>AWSSDK.S3</c> implementation of <see cref="IObjectStorage"/> (06.1.2-T1, T2).
+/// Presigning is SigV4 arithmetic over the request — no network call — so it is safe to
+/// call from a request handler. <see cref="HeadAsync"/>, <see cref="CopyAsync"/> and
+/// <see cref="DeleteAsync"/> do make a network call and MUST run outside any database
+/// transaction (00 §5.7 P5, T86). The S3 client is created once, lazily and
+/// thread-safely, and disposed with the adapter.
 /// </summary>
 /// <remarks>
 /// The signed headers are exactly the ones the 01.8.1-T1 parity suite proved on
 /// SeaweedFS and the provider (T18): <c>Content-Length</c> and
-/// <c>x-amz-checksum-sha256</c> (base64 of the raw digest). No URL, key, checksum
-/// or credential ever reaches a log line or an exception message (00 §5.7 S3).
+/// <c>x-amz-checksum-sha256</c> (base64 of the raw digest). No URL, key, checksum or
+/// credential ever reaches a log line or an exception message (00 §5.7 S3): a failed
+/// call is wrapped in <see cref="ObjectStorageException"/>, which carries only the
+/// operation and the non-secret S3 error code/status, and the SDK exception is never
+/// chained (its message and response body may carry the key and the request URL).
 /// </remarks>
 internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
 {
@@ -48,7 +54,7 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
         ArgumentNullException.ThrowIfNull(request);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        ValidateObjectKey(request.ObjectKey);
+        ValidateStagingKey(request.ObjectKey, "objectKey");
         var checksumBase64 = ChecksumBase64(request.ChecksumSha256Hex);
 
         var options = _options.Value;
@@ -87,6 +93,119 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
                 [ChecksumHeaderName] = checksumBase64,
             },
             expiresAt);
+    }
+
+    /// <inheritdoc />
+    public async Task<ObjectHead?> HeadAsync(string objectKey, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ValidateObjectKey(objectKey, nameof(objectKey));
+
+        var options = _options.Value;
+        GetObjectMetadataResponse metadata;
+        try
+        {
+            metadata = await _client.Value.GetObjectMetadataAsync(
+                new GetObjectMetadataRequest
+                {
+                    BucketName = options.Bucket,
+                    Key = objectKey,
+                    // The store echoes x-amz-checksum-sha256 only when the request asks for it
+                    // (observed on SeaweedFS 4.47: without the mode the HEAD carries no checksum).
+                    ChecksumMode = ChecksumMode.ENABLED,
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (AmazonS3Exception exception) when (IsAbsent(exception))
+        {
+            // A store 404 is an outcome, not an exception (IObjectStorage.HeadAsync).
+            return null;
+        }
+        catch (AmazonServiceException exception)
+        {
+            // SDK v4: AmazonServiceException no longer derives from AmazonClientException, so an S3
+            // service error (AmazonS3Exception) is not caught by the client clause below; without
+            // this clause its message — which may carry the key and the request URL — escapes.
+            throw StorageFailure("head", exception);
+        }
+        catch (AmazonClientException exception)
+        {
+            throw StorageFailure("head", exception);
+        }
+
+        return new ObjectHead(metadata.ContentLength, ChecksumHex(metadata.ChecksumSHA256));
+    }
+
+    /// <inheritdoc />
+    public async Task CopyAsync(string sourceKey, string destinationKey, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ValidateStagingKey(sourceKey, nameof(sourceKey));
+        ValidateFinalKey(destinationKey, nameof(destinationKey));
+
+        var options = _options.Value;
+        try
+        {
+            await _client.Value.CopyObjectAsync(
+                new CopyObjectRequest
+                {
+                    SourceBucket = options.Bucket,
+                    SourceKey = sourceKey,
+                    DestinationBucket = options.Bucket,
+                    DestinationKey = destinationKey,
+                    // COPY keeps the source metadata (the checksum the presigned PUT bound); asking
+                    // for SHA256 makes the destination report the same checksum on a later HEAD, and
+                    // an overwrite of an existing destination is the same copy again (idempotent).
+                    MetadataDirective = S3MetadataDirective.COPY,
+                    ChecksumAlgorithm = ChecksumAlgorithm.SHA256,
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (AmazonServiceException exception)
+        {
+            // SDK v4: AmazonServiceException no longer derives from AmazonClientException, so a COPY
+            // of a missing or forbidden source surfaces as AmazonS3Exception and would escape the
+            // client clause below with the SDK's message (key and request URL) intact.
+            throw StorageFailure("copy", exception);
+        }
+        catch (AmazonClientException exception)
+        {
+            throw StorageFailure("copy", exception);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteAsync(string objectKey, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ValidateObjectKey(objectKey, nameof(objectKey));
+
+        var options = _options.Value;
+        try
+        {
+            await _client.Value.DeleteObjectAsync(
+                new DeleteObjectRequest
+                {
+                    BucketName = options.Bucket,
+                    Key = objectKey,
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (AmazonS3Exception exception) when (IsAbsent(exception))
+        {
+            // S3 deletes of a missing key already succeed (204); a store that answers 404 is the
+            // same outcome, so the delete stays idempotent either way (IObjectStorage.DeleteAsync).
+        }
+        catch (AmazonServiceException exception)
+        {
+            // SDK v4: AmazonServiceException no longer derives from AmazonClientException, so a store
+            // service error would escape the client clause below with the SDK's message intact.
+            throw StorageFailure("delete", exception);
+        }
+        catch (AmazonClientException exception)
+        {
+            throw StorageFailure("delete", exception);
+        }
     }
 
     /// <inheritdoc />
@@ -144,23 +263,99 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
             : Protocol.HTTP;
 
     /// <summary>
-    /// A staging key is a plain <c>pending/&lt;guid&gt;/&lt;guid&gt;</c> string: it must
-    /// start with <c>pending/</c> and carry no traversal, empty segment, backslash
-    /// or control character, so a crafted key cannot escape the staging prefix.
+    /// Every key the adapter touches must be a plain relative key: non-empty, no leading or
+    /// trailing slash, no empty segment, no traversal, no backslash and no control character,
+    /// so a crafted key can never escape the prefix it names. The message never carries the
+    /// key (00 §5.7 S3); <paramref name="paramName"/> names the offending argument.
     /// </summary>
-    private static void ValidateObjectKey(string objectKey)
+    private static void ValidateObjectKey(string objectKey, string paramName)
     {
         if (string.IsNullOrEmpty(objectKey)
-            || !objectKey.StartsWith(PendingPrefix, StringComparison.Ordinal)
+            || objectKey.StartsWith('/')
+            || objectKey.EndsWith('/')
             || objectKey.Contains("..", StringComparison.Ordinal)
             || objectKey.Contains("//", StringComparison.Ordinal)
             || objectKey.Contains('\\')
             || objectKey.Any(char.IsControl))
         {
             throw new ArgumentException(
-                "ObjectKey must be a plain pending/ staging key", nameof(objectKey));
+                "ObjectKey must be a plain relative key with no empty segment, traversal, backslash or control character",
+                paramName);
         }
     }
+
+    /// <summary>
+    /// A staging key is a plain <c>pending/&lt;org_id&gt;/&lt;artifact_id&gt;</c> string (06.1.2 §5): it
+    /// must start with <c>pending/</c> so a crafted key cannot name a final object, and it must pass
+    /// <see cref="ValidateObjectKey"/> so it cannot escape the staging prefix.
+    /// </summary>
+    private static void ValidateStagingKey(string objectKey, string paramName)
+    {
+        ValidateObjectKey(objectKey, paramName);
+        if (!objectKey.StartsWith(PendingPrefix, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "ObjectKey must be a plain pending/ staging key", paramName);
+        }
+    }
+
+    /// <summary>
+    /// The destination of a copy is always a final key (T86): a <c>pending/</c> destination is
+    /// refused, so a copy can never write back into the staging prefix.
+    /// </summary>
+    private static void ValidateFinalKey(string destinationKey, string paramName)
+    {
+        ValidateObjectKey(destinationKey, paramName);
+        if (destinationKey.StartsWith(PendingPrefix, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "DestinationKey must not be a pending/ staging key", paramName);
+        }
+    }
+
+    /// <summary>
+    /// True when the store answered "no such object": the SDK surfaces a <c>HEAD</c>/<c>COPY</c> 404
+    /// (SeaweedFS answers an empty-bodied 404) as <see cref="HttpStatusCode.NotFound"/>, and a store
+    /// that names the code instead reports <c>NoSuchKey</c>.
+    /// </summary>
+    private static bool IsAbsent(AmazonS3Exception exception) =>
+        exception.StatusCode == HttpStatusCode.NotFound
+        || string.Equals(exception.ErrorCode, "NoSuchKey", StringComparison.Ordinal)
+        || string.Equals(exception.ErrorCode, "NotFound", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Lowercase hex of a base64 SHA-256 the store reported, or <c>null</c> when the store holds
+    /// none. A value that is not a 32-byte digest is "not verified" (<c>null</c>), never a wrong
+    /// digest: the caller fails closed on <c>null</c> (T86).
+    /// </summary>
+    private static string? ChecksumHex(string? checksumSha256Base64)
+    {
+        if (string.IsNullOrEmpty(checksumSha256Base64))
+        {
+            return null;
+        }
+
+        try
+        {
+            var digest = Convert.FromBase64String(checksumSha256Base64);
+            return digest.Length == 32 ? Convert.ToHexStringLower(digest) : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Wraps a failed storage call so no key, URL, checksum or credential can reach a log line: only
+    /// the operation and the non-secret S3 error code/status are carried. The SDK exception is never
+    /// chained, because its message and response body may carry the request URL and the key
+    /// (00 §5.7 S3).
+    /// </summary>
+    private static ObjectStorageException StorageFailure(string operation, Exception exception) =>
+        exception is AmazonServiceException service
+            ? new ObjectStorageException(operation, service.ErrorCode, service.StatusCode)
+            : new ObjectStorageException(operation, null, null);
 
     /// <summary>Base64 of the raw digest, the value the signed checksum header carries.</summary>
     private static string ChecksumBase64(string checksumSha256Hex)

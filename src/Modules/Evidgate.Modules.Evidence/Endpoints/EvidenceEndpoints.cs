@@ -29,7 +29,51 @@ public static class EvidenceEndpoints
             .Produces<UploadUrlResponse>(StatusCodes.Status200OK)
             .WithSummary("Request a presigned upload URL for an artifact (06.1.2)");
 
+        group.MapPost("/artifacts/{a:guid}/complete", CompleteArtifactAsync)
+            .Produces<CompleteResponse>(StatusCodes.Status200OK)
+            .WithSummary("Verify an uploaded artifact and complete its upload (06.1.2)");
+
         return group;
+    }
+
+    /// <summary>
+    /// <c>POST /v1/artifacts/{a}/complete</c> (06.1.2 §5, T86): the route carries no body, so the verification is
+    /// server-derived and runs here — before the command dispatches — with no transaction open. The verdict then
+    /// travels into <see cref="CompleteArtifactUpload"/>, whose handler re-reads the row inside the C2 tenant
+    /// transaction and commits it.
+    /// </summary>
+    /// <param name="context">The request, for the <c>Idempotency-Key</c> header.</param>
+    /// <param name="a">The artifact the path names; the <c>guid</c> route constraint refuses anything else.</param>
+    /// <param name="principals">The caller's token identity.</param>
+    /// <param name="verifier">The endpoint-side C2 gate + storage verification (T86 steps 1-4).</param>
+    /// <param name="mediator">Dispatches the writer command.</param>
+    /// <param name="cancellationToken">Cancels the verification and the command.</param>
+    private static async Task<Result<CompleteResponse>> CompleteArtifactAsync(
+        HttpContext context,
+        Guid a,
+        IRequestPrincipalAccessor principals,
+        ArtifactCompletionVerifier verifier,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        // Nothing of the artifact is read for a caller who is nobody; the C2 pipeline authorizes the rest.
+        if (principals.Current is not { } principal)
+        {
+            return Result.Failure<CompleteResponse>(Unauthenticated);
+        }
+
+        var verdict = await verifier.VerifyAsync(a, principal, cancellationToken).ConfigureAwait(false);
+
+        if (!verdict.IsSuccess)
+        {
+            return Result.Failure<CompleteResponse>(verdict.Error!);
+        }
+
+        // The caller's token identity travels into the command, which carries it into the idempotency hash, so a
+        // replay by another principal is a conflict rather than the first caller's response (T1 decision 11).
+        return await mediator.Send(
+            new CompleteArtifactUpload(a, verdict.Value, principal.CredentialId, IdempotencyKey(context)),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Result<UploadUrlResponse>> RequestUploadUrlAsync(
@@ -135,3 +179,29 @@ public sealed record UploadUrlResponse(
     [property: JsonPropertyName("upload_url")] Uri UploadUrl,
     [property: JsonPropertyName("required_headers")] IReadOnlyDictionary<string, string> RequiredHeaders,
     [property: JsonPropertyName("expires_at")] DateTimeOffset ExpiresAt);
+
+/// <summary>
+/// 200 body of <c>POST /v1/artifacts/{a}/complete</c> (06.1.2 §5, AC3/AC4/AC5). <see cref="State"/> is
+/// <c>ready</c> when the staged object matched the declared size and checksum and the commit landed, or
+/// <c>rejected</c> when verification refused it — a rejection is a committed 200 carrying
+/// <see cref="FailureCode"/>, never an error response. <see cref="Bytes"/> is the length the store reported and is
+/// <c>null</c> on a rejection (nothing was verified); <see cref="ScanState"/> is <c>pending</c> on a <c>ready</c>
+/// artifact and <c>null</c> on a rejected one. The final object key is never returned.
+/// <para>
+/// It lives in this namespace, not in <c>Application</c>, because the 00 §5.5 module-boundary rule allows a
+/// public type inside a module only under <c>.Contracts</c>/<c>.Endpoints</c> (the same reason
+/// <see cref="UploadUrlResponse"/> is declared here); the writer command and its handler reach it through
+/// <c>using Evidgate.Modules.Evidence.Endpoints;</c>.
+/// </para>
+/// </summary>
+/// <param name="ArtifactId">The artifact that was completed.</param>
+/// <param name="State"><c>ready</c> or <c>rejected</c> (00 §8.4).</param>
+/// <param name="Bytes">The verified size, or <c>null</c> when nothing was verified.</param>
+/// <param name="ScanState">The masking-scan state of a <c>ready</c> artifact (<c>pending</c>/<c>clean</c>/<c>flagged</c>), else <c>null</c>.</param>
+/// <param name="FailureCode">One of the <c>artifact.failure_code</c> reasons, or <c>null</c> when verified.</param>
+public sealed record CompleteResponse(
+    [property: JsonPropertyName("artifact_id")] Guid ArtifactId,
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("bytes")] long? Bytes,
+    [property: JsonPropertyName("scan_state")] string? ScanState,
+    [property: JsonPropertyName("failure_code")] string? FailureCode);

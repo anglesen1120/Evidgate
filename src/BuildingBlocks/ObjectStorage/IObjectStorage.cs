@@ -1,16 +1,18 @@
 namespace Evidgate.BuildingBlocks.ObjectStorage;
 
 /// <summary>
-/// The object-storage seam (06.1.2-T1, 00 §9.3 <c>POST /v1/artifacts/upload-url</c>):
+/// The object-storage seam (06.1.2, 00 §9.3 <c>POST /v1/artifacts/upload-url</c> and <c>/complete</c>):
 /// the API mints a short-lived presigned <c>PUT</c> for a server-chosen staging key
 /// so the client uploads bytes straight to storage and the API never proxies the
-/// bandwidth (DECISIONS §9). The adapter is CPU-only — presigning is SigV4 arithmetic,
-/// no network call — so a request handler can call it inside its own scope.
+/// bandwidth (DECISIONS §9). Presigning is CPU-only (SigV4 arithmetic, no network call);
+/// <see cref="HeadAsync"/>, <see cref="CopyAsync"/> and <see cref="DeleteAsync"/> are
+/// network calls and MUST run outside any database transaction (00 §5.7 P5, T86).
 /// </summary>
 /// <remarks>
-/// The interface carries only the presign half of the adapter in this task; the
-/// <c>HEAD</c>/<c>Copy</c>/<c>Delete</c> members the <c>complete</c> path needs
-/// (06.1.2-T2) are added with that task.
+/// Keys are always server-minted (<c>pending/&lt;org_id&gt;/&lt;artifact_id&gt;</c> staging or the
+/// FR-06-1 final key); the adapter still refuses any key with traversal, an empty segment, a
+/// backslash or a control character. No key, URL, checksum or credential ever reaches a log
+/// line or an exception message (00 §5.7 S3).
 /// </remarks>
 public interface IObjectStorage
 {
@@ -27,6 +29,34 @@ public interface IObjectStorage
     /// digest. The message never carries the key or the checksum value.
     /// </exception>
     PresignedPut PresignPut(PresignPutRequest request);
+
+    /// <summary>
+    /// <c>HEAD</c>s one object (06.1.2-T2, T86). Returns <c>null</c> when the object does not exist
+    /// (a store 404 is an outcome, not an exception).
+    /// </summary>
+    /// <param name="objectKey">A server-minted staging or final key.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>The stored length and checksum, or <c>null</c> when absent.</returns>
+    Task<ObjectHead?> HeadAsync(string objectKey, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Copies the staging object <paramref name="sourceKey"/> (a <c>pending/</c> key) to the final
+    /// <paramref name="destinationKey"/> (never a <c>pending/</c> key), preserving the SHA-256 checksum
+    /// so a later <see cref="HeadAsync"/> of the destination reports it. Idempotent: copying onto an
+    /// existing destination overwrites it with the same bytes. Throws when the source is missing.
+    /// </summary>
+    /// <param name="sourceKey">The staging key.</param>
+    /// <param name="destinationKey">The final key.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    Task CopyAsync(string sourceKey, string destinationKey, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes one object. Idempotent: deleting a missing key succeeds (T86: the 24 h lifecycle may
+    /// already have collected the staging object).
+    /// </summary>
+    /// <param name="objectKey">A server-minted staging or final key.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    Task DeleteAsync(string objectKey, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -53,3 +83,13 @@ public sealed record PresignedPut(
     Uri Url,
     IReadOnlyDictionary<string, string> RequiredHeaders,
     DateTimeOffset ExpiresAt);
+
+/// <summary>
+/// What a <c>HEAD</c> reports about a stored object (06.1.2-T2). <see cref="ChecksumSha256Hex"/> is
+/// the lowercase hex of the SHA-256 the store recorded when the object was written (the signed
+/// <c>x-amz-checksum-sha256</c> of the presigned <c>PUT</c>), or <c>null</c> when the store holds no
+/// SHA-256 checksum for the object; a caller must treat <c>null</c> as "not verified".
+/// </summary>
+/// <param name="ContentLength">The stored byte count.</param>
+/// <param name="ChecksumSha256Hex">64 lowercase hex characters, or <c>null</c> when none is recorded.</param>
+public sealed record ObjectHead(long ContentLength, string? ChecksumSha256Hex);
