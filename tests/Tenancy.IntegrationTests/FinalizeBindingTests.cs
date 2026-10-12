@@ -68,8 +68,15 @@ public sealed class FinalizeBindingTests
     {
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
 
+        // Npgsql maps `timestamptz` to a UTC DateTime, so reading it as DateTimeOffset? would throw
+        // InvalidCastException on the unchecked cast in ScalarAsync. Read DateTime and keep the tuple's
+        // API-facing DateTimeOffset? type.
+        var closedAt = await scope.ScalarAsync<DateTime?>("select closed_at from public.producer_slot");
+
         return (
-            await scope.ScalarAsync<DateTimeOffset?>("select closed_at from public.producer_slot"),
+            closedAt is null
+                ? (DateTimeOffset?)null
+                : new DateTimeOffset(DateTime.SpecifyKind(closedAt.Value, DateTimeKind.Utc)),
             await scope.ScalarAsync<long?>("select declared_last_sequence from public.producer_slot"),
             await scope.ScalarAsync<int?>("select declared_count from public.producer_slot"),
             await scope.ScalarAsync<int>("select version from public.producer_slot"));
