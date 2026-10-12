@@ -16,6 +16,7 @@ using Evidgate.Modules.Ingestion.Domain.Events;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Mediator;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Evidgate.Modules.Ingestion.Application.Commands;
 
@@ -32,12 +33,16 @@ namespace Evidgate.Modules.Ingestion.Application.Commands;
 /// </para>
 /// </summary>
 /// <param name="RunId">The run of the route's <c>{r}</c> segment.</param>
-/// <param name="Body">The raw UTF-8 request body, already capped by the endpoint (1 MiB).</param>
+/// <param name="Body">The raw UTF-8 request body: the bytes as sent when identity, the decoded bytes when <c>Content-Encoding: gzip</c> (04.1.1-T3).</param>
 /// <param name="RequestId">The <c>X-Request-Id</c> the host echoed; the batch's audit row carries it.</param>
+/// <param name="BytesIn">The as-sent (compressed, for gzip) body size, already capped at 1 MiB by the endpoint; the handler's transport cap compares against this, never the decoded size.</param>
+/// <param name="BytesExpanded">The decoded body size: equal to <paramref name="BytesIn"/> for identity, the inflated size for gzip.</param>
 internal sealed record IngestEventBatch(
     Guid RunId,
     [property: JsonIgnore] ReadOnlyMemory<byte> Body,
-    string RequestId) : ICommand<Result<BatchAckResult>>;
+    string RequestId,
+    int BytesIn,
+    int BytesExpanded) : ICommand<Result<BatchAckResult>>;
 
 /// <summary>The 200 body of <c>POST /v1/runs/{r}/events</c> (00 §9.4, D3): the batch row, its counts and one ack per event in request order.</summary>
 /// <param name="BatchId">The <c>event_batch</c> row written by this accepted batch.</param>
@@ -82,7 +87,8 @@ internal sealed class IngestEventBatchHandler(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
-    IAuditTrail audit) : ICommandHandler<IngestEventBatch, Result<BatchAckResult>>
+    IAuditTrail audit,
+    ILogger<IngestEventBatchHandler> logger) : ICommandHandler<IngestEventBatch, Result<BatchAckResult>>
 {
     /// <summary>The per-event ack of a row this batch committed (00 §9.4).</summary>
     internal const string AcceptedAck = "accepted";
@@ -135,10 +141,15 @@ internal sealed class IngestEventBatchHandler(
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Ingestion, nameof(IngestEventBatch));
 
         // (a) The edge cap comes from the schema itself (event-envelope.v1's x-max-bytes), so the limit has
-        // one home. The parser enforces the per-event and per-batch rules below it (00 §5.5 C6).
+        // one home. It bounds the body as sent, not the decoded size: a gzip body may legitimately inflate
+        // past 1 MiB up to the 04.1.1-T3 expanded cap, so the comparison uses BytesIn. The parser enforces
+        // the per-event and per-batch rules below it (00 §5.5 C6).
         if (schemas.Value.MaxBytes(ContractSchemaKeys.EventEnvelope) is { } maxBytes
-            && command.Body.Length > maxBytes)
+            && command.BytesIn > maxBytes)
         {
+            IngestBatchRejection.Record(
+                logger, IngestBatchRejection.BodyTooLarge, command.RequestId, command.RunId, command.BytesIn, command.BytesExpanded);
+
             return TooLarge();
         }
 
@@ -149,12 +160,20 @@ internal sealed class IngestEventBatchHandler(
         var parsed = EventBatchParser.Parse(command.Body);
         if (!parsed.IsAccepted)
         {
-            return parsed.Errors.Any(error => error.Reason == TooLargeReason)
-                ? TooLarge()
-                : Result.Failure<BatchAckResult>(Error.Unprocessable(
-                    ApiErrorCode.EventInvalid,
-                    "the event batch was rejected",
-                    parsed.Errors));
+            if (parsed.Errors.Any(error => error.Reason == TooLargeReason))
+            {
+                // The bytes cap of (a) already passed, so the only too_large the parser can report is the
+                // 500-event cap (AC7): one refusal, one counter bump and one log line (04.1.1-T3).
+                IngestBatchRejection.Record(
+                    logger, IngestBatchRejection.EventCount, command.RequestId, command.RunId, command.BytesIn, command.BytesExpanded);
+
+                return TooLarge();
+            }
+
+            return Result.Failure<BatchAckResult>(Error.Unprocessable(
+                ApiErrorCode.EventInvalid,
+                "the event batch was rejected",
+                parsed.Errors));
         }
 
         var events = parsed.Events;
@@ -492,9 +511,10 @@ internal sealed class IngestEventBatchHandler(
                 run_id = command.RunId,
                 producer_id = producerId,
                 event_count = events.Count,
-                bytes_in = (long)command.Body.Length,
-                // Gzip is refused until 04.1.1-T3, so the expanded size equals the received size.
-                bytes_expanded = (long)command.Body.Length,
+                bytes_in = (long)command.BytesIn,
+                // The decoded size: equal to bytes_in for an identity body, the inflated size for gzip
+                // (04.1.1-T3); the endpoint bounded both before this handler ran.
+                bytes_expanded = (long)command.BytesExpanded,
                 accepted,
                 duplicate = duplicates,
                 request_id = command.RequestId,

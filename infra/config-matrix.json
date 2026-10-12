@@ -549,6 +549,54 @@
       "note": "secret key of the object-storage identity (06.1.2-T1), resolved through ISecretProvider by the options post-configurer and never bound from IConfiguration. Dev uses the local-only SeaweedFS identity that scripts/dev/up.sh asserts equals infra/seaweedfs/s3-config.json; staging and prod hold their own credential in the provider secret store (10.1.1-T3)."
     },
     {
+      "key": "EVIDGATE__INGESTION__MAXEXPANDEDBYTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion/Application/IngestionLimits.cs",
+      "constraints": {
+        "min": 1048576,
+        "max": 67108864
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "expanded-size cap of an event batch (04.1.1-T3.2, DECISIONS §8.1 D-A8): the byte count a `Content-Encoding: gzip` body may expand to on `POST /v1/runs/{r}/events`, measured while decoding and before any parse or write. Exceeding it — or the ratio cap of EVIDGATE__INGESTION__MAXEXPANSIONRATIO — is 413 `batch_too_large` with no write; the raw 1 MiB transport cap and the 500-event cap stay code constants (contract numbers, not options). Option default 8388608 (8 MiB); the range 1048576..67108864 stops a deployment from disabling the cap or setting it below one legal 1 MiB batch."
+    },
+    {
+      "key": "EVIDGATE__INGESTION__MAXEXPANSIONRATIO",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion/Application/IngestionLimits.cs",
+      "constraints": {
+        "min": 1,
+        "max": 1000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "expanded/compressed ratio cap of a gzip event batch (04.1.1-T3.2, DECISIONS §8.1 D-A8): decoding refuses once expanded bytes / compressed bytes read exceeds this value, so a small body cannot expand without bound (the 50 MiB-from-20 KiB bomb). Paired with EVIDGATE__INGESTION__MAXEXPANDEDBYTES; either overrun is 413 `batch_too_large` with no write. Option default 20 (20:1); the range 1..1000 keeps the guard meaningful."
+    },
+    {
       "key": "EVIDGATE__RUNS__DEFAULTCOLLECTIONTIMEOUT",
       "scope": "runtime",
       "consumers": ["api", "worker"],
