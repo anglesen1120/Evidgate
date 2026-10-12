@@ -80,6 +80,12 @@ public interface IProducerRegistry
     /// finalize is a 202-equivalent no-op (05.3.2 AC6/D3). The statement is one conditional
     /// <c>UPDATE … WHERE closed_at IS NULL</c> whose <c>WHERE</c> carries the whole identity guard, so
     /// two racing finalizes cannot both write.
+    /// <para>
+    /// A repeat call answers with the STORED values, never with the ones this caller sent (L3), so the
+    /// caller MUST compare the returned declared values with its own (05.3.2-T2.2): an equal pair is a
+    /// duplicate finalize of the same declaration, a different pair is this shard's declarations
+    /// disagreeing with the row and is the caller's to reconcile.
+    /// </para>
     /// </summary>
     /// <param name="runId">The run the slot belongs to.</param>
     /// <param name="producerId">The manifest shard's deterministic producer id (T54).</param>

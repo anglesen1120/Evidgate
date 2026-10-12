@@ -269,12 +269,13 @@ public sealed class IngestQaBoundaryTests
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
         await world.SetRunStateAsync("incomplete");
 
-        // The window's end is `collection_deadline_at + late_window_minutes`, both columns of the locked run
-        // row. Put the end one second in the future with late_window_minutes 0 (valid per 0033), so the
-        // boundary instant itself is inside the window: `now() <= end` holds.
+        // The window's end is `collection_deadline_at + late_window_minutes` (RunEventScopeReader's SQL),
+        // both columns of the locked run row. With late_window_minutes = 5 a deadline of now() less five
+        // minutes puts the end one second in the future, so the boundary instant itself is inside the
+        // window: `now() <= end` holds and the batch is stored with late = true.
         await world.Fixture.ExecuteAsync(
             world.Database,
-            $"update public.run set collection_deadline_at = now() + interval '1 second', late_window_minutes = 0 where id = '{world.RunId:D}'");
+            $"update public.run set late_window_minutes = 5, collection_deadline_at = now() - interval '5 minutes' + interval '1 second' where id = '{world.RunId:D}'");
 
         var inside = await IngestQaRequests.PostEventsAsync(
             world.Client,
@@ -286,10 +287,11 @@ public sealed class IngestQaBoundaryTests
         (await world.ScalarAsync<bool>("select late from public.event where sequence = 1")).ShouldBeTrue();
         (await world.ScalarAsync<bool>("select after_cancel from public.event where sequence = 1")).ShouldBeFalse();
 
-        // One second past the end the same incomplete run answers 409 run_closed and writes nothing (T81).
+        // One second past the end (the deadline five minutes before, minus one second) the same incomplete
+        // run answers 409 run_closed and writes nothing (T81).
         await world.Fixture.ExecuteAsync(
             world.Database,
-            $"update public.run set collection_deadline_at = now() - interval '1 second' where id = '{world.RunId:D}'");
+            $"update public.run set collection_deadline_at = now() - interval '5 minutes' - interval '1 second' where id = '{world.RunId:D}'");
 
         var after = await IngestQaRequests.PostEventsAsync(
             world.Client,

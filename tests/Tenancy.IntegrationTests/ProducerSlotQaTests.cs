@@ -464,6 +464,49 @@ public sealed class ProducerSlotQaTests
         read.ShouldNotContain("Seq Scan");
     }
 
+    [Fact]
+    public async Task ReadByProducerAndCloseIfOpen_UseTheirIndexes()
+    {
+        // P3/P4: ReadByProducer is the single indexed lookup of BindOrCheckAsync (and the read CloseSlotAsync
+        // decides on). It carries the T88 run join, so the run's CI reference is compared in the same
+        // statement; that join must reach the run primary key. CloseIfOpen is the one-shot finalize. Both
+        // filter on (org_id, run_id, producer_id), so with sequential scans disabled (the WaiverTests
+        // precedent) the planner must reach producer_slot_run_producer_key for the slot row.
+        await using var world = await StartAsync();
+        var run = await CreateRunAsync(world);
+        await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 3, TestContext.Current.CancellationToken));
+        await _fixture.ExecuteAsync(world.Database, "analyze public.producer_slot");
+        await _fixture.ExecuteAsync(world.Database, "analyze public.run");
+
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        await scope.SetAsync("enable_seqscan", "off");
+
+        var read = await scope.ScalarAsync<string>(
+            $"explain (format json) {ProducerSlotSql.ReadByProducer}",
+            ("org_id", world.Org),
+            ("run_id", run),
+            ("producer_id", "shard-1"));
+        var readIndexes = IndexNames(read);
+        readIndexes.ShouldContain("producer_slot_run_producer_key");
+        // The T88 run join is served by a run index. With a single run row the planner is free to pick
+        // either run_org_id_key (the (org_id, id) unique) or run_project_created_idx; what matters is that
+        // the run side is an index access at all, never a sequential scan.
+        readIndexes.ShouldContain(name => name.StartsWith("run_", StringComparison.Ordinal));
+        read.ShouldNotContain("Seq Scan");
+
+        var close = await scope.ScalarAsync<string>(
+            $"explain (format json) {ProducerSlotSql.CloseIfOpen}",
+            ("org_id", world.Org),
+            ("run_id", run),
+            ("producer_id", "shard-1"),
+            ("jti", "jti-a"),
+            ("ci_run_ref", "1/7/2"),
+            ("declared_last_sequence", 3L),
+            ("declared_count", 3));
+        IndexNames(close).ShouldContain("producer_slot_run_producer_key");
+        close.ShouldNotContain("Seq Scan");
+    }
+
     /// <summary>Every <c>Index Name</c> in an <c>EXPLAIN (FORMAT JSON)</c> plan, in plan order.</summary>
     private static List<string> IndexNames(string plan)
     {

@@ -343,11 +343,15 @@ internal sealed class ProducerRegistry(
     /// <summary>
     /// True when the run carries a CI reference (T88) that is not exactly the caller's. Only the run's
     /// side is compared: a run created without a CI reference has nothing to compare, and the slot's own
-    /// binding is then the whole identity. Every mismatch is another identity and answers 403
-    /// <c>producer_slot_taken</c>, never a distinct code that would leak whether a slot exists (T9).
+    /// binding is then the whole identity. A run that carries one but whose composed reference came back
+    /// null (L1: a member of <c>ci_run_ref</c> is JSON null, so the concatenation is null) is also a
+    /// mismatch — the reference is present and unreadable, so it fails closed rather than open. Every
+    /// mismatch is another identity and answers 403 <c>producer_slot_taken</c>, never a distinct code that
+    /// would leak whether a slot exists (T9).
     /// </summary>
     private static bool RunReferenceMismatch(SlotRow row, string? ciRunRef) =>
-        row.RunCiRunRef is not null && !string.Equals(row.RunCiRunRef, ciRunRef, StringComparison.Ordinal);
+        row.RunHasCiRef
+        && (row.RunCiRunRef is null || !string.Equals(row.RunCiRunRef, ciRunRef, StringComparison.Ordinal));
 
     /// <summary>One slot row as the registry's statements return it.</summary>
     private sealed class SlotRow
@@ -372,6 +376,9 @@ internal sealed class ProducerRegistry(
 
         /// <summary>The run's CI reference as <c>repository_id/run_id/run_attempt</c> (T88), or null; only <c>ReadByProducer</c> selects it.</summary>
         public string? RunCiRunRef { get; set; }
+
+        /// <summary>Whether the run's <c>ci_run_ref</c> is not null (L1); only <c>ReadByProducer</c> selects it.</summary>
+        public bool RunHasCiRef { get; set; }
     }
 }
 
@@ -518,10 +525,18 @@ internal static class ProducerSlotSql
     /// comparison part of the same statement, so the enforcement costs no extra round trip; it joins on
     /// the slot's own <c>(org_id, run_id)</c>, so RLS scopes the run exactly like the slot row, and
     /// <c>ci_run_ref</c> is written once at run create and never updated, so the join needs no lock.
+    /// <para>
+    /// <c>run_has_ci_ref</c> is the run's own <c>ci_run_ref is not null</c>, kept beside the composed
+    /// reference (L1): the composition is a <c>-&gt;&gt;</c> concatenation, so a member that were JSON null
+    /// would make the whole expression NULL — indistinguishable from a run that carries no reference at
+    /// all. The flag separates the two and lets the caller fail closed on a run that has one it could not
+    /// compose.
+    /// </para>
     /// </summary>
     internal const string ReadByProducer = """
         select s.id, s.shard_index, s.producer_id, s.bound_token_jti, s.bound_ci_run_ref,
                s.last_sequence, s.closed_at, s.declared_last_sequence, s.declared_count,
+               (r.ci_run_ref is not null) as run_has_ci_ref,
                (r.ci_run_ref->>'repository_id') || '/' || (r.ci_run_ref->>'run_id') || '/' || (r.ci_run_ref->>'run_attempt') as run_ci_run_ref
           from public.producer_slot s
           join public.run r on r.org_id = s.org_id and r.id = s.run_id

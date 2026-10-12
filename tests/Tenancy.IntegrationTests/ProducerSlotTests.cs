@@ -187,6 +187,14 @@ public sealed class ProducerSlotTests
                 && constraint.Contains(">= 0", StringComparison.Ordinal),
             "declared_count needs its non-negative CHECK (0035)");
 
+        // The all-or-nothing CHECK (Sec L2): `closed_at` and the two declared values are written together by
+        // CloseSlotAsync's single UPDATE, so a row carries all three or none. It is the pair-null idiom of
+        // 0008's `task_fire_pair_check` repeated for the three columns.
+        constraints.ShouldContain(
+            constraint => constraint.StartsWith("c:producer_slot_closed_declared_check:", StringComparison.Ordinal)
+                && constraint.Contains("IS NULL", StringComparison.Ordinal),
+            "the closed_at and declared-value columns need their all-or-nothing CHECK (0035)");
+
         // The UPDATE grants the app role holds on the table are exactly the columns the module's writes
         // name: the bind's two (0029), the ingest handler's `last_sequence` (0034) and `CloseSlotAsync`'s
         // three (0035: `closed_at` plus the two declared values). Every other column stays outside the grant.

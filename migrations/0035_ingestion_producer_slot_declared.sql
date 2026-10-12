@@ -22,6 +22,11 @@
 -- slot declares nothing. `add constraint` is not idempotent in PostgreSQL, so each key is dropped by
 -- name first — 0033's form for changing a constraint on an existing table (0033:118-120).
 --
+-- `producer_slot_closed_declared_check` is the all-or-nothing invariant `CloseSlotAsync` relies on: the
+-- three columns are written together by one UPDATE, so a row carries either all three or none. It is the
+-- pair-null idiom of 0008's `task_fire_pair_check` (0008:116) repeated for the three columns, and it
+-- holds trivially for the rows that exist when it is added (all three are NULL), so no backfill is needed.
+--
 -- Column grant on `producer_slot`: `grant update (closed_at, declared_last_sequence, declared_count) on
 -- public.producer_slot to evidgate_app` below — exactly the three columns `CloseSlotAsync`'s single
 -- conditional UPDATE names and nothing wider. `bound_token_jti`/`bound_ci_run_ref` are 0029's,
@@ -48,5 +53,13 @@ alter table public.producer_slot
 alter table public.producer_slot drop constraint if exists producer_slot_declared_count_check;
 alter table public.producer_slot
   add constraint producer_slot_declared_count_check check (declared_count is null or declared_count >= 0);
+
+-- All-or-nothing (Sec L2): the three columns CloseSlotAsync's single UPDATE writes together. `(is null) =
+-- (is null)` is the pair-null idiom of 0008's task_fire_pair_check, repeated for the third column.
+alter table public.producer_slot drop constraint if exists producer_slot_closed_declared_check;
+alter table public.producer_slot
+  add constraint producer_slot_closed_declared_check check (
+    (closed_at is null) = (declared_last_sequence is null)
+    and (closed_at is null) = (declared_count is null));
 
 grant update (closed_at, declared_last_sequence, declared_count) on public.producer_slot to evidgate_app;

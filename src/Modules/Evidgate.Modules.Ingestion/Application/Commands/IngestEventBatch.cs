@@ -23,8 +23,8 @@ namespace Evidgate.Modules.Ingestion.Application.Commands;
 /// The 04.1.1-T1 hot path: one atomic event batch (<c>POST /v1/runs/{r}/events</c>, 00 §9.3/§9.4).
 /// The command carries the route's run id, the raw body bytes and the request id; the handler owns
 /// the whole decision list of the task file §5 (edge validation → scope → producer binding →
-/// first-send capability → one insert → case attempts → slot/ledger rows) inside the C2 pipeline's
-/// tenant transaction, so a refusal leaves no row behind.
+/// planned-key gate → first-send capability → one insert → case attempts → slot/ledger rows) inside the
+/// C2 pipeline's tenant transaction, so a refusal leaves no row behind.
 /// <para>
 /// Not an <c>IIdempotentCommand</c> (D2): the route is exempt from <c>Idempotency-Key</c>
 /// (contracts/README.md), the batch carries its own per-event <c>event_id</c> dedupe, and a resend
@@ -220,7 +220,22 @@ internal sealed class IngestEventBatchHandler(
                 "the run no longer accepts events"));
         }
 
-        // (c) Every execution_key must be a planned execution of the run; all failing indices are named (T10).
+        // (c) One bind-or-check per batch: the first accepted write of a slot binds it to this token (T9).
+        // It runs before the planned-key gate below (shared contract, T9/T10): a foreign or mismatching
+        // token always gets 403 producer_slot_taken - or 422 unknown_producer when the run has no such slot
+        // - and never learns which execution keys the run planned. A refusal after the bind rolls the bind
+        // back, because this handler runs inside the C2 pipeline's one tenant transaction.
+        var bound = await producers
+            .BindOrCheckAsync(command.RunId, producerId, principal.CredentialId, principal.CiRun?.ToBindingReference(), cancellationToken)
+            .ConfigureAwait(false);
+        if (!bound.IsSuccess)
+        {
+            return Result.Failure<BatchAckResult>(bound.Error!);
+        }
+
+        // (d) Every execution_key must be a planned execution of the run; all failing indices are named (T10).
+        // The membership test rides the scope read's single `execution_key = ANY(@keys)` probe above, so this
+        // gate costs no extra statement.
         var unknown = events.Where(e => !scope.PlannedKeys.Contains(e.ExecutionKey)).ToList();
         if (unknown.Count > 0)
         {
@@ -228,15 +243,6 @@ internal sealed class IngestEventBatchHandler(
                 ApiErrorCode.UnknownExecutionKey,
                 "the batch names execution keys that are not planned executions of the run",
                 [.. unknown.Select(e => new ErrorDetail($"/events/{e.Index}/execution_key", "unknown_execution_key", e.Index))]));
-        }
-
-        // (d) One bind-or-check per batch: the first accepted write of a slot binds it to this token (T9).
-        var bound = await producers
-            .BindOrCheckAsync(command.RunId, producerId, principal.CredentialId, principal.CiRun?.ToBindingReference(), cancellationToken)
-            .ConfigureAwait(false);
-        if (!bound.IsSuccess)
-        {
-            return Result.Failure<BatchAckResult>(bound.Error!);
         }
 
         // (e) The first-send capability seam (04.7.1-T2.3, D11): a sequence-1 run.log carrier registers its
