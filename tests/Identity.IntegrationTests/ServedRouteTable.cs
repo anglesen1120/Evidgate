@@ -683,6 +683,8 @@ internal static class RouteRequests
         // ---- Evidence ----------------------------------------------------------------------------------------
         Add("POST", "/v1/artifacts/upload-url", _ => new(HttpMethod.Post, "/v1/artifacts/upload-url",
             UploadUrl(), IdempotencyKey: Key()));
+        Add("POST", "/v1/artifacts/{a}/complete", _ => new(HttpMethod.Post,
+            $"/v1/artifacts/{Guid.CreateVersion7()}/complete", IdempotencyKey: Key()));
 
         // ---- Ingestion ---------------------------------------------------------------------------------------
         // 04.1.1-T1: the run is addressed in the path, so a fresh id is used - the route answers 404 not_found

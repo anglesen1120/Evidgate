@@ -259,4 +259,13 @@ public static class ApiErrorCode
 
     /// <summary>413: the event batch exceeds the route's 1 MiB transport cap (04.1.1 AC7, 00 §9.3).</summary>
     public const string BatchTooLarge = "batch_too_large";
+
+    /// <summary>404: no such artifact in the caller's project — unknown, another tenant's or another project's (06.1.2-T2 AC6, §5).</summary>
+    public const string ArtifactNotFound = "artifact_not_found";
+
+    /// <summary>409: the artifact's state does not allow the requested transition (06.1.2-T2 §6).</summary>
+    public const string ArtifactStateConflict = "artifact_state_conflict";
+
+    /// <summary>403: the route names no project and the caller's credential names none (06.1.2-T1 decision 10).</summary>
+    public const string ProjectRequired = "project_required";
 }

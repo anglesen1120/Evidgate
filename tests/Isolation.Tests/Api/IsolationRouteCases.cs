@@ -92,6 +92,16 @@ public enum ProbeExpect
     /// </summary>
     ServiceRefused,
 
+    /// <summary>
+    /// A <c>ci_producer</c> of org B, authorized for the project its token names, on an org-A (or random) id at
+    /// <c>POST /v1/artifacts/{a}/complete</c>: the route's project comes from the credential, so the request
+    /// reaches the tenant read and is refused 404 <c>artifact_not_found</c> — the code 06.1.2 §5 names for an
+    /// unknown, other-tenant or other-project artifact. The foreign and the random id answer identically (same
+    /// status, same code, same body shape), so another tenant's artifact is never resolved and no existence
+    /// oracle exists. Never a 2xx and never a row.
+    /// </summary>
+    ArtifactNotFound,
+
     /// <summary>A refused write naming an org-A object inside the caller's own org (a body reference): any non-2xx.</summary>
     NotSuccess,
 }
@@ -370,6 +380,7 @@ public static class IsolationRouteCases
         // ---- Evidence (EvidenceEndpoints.cs:28; 06.1.2) ---------------------------------------------------------
         EvidenceUploadUrlCase(),
         EventBatchCase(),
+        EvidenceCompleteCase(),
 
         // ---- Dev surface (SliceEndpoints.cs:29-40; recorded in ServedDocumentTests.cs:59) -------------------------
         Case("POST", "/v1/slice/run", (route, w) =>
@@ -835,6 +846,44 @@ public static class IsolationRouteCases
     }
 
     /// <summary>
+    /// <c>POST /v1/artifacts/{a}/complete</c>: the artifact id is in the path and the route carries no project in
+    /// its URL. No artifact row is seeded for either org (an artifact is minted only by <c>upload-url</c>, which
+    /// needs a run), so the org-A half is an org-A id and the control a random id — the same 404
+    /// <c>artifact_not_found</c> for both, so another tenant's artifact is never resolved (AC1). The route is
+    /// project-scoped by the credential, not by its path: org B's header-scoped <c>tenant_admin</c> names no
+    /// project and is refused 403 for the org-A and the random id alike (no oracle); org B's <c>ci_producer</c>
+    /// (project <c>web</c>) holds <c>artifact:write</c> for the project its token names, so it reaches the
+    /// endpoint's tenant read and gets the 404 <c>artifact_not_found</c> 06.1.2 §5 names for an unknown,
+    /// other-tenant or other-project artifact.
+    /// </summary>
+    private static RouteCase EvidenceCompleteCase()
+    {
+        var route = new ApiRoute("POST", "/v1/artifacts/{a}/complete");
+        static ProbeRequest Complete(Guid artifact) => new(HttpMethod.Post, $"/v1/artifacts/{artifact}/complete");
+
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "an org A id in {a}", ProbeExpect.NotSuccess, OrgBAdmin(w),
+                        Complete(w.Acme.Projects[0].ManifestId), Complete(Guid.CreateVersion7())),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "an org A id in {a}", ProbeExpect.ArtifactNotFound, OrgBService(w),
+                        Complete(w.Acme.Projects[0].ManifestId), Complete(Guid.CreateVersion7())),
+                ];
+            });
+    }
+
+    /// <summary>
     /// <c>POST /v1/waivers</c>: the project is named in the body, the org in <c>X-Evidgate-Org</c>. Org A's
     /// project against a random project id (404, no row written), plus the header naming org A.
     /// </summary>
@@ -1158,6 +1207,9 @@ public sealed class RouteProbeRunner
     /// <summary>The 00 §9.2 <c>error.code</c> for a hidden or missing row (<c>ApiErrorCode.NotFound</c>, ErrorEnvelope.cs:50).</summary>
     private const string NotFoundCode = "not_found";
 
+    /// <summary>The 00 §9.2 <c>error.code</c> for an artifact outside the caller's tenant/project (06.1.2 §5).</summary>
+    private const string ArtifactNotFoundCode = "artifact_not_found";
+
     /// <summary>
     /// The JSON members whose values are masked in a failure message. The ingest-token plaintext is <c>secret</c>
     /// (<c>IngestTokenCreatedResponse.Secret</c>, CiDtos.cs:89) and the CI exchange token is <c>token</c>
@@ -1339,6 +1391,7 @@ public sealed class RouteProbeRunner
                 ProbeExpect.ForeignOrg => response.Status == 403 || (response.Status == 404 && response.Code == NotFoundCode),
                 ProbeExpect.EmptyOrNotFound => (response.Status == 404 && response.Code == NotFoundCode) || (IsListRoute(route) && response.Status == 200 && response.ItemCount == 0),
                 ProbeExpect.ServiceRefused => (response.Status == 403 || (response.Status == 404 && response.Code == NotFoundCode)) || (IsListRoute(route) && response.Status == 200 && response.ItemCount == 0),
+                ProbeExpect.ArtifactNotFound => response.Status == 404 && response.Code == ArtifactNotFoundCode,
                 ProbeExpect.NotSuccess => !response.IsSuccess && response.Status < 500,
                 _ => false,
             };
@@ -1706,6 +1759,7 @@ public sealed class RouteProbeRunner
         ProbeExpect.ForeignOrg => "403 or 404 not_found",
         ProbeExpect.EmptyOrNotFound => "404 not_found or a GET list's 200 with no items",
         ProbeExpect.ServiceRefused => "403 or 404 not_found (or a GET list's 200 with no items)",
+        ProbeExpect.ArtifactNotFound => "404 artifact_not_found",
         ProbeExpect.NotSuccess => "a 4xx refusal",
         _ => expect.ToString(),
     };

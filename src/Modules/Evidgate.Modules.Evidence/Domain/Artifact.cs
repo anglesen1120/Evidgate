@@ -152,6 +152,30 @@ internal static class ArtifactState
 }
 
 /// <summary>
+/// The reason codes 06.1.2's <c>complete</c> writes into <c>artifact.failure_code</c> when it refuses an upload
+/// (06.1.2 §2 AC3/AC5, §5): the object never became evidence. The column's CHECK only bounds the length
+/// (migration 0028: <c>char_length between 1 and 128</c>), so this type carries the vocabulary and is the SLI's
+/// <c>failure_code</c> dimension (06.1.2 §8). Every code is also a committed 200, never an error response.
+/// </summary>
+internal static class ArtifactFailureCode
+{
+    /// <summary>The store reported a length other than the declared one (T18's signed <c>Content-Length</c> is the first line of defence).</summary>
+    public const string SizeMismatch = "size_mismatch";
+
+    /// <summary>The store's SHA-256 does not match the declared checksum, or it records none (not verified, fail closed).</summary>
+    public const string ChecksumMismatch = "checksum_mismatch";
+
+    /// <summary>The declared media type is not one the kind policy accepts.</summary>
+    public const string MediaTypeMismatch = "media_type_mismatch";
+
+    /// <summary>The object is larger than the kind policy's <c>max_bytes</c>.</summary>
+    public const string TooLarge = "too_large";
+
+    /// <summary>Neither the staging object nor a matching final object exists in the store (T86).</summary>
+    public const string ObjectMissing = "object_missing";
+}
+
+/// <summary>
 /// The write-model row of <c>public.artifact</c> (migration 0028, 06.1.1-T1): one stored evidence artifact whose
 /// object key is minted only by the server. No property carries a <c>set</c> or <c>init</c> accessor (00 §5.5 C6),
 /// so the write model cannot be mutated after construction; EF Core binds the row through this constructor and the
@@ -203,6 +227,70 @@ internal sealed class Artifact
         Version = version;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
+    }
+
+    /// <summary>
+    /// The <c>pending_upload|uploaded → ready</c> transition of 06.1.2 §6 (AC4), returned as a new row (C6: no
+    /// property carries a setter): the length the store reported for the verified object, the masking scan
+    /// awaiting its turn (T19) and no failure code. <c>object_key</c> is unchanged — the row already holds the
+    /// final key (06.1.2-T1 decision 7), and it is the one column migration 0028 does not grant the app role.
+    /// </summary>
+    /// <param name="verifiedBytes">The stored length <c>HEAD</c> reported for the verified object.</param>
+    public Artifact MarkReady(long? verifiedBytes) => new(
+        Id,
+        OrgId,
+        ProjectId,
+        RunId,
+        ExecutionKey,
+        AttemptNo,
+        Kind,
+        ObjectKey,
+        MediaType,
+        Checksum,
+        Sensitivity,
+        attemptId: AttemptId,
+        bytes: verifiedBytes,
+        scanState: ArtifactScanState.Pending,
+        state: ArtifactState.Ready,
+        expiresAt: ExpiresAt,
+        failureCode: null,
+        version: Version,
+        createdAt: CreatedAt,
+        updatedAt: UpdatedAt);
+
+    /// <summary>
+    /// The <c>pending_upload|uploaded → rejected</c> transition of 06.1.2 §6 (AC3): the object never became
+    /// evidence, so the row keeps the size it declared and carries the reason. Terminal (00 §8.4); the 0028
+    /// <c>artifact_failure_code_check</c> bounds the code's length, which is checked here so a value the database
+    /// would refuse never reaches a statement (C6).
+    /// </summary>
+    /// <param name="failureCode">One of the <see cref="ArtifactFailureCode"/> reasons.</param>
+    public Artifact MarkRejected(string failureCode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(failureCode.Length, 128);
+
+        return new Artifact(
+            Id,
+            OrgId,
+            ProjectId,
+            RunId,
+            ExecutionKey,
+            AttemptNo,
+            Kind,
+            ObjectKey,
+            MediaType,
+            Checksum,
+            Sensitivity,
+            attemptId: AttemptId,
+            bytes: Bytes,
+            scanState: ScanState,
+            state: ArtifactState.Rejected,
+            expiresAt: ExpiresAt,
+            failureCode: failureCode,
+            version: Version,
+            createdAt: CreatedAt,
+            updatedAt: UpdatedAt);
     }
 
     /// <summary>UUIDv7 id (00 §7).</summary>
