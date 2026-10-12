@@ -14,7 +14,8 @@ namespace Tenancy.IntegrationTests;
 /// 05.2.1-T4 through the real host and a real PostgreSQL: the create transaction derives one <c>producer_slot</c> per
 /// manifest shard (<c>shard-1..shard-N</c>, indexes 1..N) and writes <c>planned_execution.shard_id</c> as the same
 /// <c>shard-&lt;ordinal&gt;</c> string, and the run row is written <c>queued</c> inside that same transaction — a
-/// recording trigger on <c>public.run</c> proves no <c>created</c> state was ever persisted (T4.1/T4.2).
+/// recording trigger on <c>public.run</c> records every state the handler writes (only <c>queued</c>, never <c>created</c>)
+/// (T4.1/T4.2).
 /// </summary>
 /// <remarks>
 /// The boundary tests <c>CreateRun_ShardCountEqualsPlannedCount_OneSlotPerShard</c> and
