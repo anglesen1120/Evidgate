@@ -8,7 +8,7 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing;
 /// The JSON arm of the parser profile (06.3.1 AC2; 00 §5.7 S5). The bytes are bounded into one buffer first
 /// (never more than the kind's cap, even when the stream lies about <see cref="Stream.Length"/>), a UTF-8 BOM
 /// is dropped — the media sniffer already accepts one — and the document is parsed over that buffer with the
-/// profile's depth cap and with comments and trailing commas disallowed.
+/// profile's depth cap and with comments, trailing commas and duplicate property names disallowed.
 /// <para>
 /// JSON has no external-entity or DTD surface, so the depth and byte caps plus the wall clock are the whole
 /// guard; <see cref="JsonDocument"/> is a read-only DOM over the profile's own buffer and never touches the
@@ -17,11 +17,16 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing;
 /// </summary>
 internal static class SafeJson
 {
+    /// <summary>
+    /// The one JSON profile: the depth cap, and strict syntax — no trailing commas, no comments, and no
+    /// duplicate property names, so a repeated key cannot silently shadow the value an earlier key carried.
+    /// </summary>
     private static readonly JsonDocumentOptions Options = new()
     {
         MaxDepth = ParsingLimits.MaxDepth,
         AllowTrailingCommas = false,
         CommentHandling = JsonCommentHandling.Disallow,
+        AllowDuplicateProperties = false,
     };
 
     /// <summary>
@@ -83,10 +88,16 @@ internal static class SafeJson
             // The caller's own cancellation propagates; only the profile's timeout becomes a failure value.
             return Result.Failure<JsonDocument>(ParsingFailure.For(ParsingFailureReason.Timeout));
         }
-        catch (InvalidDataException)
+        catch (ContentTooLongException)
         {
             // The bounded read refused the content: the stream is longer than the kind's cap.
             return Result.Failure<JsonDocument>(ParsingFailure.For(ParsingFailureReason.SizeExceeded));
+        }
+        catch (InvalidDataException)
+        {
+            // A caller stream that fails with InvalidDataException (a corrupt GZipStream, say) is malformed
+            // content, not a breached cap: only the read's own ContentTooLongException means size_exceeded.
+            return Result.Failure<JsonDocument>(ParsingFailure.For(ParsingFailureReason.Malformed));
         }
         catch (JsonException)
         {

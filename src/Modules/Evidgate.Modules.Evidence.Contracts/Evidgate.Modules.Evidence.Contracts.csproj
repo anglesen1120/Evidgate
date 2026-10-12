@@ -9,4 +9,10 @@
          rule (00 §5.5) intact (same shape as Evidgate.Modules.Ingestion.Contracts). -->
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
   </ItemGroup>
+  <!-- 06.3.1-T1: ParsedXmlReport's constructor is internal — only the parser profile may construct one
+       (the factory must be the profile's own closed reader factory) — so the Evidence module's
+       Infrastructure/Parsing profile sees it through InternalsVisibleTo. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Evidgate.Modules.Evidence" />
+  </ItemGroup>
 </Project>

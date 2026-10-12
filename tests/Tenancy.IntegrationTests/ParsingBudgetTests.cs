@@ -104,6 +104,45 @@ public sealed class ParsingBudgetTests
         ParsingLimits.SniffPrefixBytes.ShouldBe(4096);
     }
 
+    [Fact]
+    public void OneBytePerReadXmlStreamDoesNotAllocateOneArrayPerByte()
+    {
+        // A stream that hands out one byte per Read is the worst case for chunk assembly: BoundedContent.Read
+        // fills its scratch buffer before allocating a chunk, so the allocation stays a small multiple of the
+        // content. One array per byte would cost ~24 bytes of header per input byte, far past the 4x bound.
+        // Many small elements (not one huge text node) keep XmlReader's own buffers small, so the measurement is
+        // about the profile's chunking.
+        var builder = new StringBuilder(512 * 1024 + 16);
+        builder.Append("<r>");
+        while (builder.Length < 512 * 1024)
+        {
+            builder.Append("<i/>");
+        }
+
+        builder.Append("</r>");
+        var fixture = Encoding.UTF8.GetBytes(builder.ToString());
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+
+        var result = SafeXml.Parse(new OneByteStream(fixture), CapBytes, CancellationToken.None);
+
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        allocated.ShouldBeLessThan(4L * fixture.Length, "one chunk per buffer, not one array per byte");
+    }
+
+    [Fact]
+    public void TheContiguousReadClampKeepsTheBufferAllocatable()
+    {
+        // A cap above Array.MaxLength must never reach new byte[...] or Array.Resize: the effective cap is clamped
+        // one below Array.MaxLength, so the byte[] path can always hold the extra byte that proves "longer than
+        // the cap", and a stream longer than the clamp is refused as size-exceeded.
+        BoundedContent.EffectiveCap(long.MaxValue).ShouldBe((long)Array.MaxLength - 1);
+        BoundedContent.EffectiveCap(Array.MaxLength).ShouldBe((long)Array.MaxLength - 1);
+        BoundedContent.EffectiveCap(1024).ShouldBe(1024L);
+    }
+
     /// <summary>An 8 MiB JUnit-shaped report: many small elements, the shape a DOM parse would blow up on.</summary>
     private static byte[] XmlReportFixture()
     {
@@ -140,5 +179,47 @@ public sealed class ParsingBudgetTests
         builder.Append(Tail);
 
         return Encoding.UTF8.GetBytes(builder.ToString());
+    }
+
+    /// <summary>Delivers the payload one byte per read, the worst case for chunk assembly.</summary>
+    private sealed class OneByteStream(byte[] payload) : Stream
+    {
+        private int offset;
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offsetInBuffer, int count)
+        {
+            if (offset >= payload.Length)
+            {
+                return 0;
+            }
+
+            buffer[offsetInBuffer] = payload[offset++];
+            return 1;
+        }
+
+        public override void Flush()
+        {
+            // Read-only.
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offsetInBuffer, int count) => throw new NotSupportedException();
     }
 }

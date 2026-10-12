@@ -57,6 +57,18 @@ public sealed class ParserQaHostileJsonTests
     }
 
     [Fact]
+    public void DuplicateKeysAreMalformed()
+    {
+        // AllowDuplicateProperties = false (SafeJson.Options): a repeated property name is refused, so a later
+        // key can never silently shadow an earlier one.
+        var result = ParseJson("""{"a":1,"a":2}""");
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
+        ReasonOf(result).ShouldBe(ParsingFailureReason.Malformed);
+    }
+
+    [Fact]
     public void HugeNumberLiteralsAreWellFormedAndDoNotOverflowTheParser()
     {
         // JsonDocument stores numbers as raw text; syntactically valid numbers outside double range must parse.
@@ -130,8 +142,9 @@ public sealed class ParserQaHostileJsonTests
     [Fact]
     public void CallerIoExceptionPropagatesAndIsNotSwallowedAsAParseFailure()
     {
-        // Characterisation: an IOException from the caller's stream is not classified by SafeJson (catch list
-        // 77–92). Recorded in the QA report as a decision for the owner; pinned so a silent change shows.
+        // Characterisation: an IOException from the caller's stream is not classified by SafeJson — its catch
+        // list classifies only the profile's own limits and JSON errors. Recorded in the QA report as a decision
+        // for the owner; pinned so a silent change shows.
         Should.Throw<IOException>(() =>
             SafeJson.Parse(new ThrowingStream(), MaxBytes, CancellationToken.None));
     }

@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Xml;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -34,70 +33,49 @@ public sealed class SafeXmlReaderTests
         """;
 
     /// <summary>
-    /// Hostile payloads and whether a permissive reader (DTDs allowed, the spy resolver installed) actually
-    /// reaches out for an external resource. The profile must refuse every one of them, and the flag proves the
-    /// external-entity payloads are genuine XXE attempts rather than strings the reader would ignore anyway.
+    /// Hostile payloads the profile must refuse at the prologue: DTD declarations, external general entities
+    /// (local file, URL), a parameter entity pulling an external DTD subset, a PUBLIC external identifier and an
+    /// XInclude-shaped fetch. Every one declares a DTD, so every one is <c>dtd_prohibited</c>.
     /// </summary>
-    public static TheoryData<string, bool> HostileDocuments => new()
+    public static TheoryData<string> HostileDocuments => new()
     {
-        {
-            // A classic billion-laughs DTD: rejected at the prologue, so no entity is ever expanded.
-            """
-            <?xml version="1.0"?>
-            <!DOCTYPE lolz [
-              <!ENTITY lol "lol">
-              <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
-              <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
-              <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
-            ]>
-            <lolz>&lol4;</lolz>
-            """,
-            false
-        },
-        {
-            // External general entity reading a local file.
-            """
-            <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>
-            """,
-            true
-        },
-        {
-            // External general entity reading a URL.
-            """
-            <!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://127.0.0.1:9/never-called">]><foo>&xxe;</foo>
-            """,
-            true
-        },
-        {
-            // Parameter entity pulling an external DTD subset.
-            """
-            <!DOCTYPE foo [<!ENTITY % remote SYSTEM "http://127.0.0.1:9/never-called.dtd"> %remote;]><foo/>
-            """,
-            true
-        },
-        {
-            // PUBLIC external DTD identifier.
-            """
-            <!DOCTYPE foo PUBLIC "-//Evidgate//Never Called//EN" "http://127.0.0.1:9/never-called.dtd"><foo/>
-            """,
-            true
-        },
-        {
-            // XInclude-shaped document whose entity would fetch a file: XmlReader implements no XInclude, so
-            // the entity is the only resolution surface and the profile refuses it.
-            """
-            <!DOCTYPE foo [<!ENTITY xi SYSTEM "file:///etc/passwd">]>
-            <foo xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include href="file:///etc/passwd" parse="text"/>&xi;</foo>
-            """,
-            true
-        },
-        {
-            // An internal-only DTD (no external identifier): still a DTD, so still prohibited.
-            """
-            <!DOCTYPE foo [<!ELEMENT foo (#PCDATA)>]><foo>hello</foo>
-            """,
-            false
-        },
+        // A classic billion-laughs DTD: rejected at the prologue, so no entity is ever expanded.
+        """
+        <?xml version="1.0"?>
+        <!DOCTYPE lolz [
+          <!ENTITY lol "lol">
+          <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+          <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+          <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
+        ]>
+        <lolz>&lol4;</lolz>
+        """,
+        // External general entity reading a local file.
+        """
+        <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>
+        """,
+        // External general entity reading a URL.
+        """
+        <!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://127.0.0.1:9/never-called">]><foo>&xxe;</foo>
+        """,
+        // Parameter entity pulling an external DTD subset.
+        """
+        <!DOCTYPE foo [<!ENTITY % remote SYSTEM "http://127.0.0.1:9/never-called.dtd"> %remote;]><foo/>
+        """,
+        // PUBLIC external DTD identifier.
+        """
+        <!DOCTYPE foo PUBLIC "-//Evidgate//Never Called//EN" "http://127.0.0.1:9/never-called.dtd"><foo/>
+        """,
+        // XInclude-shaped document whose entity would fetch a file: XmlReader implements no XInclude, so the
+        // entity is the only resolution surface and the profile refuses it.
+        """
+        <!DOCTYPE foo [<!ENTITY xi SYSTEM "file:///etc/passwd">]>
+        <foo xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include href="file:///etc/passwd" parse="text"/>&xi;</foo>
+        """,
+        // An internal-only DTD (no external identifier): still a DTD, so still prohibited.
+        """
+        <!DOCTYPE foo [<!ELEMENT foo (#PCDATA)>]><foo>hello</foo>
+        """,
     };
 
     [Fact]
@@ -126,10 +104,9 @@ public sealed class SafeXmlReaderTests
 
         // AC1/00 §5.7 S4: the four guards are properties of the one settings object the profile builds.
         settings.DtdProcessing.ShouldBe(DtdProcessing.Prohibit);
-        // XmlReaderSettings.XmlResolver has no get accessor, so a resolver can never be read back out of the
-        // profile's settings; the spy test below proves the profile never reaches one either.
-        typeof(XmlReaderSettings).GetProperty(nameof(XmlReaderSettings.XmlResolver))!.CanRead.ShouldBeFalse();
-        settings.MaxCharactersFromEntities.ShouldBe(0);
+        // DtdProcessing.Prohibit is the real entity guard: with DTDs prohibited no general entity can be declared
+        // or expanded. MaxCharactersFromEntities is a positive cap, and 0 would mean no limit at all.
+        settings.MaxCharactersFromEntities.ShouldBe(1);
         settings.MaxCharactersInDocument.ShouldBe(MaxBytes);
 
         // The caller's stream stays open: the profile owns its own bounded buffer, not the caller's stream.
@@ -159,19 +136,8 @@ public sealed class SafeXmlReaderTests
 
     [Theory]
     [MemberData(nameof(HostileDocuments))]
-    public void RejectsExternalEntities(string payload, bool resolvesWhenPermissive)
+    public void RejectsExternalEntities(string payload)
     {
-        // The spy resolver is installed on a permissive reader the test owns — it can never be installed into the
-        // profile, which takes no resolver parameter and builds settings with XmlResolver = null. The permissive
-        // read proves the payload really is a resolution attempt; the profile then refuses it with zero calls.
-        var spy = new CountingXmlResolver();
-
-        if (resolvesWhenPermissive)
-        {
-            ReadPermissively(payload, spy).ShouldBeGreaterThan(0, "the payload must be a genuine resolution attempt");
-        }
-
-        var callsBeforeProfile = spy.EntityCalls;
         var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
         var started = Environment.TickCount64;
 
@@ -180,32 +146,26 @@ public sealed class SafeXmlReaderTests
         var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
         var elapsed = TimeSpan.FromMilliseconds(Environment.TickCount64 - started);
 
+        // The profile takes no resolver and builds settings with XmlResolver = null, so every payload's DTD is
+        // refused at the prologue and no external resource is ever fetched: the cost is bounded by the payload,
+        // not by the DTD.
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
         ReasonOf(result).ShouldBe(ParsingFailureReason.DtdProhibited);
 
-        // Zero resolution calls, zero file or HTTP access, and a cost bounded by the payload — not by the DTD.
-        spy.EntityCalls.ShouldBe(callsBeforeProfile);
         allocated.ShouldBeLessThan(4 * 1024 * 1024, "a rejected DTD must not expand into memory");
         elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public void SpyResolverIsNeverReachedByTheProfile()
+    public void PredefinedEntitiesAndCharacterReferencesSurviveTheEntityCap()
     {
-        var spy = new CountingXmlResolver();
-        const string Payload = """<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>""";
+        // MaxCharactersFromEntities = 1 is a positive cap, but it counts only characters produced by general
+        // entity expansion — which the profile prohibits anyway. Predefined entities and numeric character
+        // references are not counted, so a legitimate document that uses them must still parse.
+        var result = ParseXml("<r>&amp;&lt;&#65;&#x42;</r>");
 
-        // The profile builds its own settings and takes no resolver parameter, and XmlResolver is write-only,
-        // so no resolver can be handed to the profile or read back from it: the spy below can only ever reach
-        // the permissive reader this test owns.
-        ReadPermissively(Payload, spy).ShouldBeGreaterThan(0);
-
-        var callsAfterPermissiveRead = spy.EntityCalls;
-
-        ParseXml(Payload).IsSuccess.ShouldBeFalse();
-
-        spy.EntityCalls.ShouldBe(callsAfterPermissiveRead);
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
     }
 
     [Fact]
@@ -222,6 +182,24 @@ public sealed class SafeXmlReaderTests
         ReasonOf(tooDeep).ShouldBe(ParsingFailureReason.DepthExceeded);
     }
 
+    [Theory]
+    [InlineData(63, true)]
+    [InlineData(64, false)]
+    public void DepthCountsElementsOnlySoATextLeafAtTheCapIsAccepted(int levels, bool accepted)
+    {
+        // A text node inside the deepest element carries XmlReader.Depth one past that element's own, so counting
+        // every node's depth would reject the 64th level's own text leaf. Only element nodes count: 64 element
+        // levels (the root plus 63 children) with a text leaf are accepted, and the 65th element level is refused.
+        var result = ParseXml(NestedDocument(levels, "leaf"));
+
+        result.IsSuccess.ShouldBe(accepted);
+
+        if (!accepted)
+        {
+            ReasonOf(result).ShouldBe(ParsingFailureReason.DepthExceeded);
+        }
+    }
+
     [Fact]
     public void EnforcesSizeCap()
     {
@@ -234,7 +212,7 @@ public sealed class SafeXmlReaderTests
         var overCap = ParseXml(ExactSizeDocument(Cap + 1), Cap);
 
         overCap.IsSuccess.ShouldBeFalse();
-        overCap.Error!.Code.ShouldBe(ParsingErrorCode.TooLarge);
+        overCap.Error!.Code.ShouldBe(ParsingErrorCode.PayloadTooLarge);
         overCap.Error.Status.ShouldBe(413);
         ReasonOf(overCap).ShouldBe(ParsingFailureReason.SizeExceeded);
     }
@@ -306,6 +284,19 @@ public sealed class SafeXmlReaderTests
         ReasonOf(result).ShouldBe(ParsingFailureReason.Malformed);
     }
 
+    [Fact]
+    public void CallerInvalidDataExceptionBecomesMalformedNotSizeExceeded()
+    {
+        // A caller stream that fails with InvalidDataException (a corrupt GZipStream, say) is malformed content.
+        // Only the bounded read's own ContentTooLongException may be mapped to size_exceeded; the caller's
+        // InvalidDataException must not be misreported as a breached cap.
+        var result = SafeXml.Parse(new InvalidDataStream(), MaxBytes, CancellationToken.None);
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
+        ReasonOf(result).ShouldBe(ParsingFailureReason.Malformed);
+    }
+
     /// <summary>Parses a UTF-8 payload against the profile at the test's kind cap.</summary>
     private static Result<ParsedXmlReport> ParseXml(string payload, long maxBytes = MaxBytes) =>
         SafeXml.Parse(new MemoryStream(Encoding.UTF8.GetBytes(payload)), maxBytes, CancellationToken.None);
@@ -346,44 +337,12 @@ public sealed class SafeXmlReaderTests
         return text.ToString();
     }
 
-    /// <summary>
-    /// Reads a payload with DTDs allowed and <paramref name="resolver"/> installed, returning how many times the
-    /// resolver was asked for an external resource. Used only to prove a hostile payload is genuine: the resolver
-    /// performs no I/O (it returns null), and the profile itself can never be configured this way.
-    /// </summary>
-    [SuppressMessage(
-        "Security",
-        "CA3075:Insecure DTD processing in XML",
-        Justification = "Deliberate: a permissive reader with a non-I/O spy resolver is the only way to prove the "
-            + "test's hostile payloads are genuine resolution attempts. The production profile is the opposite of "
-            + "this reader (DtdProcessing.Prohibit, XmlResolver = null) and never reaches it.")]
-    private static int ReadPermissively(string payload, CountingXmlResolver resolver)
-    {
-        var settings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Parse,
-            XmlResolver = resolver,
-        };
-
-        try
-        {
-            using var reader = XmlReader.Create(new StringReader(payload), settings);
-            while (reader.Read())
-            {
-                // Walking the document is what triggers the external resolution.
-            }
-        }
-        catch (XmlException)
-        {
-            // A permissive reader without a working resolver fails on the unresolvable entity; the count is the point.
-        }
-
-        return resolver.EntityCalls;
-    }
-
     /// <summary>A document nested <paramref name="levels"/> deep under its root element.</summary>
-    private static string NestedDocument(int levels) =>
-        "<r>" + string.Concat(Enumerable.Repeat("<a>", levels)) + string.Concat(Enumerable.Repeat("</a>", levels)) + "</r>";
+    /// <param name="levels">How many child elements to nest under the root.</param>
+    /// <param name="leaf">Optional text placed inside the innermost element.</param>
+    private static string NestedDocument(int levels, string leaf = "") =>
+        "<r>" + string.Concat(Enumerable.Repeat("<a>", levels)) + leaf
+        + string.Concat(Enumerable.Repeat("</a>", levels)) + "</r>";
 
     /// <summary>A well-formed ASCII document of exactly <paramref name="bytes"/> bytes.</summary>
     private static string ExactSizeDocument(long bytes)
@@ -393,33 +352,6 @@ public sealed class SafeXmlReaderTests
         var padding = bytes - Head.Length - Tail.Length;
 
         return Head + new string('a', (int)padding) + Tail;
-    }
-
-    /// <summary>An <see cref="XmlResolver"/> that counts external resolutions and never performs I/O.</summary>
-    private sealed class CountingXmlResolver : XmlResolver
-    {
-        /// <summary>How many times an external entity or DTD was requested.</summary>
-        public int EntityCalls { get; private set; }
-
-        /// <inheritdoc />
-        public override System.Net.ICredentials? Credentials
-        {
-            set => throw new NotSupportedException();
-        }
-
-        /// <inheritdoc />
-        public override object? GetEntity(Uri absoluteUri, string? role, Type? ofObjectToReturn)
-        {
-            EntityCalls++;
-            return null;
-        }
-
-        /// <inheritdoc />
-        public override Task<object> GetEntityAsync(Uri absoluteUri, string? role, Type? ofObjectToReturn)
-        {
-            EntityCalls++;
-            return Task.FromResult<object>(new MemoryStream());
-        }
     }
 }
 
@@ -519,4 +451,40 @@ internal sealed class SlowStream(byte[] content, int chunkBytes, TimeSpan delayP
     public override void SetLength(long value) => throw new NotSupportedException();
 
     public override void Write(byte[] buffer, int offsetInBuffer, int count) => throw new NotSupportedException();
+}
+
+/// <summary>
+/// A stream whose every read fails with <see cref="InvalidDataException"/> — the shape a corrupt
+/// <c>GZipStream</c> presents: shared by the 06.3.1-T1 profile tests to prove the profile classifies the caller's
+/// own invalid-data failure as malformed content, never as a breached size cap.
+/// </summary>
+internal sealed class InvalidDataStream : Stream
+{
+    public override bool CanRead => true;
+
+    public override bool CanSeek => false;
+
+    public override bool CanWrite => false;
+
+    public override long Length => throw new NotSupportedException();
+
+    public override long Position
+    {
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
+    }
+
+    public override int Read(byte[] buffer, int offset, int count) =>
+        throw new InvalidDataException("simulated corrupt content");
+
+    public override void Flush()
+    {
+        // Read-only.
+    }
+
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

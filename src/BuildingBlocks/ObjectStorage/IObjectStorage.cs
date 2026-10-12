@@ -45,7 +45,9 @@ public interface IObjectStorage
     /// sniff at <c>complete</c> reads a bounded prefix, never the whole artifact). The request is a ranged
     /// <c>GET</c> (<c>bytes=0-(maxBytes-1)</c>), so a store never sends more than asked for; the response
     /// stream is disposed before returning. Returns <c>null</c> when the object does not exist (a store 404
-    /// is an outcome, not an exception, exactly like <see cref="HeadAsync"/>).
+    /// is an outcome, not an exception, exactly like <see cref="HeadAsync"/>). A zero-byte object answers an
+    /// empty array: the store may report the unsatisfiable range as 416 <c>InvalidRange</c>, which is also an
+    /// outcome, not an exception.
     /// </summary>
     /// <param name="objectKey">A server-minted staging or final key.</param>
     /// <param name="maxBytes">The prefix cap in bytes, between 1 and 65536.</param>

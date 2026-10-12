@@ -115,6 +115,29 @@ public sealed class ObjectStorageReadPrefixTests(SeaweedFsFixture fixture) : IDi
         prefix.ShouldBeNull("a store 404 is an outcome, not an exception");
     }
 
+    /// <summary>
+    /// 06.3.1-T1 F-C10: a zero-byte object exists but has no leading bytes. A store may answer the ranged
+    /// <c>GET</c> with 416 <c>InvalidRange</c> (the requested range is unsatisfiable); the adapter must turn that
+    /// into an empty prefix, not a failure, so a sniff of a zero-byte artifact answers a verdict rather than
+    /// throwing.
+    /// </summary>
+    [Fact]
+    public async Task ReadPrefix_Of_A_ZeroByte_Object_Is_An_Empty_Array()
+    {
+        var key = StagingKey();
+        using var adapter = Adapter();
+
+        using var response = await PutAsync(
+            adapter.PresignPut(new PresignPutRequest(key, 0, Sha256Hex([]))), []);
+        response.IsSuccessStatusCode.ShouldBeTrue(
+            $"the signed PUT of an empty body must be accepted; status={(int)response.StatusCode}");
+
+        var prefix = await adapter.ReadPrefixAsync(key, 1024, CancellationToken.None);
+
+        prefix.ShouldNotBeNull("a zero-byte object exists, so the read is not a 404");
+        prefix!.ShouldBeEmpty("a zero-byte object has no leading bytes: an empty prefix, never a failure");
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

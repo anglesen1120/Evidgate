@@ -26,6 +26,14 @@ public class ParserConstructionTests
     [InlineData("var document = new XmlDocument();")]
     [InlineData("using var archive = new ZipArchive(stream, ZipArchiveMode.Read);")]
     [InlineData("using var archive = ZipFile.OpenRead(path);")]
+    [InlineData("var reader = XmlDictionaryReader.Create(stream);")]
+    [InlineData("var element = XElement.Load(stream);")]
+    [InlineData("var element = XElement.Parse(text);")]
+    [InlineData("var document = new XPathDocument(stream);")]
+    [InlineData("var serializer = new XmlSerializer(typeof(Payload));")]
+    [InlineData("ZipFile.ExtractToDirectory(archivePath, destination);")]
+    [InlineData("using var tar = new TarReader(stream);")]
+    [InlineData("return new ParsedXmlReport(() => OpenReader(chunks));")]
     public void Synthetic_Xml_Or_Archive_Reader_Outside_The_Profile_Is_Detected(string text)
     {
         var files = new (string Path, string Text)[]
@@ -47,6 +55,29 @@ public class ParserConstructionTests
         var files = new (string Path, string Text)[]
         {
             ("src/Modules/Evidgate.Modules.Evidence/Application/ArtifactCompletionVerifier.cs", "var document = JsonDocument.Parse(prefix);"),
+        };
+
+        var violations = ParserConstructionRules.FindViolations(
+            files,
+            ParserConstructionRules.ProfileDirectory,
+            ParserConstructionRules.ArtifactModuleDirectory);
+
+        violations.ShouldHaveSingleItem().ShouldContain("ArtifactCompletionVerifier.cs");
+    }
+
+    [Theory]
+    [InlineData("using var document = await JsonDocument.ParseAsync(stream);")]
+    [InlineData("JsonDocument.TryParseValue(ref reader, out var document);")]
+    [InlineData("var node = JsonNode.Parse(prefix);")]
+    [InlineData("var obj = JsonObject.Parse(prefix);")]
+    [InlineData("var arr = JsonArray.Parse(prefix);")]
+    [InlineData("var dto = JsonSerializer.Deserialize<Payload>(body);")]
+    [InlineData("var reader = new Utf8JsonReader(payload);")]
+    public void Synthetic_Json_Reader_Inside_The_Artifact_Module_Is_Detected(string text)
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Evidence/Application/ArtifactCompletionVerifier.cs", text),
         };
 
         var violations = ParserConstructionRules.FindViolations(

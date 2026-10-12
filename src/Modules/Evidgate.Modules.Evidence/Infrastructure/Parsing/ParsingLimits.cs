@@ -40,7 +40,7 @@ internal static class ParsingFailure
     public static Error For(string reason) =>
         string.Equals(reason, ParsingFailureReason.SizeExceeded, StringComparison.Ordinal)
             ? new Error(
-                ParsingErrorCode.TooLarge,
+                ParsingErrorCode.PayloadTooLarge,
                 Message(reason),
                 StatusCodes.Status413PayloadTooLarge,
                 Retryable: false,

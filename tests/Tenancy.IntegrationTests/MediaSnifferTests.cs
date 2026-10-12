@@ -126,6 +126,40 @@ public sealed class MediaSnifferTests
         Sniff(declared, "").ShouldBe(MediaSniffVerdict.NotSniffed);
     }
 
+    /// <summary>
+    /// 06.3.1-T1 F-P2: <see cref="MediaSniffer.IsSniffed"/> reports the same families <see cref="MediaSniffer.Check"/>
+    /// sniffs, so the completion can skip its prefix read exactly for the types the profile would answer
+    /// <c>NotSniffed</c> for.
+    /// </summary>
+    [Theory]
+    [InlineData("application/xml")]
+    [InlineData("text/xml")]
+    [InlineData("application/atom+xml")]
+    [InlineData("APPLICATION/XML; charset=utf-8")]
+    [InlineData("application/json")]
+    [InlineData("application/problem+json")]
+    [InlineData("text/html")]
+    [InlineData("TEXT/HTML; charset=utf-8")]
+    public void IsSniffedReportsTheT1Families(string declared) =>
+        MediaSniffer.IsSniffed(declared).ShouldBeTrue();
+
+    /// <summary>06.3.1-T1 F-P2: every other declared type is not sniffed, so no prefix read is issued for it.</summary>
+    [Theory]
+    [InlineData("image/png")]
+    [InlineData("video/mp4")]
+    [InlineData("application/zip")]
+    [InlineData("application/octet-stream")]
+    [InlineData("text/plain")]
+    [InlineData("application/pdf")]
+    [InlineData("application/xmlx")]
+    [InlineData("application/jsonx")]
+    [InlineData("text/xmlish")]
+    [InlineData("application/")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void IsSniffedReportsTypesOutsideTheT1Table(string declared) =>
+        MediaSniffer.IsSniffed(declared).ShouldBeFalse();
+
     [Fact]
     public void NeverThrowsOnAHostilePrefix()
     {

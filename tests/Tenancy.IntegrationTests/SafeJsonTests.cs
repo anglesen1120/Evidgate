@@ -48,13 +48,15 @@ public sealed class SafeJsonTests
     }
 
     [Fact]
-    public void KeepsTheDefaultDuplicateKeyPolicy()
+    public void RejectsDuplicateKeysAsMalformed()
     {
-        // The profile sets no duplicate-key policy, so System.Text.Json's default applies: duplicates are
-        // allowed. The test pins that behaviour so a later change to the options is a deliberate one.
+        // AllowDuplicateProperties = false: a repeated key is refused rather than silently shadowing the value an
+        // earlier key carried.
         var result = ParseJson("""{"a":1,"a":2}""");
 
-        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
+        ReasonOf(result).ShouldBe(ParsingFailureReason.Malformed);
     }
 
     [Fact]
@@ -91,7 +93,7 @@ public sealed class SafeJsonTests
         var overCap = ParseJson(ExactSizeJson(Cap + 1), Cap);
 
         overCap.IsSuccess.ShouldBeFalse();
-        overCap.Error!.Code.ShouldBe(ParsingErrorCode.TooLarge);
+        overCap.Error!.Code.ShouldBe(ParsingErrorCode.PayloadTooLarge);
         overCap.Error.Status.ShouldBe(413);
         ReasonOf(overCap).ShouldBe(ParsingFailureReason.SizeExceeded);
     }
@@ -161,6 +163,19 @@ public sealed class SafeJsonTests
         var result = SafeJson.Parse(Stream.Null, MaxBytes, CancellationToken.None);
 
         result.IsSuccess.ShouldBeFalse();
+        ReasonOf(result).ShouldBe(ParsingFailureReason.Malformed);
+    }
+
+    [Fact]
+    public void CallerInvalidDataExceptionBecomesMalformedNotSizeExceeded()
+    {
+        // A caller stream that fails with InvalidDataException (a corrupt GZipStream, say) is malformed content.
+        // Only the bounded read's own ContentTooLongException may be mapped to size_exceeded; the caller's
+        // InvalidDataException must not be misreported as a breached cap.
+        var result = SafeJson.Parse(new InvalidDataStream(), MaxBytes, CancellationToken.None);
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
         ReasonOf(result).ShouldBe(ParsingFailureReason.Malformed);
     }
 

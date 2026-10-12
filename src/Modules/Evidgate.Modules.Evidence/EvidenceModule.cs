@@ -48,9 +48,10 @@ internal static class EvidenceModule
         // piece; only the Worker runs a consumer, and the Api host tolerates the row until it does (T19).
         services.AddTaskHandler<ArtifactStagingDeletePayload, ArtifactStagingDeleteTaskHandler>();
 
-        // 06.3.1-T1.2: the one untrusted-parser profile (00 §5.7 S5), published on the module's .Contracts so the
-        // `complete` verifier and 04.4.1's report mapper resolve the same singleton instead of building their own
-        // readers (00 §5.7 S4).
+        // 06.3.1-T1.2: the one untrusted-parser profile (00 §5.7 S5), published on the module's .Contracts.
+        // It has no consumer yet: the `complete` verifier uses the static MediaSniffer directly (06.3.1-T1),
+        // and 04.4.1's report mapper is the first IParsing consumer, resolving this same singleton instead of
+        // building its own readers (00 §5.7 S4).
         services.TryAddSingleton<IParsing, ParsingService>();
 
         return services;

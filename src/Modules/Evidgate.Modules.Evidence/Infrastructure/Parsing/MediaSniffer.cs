@@ -48,7 +48,7 @@ internal static class MediaSniffer
             return SniffResult.NotSniffed;
         }
 
-        var bare = BareType(declaredMediaType);
+        var bare = BareType(declaredMediaType.AsSpan());
 
         if (IsXml(bare))
         {
@@ -60,28 +60,50 @@ internal static class MediaSniffer
             return CheckJson(prefix);
         }
 
-        return bare.Equals(HtmlType, StringComparison.OrdinalIgnoreCase)
+        return bare.Equals(HtmlType.AsSpan(), StringComparison.OrdinalIgnoreCase)
             ? CheckHtml(prefix)
             : SniffResult.NotSniffed;
     }
 
-    /// <summary>The bare type: the parameters after the first <c>;</c> are dropped, surrounding whitespace trimmed.</summary>
-    private static string BareType(string declaredMediaType)
+    /// <summary>
+    /// True when the T1 profile sniffs <paramref name="declaredMediaType"/> at all: the same family test
+    /// <see cref="Check"/> applies, so the caller can skip the prefix read entirely for a type the profile
+    /// would answer <see cref="SniffResult.NotSniffed"/> for (06.3.1-T1 F-P2). Pure and allocation-free:
+    /// it walks the declared type as a span and never builds the bare-type substring.
+    /// </summary>
+    /// <param name="declaredMediaType">The declared <c>media_type</c>; parameters after <c>;</c> are ignored.</param>
+    /// <returns>True for the XML family, the JSON family and <c>text/html</c>; false otherwise.</returns>
+    internal static bool IsSniffed(string declaredMediaType)
     {
-        var semicolon = declaredMediaType.IndexOf(';', StringComparison.Ordinal);
+        if (string.IsNullOrWhiteSpace(declaredMediaType))
+        {
+            return false;
+        }
+
+        var bare = BareType(declaredMediaType.AsSpan());
+
+        return IsXml(bare)
+            || IsJson(bare)
+            || bare.Equals(HtmlType.AsSpan(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The bare type: the parameters after the first <c>;</c> are dropped, surrounding whitespace trimmed.</summary>
+    private static ReadOnlySpan<char> BareType(ReadOnlySpan<char> declaredMediaType)
+    {
+        var semicolon = declaredMediaType.IndexOf(';');
         return (semicolon < 0 ? declaredMediaType : declaredMediaType[..semicolon]).Trim();
     }
 
-    private static bool IsXml(string bare) =>
-        bare.Equals(XmlType, StringComparison.OrdinalIgnoreCase)
-        || bare.Equals(TextXmlType, StringComparison.OrdinalIgnoreCase)
-        || (bare.StartsWith(ApplicationPrefix, StringComparison.OrdinalIgnoreCase)
-            && bare.EndsWith(XmlSuffix, StringComparison.OrdinalIgnoreCase));
+    private static bool IsXml(ReadOnlySpan<char> bare) =>
+        bare.Equals(XmlType.AsSpan(), StringComparison.OrdinalIgnoreCase)
+        || bare.Equals(TextXmlType.AsSpan(), StringComparison.OrdinalIgnoreCase)
+        || (bare.StartsWith(ApplicationPrefix.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            && bare.EndsWith(XmlSuffix.AsSpan(), StringComparison.OrdinalIgnoreCase));
 
-    private static bool IsJson(string bare) =>
-        bare.Equals("application/json", StringComparison.OrdinalIgnoreCase)
-        || (bare.StartsWith(ApplicationPrefix, StringComparison.OrdinalIgnoreCase)
-            && bare.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase));
+    private static bool IsJson(ReadOnlySpan<char> bare) =>
+        bare.Equals("application/json".AsSpan(), StringComparison.OrdinalIgnoreCase)
+        || (bare.StartsWith(ApplicationPrefix.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            && bare.EndsWith(JsonSuffix.AsSpan(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// XML must start with <c>&lt;</c> then the declaration (<c>?xml</c>), a comment (<c>!--</c>), a

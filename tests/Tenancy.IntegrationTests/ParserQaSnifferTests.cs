@@ -135,4 +135,29 @@ public sealed class ParserQaSnifferTests
         // media-type allow-list excludes it, or add it to the sniff family.
         MediaSniffer.Check("image/svg+xml", Encoding.ASCII.GetBytes("<script>x</script>")).ShouldBe(SniffResult.NotSniffed);
     }
+
+    /// <summary>
+    /// 06.3.1-T1 F-P2: <see cref="MediaSniffer.IsSniffed"/> is the exact predicate the completion uses to decide
+    /// whether to issue a prefix read, so it must agree with <see cref="MediaSniffer.Check"/>: a read happens iff
+    /// the verdict is not <see cref="SniffResult.NotSniffed"/>. Any drift would let a sniffed type skip its check.
+    /// </summary>
+    [Theory]
+    [InlineData("application/xml", "<?xml version=\"1.0\"?>")]
+    [InlineData("application/xml", "\u0089PNG\r\n\u001A\n")]
+    [InlineData("text/xml", "<r/>")]
+    [InlineData("application/atom+xml", "<feed/>")]
+    [InlineData("application/json", "{\"a\":1}")]
+    [InlineData("application/json", "<html/>")]
+    [InlineData("text/html", "<html/>")]
+    [InlineData("text/html", "plain")]
+    [InlineData("image/png", "\u0089PNG\r\n\u001A\n")]
+    [InlineData("application/zip", "PK\u0003\u0004")]
+    [InlineData("text/plain", "hello")]
+    [InlineData("", "")]
+    public void IsSniffedAgreesWithCheckNeverNotSniffed(string declared, string prefix)
+    {
+        var verdict = MediaSniffer.Check(declared, Encoding.Latin1.GetBytes(prefix));
+
+        MediaSniffer.IsSniffed(declared).ShouldBe(verdict != SniffResult.NotSniffed);
+    }
 }

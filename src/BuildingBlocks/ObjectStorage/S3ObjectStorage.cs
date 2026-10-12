@@ -175,6 +175,13 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
             // A store 404 is an outcome, not an exception (IObjectStorage.ReadPrefixAsync).
             return null;
         }
+        catch (AmazonS3Exception exception) when (IsEmptyRange(exception))
+        {
+            // A zero-byte object: the store answers 416 InvalidRange because no byte can satisfy the requested
+            // range. The object exists and has no leading bytes, so the prefix is empty — an outcome, not a
+            // failure (06.3.1-T1 F-C10).
+            return [];
+        }
         catch (AmazonServiceException exception)
         {
             // SDK v4: AmazonServiceException no longer derives from AmazonClientException, so a store
@@ -402,6 +409,15 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
         exception.StatusCode == HttpStatusCode.NotFound
         || string.Equals(exception.ErrorCode, "NoSuchKey", StringComparison.Ordinal)
         || string.Equals(exception.ErrorCode, "NotFound", StringComparison.Ordinal);
+
+    /// <summary>
+    /// True when the store refused the requested byte range as unsatisfiable: a ranged <c>GET</c> of a
+    /// zero-byte object answers 416 <c>InvalidRange</c>, which is an outcome (an empty prefix), not a
+    /// failure (06.3.1-T1 F-C10).
+    /// </summary>
+    private static bool IsEmptyRange(AmazonS3Exception exception) =>
+        exception.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable
+        || string.Equals(exception.ErrorCode, "InvalidRange", StringComparison.Ordinal);
 
     /// <summary>
     /// Lowercase hex of a base64 SHA-256 the store reported, or <c>null</c> when the store holds

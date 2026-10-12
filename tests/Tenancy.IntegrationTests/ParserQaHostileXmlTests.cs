@@ -59,7 +59,9 @@ public sealed class ParserQaHostileXmlTests
     [Fact]
     public void PredefinedEntityReferencesAreStillWellFormed()
     {
-        var result = ParseXml("<r>&amp;&lt;&gt;&quot;&apos;</r>");
+        // MaxCharactersFromEntities = 1 counts neither predefined entities nor numeric character references, so
+        // this document must still parse.
+        var result = ParseXml("<r>&amp;&lt;&gt;&quot;&apos;&#65;&#x42;</r>");
 
         result.IsSuccess.ShouldBeTrue();
     }
@@ -173,7 +175,7 @@ public sealed class ParserQaHostileXmlTests
     public void CallerIoExceptionPropagatesAndIsNotSwallowedAsAParseFailure()
     {
         // Characterisation of the current behaviour: the profile classifies its own limits and XML errors, but
-        // an IOException from the caller's stream is not one of them (SafeXml.cs catch list 82–95). Recorded in the
+        // an IOException from the caller's stream is not one of them (SafeXml.Parse's catch list). Recorded in the
         // report as a decision the owner must make; the test pins the present behaviour so a silent change shows up.
         Should.Throw<IOException>(() =>
             SafeXml.Parse(new ThrowingStream(), MaxBytes, CancellationToken.None));

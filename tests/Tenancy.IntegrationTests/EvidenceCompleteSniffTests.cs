@@ -12,6 +12,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
+using Microsoft.AspNetCore.TestHost;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -411,6 +412,66 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
         (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(1);
         (await OutboxCountAsync(world, StagingDeleteTask, artifactId)).ShouldBe(1);
         (await _store.ReadAsync(finalKey)).ShouldBe(NotZipBody);
+    }
+
+    // --------------------------------------------- F-P2: no prefix read for a type the profile never sniffs
+
+    /// <summary>
+    /// 06.3.1-T1 F-P2: a declared type outside the T1 families (<c>application/zip</c>) is never sniffed, so the
+    /// completion issues ZERO <c>ReadPrefixAsync</c> calls — the staging and final sniff both skip the read for a
+    /// verdict the profile would answer <c>NotSniffed</c> for. The artifact still completes <c>ready</c> and is
+    /// promoted. The prefix reads are counted by a decorator over the real adapter.
+    /// </summary>
+    [Fact]
+    public async Task Complete_DeclaredTypeOutsideTheT1Families_IssuesNoPrefixRead()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        await InsertKindPolicyAsync(world, ZipType);
+
+        var (artifactId, _, finalKey) = await MintAndUploadAsync(world, runId, NotZipBody, ZipType);
+
+        var storage = new FaultInjectingObjectStorage();
+        await using var host = world.Host.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => FaultInjectingObjectStorage.Decorate(services, storage)));
+        using var client = host.CreateClient();
+
+        var answer = await client.SendAsync(
+            HttpMethod.Post, $"/v1/artifacts/{artifactId:D}/complete", _ => { }, null, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Text("state").ShouldBe("ready");
+        storage.PrefixReads.ShouldBe(0, "a declared type outside the T1 families is never sniffed: no prefix is read");
+        (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(1);
+        (await OutboxCountAsync(world, StagingDeleteTask, artifactId)).ShouldBe(1);
+        (await _store.ReadAsync(finalKey)).ShouldBe(NotZipBody);
+    }
+
+    /// <summary>
+    /// 06.3.1-T1 F-P2: a declared type the T1 profile DOES sniff (<c>application/xml</c>) still reads the prefix
+    /// twice — once on the staging object before the copy and once on the final object after it — so the skip is
+    /// exactly the <c>NotSniffed</c> case and nothing else.
+    /// </summary>
+    [Fact]
+    public async Task Complete_DeclaredXmlFamily_IssuesTwoPrefixReads()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        await InsertKindPolicyAsync(world, XmlType);
+
+        var (artifactId, _, _) = await MintAndUploadAsync(world, runId, XmlBody, XmlType);
+
+        var storage = new FaultInjectingObjectStorage();
+        await using var host = world.Host.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => FaultInjectingObjectStorage.Decorate(services, storage)));
+        using var client = host.CreateClient();
+
+        var answer = await client.SendAsync(
+            HttpMethod.Post, $"/v1/artifacts/{artifactId:D}/complete", _ => { }, null, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Text("state").ShouldBe("ready");
+        storage.PrefixReads.ShouldBe(2, "a sniffed type reads the staging prefix before the copy and the final prefix after it");
     }
 
     // ------------------------------------------------------------------ P5: no storage call before the key check

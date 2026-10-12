@@ -332,9 +332,10 @@ internal sealed class ArtifactCompletionVerifier(
     /// staging object are read and the declared media type is checked against them, so a mismatching artifact is
     /// never copied to the final key. The read is a storage call and runs with no transaction open, exactly like
     /// the <c>HEAD</c>s and the copy (00 §5.7 P5). True only for a <see cref="SniffResult.Mismatch"/>: a
-    /// declared type the T1 profile does not sniff (<see cref="SniffResult.NotSniffed"/>) proceeds, and a prefix
-    /// read that finds the staging object gone (the 24 h lifecycle) also proceeds — the copy then reports the
-    /// missing source and the caller falls through to the retry path.
+    /// declared type the T1 profile does not sniff (<see cref="SniffResult.NotSniffed"/>) proceeds without a
+    /// read at all (<see cref="MediaSniffer.IsSniffed"/>), and a prefix read that finds the staging object gone
+    /// (the 24 h lifecycle) also proceeds — the copy then reports the missing source and the caller falls through
+    /// to the retry path.
     /// </summary>
     /// <param name="stagingKey">The derived <c>pending/</c> staging key.</param>
     /// <param name="facts">The declared facts of the row (the media type is sniffed against the bytes).</param>
@@ -342,6 +343,13 @@ internal sealed class ArtifactCompletionVerifier(
     private async ValueTask<bool> StagingSniffMismatchAsync(
         string stagingKey, ArtifactFacts facts, CancellationToken cancellationToken)
     {
+        // A declared type outside the T1 table is never sniffed, so the prefix read is skipped entirely: no
+        // storage call is made for a verdict the profile would ignore (06.3.1-T1 F-P2).
+        if (!MediaSniffer.IsSniffed(facts.MediaType))
+        {
+            return false;
+        }
+
         var prefix = await storage
             .ReadPrefixAsync(stagingKey, ParsingLimits.SniffPrefixBytes, cancellationToken)
             .ConfigureAwait(false);
@@ -355,9 +363,10 @@ internal sealed class ArtifactCompletionVerifier(
     /// declared media type is checked against them again, because the bytes could have been swapped between the
     /// staging read and the copy. The read is a storage call and runs with no transaction open, exactly like the
     /// <c>HEAD</c>s and the copy above (00 §5.7 P5). A declared type the T1 profile does not sniff
-    /// (<see cref="SniffResult.NotSniffed"/> — every type T2.2 has not yet added) is accepted as before; a
-    /// mismatch rejects with <c>media_type_mismatch</c>; a prefix that is gone (the object vanished between the
-    /// <c>HEAD</c> and this read) rejects with <c>object_missing</c>, never a 500.
+    /// (<see cref="SniffResult.NotSniffed"/> — every type T2.2 has not yet added) is accepted as before, without
+    /// a read (<see cref="MediaSniffer.IsSniffed"/>); a mismatch rejects with <c>media_type_mismatch</c>; a
+    /// prefix that is gone (the object vanished between the <c>HEAD</c> and this read) rejects with
+    /// <c>object_missing</c>, never a 500.
     /// </summary>
     /// <param name="facts">The declared facts of the row (the media type is sniffed against the bytes).</param>
     /// <param name="verifiedBytes">The length the final <c>HEAD</c> reported, carried into an accepted verdict.</param>
@@ -365,6 +374,13 @@ internal sealed class ArtifactCompletionVerifier(
     private async ValueTask<ArtifactCompletionVerdict> SniffAsync(
         ArtifactFacts facts, long verifiedBytes, CancellationToken cancellationToken)
     {
+        // A declared type outside the T1 table is accepted without a read: the profile has no signature to
+        // check it against, so no prefix read is issued (06.3.1-T1 F-P2).
+        if (!MediaSniffer.IsSniffed(facts.MediaType))
+        {
+            return ArtifactCompletionVerdict.Accept(verifiedBytes);
+        }
+
         var prefix = await storage
             .ReadPrefixAsync(facts.ObjectKey, ParsingLimits.SniffPrefixBytes, cancellationToken)
             .ConfigureAwait(false);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Xml;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 
 namespace Evidgate.Modules.Evidence.Contracts;
@@ -7,33 +8,49 @@ namespace Evidgate.Modules.Evidence.Contracts;
 /// <summary>
 /// The Evidence module's untrusted-parser profile (00 §5.7 S5, 06.3.1 §5): the one entry point every
 /// server-side parse of artifact bytes goes through. XML, JSON and (from 06.3.1-T2) archives are read
-/// through it, so external entities and DTDs are impossible, depth/size/time caps are hard limits and the
-/// sniffed signature is checked against the declared media type. A hostile artifact costs bounded CPU and
-/// memory and ends <c>rejected</c>, never <c>ready</c>.
+/// through it, so external entities and DTDs are impossible, the depth and size caps are hard limits, and
+/// the sniffed signature is checked against the declared media type. A hostile artifact costs bounded CPU
+/// and memory and ends <c>rejected</c>, never <c>ready</c>.
 /// </summary>
 /// <remarks>
-/// Every failure is a <see cref="Result"/> value carrying <c>artifact_invalid</c> (422) or <c>too_large</c>
-/// (413) plus a generic reason from <see cref="ParsingFailureReason"/> — never a parser exception, never an
-/// artifact byte, name or path. HTML is never parsed on the server: a declared <c>text/html</c> kind is
-/// validated by size and <see cref="SniffMediaType"/> only.
+/// Every failure is a <see cref="Result"/> value carrying <see cref="ParsingErrorCode.ArtifactInvalid"/>
+/// (422) or <see cref="ParsingErrorCode.PayloadTooLarge"/> (413) plus a generic reason from
+/// <see cref="ParsingFailureReason"/> — never a parser exception, never an artifact byte, name or path.
+/// HTML is never parsed on the server: a declared <c>text/html</c> kind is validated by size and
+/// <see cref="SniffMediaType"/> only.
+/// <para>
+/// <see cref="ParseXmlReport"/> and <see cref="ParseJson"/> are synchronous, and the 30 s cap
+/// (<c>ParsingLimits.ParseTimeout</c>) is cooperative: it is checked between reads and per node, so it
+/// cannot interrupt a blocking <see cref="Stream.Read"/> or one <c>JsonDocument.Parse</c> call. A caller
+/// MUST therefore pass an already-buffered, bounded stream; hard isolation from a runaway parse is 06.3.6.
+/// </para>
 /// </remarks>
 public interface IParsing
 {
     /// <summary>
     /// Validates one XML report (a JUnit <c>testsuite</c> document, a DOM snapshot, a UI hierarchy dump)
-    /// against the profile and hands back a handle that streams it (06.3.1 AC1, AC2).
+    /// against the profile and hands back a handle that streams it (06.3.1 AC1, AC2). Synchronous: it
+    /// returns only after the whole document has been validated under the depth and size caps.
     /// </summary>
-    /// <param name="content">The untrusted bytes; the caller keeps ownership of the stream.</param>
+    /// <param name="content">
+    /// The untrusted, already-bounded bytes; the caller keeps ownership of the stream. The profile's 30 s
+    /// timeout is cooperative and cannot interrupt a blocking read, so a caller passes a buffered stream.
+    /// </param>
     /// <param name="maxBytes">The per-kind cap from <c>artifact_kind_policy.max_bytes</c>.</param>
     /// <param name="cancellationToken">Cancels the parse; a timeout of its own is added by the profile.</param>
-    /// <returns>The validated report, or the profile failure (<c>artifact_invalid</c>/<c>too_large</c>).</returns>
+    /// <returns>The validated report, or the profile failure (<c>artifact_invalid</c>/<c>payload_too_large</c>).</returns>
     Result<ParsedXmlReport> ParseXmlReport(Stream content, long maxBytes, CancellationToken cancellationToken);
 
     /// <summary>
     /// Parses one JSON payload (a serialised DOM snapshot, an accessibility snapshot, an adapter body)
-    /// with a depth cap, a byte cap and no comments or trailing commas (06.3.1 AC2).
+    /// with a depth cap, a byte cap and no comments or trailing commas (06.3.1 AC2). Synchronous: it
+    /// returns only after the whole payload has been validated under the depth and size caps.
     /// </summary>
-    /// <param name="content">The untrusted bytes; the caller keeps ownership of the stream.</param>
+    /// <param name="content">
+    /// The untrusted, already-bounded bytes; the caller keeps ownership of the stream. The profile's 30 s
+    /// timeout is cooperative and cannot interrupt one <c>JsonDocument.Parse</c> call, so a caller passes a
+    /// buffered stream.
+    /// </param>
     /// <param name="maxBytes">The per-kind cap from <c>artifact_kind_policy.max_bytes</c>.</param>
     /// <param name="cancellationToken">Cancels the parse; a timeout of its own is added by the profile.</param>
     /// <returns>The parsed document (the caller disposes it), or the profile failure.</returns>
@@ -66,11 +83,12 @@ public sealed class ParsedXmlReport
     private readonly Func<XmlReader> openReader;
 
     /// <summary>
-    /// Builds a report over the profile's closed reader factory. Only the parser profile constructs these;
-    /// the factory must be the profile's own (a reader that cannot resolve an entity or a DTD).
+    /// Builds a report over the profile's closed reader factory. Internal by design: only the parser
+    /// profile constructs these (the factory must be the profile's own — a reader that cannot resolve an
+    /// entity or a DTD), and the Evidence module sees this constructor through <c>InternalsVisibleTo</c>.
     /// </summary>
     /// <param name="openReader">The safe reader factory.</param>
-    public ParsedXmlReport(Func<XmlReader> openReader)
+    internal ParsedXmlReport(Func<XmlReader> openReader)
     {
         ArgumentNullException.ThrowIfNull(openReader);
 
@@ -102,18 +120,19 @@ public enum MediaSniffVerdict
 }
 
 /// <summary>
-/// The two codes of a parser-profile failure (00 §9.2, 06.3.1 AC1/AC2). <c>artifact_invalid</c> is
-/// <see cref="Evidgate.BuildingBlocks.SharedKernel.Api.ApiErrorCode.ArtifactInvalid"/>; <c>too_large</c> is the
-/// 413 the size cap maps to. Both are registered in <c>contracts/openapi.yaml</c> (the only error-code source,
-/// T52) and are returned by in-process parser callers only — no HTTP route parses an artifact at T1.
+/// The codes of a parser-profile failure (00 §9.2, 06.3.1 AC1/AC2). Both are the registered
+/// <see cref="ApiErrorCode"/> constants, so the profile never invents a code: a parse failure maps to
+/// <see cref="ApiErrorCode.ArtifactInvalid"/> (422, registered in <c>contracts/openapi.yaml</c>) and the
+/// size cap maps to the existing 413 <see cref="ApiErrorCode.PayloadTooLarge"/> (06.1.2-T1). Both are
+/// returned by in-process parser callers only — no HTTP route parses an artifact at T1.
 /// </summary>
 public static class ParsingErrorCode
 {
     /// <summary>422: the bytes violate the profile — a DTD/entity, depth, timeout or malformed content.</summary>
-    public const string ArtifactInvalid = "artifact_invalid";
+    public const string ArtifactInvalid = ApiErrorCode.ArtifactInvalid;
 
-    /// <summary>413: the bytes exceed the artifact kind's byte cap.</summary>
-    public const string TooLarge = "too_large";
+    /// <summary>413 <c>payload_too_large</c> (06.1.2-T1): the bytes exceed the artifact kind's byte cap.</summary>
+    public const string PayloadTooLarge = ApiErrorCode.PayloadTooLarge;
 }
 
 /// <summary>

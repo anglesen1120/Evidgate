@@ -87,8 +87,9 @@ public sealed class ParseErrorRedactionTests
     [Fact]
     public void FailureCarriesTheRegisteredCodesAndStatuses()
     {
-        // 00 §9.2: 422 artifact_invalid is the registered parse-profile code; the size cap is the 413 too_large.
-        // Neither is retryable, and both carry exactly one detail naming the reason.
+        // 00 §9.2: 422 artifact_invalid is the registered parse-profile code; the size cap maps to the
+        // registered 413 payload_too_large (06.1.2-T1). Neither is retryable, and both carry exactly one
+        // detail naming the reason.
         var invalid = SafeXml.Parse(new MemoryStream(Encoding.UTF8.GetBytes("<r>")), 1024, CancellationToken.None);
 
         invalid.Error!.Code.ShouldBe(ApiErrorCode.ArtifactInvalid);
@@ -101,7 +102,8 @@ public sealed class ParseErrorRedactionTests
         var tooLarge = SafeXml.Parse(
             new MemoryStream(Encoding.UTF8.GetBytes(OpaqueElement("x", 2048))), 1024, CancellationToken.None);
 
-        tooLarge.Error!.Code.ShouldBe(ParsingErrorCode.TooLarge);
+        tooLarge.Error!.Code.ShouldBe(ParsingErrorCode.PayloadTooLarge);
+        tooLarge.Error.Code.ShouldBe(ApiErrorCode.PayloadTooLarge);
         tooLarge.Error.Status.ShouldBe(413);
         tooLarge.Error.Retryable.ShouldBeFalse();
         tooLarge.Error.Details!.Single().Reason.ShouldBe(ParsingFailureReason.SizeExceeded);
@@ -119,31 +121,6 @@ public sealed class ParseErrorRedactionTests
         declared.ShouldBe(ClosedReasons.Order(StringComparer.Ordinal).ToArray());
     }
 
-    [Fact]
-    public void ProfileTakesNoLoggerAndNoObjectKey()
-    {
-        // The profile has no logging dependency and never receives an object key, so a refusal cannot put an
-        // artifact byte or a storage path into a log: there is nowhere for it to travel.
-        foreach (var type in new[] { typeof(SafeXml), typeof(SafeJson), typeof(MediaSniffer), typeof(ParsingService) })
-        {
-            type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .SelectMany(constructor => constructor.GetParameters())
-                .ShouldBeEmpty($"{type.Name} must be stateless");
-
-            type.GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-                .ShouldNotContain(
-                    field => field.FieldType.Name.Contains("Logger", StringComparison.OrdinalIgnoreCase),
-                    $"{type.Name} must not log artifact content");
-        }
-
-        // No method of the profile ever receives an object key, so a refusal has no storage path to leak.
-        typeof(SafeXml).GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-            .SelectMany(method => method.GetParameters())
-            .ShouldNotContain(parameter => parameter.Name != null
-                && (parameter.Name.Equals("key", StringComparison.OrdinalIgnoreCase)
-                    || parameter.Name.Contains("objectKey", StringComparison.OrdinalIgnoreCase)));
-    }
-
     /// <summary>Asserts the failure is the expected generic reason and carries no canary anywhere.</summary>
     private static void AssertRedacted(Result result, string expectedReason)
     {
@@ -153,7 +130,7 @@ public sealed class ParseErrorRedactionTests
         var details = error.Details!;
 
         details.Single().Reason.ShouldBe(expectedReason);
-        error.Code.ShouldBeOneOf(ParsingErrorCode.ArtifactInvalid, ParsingErrorCode.TooLarge);
+        error.Code.ShouldBeOneOf(ParsingErrorCode.ArtifactInvalid, ParsingErrorCode.PayloadTooLarge);
 
         var rendered = string.Join(
             '\u0000',
