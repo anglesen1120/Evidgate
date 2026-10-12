@@ -44,6 +44,7 @@ internal sealed partial class RunEventScopeReader(ITenantDb db, ITenantScopeAcce
         select r.project_id as project_id,
                p.status as project_state,
                r.state as run_state,
+               now() <= r.collection_deadline_at + make_interval(mins => r.late_window_minutes) as late_window_open,
                (select coalesce(array_agg(pe.execution_key order by pe.execution_key), '{}'::text[])
                   from public.planned_execution pe
                  where pe.org_id = @org_id and pe.run_id = @run_id
@@ -76,7 +77,12 @@ internal sealed partial class RunEventScopeReader(ITenantDb db, ITenantScopeAcce
 
         return row is null
             ? null
-            : new RunEventScope(row.ProjectId, row.ProjectState, row.RunState, row.PlannedKeys.ToHashSet(StringComparer.Ordinal));
+            : new RunEventScope(
+                row.ProjectId,
+                row.ProjectState,
+                row.RunState,
+                row.PlannedKeys.ToHashSet(StringComparer.Ordinal),
+                row.LateWindowOpen);
     }
 
     /// <summary>
@@ -125,6 +131,8 @@ internal sealed partial class RunEventScopeReader(ITenantDb db, ITenantScopeAcce
         public string ProjectState { get; set; } = string.Empty;
 
         public string RunState { get; set; } = string.Empty;
+
+        public bool LateWindowOpen { get; set; }
 
         public string[] PlannedKeys { get; set; } = [];
     }

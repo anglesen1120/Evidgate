@@ -24,8 +24,8 @@ namespace Evidgate.Modules.Ingestion.Application.Commands;
 /// The 04.1.1-T1 hot path: one atomic event batch (<c>POST /v1/runs/{r}/events</c>, 00 §9.3/§9.4).
 /// The command carries the route's run id, the raw body bytes and the request id; the handler owns
 /// the whole decision list of the task file §5 (edge validation → scope → producer binding →
-/// first-send capability → one insert → case attempts → slot/ledger rows) inside the C2 pipeline's
-/// tenant transaction, so a refusal leaves no row behind.
+/// planned-key gate → first-send capability → one insert → case attempts → slot/ledger rows) inside the
+/// C2 pipeline's tenant transaction, so a refusal leaves no row behind.
 /// <para>
 /// Not an <c>IIdempotentCommand</c> (D2): the route is exempt from <c>Idempotency-Key</c>
 /// (contracts/README.md), the batch carries its own per-event <c>event_id</c> dedupe, and a resend
@@ -221,17 +221,40 @@ internal sealed class IngestEventBatchHandler(
                 "the project is suspended"));
         }
 
-        // D6 (fail closed): a complete or incomplete run has closed its event window; a canceled run still
-        // accepts events and marks them after_cancel (T12). The late-window write is 04.1.1-T4.2's.
+        // T12/T81 (replacing 04.1.1's D6 fail-closed for the incomplete case): a canceled run still accepts
+        // events and marks them after_cancel (T12); an incomplete run still accepts late evidence inside its
+        // late window and marks it late = true, because the run row's own immutable window (T93) is what
+        // closes it - after the window the run answers 409 run_closed (T81). A complete run is closed: its
+        // window runs "since completion" and the run row stores no completion instant (T101's run.completed_at
+        // is 05.3.1's to add), so nothing here could open it. The state and the window are read from the run
+        // row taken FOR SHARE (T91), so a committed cancel or completion can never be missed.
         var afterCancel = string.Equals(scope.RunState, "canceled", StringComparison.Ordinal);
-        if (scope.RunState is "complete" or "incomplete")
+        var late = string.Equals(scope.RunState, "incomplete", StringComparison.Ordinal) && scope.LateWindowOpen;
+        var closed = (string.Equals(scope.RunState, "complete", StringComparison.Ordinal) || string.Equals(scope.RunState, "incomplete", StringComparison.Ordinal))
+            && !late;
+        if (closed)
         {
             return Result.Failure<BatchAckResult>(Error.Conflict(
                 ApiErrorCode.RunClosed,
                 "the run no longer accepts events"));
         }
 
-        // (c) Every execution_key must be a planned execution of the run; all failing indices are named (T10).
+        // (c) One bind-or-check per batch: the first accepted write of a slot binds it to this token (T9).
+        // It runs before the planned-key gate below (shared contract, T9/T10): a foreign or mismatching
+        // token always gets 403 producer_slot_taken - or 422 unknown_producer when the run has no such slot
+        // - and never learns which execution keys the run planned. A refusal after the bind rolls the bind
+        // back, because this handler runs inside the C2 pipeline's one tenant transaction.
+        var bound = await producers
+            .BindOrCheckAsync(command.RunId, producerId, principal.CredentialId, principal.CiRun?.ToBindingReference(), cancellationToken)
+            .ConfigureAwait(false);
+        if (!bound.IsSuccess)
+        {
+            return Result.Failure<BatchAckResult>(bound.Error!);
+        }
+
+        // (d) Every execution_key must be a planned execution of the run; all failing indices are named (T10).
+        // The membership test rides the scope read's single `execution_key = ANY(@keys)` probe above, so this
+        // gate costs no extra statement.
         var unknown = events.Where(e => !scope.PlannedKeys.Contains(e.ExecutionKey)).ToList();
         if (unknown.Count > 0)
         {
@@ -239,15 +262,6 @@ internal sealed class IngestEventBatchHandler(
                 ApiErrorCode.UnknownExecutionKey,
                 "the batch names execution keys that are not planned executions of the run",
                 [.. unknown.Select(e => new ErrorDetail($"/events/{e.Index}/execution_key", "unknown_execution_key", e.Index))]));
-        }
-
-        // (d) One bind-or-check per batch: the first accepted write of a slot binds it to this token (T9).
-        var bound = await producers
-            .BindOrCheckAsync(command.RunId, producerId, principal.CredentialId, principal.CiRun?.ToBindingReference(), cancellationToken)
-            .ConfigureAwait(false);
-        if (!bound.IsSuccess)
-        {
-            return Result.Failure<BatchAckResult>(bound.Error!);
         }
 
         // (e) The first-send capability seam (04.7.1-T2.3, D11): a sequence-1 run.log carrier registers its
@@ -347,6 +361,7 @@ internal sealed class IngestEventBatchHandler(
                 org_id = orgId,
                 run_id = command.RunId,
                 after_cancel = afterCancel,
+                late,
                 events = JsonSerializer.Serialize(rows),
             },
             cancellationToken).ConfigureAwait(false)).ToHashSet();
@@ -577,11 +592,11 @@ internal sealed class IngestEventBatchHandler(
         insert into public.event (
             id, org_id, run_id, event_id, producer_id, sequence, job_id, epoch, execution_key,
             attempt_no, type, raw_status, normalized_status, duration_ms, occurred_at, payload_hash,
-            payload, artifact_ids, after_cancel)
+            payload, artifact_ids, after_cancel, late)
         select
             x.id, @org_id, @run_id, x.event_id, x.producer_id, x.sequence, x.job_id, x.epoch,
             x.execution_key, x.attempt_no, x.type, x.raw_status, x.normalized_status, x.duration_ms,
-            x.occurred_at, x.payload_hash, x.payload::jsonb, x.artifact_ids, @after_cancel
+            x.occurred_at, x.payload_hash, x.payload::jsonb, x.artifact_ids, @after_cancel, @late
         from jsonb_to_recordset(@events::jsonb) as x (
             id uuid, event_id uuid, producer_id text, sequence bigint, job_id uuid, epoch bigint,
             execution_key text, attempt_no integer, type text, raw_status text, normalized_status text,

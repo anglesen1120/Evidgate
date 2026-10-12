@@ -203,8 +203,26 @@ public sealed class IngestQaBoundaryTests
             open.Status.ShouldBe(HttpStatusCode.OK, $"{state}: {open.ErrorMessage}");
         }
 
-        // incomplete is a closed window (D6 fail closed).
+        // T81/T91: an incomplete run still accepts late evidence inside its late window - the seeded run's
+        // deadline is 2 h out and its late_window_minutes is 1440, so the window is open and the batch is
+        // stored with late = true (04.1.2-T5's rule; 04.1.1's D6 fail-closed applied before the window was
+        // computable).
         await world.SetRunStateAsync("incomplete");
+        var lateSequence = sequence++;
+        var lateAccepted = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            world.RunId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: lateSequence)));
+
+        lateAccepted.Status.ShouldBe(HttpStatusCode.OK, lateAccepted.ErrorMessage);
+        lateAccepted.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
+        (await world.ScalarAsync<bool>($"select late from public.event where sequence = {lateSequence}")).ShouldBeTrue();
+        (await world.ScalarAsync<bool>($"select after_cancel from public.event where sequence = {lateSequence}")).ShouldBeFalse();
+
+        // Past the window the same incomplete run answers 409 run_closed (T81).
+        await world.Fixture.ExecuteAsync(
+            world.Database,
+            $"update public.run set collection_deadline_at = now() - interval '3 days' where id = '{world.RunId:D}'");
         var closed = await IngestQaRequests.PostEventsAsync(
             world.Client,
             world.RunId,
@@ -223,6 +241,68 @@ public sealed class IngestQaBoundaryTests
         canceled.Status.ShouldBe(HttpStatusCode.OK, canceled.ErrorMessage);
         canceled.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
         (await world.ScalarAsync<bool>($"select after_cancel from public.event where sequence = {sequence}")).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task after_cancel_accepted_run_terminal()
+    {
+        // AC5/T12: a canceled run keeps accepting events, marks them after_cancel, and STAYS canceled - the
+        // write never moves the run's state, so a late event cannot resurrect it.
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await world.SetRunStateAsync("canceled");
+
+        var accepted = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            world.RunId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1)));
+
+        accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
+        accepted.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
+        (await world.ScalarAsync<string>($"select state from public.run where id = '{world.RunId:D}'")).ShouldBe("canceled");
+        (await world.ScalarAsync<bool>("select after_cancel from public.event where sequence = 1")).ShouldBeTrue();
+        (await world.ScalarAsync<bool>("select late from public.event where sequence = 1")).ShouldBeFalse();
+    }
+
+    // ---------------------------------------------------------------- T81/T91: the late window
+
+    [Fact]
+    public async Task incomplete_run_late_events_marked_and_run_closed_after_window()
+    {
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await world.SetRunStateAsync("incomplete");
+
+        // The window's end is `collection_deadline_at + late_window_minutes` (RunEventScopeReader's SQL),
+        // both columns of the locked run row. With late_window_minutes = 5 a deadline of now() less five
+        // minutes puts the end one second in the future, so the boundary instant itself is inside the
+        // window: `now() <= end` holds and the batch is stored with late = true.
+        await world.Fixture.ExecuteAsync(
+            world.Database,
+            $"update public.run set late_window_minutes = 5, collection_deadline_at = now() - interval '5 minutes' + interval '1 second' where id = '{world.RunId:D}'");
+
+        var inside = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            world.RunId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1)));
+
+        inside.Status.ShouldBe(HttpStatusCode.OK, inside.ErrorMessage);
+        inside.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
+        (await world.ScalarAsync<bool>("select late from public.event where sequence = 1")).ShouldBeTrue();
+        (await world.ScalarAsync<bool>("select after_cancel from public.event where sequence = 1")).ShouldBeFalse();
+
+        // One second past the end (the deadline five minutes before, minus one second) the same incomplete
+        // run answers 409 run_closed and writes nothing (T81).
+        await world.Fixture.ExecuteAsync(
+            world.Database,
+            $"update public.run set collection_deadline_at = now() - interval '5 minutes' - interval '1 second' where id = '{world.RunId:D}'");
+
+        var after = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            world.RunId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 2)));
+
+        after.Status.ShouldBe(HttpStatusCode.Conflict, after.ErrorMessage);
+        after.ErrorCode.ShouldBe("run_closed");
+        (await world.ScalarAsync<long>("select count(*) from public.event")).ShouldBe(1);
     }
 
     // ---------------------------------------------------------------- AC4: a key planned in another run
