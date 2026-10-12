@@ -251,11 +251,41 @@ internal sealed class IngestEventBatchHandler(
 
         var orgId = scopes.Require().OrgId;
 
+        // (f0) The batch's own event_id dedupe (AC2/AC5): the first occurrence of an event_id is the accepted
+        // one; a later occurrence with the identical canonical payload is an in-batch duplicate, excluded from
+        // the insert, the attempt writer and the sequence read-back so the unique indexes and the attempt writer
+        // see the event once, while a later occurrence whose canonical payload differs refuses the whole batch
+        // before any write. One in-memory pass; it adds no statement.
+        var firstByEventId = new Dictionary<Guid, ParsedEvent>(events.Count);
+        var inBatchDuplicate = new bool[events.Count];
+        var toInsert = new List<ParsedEvent>(events.Count);
+        for (var i = 0; i < events.Count; i++)
+        {
+            var candidate = events[i];
+            if (firstByEventId.TryGetValue(candidate.EventId, out var first))
+            {
+                if (!string.Equals(first.PayloadHash, candidate.PayloadHash, StringComparison.Ordinal))
+                {
+                    // AC5: one event_id, two canonical payloads inside one batch — the whole batch is refused.
+                    return Result.Failure<BatchAckResult>(Error.Conflict(
+                        ApiErrorCode.DuplicateDifferentPayload,
+                        "an event_id of this batch is repeated with a different payload",
+                        [new ErrorDetail($"/events/{candidate.Index}/event_id", ApiErrorCode.DuplicateDifferentPayload, candidate.Index)]));
+                }
+
+                inBatchDuplicate[i] = true;
+                continue;
+            }
+
+            firstByEventId.Add(candidate.EventId, candidate);
+            toInsert.Add(candidate);
+        }
+
         // (f) One round trip inserts the whole batch. `on conflict do nothing` (no target) covers both unique
         // keys of `event`, so a duplicate and a reused sequence never raise: a caught 23505 would abort the
         // transaction and could not be probed from inside it (05.3.3 decision 4). The read-back below tells
         // the three cases apart.
-        var rows = events.Select(e => new EventRow(
+        var rows = toInsert.Select(e => new EventRow(
             Guid.CreateVersion7(),
             e.EventId,
             e.ProducerId,
@@ -288,11 +318,21 @@ internal sealed class IngestEventBatchHandler(
         var duplicates = 0;
         var accepted = 0;
 
-        if (insertedIds.Count == events.Count)
+        // An in-batch duplicate is acked without a row of its own: its event_id is on file exactly once.
+        for (var i = 0; i < events.Count; i++)
         {
-            for (var i = 0; i < events.Count; i++)
+            if (inBatchDuplicate[i])
             {
-                acks[events[i].Index] = AcceptedAck;
+                acks[events[i].Index] = DuplicateAck;
+                duplicates++;
+            }
+        }
+
+        if (insertedIds.Count == toInsert.Count)
+        {
+            foreach (var e in toInsert)
+            {
+                acks[e.Index] = AcceptedAck;
                 accepted++;
             }
         }
@@ -307,12 +347,12 @@ internal sealed class IngestEventBatchHandler(
                     // jsonb_to_recordset takes an array of OBJECTS, not an array of strings: a bare uuid
                     // array answers 22023 'argument of jsonb_to_recordset must be an array of objects'.
                     ids = JsonSerializer.Serialize(
-                        events.Where(e => !insertedIds.Contains(e.EventId)).Select(e => new { event_id = e.EventId })),
+                        toInsert.Where(e => !insertedIds.Contains(e.EventId)).Select(e => new { event_id = e.EventId })),
                 },
                 cancellationToken).ConfigureAwait(false))
                 .ToDictionary(row => row.EventId, row => row.PayloadHash);
 
-            foreach (var e in events)
+            foreach (var e in toInsert)
             {
                 if (insertedIds.Contains(e.EventId))
                 {
@@ -348,7 +388,7 @@ internal sealed class IngestEventBatchHandler(
 
         // (g) Case attempts: the writer dedupes itself, so every test.finished event of the batch is passed
         // and the caller rolls back on any refusal (AC5).
-        var attemptSlots = events
+        var attemptSlots = toInsert
             .Where(e => string.Equals(e.Type, EventBatchParser.TestFinished, StringComparison.Ordinal)
                 && e.RawStatus is not null)
             .Select(e => new AttemptSlot(e.Index, new CaseAttemptInput(
@@ -400,7 +440,7 @@ internal sealed class IngestEventBatchHandler(
             // batch decided failed (05.3.3-T2.2, AC4). The finality rule of 04.1.1-T4/05.3.3 is not derivable
             // from the batch alone, so the conservative reading is applied: a failing test.finished blocks its
             // dependants (recorded as an open item in the task file's Notes).
-            foreach (var key in events
+            foreach (var key in toInsert
                 .Where(e => string.Equals(e.Type, EventBatchParser.TestFinished, StringComparison.Ordinal)
                     && IsFailed(e.RawStatus, e.Xfail))
                 .Select(e => e.ExecutionKey)
@@ -411,7 +451,7 @@ internal sealed class IngestEventBatchHandler(
         }
 
         // (h) The producer's high-water mark, one statement for every producer of the batch.
-        var slotMaxima = events
+        var slotMaxima = toInsert
             .GroupBy(e => e.ProducerId, StringComparer.Ordinal)
             .Select(group => new SlotMax(group.Key, group.Max(e => e.Sequence)))
             .ToList();
