@@ -38,9 +38,14 @@ internal static class EvidenceErrors
         "the declared size must be greater than zero",
         [new ErrorDetail("declared_bytes", "out_of_range")]);
 
-    /// <summary>403: the request carries no project scope, so no artifact can be minted for it (00 §5.4).</summary>
-    internal static Error ProjectRequired => Error.Forbidden(
-        "the request is not scoped to a project, so no artifact can be minted");
+    /// <summary>
+    /// 403: the request carries no project scope, so no artifact can be uploaded or completed for it (00 §5.4).
+    /// The route names no project, so the project comes from the credential and an org-scoped principal is
+    /// refused: 06.1.2-T1 decision 10 records this refusal as <c>project_required</c>.
+    /// </summary>
+    internal static Error ProjectRequired => Error.Denied(
+        ApiErrorCode.ProjectRequired,
+        "the request is not scoped to a project, so no artifact can be uploaded or completed");
 
     /// <summary>
     /// 404: the run does not exist in the caller's project (06.1.2 AC6). RLS makes another tenant's run invisible,
@@ -95,4 +100,23 @@ internal static class EvidenceErrors
         StatusCodes.Status413PayloadTooLarge,
         Retryable: false,
         Details: [new ErrorDetail("bytes", "too_large")]);
+
+    /// <summary>
+    /// 404: no such artifact in the caller's project (06.1.2-T2 AC6, §5). RLS makes another tenant's row
+    /// invisible and the handler also compares the row's project with the request scope, so an unknown id, a
+    /// foreign id and a foreign project are one answer and never an oracle.
+    /// </summary>
+    internal static Error ArtifactNotFound => new(
+        ApiErrorCode.ArtifactNotFound,
+        "the artifact does not exist in this project",
+        StatusCodes.Status404NotFound);
+
+    /// <summary>
+    /// 409: the artifact is in a state that allows no completion (06.1.2-T2 §6) — neither the
+    /// <c>pending_upload</c>/<c>uploaded</c> pair nor the replayable <c>ready</c>/<c>rejected</c> outcome, e.g.
+    /// <c>pending_delete</c> or <c>deleted</c>.
+    /// </summary>
+    internal static Error ArtifactStateConflict => Error.Conflict(
+        ApiErrorCode.ArtifactStateConflict,
+        "the artifact is not awaiting an upload completion");
 }

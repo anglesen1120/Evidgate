@@ -683,6 +683,8 @@ internal static class RouteRequests
         // ---- Evidence ----------------------------------------------------------------------------------------
         Add("POST", "/v1/artifacts/upload-url", _ => new(HttpMethod.Post, "/v1/artifacts/upload-url",
             UploadUrl(), IdempotencyKey: Key()));
+        Add("POST", "/v1/artifacts/{a}/complete", _ => new(HttpMethod.Post,
+            $"/v1/artifacts/{Guid.CreateVersion7()}/complete", IdempotencyKey: Key()));
 
         // ---- Dev surface (absent from the spec; allowlisted in ServedRouteTable) ------------------------------
         Add("POST", "/v1/slice/run", ctx => new(HttpMethod.Post, "/v1/slice/run",

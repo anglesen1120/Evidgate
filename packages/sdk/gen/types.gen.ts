@@ -934,6 +934,17 @@ export type UploadUrlResponse = {
 };
 
 /**
+ * 200 body of `POST /v1/artifacts/{a}/complete` (06.1.2 §5, AC3/AC4/AC5). `state` is `ready` when the staged object matched the declared size and checksum and the commit landed, or `rejected` when verification failed — a rejection is still a committed 200 carrying `failure_code` (one of `size_mismatch`, `checksum_mismatch`, `media_type_mismatch`, `too_large`, `object_missing`), never an error response. `bytes` is the size the store reported, or `null` when nothing was verified; `scan_state` is `pending` on a `ready` artifact (`pending`/`clean`/ `flagged` are the 06.2.3 values) and `null` on a `rejected` one. The final object key is never returned.
+ */
+export type CompleteResponse = {
+    artifact_id: string;
+    state: 'ready' | 'rejected';
+    bytes: number | null;
+    scan_state: string | null;
+    failure_code: string | null;
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -1864,10 +1875,12 @@ export type CompleteArtifactError = CompleteArtifactErrors[keyof CompleteArtifac
 
 export type CompleteArtifactResponses = {
     /**
-     * Artifact verified and `ready`
+     * Artifact verified (`ready`) or verification refused (`rejected`)
      */
-    200: unknown;
+    200: CompleteResponse;
 };
+
+export type CompleteArtifactResponse = CompleteArtifactResponses[keyof CompleteArtifactResponses];
 
 export type GetRunDecisionData = {
     body?: never;

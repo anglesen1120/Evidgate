@@ -250,4 +250,13 @@ public static class ApiErrorCode
 
     /// <summary>422: capture of the artifact kind is switched off for the project, or the project has no policy row for it (06.1.2 AC1, 06.2.2 AC2).</summary>
     public const string KindDisabled = "kind_disabled";
+
+    /// <summary>404: no such artifact in the caller's project — unknown, another tenant's or another project's (06.1.2-T2 AC6, §5).</summary>
+    public const string ArtifactNotFound = "artifact_not_found";
+
+    /// <summary>409: the artifact's state does not allow the requested transition (06.1.2-T2 §6).</summary>
+    public const string ArtifactStateConflict = "artifact_state_conflict";
+
+    /// <summary>403: the route names no project and the caller's credential names none (06.1.2-T1 decision 10).</summary>
+    public const string ProjectRequired = "project_required";
 }
