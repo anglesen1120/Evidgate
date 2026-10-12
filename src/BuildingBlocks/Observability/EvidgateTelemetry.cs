@@ -35,6 +35,9 @@ public static class EvidgateTelemetry
     /// <summary>Counter of adapter capabilities refused at first send, tagged by code and protocol-major bucket (04.7.1-T2).</summary>
     public const string AdapterCapabilityRejectedMetricName = "evidgate_adapter_capability_rejected_total";
 
+    /// <summary>Counter of event batches refused by a transport or decode cap, tagged by reason (04.1.1-T3).</summary>
+    public const string IngestBatchRejectedMetricName = "evidgate_ingest_batch_rejected_total";
+
     /// <summary>Counter of case attempts written inside a caller's tenant transaction, tagged by normalised status (05.3.3-T2.1).</summary>
     public const string CaseAttemptWrittenMetricName = "evidgate_case_attempt_written_total";
 
@@ -68,6 +71,11 @@ public static class EvidgateTelemetry
         AdapterCapabilityRejectedMetricName,
         unit: "{capability}",
         description: "Adapter capabilities refused at first send, by code and protocol-major bucket (04.7.1). Never labelled with a document value, adapter name or hash.");
+
+    private static readonly Counter<long> IngestBatchRejections = Meter.CreateCounter<long>(
+        IngestBatchRejectedMetricName,
+        unit: "{batch}",
+        description: "Event batches refused by a transport or decode cap, by reason (04.1.1). Never labelled with a body, an event id or any request value.");
 
     private static readonly Counter<long> CaseAttemptsWritten = Meter.CreateCounter<long>(
         CaseAttemptWrittenMetricName,
@@ -130,6 +138,15 @@ public static class EvidgateTelemetry
             1,
             new KeyValuePair<string, object?>("code", code),
             new KeyValuePair<string, object?>("protocol_major", ProtocolMajorBucket(protocolMajor)));
+
+    /// <summary>
+    /// Counts one event batch refused by a transport or decode cap (04.1.1-T3), tagged by
+    /// <paramref name="reason"/> from the closed vocabulary only — never a body, an event id or any
+    /// request value.
+    /// </summary>
+    /// <param name="reason">One of <c>body_too_large</c>, <c>event_count</c>, <c>expanded_too_large</c>, <c>ratio_exceeded</c>, <c>encoding_unsupported</c>, <c>gzip_invalid</c>.</param>
+    public static void RecordIngestBatchRejected(string reason) =>
+        IngestBatchRejections.Add(1, new KeyValuePair<string, object?>("reason", reason));
 
     /// <summary>
     /// Counts <paramref name="count"/> case attempts written inside the caller's tenant transaction, by

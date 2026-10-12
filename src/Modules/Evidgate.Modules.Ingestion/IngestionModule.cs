@@ -8,6 +8,7 @@ using Evidgate.Modules.Ingestion.Infrastructure;
 using Evidgate.Modules.Ingestion.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Ingestion;
 
@@ -38,6 +39,15 @@ internal static class IngestionModule
         // 04.1.1-T1 (D11): the first-send seam both the raw-bytes command (04.7.1-T2.3) and the events
         // handler call, so the first envelope is parsed once per request either way.
         services.TryAddScoped<FirstSendCapabilityService>();
+
+        // 04.1.1-T3: the gzip decode caps are bound and validated at boot like every other
+        // EVIDGATE__* group (01.1.2-T1). BindConfiguration resolves IConfiguration from the container,
+        // so the module seam keeps its signature; the two composition roots need no extra wiring.
+        services
+            .AddOptions<IngestionLimits>()
+            .BindConfiguration(IngestionLimits.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         // 04.1.2-T4.1: the EF write model of producer slots (00 §5.5 C4).
         services.AddEvidgateDbContext<IngestionDbContext>(typeof(IngestionDbContext).Assembly);
