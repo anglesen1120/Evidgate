@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.ObjectStorage;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
@@ -33,6 +34,17 @@ internal static class EvidenceModule
 
         // 06.1.2-T1: the S3-compatible presign adapter, bound from EVIDGATE__OBJECT__* (00 §9.3).
         services.AddEvidgateObjectStorage();
+
+        // 06.1.2-T2: C2 stage-2 shape validation of the completion command.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CompleteArtifactUpload>, CompleteArtifactUploadValidator>());
+
+        // 06.1.2-T2: the endpoint-side verification (T86 steps 1-4): one row read in a read-only scope, then the
+        // HEAD/copy with no transaction open, so the writer command's transaction only ever wraps the commit.
+        services.TryAddScoped<ArtifactCompletionVerifier>();
+
+        // 06.1.2-T2: the staging-object delete the completion enqueues. Registered in both hosts like every module
+        // piece; only the Worker runs a consumer, and the Api host tolerates the row until it does (T19).
+        services.AddTaskHandler<ArtifactStagingDeletePayload, ArtifactStagingDeleteTaskHandler>();
 
         return services;
     }
