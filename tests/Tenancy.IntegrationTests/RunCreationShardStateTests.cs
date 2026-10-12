@@ -93,6 +93,85 @@ public sealed class RunCreationShardStateTests
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(1);
     }
 
+    /// <summary>
+    /// AC (T4.1) boundary: the manifest builder emits one shard per planned execution when the shard count equals the
+    /// planned count (4 cases x 1 variant -> 4 shards, ranges 0..1, 1..2, 2..3, 3..4). Each shard is a single row, so
+    /// the derived set is <c>shard-1..shard-4</c> with indexes 1..4 and one planned execution per shard.
+    /// </summary>
+    [Fact]
+    public async Task CreateRun_ShardCountEqualsPlannedCount_OneSlotPerShard()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, cases: 4);
+        var manifestId = await UploadAsync(world, variants: 1, shards: 4);
+
+        var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(manifestId));
+
+        answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
+        var runId = answer.Id("run_id");
+
+        (await ManifestShardSizesAsync(world, manifestId)).ShouldBe(["shard-1:1", "shard-2:1", "shard-3:1", "shard-4:1"]);
+        (await _fixture.ColumnAsync<string>(world.Database, $"select producer_id from public.producer_slot where run_id = '{runId}' order by shard_index"))
+            .ShouldBe(["shard-1", "shard-2", "shard-3", "shard-4"]);
+        (await _fixture.ColumnAsync<int>(world.Database, $"select shard_index from public.producer_slot where run_id = '{runId}' order by shard_index"))
+            .ShouldBe([1, 2, 3, 4]);
+        (await PlannedPerShardAsync(world, runId)).ShouldBe(["shard-1:1", "shard-2:1", "shard-3:1", "shard-4:1"]);
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(4);
+    }
+
+    /// <summary>
+    /// AC1 (T4.1/T4.2): two creates from the same manifest are two runs with two independent slot sets — distinct
+    /// <c>run_id</c>s, one <c>shard-1..shard-3</c> set each, no shared row, and <c>unique (org_id, run_id, producer_id)</c>
+    /// holds (6 slots, 6 distinct <c>(run_id, producer_id)</c> pairs).
+    /// </summary>
+    [Fact]
+    public async Task CreateRun_TwoRunsFromOneManifest_IndependentSlotSets()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, cases: 5);
+        var manifestId = await UploadAsync(world, variants: 1, shards: 3);
+        var body = RunCreationTests.RunBody(manifestId);
+
+        var first = await RunCreationTests.CreateRunAsync(world, body);
+        var second = await RunCreationTests.CreateRunAsync(world, body);
+
+        first.Status.ShouldBe(HttpStatusCode.Created, first.ErrorMessage);
+        second.Status.ShouldBe(HttpStatusCode.Created, second.ErrorMessage);
+        var firstId = first.Id("run_id");
+        var secondId = second.Id("run_id");
+        firstId.ShouldNotBe(secondId);
+
+        foreach (var runId in new[] { firstId, secondId })
+        {
+            (await _fixture.ColumnAsync<string>(world.Database, $"select producer_id from public.producer_slot where run_id = '{runId}' order by shard_index"))
+                .ShouldBe(["shard-1", "shard-2", "shard-3"]);
+        }
+
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(6);
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(distinct (run_id, producer_id)) from public.producer_slot")).ShouldBe(6);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where run_id not in ('{firstId}', '{secondId}')")).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// AC2/AC7 (T4.2): a refused create leaves zero slots (and zero runs/planned executions/outbox rows), and the state
+    /// probe records nothing — no run INSERT ever ran, so no <c>created</c> (or any other state) was persisted. The
+    /// manifest has no environment revision, so the handler refuses with 422 <c>manifest_invalid</c> before any write.
+    /// </summary>
+    [Fact]
+    public async Task CreateRun_RefusedManifest_NoSlotsAndNoProbeRow()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await InstallStateProbeAsync(world.Database);
+
+        var noEnvironment = Manifest(world.SuiteRevision, world.Cases, variants: 1, shards: 1);
+        var manifestId = await UploadAsync(world, noEnvironment, withEnvironment: false);
+
+        var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(manifestId));
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        answer.ErrorCode.ShouldBe("manifest_invalid");
+        await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
+        (await ProbeStatesAsync(world)).ShouldBeEmpty("the refused create never reached the run INSERT");
+    }
+
     // ------------------------------------------------------------------ T4.2 created -> queued
 
     /// <summary>
@@ -191,10 +270,23 @@ public sealed class RunCreationShardStateTests
         shards: shards);
 
     /// <summary>Uploads a manifest built from the world's suite revision and cases and returns its id.</summary>
-    private static async Task<Guid> UploadAsync(RunCreationTests.World world, int variants, int shards)
+    private static Task<Guid> UploadAsync(RunCreationTests.World world, int variants, int shards) =>
+        UploadAsync(world, Manifest(world.SuiteRevision, world.Cases, variants, shards));
+
+    /// <summary>Uploads an already-built manifest (its environment revision is set here) and returns its id.</summary>
+    private static Task<Guid> UploadAsync(RunCreationTests.World world, JsonObject manifest) =>
+        UploadAsync(world, manifest, withEnvironment: true);
+
+    /// <summary>
+    /// Uploads a manifest and returns its id. <paramref name="withEnvironment"/> false leaves
+    /// <c>environment_revision_id</c> off the document, the AC5 case where run create must refuse it.
+    /// </summary>
+    private static async Task<Guid> UploadAsync(RunCreationTests.World world, JsonObject manifest, bool withEnvironment)
     {
-        var manifest = Manifest(world.SuiteRevision, world.Cases, variants, shards);
-        manifest["environment_revision_id"] = world.EnvironmentRevision.ToString();
+        if (withEnvironment)
+        {
+            manifest["environment_revision_id"] = world.EnvironmentRevision.ToString();
+        }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/projects/{world.Project}/manifests");
         world.Admin(request.Headers);
