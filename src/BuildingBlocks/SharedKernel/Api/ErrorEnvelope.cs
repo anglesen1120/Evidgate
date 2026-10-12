@@ -251,6 +251,9 @@ public static class ApiErrorCode
     /// <summary>409: the artifact's state does not allow the requested transition (06.1.2-T2 §6).</summary>
     public const string ArtifactStateConflict = "artifact_state_conflict";
 
+    /// <summary>422: the artifact's bytes violate the server-side parser profile — external entity or DTD, depth, size or time cap, or malformed content (06.3.1 AC1, AC2, 00 §5.7 S5).</summary>
+    public const string ArtifactInvalid = "artifact_invalid";
+
     /// <summary>403: the route names no project and the caller's credential names none (06.1.2-T1 decision 10).</summary>
     public const string ProjectRequired = "project_required";
 }

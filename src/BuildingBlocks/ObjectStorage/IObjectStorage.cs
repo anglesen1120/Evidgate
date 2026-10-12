@@ -5,8 +5,9 @@ namespace Evidgate.BuildingBlocks.ObjectStorage;
 /// the API mints a short-lived presigned <c>PUT</c> for a server-chosen staging key
 /// so the client uploads bytes straight to storage and the API never proxies the
 /// bandwidth (DECISIONS §9). Presigning is CPU-only (SigV4 arithmetic, no network call);
-/// <see cref="HeadAsync"/>, <see cref="CopyAsync"/> and <see cref="DeleteAsync"/> are
-/// network calls and MUST run outside any database transaction (00 §5.7 P5, T86).
+/// <see cref="HeadAsync"/>, <see cref="ReadPrefixAsync"/>, <see cref="CopyAsync"/> and
+/// <see cref="DeleteAsync"/> are network calls and MUST run outside any database transaction
+/// (00 §5.7 P5, T86).
 /// </summary>
 /// <remarks>
 /// Keys are always server-minted (<c>pending/&lt;org_id&gt;/&lt;artifact_id&gt;</c> staging or the
@@ -38,6 +39,20 @@ public interface IObjectStorage
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The stored length and checksum, or <c>null</c> when absent.</returns>
     Task<ObjectHead?> HeadAsync(string objectKey, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads at most <paramref name="maxBytes"/> bytes from the start of one object (06.3.1-T1: the media
+    /// sniff at <c>complete</c> reads a bounded prefix, never the whole artifact). The request is a ranged
+    /// <c>GET</c> (<c>bytes=0-(maxBytes-1)</c>), so a store never sends more than asked for; the response
+    /// stream is disposed before returning. Returns <c>null</c> when the object does not exist (a store 404
+    /// is an outcome, not an exception, exactly like <see cref="HeadAsync"/>).
+    /// </summary>
+    /// <param name="objectKey">A server-minted staging or final key.</param>
+    /// <param name="maxBytes">The prefix cap in bytes, between 1 and 65536.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>The first <paramref name="maxBytes"/> bytes (fewer when the object is shorter), or <c>null</c> when absent.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxBytes"/> is below 1 or above 65536.</exception>
+    Task<byte[]?> ReadPrefixAsync(string objectKey, int maxBytes, CancellationToken cancellationToken);
 
     /// <summary>
     /// Copies the staging object <paramref name="sourceKey"/> (a <c>pending/</c> key) to the final

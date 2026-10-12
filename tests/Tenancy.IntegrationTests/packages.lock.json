@@ -1043,7 +1043,10 @@
         }
       },
       "evidgate.modules.evidence.contracts": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
+        }
       },
       "evidgate.modules.healing": {
         "type": "Project",

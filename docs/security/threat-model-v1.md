@@ -354,7 +354,7 @@ Untrusted artifact bytes (JUnit XML, HTML reports, Playwright traces, archives) 
 
 | ID | STRIDE | Threat | Attacker | Impact | Disposition |
 |---|---|---|---|---|---|
-| TH-artifact-parsers-1 | I | XXE or external entity expansion reads local files or reaches the network | Hostile artifact | File disclosure, SSRF | control: `XmlReader` with `DtdProcessing.Prohibit` and `XmlResolver = null`, plus entity, depth, size and time caps (00 §5.7 S5) — 06.3.1-T1, 04.4.1-T2 [planned] |
+| TH-artifact-parsers-1 | I | XXE or external entity expansion reads local files or reaches the network | Hostile artifact | File disclosure, SSRF | control: `XmlReader` with `DtdProcessing.Prohibit` and `XmlResolver = null`, plus entity, depth, size and time caps (00 §5.7 S5) — 06.3.1-T1, 04.4.1-T2 [implemented: src/Modules/Evidgate.Modules.Evidence/Infrastructure/Parsing/SafeXml.cs]; the ingestion-side report parser that consumes the same profile is 04.4.1-T2, planned |
 | TH-artifact-parsers-2 | T | Zip-slip — an archive entry escapes the extraction root | Hostile artifact | Arbitrary file write | control: archive limits (entries, ratio, nesting) and path-traversal rejection — 06.3.1-T2, 06.3.4-T2 [planned] |
 | TH-artifact-parsers-3 | D | A decompression bomb or memory bomb exhausts the worker | Hostile artifact | Worker starvation | control: the parse runner as a child process with memory, CPU and wall-time limits and no network, plus a per-tenant parse concurrency cap — 06.3.6-T1, 06.3.6-T2 [planned] |
 | TH-artifact-parsers-4 | T | A MIME mismatch makes a hostile file render as a trusted type | Hostile artifact | Script execution | control: a MIME allowlist and a sniff-versus-declared check, with a server-chosen `Content-Type` from an allow-list — 06.1.2-T3, 06.3.1-T2 [planned] |
@@ -438,8 +438,8 @@ Steps at each milestone exit:
 
 | State | Count |
 |---|---|
-| control (implemented) | 48 |
-| control (planned) | 102 |
+| control (implemented) | 49 |
+| control (planned) | 101 |
 | accepted | 3 |
 | open | 0 |
 

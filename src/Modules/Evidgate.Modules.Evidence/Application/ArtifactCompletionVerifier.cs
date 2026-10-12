@@ -7,6 +7,7 @@ using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Domain;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 
 namespace Evidgate.Modules.Evidence.Application;
 
@@ -50,7 +51,9 @@ internal sealed record ArtifactFacts(
 /// dispatches: it takes the C2 <c>artifact:write</c> decision the pipeline would reach (an unauthorized caller —
 /// a viewer, a non-member, a token scoped to another project — is refused here, so it can never reach the storage
 /// calls), reads the row facts in a read-only tenant scope, checks the scope and the state, then <c>HEAD</c>s the
-/// staging object, verifies size/cap/checksum and promotes it to the final key. Every storage call runs with NO
+/// staging object, verifies size/cap/checksum, sniffs its leading bytes against the declared media type before the
+/// promotion (so a mismatch is never copied to the final key), promotes it to the final key, re-verifies the
+/// promoted object and sniffs it again (06.3.1 AC5). Every storage call runs with NO
 /// transaction open — the read scope is disposed first and the command's tenant transaction opens only after this
 /// returns (00 §5.7 P5, AC4) — and the verdict it derives travels into the command, which re-reads the row and
 /// guards the state again under its own transaction.
@@ -240,6 +243,15 @@ internal sealed class ArtifactCompletionVerifier(
                 return Result.Success(ArtifactCompletionVerdict.Reject(staged));
             }
 
+            // 06.3.1 AC5 / plan §7: the pending object is sniffed BEFORE the promotion, so a mismatching
+            // artifact is never copied to the final key. Only a mismatch refuses here; a type the T1 profile
+            // does not sniff proceeds, and a prefix read that finds the staging object gone (the 24 h lifecycle
+            // race) falls through to the copy, which reports the missing source the retry path below handles.
+            if (await StagingSniffMismatchAsync(stagingKey, facts, cancellationToken).ConfigureAwait(false))
+            {
+                return Result.Success(ArtifactCompletionVerdict.Reject(ArtifactFailureCode.MediaTypeMismatch));
+            }
+
             // T86 step 4: promote the verified bytes. A store that reports the source gone between the HEAD and
             // the copy (the 24 h lifecycle) falls through to the retry path instead of failing the request.
             if (await TryPromoteAsync(stagingKey, facts.ObjectKey, cancellationToken).ConfigureAwait(false))
@@ -247,8 +259,9 @@ internal sealed class ArtifactCompletionVerifier(
                 // S-F2: the copy is not a verification. The source could have been replaced between the HEAD above
                 // and the COPY, so the object the commit would mark ready is re-verified at the FINAL key with the
                 // same size/cap/checksum rule the staging check applied — a mismatch is rejected with the same
-                // reason codes, never committed ready. This is the happy path's one extra HEAD; the retry path
-                // below already HEADs the final key.
+                // reason codes, never committed ready. The final key is then sniffed again (the bytes could also
+                // have been swapped between the staging read and the copy); this is the happy path's one extra
+                // HEAD, while the retry path below already HEADs the final key.
                 var promoted = await storage.HeadAsync(facts.ObjectKey, cancellationToken).ConfigureAwait(false);
 
                 if (promoted is null)
@@ -258,7 +271,7 @@ internal sealed class ArtifactCompletionVerifier(
 
                 return Mismatch(promoted, facts, maxBytes) is { } afterCopy
                     ? Result.Success(ArtifactCompletionVerdict.Reject(afterCopy))
-                    : Result.Success(ArtifactCompletionVerdict.Accept(promoted.ContentLength));
+                    : Result.Success(await SniffAsync(facts, promoted.ContentLength, cancellationToken).ConfigureAwait(false));
             }
         }
 
@@ -273,7 +286,7 @@ internal sealed class ArtifactCompletionVerifier(
 
         return Mismatch(final, facts, maxBytes) is { } mismatched
             ? Result.Success(ArtifactCompletionVerdict.Reject(mismatched))
-            : Result.Success(ArtifactCompletionVerdict.Accept(final.ContentLength));
+            : Result.Success(await SniffAsync(facts, final.ContentLength, cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>True when the state may still be completed (06.1.2 §6: <c>pending_upload</c> or <c>uploaded</c>).</summary>
@@ -311,6 +324,59 @@ internal sealed class ArtifactCompletionVerifier(
         return declared is not null && string.Equals(head.ChecksumSha256Hex, declared, StringComparison.OrdinalIgnoreCase)
             ? null
             : ArtifactFailureCode.ChecksumMismatch;
+    }
+
+    /// <summary>
+    /// The 06.3.1 AC5 sniff of the PENDING object, run after the staging size/cap/checksum verification and
+    /// before the promotion (plan §7): the first <see cref="ParsingLimits.SniffPrefixBytes"/> bytes of the
+    /// staging object are read and the declared media type is checked against them, so a mismatching artifact is
+    /// never copied to the final key. The read is a storage call and runs with no transaction open, exactly like
+    /// the <c>HEAD</c>s and the copy (00 §5.7 P5). True only for a <see cref="SniffResult.Mismatch"/>: a
+    /// declared type the T1 profile does not sniff (<see cref="SniffResult.NotSniffed"/>) proceeds, and a prefix
+    /// read that finds the staging object gone (the 24 h lifecycle) also proceeds — the copy then reports the
+    /// missing source and the caller falls through to the retry path.
+    /// </summary>
+    /// <param name="stagingKey">The derived <c>pending/</c> staging key.</param>
+    /// <param name="facts">The declared facts of the row (the media type is sniffed against the bytes).</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    private async ValueTask<bool> StagingSniffMismatchAsync(
+        string stagingKey, ArtifactFacts facts, CancellationToken cancellationToken)
+    {
+        var prefix = await storage
+            .ReadPrefixAsync(stagingKey, ParsingLimits.SniffPrefixBytes, cancellationToken)
+            .ConfigureAwait(false);
+
+        return prefix is not null && MediaSniffer.Check(facts.MediaType, prefix) == SniffResult.Mismatch;
+    }
+
+    /// <summary>
+    /// The 06.3.1 AC5 sniff of the FINAL object (S-F2): once the final-key size/cap/checksum verification has
+    /// passed, the first <see cref="ParsingLimits.SniffPrefixBytes"/> bytes of the FINAL object are read and the
+    /// declared media type is checked against them again, because the bytes could have been swapped between the
+    /// staging read and the copy. The read is a storage call and runs with no transaction open, exactly like the
+    /// <c>HEAD</c>s and the copy above (00 §5.7 P5). A declared type the T1 profile does not sniff
+    /// (<see cref="SniffResult.NotSniffed"/> — every type T2.2 has not yet added) is accepted as before; a
+    /// mismatch rejects with <c>media_type_mismatch</c>; a prefix that is gone (the object vanished between the
+    /// <c>HEAD</c> and this read) rejects with <c>object_missing</c>, never a 500.
+    /// </summary>
+    /// <param name="facts">The declared facts of the row (the media type is sniffed against the bytes).</param>
+    /// <param name="verifiedBytes">The length the final <c>HEAD</c> reported, carried into an accepted verdict.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    private async ValueTask<ArtifactCompletionVerdict> SniffAsync(
+        ArtifactFacts facts, long verifiedBytes, CancellationToken cancellationToken)
+    {
+        var prefix = await storage
+            .ReadPrefixAsync(facts.ObjectKey, ParsingLimits.SniffPrefixBytes, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (prefix is null)
+        {
+            return ArtifactCompletionVerdict.Reject(ArtifactFailureCode.ObjectMissing);
+        }
+
+        return MediaSniffer.Check(facts.MediaType, prefix) == SniffResult.Mismatch
+            ? ArtifactCompletionVerdict.Reject(ArtifactFailureCode.MediaTypeMismatch)
+            : ArtifactCompletionVerdict.Accept(verifiedBytes);
     }
 
     /// <summary>

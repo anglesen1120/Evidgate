@@ -12,9 +12,9 @@ namespace Evidgate.BuildingBlocks.ObjectStorage;
 /// <summary>
 /// The <c>AWSSDK.S3</c> implementation of <see cref="IObjectStorage"/> (06.1.2-T1, T2).
 /// Presigning is SigV4 arithmetic over the request — no network call — so it is safe to
-/// call from a request handler. <see cref="HeadAsync"/>, <see cref="CopyAsync"/> and
-/// <see cref="DeleteAsync"/> do make a network call and MUST run outside any database
-/// transaction (00 §5.7 P5, T86). The S3 client is created once, lazily and
+/// call from a request handler. <see cref="HeadAsync"/>, <see cref="ReadPrefixAsync"/>,
+/// <see cref="CopyAsync"/> and <see cref="DeleteAsync"/> do make a network call and MUST run
+/// outside any database transaction (00 §5.7 P5, T86). The S3 client is created once, lazily and
 /// thread-safely, and disposed with the adapter.
 /// </summary>
 /// <remarks>
@@ -33,6 +33,12 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
 
     /// <summary>The provider-neutral checksum header the presigned PUT binds (T18).</summary>
     internal const string ChecksumHeaderName = "x-amz-checksum-sha256";
+
+    /// <summary>
+    /// The largest prefix <see cref="ReadPrefixAsync"/> will read (06.3.1-T1): a media sniff needs a few
+    /// signature bytes, never a whole artifact, so the cap is the only bound the caller can name.
+    /// </summary>
+    internal const int MaxPrefixBytes = 65536;
 
     private const string ContentLengthHeaderName = "Content-Length";
 
@@ -134,6 +140,80 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
         }
 
         return new ObjectHead(metadata.ContentLength, ChecksumHex(metadata.ChecksumSHA256));
+    }
+
+    /// <inheritdoc />
+    public async Task<byte[]?> ReadPrefixAsync(string objectKey, int maxBytes, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ValidateObjectKey(objectKey, nameof(objectKey));
+
+        if (maxBytes is < 1 or > MaxPrefixBytes)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxBytes), maxBytes, "maxBytes must be between 1 and 65536");
+        }
+
+        var options = _options.Value;
+        try
+        {
+            // The range bounds the response: the store sends at most maxBytes, so the read below can never
+            // pull a whole artifact into memory (00 §5.7 P1, 06.3.1 AC5).
+            using var response = await _client.Value.GetObjectAsync(
+                new GetObjectRequest
+                {
+                    BucketName = options.Bucket,
+                    Key = objectKey,
+                    ByteRange = new ByteRange(0, maxBytes - 1),
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            return await ReadBoundedAsync(response.ResponseStream, maxBytes, cancellationToken).ConfigureAwait(false);
+        }
+        catch (AmazonS3Exception exception) when (IsAbsent(exception))
+        {
+            // A store 404 is an outcome, not an exception (IObjectStorage.ReadPrefixAsync).
+            return null;
+        }
+        catch (AmazonServiceException exception)
+        {
+            // SDK v4: AmazonServiceException no longer derives from AmazonClientException, so a store
+            // service error would escape the client clause below with the SDK's message intact.
+            throw StorageFailure("read-prefix", exception);
+        }
+        catch (AmazonClientException exception)
+        {
+            throw StorageFailure("read-prefix", exception);
+        }
+    }
+
+    /// <summary>
+    /// Reads the response stream up to <paramref name="maxBytes"/> bytes, disposing it first. The ranged GET
+    /// already caps the body, but a store that ignores the range is still read no further than the cap, so the
+    /// read is bounded by construction.
+    /// </summary>
+    private static async Task<byte[]> ReadBoundedAsync(Stream stream, int maxBytes, CancellationToken cancellationToken)
+    {
+        await using (stream.ConfigureAwait(false))
+        {
+            var buffer = new byte[maxBytes];
+            var total = 0;
+            while (total < maxBytes)
+            {
+                var read = await stream
+                    .ReadAsync(buffer.AsMemory(total, maxBytes - total), cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (read == 0)
+                {
+                    break;
+                }
+
+                total += read;
+            }
+
+            return total == buffer.Length ? buffer : buffer[..total];
+        }
     }
 
     /// <inheritdoc />

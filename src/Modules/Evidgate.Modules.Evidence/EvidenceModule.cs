@@ -1,6 +1,8 @@
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Evidence.Contracts;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
 using FluentValidation;
@@ -45,6 +47,11 @@ internal static class EvidenceModule
         // 06.1.2-T2: the staging-object delete the completion enqueues. Registered in both hosts like every module
         // piece; only the Worker runs a consumer, and the Api host tolerates the row until it does (T19).
         services.AddTaskHandler<ArtifactStagingDeletePayload, ArtifactStagingDeleteTaskHandler>();
+
+        // 06.3.1-T1.2: the one untrusted-parser profile (00 §5.7 S5), published on the module's .Contracts so the
+        // `complete` verifier and 04.4.1's report mapper resolve the same singleton instead of building their own
+        // readers (00 §5.7 S4).
+        services.TryAddSingleton<IParsing, ParsingService>();
 
         return services;
     }
