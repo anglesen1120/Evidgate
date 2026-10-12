@@ -114,8 +114,8 @@ internal sealed class ProducerRegistry(
     /// <inheritdoc />
     /// <remarks>
     /// Lock order (T91): a caller that reads the run takes the run row <c>FOR SHARE</c> first (the events
-    /// handler does, in its scope read); this method then touches only the slot row, through one conditional
-    /// UPDATE, and never locks the run. No path takes the slot row before the run, so there is no cycle.
+    /// handler does, in its scope read); this method then reads the slot (joined to the run, unlocked) and at most
+    /// binds it with one conditional UPDATE, and never locks the run. No path takes the slot row before the run, so there is no cycle.
     /// </remarks>
     public async ValueTask<Result<ProducerSlotBinding>> BindOrCheckAsync(
         Guid runId,
