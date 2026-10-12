@@ -116,7 +116,9 @@ internal static class EventBodyDecoder
                 deflateBytes = source.Served;
             }
 
-            if (headerLength + deflateBytes + TrailerLength != compressed.Length)
+            // A deflate stream is never empty (the final block alone is at least one byte), so a member of just
+            // header + trailer is malformed rather than an empty body.
+            if (deflateBytes == 0 || headerLength + deflateBytes + TrailerLength != compressed.Length)
             {
                 Return(ref output);
                 return DecodedBody.Refused(IngestBatchRejection.GzipInvalid, expanded);

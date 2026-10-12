@@ -320,6 +320,16 @@ public sealed class EventBodyDecoderUnitTests
         decoded.Reason.ShouldBe(IngestBatchRejection.GzipInvalid);
     }
 
+    [Fact]
+    public void header_and_trailer_with_no_deflate_stream_is_refused()
+    {
+        byte[] member = [0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0x00, 0xff, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        using var decoded = EventBodyDecoder.DecodeGzip(member, Defaults());
+
+        decoded.Reason.ShouldBe(IngestBatchRejection.GzipInvalid);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /// <summary>One well-formed gzip member of <paramref name="payload"/>, as a client would send it.</summary>
