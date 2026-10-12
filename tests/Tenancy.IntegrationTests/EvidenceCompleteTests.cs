@@ -745,12 +745,19 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
         var answer = await CompleteAsync(world, artifactId, NewKey());
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
 
-        // One completion is a constant number of statements (P3): the idempotency claim, the row read, the
-        // re-read under lock, the update, the two outbox inserts, the audit row and the idempotency completion.
-        // The storage HEAD/copy are network calls, never SQL (P5).
+        // One completion is a constant number of statements (P3), derived from the code paths:
+        //   verifier  — the row-facts read (the read-only scope's `set transaction read only; select set_config(…)`
+        //               begin is dropped by the recorder's transaction-control filter, so it is not counted);
+        //   writer    — the `select set_config(evidgate.org_id, …)` scope begin, the idempotency claim, the artifact
+        //               read, the project-status read (review S-F3), the artifact UPDATE and the two outbox inserts;
+        //   audit     — the lock_timeout set_config, the advisory lock, the chain-tip read and the audit insert;
+        //   idempotency — the response completion.
+        // That is 1 + (1 + 1 + 1 + 1 + 1 + 2) + 4 + 1 = 13 statements; 16 leaves a small margin for an EF or
+        // pipeline variation without admitting an unbounded count. The storage HEAD/copy are network calls, never
+        // SQL (P5).
         var statements = world.Host.Statements.Snapshot();
         statements.Count.ShouldBeGreaterThan(0);
-        statements.Count.ShouldBeLessThanOrEqualTo(24);
+        statements.Count.ShouldBeLessThanOrEqualTo(16);
     }
 
     [Fact]

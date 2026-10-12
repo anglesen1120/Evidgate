@@ -101,7 +101,8 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 /// <summary>
 /// Handler of <see cref="CompleteArtifactUpload"/> (06.1.2 §5, T86 step 5): inside the tenant transaction it reads
 /// the row once, guards its state (the endpoint's verdict is derived from facts read before this transaction
-/// opened, so it is never trusted for the state), writes the outcome and — for a verified object — the two outbox
+/// opened, so it is never trusted for the state), re-reads the project's status so a project that flipped to
+/// <c>deleted</c> since the verifier cannot commit, writes the outcome and — for a verified object — the two outbox
 /// rows, in one commit (C7). A row that already holds <c>ready</c>/<c>rejected</c> is returned unchanged: a fresh
 /// key on a completed artifact is a no-op, never a second scan or a second staging delete (T19/T86). The staging
 /// object is deleted only by the <see cref="ArtifactStagingDeleteTaskHandler"/>, after this transaction commits.
@@ -119,11 +120,23 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 internal sealed class CompleteArtifactUploadHandler(
     ITenantDbContextFactory<EvidenceDbContext> contexts,
     IOutboxWriter outbox,
-    IAuditTrail audit)
+    IAuditTrail audit,
+    ITenantDb db)
     : ICommandHandler<CompleteArtifactUpload, Result<CompleteResponse>>
 {
     /// <summary>The outbox aggregate the two rows belong to (00 §5.3).</summary>
     private const string AggregateType = "artifact";
+
+    /// <summary>The <c>project.status</c> that refuses a completion (migration 0005, 06.4.4 AC2).</summary>
+    private const string ProjectDeleted = "deleted";
+
+    /// <summary>
+    /// The project's status for one artifact's <c>project_id</c>, read on this command's tenant scope (RLS applies,
+    /// C3). The verifier checked the project before its storage calls and before this transaction opened, so the
+    /// writer re-reads it here — the same guard, at commit time — so a project that flips to <c>deleted</c> in
+    /// between cannot commit <c>ready</c> bytes and outbox rows (06.1.2 §5, 06.4.4 AC2).
+    /// </summary>
+    private const string ProjectStatusSql = "select status from public.project where id = @project_id";
 
     /// <inheritdoc />
     public async ValueTask<Result<CompleteResponse>> Handle(CompleteArtifactUpload command, CancellationToken cancellationToken)
@@ -147,7 +160,26 @@ internal sealed class CompleteArtifactUploadHandler(
 
         if (IsStored(row.State))
         {
+            // A replay (or a fresh key on a completed artifact) changes nothing, but the authorization stage still
+            // records an `artifact.complete` entry for the success (RunAuditedAsync): naming the artifact keeps
+            // that row actionable instead of leaving its subject null (review C-F2). Suppressing it would hide the
+            // attempt, which the trail is meant to keep.
+            audit.Describe(new AuditObject(AggregateType, row.Id.ToString("D")));
+
             return Result.Success(Respond(row));
+        }
+
+        // The project guard the verifier applied before its storage calls, re-applied here at commit time: a
+        // project that flipped to `deleted` between the verifier and this transaction must not commit `ready`
+        // bytes and outbox rows (06.1.2 §5, 06.4.4 AC2). A stored outcome returned above is never re-guarded, so
+        // only a still-pending artifact is refused — the same 409 the verifier answers (review S-F3).
+        var projectStatus = await db
+            .ScalarAsync<string>(ProjectStatusSql, new { project_id = row.ProjectId }, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (projectStatus is null || string.Equals(projectStatus, ProjectDeleted, StringComparison.Ordinal))
+        {
+            return Result.Failure<CompleteResponse>(EvidenceErrors.ProjectDeleting);
         }
 
         if (!IsCompletable(row.State))
@@ -176,7 +208,16 @@ internal sealed class CompleteArtifactUploadHandler(
             // Another completion committed between the read above and this update; the version token is the
             // guard, and that completion is the winner. This request is the loser and answers the stored outcome
             // (the idempotent no-op of AC5) instead of overwriting it — never a 500.
-            return await LoserAsync(context, command.ArtifactId, cancellationToken).ConfigureAwait(false);
+            var loser = await LoserAsync(context, command.ArtifactId, cancellationToken).ConfigureAwait(false);
+
+            if (loser.IsSuccess)
+            {
+                // The loser's stored-outcome answer is still an `artifact.complete` the authorization stage
+                // records, so it names the artifact exactly like the stored-state no-op above (review C-F2).
+                audit.Describe(new AuditObject(AggregateType, command.ArtifactId.ToString("D")));
+            }
+
+            return loser;
         }
 
         if (command.Verdict.Verified)

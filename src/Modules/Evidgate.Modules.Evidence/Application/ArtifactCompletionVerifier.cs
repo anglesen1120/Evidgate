@@ -26,6 +26,11 @@ namespace Evidgate.Modules.Evidence.Application;
 /// <param name="MaxBytes">The kind policy's size cap, or null when the project has no policy row for the kind.</param>
 /// <param name="MediaTypes">The kind policy's accepted media types, or null with no policy row.</param>
 /// <param name="CaptureEnabled">The kind policy's capture switch, or null with no policy row.</param>
+/// <param name="BoundCiRunRef">
+/// The CI reference of the artifact's run in the <see cref="CiRunReference.ToBindingReference"/> form
+/// (<c>{repository_id}/{run_id}/{run_attempt}</c>, T88), or null when the run carries none (a manual or replay
+/// run). It is what a service principal's own CI run is compared with (S-F1).
+/// </param>
 internal sealed record ArtifactFacts(
     string? State,
     long? Bytes,
@@ -37,7 +42,8 @@ internal sealed record ArtifactFacts(
     string ProjectStatus,
     long? MaxBytes,
     string[]? MediaTypes,
-    bool? CaptureEnabled);
+    bool? CaptureEnabled,
+    string? BoundCiRunRef);
 
 /// <summary>
 /// The endpoint-side verification of one completion (06.1.2 §5, T86 steps 1-4), run BEFORE the writer command
@@ -78,9 +84,11 @@ internal sealed class ArtifactCompletionVerifier(
     private const string ChecksumPrefix = "sha256:";
 
     /// <summary>
-    /// The row facts of one artifact, the project status and the kind policy as one statement: the artifact is
-    /// visible to the scope's org through RLS, the project join also fails for another tenant, and the policy is
-    /// left-joined so a project without one is still a row (and fails closed later).
+    /// The row facts of one artifact, the project status, the run's CI reference and the kind policy as one
+    /// statement: the artifact is visible to the scope's org through RLS, the project join also fails for another
+    /// tenant, the run join recovers the CI reference the run was created from (S-F1; the composite
+    /// <c>artifact_run_fk</c> makes it one row), and the policy is left-joined so a project without one is still a
+    /// row (and fails closed later).
     /// </summary>
     private const string RowFactsSql = """
         select a.state,
@@ -93,9 +101,11 @@ internal sealed class ArtifactCompletionVerifier(
                p.status as project_status,
                kp.max_bytes,
                kp.media_types,
-               kp.capture_enabled
+               kp.capture_enabled,
+               (r.ci_run_ref->>'repository_id') || '/' || (r.ci_run_ref->>'run_id') || '/' || (r.ci_run_ref->>'run_attempt') as bound_ci_run_ref
           from public.artifact a
           join public.project p on p.id = a.project_id
+          join public.run r on r.org_id = a.org_id and r.id = a.run_id
           left join public.artifact_kind_policy kp
             on kp.org_id = a.org_id
            and kp.project_id = a.project_id
@@ -106,8 +116,9 @@ internal sealed class ArtifactCompletionVerifier(
     /// <summary>
     /// Verifies the object of one artifact (06.1.2 §5, T86): 403 when the caller is refused (no project in the
     /// credential, or the C2 <c>artifact:write</c> decision the pipeline would reach), 404 for an artifact that
-    /// does not exist in that project, 409 for a project being deleted or a state that allows no completion,
-    /// and otherwise the verdict the writer commits — a verified length, or a rejection carrying its reason.
+    /// does not exist in that project or whose run belongs to another CI run than the caller's (S-F1), 409 for a
+    /// project being deleted or a state that allows no completion, and otherwise the verdict the writer commits —
+    /// a verified length, or a rejection carrying its reason.
     /// </summary>
     /// <param name="artifactId">The artifact the route addressed.</param>
     /// <param name="principal">The caller's token identity, as the C2 authorization stage would evaluate it.</param>
@@ -166,13 +177,25 @@ internal sealed class ArtifactCompletionVerifier(
             return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.ArtifactNotFound);
         }
 
-        if (string.Equals(facts.ProjectStatus, ProjectDeleted, StringComparison.Ordinal))
+        // S-F1: the completion is bound to the artifact's run. The artifact row names its run; the run row carries
+        // the CI reference it was created from (T88), which is the identity the minting producer's slot was bound
+        // to (T9/T85). A service token minted for another CI run of the same project therefore cannot force a
+        // terminal verdict on an upload in flight — it gets the identical 404 an unknown id gets, so a foreign id
+        // and a foreign CI run are one answer and never an oracle. Only a service principal is bound (a member
+        // carries no CI run), and only when the run has a CI reference to compare: a run created without one (a
+        // manual or replay run) leaves the caller unbound rather than falsely refused. It runs before the stored
+        // outcomes below so a foreign token can never read them back.
+        if (principal.Kind == PrincipalKind.ServicePrincipal
+            && facts.BoundCiRunRef is { } boundCiRun
+            && !string.Equals(boundCiRun, principal.CiRun?.ToBindingReference(), StringComparison.Ordinal))
         {
-            return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.ProjectDeleting);
+            return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.ArtifactNotFound);
         }
 
         // A stored outcome is returned as it stands (AC5): no storage call, and the verdict mirrors the row so a
-        // replay of the same key derives the identical command.
+        // replay of the same key derives the identical command. It is returned before the project-deleting guard
+        // (C-F4): a replay of an already committed artifact answers the stored 200 whatever the project's status
+        // since, and the guard below therefore only ever refuses a row that could still be completed.
         if (string.Equals(facts.State, ArtifactState.Ready, StringComparison.Ordinal))
         {
             return Result.Success(ArtifactCompletionVerdict.Accept(facts.Bytes));
@@ -181,6 +204,11 @@ internal sealed class ArtifactCompletionVerifier(
         if (string.Equals(facts.State, ArtifactState.Rejected, StringComparison.Ordinal))
         {
             return Result.Success(ArtifactCompletionVerdict.Reject(facts.FailureCode));
+        }
+
+        if (string.Equals(facts.ProjectStatus, ProjectDeleted, StringComparison.Ordinal))
+        {
+            return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.ProjectDeleting);
         }
 
         // Only the 06.1.2 §6 transitions are completable; pending_delete/deleted are the 409 the contract names.
@@ -216,7 +244,21 @@ internal sealed class ArtifactCompletionVerifier(
             // the copy (the 24 h lifecycle) falls through to the retry path instead of failing the request.
             if (await TryPromoteAsync(stagingKey, facts.ObjectKey, cancellationToken).ConfigureAwait(false))
             {
-                return Result.Success(ArtifactCompletionVerdict.Accept(staging.ContentLength));
+                // S-F2: the copy is not a verification. The source could have been replaced between the HEAD above
+                // and the COPY, so the object the commit would mark ready is re-verified at the FINAL key with the
+                // same size/cap/checksum rule the staging check applied — a mismatch is rejected with the same
+                // reason codes, never committed ready. This is the happy path's one extra HEAD; the retry path
+                // below already HEADs the final key.
+                var promoted = await storage.HeadAsync(facts.ObjectKey, cancellationToken).ConfigureAwait(false);
+
+                if (promoted is null)
+                {
+                    return Result.Success(ArtifactCompletionVerdict.Reject(ArtifactFailureCode.ObjectMissing));
+                }
+
+                return Mismatch(promoted, facts, maxBytes) is { } afterCopy
+                    ? Result.Success(ArtifactCompletionVerdict.Reject(afterCopy))
+                    : Result.Success(ArtifactCompletionVerdict.Accept(promoted.ContentLength));
             }
         }
 
