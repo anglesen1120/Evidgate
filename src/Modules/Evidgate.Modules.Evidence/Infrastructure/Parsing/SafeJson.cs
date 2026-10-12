@@ -68,6 +68,13 @@ internal static class SafeJson
             // A UTF-8 BOM is dropped by offset, not by copying: the sniffer already accepts one.
             offset = length >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF ? 3 : 0;
 
+            // JsonDocument does not reject every ill-formed UTF-8 sequence inside strings (an encoded surrogate
+            // such as ED A0 80 is accepted), so the bytes are validated strictly first.
+            if (!System.Text.Unicode.Utf8.IsValid(buffer.AsSpan(offset, length - offset)))
+            {
+                return Result.Failure<JsonDocument>(ParsingFailure.For(ParsingFailureReason.Malformed));
+            }
+
             return Result.Success(
                 JsonDocument.Parse(new ReadOnlyMemory<byte>(buffer, offset, length - offset), Options));
         }
