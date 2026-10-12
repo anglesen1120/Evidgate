@@ -558,7 +558,7 @@ paths:
         (06.1.2 §5, AC3/AC4/AC5/AC8). The route takes no request body: the artifact is
         named by `{a}` and the project comes from the credential, so a project-scoped
         principal (the CI producer token) is required — an org-scoped principal is refused
-        403 `forbidden` (T1 decision 10 records this refusal as `project_required`). T86
+        403 `project_required` (T1 decision 10). T86
         order: (1) read the artifact row (state, declared bytes, checksum, kind, final key,
         project status) in a tenant read scope; (2) with NO transaction open, `HEAD` the
         staging key `pending/<org_id>/<artifact_id>`; when it is absent, `HEAD` the final
@@ -580,12 +580,15 @@ paths:
         key is never in the body. Replay: `complete` on a `ready` artifact returns the same
         body, on a `rejected` artifact the current state unchanged, and a same key with a
         different canonical payload is 409 `idempotency_conflict`. The `Idempotency-Key` is
-        a header and is required (T92). `failure_code` is one of `size_mismatch`,
-        `checksum_mismatch`, `media_type_mismatch`, `too_large` or `object_missing`.
+        a header and is required (T92): a missing or over-long key is 400 `request_invalid`,
+        refused before the artifact is read or the object store is touched. `failure_code` is
+        one of `size_mismatch`, `checksum_mismatch`, `media_type_mismatch`, `too_large` or
+        `object_missing`.
         Errors: 404 `artifact_not_found` (unknown, other-tenant or other-project artifact),
         409 `artifact_state_conflict` (a state that is neither `pending_upload`/`uploaded`
         nor a replayable `ready`/`rejected`), 409 `project_deleting` (project status
-        `deleted`), 403 `forbidden` (missing `artifact:write` or no project scope).
+        `deleted`), 403 `forbidden` (missing `artifact:write`) or 403 `project_required`
+        (an org-scoped credential that names no project).
       x-permission: artifact:write
       x-version: v1
       parameters:

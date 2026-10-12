@@ -13,6 +13,7 @@ using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using FluentValidation;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Evidgate.Modules.Evidence.Application;
 
@@ -106,9 +107,12 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 /// object is deleted only by the <see cref="ArtifactStagingDeleteTaskHandler"/>, after this transaction commits.
 /// </summary>
 /// <remarks>
-/// The version column is the concurrency token (migration 0028's trigger owns the increment), so a completion that
-/// raced another one updates no row and is answered 409 <c>artifact_state_conflict</c> instead of overwriting the
-/// winner. No storage call happens here: <c>HEAD</c> and the copy ran before the transaction opened (00 §5.7 P5).
+/// The version column is the concurrency token (migration 0028's trigger owns the increment) and the artifact
+/// update is written FIRST, so a completion that raced another one blocks on the winner's row lock and then
+/// updates no row: it re-reads the committed outcome and answers it — the same stored-state no-op a replay
+/// answers (AC5) — instead of overwriting the winner, and the outbox inserts below can never produce a second
+/// scan or a 23505. No storage call happens here: <c>HEAD</c> and the copy ran before the transaction opened
+/// (00 §5.7 P5).
 /// </remarks>
 [AuditedAction("artifact.complete")]
 [Permission(Permissions.Artifact.Write)]
@@ -159,24 +163,66 @@ internal sealed class CompleteArtifactUploadHandler(
 
         context.Entry(row).CurrentValues.SetValues(next);
 
-        if (command.Verdict.Verified)
-        {
-            await EnqueueAsync(row, cancellationToken).ConfigureAwait(false);
-        }
-
+        // The artifact UPDATE goes FIRST, before the outbox inserts: it takes the row lock the version token
+        // guards, so a concurrent completion of the same artifact blocks here and — once this transaction
+        // commits — its own update matches no row instead of racing the outbox inserts below into a 23505
+        // (T19/T86: one scan and one staging-delete row per artifact, never two).
         try
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException)
         {
-            // Another completion committed between the read above and this update; the version token is the guard.
-            return Result.Failure<CompleteResponse>(EvidenceErrors.ArtifactStateConflict);
+            // Another completion committed between the read above and this update; the version token is the
+            // guard, and that completion is the winner. This request is the loser and answers the stored outcome
+            // (the idempotent no-op of AC5) instead of overwriting it — never a 500.
+            return await LoserAsync(context, command.ArtifactId, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (command.Verdict.Verified)
+        {
+            try
+            {
+                await EnqueueAsync(row, cancellationToken).ConfigureAwait(false);
+            }
+            catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                // Defensive (T19): the outbox idempotency keys are per artifact (`outbox_org_idem_uq`, 0006), so
+                // a completion that slipped past the row lock cannot enqueue a second scan or staging delete. The
+                // 23505 has aborted this transaction, so the stored outcome cannot be re-read here: the request is
+                // the loser and answers the same 409 the version guard produces, never a 500.
+                return Result.Failure<CompleteResponse>(EvidenceErrors.ArtifactStateConflict);
+            }
         }
 
         audit.Describe(new AuditObject(AggregateType, row.Id.ToString("D")));
 
         return Result.Success(Respond(next));
+    }
+
+    /// <summary>
+    /// The loser of a concurrent completion (T19/T86): the version token made this transaction's artifact update
+    /// touch no row, so the winner's outcome is committed. It is re-read in this same scope — the tenant scope is
+    /// READ COMMITTED, so the winner's commit is visible — and answered verbatim, the same stored-state no-op a
+    /// replay answers (AC5). Only a row that is somehow no outcome (vanished, or still neither <c>ready</c> nor
+    /// <c>rejected</c>) falls back to the 409 the contract names.
+    /// </summary>
+    /// <param name="context">This command's write model, whose transaction is still open and uncommitted.</param>
+    /// <param name="artifactId">The artifact the route addressed.</param>
+    /// <param name="cancellationToken">Cancels the re-read.</param>
+    private static async Task<Result<CompleteResponse>> LoserAsync(
+        EvidenceDbContext context,
+        Guid artifactId,
+        CancellationToken cancellationToken)
+    {
+        var stored = await context.Artifacts
+            .AsNoTracking()
+            .SingleOrDefaultAsync(artifact => artifact.Id == artifactId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return stored is not null && IsStored(stored.State)
+            ? Result.Success(Respond(stored))
+            : Result.Failure<CompleteResponse>(EvidenceErrors.ArtifactStateConflict);
     }
 
     /// <summary>True when the row already holds an outcome a later <c>complete</c> returns unchanged (AC5).</summary>

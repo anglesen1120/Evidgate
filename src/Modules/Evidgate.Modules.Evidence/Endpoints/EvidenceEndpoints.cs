@@ -41,6 +41,12 @@ public static class EvidenceEndpoints
     /// server-derived and runs here — before the command dispatches — with no transaction open. The verdict then
     /// travels into <see cref="CompleteArtifactUpload"/>, whose handler re-reads the row inside the C2 tenant
     /// transaction and commits it.
+    /// <para>
+    /// The <c>Idempotency-Key</c> header is validated here FIRST, before the verifier's permission read and its
+    /// <c>HEAD</c>/copy: the C2 idempotency stage (00 §5.5 C2, T92) refuses a missing or over-long key only inside
+    /// <c>mediator.Send</c> — i.e. after the verifier has already promoted the staged bytes — so the identical 400
+    /// is raised up front and a request the stage will refuse never touches the store.
+    /// </para>
     /// </summary>
     /// <param name="context">The request, for the <c>Idempotency-Key</c> header.</param>
     /// <param name="a">The artifact the path names; the <c>guid</c> route constraint refuses anything else.</param>
@@ -60,6 +66,15 @@ public static class EvidenceEndpoints
         if (principals.Current is not { } principal)
         {
             return Result.Failure<CompleteResponse>(Unauthenticated);
+        }
+
+        // T92: the C2 idempotency stage validates the key only inside mediator.Send, after this verifier has
+        // HEADed the staged object and copied it to the final key — so a missing or over-long key would promote
+        // bytes for a request the pipeline then refuses. The stage's own rule is applied here first, before any
+        // permission read or storage call, and the request touches nothing when the key is unacceptable.
+        if (IdempotencyKeyError(context) is { } keyError)
+        {
+            return Result.Failure<CompleteResponse>(keyError);
         }
 
         var verdict = await verifier.VerifyAsync(a, principal, cancellationToken).ConfigureAwait(false);
@@ -134,6 +149,28 @@ public static class EvidenceEndpoints
     }
 
     private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
+
+    /// <summary>00 §7 / the <c>idempotency_record</c> key column: the C2 idempotency stage's own bound (T92).</summary>
+    private const int MaxIdempotencyKeyLength = 128;
+
+    /// <summary>
+    /// The <c>Idempotency-Key</c> rule of the C2 idempotency stage (<c>IdempotencyBehaviour</c>, 00 §5.5 C2,
+    /// T92), applied endpoint-side so a request the stage will refuse never reaches the verifier's permission read
+    /// or the store: a missing/blank key is <c>required</c> and one longer than <see cref="MaxIdempotencyKeyLength"/>
+    /// is <c>too_long</c>, both the stage's 400 <c>request_invalid</c> — the same message and detail the stage
+    /// produces, so the two ends cannot disagree. Null means the key is acceptable.
+    /// </summary>
+    /// <param name="context">The request carrying the header.</param>
+    private static Error? IdempotencyKeyError(HttpContext context)
+    {
+        var key = IdempotencyKey(context);
+
+        return string.IsNullOrWhiteSpace(key) || key.Length > MaxIdempotencyKeyLength
+            ? Error.BadRequest(
+                $"Idempotency-Key must be 1..{MaxIdempotencyKeyLength} characters",
+                [new ErrorDetail("Idempotency-Key", string.IsNullOrWhiteSpace(key) ? "required" : "too_long")])
+            : null;
+    }
 
     private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
 }
