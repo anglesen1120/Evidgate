@@ -206,6 +206,12 @@ public static class ApiErrorCode
     /// <summary>422: a request named a <c>release</c> the platform cannot resolve (05.2.1 AC10, T15; the bind path lands with 05.6.1).</summary>
     public const string ReleaseUnresolvable = "release_unresolvable";
 
+    /// <summary>422: a <c>purpose: "replay"</c> request carries no usable replay grant (05.2.1 AC8, T5; the grant store lands with 08.4.3, so every replay request is refused until then).</summary>
+    public const string ReplayGrantInvalid = "replay_grant_invalid";
+
+    /// <summary>422: a <c>purpose: "replay"</c> request also names a <c>release</c>; the two are mutually exclusive (05.2.1 AC9, T5).</summary>
+    public const string ReplayReleaseNotAllowed = "replay_release_not_allowed";
+
     /// <summary>403: a waiver may not be approved by the member who requested it (07.3.1 AC1, FR-07-8; 00 §9.3).</summary>
     public const string WaiverSelfApproval = "waiver_self_approval";
 
@@ -265,6 +271,9 @@ public static class ApiErrorCode
 
     /// <summary>409: the artifact's state does not allow the requested transition (06.1.2-T2 §6).</summary>
     public const string ArtifactStateConflict = "artifact_state_conflict";
+
+    /// <summary>422: the artifact's bytes violate the server-side parser profile — external entity or DTD, depth, size or time cap, or malformed content (06.3.1 AC1, AC2, 00 §5.7 S5).</summary>
+    public const string ArtifactInvalid = "artifact_invalid";
 
     /// <summary>403: the route names no project and the caller's credential names none (06.1.2-T1 decision 10).</summary>
     public const string ProjectRequired = "project_required";

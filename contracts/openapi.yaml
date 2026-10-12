@@ -229,7 +229,13 @@ paths:
         environment revision is 422 `manifest_invalid` with `details[]`; a
         manifest whose planned executions collide on `execution_key` is 422
         `execution_key_conflict`; naming a `release` is 422
-        `release_unresolvable` at M1 (the release tables land with 05.6.1).
+        `release_unresolvable` at M1 (the release tables land with 05.6.1). A
+        `purpose` of `replay` is refused 422 `replay_grant_invalid` until
+        08.4.3 issues grants (every replay request, even one naming a
+        well-formed grant); a `replay` purpose together with a `release` is 422
+        `replay_release_not_allowed`. A refusal writes no run, planned
+        execution, producer slot, outbox or audit row, and its failure Result is
+        never stored for idempotency (the key stays reusable).
       x-permission: run:create
       x-version: v1
       parameters:
@@ -597,7 +603,12 @@ paths:
         409 `artifact_state_conflict` (a state that is neither `pending_upload`/`uploaded`
         nor a replayable `ready`/`rejected`), 409 `project_deleting` (project status
         `deleted`), 403 `forbidden` (missing `artifact:write`) or 403 `project_required`
-        (an org-scoped credential that names no project).
+        (an org-scoped credential that names no project). The parse-profile failure
+        `artifact_invalid` (422, 06.3.1-T1) is registered here for discoverability but is
+        not returned by this route: it comes from in-process parser callers (`IParsing`,
+        reason ∈ `dtd_prohibited`, `depth_exceeded`, `size_exceeded`, `timeout`,
+        `malformed`), and this route never parses the object — a sniff mismatch is the
+        committed 200 `rejected` + `media_type_mismatch` above.
       x-permission: artifact:write
       x-version: v1
       parameters:
@@ -4388,6 +4399,23 @@ components:
           description: >-
             Optional release name; at M1 it resolves to 422
             `release_unresolvable` (05.6.1 owns the write-bind).
+        purpose:
+          type: string
+          enum: [regular, replay]
+          default: regular
+          description: >-
+            Optional run purpose; absent means `regular`. `replay` is refused
+            422 `replay_grant_invalid` until 08.4.3 issues grants (05.2.1-T5);
+            with `regular` it never changes the 201 shape.
+        replay_grant_id:
+          type: string
+          format: uuid
+          description: >-
+            Optional grant id issued by 08.4.3; meaningful only with
+            `purpose: replay`, where it must name a valid, unexpired grant
+            bound to this project. With `regular` (or an absent `purpose`) it is
+            422 `request_invalid` (`details[]` reason `invalid_value`, path
+            `/replay_grant_id`; 05.2.1-T5).
         components:
           type: object
           description: Optional build identifiers for the run's components.

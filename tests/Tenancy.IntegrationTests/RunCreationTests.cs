@@ -393,11 +393,11 @@ public sealed class RunCreationTests
     {
         await using var world = await StartAsync(_fixture);
 
-        var answer = await CreateRunAsync(world, $$"""{"manifest_id":"{{world.ManifestId}}","purpose":"replay"}""");
+        var answer = await CreateRunAsync(world, $$"""{"manifest_id":"{{world.ManifestId}}","adhoc_field":"x"}""");
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         answer.ErrorCode.ShouldBe("request_invalid");
-        Details(answer).Single().GetProperty("path").GetString().ShouldBe("/purpose");
+        Details(answer).Single().GetProperty("path").GetString().ShouldBe("/adhoc_field");
         Details(answer).Single().GetProperty("reason").GetString().ShouldBe("additional_properties");
         await AssertNoRunRowsAsync(world);
     }

@@ -33,6 +33,11 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// (like <see cref="Manifests.UploadManifestCommand"/>): the handler parses and validates it after the C2 pipeline
 /// authorized the caller, so an anonymous or unauthorized request costs no parse.
 /// <para>
+/// Besides <c>manifest_id</c>, <c>release</c> and <c>components</c>, the body may carry <c>purpose</c>
+/// (<c>regular</c>, the default, or <c>replay</c>) and <c>replay_grant_id</c> (05.2.1-T5): a <c>replay</c> request is
+/// refused 422 before any read, and a <c>replay_grant_id</c> is only meaningful for one.
+/// </para>
+/// <para>
 /// Idempotent under the client's <c>Idempotency-Key</c> (00 §9.1, 05.2.1-T2): the C2 idempotency stage claims the key
 /// inside the run's tenant transaction, so the <c>idempotency_record</c>, the run, its planned executions, its producer
 /// slots and its outbox row commit or roll back together. The request identity is the RFC 8785 digest of the body
@@ -101,7 +106,12 @@ internal sealed record CreateRunCommand(
 /// null is refused 422 because <c>run.environment_revision_id</c> is NOT NULL; [DECISION] the pinned policy values are
 /// read once, before the run INSERT, and written once — nothing updates <c>run.policy_revision_id</c>,
 /// <c>collection_deadline_at</c> or <c>late_window_minutes</c> afterwards (FR-07-2), so a later activation never moves
-/// an existing run's pin.
+/// an existing run's pin. [DECISION] the <c>purpose: "replay"</c> path is inert until 08.4.3: no replay-grant reader
+/// exists (<c>Evidgate.Modules.Healing.Contracts</c> declares only an empty <c>IHealing</c>), so the handler refuses
+/// every replay request 422 (<c>replay_release_not_allowed</c> first, then <c>replay_grant_invalid</c>) and adds no
+/// reader of its own; the columns (<c>run.purpose</c>, <c>run.replay_grant_id</c>, migration 0031) stay at their
+/// defaults and are immutable because the app role holds no UPDATE on them (05.3.1 owns the read model and MUST NOT
+/// grant UPDATE on <c>purpose</c>/<c>replay_grant_id</c>).
 /// </remarks>
 [AuditedAction("run.create")]
 [Permission(Permissions.Run.Create)]
@@ -139,6 +149,12 @@ internal sealed class CreateRunCommandHandler(
     internal const string InvalidVariant = "invalid_variant";
     internal const string InvalidValue = "invalid_value";
 
+    /// <summary>The default run <c>purpose</c> when the body omits it: a fresh run (05.2.1-T5).</summary>
+    internal const string RegularPurpose = "regular";
+
+    /// <summary>A run that replays a stored run's inputs (05.2.1-T5); refused until the grant store lands with 08.4.3.</summary>
+    internal const string ReplayPurpose = "replay";
+
     /// <summary>The outbox task type of the create event (00 §5.3); 05.3.1 owns its handler.</summary>
     internal const string RunCreatedTaskType = "orchestrator.run.created";
 
@@ -175,7 +191,7 @@ internal sealed class CreateRunCommandHandler(
 
         foreach (var member in body.EnumerateObject())
         {
-            if (member.Name is not ("manifest_id" or "release" or "components"))
+            if (member.Name is not ("manifest_id" or "release" or "components" or "purpose" or "replay_grant_id"))
             {
                 return BodyInvalid("the request body carries an unknown field", [new ErrorDetail($"/{member.Name}", "additional_properties")]);
             }
@@ -210,6 +226,58 @@ internal sealed class CreateRunCommandHandler(
                     $"release must be 1..{MaxReleaseRunes} characters",
                     [new ErrorDetail("/release", InvalidValue)]);
             }
+        }
+
+        // (1b) the replay members (05.2.1-T5): purpose defaults to `regular` and replay_grant_id is meaningful only for
+        // a replay run. Both are parsed here, after the release check and before any database read, and a replay request
+        // is refused by the ordered checks below before the regular path (components, release_unresolvable) runs.
+        var purpose = RegularPurpose;
+        if (body.TryGetProperty("purpose", out var purposeElement))
+        {
+            if (purposeElement.ValueKind != JsonValueKind.String)
+            {
+                return BodyInvalid("purpose must be a string", [new ErrorDetail("/purpose", InvalidValue)]);
+            }
+
+            purpose = purposeElement.GetString()!;
+            if (purpose is not (RegularPurpose or ReplayPurpose))
+            {
+                return BodyInvalid(
+                    $"purpose must be \"{RegularPurpose}\" or \"{ReplayPurpose}\"",
+                    [new ErrorDetail("/purpose", InvalidValue)]);
+            }
+        }
+
+        Guid? replayGrantId = null;
+        if (body.TryGetProperty("replay_grant_id", out var grantElement))
+        {
+            if (grantElement.ValueKind != JsonValueKind.String || !grantElement.TryGetGuid(out var grantId))
+            {
+                return BodyInvalid("replay_grant_id must be a UUID", [new ErrorDetail("/replay_grant_id", InvalidValue)]);
+            }
+
+            replayGrantId = grantId;
+        }
+
+        if (purpose == ReplayPurpose)
+        {
+            // AC9: a replay run re-executes a stored run's inputs, so it may not also name a release; this refusal wins
+            // over the grant check below.
+            if (release is not null)
+            {
+                return Result.Failure<RunCreated>(OrchestratorErrors.ReplayReleaseNotAllowed);
+            }
+
+            // AC8: the replay_grant store lands with 08.4.3, so no grant resolves at this milestone — with or without a
+            // well-formed replay_grant_id — and the request is refused before any manifest read. The id is still parsed
+            // above, so a malformed one is request_invalid rather than this code.
+            return Result.Failure<RunCreated>(OrchestratorErrors.ReplayGrantInvalid);
+        }
+
+        if (replayGrantId is not null)
+        {
+            // A grant id is meaningful only for a replay run.
+            return BodyInvalid("replay_grant_id is only valid for a replay run", [new ErrorDetail("/replay_grant_id", InvalidValue)]);
         }
 
         JsonElement? components = null;

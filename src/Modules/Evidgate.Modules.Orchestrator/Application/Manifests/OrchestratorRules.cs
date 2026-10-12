@@ -24,6 +24,20 @@ internal static class OrchestratorErrors
         ApiErrorCode.ReleaseUnresolvable,
         "the release cannot be resolved at this milestone");
 
+    /// <summary>
+    /// 422 <c>replay_grant_invalid</c> (05.2.1 AC8, T5): a <c>purpose: "replay"</c> request names no grant the platform
+    /// can honour. The <c>replay_grant</c> store lands with 08.4.3, so until then every replay request — with or
+    /// without a well-formed grant id — is refused with this code (the path is inert).
+    /// </summary>
+    internal static Error ReplayGrantInvalid => Error.Unprocessable(
+        ApiErrorCode.ReplayGrantInvalid,
+        "the replay grant cannot be resolved at this milestone");
+
+    /// <summary>422 <c>replay_release_not_allowed</c> (05.2.1 AC9, T5): a replay run re-executes stored inputs, so it may not also name a <c>release</c>.</summary>
+    internal static Error ReplayReleaseNotAllowed => Error.Unprocessable(
+        ApiErrorCode.ReplayReleaseNotAllowed,
+        "a replay run may not also name a release");
+
     /// <summary>422 <c>execution_key_conflict</c> (05.2.1 AC6): two planned executions of the manifest share an execution key.</summary>
     internal static Error ExecutionKeyConflict(IReadOnlyList<ErrorDetail> details) => Error.Unprocessable(
         ApiErrorCode.ExecutionKeyConflict,
