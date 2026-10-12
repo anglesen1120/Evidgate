@@ -152,19 +152,21 @@ public sealed class IngestQaBoundaryTests
         return content;
     }
 
-    // ---------------------------------------------------------------- gzip is refused before 04.1.1-T3
+    // ---------------------------------------------------------------- Content-Encoding: gzip is supported (04.1.1-T3)
 
     [Fact]
-    public async Task content_encoding_gzip_refused_422_request_invalid()
+    public async Task content_encoding_other_than_gzip_refused_422_request_invalid()
     {
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
 
+        // 04.1.1-T3 accepts a single `gzip` (and `identity`) and keeps 422 request_invalid for anything else,
+        // naming the header in the detail. `deflate` is a real encoding the route does not decode.
         var answer = await IngestQaRequests.PostAsync(
             world.Client,
             world.RunId,
             IngestQaRequests.JsonBody(IngestQaRequests.Batch(
                 IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1))),
-            mutate: request => request.Content!.Headers.TryAddWithoutValidation("Content-Encoding", "gzip"));
+            mutate: request => request.Content!.Headers.TryAddWithoutValidation("Content-Encoding", "deflate"));
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("request_invalid");
