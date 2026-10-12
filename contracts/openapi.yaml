@@ -592,7 +592,12 @@ paths:
         409 `artifact_state_conflict` (a state that is neither `pending_upload`/`uploaded`
         nor a replayable `ready`/`rejected`), 409 `project_deleting` (project status
         `deleted`), 403 `forbidden` (missing `artifact:write`) or 403 `project_required`
-        (an org-scoped credential that names no project).
+        (an org-scoped credential that names no project). The parse-profile failure
+        `artifact_invalid` (422, 06.3.1-T1) is registered here for discoverability but is
+        not returned by this route: it comes from in-process parser callers (`IParsing`,
+        reason ∈ `dtd_prohibited`, `depth_exceeded`, `size_exceeded`, `timeout`,
+        `malformed`), and this route never parses the object — a sniff mismatch is the
+        committed 200 `rejected` + `media_type_mismatch` above.
       x-permission: artifact:write
       x-version: v1
       parameters:
