@@ -34,7 +34,7 @@ internal static class ParsingLimits
 /// </summary>
 internal static class ParsingFailure
 {
-    /// <summary>The failure for one reason: 422 <c>artifact_invalid</c>, or 413 <c>too_large</c> for the size cap.</summary>
+    /// <summary>The failure for one reason: 422 <c>artifact_invalid</c>, or 413 <c>payload_too_large</c> for the size cap.</summary>
     /// <param name="reason">One of <see cref="ParsingFailureReason"/>.</param>
     /// <returns>The 00 §9.2 failure the endpoint filter renders.</returns>
     public static Error For(string reason) =>

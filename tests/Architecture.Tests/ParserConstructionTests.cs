@@ -27,6 +27,8 @@ public class ParserConstructionTests
     [InlineData("using var archive = new ZipArchive(stream, ZipArchiveMode.Read);")]
     [InlineData("using var archive = ZipFile.OpenRead(path);")]
     [InlineData("var reader = XmlDictionaryReader.Create(stream);")]
+    [InlineData("var reader = new XmlTextReader(stream);")]
+    [InlineData("using var archive = ZipFile.Open(path, ZipArchiveMode.Read);")]
     [InlineData("var element = XElement.Load(stream);")]
     [InlineData("var element = XElement.Parse(text);")]
     [InlineData("var document = new XPathDocument(stream);")]

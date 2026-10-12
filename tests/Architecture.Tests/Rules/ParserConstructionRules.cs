@@ -39,7 +39,6 @@ public static class ParserConstructionRules
         "new XmlDocument(",
         "new XmlTextReader(",
         "new ZipArchive(",
-        "ZipArchive.Create(",
         "ZipFile.Open(",
         "ZipFile.OpenRead(",
         "ZipFile.ExtractToDirectory(",
