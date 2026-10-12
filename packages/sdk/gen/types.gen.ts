@@ -50,6 +50,14 @@ export type CreateRunRequest = {
      */
     release?: string;
     /**
+     * Optional run purpose; absent means `regular`. `replay` is refused 422 `replay_grant_invalid` until 08.4.3 issues grants (05.2.1-T5); with `regular` it never changes the 201 shape.
+     */
+    purpose?: 'regular' | 'replay';
+    /**
+     * Optional grant id issued by 08.4.3; meaningful only with `purpose: replay`, where it must name a valid, unexpired grant bound to this project. With `regular` (or an absent `purpose`) it is 422 `invalid_value` (05.2.1-T5).
+     */
+    replay_grant_id?: string;
+    /**
      * Optional build identifiers for the run's components.
      */
     components?: {
