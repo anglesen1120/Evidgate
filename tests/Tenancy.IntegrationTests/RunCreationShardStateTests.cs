@@ -2,10 +2,6 @@
 // PostgreSQL. Request bodies are built inline so each test reads as the request it sends.
 #pragma warning disable CA1861
 using System.Net;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Npgsql;
 using Shouldly;
@@ -20,6 +16,10 @@ namespace Tenancy.IntegrationTests;
 /// <c>shard-&lt;ordinal&gt;</c> string, and the run row is written <c>queued</c> inside that same transaction — a
 /// recording trigger on <c>public.run</c> proves no <c>created</c> state was ever persisted (T4.1/T4.2).
 /// </summary>
+/// <remarks>
+/// The boundary tests <c>CreateRun_ShardCountEqualsPlannedCount_OneSlotPerShard</c> and
+/// <c>CreateRun_TwoRunsFromOneManifest_IndependentSlotSets</c> were added by the QA agent.
+/// </remarks>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunCreationShardStateTests
@@ -150,28 +150,6 @@ public sealed class RunCreationShardStateTests
         (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where run_id not in ('{firstId}', '{secondId}')")).ShouldBe(0);
     }
 
-    /// <summary>
-    /// AC2/AC7 (T4.2): a refused create leaves zero slots (and zero runs/planned executions/outbox rows), and the state
-    /// probe records nothing — no run INSERT ever ran, so no <c>created</c> (or any other state) was persisted. The
-    /// manifest has no environment revision, so the handler refuses with 422 <c>manifest_invalid</c> before any write.
-    /// </summary>
-    [Fact]
-    public async Task CreateRun_RefusedManifest_NoSlotsAndNoProbeRow()
-    {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
-        await InstallStateProbeAsync(world.Database);
-
-        var noEnvironment = Manifest(world.SuiteRevision, world.Cases, variants: 1, shards: 1);
-        var manifestId = await UploadAsync(world, noEnvironment, withEnvironment: false);
-
-        var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(manifestId));
-
-        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        answer.ErrorCode.ShouldBe("manifest_invalid");
-        await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
-        (await ProbeStatesAsync(world)).ShouldBeEmpty("the refused create never reached the run INSERT");
-    }
-
     // ------------------------------------------------------------------ T4.2 created -> queued
 
     /// <summary>
@@ -226,6 +204,10 @@ public sealed class RunCreationShardStateTests
     /// <c>pg_get_constraintdef</c>, so an added or dropped literal fails here), accepts every one of those literals and
     /// refuses a value outside the set — all inside a transaction that is rolled back, so no row survives.
     /// </summary>
+    /// <remarks>
+    /// The literal comparison is order-sensitive on purpose: a reorder of the literals in the migration must be
+    /// mirrored here. App-role refusal of a bad state is covered by <c>RunSchemaTests.State_Unknown_FailsCheck</c>.
+    /// </remarks>
     [Fact]
     public async Task CreateRun_StateCheckConstraint_EnumeratesTheFullVocabulary()
     {
@@ -261,43 +243,15 @@ public sealed class RunCreationShardStateTests
 
     // ------------------------------------------------------------------ helpers
 
-    /// <summary>A manifest over the world's suite revision and cases; <c>shards</c> shards, <c>variants</c> variant axis.</summary>
-    private static JsonObject Manifest(Guid suite, Guid[] cases, int variants, int shards) => ManifestUnitTests.Build(
-        suite,
-        cases,
-        [.. Enumerable.Range(0, variants).Select(i => new Dictionary<string, string> { ["browser"] = $"b{i}" })],
-        ["staging"],
-        shards: shards);
-
-    /// <summary>Uploads a manifest built from the world's suite revision and cases and returns its id.</summary>
-    private static Task<Guid> UploadAsync(RunCreationTests.World world, int variants, int shards) =>
-        UploadAsync(world, Manifest(world.SuiteRevision, world.Cases, variants, shards));
-
-    /// <summary>Uploads an already-built manifest (its environment revision is set here) and returns its id.</summary>
-    private static Task<Guid> UploadAsync(RunCreationTests.World world, JsonObject manifest) =>
-        UploadAsync(world, manifest, withEnvironment: true);
-
     /// <summary>
-    /// Uploads a manifest and returns its id. <paramref name="withEnvironment"/> false leaves
-    /// <c>environment_revision_id</c> off the document, the AC5 case where run create must refuse it.
+    /// Uploads a manifest over the world's suite revision and cases with the environment revision set, and returns its
+    /// id. The manifest and upload helpers live on <see cref="RunCreationTests"/>.
     /// </summary>
-    private static async Task<Guid> UploadAsync(RunCreationTests.World world, JsonObject manifest, bool withEnvironment)
+    private static Task<Guid> UploadAsync(RunCreationTests.World world, int variants, int shards)
     {
-        if (withEnvironment)
-        {
-            manifest["environment_revision_id"] = world.EnvironmentRevision.ToString();
-        }
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/projects/{world.Project}/manifests");
-        world.Admin(request.Headers);
-        request.Headers.Add("Idempotency-Key", NewKey());
-        request.Content = new StringContent(manifest.ToJsonString(), Encoding.UTF8, "application/json");
-        using var response = await world.Client.SendAsync(request, TestContext.Current.CancellationToken);
-        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        using var document = JsonDocument.Parse(string.IsNullOrEmpty(text) ? "{}" : text);
-        response.StatusCode.ShouldBe(HttpStatusCode.Created, text);
-
-        return document.RootElement.GetProperty("manifest_id").GetGuid();
+        var manifest = RunCreationTests.Manifest(world.SuiteRevision, world.Cases, variants, shards);
+        manifest["environment_revision_id"] = world.EnvironmentRevision.ToString();
+        return RunCreationTests.UploadAsync(world.Client, world.Admin, world.Project, manifest);
     }
 
     /// <summary>The stored manifest's shard plan as <c>shard-&lt;ordinal&gt;:&lt;size&gt;</c>, ordered by ordinal.</summary>

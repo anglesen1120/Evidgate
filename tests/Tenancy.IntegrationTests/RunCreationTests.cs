@@ -91,14 +91,14 @@ public sealed class RunCreationTests
         return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), environment.Id("revision_id"), manifestId, revisions);
     }
 
-    private static JsonObject Manifest(Guid suite, Guid[] cases, int variants, int shards) => ManifestUnitTests.Build(
+    internal static JsonObject Manifest(Guid suite, Guid[] cases, int variants, int shards) => ManifestUnitTests.Build(
         suite,
         cases,
         [.. Enumerable.Range(0, variants).Select(i => new Dictionary<string, string> { ["browser"] = $"b{i}" })],
         ["staging"],
         shards: shards);
 
-    private static async Task<Guid> UploadAsync(HttpClient client, Action<HttpRequestHeaders> caller, Guid project, JsonObject manifest)
+    internal static async Task<Guid> UploadAsync(HttpClient client, Action<HttpRequestHeaders> caller, Guid project, JsonObject manifest)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/projects/{project}/manifests");
         caller(request.Headers);
