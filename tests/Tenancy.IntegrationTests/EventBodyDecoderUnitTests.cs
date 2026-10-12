@@ -1,6 +1,7 @@
 // 04.1.1-T3 (AC7, DECISIONS §8.1 D-A8): the gzip decoder's cap arithmetic, without a database or a host.
 // The transport cap (1 MiB as sent) belongs to the endpoint and the 500-event cap to the parser; this file
 // pins the two IngestionLimits caps and every well-formedness refusal of EventBodyDecoder.
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using Evidgate.Modules.Ingestion.Application;
@@ -45,15 +46,35 @@ public sealed class EventBodyDecoderUnitTests
     }
 
     [Fact]
-    public void empty_member_decodes_to_nothing()
+    public void member_written_with_an_explicit_flush_is_accepted()
     {
-        // A well-formed member of a zero-byte payload: accepted, and the parser is the one that calls the
-        // empty batch invalid (its `empty` reason), not the decoder.
-        using var decoded = EventBodyDecoder.DecodeGzip(GzipOf([]), Defaults());
+        // A producer that flushes before closing (pigz, Node's zlib.flush(), a streaming client) emits an
+        // extra empty stored block before the final one; the member must still be accepted, and its trailer
+        // must still be found at the body's end.
+        var payload = Encoding.UTF8.GetBytes(
+            """{"schema_version":1,"events":[{"event_id":"0198a0f0-0000-7000-8000-000000000001","sequence":1}]}""");
+
+        using var output = new MemoryStream();
+        using (var gzip = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            gzip.Write(payload);
+            gzip.Flush();
+        }
+
+        using var decoded = EventBodyDecoder.DecodeGzip(output.ToArray(), Defaults());
 
         decoded.Reason.ShouldBeNull();
-        decoded.ExpandedBytes.ShouldBe(0);
-        decoded.Bytes.Length.ShouldBe(0);
+        decoded.Bytes.ToArray().ShouldBe(payload);
+    }
+
+    [Fact]
+    public void trailer_isize_is_little_endian()
+    {
+        // RFC 1952 §2.3.1: both trailer fields are little-endian. Reading them big-endian would make every
+        // complete member look corrupt (the regression this pins).
+        var member = GzipOf(new byte[4096]);
+
+        BinaryPrimitives.ReadUInt32LittleEndian(member.AsSpan(member.Length - 4)).ShouldBe(4096u);
     }
 
     // ------------------------------------------------------------------ the expanded-size cap (AC7)
@@ -162,7 +183,9 @@ public sealed class EventBodyDecoderUnitTests
     [Fact]
     public void truncated_member_is_refused()
     {
-        var member = GzipOf(new byte[4096]);
+        // Incompressible bytes, so the 20:1 ratio cannot fire first and the truncated trailer is what the
+        // decoder must notice.
+        var member = GzipOf(Incompressible(4096));
         var truncated = member.AsSpan(0, member.Length - 4).ToArray();
 
         using var decoded = EventBodyDecoder.DecodeGzip(truncated, Defaults());
@@ -205,6 +228,20 @@ public sealed class EventBodyDecoderUnitTests
         }
 
         return output.ToArray();
+    }
+
+    /// <summary>Deterministic incompressible bytes, so a member of <paramref name="length"/> stays that size when gzipped.</summary>
+    private static byte[] Incompressible(int length)
+    {
+        var bytes = new byte[length];
+        var state = 0x2545F491u;
+        for (var i = 0; i < length; i++)
+        {
+            state = (state * 1664525u) + 1013904223u;
+            bytes[i] = (byte)(state >> 24);
+        }
+
+        return bytes;
     }
 
     /// <summary>

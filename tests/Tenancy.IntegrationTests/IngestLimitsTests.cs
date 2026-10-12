@@ -53,13 +53,15 @@ public sealed class IngestLimitsTests
         (await EventRowsAsync(world)).ShouldBe(500);
         (await world.CountAsync("event_batch")).ShouldBe(1);
 
-        // Exactly 1 MiB of as-sent body: accepted; 1 MiB + 1 byte: 413 before any write.
-        var oneMiB = await PostAsync(world, IngestQaRequests.PaddedBody(Batch(world, sequence: 501), 1_048_576));
+        // Exactly 1 MiB of as-sent body: accepted; 1 MiB + 1 byte: 413 before any write. The body is a
+        // one-event batch object padded with trailing whitespace (PaddedBody serializes the object itself),
+        // and its sequence does not collide with the 500 stored above (AC6).
+        var oneMiB = await PostAsync(world, IngestQaRequests.PaddedBody(OneEvent(world, sequence: 501), 1_048_576));
 
         oneMiB.Status.ShouldBe(HttpStatusCode.OK, oneMiB.ErrorMessage);
         (await EventRowsAsync(world)).ShouldBe(501);
 
-        var overMiB = await PostAsync(world, IngestQaRequests.PaddedBody(Batch(world, sequence: 502), 1_048_577));
+        var overMiB = await PostAsync(world, IngestQaRequests.PaddedBody(OneEvent(world, sequence: 502), 1_048_577));
 
         overMiB.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
         overMiB.ErrorCode.ShouldBe("batch_too_large");
@@ -193,10 +195,14 @@ public sealed class IngestLimitsTests
 
     private static Task<long> EventRowsAsync(IngestTestWorld world) => world.CountAsync("event");
 
-    /// <summary>One valid batch whose body is padded with trailing whitespace to exactly <paramref name="bytes"/>.</summary>
+    /// <summary>One valid one-event batch as a serialized body (for the gzip and malformed cases).</summary>
     private static string Batch(IngestTestWorld world, long sequence) =>
-        IngestQaRequests.Json(IngestQaRequests.Batch(
-            IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: sequence)));
+        IngestQaRequests.Json(OneEvent(world, sequence));
+
+    /// <summary>One valid one-event batch as an object, so a caller can pad or re-serialize it (≤ 500 events).</summary>
+    private static object OneEvent(IngestTestWorld world, long sequence) =>
+        IngestQaRequests.Batch(
+            IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: sequence));
 
     private static object[] Events(IngestTestWorld world, int count)
     {

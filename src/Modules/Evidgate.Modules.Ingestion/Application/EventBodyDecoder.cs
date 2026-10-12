@@ -22,8 +22,9 @@ namespace Evidgate.Modules.Ingestion.Application;
 /// (<see cref="SingleByteStream"/>). That is the only way the managed API exposes the exact end of the
 /// first gzip member: with a whole-buffer feed the inflater reads ahead, and .NET's <c>GZipStream</c>
 /// then either transparently concatenates the next member or silently ignores trailing bytes. With a
-/// one-byte feed the inflater consumes exactly the member, so "fewer bytes served than the body carries"
-/// is proof of a second member or trailing data — both refused (<c>gzip_invalid</c>), never ignored.</item>
+/// one-byte feed the inflater consumes exactly the member, so more bytes left unread than the member's
+/// own trailer is proof of a second member or trailing data — both refused (<c>gzip_invalid</c>), never
+/// ignored.</item>
 /// </list>
 /// <para>
 /// Truncation is the one case zlib does not report (its strict-validation switch is off by default), so
@@ -96,9 +97,10 @@ internal static class EventBodyDecoder
                     expanded = next;
                 }
 
-                // One byte per read means the inflater consumed exactly the first member. A body that
-                // served fewer bytes than it carries holds a second member or trailing data.
-                if (source.Served != compressed.Length)
+                // One byte per read means the inflater consumed exactly the first member: the trailer may
+                // be left unread (its consumption depends on the inflater's own buffering), but anything
+                // beyond it is a second member or trailing data, never silently ignored.
+                if (compressed.Length - source.Served > TrailerLength)
                 {
                     Return(ref output);
                     return DecodedBody.Refused(IngestBatchRejection.GzipInvalid, expanded);
@@ -161,13 +163,13 @@ internal static class EventBodyDecoder
     /// <summary>
     /// True when the body's last eight bytes are the gzip trailer of what was decoded: a complete member
     /// ends there (zlib already verified the CRC/ISIZE), while a truncated member ends mid-stream and its
-    /// tail is deflate data, not a trailer.
+    /// tail is deflate data, not a trailer. RFC 1952 §2.3.1 stores both fields little-endian.
     /// </summary>
     private static bool TrailerMatches(ReadOnlySpan<byte> compressed, byte[]? output, int expanded)
     {
         var trailer = compressed[^TrailerLength..];
-        var crc = BinaryPrimitives.ReadUInt32BigEndian(trailer);
-        var isize = BinaryPrimitives.ReadUInt32BigEndian(trailer[4..]);
+        var crc = BinaryPrimitives.ReadUInt32LittleEndian(trailer);
+        var isize = BinaryPrimitives.ReadUInt32LittleEndian(trailer[4..]);
 
         return isize == (uint)expanded && crc == Crc32(output, expanded);
     }
