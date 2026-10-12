@@ -102,9 +102,9 @@ public sealed class AdapterCapabilityTests
         return JsonSerializer.Serialize(document);
     }
 
-    /// <summary>The first envelope of a run carrying a capability document (00 §9.4).</summary>
+    /// <summary>The first envelope of a run carrying a capability document (00 §9.4; the envelope member is <c>type</c>).</summary>
     private static string Carrier(string schema, string capability) =>
-        "{\"kind\":\"run.log\",\"sequence\":1,\"ext\":{\"schema\":\"" + schema + "\",\"capability\":" + capability + "}}";
+        "{\"type\":\"run.log\",\"sequence\":1,\"ext\":{\"schema\":\"" + schema + "\",\"capability\":" + capability + "}}";
 
     // ------------------------------------------------------------------ pipeline drivers
 
@@ -439,7 +439,7 @@ public sealed class AdapterCapabilityTests
 
         var result = await FirstSendAsync(
             world,
-            """{"kind":"run.step","sequence":1,"ext":{"schema":"playwright/1"}}""");
+            """{"type":"run.step","sequence":1,"ext":{"schema":"playwright/1"}}""");
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         result.Value.Registered.ShouldBeFalse();

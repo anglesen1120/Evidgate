@@ -31,9 +31,10 @@ The playbook for changing a table without breaking the running version is
   `artifact`/`artifact_kind_policy`, `0029` is 04.1.2-T4's `producer_slot`, `0030` is 07.3.1-T2's
   `quarantine_entry` plus its `quarantine:write` catalogue permission, `0031` is 05.2.1-T1's
   `run`/`planned_execution` plus the deferred `artifact`/`producer_slot` run keys and `0032` is
-  05.3.3-T1's `case_attempt` plus the deferred `artifact` attempt key, and `0033` is 07.1.1-T4's
+  05.3.3-T1's `case_attempt` plus the deferred `artifact` attempt key, `0033` is 07.1.1-T4's
   `policy_activation` (the project's policy pointer) plus the `policy_revision` state grant, its
-  one-active partial unique index and the widened `run.late_window_minutes` bound); a gap means two branches
+  one-active partial unique index and the widened `run.late_window_minutes` bound, and `0034` is
+  04.1.1-T1's `event`/`event_batch` plus the `producer_slot.last_sequence` column grant; a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and

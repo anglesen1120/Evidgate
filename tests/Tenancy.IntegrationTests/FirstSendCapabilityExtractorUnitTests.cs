@@ -20,7 +20,7 @@ public sealed class FirstSendCapabilityExtractorUnitTests
     {
         var extraction = FirstSendCapabilityExtractor.Extract(Envelope(
             """
-            {"kind":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":{"protocol":{"major":1,"minor":0}}}}
+            {"type":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":{"protocol":{"major":1,"minor":0}}}}
             """));
 
         extraction.IsCarrier.ShouldBeTrue();
@@ -30,14 +30,14 @@ public sealed class FirstSendCapabilityExtractorUnitTests
     }
 
     [Theory]
-    // A kind other than run.log carries no capability.
-    [InlineData("""{"kind":"run.step","sequence":1,"ext":{"schema":"playwright/1","capability":{"protocol":{"major":1,"minor":0}}}}""")]
+    // A type other than run.log carries no capability.
+    [InlineData("""{"type":"run.step","sequence":1,"ext":{"schema":"playwright/1","capability":{"protocol":{"major":1,"minor":0}}}}""")]
     // Only the first envelope (sequence 1) is the capability carrier.
-    [InlineData("""{"kind":"run.log","sequence":2,"ext":{"schema":"playwright/1","capability":{"protocol":{"major":1,"minor":0}}}}""")]
+    [InlineData("""{"type":"run.log","sequence":2,"ext":{"schema":"playwright/1","capability":{"protocol":{"major":1,"minor":0}}}}""")]
     // No ext.capability member: nothing to register.
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":"playwright/1"}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":"playwright/1"}}""")]
     // No ext member at all.
-    [InlineData("""{"kind":"run.log","sequence":1}""")]
+    [InlineData("""{"type":"run.log","sequence":1}""")]
     public void Extract_NonCarrierKinds_IsNotACarrier(string envelope)
     {
         var extraction = FirstSendCapabilityExtractor.Extract(Envelope(envelope));
@@ -49,17 +49,17 @@ public sealed class FirstSendCapabilityExtractorUnitTests
 
     [Theory]
     // Uppercase name is outside the ^[a-z0-9][a-z0-9._-]{0,63}$ shape.
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":"Playwright/1","capability":{}}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":"Playwright/1","capability":{}}}""")]
     // No slash: the major is missing.
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":"playwright","capability":{}}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":"playwright","capability":{}}}""")]
     // A non-numeric major.
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":"playwright/x","capability":{}}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":"playwright/x","capability":{}}}""")]
     // An empty schema.
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":"","capability":{}}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":"","capability":{}}}""")]
     // A schema that is not a string.
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":7,"capability":{}}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":7,"capability":{}}}""")]
     // No schema member.
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"capability":{}}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"capability":{}}}""")]
     public void Extract_BadSchema_ReportsExtSchemaDetail(string envelope)
     {
         var extraction = FirstSendCapabilityExtractor.Extract(Envelope(envelope));
@@ -70,10 +70,10 @@ public sealed class FirstSendCapabilityExtractorUnitTests
 
     [Theory]
     // ext.capability must be an object (the capability.v1 document root).
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":"text"}}""")]
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":5}}""")]
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":[]}}""")]
-    [InlineData("""{"kind":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":null}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":"text"}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":5}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":[]}}""")]
+    [InlineData("""{"type":"run.log","sequence":1,"ext":{"schema":"playwright/1","capability":null}}""")]
     public void Extract_CapabilityNotAnObject_ReportsExtCapabilityDetail(string envelope)
     {
         var extraction = FirstSendCapabilityExtractor.Extract(Envelope(envelope));
