@@ -456,7 +456,15 @@ public sealed class RunIdentitySchemaTests
         // The pre-05.2.2 row shape (plan §4, "existing rows"): every identity column omitted, the two
         // flags defaulted. Inserted with no identity override at all, so the column defaults are what is
         // under test.
-        var runId = await InsertRunAsync(world, parents, Guid.CreateVersion7());
+        var runId = Guid.CreateVersion7();
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync(
+                "insert into public.run (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id, collection_deadline_at, late_window_minutes) "
+                + $"values ('{runId}', '{world.Org}', '{world.Project}', '{parents.ManifestId}', '{parents.SuiteRevisionId}', '{parents.EnvironmentRevisionId}', now() + interval '2 hours', 1440)"))
+                .ShouldBe(1);
+            await scope.CommitAsync();
+        }
 
         (await _fixture.ScalarAsync<string?>(world.Database, $"select ref_kind from public.run where id = '{runId}'"))
             .ShouldBeNull();
