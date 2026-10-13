@@ -475,6 +475,38 @@ public sealed class IngestEventBatchTests
     }
 
     [Fact]
+    public async Task first_batch_binds_slot_then_foreign_token_403_producer_slot_taken()
+    {
+        // AC3 on the event path: the seeded slot starts unbound, the first ACCEPTED batch binds it to the
+        // caller's jti, and a later batch from a different ci_producer identity is then refused 403
+        // producer_slot_taken with no write (T9). Distinct from slot_taken_by_other_token_403, which pre-binds
+        // the slot and never exercises the binding the first batch performs.
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+
+        var accepted = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
+
+        accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
+        (await world.ScalarAsync<string>("select bound_token_jti from public.producer_slot"))
+            .ShouldBe(IngestTestWorld.Jti);
+        (await EventRowsAsync(world)).ShouldBe(1);
+
+        await using var foreign = TenancyApiFactory.WithPrincipal(
+            _fixture.AppConnectionString(world.Database), world.Org, world.Project,
+            IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti));
+        using var foreignClient = foreign.CreateClient();
+
+        var refused = await PostEventsAsync(
+            world,
+            Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 2)),
+            client: foreignClient);
+
+        refused.Status.ShouldBe(HttpStatusCode.Forbidden);
+        refused.ErrorCode.ShouldBe("producer_slot_taken");
+        (await EventRowsAsync(world)).ShouldBe(1);
+        (await BatchRowsAsync(world)).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task unknown_producer_422()
     {
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());

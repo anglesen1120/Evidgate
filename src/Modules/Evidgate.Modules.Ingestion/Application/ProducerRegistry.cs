@@ -112,6 +112,11 @@ internal sealed class ProducerRegistry(
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Lock order (T91): a caller that reads the run takes the run row <c>FOR SHARE</c> first (the events
+    /// handler does, in its scope read); this method then reads the slot (joined to the run, unlocked) and at most
+    /// binds it with one conditional UPDATE, and never locks the run. No path takes the slot row before the run, so there is no cycle.
+    /// </remarks>
     public async ValueTask<Result<ProducerSlotBinding>> BindOrCheckAsync(
         Guid runId,
         string producerId,
@@ -142,6 +147,16 @@ internal sealed class ProducerRegistry(
         if (existing is null)
         {
             return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.UnknownProducer);
+        }
+
+        // T88: when the run carries a CI reference (set at run create from the caller's OIDC claims), the
+        // caller's claims must equal it exactly - a different CI run is a different identity even for an
+        // already-bound slot. A run created without one has nothing to compare, and the slot's own binding
+        // below is then the whole identity. Both answer the same 403 producer_slot_taken, so a foreign CI
+        // run learns nothing about the slot beyond that code (T9).
+        if (RunReferenceMismatch(existing, ciRunRef))
+        {
+            return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
         }
 
         if (existing.BoundTokenJti is not null)
@@ -175,10 +190,130 @@ internal sealed class ProducerRegistry(
             return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.UnknownProducer);
         }
 
+        // The same T88 comparison as the read path above: the race loser decides against the row the
+        // winner wrote, so a mismatching CI run is refused here too.
+        if (RunReferenceMismatch(after, ciRunRef))
+        {
+            return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
+        }
+
         return string.Equals(after.BoundTokenJti, tokenJti, StringComparison.Ordinal)
             && string.Equals(after.BoundCiRunRef, ciRunRef, StringComparison.Ordinal)
             ? Result.Success(new ProducerSlotBinding(after.Id, after.ShardIndex, after.ProducerId, false))
             : Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<Result<ProducerSlotClosure>> CloseSlotAsync(
+        Guid runId,
+        string producerId,
+        string tokenJti,
+        string? ciRunRef,
+        long declaredLastSequence,
+        int declaredCount,
+        CancellationToken cancellationToken)
+    {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Ingestion, nameof(CloseSlotAsync));
+
+        // The column bounds are checked before any SQL (00 §5.5 C6), exactly like the bind's identity
+        // arguments: a negative declared value would otherwise surface as an unhandled 23514.
+        if (!ProducerSlotArguments.IsValidProducerId(producerId)
+            || !ProducerSlotArguments.IsWithin(tokenJti, ProducerSlotLimits.MaxTokenJtiLength)
+            || !ProducerSlotArguments.IsWithinOrNull(ciRunRef, ProducerSlotLimits.MaxCiRunRefLength))
+        {
+            return Result.Failure<ProducerSlotClosure>(ProducerSlotErrors.ArgumentOutOfRange);
+        }
+
+        // The declared values carry their own 422: the identity message above names producerId/tokenJti/
+        // ciRunRef, so reusing it for a negative declared value would misdescribe the failure.
+        if (declaredLastSequence < 0 || declaredCount < 0)
+        {
+            return Result.Failure<ProducerSlotClosure>(ProducerSlotErrors.DeclaredOutOfRange);
+        }
+
+        var orgId = scopes.Require().OrgId;
+
+        // Read first: the decision table is unknown (422), foreign (403), already closed (the idempotent
+        // no-op that returns the STORED values), or close. The same indexed lookup the bind uses (P3/P4).
+        var existing = await db.QuerySingleOrDefaultAsync<SlotRow>(
+            ProducerSlotSql.ReadByProducer,
+            new { org_id = orgId, run_id = runId, producer_id = producerId },
+            cancellationToken).ConfigureAwait(false);
+
+        if (existing is null)
+        {
+            return Result.Failure<ProducerSlotClosure>(ProducerSlotErrors.UnknownProducer);
+        }
+
+        // T9/T88: only the bound identity may finalize the slot. An unbound slot has no bound identity,
+        // so nobody may close it - 05.3.2-T1's handler binds through BindOrCheckAsync first, so a finalize
+        // arriving before the events still closes the slot (05.3.2 AC7).
+        if (existing.BoundTokenJti is null
+            || RunReferenceMismatch(existing, ciRunRef)
+            || !string.Equals(existing.BoundTokenJti, tokenJti, StringComparison.Ordinal)
+            || !string.Equals(existing.BoundCiRunRef, ciRunRef, StringComparison.Ordinal))
+        {
+            return Result.Failure<ProducerSlotClosure>(ProducerSlotErrors.SlotTaken);
+        }
+
+        // Already closed: idempotent on closed_at (T68, AC9) - the stored values are returned, nothing is
+        // written and no version bump happens, so a duplicate finalize is a no-op (05.3.2 AC6/D3).
+        if (existing.ClosedAt is { } alreadyClosed)
+        {
+            return Result.Success(new ProducerSlotClosure(
+                existing.Id,
+                existing.ShardIndex,
+                existing.ProducerId,
+                alreadyClosed,
+                existing.DeclaredLastSequence ?? 0,
+                existing.DeclaredCount ?? 0,
+                Closed: false));
+        }
+
+        var closed = await db.QuerySingleOrDefaultAsync<SlotRow>(
+            ProducerSlotSql.CloseIfOpen,
+            new
+            {
+                org_id = orgId,
+                run_id = runId,
+                producer_id = producerId,
+                jti = tokenJti,
+                ci_run_ref = ciRunRef,
+                declared_last_sequence = declaredLastSequence,
+                declared_count = declaredCount,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (closed is not null)
+        {
+            return Result.Success(new ProducerSlotClosure(
+                closed.Id,
+                closed.ShardIndex,
+                closed.ProducerId,
+                closed.ClosedAt!.Value,
+                closed.DeclaredLastSequence ?? declaredLastSequence,
+                closed.DeclaredCount ?? declaredCount,
+                Closed: true));
+        }
+
+        // The race was lost: a concurrent close won, so this call is the idempotent no-op and answers with
+        // what that winner stored. The row cannot have vanished (a slot is never deleted), but the read is
+        // still guarded so the method cannot return an uninitialised closure.
+        var after = await db.QuerySingleOrDefaultAsync<SlotRow>(
+            ProducerSlotSql.ReadByProducer,
+            new { org_id = orgId, run_id = runId, producer_id = producerId },
+            cancellationToken).ConfigureAwait(false);
+
+        return after?.ClosedAt is { } racedClosed
+            ? Result.Success(new ProducerSlotClosure(
+                after.Id,
+                after.ShardIndex,
+                after.ProducerId,
+                racedClosed,
+                after.DeclaredLastSequence ?? 0,
+                after.DeclaredCount ?? 0,
+                Closed: false))
+            : Result.Failure<ProducerSlotClosure>(ProducerSlotErrors.UnknownProducer);
     }
 
     /// <inheritdoc />
@@ -200,13 +335,28 @@ internal sealed class ProducerRegistry(
             row.ProducerId,
             row.BoundTokenJti is not null,
             row.ClosedAt,
-            row.LastSequence))];
+            row.LastSequence,
+            row.DeclaredLastSequence,
+            row.DeclaredCount))];
     }
 
     /// <summary>The deterministic producer id of a 1-based shard index (T54).</summary>
     internal static string ProducerId(int shardIndex) => $"shard-{shardIndex}";
 
     private static ProducerSlotRef ToRef(SlotRow row) => new(row.Id, row.ShardIndex, row.ProducerId);
+
+    /// <summary>
+    /// True when the run carries a CI reference (T88) that is not exactly the caller's. Only the run's
+    /// side is compared: a run created without a CI reference has nothing to compare, and the slot's own
+    /// binding is then the whole identity. A run that carries one but whose composed reference came back
+    /// null (L1: a member of <c>ci_run_ref</c> is JSON null, so the concatenation is null) is also a
+    /// mismatch — the reference is present and unreadable, so it fails closed rather than open. Every
+    /// mismatch is another identity and answers 403 <c>producer_slot_taken</c>, never a distinct code that
+    /// would leak whether a slot exists (T9).
+    /// </summary>
+    private static bool RunReferenceMismatch(SlotRow row, string? ciRunRef) =>
+        row.RunHasCiRef
+        && (row.RunCiRunRef is null || !string.Equals(row.RunCiRunRef, ciRunRef, StringComparison.Ordinal));
 
     /// <summary>One slot row as the registry's statements return it.</summary>
     private sealed class SlotRow
@@ -224,6 +374,16 @@ internal sealed class ProducerRegistry(
         public long LastSequence { get; set; }
 
         public DateTimeOffset? ClosedAt { get; set; }
+
+        public long? DeclaredLastSequence { get; set; }
+
+        public int? DeclaredCount { get; set; }
+
+        /// <summary>The run's CI reference as <c>repository_id/run_id/run_attempt</c> (T88), or null; only <c>ReadByProducer</c> selects it.</summary>
+        public string? RunCiRunRef { get; set; }
+
+        /// <summary>Whether the run's <c>ci_run_ref</c> is not null (L1); only <c>ReadByProducer</c> selects it.</summary>
+        public bool RunHasCiRef { get; set; }
     }
 }
 
@@ -261,6 +421,11 @@ internal static class ProducerSlotErrors
     internal static Error SlotTaken => Error.Denied(
         ApiErrorCode.ProducerSlotTaken,
         "the producer slot is bound to another token identity");
+
+    /// <summary>422: a declared value <c>CloseSlotAsync</c> would store is outside its column bound (T68).</summary>
+    internal static Error DeclaredOutOfRange => Error.Unprocessable(
+        ApiErrorCode.RequestInvalid,
+        "declaredLastSequence and declaredCount must be non-negative");
 }
 
 /// <summary>
@@ -350,20 +515,39 @@ internal static class ProducerSlotSql
 
     /// <summary>The slots of one run, in shard order (P4, served by the <c>producer_slot_run</c> index).</summary>
     internal const string ReadRunSlots = """
-        select id, shard_index, producer_id, bound_token_jti, bound_ci_run_ref, last_sequence, closed_at
+        select id, shard_index, producer_id, bound_token_jti, bound_ci_run_ref, last_sequence, closed_at,
+               declared_last_sequence, declared_count
           from public.producer_slot
          where org_id = @org_id
            and run_id = @run_id
          order by shard_index
         """;
 
-    /// <summary>One slot by its producer id; the re-read that decides idempotent versus taken (T9).</summary>
+    /// <summary>
+    /// One slot by its producer id, with the run's CI reference (T88) and the declared values (T68): the
+    /// single indexed lookup of <see cref="IProducerRegistry.BindOrCheckAsync"/> (P3) and the read
+    /// <see cref="IProducerRegistry.CloseSlotAsync"/> decides on. The run join is what makes the T88
+    /// comparison part of the same statement, so the enforcement costs no extra round trip; it joins on
+    /// the slot's own <c>(org_id, run_id)</c>, so RLS scopes the run exactly like the slot row, and
+    /// <c>ci_run_ref</c> is written once at run create and never updated, so the join needs no lock.
+    /// <para>
+    /// <c>run_has_ci_ref</c> is the run's own <c>ci_run_ref is not null</c>, kept beside the composed
+    /// reference (L1): the composition is a <c>-&gt;&gt;</c> concatenation, so a member that were JSON null
+    /// would make the whole expression NULL — indistinguishable from a run that carries no reference at
+    /// all. The flag separates the two and lets the caller fail closed on a run that has one it could not
+    /// compose.
+    /// </para>
+    /// </summary>
     internal const string ReadByProducer = """
-        select id, shard_index, producer_id, bound_token_jti, bound_ci_run_ref, last_sequence, closed_at
-          from public.producer_slot
-         where org_id = @org_id
-           and run_id = @run_id
-           and producer_id = @producer_id
+        select s.id, s.shard_index, s.producer_id, s.bound_token_jti, s.bound_ci_run_ref,
+               s.last_sequence, s.closed_at, s.declared_last_sequence, s.declared_count,
+               (r.ci_run_ref is not null) as run_has_ci_ref,
+               (r.ci_run_ref->>'repository_id') || '/' || (r.ci_run_ref->>'run_id') || '/' || (r.ci_run_ref->>'run_attempt') as run_ci_run_ref
+          from public.producer_slot s
+          join public.run r on r.org_id = s.org_id and r.id = s.run_id
+         where s.org_id = @org_id
+           and s.run_id = @run_id
+           and s.producer_id = @producer_id
         """;
 
     /// <summary>
@@ -379,5 +563,26 @@ internal static class ProducerSlotSql
            and producer_id = @producer_id
            and bound_token_jti is null
         returning id, shard_index, producer_id, bound_token_jti, bound_ci_run_ref, last_sequence, closed_at
+        """;
+
+    /// <summary>
+    /// The one-shot close (T68, AC9): the whole identity guard sits in the <c>WHERE</c> - an unclosed
+    /// slot bound to exactly this jti and CI reference - so the statement itself is the race arbiter and
+    /// a second finalize matches no row. <c>closed_at</c> and the two declared values are written
+    /// together exactly once; <c>is not distinct from</c> is the null-safe equality the binding needs
+    /// (<c>bound_ci_run_ref</c> is null for a non-CI producer), which the read path expresses in C#.
+    /// </summary>
+    internal const string CloseIfOpen = """
+        update public.producer_slot
+           set closed_at = now(),
+               declared_last_sequence = @declared_last_sequence,
+               declared_count = @declared_count
+         where org_id = @org_id
+           and run_id = @run_id
+           and producer_id = @producer_id
+           and closed_at is null
+           and bound_token_jti = @jti
+           and bound_ci_run_ref is not distinct from @ci_run_ref
+        returning id, shard_index, producer_id, closed_at, declared_last_sequence, declared_count
         """;
 }
