@@ -493,8 +493,10 @@ public sealed class EvidenceUploadUrlTests
         await using var world = await StartAsync(Writer());
         var runId = await SeedRunAsync(world, ExecutionKey);
 
-        // No artifact_kind_policy row: the policy is the only authority, so the request fails closed.
-        var answer = await UploadUrlAsync(world, Body(runId), NewKey());
+        // A kind with no static default (06.1.2-T3.1): trace/video/screenshot/raw_report now fall back to the
+        // static per-kind defaults, so dom_snapshot — one of the four kinds D-A9 fixes no cap for — is the one
+        // that still fails closed with no policy row. It is the same 422 the refusal carried before the defaults.
+        var answer = await UploadUrlAsync(world, Body(runId, kind: "dom_snapshot", mediaType: "application/json"), NewKey());
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         answer.ErrorCode.ShouldBe("kind_disabled");

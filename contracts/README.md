@@ -27,6 +27,12 @@ client and the server-side JSON Schema validation (01.3.2).
   `(producer_id, sequence)`, gap detection is derived from `producer_slot.last_sequence`, and the
   first-event `queued → running` lock order. The envelope schema itself lives in
   `schemas/event-envelope.v1.json`.
+- `evidence/artifact-kind-defaults.v1.json` — the static per-kind artifact
+  defaults (media types + `max_bytes`, capture enabled) that apply only when a
+  project has no `artifact_kind_policy` row, plus the 8 KiB cap on the
+  `POST /v1/artifacts/upload-url` request body (00 §9.3, 06.1.2-T3, D-A9 /
+  D-S46-Q1). A data file, not a schema: it sits outside `schemas/`,
+  `adapter/` and `manifest/`, so neither runtime loader compiles it.
 - `cli.md` — the `evidgate` CLI contract (04.2.1-T2, OI-04-06): exit-code
   registry, `EVIDGATE_*` configuration and precedence, token sources, stderr
   error codes and redaction rules. Owned across the 04.2.x stories.
