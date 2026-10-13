@@ -84,16 +84,18 @@ internal static class EvidenceErrors
         [new ErrorDetail("media_type", "not_allowed")]);
 
     /// <summary>
-    /// 422: capture of the kind is switched off for the project, or the project has no policy row for it
-    /// (06.1.2 AC1, 06.2.2 AC2). A missing row fails closed: the policy is the only authority on what a project
-    /// accepts, and 06.1.2-T3.1's static defaults may later relax this to a permissive fallback.
+    /// 422: capture of the kind is switched off for the project, or the project has no policy row for the kind and
+    /// the kind has no static default (06.1.2 AC1, 06.2.2 AC2, 06.1.2-T3.1). A project row with
+    /// <c>capture_enabled</c> false is this refusal however the defaults read; a kind with a static default and no
+    /// row is captured with that default instead, so only the four kinds without one (the 06.1.2-T3.1 owner
+    /// decision) fail closed with no row.
     /// </summary>
     internal static Error KindDisabled => Error.Unprocessable(
         ApiErrorCode.KindDisabled,
         "capture of this artifact kind is disabled for the project",
         [new ErrorDetail("kind", "disabled")]);
 
-    /// <summary>413: the declared size is above the kind policy's <c>max_bytes</c> (06.1.2 AC1, 06.1.2-T3).</summary>
+    /// <summary>413: the declared size is above the effective kind policy's <c>max_bytes</c> (06.1.2 AC1, 06.1.2-T3.1).</summary>
     internal static Error PayloadTooLarge => new(
         ApiErrorCode.PayloadTooLarge,
         "the declared size is above the limit for this artifact kind",

@@ -317,12 +317,15 @@ public sealed class EvidenceUploadUrlQaTests
     [Fact]
     public async Task UploadUrl_KindWithoutPolicyRow_IsKindDisabled_NotKindUnknown()
     {
-        // The policy is the only authority: a KNOWN kind with no policy row fails closed as kind_disabled
-        // (coordinator ruling). An unknown kind is refused earlier as kind_unknown (see the test below).
+        // A KNOWN kind with no policy row and no static default (06.1.2-T3.1): dom_snapshot has no D-A9 cap, so it
+        // is still the fail-closed kind_disabled (coordinator ruling) rather than any other code. An unknown kind
+        // is refused earlier as kind_unknown (see the test below); a kind WITH a default (trace/video/screenshot/
+        // raw_report) is accepted with it, which EvidenceKindDefaultsTests covers.
         await using var world = await StartAsync(Writer());
         var runId = await SeedRunAsync(world, ExecutionKey);
 
-        var answer = await UploadUrlAsync(world, Body(runId, attemptNo: 1, bytes: Cap, kind: "trace"), Guid.NewGuid().ToString("N"));
+        var answer = await UploadUrlAsync(
+            world, Body(runId, attemptNo: 1, bytes: Cap, kind: "dom_snapshot", mediaType: "application/json"), Guid.NewGuid().ToString("N"));
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         answer.ErrorCode.ShouldBe("kind_disabled");

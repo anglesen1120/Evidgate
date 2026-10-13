@@ -13,20 +13,28 @@ namespace Evidgate.Modules.Evidence.Application;
 
 /// <summary>
 /// The row facts one completion needs (06.1.2 §5, T86 step 1), read as one bounded statement (P3): the artifact's
-/// state-machine facts, the declared size/checksum/media type, the final object key, the project's status and the
-/// kind policy the mint used. A missing policy row leaves the three policy members null.
+/// state-machine facts, the kind, the declared size/checksum/media type, the final object key, the project's
+/// status and the kind policy the mint used. A missing policy row leaves the four policy members null, and
+/// <see cref="ArtifactKindDefaults.Resolve"/> then decides from the artifact's <see cref="Kind"/> whether the
+/// static default applies or the project has disabled the kind (06.1.2-T3.1).
 /// </summary>
 /// <param name="State">One of <see cref="ArtifactState.All"/>.</param>
 /// <param name="Bytes">The declared size, persisted at mint (T1 decision 8).</param>
 /// <param name="Checksum">The declared content address, <c>sha256:&lt;64 lowercase hex&gt;</c>.</param>
 /// <param name="MediaType">The declared media type.</param>
+/// <param name="Kind">One of the 00 §7 kinds; the kind the static-default lookup is keyed by.</param>
 /// <param name="ObjectKey">The final object key the row already holds (T1 decision 7).</param>
 /// <param name="ProjectId">The project the artifact belongs to.</param>
 /// <param name="FailureCode">The reason code of a rejected artifact; null otherwise.</param>
 /// <param name="ProjectStatus">The project's status (migration 0005); <c>deleted</c> refuses the completion.</param>
-/// <param name="MaxBytes">The kind policy's size cap, or null when the project has no policy row for the kind.</param>
-/// <param name="MediaTypes">The kind policy's accepted media types, or null with no policy row.</param>
-/// <param name="CaptureEnabled">The kind policy's capture switch, or null with no policy row.</param>
+/// <param name="MaxBytes">The kind policy row's size cap, or null when the project has no row for the kind (the static default then caps it).</param>
+/// <param name="MediaTypes">The kind policy row's accepted media types, or null with no row (the static default's list then applies).</param>
+/// <param name="CaptureEnabled">The kind policy row's capture switch, or null with no row.</param>
+/// <param name="DefaultSensitivity">
+/// The kind policy row's sensitivity, or null with no row. The completion itself reads only the cap, the accepted
+/// types and the capture switch; the row is passed to the shared resolution whole, so the mint's and the
+/// completion's resolution of one artifact cannot differ.
+/// </param>
 /// <param name="BoundCiRunRef">
 /// The CI reference of the artifact's run in the <see cref="CiRunReference.ToBindingReference"/> form
 /// (<c>{repository_id}/{run_id}/{run_attempt}</c>, T88), or null when the run carries none (a manual or replay
@@ -37,6 +45,7 @@ internal sealed record ArtifactFacts(
     long? Bytes,
     string Checksum,
     string MediaType,
+    string Kind,
     string ObjectKey,
     Guid ProjectId,
     string? FailureCode,
@@ -44,13 +53,15 @@ internal sealed record ArtifactFacts(
     long? MaxBytes,
     string[]? MediaTypes,
     bool? CaptureEnabled,
+    string? DefaultSensitivity,
     string? BoundCiRunRef);
 
 /// <summary>
 /// The endpoint-side verification of one completion (06.1.2 §5, T86 steps 1-4), run BEFORE the writer command
 /// dispatches: it takes the C2 <c>artifact:write</c> decision the pipeline would reach (an unauthorized caller —
 /// a viewer, a non-member, a token scoped to another project — is refused here, so it can never reach the storage
-/// calls), reads the row facts in a read-only tenant scope, checks the scope and the state, then <c>HEAD</c>s the
+/// calls), reads the row facts in a read-only tenant scope, checks the scope and the state, re-resolves the kind
+/// policy (the project's row against the static per-kind defaults, 06.1.2-T3.1), then <c>HEAD</c>s the
 /// staging object, verifies size/cap/checksum, sniffs its leading bytes against the declared media type before the
 /// promotion (so a mismatch is never copied to the final key), promotes it to the final key, re-verifies the
 /// promoted object and sniffs it again (06.3.1 AC5). Every storage call runs with NO
@@ -98,6 +109,7 @@ internal sealed class ArtifactCompletionVerifier(
                a.bytes,
                a.checksum,
                a.media_type,
+               a.kind,
                a.object_key,
                a.project_id,
                a.failure_code,
@@ -105,6 +117,7 @@ internal sealed class ArtifactCompletionVerifier(
                kp.max_bytes,
                kp.media_types,
                kp.capture_enabled,
+               kp.default_sensitivity,
                (r.ci_run_ref->>'repository_id') || '/' || (r.ci_run_ref->>'run_id') || '/' || (r.ci_run_ref->>'run_attempt') as bound_ci_run_ref
           from public.artifact a
           join public.project p on p.id = a.project_id
@@ -220,17 +233,27 @@ internal sealed class ArtifactCompletionVerifier(
             return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.ArtifactStateConflict);
         }
 
-        // The kind policy is the authority on the cap and the accepted media types, and a missing or switched-off
-        // row fails closed exactly as it does at mint (T1 decision 3).
-        if (facts.MaxBytes is not { } maxBytes || facts.CaptureEnabled != true)
+        // The effective policy is the project's row resolved against the static per-kind defaults (06.1.2-T3.1),
+        // by the same rule the mint applied. Only a kind with neither a row nor a default, and a row whose capture
+        // switch is off, fail closed — exactly as at mint (T1 decision 3).
+        var policy = ArtifactKindDefaults.Resolve(
+            facts.Kind,
+            facts.MaxBytes is { } rowMaxBytes
+                ? new KindPolicyRow(rowMaxBytes, facts.MediaTypes ?? [], facts.CaptureEnabled == true, facts.DefaultSensitivity ?? ArtifactSensitivity.ForKind(facts.Kind))
+                : null);
+        if (policy is null || !policy.CaptureEnabled)
         {
             return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.KindDisabled);
         }
 
-        if (!MediaTypeAllowed(facts.MediaTypes, facts.MediaType))
+        if (!MediaTypeAllowed(policy.MediaTypes, facts.MediaType))
         {
             return Result.Success(ArtifactCompletionVerdict.Reject(ArtifactFailureCode.MediaTypeMismatch));
         }
+
+        // The effective cap the stored object is checked against: the resolved policy's, never the raw row's, so a
+        // row above a kind's default cannot widen the cap at completion either (D-A9).
+        var maxBytes = policy.MaxBytes;
 
         // T86 step 2/3: the staging key is derived, never read from the row (T1 decision 7).
         var stagingKey = ArtifactKeyMinter.StagingKey(context.OrgId, artifactId);
@@ -299,13 +322,13 @@ internal sealed class ArtifactCompletionVerifier(
 
     /// <summary>
     /// The T86 step-3 verification of one stored object against the declared facts (AC3): the stored length must
-    /// equal the declared <c>bytes</c> and stay within the kind policy's cap, and the SHA-256 the store recorded
-    /// must equal the declared one. A store that records no checksum is not verified and fails closed. Null means
-    /// the object is verified.
+    /// equal the declared <c>bytes</c> and stay within the effective kind policy's cap, and the SHA-256 the store
+    /// recorded must equal the declared one. A store that records no checksum is not verified and fails closed.
+    /// Null means the object is verified.
     /// </summary>
     /// <param name="head">What the store reported about the object.</param>
     /// <param name="facts">The declared facts of the row.</param>
-    /// <param name="maxBytes">The kind policy's size cap.</param>
+    /// <param name="maxBytes">The effective kind policy's size cap (06.1.2-T3.1).</param>
     private static string? Mismatch(ObjectHead head, ArtifactFacts facts, long maxBytes)
     {
         if (facts.Bytes != head.ContentLength)
@@ -502,11 +525,11 @@ internal sealed class ArtifactCompletionVerifier(
     /// refused. The same comparison the mint applies (06.1.2-T1), so both ends of the upload agree on what the
     /// policy accepts.
     /// </summary>
-    /// <param name="allowed">The policy's accepted types, or null with no policy row.</param>
+    /// <param name="allowed">The effective policy's accepted types (never null: a null resolution is refused before this call).</param>
     /// <param name="mediaType">The declared media type of the artifact.</param>
-    private static bool MediaTypeAllowed(string[]? allowed, string? mediaType)
+    private static bool MediaTypeAllowed(string[] allowed, string? mediaType)
     {
-        if (allowed is null || mediaType is null || !ArtifactShape.HasNoControlCharacter(mediaType))
+        if (mediaType is null || !ArtifactShape.HasNoControlCharacter(mediaType))
         {
             return false;
         }

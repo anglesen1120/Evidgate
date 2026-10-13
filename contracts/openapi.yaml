@@ -484,7 +484,13 @@ paths:
         `execution_key` must be a planned execution of the run (422
         `unknown_execution_key`; T10/T17); the kind policy must allow the kind,
         the media type and the declared size (422 `kind_disabled` /
-        `media_type_not_allowed`, 413 `payload_too_large`). The returned `object_key` is
+        `media_type_not_allowed`, 413 `payload_too_large`). The request body is
+        capped at 8 KiB and is refused with 413 `payload_too_large` before it is
+        parsed. When the project has no policy row for the kind, the static
+        per-kind defaults (`contracts/evidence/artifact-kind-defaults.v1.json`,
+        06.1.2-T3) apply for `trace`, `video`, `screenshot` and `raw_report`;
+        the remaining four kinds stay 422 `kind_disabled`, and a project row can
+        only lower the cap, never raise it. The returned `object_key` is
         the `pending/<org_id>/<artifact_id>` staging key, `required_headers`
         must be sent verbatim with the `PUT`, and the URL expires within 15
         minutes. The `Idempotency-Key` is a header, never a body member (T92).

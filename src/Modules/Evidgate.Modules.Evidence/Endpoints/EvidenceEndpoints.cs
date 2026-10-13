@@ -4,6 +4,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Application;
+using Evidgate.Modules.Evidence.Domain;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -14,7 +15,9 @@ namespace Evidgate.Modules.Evidence.Endpoints;
 /// <summary>
 /// The artifact routes of 06.1.2 §5. The body is read with the host's snake_case JSON options and validated by the
 /// command's FluentValidation validator; authorization is the C2 pipeline and the 00 §9.2 envelope is the host's
-/// <c>ResultEndpointFilter</c>.
+/// <c>ResultEndpointFilter</c>. The upload-url body is bounded by <see cref="UploadUrlLimits.MaxBodyBytes"/> before
+/// it is deserialised (06.1.2-T3.1), so an oversized body is the 00 §9.2 413 <c>payload_too_large</c> envelope and
+/// never reaches the mediator.
 /// </summary>
 public static class EvidenceEndpoints
 {
@@ -103,13 +106,25 @@ public static class EvidenceEndpoints
             return Result.Failure<UploadUrlResponse>(Unauthenticated);
         }
 
+        // 06.1.2-T3.1: the route's body limit is enforced BEFORE deserialisation, so an oversized body costs no
+        // parse, no statement and no row. A declared Content-Length over the limit is refused without reading the
+        // body at all; a chunked or length-less body, which no header reveals, is counted while it is read by
+        // BodySizeLimitStream below.
+        if (context.Request.ContentLength is { } declared && declared > UploadUrlLimits.MaxBodyBytes)
+        {
+            return Result.Failure<UploadUrlResponse>(BodyTooLarge);
+        }
+
         // The body is read explicitly rather than bound by the request-delegate factory: the spec declares this
         // request body inline (no component schema), so the served document must not name one, and every body-read
         // failure mode still produces the 00 §9.2 envelope — malformed JSON, an unsupported/missing content type
-        // (InvalidOperationException) and Kestrel's own BadHttpRequestException (whose status, e.g. 413, is kept).
+        // (InvalidOperationException) and Kestrel's own BadHttpRequestException (whose status, e.g. 413, is kept),
+        // which is also what the size-limiting stream raises when the body passes the limit.
         UploadUrlRequest? request;
+        var body = context.Request.Body;
         try
         {
+            context.Request.Body = new BodySizeLimitStream(body, UploadUrlLimits.MaxBodyBytes);
             request = await context.Request.ReadFromJsonAsync<UploadUrlRequest>(cancellationToken).ConfigureAwait(false);
         }
         catch (BadHttpRequestException exception)
@@ -123,6 +138,10 @@ public static class EvidenceEndpoints
         catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         {
             return Result.Failure<UploadUrlResponse>(Error.BadRequest("the request body is not valid JSON"));
+        }
+        finally
+        {
+            context.Request.Body = body;
         }
 
         if (request is null)
@@ -149,6 +168,128 @@ public static class EvidenceEndpoints
     }
 
     private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
+
+    /// <summary>
+    /// 413 for a body over <see cref="UploadUrlLimits.MaxBodyBytes"/>: the same 00 §9.2 shape the other
+    /// body-bounded routes use (<c>PolicyEndpoints</c>, <c>OrchestratorEndpoints</c>, the contract-validation
+    /// filter), and the same one the catch below derives from a streamed oversize. It echoes nothing of the body.
+    /// </summary>
+    private static Error BodyTooLarge => new(
+        ApiErrorCode.PayloadTooLarge,
+        "the request body is too large",
+        StatusCodes.Status413PayloadTooLarge);
+
+    /// <summary>
+    /// The body reader of <c>POST /v1/artifacts/upload-url</c> (06.1.2-T3.1): every byte the host reads is counted,
+    /// and the first byte PAST <paramref name="limit"/> raises the same <see cref="BadHttpRequestException"/> with
+    /// <c>413</c> that Kestrel raises for its own body-size limit, so the endpoint's existing catch maps it to the
+    /// identical 00 §9.2 <c>payload_too_large</c> envelope. It bounds a chunked or length-less body, which the
+    /// declared <c>Content-Length</c> check cannot see, without buffering anything: a body of exactly the limit is
+    /// read whole (one byte past it is always requested, so only the byte that passes the limit refuses), and no
+    /// body byte is ever copied out, logged or echoed.
+    /// </summary>
+    /// <param name="inner">The request body Kestrel hands the endpoint.</param>
+    /// <param name="limit">The largest body the route accepts, in bytes.</param>
+    private sealed class BodySizeLimitStream(Stream inner, int limit) : Stream
+    {
+        /// <summary>The bytes read through this stream so far; never above <paramref name="limit"/> when a read returns.</summary>
+        private long read;
+
+        /// <inheritdoc />
+        public override bool CanRead => true;
+
+        /// <inheritdoc />
+        public override bool CanSeek => false;
+
+        /// <inheritdoc />
+        public override bool CanWrite => false;
+
+        /// <inheritdoc />
+        public override long Length => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        public override long Position
+        {
+            get => read;
+            set => throw new NotSupportedException();
+        }
+
+        /// <inheritdoc />
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ArgumentNullException.ThrowIfNull(buffer);
+
+            var taken = inner.Read(buffer, offset, Room(count));
+            Count(taken);
+            return taken;
+        }
+
+        /// <inheritdoc />
+        public override int Read(Span<byte> buffer)
+        {
+            var taken = inner.Read(buffer[..Room(buffer.Length)]);
+            Count(taken);
+            return taken;
+        }
+
+        /// <inheritdoc />
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ReadCoreAsync(buffer, cancellationToken);
+
+        /// <inheritdoc />
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(buffer);
+
+            return ReadCoreAsync(buffer.AsMemory(offset, Room(count)), cancellationToken).AsTask();
+        }
+
+        /// <inheritdoc />
+        public override void Flush()
+        {
+            // Read-only stream: nothing to flush.
+        }
+
+        /// <inheritdoc />
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        /// <summary>
+        /// How many bytes this read may take without passing the limit: the requested count, capped at the one byte
+        /// that would prove the body is over it. A body of exactly the limit therefore ends in a normal
+        /// end-of-stream read instead of a refusal.
+        /// </summary>
+        /// <param name="requested">The count the caller asked for.</param>
+        private int Room(int requested)
+        {
+            var room = (limit + 1) - read;
+            return requested < room ? requested : (int)room;
+        }
+
+        /// <summary>Counts a completed read and refuses the moment it passes the limit.</summary>
+        /// <param name="taken">The bytes the inner stream returned.</param>
+        private void Count(int taken)
+        {
+            read += taken;
+
+            if (read > limit)
+            {
+                throw new BadHttpRequestException("the request body is too large", StatusCodes.Status413PayloadTooLarge);
+            }
+        }
+
+        private async ValueTask<int> ReadCoreAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+        {
+            var taken = await inner.ReadAsync(buffer[..Room(buffer.Length)], cancellationToken).ConfigureAwait(false);
+            Count(taken);
+            return taken;
+        }
+    }
 
     /// <summary>00 §7 / the <c>idempotency_record</c> key column: the C2 idempotency stage's own bound (T92).</summary>
     private const int MaxIdempotencyKeyLength = 128;
