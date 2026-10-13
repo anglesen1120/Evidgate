@@ -1,0 +1,34 @@
+{
+  "$comment": "Static per-kind artifact defaults, applied only when the project has no artifact_kind_policy row for that kind (DECISIONS.md §8.1 D-A9 / OI-06-03, 06-O3; ratified D-S46-Q1). Media types are exactly the types MediaSniffer.HasSignature accepts (06.3.1-T2.2).",
+  "request_body_max_bytes": 8192,
+  "kinds": {
+    "trace": { "max_bytes": 104857600, "media_types": ["application/zip"] },
+    "video": { "max_bytes": 209715200, "media_types": ["video/mp4"] },
+    "screenshot": { "max_bytes": 10485760, "media_types": ["image/png", "image/jpeg"] },
+    "raw_report": {
+      "max_bytes": 268435456,
+      "media_types": [
+        "application/xml",
+        "text/xml",
+        "application/json",
+        "text/html",
+        "application/zip"
+      ]
+    }
+  },
+  "no_default": ["dom_snapshot", "a11y_snapshot", "patch", "ui_hierarchy"],
+  "unmapped": {
+    "log": {
+      "max_bytes": 20971520,
+      "reason": "D-A9 names a log kind that the 00 §7 closed list does not have"
+    },
+    "html_report": { "max_bytes": 104857600, "reason": "folded into raw_report (256 MiB cap)" }
+  },
+  "rules": [
+    "A project row always supplies media_types and capture_enabled and wins for both; a kind default applies only while no row exists.",
+    "effective_max_bytes = min(row.max_bytes, kind.max_bytes) for a kind that has a default; a kind without a default uses the row value as is.",
+    "No project row and no kind default: 422 kind_disabled (fail closed).",
+    "Sensitivity of a defaulted kind is ArtifactSensitivity.ForKind(kind); a project row may set default_sensitivity instead.",
+    "request_body_max_bytes caps the POST /v1/artifacts/upload-url request body before deserialisation; over the cap is 413 payload_too_large."
+  ]
+}

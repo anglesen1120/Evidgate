@@ -108,10 +108,11 @@ internal sealed class RequestArtifactUploadUrlValidator : AbstractValidator<Requ
 
 /// <summary>
 /// Handler of <see cref="RequestArtifactUploadUrl"/> (06.1.2 §5): the pure in-memory shape refusals first (kind,
-/// checksum, size, token identity), then inside ONE tenant transaction (1) the run scope, (2) the kind policy,
-/// (3) the planned <c>(execution_key, attempt_no)</c> pair, (4) the producer-slot binding, (5) the mint and
-/// (6) the presign. Every refusal is a named 00 §9.2 code; the presigned URL is a bearer credential and is never
-/// logged, thrown or audited (S3).
+/// checksum, size, token identity), then inside ONE tenant transaction (1) the run scope, (2) the effective kind
+/// policy (the project's row resolved against the static per-kind defaults, 06.1.2-T3.1), (3) the planned
+/// <c>(execution_key, attempt_no)</c> pair, (4) the producer-slot binding, (5) the mint and (6) the presign. Every
+/// refusal is a named 00 §9.2 code; the presigned URL is a bearer credential and is never logged, thrown or
+/// audited (S3).
 /// </summary>
 /// <remarks>
 /// The audit action is <c>artifact.mint</c>: this command mints the same <c>artifact</c> row as
@@ -176,9 +177,16 @@ internal sealed class RequestArtifactUploadUrlHandler(
             return Result.Failure<UploadUrlResponse>(EvidenceErrors.ProjectDeleting);
         }
 
-        // (2) Kind policy, one statement. A missing row fails closed: the policy is the only authority on what a
-        // project accepts, and 06.1.2-T3.1's static defaults may later relax this to a permissive fallback.
-        var policy = await ReadPolicyAsync(contexts, scope.OrgId, projectId, command.Kind, cancellationToken).ConfigureAwait(false);
+        // (2) Kind policy, one statement plus the resolution. The row is no longer the only authority: the static
+        // per-kind defaults (06.1.2-T3.1, DECISIONS §8.1 D-A9) apply when the project has no row for the kind, so
+        // a kind that has a default is captured with it. A kind with neither a row nor a default, and a row whose
+        // capture switch is off, are the same fail-closed 422 kind_disabled (the refusal evidence exists for it).
+        var row = await ReadPolicyAsync(contexts, scope.OrgId, projectId, command.Kind, cancellationToken).ConfigureAwait(false);
+        var policy = ArtifactKindDefaults.Resolve(
+            command.Kind,
+            row is null
+                ? null
+                : new KindPolicyRow(row.MaxBytes, row.MediaTypes, row.CaptureEnabled, row.DefaultSensitivity));
         if (policy is null || !policy.CaptureEnabled)
         {
             return Result.Failure<UploadUrlResponse>(EvidenceErrors.KindDisabled);
@@ -224,8 +232,9 @@ internal sealed class RequestArtifactUploadUrlHandler(
         }
 
         // (5) The mint. The upload-url body carries no client object key, so object_key_not_allowed is
-        // structurally unreachable on this path. The policy row read above already carries the sensitivity, so the
-        // minter is spared a second read of it (F2).
+        // structurally unreachable on this path. The resolved policy above already carries the sensitivity — the
+        // project's row when there is one, the kind's static default otherwise — so the minter is spared a second
+        // read of it (F2).
         var record = await minter.MintAsync(
             scope.OrgId,
             projectId,
@@ -256,7 +265,11 @@ internal sealed class RequestArtifactUploadUrlHandler(
             presigned.ExpiresAt));
     }
 
-    /// <summary>The project's kind policy, or null when it has none for the kind (one statement, P3).</summary>
+    /// <summary>
+    /// The project's kind policy row, or null when it has none for the kind (one statement, P3). A null row is not
+    /// a refusal by itself: <see cref="ArtifactKindDefaults.Resolve"/> decides whether the kind's static default
+    /// applies or the kind is disabled.
+    /// </summary>
     private static async Task<ArtifactKindPolicy?> ReadPolicyAsync(
         ITenantDbContextFactory<EvidenceDbContext> contexts,
         Guid orgId,

@@ -276,7 +276,9 @@ public sealed class HostileFixtureTests(GeneratedHostileFixtures generated) : IC
     /// (<see cref="ArtifactCompletionVerifier"/>): a store that reports exactly the object's length and SHA-256
     /// behind one ETag, the artifact's own tenant, and a kind policy that ACCEPTS the declared media type and caps
     /// the size at <see cref="HostileFixtureCorpus.KindCapBytes"/>. The declared type is allowed by policy on
-    /// purpose: what the corpus proves is the media sniff's fail-closed arm, not the policy gate.
+    /// purpose: what the corpus proves is the media sniff's fail-closed arm, not the policy gate. The row is
+    /// present, so the kind — <c>raw_report</c>, the kind every artifact this corpus describes is — contributes
+    /// only its sensitivity default, which no verdict reads.
     /// </summary>
     /// <param name="bytes">The hostile object's bytes, as the store holds them.</param>
     /// <param name="declaredMediaType">The media type the artifact declares.</param>
@@ -292,6 +294,7 @@ public sealed class HostileFixtureTests(GeneratedHostileFixtures generated) : IC
             bytes.LongLength,
             $"sha256:{checksum}",
             declaredMediaType,
+            "raw_report",
             $"projects/{projectId}/artifacts/{artifactId}",
             projectId,
             FailureCode: null,
@@ -299,6 +302,7 @@ public sealed class HostileFixtureTests(GeneratedHostileFixtures generated) : IC
             MaxBytes: HostileFixtureCorpus.KindCapBytes,
             MediaTypes: [declaredMediaType],
             CaptureEnabled: true,
+            DefaultSensitivity: null,
             BoundCiRunRef: null);
 
         var scopes = Substitute.For<ITenantScopeFactory>();
