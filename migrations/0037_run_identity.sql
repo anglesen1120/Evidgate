@@ -22,7 +22,7 @@
 -- Existing rows: the six nullable columns stay NULL and the two flags default false, which is the
 -- pre-05.2.2 reading of every run (plan §4, "existing rows").
 --
--- Index (D-S45-Q2, coordinator, 2026-10-13). The verified-caller check reads the `ci_token_issue` row
+-- Index (D-S45-Q2, S45 lane, 2026-10-13). The verified-caller check reads the `ci_token_issue` row
 -- of the GitHub run attempt the minted token carries, not of its own `jti`: 02.4.1 stores the GitHub
 -- OIDC token's `jti` in `ci_token_issue.jti` while the `ci_producer` token Evidgate mints has a fresh
 -- `jti` (Identity/Application/Commands/ExchangeCommands.cs), so a `where jti = <credential id>` read
