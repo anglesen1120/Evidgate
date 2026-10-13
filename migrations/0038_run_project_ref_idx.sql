@@ -1,0 +1,37 @@
+-- 0038_run_project_ref_idx.sql
+--
+-- Owner: 05.2.2-T2.2. The keyset index behind the run list's `ref_name` filter (feature plan 05.2.2 §4,
+-- AC6, §8 "Performance P2"): `GET /v1/projects/{p}/runs?ref_name=…` is one keyset statement
+--
+--   select … from public.run
+--    where project_id = @project_id and ref_name = @ref_name
+--      and (created_at, id) > (@cursor_created_at, @cursor_id)
+--    order by created_at, id
+--    limit @limit
+--
+-- and `run_project_ref_idx (project_id, ref_name, created_at, id)` serves it end to end: the two equality
+-- columns pin one project's one ref, and `(created_at, id)` is the keyset order, so the page is a short
+-- forward range scan with no sort step. The shape is the plan §4 one verbatim; `org_id` is deliberately not
+-- a key column — `project_id` is globally unique (a project belongs to exactly one organisation) and the
+-- tenant RLS predicate `org_id = current_setting(…)` is a cheap filter on the already-pinned rows.
+-- `ListRunsIndexPlanTests` (tests/Tenancy.IntegrationTests) asserts the plan on a seeded table.
+--
+-- What it does NOT serve, on purpose: the other filters (`pr_number`, `head_sha`, `trigger_event`,
+-- `is_fork`) and the unfiltered list read the project's rows through 0031's `run_project_created_idx`
+-- (`org_id, project_id, created_at desc, id`) and filter/sort them; they have no index in this task (the
+-- plan names exactly one) and are recorded as a hand-over in STATUS.md.
+--
+-- Locking. The runner applies a file in one transaction (`WithTransactionPerScript`), so
+-- `create index concurrently` is not available (migrations/README.md, "Known limits"): a plain
+-- `create index` takes a SHARE lock on `public.run` for the build, which blocks the run create and the
+-- `update … set state` writes (reads are unaffected) while it runs. The table is the youngest of the
+-- orchestration tables (0031, 05.2.1; no production tenant exists before the Stage B decision), so the
+-- build is sub-second and the same plain form as every earlier index migration (0028-0034) is kept.
+-- Before a populated production `run` table exists this decision must be revisited: build the index
+-- out of band with `create index concurrently` and let this file's `if not exists` adopt it.
+--
+-- Idempotent like 0013/0025/0027-0037: `create index if not exists`, so a re-run is a no-op. No column,
+-- grant, policy or RLS statement changes: the index is read through the app role's existing SELECT on `run`.
+
+create index if not exists run_project_ref_idx
+  on public.run (project_id, ref_name, created_at, id);

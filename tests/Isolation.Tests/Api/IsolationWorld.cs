@@ -84,8 +84,15 @@ public sealed class IsolationProject
     /// <summary>The project's manifest.</summary>
     public required Guid ManifestId { get; init; }
 
-    /// <summary>The project's run (<c>{r}</c> of <c>/v1/runs/{r}</c>), created from <see cref="ManifestId"/> (05.3.1).</summary>
-    public required Guid RunId { get; init; }
+    /// <summary>
+    /// The project's runs (<c>{r}</c> of <c>/v1/runs/{r}</c>), all created from <see cref="ManifestId"/> (05.3.1):
+    /// at least two, so <c>GET /v1/projects/{p}/runs</c> pages at limit 1 (05.2.2-T2). The first carries a
+    /// body-only <c>branch</c>/<c>main</c> ref, so the <c>?ref_name=main</c> filter has a matching row per project.
+    /// </summary>
+    public required IReadOnlyList<Guid> RunIds { get; init; }
+
+    /// <summary>The first run (<c>{r}</c> of <c>/v1/runs/{r}</c>), created from <see cref="ManifestId"/> (05.3.1); <see cref="RunIds"/>[0].</summary>
+    public Guid RunId => RunIds[0];
 
     /// <summary>The project's waivers (<c>{w}</c> of <c>/v1/waivers/{w}/…</c>), in seeding order; at least two, so the list pages.</summary>
     public required IReadOnlyList<Guid> WaiverIds { get; init; }
@@ -170,8 +177,8 @@ public sealed class IsolationOrg
     /// <summary>Every manifest id.</summary>
     public IReadOnlyList<Guid> ManifestIds => [.. Projects.Select(p => p.ManifestId)];
 
-    /// <summary>Every run id (05.3.1's <c>GET /v1/runs/{r}</c>).</summary>
-    public IReadOnlyList<Guid> RunIds => [.. Projects.Select(p => p.RunId)];
+    /// <summary>Every run id (05.2.2-T2's <c>GET /v1/projects/{p}/runs</c>).</summary>
+    public IReadOnlyList<Guid> RunIds => [.. Projects.SelectMany(p => p.RunIds)];
 
     /// <summary>The member with <paramref name="label"/> (e.g. <c>viewer</c>, <c>tenant_admin</c>).</summary>
     public IsolationUser User(string label) => Users.Single(u => u.Label == label);
@@ -257,6 +264,9 @@ public sealed class IsolationWorld
 
     /// <summary>Two quarantine entries per project, so <c>/v1/projects/{p}/quarantine</c> pages at limit 1 and the remove control never shares a row.</summary>
     private const int QuarantinesPerProject = 2;
+
+    /// <summary>Two runs per project, so <c>/v1/projects/{p}/runs</c> pages at limit 1 (05.2.2-T2), which is also what gives org A's first page a cursor for the cross-org step.</summary>
+    private const int RunsPerProject = 2;
 
     /// <summary>The commit of the first tree; the second sync uses <see cref="SecondCommitSha"/>.</summary>
     private const string CommitSha = "bbbbbbb2222222";
@@ -467,15 +477,24 @@ public sealed class IsolationWorld
                 Manifest(suiteRevisions[0], primaryRevisions, environmentRevision),
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("manifest_id").GetGuid();
 
-            // 05.3.1-T1: one run of that manifest, so GET /v1/runs/{r} has a real org-A run id to probe
-            // with (the route is addressed by run id alone; a random id would not prove RLS hides a real row).
-            var run = (await SendAsync(
-                HttpMethod.Post,
-                $"/v1/projects/{project}/runs",
-                admin,
-                org,
-                new { manifest_id = manifest },
-                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("run_id").GetGuid();
+            // 05.3.1-T1 + 05.2.2-T2: two runs of that manifest, so GET /v1/runs/{r} has a real org-A run id to
+            // probe with (the route is addressed by run id alone; a random id would not prove RLS hides a real
+            // row) AND GET /v1/projects/{p}/runs pages at limit 1. The first body carries a branch/main `ref`,
+            // which the ?ref_name=main filter matches — so a cross-tenant leak of the filter path would surface a
+            // real org-A row instead of an empty page.
+            var runs = new List<Guid>();
+            for (var i = 0; i < RunsPerProject; i++)
+            {
+                runs.Add((await SendAsync(
+                    HttpMethod.Post,
+                    $"/v1/projects/{project}/runs",
+                    admin,
+                    org,
+                    i == 0
+                        ? new { manifest_id = manifest, @ref = new { kind = "branch", name = "main" } }
+                        : new { manifest_id = manifest },
+                    HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("run_id").GetGuid());
+            }
 
             var waivers = new List<Guid>();
             for (var i = 0; i < WaiversPerProject; i++)
@@ -576,7 +595,7 @@ public sealed class IsolationWorld
                 EnvironmentRevisionId = environmentRevision,
                 PolicyRevisionId = policyRevision,
                 ManifestId = manifest,
-                RunId = run,
+                RunIds = runs,
                 WaiverIds = waivers,
                 QuarantineIds = quarantines,
             };
