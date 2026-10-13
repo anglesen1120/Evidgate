@@ -133,7 +133,7 @@ public sealed class RunStateTransitionSchemaTests
         }
 
         (await _fixture.ScalarAsync<string>(world.Database, $"select purpose || ':' || version::text from public.run where id = '{runId}'"))
-            .ShouldBe("regular:0", "no un-granted column moved");
+            .ShouldBe("regular:1", "no un-granted column moved; the 0004 trigger bumped version once for the state update");
     }
 
     // ------------------------------------------------------------------ (b) the migration re-run

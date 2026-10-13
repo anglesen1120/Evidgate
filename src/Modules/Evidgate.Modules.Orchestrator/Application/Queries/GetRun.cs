@@ -18,9 +18,13 @@ internal sealed record GetRunQuery(Guid RunId) : IQuery<Result<RunStateDto>>;
 
 /// <summary>
 /// Handler of <see cref="GetRunQuery"/>: one Dapper read over the ambient tenant scope (00 §5.5 C1/C3/C5), so RLS
-/// scopes the row and another tenant's run is the same <c>404 not_found</c> as an unknown id. A credential scoped to
-/// another project is refused <c>403 project_scope_mismatch</c>, exactly like the module's other read route
-/// (05.1.2 §5); reads never write.
+/// scopes the row and another tenant's run is the same <c>404 not_found</c> as an unknown id. The route names the run
+/// by id alone, so a project-scoped credential asking for a sibling project's run of the same org is that same
+/// <c>404 not_found</c>: <see cref="OrchestratorScope.Project"/>'s scope mismatch is mapped to it below, never to
+/// <c>403 project_scope_mismatch</c> — the same shape as the module's other read route
+/// (<c>GetEnvironmentRevisionQueryHandler</c>, EnvironmentRevisions.cs:246). The only 403 here is the permission
+/// stage's: <c>run:read</c> is outside the service-role ceiling (<c>PermissionEvaluator.Service</c>), so a
+/// <c>ci_producer</c>/service credential can never hold it and is refused <c>403 forbidden</c>. Reads never write.
 /// </summary>
 [Permission(Permissions.Run.Read)]
 internal sealed class GetRunQueryHandler(
@@ -67,7 +71,9 @@ internal sealed class GetRunQueryHandler(
 
     /// <summary>
     /// 404 <c>not_found</c>: no run with that id is visible to this tenant — the same code, message and body for an
-    /// unknown id and for another tenant's (the RLS branch above), so the answer is no existence oracle (00 §5.4).
+    /// unknown id, for another tenant's run (the RLS branch above) and for a sibling project's run of the same org
+    /// (the <see cref="OrchestratorScope.Project"/> mismatch, mapped here), so the answer is no existence oracle
+    /// (00 §5.4).
     /// </summary>
     private static Error RunNotFound => Error.NotFound("no run with that id is visible to this tenant");
 

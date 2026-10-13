@@ -20,18 +20,35 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// The <c>created → queued</c> edge has no caller: 05.2.1-T4 inserts the run as <c>queued</c> in the
 /// create transaction, so <c>created</c> is never persisted.
 /// </para>
+/// <para>
+/// <b>Lock order.</b> The read takes the run row <c>FOR NO KEY UPDATE</c> — the lock the guarded
+/// <c>UPDATE</c> itself takes — which conflicts with a concurrent transition, so callers serialise (AC4), but
+/// not with the <c>FOR KEY SHARE</c> an FK check on <c>run</c> takes. A caller must <b>not</b> hold a weaker
+/// lock on the same run row (<c>FOR SHARE</c>, e.g. <c>RunEventScopeReader</c>'s, or <c>FOR KEY SHARE</c>)
+/// when it calls this method: two callers upgrading such a lock to <c>NO KEY UPDATE</c> deadlock (40P01). A
+/// caller that may transition and also reads the run under <c>FOR SHARE</c> (04.1.1-T4's event handler) must
+/// take the run row <c>FOR NO KEY UPDATE</c> up front, or run the transition before any shared read.
+/// </para>
+/// <para>
+/// <b>Audit.</b> An applied transition's entry (action <c>run.state_changed</c>, object <c>run:{id}</c>) is the
+/// canonical audit record of the edge. A caller that audits an action of its own shares the unit of work's
+/// single pending description slot with it (<c>AuditTrail</c>'s <c>Describe</c>/<c>Record</c>): it must call
+/// <c>Describe</c> for its own entry <b>after</b> this method returns, because this method's own
+/// <c>Describe</c> overwrites that slot and its <c>Record</c> consumes it.
+/// </para>
 /// </summary>
 public interface IRunStateTransition
 {
     /// <summary>
     /// Classifies the requested <c>from → to</c> edge against the 00 §8.1 adjacency table, under the
-    /// run row's <c>FOR UPDATE</c> lock inside the caller's transaction, and applies it when the edge
+    /// run row's <c>FOR NO KEY UPDATE</c> lock inside the caller's transaction, and applies it when the edge
     /// is a declared forward move. Three outcomes (T82):
     /// <list type="bullet">
     /// <item>the run already holds <c>to</c>, has passed it on the forward path, or <c>from</c> is
     /// terminal → <see cref="TransitionOutcome.NoOp"/>, returning the current state with no write, no
     /// outbox row, no audit row and no version bump, so idempotent retries and concurrent first
-    /// batches stay safe;</item>
+    /// batches stay safe — and so a no-op is never an error, even when
+    /// <see cref="TransitionRunStateCommand.ExpectedVersion"/> is stale;</item>
     /// <item>a declared forward edge → <see cref="TransitionOutcome.Applied"/>: one
     /// <c>update public.run set state = @state</c> (the database's <c>set_updated_at_and_version</c>
     /// trigger bumps <c>version</c>), one <c>run.state_changed</c> outbox row and one
@@ -48,10 +65,12 @@ public interface IRunStateTransition
     /// The applied or no-op outcome, or a failure the caller maps to the 00 §9.2 envelope:
     /// <c>not_found</c> (404) when no run with that id is visible to the caller's tenant;
     /// <see cref="RunStateTransitionContract.ForwardSkipCode"/> (409) for an undeclared forward-skip;
-    /// <c>request_invalid</c> (422) when <c>to_state</c> is not a 00 §8.1 state; <c>precondition_failed</c>
-    /// (412, AC6) when <see cref="TransitionRunStateCommand.ExpectedVersion"/> does not match the row's
+    /// <c>request_invalid</c> (422) when <c>to_state</c> is null, empty or not a 00 §8.1 state;
+    /// <c>precondition_failed</c> (412, AC6) when an edge that would be applied has a
+    /// <see cref="TransitionRunStateCommand.ExpectedVersion"/> that does not match the row's
     /// current <c>version</c> — the failure's <c>details</c> mark the stale <c>If-Match</c> and carry the
-    /// current <c>version</c>.
+    /// current <c>version</c>. A no-op or forward-skip outcome is decided before that precondition, so a
+    /// stale <c>ExpectedVersion</c> never turns either of them into an error.
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="command"/> is null.</exception>
     /// <exception cref="InvalidOperationException">No tenant scope is open (the tenant-scope guard throws before any statement).</exception>
@@ -62,11 +81,17 @@ public interface IRunStateTransition
 
 /// <summary>One requested run state transition.</summary>
 /// <param name="RunId">The run to move; it must be visible to the caller's tenant scope.</param>
-/// <param name="ToState">The target state, one of the 00 §8.1 vocabulary (0031's <c>run_state_check</c>).</param>
+/// <param name="ToState">
+/// The target state, one of the 00 §8.1 vocabulary (0031's <c>run_state_check</c>); null or empty is refused
+/// 422 <c>request_invalid</c> like any unknown state, before any read.
+/// </param>
 /// <param name="Actor">Who the applied transition is credited to in <c>audit_log</c> (00 §7).</param>
 /// <param name="ExpectedVersion">
-/// The <c>run.version</c> the caller read, or null to skip the precondition. A mismatch is 412
-/// <c>precondition_failed</c> with the current version in <c>details</c> (00 §5.5 C4, AC6).
+/// The <c>run.version</c> the caller read, or null to skip the precondition. It is checked only for an edge
+/// that will be applied: a mismatch then fails 412 <c>precondition_failed</c> with the current version in
+/// <c>details</c> (00 §5.5 C4, AC6). A request that is a no-op (the run already holds or has passed the
+/// target, or is terminal) or a forward-skip is decided first, so a stale <c>ExpectedVersion</c> never
+/// turns either into an error.
 /// </param>
 public sealed record TransitionRunStateCommand(
     Guid RunId,

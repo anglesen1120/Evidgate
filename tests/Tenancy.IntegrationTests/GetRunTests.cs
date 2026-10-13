@@ -46,8 +46,11 @@ public sealed class GetRunTests
 
         // Purpose is exposed because 05.2.1-T5 labels a replay run for regression-count exclusion; the read path is
         // the only place a client can see the label, and the row is the one that decides (seeded here as the owner,
-        // since nothing served creates a replay run until the replay story).
-        await _fixture.ExecuteAsync(world.Database, $"update public.run set purpose = 'replay' where id = '{runId:D}'");
+        // since nothing served creates a replay run until the replay story). run_replay_grant_check (0031) requires
+        // a replay run to name its grant, so one is written; replay_grant_id has no foreign key until 08.4.3.
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.run set purpose = 'replay', replay_grant_id = '{Guid.CreateVersion7()}' where id = '{runId:D}'");
 
         (await GetAsync(world, runId)).Text("purpose").ShouldBe("replay");
     }
@@ -100,9 +103,17 @@ public sealed class GetRunTests
         answer.Status.ShouldBe(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>§5: a project-scoped credential reads its own project only; the sibling project's run is refused 403.</summary>
+    /// <summary>
+    /// §5: the read is refused to a credential that does not hold <c>run:read</c>. A CI/service credential can
+    /// never hold it — <c>run:read</c> is outside the service-role ceiling (<c>PermissionEvaluator.Service</c>) —
+    /// so a service token scoped to the sibling project is 403 <c>forbidden</c>, exactly like the module's other
+    /// read route (05.1.2's <c>GET /v1/environment-revisions/{id}</c>, EnvironmentRevisionTests). §5 documents
+    /// <c>forbidden</c> and <c>not_found</c> for this route; <c>project_scope_mismatch</c> is not part of it, and
+    /// the handler-level scope check that would produce it is mapped to <c>404 not_found</c> (GetRun.cs:55, the
+    /// same as GetEnvironmentRevisionQueryHandler, EnvironmentRevisions.cs:246).
+    /// </summary>
     [Fact]
-    public async Task GetRun_ProjectScopeMismatch_403()
+    public async Task GetRun_SiblingProjectCredential_Forbidden()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var runId = await CreateRunAsync(world);
@@ -114,7 +125,7 @@ public sealed class GetRunTests
             TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: other, servicePermissions: ["run:read"]));
 
         answer.Status.ShouldBe(HttpStatusCode.Forbidden);
-        answer.ErrorCode.ShouldBe("project_scope_mismatch");
+        answer.ErrorCode.ShouldBe("forbidden");
     }
 
     /// <summary>Creates one run of the world's manifest through the served route; returns its id.</summary>

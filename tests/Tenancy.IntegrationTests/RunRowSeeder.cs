@@ -55,18 +55,43 @@ internal static class RunRowSeeder
             on conflict do nothing
             """,
             ("id", suiteRevisionId), ("org_id", org), ("suite_id", suiteId), ("hash", "sha256:" + new string('a', 64)));
-        await scope.ExecuteAsync(
-            "insert into public.environment (id, org_id, project_id, environment_key, name) "
-            + "values (@id, @org_id, @project_id, 'staging', 'Staging') on conflict do nothing",
-            ("id", environmentId), ("org_id", org), ("project_id", project));
-        await scope.ExecuteAsync(
-            """
-            insert into public.environment_revision (id, org_id, project_id, environment_id, revision_no, base_urls, dependency_versions, revision_hash, created_by)
-            values (@id, @org_id, @project_id, @environment_id, 1, '{}', '{}', @hash, 'probe')
-            on conflict do nothing
-            """,
-            ("id", environmentRevisionId), ("org_id", org), ("project_id", project), ("environment_id", environmentId),
-            ("hash", "sha256:" + new string('c', 64)));
+        // Reuse the `staging` environment the world may already hold (RunCreationTests.StartAsync creates one
+        // through the API) and its first revision: environment_key_unique refuses a second row under that key,
+        // and a plain `do nothing` insert would leave the manifest pointing at an environment revision that was
+        // never inserted (environment_revision_environment_fk). The derived id is the fallback for a world
+        // without an environment (a bare org/project, as EventSchemaTests builds).
+        if (await scope.ScalarAsync<Guid?>(
+                "select id from public.environment where org_id = @org_id and project_id = @project_id and environment_key = 'staging'",
+                ("org_id", org), ("project_id", project)) is { } existingEnvironment)
+        {
+            environmentId = existingEnvironment;
+        }
+        else
+        {
+            await scope.ExecuteAsync(
+                "insert into public.environment (id, org_id, project_id, environment_key, name) "
+                + "values (@id, @org_id, @project_id, 'staging', 'Staging')",
+                ("id", environmentId), ("org_id", org), ("project_id", project));
+        }
+
+        // Same for the environment's revision 1: reuse it when the world already created it, else append the
+        // seeded one (environment_revision is append-only, so the existing row is never updated).
+        if (await scope.ScalarAsync<Guid?>(
+                "select id from public.environment_revision where org_id = @org_id and environment_id = @environment_id and revision_no = 1",
+                ("org_id", org), ("environment_id", environmentId)) is { } existingEnvironmentRevision)
+        {
+            environmentRevisionId = existingEnvironmentRevision;
+        }
+        else
+        {
+            await scope.ExecuteAsync(
+                """
+                insert into public.environment_revision (id, org_id, project_id, environment_id, revision_no, base_urls, dependency_versions, revision_hash, created_by)
+                values (@id, @org_id, @project_id, @environment_id, 1, '{}', '{}', @hash, 'probe')
+                """,
+                ("id", environmentRevisionId), ("org_id", org), ("project_id", project), ("environment_id", environmentId),
+                ("hash", "sha256:" + new string('c', 64)));
+        }
         await scope.ExecuteAsync(
             """
             insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, verified_by)

@@ -1,5 +1,5 @@
 // 05.3.1-T1.1/T1.2/T1.3 through the real host and a real PostgreSQL: the guarded run state transition
-// (00 §8.1) inside a tenant transaction the test owns — its FOR UPDATE read, the T82 classification, the
+// (00 §8.1) inside a tenant transaction the test owns — its FOR NO KEY UPDATE read, the T82 classification, the
 // outbox row, the audit row and the version bump — plus the two races the story names (concurrent first
 // batch, cancel vs reconciler verdict).
 #pragma warning disable CA1861
@@ -24,9 +24,11 @@ namespace Tenancy.IntegrationTests;
 /// app role, so the column grant, RLS and the version trigger are the production ones.
 /// </summary>
 /// <remarks>
-/// The two races are deterministic without sleeps: the test makes the winner take the row lock first (it
-/// awaits its own <c>FOR UPDATE</c> read), starts the second transaction, and only then commits the winner —
-/// so the loser is provably waiting on that lock when it reads the row.
+/// The two races are deterministic without sleeps: the winner takes the row lock first (awaiting its own
+/// <c>FOR NO KEY UPDATE</c> read), the loser starts in its own execution flow (<see cref="ExecutionContext.SuppressFlow"/>
+/// keeps the winner's ambient scope out of it), and the winner commits only once the loser's <c>FOR NO KEY UPDATE</c>
+/// is observed parked on that lock in <c>pg_stat_activity</c> — so the loser is provably waiting on the lock
+/// when the winner commits.
 /// </remarks>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
@@ -195,36 +197,29 @@ public sealed class RunStateTransitionTests
     /// <summary>
     /// AC3: an undeclared forward-skip between non-terminal states is a <c>Result</c> failure (409
     /// <c>invalid_transition</c>) and is never applied — the state, the version and the two journals are
-    /// exactly what they were.
+    /// exactly what they were. <c>running → incomplete</c> is deliberately absent: AC1 declares that edge.
     /// </summary>
     [Fact]
     public async Task TransitionRun_ForwardSkip_RejectedAndNotApplied()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        var runId = await RunInStateAsync(world, "running");
-        var version = await VersionAsync(world, runId);
 
-        foreach (var to in new[] { "complete", "incomplete" })
+        foreach (var (from, to) in new[] { ("running", "complete"), ("queued", "collecting"), ("queued", "complete") })
         {
+            var runId = await RunInStateAsync(world, from);
+            var drive = DriveTo(from).ToList();
+            var version = await VersionAsync(world, runId);
+
             var result = await TransitionAsync(world, runId, to);
 
-            result.IsSuccess.ShouldBeFalse(to);
-            result.Error!.Code.ShouldBe(ApiErrorCode.InvalidTransition, to);
-            result.Error.Status.ShouldBe(409, to);
-            (await StateAsync(world, runId)).ShouldBe("running", to);
-            (await VersionAsync(world, runId)).ShouldBe(version, to);
-            (await OutboxTargetsAsync(world, runId)).ShouldBe(["running"], to);
-            (await AuditRowsAsync(world, runId)).ShouldBe(1, to);
+            result.IsSuccess.ShouldBeFalse($"{from} -> {to}");
+            result.Error!.Code.ShouldBe(ApiErrorCode.InvalidTransition, $"{from} -> {to}");
+            result.Error.Status.ShouldBe(409, $"{from} -> {to}");
+            (await StateAsync(world, runId)).ShouldBe(from, $"{from} -> {to}");
+            (await VersionAsync(world, runId)).ShouldBe(version, $"{from} -> {to}");
+            (await OutboxTargetsAsync(world, runId)).ShouldBe(drive.ToArray(), $"{from} -> {to}");
+            (await AuditRowsAsync(world, runId)).ShouldBe(drive.Count, $"{from} -> {to}");
         }
-
-        // A queued run cannot jump to collecting either (it has not passed running).
-        var queued = await CreateQueuedRunAsync(world);
-        var skipped = await TransitionAsync(world, queued, "collecting");
-
-        skipped.Error!.Code.ShouldBe(ApiErrorCode.InvalidTransition);
-        (await StateAsync(world, queued)).ShouldBe("queued");
-        (await OutboxTargetsAsync(world, queued)).ShouldBeEmpty();
-        (await AuditRowsAsync(world, queued)).ShouldBe(0);
     }
 
     /// <summary>422 <c>request_invalid</c>: a target outside the 00 §8.1 vocabulary is refused before any read.</summary>
@@ -241,6 +236,32 @@ public sealed class RunStateTransitionTests
         result.Error.Status.ShouldBe(422);
         result.Error.Details!.ShouldContain(detail => detail.Path == "/to_state");
         (await StateAsync(world, runId)).ShouldBe("queued");
+        (await OutboxTargetsAsync(world, runId)).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// 422 <c>request_invalid</c>, never a null-argument fault: a null or empty <c>to_state</c> is a malformed
+    /// request, refused before the vocabulary lookup, before the row read and before the version precondition.
+    /// </summary>
+    [Fact]
+    public async Task TransitionRun_NullOrEmptyToState_RequestInvalid()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var runId = await CreateQueuedRunAsync(world);
+
+        foreach (var to in new[] { null!, string.Empty })
+        {
+            await using var scope = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project);
+            var result = await scope.TransitionAsync(new TransitionRunStateCommand(runId, to));
+
+            result.IsSuccess.ShouldBeFalse(to is null ? "null" : "empty");
+            result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid, to is null ? "null" : "empty");
+            result.Error.Status.ShouldBe(422, to is null ? "null" : "empty");
+            result.Error.Details!.ShouldContain(detail => detail.Path == "/to_state");
+        }
+
+        (await StateAsync(world, runId)).ShouldBe("queued");
+        (await VersionAsync(world, runId)).ShouldBe(0);
         (await OutboxTargetsAsync(world, runId)).ShouldBeEmpty();
     }
 
@@ -281,7 +302,10 @@ public sealed class RunStateTransitionTests
     /// <summary>
     /// AC6 (00 §5.5 C4): a transition against a stale <c>version</c> fails 412 <c>precondition_failed</c>
     /// with the row's current version in <c>details</c> and writes nothing; the same request against the
-    /// current version applies, and then reports the version it moved the row to.
+    /// current version applies, and then reports the version it moved the row to. Both stale requests here
+    /// name an edge that would be applied (<c>queued → running</c>, then <c>running → collecting</c>): the
+    /// precondition is checked only for the applying branch, so a stale version on a no-op is the no-op
+    /// instead (TransitionRun_StaleVersionOnNoOp_ReturnsCurrentState).
     /// </summary>
     [Fact]
     public async Task TransitionRun_StaleVersion_412()
@@ -321,6 +345,54 @@ public sealed class RunStateTransitionTests
         (await StateAsync(world, runId)).ShouldBe("running");
     }
 
+    /// <summary>
+    /// AC2/AC3 decided before AC6: a request that is a no-op returns the current state even with a stale
+    /// <c>ExpectedVersion</c> — a retry, a duplicate first batch or a reconciler verdict that read an older
+    /// version is never turned into a 412. Nothing is written.
+    /// </summary>
+    [Fact]
+    public async Task TransitionRun_StaleVersionOnNoOp_ReturnsCurrentState()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var runId = await RunInStateAsync(world, "running");
+        var version = await VersionAsync(world, runId);
+        version.ShouldBe(1, "queued -> running is one apply");
+
+        // The run holds `running`, has passed `queued`/`created`: a version the caller read is irrelevant to all three.
+        foreach (var to in new[] { "running", "queued", "created" })
+        {
+            await using var scope = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project);
+            var result = await scope.TransitionAsync(new TransitionRunStateCommand(runId, to, ExpectedVersion: 99));
+
+            result.IsSuccess.ShouldBeTrue($"{to}: {result.Error?.Message}");
+            result.Value.Outcome.ShouldBe(TransitionOutcome.NoOp, to);
+            result.Value.State.ShouldBe("running", to);
+            result.Value.Version.ShouldBe(version, to);
+        }
+
+        // Out of a terminal state the same holds on a run whose version is ahead of the caller's idea of it.
+        var terminal = await RunInStateAsync(world, "collecting");
+        (await TransitionAsync(world, terminal, "canceled")).Value.State.ShouldBe("canceled");
+        var terminalVersion = await VersionAsync(world, terminal);
+
+        await using (var scope = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project))
+        {
+            var result = await scope.TransitionAsync(new TransitionRunStateCommand(terminal, "complete", ExpectedVersion: 99));
+
+            result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+            result.Value.Outcome.ShouldBe(TransitionOutcome.NoOp);
+            result.Value.State.ShouldBe("canceled");
+            result.Value.Version.ShouldBe(terminalVersion);
+        }
+
+        (await StateAsync(world, runId)).ShouldBe("running");
+        (await VersionAsync(world, runId)).ShouldBe(version);
+        (await OutboxTargetsAsync(world, runId)).ShouldBe(["running"], "a no-op writes no outbox row, stale version or not");
+        (await AuditRowsAsync(world, runId)).ShouldBe(1);
+        (await StateAsync(world, terminal)).ShouldBe("canceled");
+        (await VersionAsync(world, terminal)).ShouldBe(terminalVersion);
+    }
+
     // ------------------------------------------------------------------ AC5: outbox + audit, one transaction
 
     /// <summary>
@@ -334,21 +406,25 @@ public sealed class RunStateTransitionTests
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var runId = await CreateQueuedRunAsync(world);
 
-        // Rolled back: the handler wrote on the transaction, and the dispose took all three writes with it.
+        // Rolled back: the handler wrote on the transaction — the audit flush is the pipeline's own step just
+        // before the commit — and the dispose took all three writes with it.
         await using (var rollback = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project))
         {
             var applied = await rollback.TransitionAsync(new TransitionRunStateCommand(runId, "running"));
             applied.Value.Outcome.ShouldBe(TransitionOutcome.Applied);
+            await rollback.FlushAuditAsync();
 
-            (await rollback.ScalarAsync<long>($"select count(*) from public.outbox where aggregate_id = '{runId}'"))
+            (await rollback.ScalarAsync<long>(
+                $"select count(*) from public.outbox where aggregate_id = '{runId}' and task_type = '{StateChangedTask}'"))
                 .ShouldBe(1, "the outbox row is on this transaction");
-            (await rollback.ScalarAsync<long>($"select count(*) from public.audit_log where org_id = '{world.Org}' and object_id = '{runId}'"))
+            (await rollback.ScalarAsync<long>(
+                $"select count(*) from public.audit_log where org_id = '{world.Org}' and action = '{StateChangedAction}' and object_id = '{runId}'"))
                 .ShouldBe(1, "the audit entry is on this transaction");
         }
 
         (await StateAsync(world, runId)).ShouldBe("queued");
         (await VersionAsync(world, runId)).ShouldBe(0);
-        (await OutboxTargetsAsync(world, runId)).ShouldBeEmpty();
+        (await OutboxTargetsAsync(world, runId)).ShouldBeEmpty("the run.created row is not a state change");
         (await AuditRowsAsync(world, runId)).ShouldBe(0);
 
         // Committed: the same three writes, now durable.
@@ -368,7 +444,7 @@ public sealed class RunStateTransitionTests
         (await _fixture.ColumnAsync<string>(
             world.Database,
             $"select payload ->> 'from' || '->' || (payload ->> 'to') || ':' || coalesce(payload ->> 'evidence_revision_id', 'null') "
-            + $"from public.outbox where aggregate_id = '{runId}'")).ShouldBe(["queued->running:null"]);
+            + $"from public.outbox where aggregate_id = '{runId}' and task_type = '{StateChangedTask}'")).ShouldBe(["queued->running:null"]);
 
         var audit = await _fixture.ColumnAsync<string>(
             world.Database,
@@ -398,8 +474,10 @@ public sealed class RunStateTransitionTests
         winnerResult.Value.Outcome.ShouldBe(TransitionOutcome.Applied);
 
         // The loser starts against the same row while the lock is held, in its own async flow (a second
-        // connection and transaction, exactly like a second request).
-        var loser = Task.Run(
+        // connection and transaction, exactly like a second request). SuppressFlow is what makes it a fresh
+        // flow: the winner's ambient tenant scope is an AsyncLocal in this flow, and without it the child's
+        // BeginAsync would refuse a second scope ("already open in this async flow").
+        var loser = Detached(
             async () =>
             {
                 await using var scope = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project);
@@ -410,6 +488,10 @@ public sealed class RunStateTransitionTests
                 return result;
             },
             TestContext.Current.CancellationToken);
+
+        // Deterministic, not sleep-ordered: the winner commits only after the loser's FOR NO KEY UPDATE is
+        // observed parked on the winner's row lock in pg_stat_activity.
+        await AwaitLoserParkedOnWinnerLockAsync(world, loser);
 
         await winner.FlushAuditAsync();
         await winner.CommitAsync();
@@ -449,7 +531,9 @@ public sealed class RunStateTransitionTests
         canceled.Value.Outcome.ShouldBe(TransitionOutcome.Applied);
         canceled.Value.State.ShouldBe("canceled");
 
-        var verdict = Task.Run(
+        // The verdict runs in its own async flow (SuppressFlow keeps the cancel's ambient scope out of it), and
+        // its FOR NO KEY UPDATE read parks on the cancel's row lock before the cancel commits.
+        var verdict = Detached(
             async () =>
             {
                 await using var scope = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project);
@@ -460,6 +544,8 @@ public sealed class RunStateTransitionTests
                 return result;
             },
             TestContext.Current.CancellationToken);
+
+        await AwaitLoserParkedOnWinnerLockAsync(world, verdict);
 
         await cancel.FlushAuditAsync();
         await cancel.CommitAsync();
@@ -486,7 +572,7 @@ public sealed class RunStateTransitionTests
     // ------------------------------------------------------------------ P3/P5: the statement budget
 
     /// <summary>
-    /// 05.3.1 §8 (P3/P5): one transition costs one <c>FOR UPDATE</c> read, one <c>UPDATE</c>, one outbox
+    /// 05.3.1 §8 (P3/P5): one transition costs one <c>FOR NO KEY UPDATE</c> read, one <c>UPDATE</c>, one outbox
     /// insert and one audit insert — a fixed, local statement set with no network call and no read of the
     /// planned executions or slots.
     /// </summary>
@@ -507,13 +593,13 @@ public sealed class RunStateTransitionTests
 
         var runStatements = statements.Where(statement => statement.Contains("public.run", StringComparison.Ordinal)).ToList();
         runStatements.Count.ShouldBe(2, string.Join(Environment.NewLine, statements));
-        runStatements.Count(statement => statement.Contains("for update", StringComparison.Ordinal)).ShouldBe(1);
+        runStatements.Count(statement => statement.Contains("for no key update", StringComparison.Ordinal)).ShouldBe(1);
         runStatements.Count(statement => statement.StartsWith("update public.run set state", StringComparison.Ordinal)).ShouldBe(1);
         statements.Count(statement => statement.Contains("public.outbox", StringComparison.Ordinal)).ShouldBe(1);
         statements.Count(statement => statement.Contains("insert into public.audit_log", StringComparison.Ordinal)).ShouldBe(1);
         statements.Count.ShouldBeLessThanOrEqualTo(
             8,
-            "one FOR UPDATE read + one UPDATE + one outbox insert + the audit unit's lock/chain/insert: "
+            "one FOR NO KEY UPDATE read + one UPDATE + one outbox insert + the audit unit's lock/chain/insert: "
             + string.Join(Environment.NewLine, statements));
 
         await scope.CommitAsync();
@@ -584,6 +670,45 @@ public sealed class RunStateTransitionTests
 
         return result;
     }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> in a fresh execution flow: <see cref="ExecutionContext.SuppressFlow"/>
+    /// stops this flow's ambient tenant scope (an AsyncLocal) from flowing into the child, so the child's
+    /// <c>BeginAsync</c> opens the second scope the race needs instead of refusing a second one here.
+    /// </summary>
+    private static Task<T> Detached<T>(Func<Task<T>> work, CancellationToken cancellationToken)
+    {
+        using (ExecutionContext.SuppressFlow())
+        {
+            return Task.Run(work, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Waits — never using a sleep as synchronisation — until <paramref name="loser"/>'s <c>FOR NO KEY UPDATE</c>
+    /// read is parked on the winner's uncommitted row lock in this database, and asserts it has not completed.
+    /// The lock wait observed in <c>pg_stat_activity</c> is the happens-before edge that makes the race
+    /// deterministic: the winner is never committed before the loser is provably waiting on the lock.
+    /// </summary>
+    private async Task AwaitLoserParkedOnWinnerLockAsync(RunCreationTests.World world, Task loser)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while (await BlockedOnRowLockAsync(world) == 0)
+        {
+            loser.IsCompleted.ShouldBeFalse("the loser finished while the winner still held the row lock");
+            DateTimeOffset.UtcNow.ShouldBeLessThan(deadline, "the loser never blocked on the row lock");
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+        }
+
+        loser.IsCompleted.ShouldBeFalse("the loser must still be waiting while the winner is uncommitted");
+    }
+
+    /// <summary>Count of other sessions in this database waiting on a lock while running a <c>FOR NO KEY UPDATE</c> read.</summary>
+    private Task<int> BlockedOnRowLockAsync(RunCreationTests.World world) =>
+        _fixture.ScalarAsync<int>(
+            world.Database,
+            "select count(*)::int from pg_stat_activity where datname = current_database() "
+            + "and wait_event_type = 'Lock' and query ilike '%for no key update%' and pid <> pg_backend_pid()");
 
     private Task<string> StateAsync(RunCreationTests.World world, Guid runId) =>
         _fixture.ScalarAsync<string>(world.Database, $"select state from public.run where id = '{runId}'");
