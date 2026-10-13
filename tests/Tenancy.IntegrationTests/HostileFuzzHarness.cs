@@ -121,28 +121,40 @@ internal sealed record FuzzRunOptions(
     internal const int DefaultPerInputMilliseconds = 5_000;
 
     /// <summary>The bounds for this process: every value from its variable, or the documented default.</summary>
+    /// <param name="environment">
+    /// The variable snapshot to read; defaults to the process environment. Tests pass a dictionary so they exercise
+    /// the parsing without mutating — or racing on — the real process environment (same seam as
+    /// <c>MigratorOptions.FromEnvironment</c>).
+    /// </param>
     /// <returns>The options the harness runs with.</returns>
     /// <exception cref="InvalidOperationException">
     /// A variable is set to a value the harness cannot read. An unset variable keeps its default, but a typo fails
     /// the run rather than silently shrinking it: a zero budget or cap would otherwise drive no input at all and
     /// still leave the run green, and a mistyped seed would silently replay the default run instead.
     /// </exception>
-    internal static FuzzRunOptions FromEnvironment() => new(
-        Seed: ParseSeed(SeedVariable, DefaultSeed),
-        BudgetSeconds: ParsePositive(BudgetVariable, SmokeBudgetSeconds),
-        MaxIterations: ParsePositive(IterationsVariable, DefaultMaxIterations),
-        PerInputMilliseconds: ParsePositive(PerInputVariable, DefaultPerInputMilliseconds),
-        FindingsDirectory: Environment.GetEnvironmentVariable(FindingsDirectoryVariable) is { Length: > 0 } directory
-            ? directory
-            : Path.Combine(Path.GetTempPath(), "evidgate-fuzz-findings"));
+    internal static FuzzRunOptions FromEnvironment(IReadOnlyDictionary<string, string?>? environment = null)
+    {
+        string? Lookup(string name) => environment is null
+            ? Environment.GetEnvironmentVariable(name)
+            : environment.TryGetValue(name, out var value) ? value : null;
+
+        return new(
+            Seed: ParseSeed(Lookup, SeedVariable, DefaultSeed),
+            BudgetSeconds: ParsePositive(Lookup, BudgetVariable, SmokeBudgetSeconds),
+            MaxIterations: ParsePositive(Lookup, IterationsVariable, DefaultMaxIterations),
+            PerInputMilliseconds: ParsePositive(Lookup, PerInputVariable, DefaultPerInputMilliseconds),
+            FindingsDirectory: Lookup(FindingsDirectoryVariable) is { Length: > 0 } directory
+                ? directory
+                : Path.Combine(Path.GetTempPath(), "evidgate-fuzz-findings"));
+    }
 
     /// <summary>
     /// Reads the PRNG seed. Unset keeps the constant default; a value that is set but is not an unsigned integer —
     /// a negative value included — throws, so a mistyped seed cannot pass for a replay of a recorded run.
     /// </summary>
-    private static ulong ParseSeed(string name, ulong fallback)
+    private static ulong ParseSeed(Func<string, string?> lookup, string name, ulong fallback)
     {
-        if (Environment.GetEnvironmentVariable(name) is not { Length: > 0 } raw)
+        if (lookup(name) is not { Length: > 0 } raw)
         {
             return fallback;
         }
@@ -157,9 +169,9 @@ internal sealed record FuzzRunOptions(
     /// integer throws, because a zero budget or iteration cap ends the run before it drove a single input and still
     /// leaves it green.
     /// </summary>
-    private static int ParsePositive(string name, int fallback)
+    private static int ParsePositive(Func<string, string?> lookup, string name, int fallback)
     {
-        if (Environment.GetEnvironmentVariable(name) is not { Length: > 0 } raw)
+        if (lookup(name) is not { Length: > 0 } raw)
         {
             return fallback;
         }
@@ -170,9 +182,9 @@ internal sealed record FuzzRunOptions(
     }
 
     /// <summary>Reads one positive bound as a long; otherwise the same rule as the int overload.</summary>
-    private static long ParsePositive(string name, long fallback)
+    private static long ParsePositive(Func<string, string?> lookup, string name, long fallback)
     {
-        if (Environment.GetEnvironmentVariable(name) is not { Length: > 0 } raw)
+        if (lookup(name) is not { Length: > 0 } raw)
         {
             return fallback;
         }

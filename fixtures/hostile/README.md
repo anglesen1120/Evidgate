@@ -66,6 +66,10 @@ while the harness's constant default `20261013` covers the PR smoke — and driv
 outcomes (`artifact_invalid`/422 with a closed `ParsingFailureReason`, or `payload_too_large`/413 for
 `size_exceeded`). An escaped exception, an abandoned input or an undocumented reason is a finding: the bytes go
 to the findings directory (`artifacts/fuzz-findings` in CI, uploaded on failure) and the run fails.
+Every bound is parsed strictly: a variable that is **set but unreadable** — a non-numeric value, a negative seed,
+or a zero or negative budget, iteration cap or per-input bound — fails the run with an `InvalidOperationException`
+naming the variable, so a typo cannot pass for a smaller (still green) run or a replay of the default seed, while
+an unset or empty variable keeps its default.
 
 `[DECISION]` 06.3.2-T2.1 uses that seeded mutation fuzzer rather than `SharpFuzz`. SharpFuzz is coverage-guided
 only with the AFL/libFuzzer native tooling and an IL-instrumented copy of the parser assembly in the CI image, and
@@ -79,6 +83,10 @@ Promotion is refused unless the explicit opt-in is passed and `EVIDGATE_FUZZ_PRO
 it — so a CI run never writes here. The promoted row's guard id is the finding's entry point's owning guard
 (`xml-wellformed` or `zip-central-directory`) and its `expected_failure_code` starts at the conservative
 `malformed`; the operator reviewing a real crash tightens the row to the reason the fixed profile returns.
+Promotion is idempotent per finding: a finding whose identical fixture is already in the corpus is reported as
+already promoted (`PromotedFixture.AlreadyPromoted`) and writes nothing — no second manifest row — while different
+bytes under the same file name are refused, so a committed fixture is never overwritten by hand-unresolved
+content.
 
 One promotion exists so far: `fuzz_5b9ba68261b8.xml`, found by the first smoke run (2026-10-13, seed `20261013`).
 A non-ASCII byte inside the XML declaration made `System.Xml` throw `ArgumentOutOfRangeException` out of

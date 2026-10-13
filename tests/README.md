@@ -59,6 +59,10 @@ already set one), `EVIDGATE_FUZZ_MAX_ITERATIONS`, `EVIDGATE_FUZZ_PER_INPUT_MS` a
 failure and which always receives a `run.json`). `EVIDGATE_FUZZ_SEED` replays a run exactly: the `fixtures-fuzz`
 stage sets it from the CI run id (the clock outside CI) and echoes it, so consecutive nights do not repeat one
 PRNG stream, while the harness's constant default `20261013` covers the PR smoke, which never sets the variable.
+Every bound is parsed strictly: a variable that is **set but unreadable** — a non-numeric value, a negative seed,
+or a zero or negative budget, iteration cap or per-input bound — fails the run with an `InvalidOperationException`
+naming the variable, so a typo cannot pass for a smaller (still green) run or a replay of the default seed, while
+an unset or empty variable keeps its default (`FuzzRunOptionsTests`, `[Trait("Category","Fuzz")]`).
 The `test` stage therefore runs only the few-second smoke, never the ten-minute budget; the `fixtures-hostile`
 stage selects `Category=Hostile` only and never runs the fuzz harness.
 
@@ -67,8 +71,11 @@ its `manifest.json` row, so a crash the nightly run finds becomes a permanent ca
 on. It refuses unless the explicit opt-in is passed and `EVIDGATE_FUZZ_PROMOTE=1` is set — which no CI job sets —
 so a CI run never modifies the corpus. The promoted row's `expected_failure_code` starts at the conservative
 `malformed`; the operator reviewing a real crash tightens it to the reason the fixed profile returns, and the T1
-corpus test proves the row. `FuzzPromotionTests` drives the helper against a temp copy of the corpus, never the
-committed one.
+corpus test proves the row. Promotion is idempotent per finding: a finding whose identical fixture is already in
+the corpus is reported as already promoted (`PromotedFixture.AlreadyPromoted`) and writes nothing — no second
+manifest row — while different bytes under the same file name are refused, so a committed fixture is never
+overwritten by hand-unresolved content. `FuzzPromotionTests` drives the helper against a temp copy of the corpus,
+never the committed one.
 
 ## Shared build conventions — `tests/Directory.Build.props`
 

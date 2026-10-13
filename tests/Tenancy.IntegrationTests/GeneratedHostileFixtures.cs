@@ -11,12 +11,23 @@ namespace Tenancy.IntegrationTests;
 public sealed class GeneratedHostileFixtures : IDisposable
 {
     /// <summary>Builds both generated fixtures into a fresh temp directory.</summary>
+    /// <exception cref="IOException">A fixture write failed; the temp tree is removed before the throw.</exception>
     public GeneratedHostileFixtures()
     {
         DirectoryPath = Directory.CreateTempSubdirectory("evidgate-hostile-").FullName;
 
-        File.WriteAllBytes(PathOf(GenerateBombFixture.FileName), GenerateBombFixture.Build());
-        File.WriteAllBytes(PathOf(GenerateOversizedFixture.FileName), GenerateOversizedFixture.Build());
+        try
+        {
+            File.WriteAllBytes(PathOf(GenerateBombFixture.FileName), GenerateBombFixture.Build());
+            File.WriteAllBytes(PathOf(GenerateOversizedFixture.FileName), GenerateOversizedFixture.Build());
+        }
+        catch
+        {
+            // A constructor that throws is never disposed by xUnit, so Dispose would not run and the temp tree
+            // would leak: remove it here, then rethrow so the failure still surfaces.
+            TryDeleteDirectory();
+            throw;
+        }
     }
 
     /// <summary>The temp directory holding both generated fixtures.</summary>
@@ -30,7 +41,9 @@ public sealed class GeneratedHostileFixtures : IDisposable
     /// Deletes the temp tree. Best effort: a leftover directory under the OS temp path never fails a run, and the
     /// names in it are the corpus's own.
     /// </summary>
-    public void Dispose()
+    public void Dispose() => TryDeleteDirectory();
+
+    private void TryDeleteDirectory()
     {
         try
         {
