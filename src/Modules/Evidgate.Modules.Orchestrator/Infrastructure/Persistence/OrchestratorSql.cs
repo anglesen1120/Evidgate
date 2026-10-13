@@ -113,19 +113,24 @@ internal static class OrchestratorSql
         """;
 
     /// <summary>
-    /// The run row (05.2.1 §4, T13/T88/T93). <c>state</c> is <c>queued</c> because the producer slots commit in this
-    /// same transaction; <c>collection_deadline_at</c> is computed on the database clock (<c>now()</c>, the same clock
-    /// <c>created_at</c> defaults to) so the two can never disagree; <c>policy_revision_id</c> is the active revision
-    /// 07.1.1-T4.2 pins (null when the project has no active policy); <c>ci_run_ref</c> comes from the caller's OIDC
-    /// claims, never the body.
+    /// The run row (05.2.1 §4, T13/T88/T93; identity block added by 05.2.2-T1.3). <c>state</c> is <c>queued</c> because
+    /// the producer slots commit in this same transaction; <c>collection_deadline_at</c> is computed on the database
+    /// clock (<c>now()</c>, the same clock <c>created_at</c> defaults to) so the two can never disagree;
+    /// <c>policy_revision_id</c> is the active revision 07.1.1-T4.2 pins (null when the project has no active policy);
+    /// <c>ci_run_ref</c> comes from the caller's OIDC claims, never the body. The eight identity columns
+    /// (<c>ref_kind</c>, <c>ref_name</c>, <c>pr_number</c>, <c>head_sha</c>, <c>base_sha</c>, <c>trigger_event</c>,
+    /// <c>is_fork</c>, <c>unverified_ref</c>) are written once here and never updated (the migration's trigger refuses
+    /// it, AC5); their CHECKs live in migration 0037, so a value the handler already shape-checked cannot fail here.
     /// </summary>
     internal const string InsertRun = """
         insert into public.run
                (id, org_id, project_id, manifest_id, policy_revision_id, suite_revision_id, environment_revision_id,
-                ci_run_ref, components, purpose, state, collection_deadline_at, late_window_minutes)
+                ci_run_ref, components, purpose, state, collection_deadline_at, late_window_minutes,
+                ref_kind, ref_name, pr_number, head_sha, base_sha, trigger_event, is_fork, unverified_ref)
         values (@id, @org_id, @project_id, @manifest_id, @policy_revision_id::uuid, @suite_revision_id, @environment_revision_id,
                 @ci_run_ref::jsonb, @components::jsonb, 'regular', 'queued',
-                now() + @collection_timeout::interval, @late_window_minutes)
+                now() + @collection_timeout::interval, @late_window_minutes,
+                @ref_kind, @ref_name, @pr_number, @head_sha, @base_sha, @trigger_event, @is_fork, @unverified_ref)
         """;
 
     /// <summary>
@@ -141,6 +146,35 @@ internal static class OrchestratorSql
         select r.id, @org_id, @run_id, r.execution_key, r.case_revision_id, r.variant_hash, r.target_env, r.shard_id, true
           from jsonb_to_recordset(@rows::jsonb)
                as r(id uuid, execution_key text, case_revision_id uuid, variant_hash text, target_env text, shard_id text)
+        """;
+
+    // ------------------------------------------------------------------ 05.2.2 run identity
+
+    /// <summary>
+    /// The verified <c>ref</c>/<c>sha</c> claims of the CI run the caller's credential was minted for (05.2.2-T1.3):
+    /// the <c>ci_token_issue</c> row the 02.4.1 exchange wrote from the GitHub OIDC token it had already verified,
+    /// keyed by the run reference the minted token carries (<c>repository_id</c>, <c>run_id</c>, <c>run_attempt</c>) —
+    /// not by the minted token's <c>jti</c>, which the exchange sets to a fresh GUID unrelated to the row (D-S45-Q2).
+    /// It is the only source of a verified run identity, so the create handler reads it inside the run's tenant
+    /// transaction, before any write, and only for a caller that carries a CI run reference.
+    /// <para>
+    /// The Identity module owns the table; this module reads it as raw SQL like the Evidence module reads <c>run</c>
+    /// (the cross-module read precedent), which is why no Identity contract is involved. RLS already restricts the row
+    /// to the caller's tenant (<c>ci_token_issue_app_tenant</c>, 0017); <c>org_id</c> and <c>project_id</c> repeat the
+    /// scope in the statement as defence in depth (00 §5.4), so a token of another project of the same org can never
+    /// verify an identity here. <c>ref</c> and <c>sha</c> are fixed for a GitHub run attempt, so the newest row for the
+    /// attempt is authoritative: <c>order by created_at desc limit 1</c> returns it and never throws, even when one
+    /// attempt exchanged several tokens (each keyed by its own <c>jti</c>). <c>ci_token_issue_run_idx</c>
+    /// (migration 0037) serves the predicate and the order as one index scan.
+    /// </para>
+    /// </summary>
+    internal const string CiTokenIssueClaim = """
+        select ref, sha
+          from public.ci_token_issue
+         where org_id = @org_id and project_id = @project_id
+           and repository_id = @repository_id and run_id = @run_id and run_attempt = @run_attempt
+         order by created_at desc
+         limit 1
         """;
 
     // ------------------------------------------------------------------ 06.1.2 upload-url run scope

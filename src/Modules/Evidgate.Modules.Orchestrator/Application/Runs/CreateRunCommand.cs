@@ -38,6 +38,12 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// refused 422 before any read, and a <c>replay_grant_id</c> is only meaningful for one.
 /// </para>
 /// <para>
+/// The body may also carry <c>ref</c> (05.2.2-T1.3): <c>{kind, name, pr_number, head_sha, base_sha, trigger_event,
+/// is_fork}</c>, the identity a run records when no verified GitHub OIDC claim covers it. The block is always
+/// shape-checked before any write (AC4), and where a verified claim covers a member the body's value is ignored rather
+/// than refused (AC3).
+/// </para>
+/// <para>
 /// Idempotent under the client's <c>Idempotency-Key</c> (00 §9.1, 05.2.1-T2): the C2 idempotency stage claims the key
 /// inside the run's tenant transaction, so the <c>idempotency_record</c>, the run, its planned executions, its producer
 /// slots and its outbox row commit or roll back together. The request identity is the RFC 8785 digest of the body
@@ -48,10 +54,18 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Body">The raw UTF-8 body, at most 64 KiB.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>.</param>
+/// <param name="CiRunBinding">
+/// The caller's verified CI run reference in the <see cref="CiRunReference.ToBindingReference"/> form
+/// (<c>{repository_id}/{run_id}/{run_attempt}</c>, T88), or null for a caller whose token carries none (a member, an
+/// ingest-token exchange). 05.2.2-T1.4 folds it into <see cref="BodyHash"/>: the identity a run records now depends on
+/// it, so the same key with the same body but a different CI run attempt must conflict instead of replaying. Never
+/// serialized — the request document the store hashes is the body digest, exactly as before (00 §9.1).
+/// </param>
 internal sealed record CreateRunCommand(
     Guid ProjectId,
     [property: JsonIgnore] ReadOnlyMemory<byte> Body,
-    string IdempotencyKey)
+    string IdempotencyKey,
+    [property: JsonIgnore] string? CiRunBinding = null)
     : ICommand<Result<RunCreated>>, IIdempotentCommand
 {
     /// <summary>The 00 §7 operation the key is claimed for (05.2.1-T2.1): stable across a rename.</summary>
@@ -64,8 +78,25 @@ internal sealed record CreateRunCommand(
     /// that cannot be canonicalized — invalid JSON, a duplicate member name, a lone surrogate — falls back to
     /// <c>raw-sha256:&lt;hex&gt;</c> of the raw bytes, so the request still reaches the handler, which answers its normal
     /// 400 <c>request_invalid</c> (a failure Result is never stored).
+    /// <para>
+    /// 05.2.2-T1.4: a caller with a verified CI run reference (<see cref="CiRunBinding"/>) folds it in, so the same
+    /// key and body from a different CI run attempt is 409 <c>idempotency_conflict</c> rather than a replay, while a
+    /// re-minted token for the same attempt still replays. The fold is additive: a request without that reference
+    /// hashes exactly as before this story, so no stored record mass-conflicts on deploy (00 §9.1).
+    /// </para>
     /// </summary>
-    public string BodyHash => ComputeBodyHash(Body);
+    public string BodyHash => CiRunBinding is { Length: > 0 } binding
+        ? Combine(ComputeBodyHash(Body), binding)
+        : ComputeBodyHash(Body);
+
+    /// <summary>
+    /// The digest of a request that carries a verified CI run reference: the RFC 8785 digest of one two-member document
+    /// holding the body's own digest and the reference, so both halves are covered by a single canonical hash (the
+    /// reference is escaped as a JSON string, not concatenated).
+    /// </summary>
+    private static string Combine(string bodyHash, string binding) =>
+        CanonicalHash.Compute(
+            $$"""{"body_hash":{{JsonSerializer.Serialize(bodyHash)}},"ci_run_ref":{{JsonSerializer.Serialize(binding)}}}""");
 
     private static string ComputeBodyHash(ReadOnlyMemory<byte> body)
     {
@@ -111,7 +142,16 @@ internal sealed record CreateRunCommand(
 /// every replay request 422 (<c>replay_release_not_allowed</c> first, then <c>replay_grant_invalid</c>) and adds no
 /// reader of its own; the columns (<c>run.purpose</c>, <c>run.replay_grant_id</c>, migration 0031) stay at their
 /// defaults and are immutable because the app role holds no UPDATE on them (05.3.1 owns the read model and MUST NOT
-/// grant UPDATE on <c>purpose</c>/<c>replay_grant_id</c>).
+/// grant UPDATE on <c>purpose</c>/<c>replay_grant_id</c>). [DECISION] the verified identity of a run is the caller's
+/// <c>ci_token_issue</c> row — written by the 02.4.1 exchange from a token it already verified — read by the run
+/// reference the minted token carries (<c>repository_id</c>, <c>run_id</c>, <c>run_attempt</c>) inside this same
+/// tenant transaction, and only when the principal carries a <see cref="CiRunReference"/>; the newest row for the
+/// attempt wins because its <c>ref</c>/<c>sha</c> are fixed per attempt (owner decision D-S45-Q2, T1.3). A missing or
+/// foreign-project row means the caller is not verified, so body values are stored and labelled rather than trusted
+/// (05.2.2 AC1–AC3). [DECISION] a member a verified claim covers
+/// is ignored in the body rather than refused (AC3), the claim's <c>ref</c> shape is re-checked here so a value the
+/// column CHECKs refuse is dropped instead of surfacing as a 500, and <c>ref_name</c>/the shas are never logged (only
+/// the run id and <c>ref_kind</c>, 05.2.2 §8).
 /// </remarks>
 [AuditedAction("run.create")]
 [Permission(Permissions.Run.Create)]
@@ -191,7 +231,7 @@ internal sealed class CreateRunCommandHandler(
 
         foreach (var member in body.EnumerateObject())
         {
-            if (member.Name is not ("manifest_id" or "release" or "components" or "purpose" or "replay_grant_id"))
+            if (member.Name is not ("manifest_id" or "release" or "components" or "purpose" or "replay_grant_id" or "ref"))
             {
                 return BodyInvalid("the request body carries an unknown field", [new ErrorDetail($"/{member.Name}", "additional_properties")]);
             }
@@ -307,6 +347,15 @@ internal sealed class CreateRunCommandHandler(
             components = componentsElement;
         }
 
+        // (1c) the run-identity block (05.2.2-T1.3, AC4): shape-checked here — before the database reads below and long
+        // before the write — whether or not a verified claim later overrides one of its members. An invalid member is
+        // 422 request_invalid naming its pointer, exactly like the rest of this body parse.
+        var (bodyRef, refErrors) = RunIdentityRules.ParseBodyRef(body);
+        if (refErrors.Count > 0)
+        {
+            return BodyInvalid("the request body carries an invalid ref", refErrors);
+        }
+
         // AC10: a syntactically valid release is still unresolvable at M1 (the bind path lands with 05.6.1).
         if (release is not null)
         {
@@ -373,9 +422,25 @@ internal sealed class CreateRunCommandHandler(
             : options.Value.DefaultCollectionTimeout;
         var lateWindowMinutes = activePolicy?.LateWindowMinutes ?? options.Value.DefaultLateWindowMinutes;
 
+        // (5b) the identity this run records (05.2.2-T1.3, AC1–AC3, T1.4). The only VERIFIED source is the
+        // ci_token_issue row the 02.4.1 exchange wrote from the GitHub OIDC token it had already verified, found by the
+        // run reference the minted token carries (repository/run/attempt) rather than by the token's jti, which the
+        // exchange mints fresh and unrelated: reachable only for a principal that carries a CiRunReference, so a member
+        // or an ingest-token caller can never be verified. The read is one statement inside this same tenant
+        // transaction; a missing row (purged, another project's, or another run attempt's) leaves the caller unverified
+        // rather than trusted. Reads only — nothing is written before the identity passes the effective-value check.
+        var principal = principals.Current;
+        var claim = await ReadVerifiedClaimAsync(principal, command.ProjectId, orgId, cancellationToken).ConfigureAwait(false);
+        var identity = RunIdentityRules.Resolve(bodyRef, claim);
+        if (RunIdentityRules.EffectiveViolation(identity) is { } violation)
+        {
+            // The body-only path: a `pull_request` kind without a number is not a usable identity (AC4).
+            return BodyInvalid("the run identity is invalid", [violation]);
+        }
+
         // (6) the writes, all inside the one C2 tenant transaction.
         var runId = Guid.CreateVersion7();
-        var ciRun = principals.Current?.CiRun;
+        var ciRun = principal?.CiRun;
 
         await db.ExecuteAsync(
             OrchestratorSql.InsertRun,
@@ -400,6 +465,14 @@ internal sealed class CreateRunCommandHandler(
                 components = components?.GetRawText() ?? "{}",
                 collection_timeout = collectionTimeout,
                 late_window_minutes = lateWindowMinutes,
+                ref_kind = identity.RefKind,
+                ref_name = identity.RefName,
+                pr_number = identity.PrNumber,
+                head_sha = identity.HeadSha,
+                base_sha = identity.BaseSha,
+                trigger_event = identity.TriggerEvent,
+                is_fork = identity.IsFork,
+                unverified_ref = identity.UnverifiedRef,
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -429,7 +502,26 @@ internal sealed class CreateRunCommandHandler(
 
         await outbox.EnqueueAsync(
             RunCreatedTaskType,
-            JsonSerializer.Serialize(new { run_id = runId, project_id = command.ProjectId, manifest_id = manifestId }),
+            JsonSerializer.Serialize(new
+            {
+                run_id = runId,
+                project_id = command.ProjectId,
+                manifest_id = manifestId,
+                // 05.2.2-T1.4: the identity block travels with the event (the same seven read-model members and the
+                // unverified label), so 07/09 need no second lookup. The three pre-existing members are unchanged, so
+                // an existing consumer keeps working.
+                @ref = new
+                {
+                    kind = identity.RefKind,
+                    name = identity.RefName,
+                    pr_number = identity.PrNumber,
+                    head_sha = identity.HeadSha,
+                    base_sha = identity.BaseSha,
+                    trigger_event = identity.TriggerEvent,
+                    is_fork = identity.IsFork,
+                },
+                unverified_ref = identity.UnverifiedRef,
+            }),
             "run",
             runId,
             $"orchestrator:run:{runId}:created",
@@ -437,8 +529,58 @@ internal sealed class CreateRunCommandHandler(
 
         audit.Describe(new AuditObject("run", runId.ToString("D")));
         activity?.SetTag("evidgate.run_id", runId.ToString("D"));
+        if (identity.RefKind is { } refKind)
+        {
+            // ref_kind only: ref_name (which can carry a person's name) and the shas are never logged or tagged
+            // (05.2.2 §8 — the tag is bounded to three values, the values themselves are high-cardinality).
+            activity?.SetTag("evidgate.run.ref_kind", refKind);
+        }
 
-        return Result.Success(new RunCreated(runId, "queued"), 201);
+        return Result.Success(new RunCreated(runId, "queued", identity.UnverifiedRef), 201);
+    }
+
+    /// <summary>
+    /// The verified <c>ref</c>/<c>sha</c> claims of the caller's credential (05.2.2-T1.3): the <c>ci_token_issue</c>
+    /// row the 02.4.1 exchange wrote for the presented <c>ci_producer</c> token, found by the run reference the minted
+    /// token carries (<c>repository_id</c>, <c>run_id</c>, <c>run_attempt</c>). The exchange mints the token's
+    /// <c>jti</c> as a fresh GUID and stores the GitHub OIDC <c>jti</c> separately, so that key is not a link between
+    /// the token in hand and the row; the run reference is (owner decision D-S45-Q2). Only a principal that carries a
+    /// <see cref="CiRunReference"/> can be a <c>ci_producer</c>, so every other caller short-circuits without a
+    /// statement (00 §5.7 P3).
+    /// <para>
+    /// The Identity module owns <c>ci_token_issue</c>; this module reads it as raw SQL like the Evidence module reads
+    /// <c>run</c> (the cross-module read precedent), so no Identity type or contract is involved. RLS already scopes
+    /// the row to this tenant (<c>ci_token_issue_app_tenant</c>); <c>org_id</c> and <c>project_id</c> repeat the scope
+    /// in the statement as defence in depth (00 §5.4). A row that is not there — purged after its replay window,
+    /// another project's, or another run attempt's — means NOT verified: the caller's body values are stored and
+    /// labelled <c>unverified_ref</c> rather than trusted. <c>ref</c>/<c>sha</c> are fixed per run attempt, so the
+    /// newest row for the attempt is authoritative and the statement takes it with <c>limit 1</c>.
+    /// </para>
+    /// </summary>
+    private async ValueTask<CiRefClaim?> ReadVerifiedClaimAsync(
+        IRequestPrincipal? principal,
+        Guid projectId,
+        Guid orgId,
+        CancellationToken cancellationToken)
+    {
+        if (principal?.CiRun is not { } ciRun)
+        {
+            return null;
+        }
+
+        var row = await db.QuerySingleOrDefaultAsync<CiTokenIssueRow>(
+            OrchestratorSql.CiTokenIssueClaim,
+            new
+            {
+                org_id = orgId,
+                project_id = projectId,
+                repository_id = ciRun.RepositoryId,
+                run_id = ciRun.RunId,
+                run_attempt = ciRun.RunAttempt,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return row is null ? null : new CiRefClaim(row.Ref, row.Sha);
     }
 
     /// <summary>
@@ -582,6 +724,18 @@ internal sealed class CreateRunCommandHandler(
         public bool SuiteKnown { get; set; }
 
         public bool EnvironmentKnown { get; set; }
+    }
+
+    /// <summary>
+    /// One <c>ci_token_issue</c> row as <see cref="OrchestratorSql.CiTokenIssueClaim"/> returns it (Dapper maps the
+    /// snake_case columns): the two verified claims 05.2.2-T1.3 reads. <c>ref</c> and <c>sha</c> are fixed per run
+    /// attempt, so the statement returns the newest row of the attempt and the read is a single row or none.
+    /// </summary>
+    private sealed class CiTokenIssueRow
+    {
+        public string Ref { get; set; } = string.Empty;
+
+        public string Sha { get; set; } = string.Empty;
     }
 
     /// <summary>The one <c>jsonb</c> batch parameter of the planned-execution insert, plus the shard count for the slot registration.</summary>

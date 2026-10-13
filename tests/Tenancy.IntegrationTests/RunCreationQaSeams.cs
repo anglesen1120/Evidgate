@@ -123,7 +123,13 @@ internal static class RunCreationSeams
 
         return await provider.GetRequiredService<IMediator>()
             .Send(
-                new CreateRunCommand(project, Encoding.UTF8.GetBytes(body), idempotencyKey ?? RegistryApi.NewKey()),
+                // The CI run reference joins the request identity exactly as the endpoint passes it (05.2.2-T1.4), so the
+                // seam exercises the same idempotency key the served route does.
+                new CreateRunCommand(
+                    project,
+                    Encoding.UTF8.GetBytes(body),
+                    idempotencyKey ?? RegistryApi.NewKey(),
+                    principal.CiRun?.ToBindingReference()),
                 TestContext.Current.CancellationToken);
     }
 }

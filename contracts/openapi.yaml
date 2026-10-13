@@ -235,7 +235,18 @@ paths:
         well-formed grant); a `replay` purpose together with a `release` is 422
         `replay_release_not_allowed`. A refusal writes no run, planned
         execution, producer slot, outbox or audit row, and its failure Result is
-        never stored for idempotency (the key stays reusable).
+        never stored for idempotency (the key stays reusable). The optional
+        `ref` object records the run's branch/tag/PR identity (05.2.2-T1): a
+        verified `ci_producer` caller's OIDC `ref`/`sha` claims win and a
+        conflicting member is ignored, never refused (AC3), while every value
+        taken from the body marks the run `unverified_ref = true` in the 201
+        body. The body block is shape-validated even where a claim later
+        overrides it — an unknown member inside `ref`, a `kind` or
+        `trigger_event` outside its enum, a `name` outside 1..255, a
+        `head_sha`/`base_sha` outside `^[0-9a-f]{40}([0-9a-f]{24})?$`, a
+        `pr_number` below 1 or a non-boolean `is_fork` is 422 `request_invalid`
+        with `details[].path`, and `kind: pull_request` without `pr_number` is
+        refused on the values that remain after the claim merge.
       x-permission: run:create
       x-version: v1
       parameters:
@@ -283,7 +294,11 @@ paths:
         One run's state machine position (05.3.1 AC7): `state` (00 §8.1),
         `current_evidence_revision_id` (null until 05.3.2 freezes a revision),
         `version` (the optimistic-concurrency token a transition echoes in
-        `If-Match`) and `purpose` (`regular`/`replay`, T67). Another tenant's run —
+        `If-Match`) and `purpose` (`regular`/`replay`, T67). The identity block
+        `ref` (branch/tag/PR, 05.2.2-T1) is returned with all members present,
+        `null` where unknown, plus `unverified_ref` (`true` when any stored
+        identity value came from the request body rather than a verified CI
+        claim). Another tenant's run —
         or, for a project-scoped credential, another project's — is 404, the same
         `not_found` body as an unknown id.
       x-permission: run:read
@@ -4367,7 +4382,7 @@ components:
           type: [string, 'null']
     RunStateDto:
       type: object
-      required: [run_id, state, current_evidence_revision_id, version, purpose]
+      required: [run_id, state, current_evidence_revision_id, version, purpose, ref, unverified_ref]
       properties:
         run_id:
           type: string
@@ -4388,6 +4403,14 @@ components:
         purpose:
           type: string
           enum: [regular, replay]
+        ref:
+          $ref: '#/components/schemas/RunRef'
+        unverified_ref:
+          type: boolean
+          description: >-
+            True when at least one stored identity value came from the request
+            body instead of a verified CI claim (05.2.2-T1); false for a
+            verified CI caller and for a run with no identity at all.
     RunSummary:
       type: object
       properties:
@@ -4443,9 +4466,11 @@ components:
         components:
           type: object
           description: Optional build identifiers for the run's components.
+        ref:
+          $ref: '#/components/schemas/RunRefRequest'
     RunCreated:
       type: object
-      required: [run_id, state]
+      required: [run_id, state, unverified_ref]
       properties:
         run_id:
           type: string
@@ -4453,6 +4478,89 @@ components:
         state:
           type: string
           enum: [queued]
+        unverified_ref:
+          type: boolean
+          description: >-
+            True when the stored identity block carries at least one
+            body-supplied value (05.2.2-T1); false for a verified CI caller and
+            for a run created without an identity.
+    RunRefRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Optional run identity supplied by the caller (00 §7/§8.1, 05.2.2-T1).
+        A verified CI caller's OIDC claims always win and a conflicting member
+        is ignored, never rejected (AC3); every value stored from here marks
+        the run `unverified_ref = true`. An unknown member is 422
+        `request_invalid` (`details[].path` `/ref/<member>`, reason
+        `additional_properties`), like every other shape failure of this body.
+      properties:
+        kind:
+          type: string
+          enum: [branch, tag, pull_request]
+          description: >-
+            `pull_request` requires `pr_number`, checked on the values after
+            the verified-claim merge → 422 `request_invalid`.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: >-
+            Branch or tag name; for a PR the GITHUB_REF_NAME form `<N>/merge`.
+        pr_number:
+          type: integer
+          minimum: 1
+        head_sha:
+          type: string
+          pattern: '^[0-9a-f]{40}([0-9a-f]{24})?$'
+          description: 40 hex for a SHA-1 repo, 64 for a SHA-256 repo.
+        base_sha:
+          type: string
+          pattern: '^[0-9a-f]{40}([0-9a-f]{24})?$'
+        trigger_event:
+          type: string
+          enum: [push, pull_request, schedule, manual, dispatch]
+        is_fork:
+          type: boolean
+          default: false
+          description: >-
+            Only a body value can set this: a verified CI caller is never a
+            fork (02.4.1 refuses a fork exchange 403).
+    RunRef:
+      type: object
+      additionalProperties: false
+      description: >-
+        The run's stored identity block (00 §7/§8.1, 05.2.2-T1). Every member is
+        present, `null` where unknown; an existing run created before 05.2.2 has
+        all members null and `is_fork` false. A verified `ci_producer` caller's
+        `ref`/`sha` claims win over the request body; the remaining values are
+        body-supplied and the run carries `unverified_ref = true`. `head_sha` is
+        only ever the verified `sha` claim of a `branch` or `tag` ref: for a
+        `pull_request` ref that claim is GitHub's test-merge commit and is not
+        stored.
+      required: [kind, name, pr_number, head_sha, base_sha, trigger_event, is_fork]
+      properties:
+        kind:
+          type: [string, 'null']
+          enum: [branch, tag, pull_request, null]
+        name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 255
+        pr_number:
+          type: [integer, 'null']
+          minimum: 1
+        head_sha:
+          type: [string, 'null']
+          pattern: '^[0-9a-f]{40}([0-9a-f]{24})?$'
+        base_sha:
+          type: [string, 'null']
+          pattern: '^[0-9a-f]{40}([0-9a-f]{24})?$'
+        trigger_event:
+          type: [string, 'null']
+          enum: [push, pull_request, schedule, manual, dispatch, null]
+        is_fork:
+          type: boolean
     Decision:
       type: object
       description: Evaluation decision or `pending` (00 §8.5/§9.3); `decision` values are upper case (00 §7).
