@@ -131,6 +131,58 @@ public sealed class SafeZipArchiveTests
     }
 
     [Fact]
+    public void AFakeEndOfCentralDirectoryInACommentCannotHideTheCap()
+    {
+        // AC3 (review fix): the reader takes the LAST signature in the window it scans, so a signature planted at
+        // the end of a comment is the record it will use. The pre-check must pick that same record and refuse its
+        // count - reading the real record instead would let the planted record's directory be materialized with
+        // no declared count ever checked.
+        var archive = WithComment(
+            RawZip(("a.txt", Encoding.UTF8.GetBytes("x"))),
+            EndOfCentralDirectoryRecord(declared: 10_001));
+
+        var result = Enumerate(archive, MaxBytes, Options(maxEntries: 10));
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
+        ReasonOf(result).ShouldBe(ParsingFailureReason.EntryCountExceeded);
+    }
+
+    [Fact]
+    public void AnEndOfCentralDirectoryThatDoesNotEndTheObjectIsRefused()
+    {
+        // AC3 (review fix): the last signature in the window closes exactly at the object's end for every
+        // well-formed archive. When it does not, the object is built around a signature planted in a comment, and
+        // the count that record declares (here: inside the cap) is never trusted - the object is refused as
+        // malformed before the reader is constructed at all.
+        var archive = WithComment(
+            RawZip(("a.txt", Encoding.UTF8.GetBytes("x"))),
+            [.. EndOfCentralDirectoryRecord(declared: 3), .. new byte[8]]);
+
+        var result = Enumerate(archive, MaxBytes, Options(maxEntries: 10));
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
+        ReasonOf(result).ShouldBe(ParsingFailureReason.Malformed);
+    }
+
+    [Fact]
+    public void ALegitimateArchiveWithALongCommentIsAccepted()
+    {
+        // AC3 (review fix): the fail-closed rule above never refuses a well-formed archive that carries a comment:
+        // its last signature is the real record, and that record declares a comment length that reaches the
+        // object's end exactly.
+        var archive = WithComment(
+            CreateZip(("a.txt", Encoding.UTF8.GetBytes("x"))),
+            Encoding.ASCII.GetBytes(new string('c', 300)));
+
+        var result = Enumerate(archive, MaxBytes, Options(maxEntries: 10));
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        result.Value.ShouldHaveSingleItem().Name.ShouldBe("a.txt");
+    }
+
+    [Fact]
     public void RejectsBombByExpandedSize()
     {
         // AC3: the cumulative expanded size is counted from the bytes actually read; a declared length is never
@@ -675,6 +727,48 @@ public sealed class SafeZipArchiveTests
 
         archive[count] = (byte)(declared & 0xFF);
         archive[count + 1] = (byte)(declared >> 8);
+    }
+
+    /// <summary>
+    /// Appends <paramref name="comment"/> to a classic end-of-central-directory record written without one, and
+    /// rewrites the record's comment length to reach it. The record is the object's last 22 bytes before the call,
+    /// so its comment length sits 20 bytes in.
+    /// </summary>
+    private static byte[] WithComment(byte[] archive, byte[] comment)
+    {
+        var record = archive.Length - 22;
+        var patched = new byte[archive.Length + comment.Length];
+
+        archive.CopyTo(patched, 0);
+        comment.CopyTo(patched, archive.Length);
+
+        patched[record + 20] = (byte)(comment.Length & 0xFF);
+        patched[record + 21] = (byte)(comment.Length >> 8);
+
+        return patched;
+    }
+
+    /// <summary>
+    /// One classic end-of-central-directory record: signature, disk numbers, the declared count for this disk and
+    /// in total, an empty central directory and no comment, so a caller appending it last makes a record that
+    /// closes exactly at the object's end.
+    /// </summary>
+    private static byte[] EndOfCentralDirectoryRecord(ushort declared)
+    {
+        using var buffer = new MemoryStream();
+        using var writer = new BinaryWriter(buffer, Encoding.UTF8, leaveOpen: true);
+
+        writer.Write(0x06054b50u);
+        writer.Write((ushort)0);
+        writer.Write((ushort)0);
+        writer.Write(declared);
+        writer.Write(declared);
+        writer.Write(0u);
+        writer.Write(0u);
+        writer.Write((ushort)0);
+        writer.Flush();
+
+        return buffer.ToArray();
     }
 
     /// <summary>

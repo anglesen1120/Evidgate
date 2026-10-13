@@ -486,6 +486,13 @@ internal static class SafeZipArchive
     /// large allocation, and everything else stays linear in the name's own length.
     /// </para>
     /// <para>
+    /// Refusing <see cref="UnicodeCategory.Format"/> characters (which includes the invisible ZWJ <c>U+200D</c>
+    /// and ZWNJ <c>U+200C</c>, and every bidi control) and a trailing <c>.</c> or space is deliberate hardening
+    /// beyond the traversal set of 06.3.1 AC4, not a filesystem requirement: an invisible character lets one
+    /// name read as another to a reviewer or a downstream tool, and Windows drops a trailing <c>.</c> or space,
+    /// so either could make one normalized name mean two different paths on disk. [DECISION] (AC4)
+    /// </para>
+    /// <para>
     /// Internal rather than private so the AC4 normalization tests can assert the guard directly, including the
     /// names a <see cref="ZipArchive"/> writer cannot represent (an empty name); the walk still applies it to
     /// every entry. Exposing it loosens nothing — the same rule runs on every archive.
@@ -576,7 +583,11 @@ internal static class SafeZipArchive
         return true;
     }
 
-    /// <summary>The Unicode categories the profile refuses outright in a name.</summary>
+    /// <summary>
+    /// The Unicode categories the profile refuses outright in a name. <see cref="UnicodeCategory.Format"/> covers
+    /// the invisible ones - ZWJ <c>U+200D</c>, ZWNJ <c>U+200C</c>, the bidi controls - which is deliberate
+    /// hardening under 06.3.1 AC4, not a filesystem requirement.
+    /// </summary>
     private static bool HasUnsafeCategory(char character) =>
         char.GetUnicodeCategory(character) is
             UnicodeCategory.Format
@@ -596,14 +607,28 @@ internal static class SafeZipArchive
     /// <summary>
     /// Refuses an archive whose end-of-central-directory record declares more entries than the profile allows,
     /// before <see cref="ZipArchive"/> materializes the directory: the declared count is the whole-directory cost
-    /// a hostile object can announce, and a few hundred bytes can announce millions. A record that is missing,
-    /// truncated or inconsistent is left to the normal <c>malformed</c> path.
+    /// a hostile object can announce, and a few hundred bytes can announce millions.
+    /// <para>
+    /// The record is the one the reader itself would pick - the last signature in the window it scans, with no
+    /// test of that record's own comment length - so this check can never read a different record than the
+    /// reader does. An object whose chosen record does not close exactly at its end is refused as malformed
+    /// before the reader opens it: the only way that happens is a signature planted inside a comment, and
+    /// reading the count of a planted record while the reader reads another is exactly the mismatch that would
+    /// let a hostile object announce a small count and have a huge directory materialized.
+    /// </para>
     /// </summary>
     private static void CheckDeclaredEntryCount(ReadOnlySpan<byte> bytes, ZipArchiveOptions options)
     {
         if (!TryFindEndOfCentralDirectory(bytes, out var endOfCentralDirectory))
         {
-            return;
+            // No signature in the window the reader scans: it cannot read a central directory from this object.
+            throw new ArchiveLimitException(ParsingFailureReason.Malformed);
+        }
+
+        if (endOfCentralDirectory + EndOfCentralDirectoryLength
+            + ReadUInt16(bytes, endOfCentralDirectory + EndOfCentralDirectoryCommentLengthOffset) != bytes.Length)
+        {
+            throw new ArchiveLimitException(ParsingFailureReason.Malformed);
         }
 
         // A ZIP64 archive points at its own record from a locator directly before the classic one.
@@ -635,9 +660,11 @@ internal static class SafeZipArchive
     }
 
     /// <summary>
-    /// Locates the classic end-of-central-directory record: the last occurrence whose declared comment length
-    /// reaches exactly to the end of the object, which is what tells the real record apart from the same four
-    /// bytes appearing inside a comment. Returns false when the object has no such record.
+    /// Locates the end-of-central-directory record the reader will use: the last occurrence of the signature in
+    /// the window the reader scans - the object's last <see cref="EndOfCentralDirectoryLength"/> bytes plus the
+    /// longest comment a record may declare - with no test of that record's own comment length, exactly the
+    /// choice <c>ZipArchive</c> makes while scanning backwards. Returns false when the window holds no signature,
+    /// which means the reader cannot read a central directory from the object either.
     /// </summary>
     private static bool TryFindEndOfCentralDirectory(ReadOnlySpan<byte> bytes, out int index)
     {
@@ -647,13 +674,7 @@ internal static class SafeZipArchive
 
         for (var candidate = bytes.Length - EndOfCentralDirectoryLength; candidate >= earliest; candidate--)
         {
-            if (ReadUInt32(bytes, candidate) != EndOfCentralDirectorySignature)
-            {
-                continue;
-            }
-
-            if (candidate + EndOfCentralDirectoryLength
-                + ReadUInt16(bytes, candidate + EndOfCentralDirectoryCommentLengthOffset) == bytes.Length)
+            if (ReadUInt32(bytes, candidate) == EndOfCentralDirectorySignature)
             {
                 index = candidate;
                 return true;
