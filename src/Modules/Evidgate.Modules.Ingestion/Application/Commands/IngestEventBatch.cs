@@ -72,7 +72,21 @@ internal sealed record EventAck(int Index, Guid EventId, string Ack);
 /// row per accepted batch would flood the trail for no reviewer value (00 §5.7 P5). The one exception is
 /// the org-level <c>adapter_capability</c> write of a first-send batch: it is audited exactly like the
 /// 04.7.1-T2.3 route's own registration, so the suppression decision is taken only after the capability
-/// step (S-1).
+/// step (S-1). The transition's own <c>run.state_changed</c> audit row is written by 05's
+/// <c>IRunStateTransition</c> before that decision and is never suppressed by it.
+/// </para>
+/// <para>
+/// <b>Lock order</b> (04.1.1-T4, ruling T13 + the 05.3.1 lock-order rule): the first accepted batch of a
+/// <c>queued</c> run drives <c>queued → running</c> through 05's <c>IRunStateTransition</c>, which loads
+/// the run row <c>FOR NO KEY UPDATE</c>; the scope read below loads the same row <c>FOR SHARE</c>. Because
+/// two callers that share-lock a row and then upgrade to <c>NO KEY UPDATE</c> deadlock (40P01), this
+/// handler takes the stronger lock <b>first</b>: one unlocked, RLS-scoped read of <c>run.state</c> decides
+/// whether the run is <c>queued</c>, and only then is the transition called — before any shared read. A
+/// batch on a <c>running</c>/<c>collecting</c>/terminal run skips the transition entirely, so the ingest
+/// hot path keeps its single <c>FOR SHARE</c> read (T101) and a run is never re-transitioned. A batch this
+/// handler refuses after the transition rolls it back with everything else, so the run is <c>queued</c>
+/// again; the only residual cost of that path is that the abandoned transaction keeps the run's
+/// <c>FOR NO KEY UPDATE</c> lock for the rest of its statements (QA finding O1, S43).
 /// </para>
 /// </summary>
 [AuditedAction("event.batch.ingest")]
@@ -81,6 +95,7 @@ internal sealed class IngestEventBatchHandler(
     Lazy<ContractSchemaSet> schemas,
     FirstSendCapabilityService firstSend,
     IRunEventScope runScopes,
+    IRunStateTransition runStates,
     IProducerRegistry producers,
     ICaseAttemptWriter attempts,
     IOutboxWriter outbox,
@@ -104,6 +119,12 @@ internal sealed class IngestEventBatchHandler(
 
     /// <summary>The outbox task type of the usage row (04.8.1 §4, 04.1.1 §7).</summary>
     internal const string UsageTaskType = "usage.batch_accepted";
+
+    /// <summary>The 00 §8.1 state whose first accepted event drives the transition to <see cref="RunningState"/> (T13).</summary>
+    internal const string QueuedState = "queued";
+
+    /// <summary>The 00 §8.1 state the first accepted event moves a queued run to (T13).</summary>
+    internal const string RunningState = "running";
 
     /// <summary>One event's row of the <c>jsonb_to_recordset</c> insert; property names are the column names.</summary>
     private sealed record EventRow(
@@ -188,6 +209,36 @@ internal sealed class IngestEventBatchHandler(
         }
 
         var producerId = events[0].ProducerId;
+        var orgId = scopes.Require().OrgId;
+
+        // (b1) Lock order (04.1.1-T4, ruling T13 + the 05.3.1 lock-order rule; see the class doc): the first
+        // accepted batch of a queued run moves it queued -> running through 05's IRunStateTransition, which
+        // loads the run row FOR NO KEY UPDATE. The scope read at (c) takes the same row FOR SHARE, and two
+        // racing first batches that each hold FOR SHARE and then upgrade to NO KEY UPDATE deadlock (40P01), so
+        // the transition runs BEFORE any shared read. The unlocked, RLS-scoped read below decides whether the
+        // run is queued at all: a batch on a running/collecting/terminal run skips the transition, so the hot
+        // path keeps its single FOR SHARE read (T101) and a run is never re-transitioned. The transition
+        // re-checks the state under its own lock, so the racing loser is the T82 no-op (one winner, one no-op);
+        // a batch this handler refuses later rolls the applied transition back with everything else, and a
+        // canceled or complete run is untouched.
+        var runState = await db
+            .ScalarAsync<string>(ReadRunStateSql, new { org_id = orgId, run_id = command.RunId }, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (string.Equals(runState, QueuedState, StringComparison.Ordinal))
+        {
+            var transition = await runStates
+                .TransitionAsync(new TransitionRunStateCommand(command.RunId, RunningState), cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!transition.IsSuccess)
+            {
+                // The only reachable failure of this edge is 404 (the run is not visible to this tenant, which
+                // the scope read would answer the same way): a queued source cannot produce a forward-skip, and
+                // no ExpectedVersion is passed, so no 409/412 is reachable. A no-op outcome is a success.
+                return Result.Failure<BatchAckResult>(transition.Error!);
+            }
+        }
 
         // (c) Scope: one read answers the run's existence, its state and the planned execution keys (T90).
         var distinctKeys = events.Select(e => e.ExecutionKey).ToHashSet(StringComparer.Ordinal);
@@ -295,8 +346,6 @@ internal sealed class IngestEventBatchHandler(
         {
             audit.Suppress();
         }
-
-        var orgId = scopes.Require().OrgId;
 
         // (f0) The batch's own event_id dedupe (AC2/AC5): the first occurrence of an event_id is the accepted
         // one; a later occurrence with the identical canonical payload is an in-batch duplicate, excluded from
@@ -586,6 +635,17 @@ internal sealed class IngestEventBatchHandler(
         // Anything else normalises to error: an unknown producer value is a failure, never a pass.
         _ => "error",
     };
+
+    /// <summary>
+    /// The one unlocked, RLS-scoped read of the run's state (04.1.1-T4): it decides whether the first accepted
+    /// batch must take the run row <c>FOR NO KEY UPDATE</c> up front (the <c>queued → running</c> transition) or
+    /// can keep the plain <c>FOR SHARE</c> scope read. It is a primary-key read with no locking clause, so it
+    /// never blocks on a cancel or a concurrent batch; the transition re-checks the state under its own lock, so
+    /// a stale answer here is harmless. A missing or foreign-org run answers no row, exactly like the scope read.
+    /// </summary>
+    private const string ReadRunStateSql = """
+        select state from public.run where org_id = @org_id and id = @run_id
+        """;
 
     /// <summary>One statement for the whole batch; the parameter is the batch as a JSON array (S1).</summary>
     private const string InsertEventsSql = """
