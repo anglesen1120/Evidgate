@@ -99,6 +99,13 @@ internal static class SafeXml
         {
             return Result.Failure<ParsedXmlReport>(ParsingFailure.For(ParsingFailureReason.Malformed));
         }
+        catch (ArgumentOutOfRangeException)
+        {
+            // Found by the 06.3.2 fuzz harness: a non-ASCII byte inside the XML declaration makes
+            // XmlTextReaderImpl.SwitchEncoding throw ArgumentOutOfRangeException from a negative BlockCopy count
+            // instead of XmlException. It is malformed content, never an unhandled crash.
+            return Result.Failure<ParsedXmlReport>(ParsingFailure.For(ParsingFailureReason.Malformed));
+        }
     }
 
     /// <summary>
