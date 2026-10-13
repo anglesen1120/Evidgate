@@ -109,7 +109,7 @@ public sealed class GetRunTests
     /// so a service token scoped to the sibling project is 403 <c>forbidden</c>, exactly like the module's other
     /// read route (05.1.2's <c>GET /v1/environment-revisions/{id}</c>, EnvironmentRevisionTests). §5 documents
     /// <c>forbidden</c> and <c>not_found</c> for this route; <c>project_scope_mismatch</c> is not part of it, and
-    /// the handler-level scope check that would produce it is mapped to <c>404 not_found</c> (GetRun.cs:55, the
+    /// the handler-level scope check that would produce it is mapped to <c>404 not_found</c> (the OrchestratorScope.Project check in GetRun.cs, the
     /// same as GetEnvironmentRevisionQueryHandler, EnvironmentRevisions.cs:246).
     /// </summary>
     [Fact]
