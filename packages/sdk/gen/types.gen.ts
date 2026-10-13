@@ -47,9 +47,21 @@ export type RunStateDto = {
     unverified_ref: boolean;
 };
 
+/**
+ * One row of `GET /v1/projects/{p}/runs` (05.2.2 §5). Since 05.2.2-T2 the list serves the run's state, `created_at`, the recorded identity `ref` and `unverified_ref`; `decision`, `parent_run_id`, `rerun_label` and `reprocess_label` remain optional here until 07 and 05.5.1/05.5.2 add them.
+ */
 export type RunSummary = {
-    run_id?: string;
-    state?: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
+    run_id: string;
+    state: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
+    /**
+     * Creation, UTC — the primary sort key of the list (AC6).
+     */
+    created_at: string;
+    ref: RunRef;
+    /**
+     * True when at least one stored identity value came from the request body instead of a verified CI claim (05.2.2-T1); false for a verified CI caller and for a run with no identity at all.
+     */
+    unverified_ref: boolean;
     /**
      * null while pending (00 §9.3); UPPER per 00 §7
      */
@@ -57,6 +69,14 @@ export type RunSummary = {
     parent_run_id?: string | null;
     rerun_label?: string | null;
     reprocess_label?: string | null;
+};
+
+/**
+ * 00 §9.1 cursor page of `RunSummary`, keyset-ordered on `(created_at, id)` ascending (05.2.2-T2).
+ */
+export type RunPage = {
+    items: Array<RunSummary>;
+    next_cursor: string | null;
 };
 
 export type CreateRunRequest = {
@@ -1312,6 +1332,31 @@ export type PolicyRevisionCursor = string;
 export type Limit = number;
 
 /**
+ * Exact `ref_name` of the run's recorded identity (05.2.2 §5, AC6): the branch of `refs/heads/<n>`, the tag of `refs/tags/<n>`, or GitHub's `<N>/merge` for a pull request. 1..255 code points with no control character; a present but invalid value is 422 `request_invalid` with `details[].path` = `ref_name`.
+ */
+export type RunRefName = string;
+
+/**
+ * Exact `pr_number` of the run's recorded identity (05.2.2 §5, AC6); an integer ≥ 1, a present but invalid value is 422 `request_invalid` with `details[].path` = `pr_number`.
+ */
+export type RunPrNumber = number;
+
+/**
+ * Exact `head_sha` of the run's recorded identity (05.2.2 §5, AC6): GitHub's SHA-1 or SHA-256 commit id, lowercase. A present but invalid value is 422 `request_invalid` with `details[].path` = `head_sha`.
+ */
+export type RunHeadSha = string;
+
+/**
+ * Exact `trigger_event` of the run's recorded identity (05.2.2 §5, AC6). A present but invalid value is 422 `request_invalid` with `details[].path` = `trigger_event`.
+ */
+export type RunTriggerEvent = 'push' | 'pull_request' | 'schedule' | 'manual' | 'dispatch';
+
+/**
+ * Exact `is_fork` of the run's recorded identity (05.2.2 §5, AC6); the literal `true` or `false`. A present but invalid value is 422 `request_invalid` with `details[].path` = `is_fork`.
+ */
+export type RunIsFork = boolean;
+
+/**
  * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
  */
 export type IdempotencyKey = string;
@@ -1509,6 +1554,26 @@ export type ListRunsData = {
          */
         cursor?: string;
         limit?: number;
+        /**
+         * Exact `ref_name` of the run's recorded identity (05.2.2 §5, AC6): the branch of `refs/heads/<n>`, the tag of `refs/tags/<n>`, or GitHub's `<N>/merge` for a pull request. 1..255 code points with no control character; a present but invalid value is 422 `request_invalid` with `details[].path` = `ref_name`.
+         */
+        ref_name?: string;
+        /**
+         * Exact `pr_number` of the run's recorded identity (05.2.2 §5, AC6); an integer ≥ 1, a present but invalid value is 422 `request_invalid` with `details[].path` = `pr_number`.
+         */
+        pr_number?: number;
+        /**
+         * Exact `head_sha` of the run's recorded identity (05.2.2 §5, AC6): GitHub's SHA-1 or SHA-256 commit id, lowercase. A present but invalid value is 422 `request_invalid` with `details[].path` = `head_sha`.
+         */
+        head_sha?: string;
+        /**
+         * Exact `trigger_event` of the run's recorded identity (05.2.2 §5, AC6). A present but invalid value is 422 `request_invalid` with `details[].path` = `trigger_event`.
+         */
+        trigger_event?: 'push' | 'pull_request' | 'schedule' | 'manual' | 'dispatch';
+        /**
+         * Exact `is_fork` of the run's recorded identity (05.2.2 §5, AC6); the literal `true` or `false`. A present but invalid value is 422 `request_invalid` with `details[].path` = `is_fork`.
+         */
+        is_fork?: boolean;
     };
     url: '/projects/{p}/runs';
 };
@@ -1527,6 +1592,10 @@ export type ListRunsErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
@@ -1542,9 +1611,7 @@ export type ListRunsResponses = {
     /**
      * Page of runs
      */
-    200: CursorList & {
-        items?: Array<RunSummary>;
-    };
+    200: RunPage;
 };
 
 export type ListRunsResponse = ListRunsResponses[keyof ListRunsResponses];

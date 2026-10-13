@@ -235,6 +235,8 @@ public static class IsolationRouteCases
                 Fixed(bp.WaiverIds), aAdmin, $"/v1/projects/{ap.Id}/waivers?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/quarantine"), $"org B project {bp.Slug} quarantine entries", bAdmin, $"/v1/projects/{bp.Id}/quarantine?limit=1", "id",
                 Fixed(bp.QuarantineIds), aAdmin, $"/v1/projects/{ap.Id}/quarantine?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/runs"), $"org B project {bp.Slug} runs", bAdmin, $"/v1/projects/{bp.Id}/runs?limit=1", "run_id",
+                Fixed(bp.RunIds), aAdmin, $"/v1/projects/{ap.Id}/runs?limit=1"));
             for (var c = 0; c < bp.CaseIds.Count; c++)
             {
                 walks.Add(new(Get("/v1/cases/{c}/revisions"), $"org B case {bp.Slug}#{c} revisions", bAdmin, $"/v1/cases/{bp.CaseIds[c]}/revisions?limit=1", "id",
@@ -363,6 +365,24 @@ public static class IsolationRouteCases
         // probe's allowed: [403, 404] below.
         ObjectCase("GET", "/v1/runs/{r}", p => [("run", p.RunId)], id =>
             new(HttpMethod.Get, $"/v1/runs/{id}"), ownControl: true),
+        // 05.2.2-T2: the project-scoped run list. As a list, its positive control is the full-pagination walk
+        // (Lists); the extra probes pin the ref_name filter, which must not widen tenancy.
+        ProjectCase("GET", "/v1/projects/{p}/runs", p => new(HttpMethod.Get, $"/v1/projects/{p}/runs"), list: true,
+            foreignExpect: ProbeExpect.NotFound,
+            extra: (route, w) =>
+            [
+                // ?ref_name=main on org A's project is the same refusal as on a random project (never an org-A
+                // row, no existence oracle): the filter matches org A's seeded branch/main run, so a leak would
+                // surface it here rather than returning an empty page.
+                Pair(route, "filtered ?ref_name=main on org A's project", ProbeExpect.NotFound, OrgBAdmin(w),
+                    new(HttpMethod.Get, $"/v1/projects/{w.Acme.Projects[0].Id}/runs?ref_name=main"),
+                    new(HttpMethod.Get, $"/v1/projects/{Guid.CreateVersion7()}/runs?ref_name=main")),
+                // The control: org B's own filtered page lists exactly its own branch/main run, never org A's.
+                new(route, "filtered ?ref_name=main on own project lists only its own main-ref run", runner => runner.OwnListAsync(
+                    route, "filtered ?ref_name=main on own project lists only its own main-ref run", OrgBAdmin(w),
+                    new(HttpMethod.Get, $"/v1/projects/{w.Acme2.Projects[0].Id}/runs?ref_name=main"),
+                    [w.Acme2.Projects[0].RunIds[0].ToString("D")], idField: "run_id")),
+            ]),
 
         // ---- Policy (PolicyEndpoints.cs; 07.1.1-T3) -------------------------------------------------------------
         ProjectCase("POST", "/v1/projects/{p}/policies", p => new(HttpMethod.Post, $"/v1/projects/{p}/policies", Policy())),
@@ -525,9 +545,13 @@ public static class IsolationRouteCases
     /// <summary>
     /// A route naming a project in <c>{p}</c>: as an org-B member, each org-A project against a random id; as org
     /// B's <c>ci_producer</c> (project <c>web</c>), the sibling project <c>api</c> (403, ScopeGuard) and org A's
-    /// project against a random id. A list route's positive control is its full-pagination walk (<c>Lists</c>).
+    /// project against a random id. A list route's positive control is its full-pagination walk (<c>Lists</c>);
+    /// <paramref name="extra"/> adds route-specific member probes (05.2.2-T2's filtered list).
+    /// <paramref name="foreignExpect"/> overrides the member probe's expectation: a list route defaults to
+    /// <see cref="ProbeExpect.EmptyOrNotFound"/>, but the 05.2.2-T2 run list always answers 404 for a foreign
+    /// project (it checks project liveness), so it passes <see cref="ProbeExpect.NotFound"/>.
     /// </summary>
-    private static RouteCase ProjectCase(string method, string template, Func<Guid, ProbeRequest> request, bool list = false, bool ownControl = false) =>
+    private static RouteCase ProjectCase(string method, string template, Func<Guid, ProbeRequest> request, bool list = false, bool ownControl = false, Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>>? extra = null, ProbeExpect? foreignExpect = null) =>
         Case(
             method,
             template,
@@ -535,12 +559,17 @@ public static class IsolationRouteCases
             {
                 var probes = new List<RouteProbe>();
                 probes.AddRange(w.Acme.Projects.Select(p => Pair(route, $"org A project {p.Slug} in {{p}}",
-                    list ? ProbeExpect.EmptyOrNotFound : ProbeExpect.NotFound, OrgBAdmin(w), request(p.Id), request(Guid.CreateVersion7()))));
+                    foreignExpect ?? (list ? ProbeExpect.EmptyOrNotFound : ProbeExpect.NotFound), OrgBAdmin(w), request(p.Id), request(Guid.CreateVersion7()))));
                 probes.Add(new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
                     route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderCaller(w), RandomHeaderCaller(w), request(w.Acme.Projects[0].Id))));
                 if (ownControl)
                 {
                     probes.Add(OwnObject(route, "own project answers 200", OrgBAdmin(w), request(w.Acme2.Projects[0].Id)));
+                }
+
+                if (extra is not null)
+                {
+                    probes.AddRange(extra(route, w));
                 }
 
                 return probes;
@@ -1273,6 +1302,7 @@ public sealed class RouteProbeRunner
         foreach (var p in org.Projects)
         {
             ids.AddRange([p.Id, p.ActiveTokenId, p.RevokedTokenId, p.EnvironmentRevisionId, p.ManifestId]);
+            ids.AddRange(p.RunIds);
             ids.AddRange(p.BindingIds);
             ids.AddRange(p.CaseIds);
             ids.AddRange(p.CaseRevisions.SelectMany(revisions => revisions));
@@ -1478,14 +1508,14 @@ public sealed class RouteProbeRunner
     /// Org B's own list while the caller's header names another org: the route's <c>{o}</c> wins, so 200 listing
     /// exactly <paramref name="expected"/> and no org-A id.
     /// </summary>
-    public async Task<IReadOnlyList<string>> OwnListAsync(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request, IReadOnlyCollection<string> expected)
+    public async Task<IReadOnlyList<string>> OwnListAsync(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request, IReadOnlyCollection<string> expected, string idField = "id")
     {
         ArgumentNullException.ThrowIfNull(caller);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(expected);
         var response = await SendAsync(caller, request).ConfigureAwait(false);
         var violations = new List<string>();
-        var ids = Ids(response, "id");
+        var ids = Ids(response, idField);
         if (response.Status != 200 || !ids.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(expected))
         {
             violations.Add(Describe(route, name, caller, $"{request} answered {response} listing [{string.Join(", ", ids)}], expected exactly [{string.Join(", ", expected)}]"));

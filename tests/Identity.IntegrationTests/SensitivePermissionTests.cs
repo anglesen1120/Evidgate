@@ -402,6 +402,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/suites"] = $"/v1/projects/{project}/suites",
             ["/v1/projects/{p}/waivers"] = $"/v1/projects/{project}/waivers",
             ["/v1/projects/{p}/quarantine"] = $"/v1/projects/{project}/quarantine",
+            ["/v1/projects/{p}/runs"] = $"/v1/projects/{project}/runs",
             ["/v1/cases/{c}"] = $"/v1/cases/{seeded.CaseId}",
             ["/v1/cases/{c}/revisions"] = $"/v1/cases/{seeded.CaseId}/revisions",
             ["/v1/suites/{s}"] = $"/v1/suites/{seeded.SuiteId}",

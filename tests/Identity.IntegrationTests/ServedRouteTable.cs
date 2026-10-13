@@ -658,6 +658,7 @@ internal static class RouteRequests
             Manifest(ctx), IdempotencyKey: Key()));
         Add("POST", "/v1/projects/{p}/runs", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/runs",
             Run(ctx), IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/runs", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/runs"));
         Add("POST", "/v1/projects/{p}/environments/{e}/revisions", ctx =>
             new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/environments/staging/revisions", Environment(), IdempotencyKey: Key()));
         Add("GET", "/v1/environment-revisions/{id}", ctx =>
