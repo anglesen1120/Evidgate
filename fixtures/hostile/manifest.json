@@ -127,5 +127,11 @@
     "guard": "secret-scan — the masking scanner of 06.2.3 reads this file and writes a masking_event; the assertion lives there, not in this corpus",
     "driven_through": "06.2.3 scanner (referenced, not re-tested here)",
     "expected_outcome": "referenced"
+  },
+  {
+    "file": "fuzz_5b9ba68261b8.xml",
+    "guard": "xml-wellformed — fuzz-promoted from media_svg_image.svg (fuzz seed 20261013); a non-ASCII byte inside the XML declaration made the reader throw instead of returning a refusal",
+    "driven_through": "IParsing.ParseXmlReport",
+    "expected_failure_code": "malformed"
   }
 ]

@@ -29,6 +29,44 @@ as its own gate on every PR while the assembly's Docker suites stay untouched, a
 selection trait (the `test` stage's `--filter-not-trait "Category=Docker"` skip path ignores it); the Docker
 column above still uses `Category=Docker` alone.
 
+## Fuzz harness (06.3.2-T2)
+
+`HostileFuzzHarness.cs` adds the seeded-mutation fuzzer 06.3.2-T2.1 asks for: it loads every
+`fixtures/hostile/manifest.json` seed (the cheap generated `oversized.bin` included; the 10,500-entry
+`zipbomb.zip` is deliberately not a seed — a mutated copy costs a central-directory walk with no bound well under
+the per-input limit, and the corpus test plus the mutation smoke already carry it), mutates them with a
+deterministic PRNG (splitmix64, so a recorded seed replays a run exactly), and drives every mutated input through
+`IParsing.ParseXmlReport` and `IParsing.EnumerateArchive`. `HostileFuzzTests` and `FuzzPromotionTests` carry
+`[Trait("Category","Fuzz")]`, which `scripts/verify.sh --stage fixtures-fuzz` (and the nightly `fixtures-fuzz` CI
+job) selects with `dotnet test --filter-trait "Category=Fuzz" --ignore-exit-code 8`.
+
+**`[DECISION]`** 06.3.2-T2.1 ships the seeded mutation fuzzer instead of `SharpFuzz`: SharpFuzz is only
+coverage-guided together with the AFL/libFuzzer native tooling plus an IL-instrumented copy of the parser assembly
+in the CI image, and any new dependency needs a licence-scan pass and an ADR-0002 row (00 §5.7 S6).
+`scripts/licence-policy.json` and `docs/adr/0002-compatibility-and-licence-matrix.md` have no SharpFuzz entry
+(grepped: zero hits), so the story's "or a seeded mutation fuzzer if the licence check fails" arm applies. The run
+adds no dependency.
+
+**Oracle.** Only documented outcomes pass: a `Result` success, or a failure carrying one `content` detail whose
+reason is in the closed `ParsingFailureReason` set under the code and status that reason is documented with
+(`artifact_invalid`/422, or `payload_too_large`/413 for `size_exceeded`). Anything else — an escaped exception, an
+input abandoned at the per-input bound, a failure with an undocumented reason, path, status or detail count — is a
+finding: its bytes go to the findings directory and the test fails. Mutated bytes are never executed or extracted.
+
+**Budget.** `EVIDGATE_FUZZ_SEED` (default `20261013`), `EVIDGATE_FUZZ_BUDGET_SECONDS` (default 5; the
+`fixtures-fuzz` stage exports 600 unless the caller already set one), `EVIDGATE_FUZZ_MAX_ITERATIONS`,
+`EVIDGATE_FUZZ_PER_INPUT_MS` and `EVIDGATE_FUZZ_FINDINGS_DIR` (default a temp directory; the stage points it at
+`artifacts/fuzz-findings`, which the nightly job uploads on failure and which always receives a `run.json`). The
+`test` and `fixtures-hostile` stages therefore run only the few-second smoke, never the ten-minute budget.
+
+**Promotion.** `FuzzPromotion.Promote` writes a finding into `fixtures/hostile/` as a new committed fixture plus
+its `manifest.json` row, so a crash the nightly run finds becomes a permanent case the T1 suite asserts from then
+on. It refuses unless the explicit opt-in is passed and `EVIDGATE_FUZZ_PROMOTE=1` is set — which no CI job sets —
+so a CI run never modifies the corpus. The promoted row's `expected_failure_code` starts at the conservative
+`malformed`; the operator reviewing a real crash tightens it to the reason the fixed profile returns, and the T1
+corpus test proves the row. `FuzzPromotionTests` drives the helper against a temp copy of the corpus, never the
+committed one.
+
 ## Shared build conventions — `tests/Directory.Build.props`
 
 Imported automatically by every project under `tests/`. It imports the repository-root `Directory.Build.props` first, then adds what every test project shares:
