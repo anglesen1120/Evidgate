@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Manifests;
+using Evidgate.Modules.Orchestrator.Application.Queries;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Mediator;
@@ -58,6 +59,10 @@ public static class OrchestratorEndpoints
             .Produces<EnvironmentRevisionDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status304NotModified)
             .WithSummary("One environment revision; ETag is its hash (05.1.2)");
+
+        group.MapGet("/runs/{r}", GetRunAsync)
+            .Produces<RunStateDto>(StatusCodes.Status200OK)
+            .WithSummary("One run's state, current evidence revision, version and purpose (05.3.1)");
 
         return group;
     }
@@ -173,6 +178,18 @@ public static class OrchestratorEndpoints
 
         return matches ? Result.Success(StatusCodes.Status304NotModified) : result;
     }
+
+    /// <summary>
+    /// <c>GET /v1/runs/{r}</c> (05.3.1 §5): the run's state, current evidence revision, version and purpose. The
+    /// handler's <c>run:read</c> permission is the C2 pipeline's; an unknown, another tenant's or another project's
+    /// run is its 404 <c>not_found</c>. No <c>ETag</c>: 05.3.1 §5 pins <c>If-Match</c> semantics to the transition
+    /// command, and the body already carries the <c>version</c> a client echoes there.
+    /// </summary>
+    private static async Task<Result<RunStateDto>> GetRunAsync(
+        Guid r,
+        IMediator mediator,
+        CancellationToken cancellationToken) =>
+        await mediator.Send(new GetRunQuery(r), cancellationToken).ConfigureAwait(false);
 
     /// <summary>The raw body, refused with 413 as soon as it passes <paramref name="limit"/> bytes (never buffered beyond it).</summary>
     private static async Task<(ReadOnlyMemory<byte> Bytes, Error? TooLarge)> ReadBodyAsync(HttpContext context, int limit, CancellationToken cancellationToken)

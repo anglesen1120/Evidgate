@@ -25,7 +25,8 @@ internal sealed partial class RunEventScopeReader(ITenantDb db, ITenantScopeAcce
     /// <summary>
     /// The one statement of <see cref="ReadAsync"/> (04.1.1-T1, rulings T90/T91). The run row is locked
     /// <c>FOR SHARE OF r</c> — only <c>run</c>, not the joined <c>project</c> — so it serialises against the
-    /// <c>FOR UPDATE</c> a cancel or a completion takes (T12/T81) and a committed state change can never be missed;
+    /// <c>FOR NO KEY UPDATE</c> the transition takes (a cancel, a completion, the first event; T12/T81) and a
+    /// committed state change can never be missed;
     /// the same statement carries the project's state and the planned-execution membership probe. The probe is one
     /// <c>execution_key = ANY(@keys)</c> on the unique index <c>planned_execution_run_execution_key</c>
     /// (00 §5.7 P3, T90): the run's whole planned set is never loaded, and an empty key set yields the empty array.

@@ -355,6 +355,14 @@ public static class IsolationRouteCases
             new(HttpMethod.Post, $"/v1/projects/{p}/environments/{IsolationWorld.EnvironmentKey}/revisions", Environment())),
         ObjectCase("GET", "/v1/environment-revisions/{id}", p => [("environment revision", p.EnvironmentRevisionId)], id =>
             new(HttpMethod.Get, $"/v1/environment-revisions/{id}"), ownControl: true),
+        // 05.3.1-T1: the run is addressed by id alone, so the tenant scope is the RLS read — another org's run is the
+        // same 404 not_found as a random id. A project-scoped credential asking for a sibling project's run of the same
+        // org is that same 404 not_found too: GetRun maps OrchestratorScope.Project's scope mismatch to it (the OrchestratorScope.Project check in GetRun.cs),
+        // so project_scope_mismatch is never the answer here. The one 403 is the permission stage's, for a service/
+        // ci_producer principal, which can never hold run:read (outside the service-role ceiling) — hence the service
+        // probe's allowed: [403, 404] below.
+        ObjectCase("GET", "/v1/runs/{r}", p => [("run", p.RunId)], id =>
+            new(HttpMethod.Get, $"/v1/runs/{id}"), ownControl: true),
 
         // ---- Policy (PolicyEndpoints.cs; 07.1.1-T3) -------------------------------------------------------------
         ProjectCase("POST", "/v1/projects/{p}/policies", p => new(HttpMethod.Post, $"/v1/projects/{p}/policies", Policy())),

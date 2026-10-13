@@ -4,9 +4,9 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// The in-transaction run-scope lookup 04.1.1's atomic event-batch commit needs (04.1.1-T1, rulings T90/T91;
 /// 00 §5.5 C5: another module reaches the Orchestrator only through this project). One statement over the ambient
 /// tenant scope, so it joins the caller's transaction and RLS scopes every row: the run row is read
-/// <c>FOR SHARE</c>, which serialises it against the <c>FOR UPDATE</c> a cancel or a completion takes (T12/T81),
-/// so a committed state change is never missed by a batch that already read the row. An unknown or foreign-org id
-/// is the same answer — null.
+/// <c>FOR SHARE</c>, which serialises it against the <c>FOR NO KEY UPDATE</c> the run state transition takes
+/// (a cancel, a completion, the first event; T12/T81), so a committed state change is never missed by a batch
+/// that already read the row. An unknown or foreign-org id is the same answer — null.
 /// </summary>
 public interface IRunEventScope
 {
