@@ -296,8 +296,6 @@ public sealed class SafeZipArchiveTests
     [InlineData("a\u2028b")] // a line separator
     [InlineData("a\u2029b")] // a paragraph separator
     [InlineData("a\uE000b")] // a private-use character
-    [InlineData("a\uD800b")] // an unpaired high surrogate
-    [InlineData("a\uDC00b")] // an unpaired low surrogate
     [InlineData("a.")] // a segment trailing a dot, which Windows strips
     [InlineData("a ")] // a segment trailing a space, which Windows strips
     [InlineData("a. ")]
@@ -305,6 +303,27 @@ public sealed class SafeZipArchiveTests
     {
         // AC4: the guard itself, including the empty name a ZipArchive writer cannot store.
         SafeZipArchive.TryNormalize(name, out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void NormalizationRefusesUnpairedSurrogates()
+    {
+        // Built at runtime: an unpaired surrogate in an InlineData literal is replaced with U+FFFD by the theory
+        // serializer, which would test a different (legal) character.
+        SafeZipArchive.TryNormalize("a" + (char)0xD800 + "b", out _).ShouldBeFalse();
+        SafeZipArchive.TryNormalize("a" + (char)0xDC00 + "b", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void AClassicCountOverTheCapIsRefusedEvenWhenAZip64RecordClaimsLess()
+    {
+        // A reader that ignores the ZIP64 record when no classic marker is present would use the classic count.
+        var archive = Zip64WithDeclaredEntryCount(1, classicCount: 11);
+
+        var result = Enumerate(archive, MaxBytes, Options(maxEntries: 10));
+
+        result.IsSuccess.ShouldBeFalse();
+        ReasonOf(result).ShouldBe(ParsingFailureReason.EntryCountExceeded);
     }
 
     [Fact]
@@ -776,7 +795,7 @@ public sealed class SafeZipArchiveTests
     /// <paramref name="declared"/> entries in the ZIP64 record. The classic record's own count is inside any cap,
     /// so the ZIP64 record is the only place the declared count can be read from.
     /// </summary>
-    private static byte[] Zip64WithDeclaredEntryCount(ulong declared)
+    private static byte[] Zip64WithDeclaredEntryCount(ulong declared, ushort classicCount = 1)
     {
         using var buffer = new MemoryStream();
         using var writer = new BinaryWriter(buffer, Encoding.UTF8, leaveOpen: true);
@@ -802,8 +821,8 @@ public sealed class SafeZipArchiveTests
         writer.Write(0x06054b50u);
         writer.Write((ushort)0);
         writer.Write((ushort)0);
-        writer.Write((ushort)1);
-        writer.Write((ushort)1);
+        writer.Write(classicCount);
+        writer.Write(classicCount);
         writer.Write(0u);
         writer.Write(0u);
         writer.Write((ushort)0);
