@@ -102,6 +102,29 @@ jobs:
           path: artifacts/test-results/isolation.junit.xml
           retention-days: 14
 
+  # 06.3.2-T1.2 (AC2): the committed hostile-input corpus and its mutation smoke are their own job on the PR
+  # trigger, so a parser-profile guard that regresses fails a named check instead of one case inside the suite.
+  # `--stage build` precedes the stage because it runs `dotnet test --no-build -c Release`.
+  fixtures-hostile:
+    name: 'verify (hostile fixtures)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, hostile-input fixtures — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage fixtures-hostile
+
   web:
     name: 'verify (web)'
     runs-on: ubuntu-24.04

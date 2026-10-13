@@ -22,6 +22,7 @@ ALL_STAGES=(
   format
   test
   isolation
+  fixtures-hostile
   tsc-build
   tsc-spec
   vitest
@@ -117,6 +118,16 @@ run_stage() {
       dotnet run --project tests/Isolation.Tests -c Release --no-build -- \
         -result-junit "$ROOT/artifacts/test-results/isolation.junit.xml"
     fi
+    ;;
+  fixtures-hostile)
+    # 06.3.2-T1.2/T1.3 (AC2/AC3): the committed hostile-input corpus and its mutation smoke, run on the built
+    # assembly and selected by [Trait("Category","Hostile")]. The corpus drives the parser profile in-process
+    # (XML reports, archives) and the completion's media sniff/size cap with fakes, so the stage needs no Docker
+    # daemon and the assembly's Docker suites never start. `--ignore-exit-code 8` follows the `test` stage's skip
+    # path: every other assembly of the solution holds no Hostile test, which MTP reports as exit code 8.
+    stage "dotnet test (hostile-input fixtures and mutation smoke)"
+    dotnet test --no-build -c Release --solution Evidgate.slnx \
+      --filter-trait "Category=Hostile" --ignore-exit-code 8
     ;;
   tsc-build)
     # tsc -b of the root tsconfig.json references: packages/* AND apps/web — the

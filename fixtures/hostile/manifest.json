@@ -1,0 +1,131 @@
+[
+  {
+    "file": "xxe.xml",
+    "guard": "xml-dtd — the prologue DTD scan refuses <!DOCTYPE/<!ENTITY, so no external entity can resolve",
+    "driven_through": "IParsing.ParseXmlReport",
+    "expected_failure_code": "dtd_prohibited"
+  },
+  {
+    "file": "billion_laughs.xml",
+    "guard": "xml-dtd — the same prologue refusal fires before one entity is expanded",
+    "driven_through": "IParsing.ParseXmlReport",
+    "expected_failure_code": "dtd_prohibited"
+  },
+  {
+    "file": "utf16_dtd.xml",
+    "guard": "xml-wellformed — a UTF-16 declared DTD is refused by the reader profile (the byte scan covers UTF-8 only, so the reason is malformed)",
+    "driven_through": "IParsing.ParseXmlReport",
+    "expected_failure_code": "malformed"
+  },
+  {
+    "file": "utf32_dtd.xml",
+    "guard": "xml-wellformed — a UTF-32 declared DTD is refused by the reader profile for the same reason",
+    "driven_through": "IParsing.ParseXmlReport",
+    "expected_failure_code": "malformed"
+  },
+  {
+    "file": "traversal.zip",
+    "guard": "zip-entry-name — the entry ../../etc/passwd has a .. segment, so no normalized name can leave the root",
+    "driven_through": "IParsing.EnumerateArchive",
+    "expected_failure_code": "unsafe_entry_name"
+  },
+  {
+    "file": "zip_zwj_name.zip",
+    "guard": "zip-entry-name — an entry name carrying the invisible ZWJ is refused, so one name cannot read as another",
+    "driven_through": "IParsing.EnumerateArchive",
+    "expected_failure_code": "unsafe_entry_name"
+  },
+  {
+    "file": "zip_trailing_dot_name.zip",
+    "guard": "zip-entry-name — an entry name whose segment ends in a dot is refused (Windows drops it, so one name could mean two paths)",
+    "driven_through": "IParsing.EnumerateArchive",
+    "expected_failure_code": "unsafe_entry_name"
+  },
+  {
+    "file": "truncated_trace.zip",
+    "guard": "zip-central-directory — a trace archive truncated after its entries no longer carries a well-formed end-of-central-directory record, so it is refused rather than trusted",
+    "driven_through": "IParsing.EnumerateArchive",
+    "expected_failure_code": "malformed"
+  },
+  {
+    "file": "zip_fake_eocd_comment.zip",
+    "guard": "zip-central-directory — a PK\\x05\\x06 signature planted inside the record's own comment does not close at the object's end, so the record is refused rather than trusted",
+    "driven_through": "IParsing.EnumerateArchive",
+    "expected_failure_code": "malformed"
+  },
+  {
+    "file": "zip_trailing_bytes.zip",
+    "guard": "zip-central-directory — bytes appended after the end-of-central-directory record leave it short of the object's end, so the archive is refused",
+    "driven_through": "IParsing.EnumerateArchive",
+    "expected_failure_code": "malformed"
+  },
+  {
+    "file": "zip_long_comment.zip",
+    "guard": "zip-central-directory — positive control: a long but well-formed comment closes exactly at the object's end, so the archive is accepted",
+    "driven_through": "IParsing.EnumerateArchive",
+    "expected_outcome": "accepted"
+  },
+  {
+    "file": "zipbomb.zip",
+    "guard": "zip-entry-count — a decompression bomb of more entries than MaxZipEntries is refused from the declared count, before the directory is materialized",
+    "driven_through": "IParsing.EnumerateArchive",
+    "expected_failure_code": "entry_count_exceeded",
+    "generated": true
+  },
+  {
+    "file": "media_text_plain.txt",
+    "guard": "complete-media-sniff — a declared type the sniff table does not name is a mismatch, so such an object can never become evidence",
+    "driven_through": "ArtifactCompletionVerifier (complete path)",
+    "declared_media_type": "text/plain",
+    "expected_failure_code": "media_type_mismatch"
+  },
+  {
+    "file": "media_octet_stream.bin",
+    "guard": "complete-media-sniff — an opaque application/octet-stream object is refused fail-closed",
+    "driven_through": "ArtifactCompletionVerifier (complete path)",
+    "declared_media_type": "application/octet-stream",
+    "expected_failure_code": "media_type_mismatch"
+  },
+  {
+    "file": "media_pdf.pdf",
+    "guard": "complete-media-sniff — a real PDF signature is still outside the table, so the object is refused fail-closed",
+    "driven_through": "ArtifactCompletionVerifier (complete path)",
+    "declared_media_type": "application/pdf",
+    "expected_failure_code": "media_type_mismatch"
+  },
+  {
+    "file": "media_webm.webm",
+    "guard": "complete-media-sniff — a real WebM/EBML signature is outside the table and refused",
+    "driven_through": "ArtifactCompletionVerifier (complete path)",
+    "declared_media_type": "video/webm",
+    "expected_failure_code": "media_type_mismatch"
+  },
+  {
+    "file": "media_webp.webp",
+    "guard": "complete-media-sniff — a real WebP signature is outside the table and refused",
+    "driven_through": "ArtifactCompletionVerifier (complete path)",
+    "declared_media_type": "image/webp",
+    "expected_failure_code": "media_type_mismatch"
+  },
+  {
+    "file": "media_svg_image.svg",
+    "guard": "complete-media-sniff — XML served as an image (image/svg+xml) is refused, never waved through as a document",
+    "driven_through": "ArtifactCompletionVerifier (complete path)",
+    "declared_media_type": "image/svg+xml",
+    "expected_failure_code": "media_type_mismatch"
+  },
+  {
+    "file": "oversized.bin",
+    "guard": "complete-size-cap — an object larger than the kind policy's max_bytes is refused with too_large before its bytes are sniffed",
+    "driven_through": "ArtifactCompletionVerifier (complete path)",
+    "declared_media_type": "application/zip",
+    "expected_failure_code": "too_large",
+    "generated": true
+  },
+  {
+    "file": "planted_secret.txt",
+    "guard": "secret-scan — the masking scanner of 06.2.3 reads this file and writes a masking_event; the assertion lives there, not in this corpus",
+    "driven_through": "06.2.3 scanner (referenced, not re-tested here)",
+    "expected_outcome": "referenced"
+  }
+]

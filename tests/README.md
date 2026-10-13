@@ -12,6 +12,23 @@ Test projects (00 §5.2): `<Project>.UnitTests`, `<Module>.IntegrationTests` (Te
 
 Every project under `tests/` deliberately avoids the `Evidgate.` prefix (the `<Project>`/`<Module>` part is free), so the `Architecture.Tests` reflection scan (`Evidgate.*.dll` in the output directory) never analyses a test assembly.
 
+## Hostile-input corpus (06.3.2-T1)
+
+`fixtures/hostile/` is the committed hostile corpus of the 06.3.1 parser profile, indexed by
+`fixtures/hostile/manifest.json` (format: `fixtures/hostile/README.md`). `tests/Tenancy.IntegrationTests/HostileFixtureTests`
+drives every manifest row through the entry point the row names — `IParsing.ParseXmlReport`/`EnumerateArchive` for
+the bytes, the completion's media sniff and size cap for a hostile object at `complete` — and asserts the documented
+failure code, with one row asserted ACCEPTED as the positive control; `HostileFixtureMutationSmokeTests` runs the
+archive rows against one deliberately weakened `ZipArchiveOptions` cap to prove the guard is load-bearing.
+
+Both classes need no container, but they are selected by their own trait rather than by `Category=Docker`:
+`[Trait("Category","Hostile")]`, which `scripts/verify.sh --stage fixtures-hostile` (and the `fixtures-hostile` CI
+job) selects with `dotnet test --filter-trait "Category=Hostile" --ignore-exit-code 8`. That way the corpus runs
+as its own gate on every PR while the assembly's Docker suites stay untouched, and
+`EVIDGATE_VERIFY_SKIP_DOCKER=1` still skips exactly the container-backed classes. `Category=Hostile` is a
+selection trait (the `test` stage's `--filter-not-trait "Category=Docker"` skip path ignores it); the Docker
+column above still uses `Category=Docker` alone.
+
 ## Shared build conventions — `tests/Directory.Build.props`
 
 Imported automatically by every project under `tests/`. It imports the repository-root `Directory.Build.props` first, then adds what every test project shares:

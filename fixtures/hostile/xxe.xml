@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE testsuite [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<testsuite name="hostile-xxe" tests="1">
+  <testcase classname="Evidgate.Xxe" name="&xxe;" time="0.001" />
+</testsuite>
