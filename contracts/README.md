@@ -22,6 +22,11 @@ client and the server-side JSON Schema validation (01.3.2).
   `POST /v1/projects/{p}/manifests` request body (05.1.1-T1.1), referenced from
   `openapi.yaml` so the spec body and the schema file cannot drift.
 - `examples/` — documents used by the conventions gate.
+- `events/ordering.md` — the event ordering, restart and sequence-gap contract of
+  `POST /v1/runs/{r}/events` (04.1.1-T4): arrival order is storage order, readers order by
+  `(producer_id, sequence)`, gap detection is derived from `producer_slot.last_sequence`, and the
+  first-event `queued → running` lock order. The envelope schema itself lives in
+  `schemas/event-envelope.v1.json`.
 - `cli.md` — the `evidgate` CLI contract (04.2.1-T2, OI-04-06): exit-code
   registry, `EVIDGATE_*` configuration and precedence, token sources, stderr
   error codes and redaction rules. Owned across the 04.2.x stories.
