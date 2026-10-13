@@ -23,7 +23,7 @@
 --
 -- No policy, trigger or index: the new column is covered by 0031's table-scoped `run_tenant` /
 -- `run_owner_backfill` policies and the `run_set_updated_at_and_version` trigger, and the state
--- machine's read is the primary-key `select … for update` (0031's `run_pkey`), so no index is added.
+-- machine's read is the primary-key `select … for no key update` (0031's `run_pkey`), so no index is added.
 --
 -- Idempotent like 0025/0027-0035: `add column if not exists` plus a repeated `grant`, so a re-run is
 -- a no-op.
