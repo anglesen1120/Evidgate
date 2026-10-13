@@ -59,10 +59,14 @@ internal sealed record ListRunsQuery(Guid ProjectId, RunListFilters Filters, str
 /// than a guessed page position.
 /// </para>
 /// <para>
-/// The project must exist and be live, exactly like the module's other project-scoped reads: an unknown id, another
-/// tenant's project (hidden by RLS) and a credential scoped to a different project all take the one
-/// <c>404 not_found</c> of <see cref="OrchestratorErrors.ProjectNotFound"/>, so the answer is no existence oracle
-/// (00 §5.4) and the same code, message and body for every one of them.
+/// The project must exist and be live, exactly like the module's other project-scoped reads: an unknown id and
+/// another tenant's project (hidden by RLS) both take the one <c>404 not_found</c> of
+/// <see cref="OrchestratorErrors.ProjectNotFound"/>, so the answer is no existence oracle (00 §5.4) and the same
+/// code, message and body for both. The scope-mismatch branch (a credential bound to a different project) follows
+/// <see cref="GetRunQuery"/> and maps the same way, but it is defensive and not reachable over HTTP today: only a
+/// service credential carries a project scope, and <c>run:read</c> is outside the service-role ceiling
+/// (<c>PermissionEvaluator.Service</c>), so such a caller is refused at the permission stage with
+/// <c>403 forbidden</c> first.
 /// </para>
 /// </summary>
 [Permission(Permissions.Run.Read)]

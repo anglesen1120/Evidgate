@@ -1611,9 +1611,7 @@ export type ListRunsResponses = {
     /**
      * Page of runs
      */
-    200: CursorList & {
-        items?: Array<RunSummary>;
-    };
+    200: RunPage;
 };
 
 export type ListRunsResponse = ListRunsResponses[keyof ListRunsResponses];

@@ -368,12 +368,13 @@ public static class IsolationRouteCases
         // 05.2.2-T2: the project-scoped run list. As a list, its positive control is the full-pagination walk
         // (Lists); the extra probes pin the ref_name filter, which must not widen tenancy.
         ProjectCase("GET", "/v1/projects/{p}/runs", p => new(HttpMethod.Get, $"/v1/projects/{p}/runs"), list: true,
+            foreignExpect: ProbeExpect.NotFound,
             extra: (route, w) =>
             [
                 // ?ref_name=main on org A's project is the same refusal as on a random project (never an org-A
                 // row, no existence oracle): the filter matches org A's seeded branch/main run, so a leak would
                 // surface it here rather than returning an empty page.
-                Pair(route, "filtered ?ref_name=main on org A's project", ProbeExpect.EmptyOrNotFound, OrgBAdmin(w),
+                Pair(route, "filtered ?ref_name=main on org A's project", ProbeExpect.NotFound, OrgBAdmin(w),
                     new(HttpMethod.Get, $"/v1/projects/{w.Acme.Projects[0].Id}/runs?ref_name=main"),
                     new(HttpMethod.Get, $"/v1/projects/{Guid.CreateVersion7()}/runs?ref_name=main")),
                 // The control: org B's own filtered page lists exactly its own branch/main run, never org A's.
@@ -546,8 +547,11 @@ public static class IsolationRouteCases
     /// B's <c>ci_producer</c> (project <c>web</c>), the sibling project <c>api</c> (403, ScopeGuard) and org A's
     /// project against a random id. A list route's positive control is its full-pagination walk (<c>Lists</c>);
     /// <paramref name="extra"/> adds route-specific member probes (05.2.2-T2's filtered list).
+    /// <paramref name="foreignExpect"/> overrides the member probe's expectation: a list route defaults to
+    /// <see cref="ProbeExpect.EmptyOrNotFound"/>, but the 05.2.2-T2 run list always answers 404 for a foreign
+    /// project (it checks project liveness), so it passes <see cref="ProbeExpect.NotFound"/>.
     /// </summary>
-    private static RouteCase ProjectCase(string method, string template, Func<Guid, ProbeRequest> request, bool list = false, bool ownControl = false, Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>>? extra = null) =>
+    private static RouteCase ProjectCase(string method, string template, Func<Guid, ProbeRequest> request, bool list = false, bool ownControl = false, Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>>? extra = null, ProbeExpect? foreignExpect = null) =>
         Case(
             method,
             template,
@@ -555,7 +559,7 @@ public static class IsolationRouteCases
             {
                 var probes = new List<RouteProbe>();
                 probes.AddRange(w.Acme.Projects.Select(p => Pair(route, $"org A project {p.Slug} in {{p}}",
-                    list ? ProbeExpect.EmptyOrNotFound : ProbeExpect.NotFound, OrgBAdmin(w), request(p.Id), request(Guid.CreateVersion7()))));
+                    foreignExpect ?? (list ? ProbeExpect.EmptyOrNotFound : ProbeExpect.NotFound), OrgBAdmin(w), request(p.Id), request(Guid.CreateVersion7()))));
                 probes.Add(new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
                     route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderCaller(w), RandomHeaderCaller(w), request(w.Acme.Projects[0].Id))));
                 if (ownControl)

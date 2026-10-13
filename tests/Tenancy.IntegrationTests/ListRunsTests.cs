@@ -276,11 +276,13 @@ public sealed class ListRunsTests
             TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: world.Project, servicePermissions: ["run:create"]));
         withoutPermission.Status.ShouldBe(HttpStatusCode.Forbidden);
 
-        var scopedToSibling = await world.Client.SendAsync(
+        // Renamed from "scopedToSibling": the 403 is the permission stage's (run:read is outside the service-role
+        // ceiling), not the handler's scope-mismatch 404 branch, which is defensive and unreachable over HTTP today.
+        var serviceClaimingRunRead = await world.Client.SendAsync(
             HttpMethod.Get,
             $"/v1/projects/{sibling}/runs",
             TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: sibling, servicePermissions: ["run:read"]));
-        scopedToSibling.Status.ShouldBe(HttpStatusCode.Forbidden);
+        serviceClaimingRunRead.Status.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     /// <summary>AC6: every row carries the whole <c>ref</c> block and <c>unverified_ref</c>, so a client can label body-only identity.</summary>

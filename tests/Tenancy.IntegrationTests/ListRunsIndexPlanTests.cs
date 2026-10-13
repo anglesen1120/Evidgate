@@ -24,9 +24,10 @@ public sealed class ListRunsIndexPlanTests
 
     /// <summary>
     /// The target project is seeded sparsely for the filtered ref (<c>main</c>: 200 of 40 000 runs, the rest one row
-    /// each under 39 800 distinct ref names) and <c>ANALYZE</c>d, so the planner prefers the index without
-    /// <c>enable_seqscan = off</c> (which the 07.1.1-T3 contract forbids). Deterministic: it asserts node types and
-    /// index names only, never timing.
+    /// each under 39 800 distinct ref names) with a distinct <c>created_at</c> per row and <c>ANALYZE</c>d, so the
+    /// planner prefers the index without <c>enable_seqscan = off</c> (which the 07.1.1-T3 contract forbids). Both the
+    /// <c>ref_name</c>-and-<c>pr_number</c> shape and the <c>ref_name</c>-only shape are explained, first page and
+    /// cursor page each. Deterministic: it asserts node types and index names only, never timing.
     /// </summary>
     [Fact]
     public async Task ListRuns_FilterByRefAndPr_UsesIndex()
@@ -41,21 +42,25 @@ public sealed class ListRunsIndexPlanTests
                collection_deadline_at, late_window_minutes, ref_kind, ref_name, pr_number)
             select gen_random_uuid(), '{world.Org:D}', '{world.Project:D}', '{world.ManifestId:D}',
                    '{world.SuiteRevision:D}', '{world.EnvironmentRevision:D}',
-                   now() + interval '1 hour', 1440, 'branch', 'ref-' || g, null
+                   now() + interval '1 hour' + g * interval '1 second', 1440, 'branch', 'ref-' || g, null
               from generate_series(1, 39800) g;
             insert into public.run
               (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
                collection_deadline_at, late_window_minutes, ref_kind, ref_name, pr_number)
             select gen_random_uuid(), '{world.Org:D}', '{world.Project:D}', '{world.ManifestId:D}',
                    '{world.SuiteRevision:D}', '{world.EnvironmentRevision:D}',
-                   now() + interval '1 hour', 1440, 'branch', 'main', 7
+                   now() + interval '1 hour' + g * interval '1 second', 1440, 'branch', 'main', 7
               from generate_series(1, 200) g;
             analyze public.run;
             """);
 
-        var filters = new RunListFilters("main", 7, null, null, null);
-        var firstPage = ListRunsSql.FirstPage(filters);
-        var nextPage = ListRunsSql.NextPage(filters);
+        var refAndPr = new RunListFilters("main", 7, null, null, null);
+        var refOnly = new RunListFilters("main", null, null, null, null);
+
+        var firstPage = ListRunsSql.FirstPage(refAndPr);
+        var nextPage = ListRunsSql.NextPage(refAndPr);
+        var refOnlyFirstPage = ListRunsSql.FirstPage(refOnly);
+        var refOnlyNextPage = ListRunsSql.NextPage(refOnly);
 
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(world.Database));
         await connection.OpenAsync(TestContext.Current.CancellationToken);
@@ -66,8 +71,10 @@ public sealed class ListRunsIndexPlanTests
             await set.ExecuteScalarAsync(TestContext.Current.CancellationToken);
         }
 
-        await AssertUsesRefIndexAsync(connection, transaction, firstPage, world, cursor: null);
-        await AssertUsesRefIndexAsync(connection, transaction, nextPage, world, cursor: DateTimeOffset.UtcNow);
+        await AssertUsesRefIndexAsync(connection, transaction, firstPage, world, refAndPr, cursor: null);
+        await AssertUsesRefIndexAsync(connection, transaction, nextPage, world, refAndPr, cursor: DateTimeOffset.UtcNow);
+        await AssertUsesRefIndexAsync(connection, transaction, refOnlyFirstPage, world, refOnly, cursor: null);
+        await AssertUsesRefIndexAsync(connection, transaction, refOnlyNextPage, world, refOnly, cursor: DateTimeOffset.UtcNow);
     }
 
     /// <summary>Explains one handler statement with its real parameters and asserts the ref index is used with no sort step.</summary>
@@ -76,13 +83,22 @@ public sealed class ListRunsIndexPlanTests
         NpgsqlTransaction transaction,
         string sql,
         RunCreationTests.World world,
+        RunListFilters filters,
         DateTimeOffset? cursor)
     {
         await using var command = new NpgsqlCommand("explain (format json) " + sql, connection, transaction);
         command.Parameters.AddWithValue("org_id", world.Org);
         command.Parameters.AddWithValue("project_id", world.Project);
-        command.Parameters.AddWithValue("ref_name", "main");
-        command.Parameters.AddWithValue("pr_number", 7);
+        if (filters.RefName is { } refName)
+        {
+            command.Parameters.AddWithValue("ref_name", refName);
+        }
+
+        if (filters.PrNumber is { } prNumber)
+        {
+            command.Parameters.AddWithValue("pr_number", prNumber);
+        }
+
         if (cursor is not null)
         {
             command.Parameters.AddWithValue("cursor_created_at", cursor.Value);

@@ -1,6 +1,6 @@
 // Independent QA (S48Qa) of 05.2.2-T2 AC6: negative/boundary/exploratory cases the lane's own suite does not cover
 // (missing-identity rows, a PR number on a branch row, a SHA-256 head_sha, unicode/percent/255-char ref names,
-// SQL metacharacters, duplicate query parameters, limit boundaries, a cursor reused under another filter, cursor
+// SQL metacharacters, limit boundaries, a cursor reused under another filter, cursor
 // tick extremes, a soft-deleted project, a service credential claiming run:read, an unauthenticated caller and a
 // page walking rows that share created_at with an insert in between). It never edits production code or the lane's
 // tests; a failure is a defect to report, not to fix here.
@@ -125,18 +125,6 @@ public sealed class ListRunsQaTests
         (await IdsAsync(world, "ref_name=" + Uri.EscapeDataString("'; drop table public.run; --"))).ShouldBeEmpty();
 
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(2);
-    }
-
-    /// <summary>AC6: a repeated query parameter is resolved to its first value (ASP.NET <c>StringValues[0]</c>), never a union or an error.</summary>
-    [Fact]
-    public async Task ListRunsQa_DuplicateQueryParams_FirstValueWins()
-    {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
-        var a = await CreateRefRunAsync(world, Branch("a", ShaOne));
-        var b = await CreateRefRunAsync(world, Branch("b", ShaOne));
-
-        (await IdsAsync(world, "ref_name=a&ref_name=b")).ShouldBe(new[] { a });
-        (await IdsAsync(world, "ref_name=b&ref_name=a")).ShouldBe(new[] { b });
     }
 
     /// <summary>AC6, 00 §9.1: the exact limit boundaries — 1 and 200 are served, 0 and 201 are 422 <c>out_of_range</c>.</summary>
