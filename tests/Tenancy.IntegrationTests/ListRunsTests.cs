@@ -142,6 +142,7 @@ public sealed class ListRunsTests
     public async Task ListRuns_TamperedCursor_422()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
+        // Two runs so that limit=1 yields a next_cursor to tamper with.
         await CreateBranchAsync(world, "main", ShaOne);
         await CreateBranchAsync(world, "main", ShaOne);
         var issued = (await ListAsync(world, "limit=1")).Body.GetProperty("next_cursor").GetString()!;
