@@ -67,6 +67,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     /// <summary>The secret reference the probe environment revision names (a reference, never a value).</summary>
     private static readonly string[] EnvironmentSecretRefs = ["secret:db_password"];
 
+    /// <summary>The environment key of the probe revision above; the seeded manifest targets it.</summary>
+    private const string ProbeEnvironment = "ac5-probe";
+
     /// <summary>The workflow refs the probe binding allows.</summary>
     private static readonly string[] BindingWorkflowRefs =
         ["acme/ac5-probe/.github/workflows/ci.yml@refs/heads/main"];
@@ -313,6 +316,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ("/v1/environment-revisions/{id}", seeded.EnvironmentRevisionId),
             ("/v1/policies/{id}", seeded.PolicyRevisionId),
             ("/v1/policies/{id}/revisions", seeded.PolicyRevisionId),
+            ("/v1/runs/{r}", seeded.RunId),
         ];
 
         foreach (var (template, id) in seededRoutes)
@@ -370,8 +374,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     /// <summary>
     /// The served GET routes this scan addresses with the ids it really has: the
     /// seeded org and project, the seeded membership, the two created objects' list
-    /// routes, and the case, suite, suite revisions, environment revision and policy
-    /// revision <see cref="SeedReadableResourcesAsync"/> arranges. Keyed by the
+    /// routes, and the case, suite, suite revisions, environment revision, policy
+    /// revision and run <see cref="SeedReadableResourcesAsync"/> arranges. Keyed by the
     /// normalised template <see cref="ServedRouteTable"/> reports, valued by the URL
     /// to call.
     /// </summary>
@@ -407,6 +411,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/environment-revisions/{id}"] = $"/v1/environment-revisions/{seeded.EnvironmentRevisionId}",
             ["/v1/policies/{id}"] = $"/v1/policies/{seeded.PolicyRevisionId}",
             ["/v1/policies/{id}/revisions"] = $"/v1/policies/{seeded.PolicyRevisionId}/revisions",
+            ["/v1/runs/{r}"] = $"/v1/runs/{seeded.RunId}",
         };
 
     /// <summary>
@@ -416,7 +421,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     /// revisions through the served routes as the same <c>tenant_admin</c> (it holds
     /// <c>suite:write</c>), an environment revision through the served route (which
     /// creates its environment), and a policy revision through the harness's owner
-    /// seam (<c>tenant_admin</c> does not hold <c>policy:write</c>, 00 §2).
+    /// seam (<c>tenant_admin</c> does not hold <c>policy:write</c>, 00 §2). The run of
+    /// 05.3.1 needs a verified manifest, so one is uploaded and one run created
+    /// through the served routes.
     /// </summary>
     private async Task<SeededResources> SeedReadableResourcesAsync(
         CiProducerJwtFactory factory,
@@ -438,6 +445,12 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         var environmentRevisionId = await CreateEnvironmentRevisionAsync(client, project);
         var policyRevisionId = await SeedPolicyRevisionAsync(org, project);
 
+        // 05.3.1-T1: a manifest and one run of it. Nothing else creates a run (the
+        // create route needs a verified manifest), so GET /v1/runs/{r} would be
+        // unaddressable — and the scan would miss the route — without both.
+        var manifestId = await CreateManifestAsync(client, project, suiteRevisionId, [caseRevisionId], environmentRevisionId);
+        var runId = await CreateRunAsync(client, project, manifestId);
+
         return new SeededResources(
             caseId,
             caseRevisionId,
@@ -445,7 +458,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             suiteRevisionId,
             otherSuiteRevisionId,
             environmentRevisionId,
-            policyRevisionId);
+            policyRevisionId,
+            runId);
     }
 
     /// <summary>
@@ -552,6 +566,65 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     }
 
     /// <summary>
+    /// Uploads a manifest through the served route (05.1.1) and returns its id: the one
+    /// case revision it is given, in one variant on the probe environment, as one shard
+    /// — the smallest plan the manifest verifier accepts (the scan only needs a
+    /// manifest to exist, because the run route requires a verified one).
+    /// </summary>
+    private static async Task<Guid> CreateManifestAsync(
+        HttpClient client,
+        Guid project,
+        Guid suiteRevision,
+        Guid[] caseRevisions,
+        Guid environmentRevision)
+    {
+        var variant = new { Params = new Dictionary<string, string>(StringComparer.Ordinal) { ["browser"] = "chromium" } };
+
+        var (status, body) = await PostAsync(
+            client,
+            $"/v1/projects/{project}/manifests",
+            new
+            {
+                SchemaVersion = 1,
+                SuiteRevisionId = suiteRevision,
+                EnvironmentRevisionId = environmentRevision,
+                PlannedExecutions = caseRevisions
+                    .Select(id => new { CaseRevisionId = id, Variant = variant, TargetEnv = ProbeEnvironment })
+                    .ToArray(),
+                Matrix = new
+                {
+                    CaseRevisionIds = caseRevisions,
+                    Variants = new[] { variant },
+                    TargetEnvs = new[] { ProbeEnvironment },
+                },
+                ShardPlan = new
+                {
+                    Shards = new[] { new { ShardId = "s0", FromIndex = 0, ToIndex = caseRevisions.Length } },
+                },
+                EnvNeeds = new { TargetEnvs = new[] { new { TargetEnv = ProbeEnvironment } } },
+            });
+
+        status.ShouldBe(HttpStatusCode.Created, body);
+
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("manifest_id").GetGuid();
+    }
+
+    /// <summary>
+    /// Creates one run of <paramref name="manifest"/> through the served route
+    /// (05.2.1) and returns its id; <c>GET /v1/runs/{r}</c> addresses the row it writes.
+    /// </summary>
+    private static async Task<Guid> CreateRunAsync(HttpClient client, Guid project, Guid manifest)
+    {
+        var (status, body) = await PostAsync(client, $"/v1/projects/{project}/runs", new { ManifestId = manifest });
+
+        status.ShouldBe(HttpStatusCode.Created, body);
+
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("run_id").GetGuid();
+    }
+
+    /// <summary>
     /// Arranges one policy revision through the harness's owner seam: the served
     /// create route needs <c>policy:write</c>, which the 00 §2 matrix does not give
     /// <c>tenant_admin</c>, so the row is arranged like the policy suites arrange it.
@@ -610,7 +683,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         Guid SuiteRevisionId,
         Guid OtherSuiteRevisionId,
         Guid EnvironmentRevisionId,
-        Guid PolicyRevisionId);
+        Guid PolicyRevisionId,
+        Guid RunId);
 
     /// <summary>The id of the seeded member's membership, read under RLS as the org.</summary>
     private async Task<Guid> MembershipIdAsync(Guid org, Guid userId)

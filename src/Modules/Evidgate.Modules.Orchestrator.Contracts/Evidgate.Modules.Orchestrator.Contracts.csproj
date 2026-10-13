@@ -2,4 +2,11 @@
   <PropertyGroup>
     <RootNamespace>Evidgate.Modules.Orchestrator.Contracts</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- 05.3.1-T1.1: IRunStateTransition returns Result<TransitionResult> (00 §5.5 C8), the shape the
+         caller maps straight to the 00 §9.2 envelope, exactly like 04.1.2-T4's IProducerRegistry.
+         SharedKernel is a BuildingBlock, not a module, so the reference keeps the module-to-module
+         rule (00 §5.5) intact. -->
+    <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
 </Project>

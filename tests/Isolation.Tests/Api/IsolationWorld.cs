@@ -84,6 +84,9 @@ public sealed class IsolationProject
     /// <summary>The project's manifest.</summary>
     public required Guid ManifestId { get; init; }
 
+    /// <summary>The project's run (<c>{r}</c> of <c>/v1/runs/{r}</c>), created from <see cref="ManifestId"/> (05.3.1).</summary>
+    public required Guid RunId { get; init; }
+
     /// <summary>The project's waivers (<c>{w}</c> of <c>/v1/waivers/{w}/…</c>), in seeding order; at least two, so the list pages.</summary>
     public required IReadOnlyList<Guid> WaiverIds { get; init; }
 
@@ -167,6 +170,9 @@ public sealed class IsolationOrg
     /// <summary>Every manifest id.</summary>
     public IReadOnlyList<Guid> ManifestIds => [.. Projects.Select(p => p.ManifestId)];
 
+    /// <summary>Every run id (05.3.1's <c>GET /v1/runs/{r}</c>).</summary>
+    public IReadOnlyList<Guid> RunIds => [.. Projects.Select(p => p.RunId)];
+
     /// <summary>The member with <paramref name="label"/> (e.g. <c>viewer</c>, <c>tenant_admin</c>).</summary>
     public IsolationUser User(string label) => Users.Single(u => u.Label == label);
 }
@@ -191,7 +197,7 @@ public sealed class IsolationOrg
 /// <item>test cases — <c>ICaseIdentityService.RegisterDiscoveredAsync</c> in an <c>ITenantScope</c> (no POST route for
 /// cases), synced twice with changed content so every case has two revisions;</item>
 /// <item>suites + revisions, the <c>staging</c> environment revision (the environment row is created by the
-/// revision route), a manifest, two <c>ci_binding</c>s (the first activated by the OIDC exchange below), two
+/// revision route), a manifest, one run of that manifest (05.3.1-T1 — <c>GET /v1/runs/{r}</c>), two <c>ci_binding</c>s (the first activated by the OIDC exchange below), two
 /// ingest tokens (one then revoked by <c>DELETE /v1/ingest-tokens/{t}</c>), a <c>ci_producer</c> JWT from
 /// <c>POST /v1/ci/token</c> over the ingest token, and a second one over a workflow token signed by the test
 /// JWKS (<see cref="IsolationApiFactory.Jwks"/>), which proves control of the repository and activates the
@@ -461,6 +467,16 @@ public sealed class IsolationWorld
                 Manifest(suiteRevisions[0], primaryRevisions, environmentRevision),
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("manifest_id").GetGuid();
 
+            // 05.3.1-T1: one run of that manifest, so GET /v1/runs/{r} has a real org-A run id to probe
+            // with (the route is addressed by run id alone; a random id would not prove RLS hides a real row).
+            var run = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/runs",
+                admin,
+                org,
+                new { manifest_id = manifest },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("run_id").GetGuid();
+
             var waivers = new List<Guid>();
             for (var i = 0; i < WaiversPerProject; i++)
             {
@@ -560,6 +576,7 @@ public sealed class IsolationWorld
                 EnvironmentRevisionId = environmentRevision,
                 PolicyRevisionId = policyRevision,
                 ManifestId = manifest,
+                RunId = run,
                 WaiverIds = waivers,
                 QuarantineIds = quarantines,
             };

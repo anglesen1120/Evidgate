@@ -54,6 +54,11 @@ internal static class OrchestratorModule
         services.TryAddScoped<ICaseAttemptWriter, CaseAttemptWriter>();
         services.TryAddScoped<IBlockedAttemptResolver, BlockedAttemptResolver>();
 
+        // 05.3.1-T1.1: the guarded run state transition (00 §8.1) that 04's event handler (queued -> running),
+        // 05.3.2's reconciler (running -> collecting, collecting -> complete|incomplete) and 05.4.1's cancel
+        // (* -> canceled) call inside their own tenant transaction, through Orchestrator.Contracts only.
+        services.TryAddScoped<IRunStateTransition, TransitionRunStateCommandHandler>();
+
         return services;
     }
 }

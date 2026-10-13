@@ -31,6 +31,17 @@ export type CursorList = {
     next_cursor: string | null;
 };
 
+export type RunStateDto = {
+    run_id: string;
+    state: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
+    /**
+     * The evidence revision the run's current verdict was frozen from; null while none exists (`run.current_evidence_revision_id`, 05.3.1; 05.3.2 owns the write side).
+     */
+    current_evidence_revision_id: string | null;
+    version: number;
+    purpose: 'regular' | 'replay';
+};
+
 export type RunSummary = {
     run_id?: string;
     state?: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
@@ -1591,11 +1602,9 @@ export type GetRunError = GetRunErrors[keyof GetRunErrors];
 
 export type GetRunResponses = {
     /**
-     * Run detail
+     * Run state, current evidence revision, version and purpose
      */
-    200: RunSummary & {
-        evidence_revision?: string;
-    };
+    200: RunStateDto;
 };
 
 export type GetRunResponse = GetRunResponses[keyof GetRunResponses];

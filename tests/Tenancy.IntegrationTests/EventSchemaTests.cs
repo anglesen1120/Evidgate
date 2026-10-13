@@ -452,21 +452,24 @@ public sealed class EventSchemaTests
     }
 
     [Fact]
-    public async Task RunState_StaysOutsideTheAppRoleGrants()
+    public async Task RunState_IsTheGuardedUpdateGrant()
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world, world.Org);
 
-        // The lock grant is `updated_at` only: `state` stays 05.3.1's guarded grant (0031:53), so the
-        // app role cannot move the run's state from this story.
+        // 0034 granted `updated_at` (the T91 row lock) and 05.3.1's 0036 granted `state` (the guarded
+        // transition), so those two are the app role's only UPDATE columns on `run`; every other column —
+        // here `purpose` and the 0036 evidence pointer — stays outside the grant.
         (await _fixture.ScalarAsync<bool>(
             world.Database,
             "select has_column_privilege('evidgate_app', 'public.run', 'updated_at', 'update')")).ShouldBeTrue();
         (await _fixture.ScalarAsync<bool>(
             world.Database,
-            "select has_column_privilege('evidgate_app', 'public.run', 'state', 'update')")).ShouldBeFalse();
+            "select has_column_privilege('evidgate_app', 'public.run', 'state', 'update')")).ShouldBeTrue();
 
-        (await CaptureAppErrorAsync(world, world.Org, $"update public.run set state = 'running' where id = '{runId}'"))
+        (await CaptureAppErrorAsync(world, world.Org, $"update public.run set purpose = 'replay' where id = '{runId}'"))
+            .SqlState.ShouldBe("42501");
+        (await CaptureAppErrorAsync(world, world.Org, $"update public.run set current_evidence_revision_id = '{Guid.CreateVersion7()}' where id = '{runId}'"))
             .SqlState.ShouldBe("42501");
     }
 
