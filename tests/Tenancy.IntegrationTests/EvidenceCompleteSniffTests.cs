@@ -1,7 +1,9 @@
-// 06.3.1-T1 media sniff at `complete`: the endpoint's ArtifactCompletionVerifier sniffs the PENDING object
+// 06.3.1-T2.2 media sniff at `complete`: the endpoint's ArtifactCompletionVerifier sniffs the PENDING object
 // before the promotion (plan §7 — a mismatching artifact is never copied to the final key) and sniffs the FINAL
 // object again after the post-copy HEAD (S-F2), so a mismatched signature is a committed 200
 // `rejected`/`media_type_mismatch` — never `ready`, never counted as evidence, never promoted (06.3.1 §2 AC5).
+// The table is complete for every accepted media type (XML/HTML/JSON, zip, PNG, JPEG, MP4) and a declared type
+// outside it is a mismatch (fail closed, T2.2), so a type the sniffer cannot check never becomes evidence.
 // Every test drives the real host, a real PostgreSQL and a real SeaweedFS S3 container (Testcontainers; never
 // the shared dev stack) through the same harness the sibling complete suites use, and asserts the database state
 // by SQL. Expectations come from the plan (06.3.1 §1/§2 AC5, §5, §7) and the shared contract, not from the
@@ -20,12 +22,12 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// 06.3.1-T1 (AC5): the media sniff the completion runs on the pending object before the promotion and again on
-/// the final object after the post-copy HEAD. A declared type in the T1 families (XML/HTML/JSON) whose bytes do
-/// not match is rejected with <c>media_type_mismatch</c>, with no outbox row and no promotion; a matching one is
-/// <c>ready</c>; a declared type outside the T1 families (T2.2 has not added it yet) is <c>NotSniffed</c> and
-/// stays <c>ready</c>, which is why the existing complete suites — which declare <c>application/zip</c> with
-/// non-zip bytes — keep passing.
+/// 06.3.1-T2.2 (AC5): the media sniff the completion runs on the pending object before the promotion and again on
+/// the final object after the post-copy HEAD. A declared type whose bytes do not match is rejected with
+/// <c>media_type_mismatch</c>, with no outbox row and no promotion; a matching one is <c>ready</c>; a declared
+/// type outside the sniff table (an opaque or unknown type) is a mismatch too — fail closed — so it can never
+/// become evidence. The table now covers zip, PNG, JPEG and MP4 as well as the XML/HTML/JSON families, so the
+/// sibling complete suites declare a real zip signature.
 /// </summary>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
@@ -41,8 +43,14 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
 
     private const string JsonType = "application/json";
 
-    /// <summary>A type outside the T1 families (T2.2 owns the zip signature); its bytes are never sniffed.</summary>
+    /// <summary>A sniffed archive type (06.3.1-T2.2): the bytes must begin with the zip signature <c>PK\x03\x04</c>.</summary>
     private const string ZipType = "application/zip";
+
+    /// <summary>A sniffed image type (06.3.1-T2.2): the bytes must begin with the 8-byte PNG signature.</summary>
+    private const string PngType = "image/png";
+
+    /// <summary>A declared type the sniff table does not know (06.3.1-T2.2 fail closed): it can never become evidence.</summary>
+    private const string OutOfTableType = "application/octet-stream";
 
     /// <summary>The caller's token id (the slot-binding identity, T9).</summary>
     private const string Jti = "jti-complete-sniff-1";
@@ -69,7 +77,7 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
     /// <summary>HTML markup declared as JSON: the JSON family refuses a leading <c>&lt;</c>.</summary>
     private static readonly byte[] HtmlAsJsonBody = Encoding.UTF8.GetBytes("<html><body>x</body></html>");
 
-    /// <summary>Bytes that are not a zip, declared <c>application/zip</c>: T1 never sniffs that type.</summary>
+    /// <summary>Bytes that are not a zip (no <c>PK\x03\x04</c>), declared <c>application/zip</c>: a mismatch.</summary>
     private static readonly byte[] NotZipBody = Encoding.UTF8.GetBytes(new string('A', 256));
 
     private readonly PostgresTenancyFixture _fixture = fixture;
@@ -246,13 +254,14 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
     // ------------------------------------------------------------------ AC5: mismatch rejects, never ready
 
     /// <summary>
-    /// 06.3.1 AC5 / plan §7: <c>application/xml</c> declared, PNG magic stored. The size and checksum match (the
-    /// bytes are exactly what was declared), so only the sniff refuses it — a committed 200 <c>rejected</c> with
+    /// 06.3.1 AC5 / plan §7 (the plan's <c>CompleteArtifactCommandTests.MismatchedMediaIsRejected</c>):
+    /// <c>application/xml</c> declared, PNG magic stored. The size and checksum match (the bytes are exactly what
+    /// was declared), so only the sniff refuses it — a committed 200 <c>rejected</c> with
     /// <c>failure_code: media_type_mismatch</c>, no outbox row, never <c>ready</c>, and the mismatching bytes are
     /// never copied to the final key (the sniff runs on the pending object before the promotion).
     /// </summary>
     [Fact]
-    public async Task Complete_DeclaredXmlWithPngBytes_RejectedMediaTypeMismatch()
+    public async Task MismatchedMediaIsRejected()
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
@@ -341,7 +350,7 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
         (await OutboxCountAsync(world, StagingDeleteTask, artifactId)).ShouldBe(0);
     }
 
-    // ------------------------------------------------------------------ AC5: match accepts, NotSniffed accepts
+    // ------------------------------------- AC5: match accepts; a type outside the table rejects (fail closed)
 
     /// <summary>06.3.1 AC5: <c>text/html</c> declared with valid markup — the sniff matches, so it is <c>ready</c>.</summary>
     [Fact]
@@ -391,18 +400,17 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
     }
 
     /// <summary>
-    /// 06.3.1 AC5 / T1 scope: <c>application/zip</c> is outside the T1 families (T2.2 owns the zip signature),
-    /// so its bytes are <c>NotSniffed</c> and the artifact is <c>ready</c> — exactly the declaration the
-    /// existing complete suites use with non-zip bytes, which is why they keep passing without an edit.
+    /// 06.3.1-T2.2 AC5: <c>image/png</c> declared with the PNG signature stored — the sniff matches, so it is
+    /// <c>ready</c>. The table is no longer the XML/HTML/JSON families only.
     /// </summary>
     [Fact]
-    public async Task Complete_DeclaredTypeOutsideTheT1Families_NotSniffed_Ready()
+    public async Task Complete_DeclaredPngWithPngSignature_Ready()
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
-        await InsertKindPolicyAsync(world, ZipType);
+        await InsertKindPolicyAsync(world, PngType);
 
-        var (artifactId, _, finalKey) = await MintAndUploadAsync(world, runId, NotZipBody, ZipType);
+        var (artifactId, _, finalKey) = await MintAndUploadAsync(world, runId, PngBody, PngType);
 
         var answer = await CompleteAsync(world, artifactId, NewKey());
 
@@ -411,19 +419,69 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
         answer.Body.GetProperty("failure_code").ValueKind.ShouldBe(System.Text.Json.JsonValueKind.Null);
         (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(1);
         (await OutboxCountAsync(world, StagingDeleteTask, artifactId)).ShouldBe(1);
-        (await _store.ReadAsync(finalKey)).ShouldBe(NotZipBody);
+        (await _store.ReadAsync(finalKey)).ShouldBe(PngBody);
     }
 
-    // --------------------------------------------- F-P2: no prefix read for a type the profile never sniffs
-
     /// <summary>
-    /// 06.3.1-T1 F-P2: a declared type outside the T1 families (<c>application/zip</c>) is never sniffed, so the
-    /// completion issues ZERO <c>ReadPrefixAsync</c> calls — the staging and final sniff both skip the read for a
-    /// verdict the profile would answer <c>NotSniffed</c> for. The artifact still completes <c>ready</c> and is
-    /// promoted. The prefix reads are counted by a decorator over the real adapter.
+    /// 06.3.1-T2.2 AC5: <c>application/zip</c> is now sniffed, so non-zip bytes under that declaration are a
+    /// committed 200 <c>rejected</c>/<c>media_type_mismatch</c> — never <c>ready</c>, never promoted.
     /// </summary>
     [Fact]
-    public async Task Complete_DeclaredTypeOutsideTheT1Families_IssuesNoPrefixRead()
+    public async Task Complete_DeclaredZipWithNonZipBytes_RejectedMediaTypeMismatch()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        await InsertKindPolicyAsync(world, ZipType);
+
+        var (artifactId, stagingKey, finalKey) = await MintAndUploadAsync(world, runId, NotZipBody, ZipType);
+
+        var answer = await CompleteAsync(world, artifactId, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Text("state").ShouldBe("rejected");
+        answer.Text("failure_code").ShouldBe("media_type_mismatch");
+        (await ArtifactColumnAsync(world, artifactId, "failure_code")).ShouldBe("media_type_mismatch");
+        (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(0);
+        (await OutboxCountAsync(world, StagingDeleteTask, artifactId)).ShouldBe(0);
+        (await _store.ExistsAsync(stagingKey)).ShouldBeTrue("a sniff rejection is not a staging delete");
+        (await _store.ExistsAsync(finalKey)).ShouldBeFalse("a mismatching artifact is never copied to the final key");
+    }
+
+    /// <summary>
+    /// 06.3.1-T2.2 AC5 fail closed: <c>application/octet-stream</c> is accepted by the policy but the sniff table
+    /// has no signature for it, so its bytes are a <c>Mismatch</c> — the artifact is <c>rejected</c> with
+    /// <c>media_type_mismatch</c> and never becomes evidence. This is the T1 <c>NotSniffed</c> fail-open closed.
+    /// </summary>
+    [Fact]
+    public async Task Complete_DeclaredTypeOutsideTheSniffTable_RejectedMediaTypeMismatch()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        await InsertKindPolicyAsync(world, OutOfTableType);
+
+        var (artifactId, stagingKey, finalKey) = await MintAndUploadAsync(world, runId, NotZipBody, OutOfTableType);
+
+        var answer = await CompleteAsync(world, artifactId, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Text("state").ShouldBe("rejected");
+        answer.Text("failure_code").ShouldBe("media_type_mismatch");
+        (await ArtifactColumnAsync(world, artifactId, "failure_code")).ShouldBe("media_type_mismatch");
+        (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(0);
+        (await OutboxCountAsync(world, StagingDeleteTask, artifactId)).ShouldBe(0);
+        (await _store.ExistsAsync(stagingKey)).ShouldBeTrue("a sniff rejection is not a staging delete");
+        (await _store.ExistsAsync(finalKey)).ShouldBeFalse("a mismatching artifact is never copied to the final key");
+    }
+
+    // ------------------------ AC5/T2.2: every declared type is read (fail closed), staging then final
+
+    /// <summary>
+    /// 06.3.1-T2.2: <c>application/zip</c> is sniffed now, so the completion reads the staging prefix before the
+    /// copy — and the mismatching bytes are rejected there, before the promotion. The reads are counted by a
+    /// decorator over the real adapter.
+    /// </summary>
+    [Fact]
+    public async Task Complete_DeclaredZip_IssuesAStagingPrefixReadAndRejects()
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
@@ -440,17 +498,50 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
             HttpMethod.Post, $"/v1/artifacts/{artifactId:D}/complete", _ => { }, null, NewKey());
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        answer.Text("state").ShouldBe("ready");
-        storage.PrefixReads.ShouldBe(0, "a declared type outside the T1 families is never sniffed: no prefix is read");
-        (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(1);
-        (await OutboxCountAsync(world, StagingDeleteTask, artifactId)).ShouldBe(1);
-        (await _store.ReadAsync(finalKey)).ShouldBe(NotZipBody);
+        answer.Text("state").ShouldBe("rejected");
+        answer.Text("failure_code").ShouldBe("media_type_mismatch");
+
+        // Only the staging read runs: the mismatch refuses the completion before the promotion, so the final
+        // object is never created and its prefix is never read.
+        storage.PrefixReads.ShouldBe(1, "the staging sniff refuses the completion before the promotion");
+        (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(0);
+        (await _store.ExistsAsync(finalKey)).ShouldBeFalse("a mismatching artifact is never copied to the final key");
     }
 
     /// <summary>
-    /// 06.3.1-T1 F-P2: a declared type the T1 profile DOES sniff (<c>application/xml</c>) still reads the prefix
-    /// twice — once on the staging object before the copy and once on the final object after it — so the skip is
-    /// exactly the <c>NotSniffed</c> case and nothing else.
+    /// 06.3.1-T2.2 fail closed without a read: a declared type the sniff table has no signature for can never be
+    /// verified, so the completion refuses it (<c>media_type_mismatch</c>) before the promotion and issues ZERO
+    /// <c>ReadPrefixAsync</c> calls — there is no prefix it could use (00 §5.7 P1). The artifact is never
+    /// promoted to the final key.
+    /// </summary>
+    [Fact]
+    public async Task Complete_DeclaredTypeOutsideTheSniffTable_IssuesNoPrefixReadAndRejects()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        await InsertKindPolicyAsync(world, OutOfTableType);
+
+        var (artifactId, _, finalKey) = await MintAndUploadAsync(world, runId, NotZipBody, OutOfTableType);
+
+        var storage = new FaultInjectingObjectStorage();
+        await using var host = world.Host.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => FaultInjectingObjectStorage.Decorate(services, storage)));
+        using var client = host.CreateClient();
+
+        var answer = await client.SendAsync(
+            HttpMethod.Post, $"/v1/artifacts/{artifactId:D}/complete", _ => { }, null, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Text("state").ShouldBe("rejected");
+        answer.Text("failure_code").ShouldBe("media_type_mismatch");
+        storage.PrefixReads.ShouldBe(0, "an unsigned declared type is refused without any prefix read");
+        (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(0);
+        (await _store.ExistsAsync(finalKey)).ShouldBeFalse("a mismatching artifact is never copied to the final key");
+    }
+
+    /// <summary>
+    /// 06.3.1-T2.2 AC5: a declared type the profile sniffs and that MATCHES (<c>application/xml</c>) reads the
+    /// prefix twice — once on the staging object before the copy and once on the final object after it.
     /// </summary>
     [Fact]
     public async Task Complete_DeclaredXmlFamily_IssuesTwoPrefixReads()

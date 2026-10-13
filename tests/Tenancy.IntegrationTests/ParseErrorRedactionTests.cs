@@ -28,6 +28,11 @@ public sealed class ParseErrorRedactionTests
         ParsingFailureReason.SizeExceeded,
         ParsingFailureReason.Timeout,
         ParsingFailureReason.Malformed,
+        ParsingFailureReason.EntryCountExceeded,
+        ParsingFailureReason.CompressionRatioExceeded,
+        ParsingFailureReason.NestingExceeded,
+        ParsingFailureReason.DuplicateEntry,
+        ParsingFailureReason.UnsafeEntryName,
     ];
 
     public static TheoryData<string, long, string> HostileXml => new()

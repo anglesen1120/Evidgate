@@ -6,8 +6,10 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// 06.3.1-T1 QA (AC5; 00 §5.7 P1): hostile declared-versus-actual cases for the media sniff that the T1 suite does
-/// not name. A declared text family with a foreign magic must be a Mismatch, never NotSniffed (a bypass).
+/// 06.3.1-T2.2 QA (AC5; 00 §5.7 P1): hostile declared-versus-actual cases for the media sniff. A declared text
+/// family with a foreign magic must be a Mismatch, and a declared type outside the table (an image, an opaque
+/// type) must be a Mismatch too — fail closed, never a pass. The T1 <c>NotSniffed</c> verdict and
+/// <c>IsSniffed</c> are gone; every verdict is Match or Mismatch.
 /// </summary>
 public sealed class ParserQaSnifferTests
 {
@@ -23,7 +25,7 @@ public sealed class ParserQaSnifferTests
     [InlineData("application/json")]
     [InlineData("application/problem+json")]
     [InlineData("text/html")]
-    public void ForeignMagicUnderADeclaredTextFamilyIsAMismatchNeverNotSniffed(string declared)
+    public void ForeignMagicUnderADeclaredTextFamilyIsAMismatch(string declared)
     {
         foreach (var magic in new[] { PngMagic, ZipMagic, ElfMagic, PdfMagic })
         {
@@ -58,12 +60,23 @@ public sealed class ParserQaSnifferTests
         MediaSniffer.Check("application/json", bytes).ShouldBe(SniffResult.Match);
     }
 
+    /// <summary>
+    /// 06.3.1-T2.2 (T1 Note 10): the T1 gap is closed — a UTF-16 XML document with its BOM is recognised for the
+    /// XML family (04.4.1 AC8), so a wide-encoded JUnit report is not refused at <c>complete</c>.
+    /// </summary>
     [Fact]
-    public void Utf16LeXmlIsMismatchFailClosed()
+    public void Utf16LeXmlWithBomMatches()
     {
-        // Known gap (P3 product question): the sniff trims only the UTF-8 BOM. A UTF-16 XML document is rejected
-        // rather than admitted. Fail closed; recorded in the QA report.
         var bytes = new byte[] { 0xFF, 0xFE }.Concat(Encoding.Unicode.GetBytes("<?xml version=\"1.0\"?>")).ToArray();
+
+        MediaSniffer.Check("application/xml", bytes).ShouldBe(SniffResult.Match);
+    }
+
+    [Fact]
+    public void Utf16LeXmlWithoutAMarkupBodyIsMismatch()
+    {
+        // The BOM alone is not markup: the bytes after it decide.
+        var bytes = new byte[] { 0xFF, 0xFE }.Concat(Encoding.Unicode.GetBytes("not markup")).ToArray();
 
         MediaSniffer.Check("application/xml", bytes).ShouldBe(SniffResult.Mismatch);
     }
@@ -106,7 +119,7 @@ public sealed class ParserQaSnifferTests
     public void EveryFirstByteValueUnderEveryFamilyNeverThrows()
     {
         // Hostile fuzz over the whole first-byte space plus a long tail: the sniff must always return a verdict.
-        var families = new[] { "application/xml", "application/json", "text/html", "image/png", "application/pdf" };
+        var families = new[] { "application/xml", "application/json", "text/html", "image/png", "application/pdf", "video/mp4" };
         for (var first = 0; first < 256; first++)
         {
             var prefix = new byte[ParsingLimits.SniffPrefixBytes];
@@ -119,27 +132,29 @@ public sealed class ParserQaSnifferTests
         }
     }
 
+    /// <summary>
+    /// 06.3.1-T2.2 fail-closed: a declared type the profile has no signature for is a Mismatch, never a pass.
+    /// <c>image/svg+xml</c> (XML served as an image) and every opaque type are explicitly rejected, so a hostile
+    /// SVG sent under that media type can never become evidence.
+    /// </summary>
     [Fact]
-    public void UnknownOrNonTextDeclarationIsNotSniffedRatherThanRejected()
+    public void UnknownOrNonTextDeclarationIsMismatchNotAPass()
     {
-        // Out-of-table types are the caller's allow-list decision (AC5 scope). The sniffer returns NotSniffed.
-        MediaSniffer.Check("image/png", PngMagic).ShouldBe(SniffResult.NotSniffed);
-        MediaSniffer.Check("image/svg+xml", Encoding.ASCII.GetBytes("<svg/>")).ShouldBe(SniffResult.NotSniffed);
-    }
-
-    [Fact]
-    public void SvgDeclaredAsImageIsNotSniffedAndIsADocumentedGap()
-    {
-        // image/svg+xml is not in the T1 XML family (IsXml covers application/* +xml and text/xml). A hostile SVG
-        // sent under that media type is not checked by T1. Recorded as a P2 gap for the owner: confirm the
-        // media-type allow-list excludes it, or add it to the sniff family.
-        MediaSniffer.Check("image/svg+xml", Encoding.ASCII.GetBytes("<script>x</script>")).ShouldBe(SniffResult.NotSniffed);
+        MediaSniffer.Check("image/svg+xml", Encoding.ASCII.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"/>"))
+            .ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check("image/svg+xml", Encoding.ASCII.GetBytes("<script>x</script>"))
+            .ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check("text/plain", Encoding.ASCII.GetBytes("hello"))
+            .ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check("application/octet-stream", PngMagic)
+            .ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check("application/pdf", PdfMagic)
+            .ShouldBe(SniffResult.Mismatch);
     }
 
     /// <summary>
-    /// 06.3.1-T1 F-P2: <see cref="MediaSniffer.IsSniffed"/> is the exact predicate the completion uses to decide
-    /// whether to issue a prefix read, so it must agree with <see cref="MediaSniffer.Check"/>: a read happens iff
-    /// the verdict is not <see cref="SniffResult.NotSniffed"/>. Any drift would let a sniffed type skip its check.
+    /// The sniff verdict space is exactly Match/Mismatch: there is no third verdict that a caller could mistake
+    /// for a pass (06.3.1-T2.2 removed <c>NotSniffed</c>).
     /// </summary>
     [Theory]
     [InlineData("application/xml", "<?xml version=\"1.0\"?>")]
@@ -153,11 +168,12 @@ public sealed class ParserQaSnifferTests
     [InlineData("image/png", "\u0089PNG\r\n\u001A\n")]
     [InlineData("application/zip", "PK\u0003\u0004")]
     [InlineData("text/plain", "hello")]
+    [InlineData("image/svg+xml", "<svg/>")]
     [InlineData("", "")]
-    public void IsSniffedAgreesWithCheckNeverNotSniffed(string declared, string prefix)
+    public void EveryVerdictIsMatchOrMismatch(string declared, string prefix)
     {
         var verdict = MediaSniffer.Check(declared, Encoding.Latin1.GetBytes(prefix));
 
-        MediaSniffer.IsSniffed(declared).ShouldBe(verdict != SniffResult.NotSniffed);
+        verdict.ShouldBeOneOf(SniffResult.Match, SniffResult.Mismatch);
     }
 }

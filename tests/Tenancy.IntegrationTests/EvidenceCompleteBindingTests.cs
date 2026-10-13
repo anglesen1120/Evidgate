@@ -47,7 +47,8 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
     /// <summary>Another CI run of the same repository: a different <c>ci_producer</c> token of the same project.</summary>
     private static readonly CiRunReference ForeignCiRun = new("github_actions", 1L, 8L, 2);
 
-    private static readonly byte[] GoodBody = Encoding.UTF8.GetBytes(new string('A', (int)Cap));
+    /// <summary>The uploaded body: a zip signature then filler, exactly <see cref="Cap"/> bytes (the declared type is <c>application/zip</c>, 06.3.1-T2.2).</summary>
+    private static readonly byte[] GoodBody = [0x50, 0x4B, 0x03, 0x04, .. Encoding.UTF8.GetBytes(new string('A', (int)Cap - 4))];
 
     private static readonly byte[] OtherBody = Encoding.UTF8.GetBytes(new string('B', (int)Cap));
 
