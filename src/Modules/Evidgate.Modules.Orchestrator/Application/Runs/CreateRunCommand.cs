@@ -143,10 +143,12 @@ internal sealed record CreateRunCommand(
 /// reader of its own; the columns (<c>run.purpose</c>, <c>run.replay_grant_id</c>, migration 0031) stay at their
 /// defaults and are immutable because the app role holds no UPDATE on them (05.3.1 owns the read model and MUST NOT
 /// grant UPDATE on <c>purpose</c>/<c>replay_grant_id</c>). [DECISION] the verified identity of a run is the caller's
-/// <c>ci_token_issue</c> row — written by the 02.4.1 exchange from a token it already verified — read by <c>jti</c>
-/// inside this same tenant transaction and only when the principal carries a <see cref="CiRunReference"/> and a
-/// credential id; a missing or foreign-project row means the caller is not verified, so body values are stored and
-/// labelled rather than trusted (05.2.2 AC1–AC3, owner decision D-S45-Q1). [DECISION] a member a verified claim covers
+/// <c>ci_token_issue</c> row — written by the 02.4.1 exchange from a token it already verified — read by the run
+/// reference the minted token carries (<c>repository_id</c>, <c>run_id</c>, <c>run_attempt</c>) inside this same
+/// tenant transaction, and only when the principal carries a <see cref="CiRunReference"/>; the newest row for the
+/// attempt wins because its <c>ref</c>/<c>sha</c> are fixed per attempt (owner decision D-S45-Q2, T1.3). A missing or
+/// foreign-project row means the caller is not verified, so body values are stored and labelled rather than trusted
+/// (05.2.2 AC1–AC3). [DECISION] a member a verified claim covers
 /// is ignored in the body rather than refused (AC3), the claim's <c>ref</c> shape is re-checked here so a value the
 /// column CHECKs refuse is dropped instead of surfacing as a 500, and <c>ref_name</c>/the shas are never logged (only
 /// the run id and <c>ref_kind</c>, 05.2.2 §8).
@@ -421,11 +423,12 @@ internal sealed class CreateRunCommandHandler(
         var lateWindowMinutes = activePolicy?.LateWindowMinutes ?? options.Value.DefaultLateWindowMinutes;
 
         // (5b) the identity this run records (05.2.2-T1.3, AC1–AC3, T1.4). The only VERIFIED source is the
-        // ci_token_issue row the 02.4.1 exchange wrote from the GitHub OIDC token it had already verified, keyed by the
-        // minted token's jti: reachable only for a principal that carries a CiRunReference, so a member or an
-        // ingest-token caller can never be verified. The read is one statement inside this same tenant transaction; a
-        // missing row (purged, or another project's) leaves the caller unverified rather than trusted. Reads only —
-        // nothing is written before the identity passes the effective-value check below.
+        // ci_token_issue row the 02.4.1 exchange wrote from the GitHub OIDC token it had already verified, found by the
+        // run reference the minted token carries (repository/run/attempt) rather than by the token's jti, which the
+        // exchange mints fresh and unrelated: reachable only for a principal that carries a CiRunReference, so a member
+        // or an ingest-token caller can never be verified. The read is one statement inside this same tenant
+        // transaction; a missing row (purged, another project's, or another run attempt's) leaves the caller unverified
+        // rather than trusted. Reads only — nothing is written before the identity passes the effective-value check.
         var principal = principals.Current;
         var claim = await ReadVerifiedClaimAsync(principal, command.ProjectId, orgId, cancellationToken).ConfigureAwait(false);
         var identity = RunIdentityRules.Resolve(bodyRef, claim);
@@ -537,17 +540,21 @@ internal sealed class CreateRunCommandHandler(
     }
 
     /// <summary>
-    /// The verified <c>ref</c>/<c>sha</c> claims of the caller's credential (05.2.2-T1.3): the <c>ci_token_issue</c> row
-    /// the 02.4.1 exchange wrote for the presented <c>ci_producer</c> token, found by the token's <c>jti</c>. Only a
-    /// principal that carries a <see cref="CiRunReference"/> can be a <c>ci_producer</c> and only a token with a
-    /// credential id can name a row, so every other caller short-circuits without a statement (00 §5.7 P3).
+    /// The verified <c>ref</c>/<c>sha</c> claims of the caller's credential (05.2.2-T1.3): the <c>ci_token_issue</c>
+    /// row the 02.4.1 exchange wrote for the presented <c>ci_producer</c> token, found by the run reference the minted
+    /// token carries (<c>repository_id</c>, <c>run_id</c>, <c>run_attempt</c>). The exchange mints the token's
+    /// <c>jti</c> as a fresh GUID and stores the GitHub OIDC <c>jti</c> separately, so that key is not a link between
+    /// the token in hand and the row; the run reference is (owner decision D-S45-Q2). Only a principal that carries a
+    /// <see cref="CiRunReference"/> can be a <c>ci_producer</c>, so every other caller short-circuits without a
+    /// statement (00 §5.7 P3).
     /// <para>
     /// The Identity module owns <c>ci_token_issue</c>; this module reads it as raw SQL like the Evidence module reads
     /// <c>run</c> (the cross-module read precedent), so no Identity type or contract is involved. RLS already scopes
-    /// the row to this tenant (<c>ci_token_issue_app_tenant</c>); <c>org_id</c> and <c>project_id</c> repeat the scope in
-    /// the statement as defence in depth (00 §5.4). A row that is not there — purged after its replay window, or another
-    /// project's — means NOT verified: the caller's body values are stored and labelled <c>unverified_ref</c> rather
-    /// than trusted.
+    /// the row to this tenant (<c>ci_token_issue_app_tenant</c>); <c>org_id</c> and <c>project_id</c> repeat the scope
+    /// in the statement as defence in depth (00 §5.4). A row that is not there — purged after its replay window,
+    /// another project's, or another run attempt's — means NOT verified: the caller's body values are stored and
+    /// labelled <c>unverified_ref</c> rather than trusted. <c>ref</c>/<c>sha</c> are fixed per run attempt, so the
+    /// newest row for the attempt is authoritative and the statement takes it with <c>limit 1</c>.
     /// </para>
     /// </summary>
     private async ValueTask<CiRefClaim?> ReadVerifiedClaimAsync(
@@ -556,14 +563,21 @@ internal sealed class CreateRunCommandHandler(
         Guid orgId,
         CancellationToken cancellationToken)
     {
-        if (principal?.CiRun is null || string.IsNullOrEmpty(principal.CredentialId))
+        if (principal?.CiRun is not { } ciRun)
         {
             return null;
         }
 
         var row = await db.QuerySingleOrDefaultAsync<CiTokenIssueRow>(
             OrchestratorSql.CiTokenIssueClaim,
-            new { org_id = orgId, project_id = projectId, jti = principal.CredentialId },
+            new
+            {
+                org_id = orgId,
+                project_id = projectId,
+                repository_id = ciRun.RepositoryId,
+                run_id = ciRun.RunId,
+                run_attempt = ciRun.RunAttempt,
+            },
             cancellationToken).ConfigureAwait(false);
 
         return row is null ? null : new CiRefClaim(row.Ref, row.Sha);
@@ -714,8 +728,8 @@ internal sealed class CreateRunCommandHandler(
 
     /// <summary>
     /// One <c>ci_token_issue</c> row as <see cref="OrchestratorSql.CiTokenIssueClaim"/> returns it (Dapper maps the
-    /// snake_case columns): the two verified claims 05.2.2-T1.3 reads. The row's <c>jti</c> is unique, so the read is a
-    /// single row or none.
+    /// snake_case columns): the two verified claims 05.2.2-T1.3 reads. <c>ref</c> and <c>sha</c> are fixed per run
+    /// attempt, so the statement returns the newest row of the attempt and the read is a single row or none.
     /// </summary>
     private sealed class CiTokenIssueRow
     {

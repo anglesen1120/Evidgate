@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 
@@ -311,8 +312,10 @@ internal static class RunIdentityRules
     /// Maps a verified <c>ref</c> claim to the three members it covers: <c>refs/heads/&lt;n&gt;</c> to a
     /// <c>branch</c> called <c>&lt;n&gt;</c>, <c>refs/tags/&lt;n&gt;</c> to a <c>tag</c>, and
     /// <c>refs/pull/&lt;N&gt;/merge</c> to a <c>pull_request</c> whose name is GitHub's <c>&lt;N&gt;/merge</c> and whose
-    /// number is <c>N</c>. Any other shape — including a name over 255 characters or a number that does not fit
-    /// <c>integer</c> — covers nothing: the three members stay null and the body is still ignored for them.
+    /// number is <c>N</c>. The name is built from the parsed number's canonical decimal, so a ref with leading zeros
+    /// (<c>refs/pull/007/merge</c>) stores <c>7/merge</c>, never the raw digits. Any other shape — including a name
+    /// over 255 characters, a name with a control character, or a number that does not fit <c>integer</c> — covers
+    /// nothing: the three members stay null and the body is still ignored for them.
     /// </summary>
     /// <param name="gitRef">The verified <c>ref</c> claim.</param>
     internal static (string? Kind, string? Name, int? PrNumber) MapClaim(string gitRef)
@@ -343,7 +346,9 @@ internal static class RunIdentityRules
                 && int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var number)
                 && number > 0)
             {
-                return (PullRequestKind, digits + PullRefSuffix, number);
+                // The canonical decimal of the parsed number, so `refs/pull/007/merge` stores `7/merge` (the digits
+                // slice may carry leading zeros, which are not a name GitHub ever writes).
+                return (PullRequestKind, number.ToString(CultureInfo.InvariantCulture) + PullRefSuffix, number);
             }
         }
 
@@ -370,8 +375,11 @@ internal static class RunIdentityRules
     }
 
     /// <summary>
-    /// <c>1..255</c> code points, the <c>run.ref_name</c> CHECK (<c>char_length</c> is the Postgres semantics the
-    /// release check uses too).
+    /// A storable <c>ref_name</c>: <c>1..255</c> code points (the <c>run.ref_name</c> CHECK — <c>char_length</c> is the
+    /// Postgres semantics the release check uses too) with no control character. A git ref name cannot contain a
+    /// C0/C1 control or DEL, and such a value is never a name a caller meant: it is refused with the same
+    /// <c>invalid_value</c> reason as any other bad name rather than stored (SEC-F3). Checked on runes, so the DEL and
+    /// C1 (the <c>U+0080..U+009F</c> block, <c>U+0085</c> NEL included) characters are covered like <c>\n</c>/<c>\r</c>/<c>\t</c>.
     /// </summary>
     private static bool IsStorableName(string? name)
     {
@@ -381,9 +389,9 @@ internal static class RunIdentityRules
         }
 
         var runes = 0;
-        foreach (var _ in name.EnumerateRunes())
+        foreach (var rune in name.EnumerateRunes())
         {
-            if (++runes > MaxRefNameLength)
+            if (++runes > MaxRefNameLength || Rune.GetUnicodeCategory(rune) == UnicodeCategory.Control)
             {
                 return false;
             }

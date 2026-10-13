@@ -41,7 +41,11 @@ The playbook for changing a table without breaking the running version is
   arrives with 05.3.2-T5) plus the `update (state)` column grant on `run`, and `0037` is 05.2.2-T1's
   `run` branch/PR/commit identity columns (`ref_kind`, `ref_name`, `pr_number`, `head_sha`, `base_sha`,
   `trigger_event`, `is_fork`, `unverified_ref`) with their bound CHECKs, the `run_pr_requires_number`
-  cross-column rule and the `run_identity_immutable` BEFORE UPDATE trigger that refuses any change to them
+  cross-column rule and the `run_identity_immutable` BEFORE UPDATE trigger that refuses any change to them,
+  plus the `ci_token_issue_run_idx` index on the Identity-owned `ci_token_issue`
+  (`project_id`, `repository_id`, `run_id`, `run_attempt`, `created_at desc`) that the verified-caller
+  check reads — it keys on the minted token's run reference, not on the credential `jti`, which the
+  exchange never stores (D-S45-Q2, 2026-10-13)
   (`run_project_ref_idx` stays 05.2.2-T2.2's); the next free number is `0038`; a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL

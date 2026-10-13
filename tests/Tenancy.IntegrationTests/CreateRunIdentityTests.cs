@@ -50,6 +50,28 @@ public sealed class RunIdentityRulesTests
     }
 
     [Fact]
+    public void MapClaim_PrNumberWithLeadingZeros_StoresTheCanonicalDecimalAndNumber()
+    {
+        // GitHub never writes a leading zero, but the digits slice may carry one: the stored name and number are the
+        // canonical decimal (F3), so `refs/pull/007/merge` is `7/merge` with number 7, not the raw `007/merge`.
+        RunIdentityRules.MapClaim("refs/pull/007/merge").ShouldBe(("pull_request", "7/merge", (int?)7));
+        RunIdentityRules.MapClaim("refs/pull/00012/merge").ShouldBe(("pull_request", "12/merge", (int?)12));
+    }
+
+    [Theory]
+    [InlineData("refs/heads/a\nb")]
+    [InlineData("refs/heads/a\rb")]
+    [InlineData("refs/heads/a\tb")]
+    [InlineData("refs/heads/a\u007Fb")]
+    [InlineData("refs/heads/a\u0085b")]
+    [InlineData("refs/tags/a\nb")]
+    public void MapClaim_RefNameWithAControlCharacter_CoversNothing(string gitRef)
+    {
+        // A git ref name cannot carry a control character, so a claim that does covers nothing (SEC-F3).
+        RunIdentityRules.MapClaim(gitRef).ShouldBe(((string?)null, (string?)null, (int?)null));
+    }
+
+    [Fact]
     public void MapClaim_UnparseableRef_CoversNothing()
     {
         // Nothing about an unrecognised shape is trusted, so the three members stay null and the body is ignored for
@@ -159,7 +181,7 @@ public sealed class RunIdentityRulesTests
     }
 
     [Fact]
-    public void Resolve_NoClaimNoRef_IsAllNullAndVerified()
+    public void Resolve_NoClaimNoRef_IsAllNullAndNotUnverified()
     {
         // Nothing was claimed and nothing was sent: the run records no identity at all, so there is nothing
         // unverified about it (AC2).
@@ -235,6 +257,25 @@ public sealed class RunIdentityRulesTests
         RunIdentityRules.ParseBodyRef(Body($$$"""{"ref":{"name":"{{{new string('x', 256)}}}"}}""")).Errors.Single().Path.ShouldBe("/ref/name");
         RunIdentityRules.ParseBodyRef(Body($$$"""{"ref":{"name":"{{{new string('x', 255)}}}"}}""")).Errors.ShouldBeEmpty();
         RunIdentityRules.ParseBodyRef(Body("""{"ref":{"name":7}}""")).Errors.Single().Path.ShouldBe("/ref/name");
+    }
+
+    [Theory]
+    [InlineData("a\nb")]
+    [InlineData("a\rb")]
+    [InlineData("a\tb")]
+    [InlineData("a\u007Fb")]
+    [InlineData("a\u0085b")]
+    public void ParseBodyRef_NameWithAControlCharacter_IsInvalidValue(string name)
+    {
+        // C0 controls (newline, CR, tab), DEL and the C1 block (NEL included) are not ref names: refused invalid_value
+        // like any other bad name, rather than stored (SEC-F3).
+        var json = JsonSerializer.Serialize(new { @ref = new { name } });
+
+        var (block, errors) = RunIdentityRules.ParseBodyRef(Body(json));
+
+        block.ShouldBeNull();
+        errors.Single().Path.ShouldBe("/ref/name");
+        errors.Single().Reason.ShouldBe("invalid_value");
     }
 
     [Fact]
@@ -376,48 +417,89 @@ public sealed class CreateRunIdentityTests
     private static readonly string Sha = new('a', 40);
     private static readonly string OtherSha = new('b', 40);
 
+    /// <summary>The repository id the <see cref="Producer"/>'s CI run reference and the seeded issue rows share.</summary>
+    private const long CiRepositoryId = 987_654_321L;
+
+    /// <summary>The run id the <see cref="Producer"/>'s CI run reference and the seeded issue rows share.</summary>
+    private const long CiRunId = 42_424_242L;
+
+    /// <summary>The run attempt the <see cref="Producer"/>'s CI run reference and the seeded issue rows share.</summary>
+    private const int CiRunAttempt = 3;
+
     /// <summary>A create body whose <c>ref</c> member is <paramref name="refJson"/> verbatim (an object, or a bare value).</summary>
     private static string BodyWithRef(RunCreationTests.World world, string refJson) =>
         $$$"""{"manifest_id":"{{{world.ManifestId}}}","ref":{{{refJson}}}}""";
 
     /// <summary>
-    /// The 02.4.1 state a verified caller implies: a <c>ci_binding</c> and the <c>ci_token_issue</c> row the exchange
-    /// wrote for the presented token. The row's <c>jti</c> must equal the principal's credential id, which is the only
-    /// link between the token in hand and the issue record (D-S45-Q1).
+    /// The 02.4.1 state a verified caller implies: the repository's <c>ci_binding</c> and the <c>ci_token_issue</c> row
+    /// the exchange wrote from the presented OIDC token. The row is keyed by the run reference the minted token carries
+    /// (<paramref name="repositoryId"/>/<paramref name="runId"/>/<paramref name="runAttempt"/>), never by the token's
+    /// <c>jti</c>: 02.4.1 mints a fresh GUID <c>jti</c> and stores the GitHub OIDC <c>jti</c> separately, so this
+    /// helper writes a <c>jti</c> deliberately unrelated to any principal's credential id (D-S45-Q2). A second call for
+    /// the same project reuses the binding and appends another issue row, so an attempt that exchanged several tokens
+    /// (or an older row carrying another ref) is expressible; <paramref name="createdAt"/> pins <c>created_at</c> when a
+    /// test needs a defined newest row (the column defaults to <c>now()</c>, the transaction clock).
     /// </summary>
-    private async Task SeedClaimAsync(string database, Guid org, Guid project, string jti, string gitRef, string sha)
+    private async Task SeedClaimAsync(
+        string database,
+        Guid org,
+        Guid project,
+        string gitRef,
+        string sha,
+        long repositoryId = CiRepositoryId,
+        long runId = CiRunId,
+        int runAttempt = CiRunAttempt,
+        DateTimeOffset? createdAt = null,
+        string? jti = null)
     {
         await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database), org, project);
-        var bindingId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
             insert into public.ci_binding (id, org_id, project_id, provider, repository_id, repository_full_name, allowed_ref_patterns, allowed_workflow_refs)
-            values (@id, @org_id, @project_id, 'github_actions', 1, 'acme/web', array['refs/heads/*', 'refs/tags/*', 'refs/pull/*/merge'], array['acme/web/.github/workflows/ci.yml@refs/heads/main'])
+            values (@id, @org_id, @project_id, 'github_actions', @repository_id, 'acme/web', array['refs/heads/*', 'refs/tags/*', 'refs/pull/*/merge'], array['acme/web/.github/workflows/ci.yml@refs/heads/main'])
+            on conflict (org_id, project_id, provider, repository_id) do nothing
             """,
-            ("id", bindingId),
+            ("id", Guid.CreateVersion7()),
             ("org_id", org),
-            ("project_id", project));
+            ("project_id", project),
+            ("repository_id", repositoryId));
+        var bindingId = await scope.ScalarAsync<Guid>(
+            """
+            select id from public.ci_binding
+             where org_id = @org_id and project_id = @project_id and provider = 'github_actions' and repository_id = @repository_id
+            """,
+            ("org_id", org),
+            ("project_id", project),
+            ("repository_id", repositoryId));
         await scope.ExecuteAsync(
             """
-            insert into public.ci_token_issue (id, org_id, project_id, binding_id, provider, jti, repository_id, repository_full_name, ref, sha, run_id, run_attempt, job_workflow_ref, expires_at)
-            values (@id, @org_id, @project_id, @binding_id, 'github_actions', @jti, 1, 'acme/web', @ref, @sha, 9001, 1, 'acme/web/.github/workflows/ci.yml@refs/heads/main', now() + interval '1 hour')
+            insert into public.ci_token_issue (id, org_id, project_id, binding_id, provider, jti, repository_id, repository_full_name, ref, sha, run_id, run_attempt, job_workflow_ref, expires_at, created_at)
+            values (@id, @org_id, @project_id, @binding_id, 'github_actions', @jti, @repository_id, 'acme/web', @ref, @sha, @run_id, @run_attempt, 'acme/web/.github/workflows/ci.yml@refs/heads/main', now() + interval '1 hour', coalesce(@created_at::timestamptz, now()))
             """,
             ("id", Guid.CreateVersion7()),
             ("org_id", org),
             ("project_id", project),
             ("binding_id", bindingId),
-            ("jti", jti),
+            ("jti", jti ?? Guid.CreateVersion7().ToString("D")),
+            ("repository_id", repositoryId),
             ("ref", gitRef),
-            ("sha", sha));
+            ("sha", sha),
+            ("run_id", runId),
+            ("run_attempt", runAttempt),
+            ("created_at", (object?)createdAt ?? DBNull.Value));
         await scope.CommitAsync();
     }
 
-    private static RequestPrincipal Producer(Guid project, string jti, long runId = 42_424_242L, int attempt = 3) =>
+    /// <summary>
+    /// A <c>ci_producer</c> principal: a minted token whose <c>jti</c> is <paramref name="tokenId"/> (unrelated to the
+    /// issue row's <c>jti</c>) and which carries the CI run reference the issue lookup keys on.
+    /// </summary>
+    private static RequestPrincipal Producer(Guid project, string tokenId, long runId = CiRunId, int attempt = CiRunAttempt) =>
         RequestPrincipal.Service(
             project,
             ["run:create"],
-            credentialId: jti,
-            ciRun: new CiRunReference("github_actions", 987_654_321L, runId, attempt));
+            credentialId: tokenId,
+            ciRun: new CiRunReference("github_actions", CiRepositoryId, runId, attempt));
 
     /// <summary>One identity column of the world's single run, as text (null when the column is null).</summary>
     private async Task<string?> ColumnAsync(RunCreationTests.World world, string column) =>
@@ -432,10 +514,10 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_OidcClaims_StoresIdentity()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "jti-branch", "refs/heads/main", Sha);
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "jti-branch"), RunCreationTests.RunBody(world.ManifestId));
+            world.Api, world.Org, world.Project, Producer(world.Project, "token-branch"), RunCreationTests.RunBody(world.ManifestId));
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         result.Value.UnverifiedRef.ShouldBeFalse();
@@ -453,10 +535,10 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_VerifiedTagClaim_StoresTheTagAndItsSha()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "jti-tag", "refs/tags/v1.0.0", Sha);
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/tags/v1.0.0", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "jti-tag"), RunCreationTests.RunBody(world.ManifestId));
+            world.Api, world.Org, world.Project, Producer(world.Project, "token-tag"), RunCreationTests.RunBody(world.ManifestId));
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         (await ColumnAsync(world, "ref_kind")).ShouldBe("tag");
@@ -469,10 +551,10 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_VerifiedPullRequestClaim_StoresTheNumberButNotTheTestMergeSha()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "jti-pr", "refs/pull/12/merge", Sha);
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/pull/12/merge", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "jti-pr"), RunCreationTests.RunBody(world.ManifestId));
+            world.Api, world.Org, world.Project, Producer(world.Project, "token-pr"), RunCreationTests.RunBody(world.ManifestId));
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         (await ColumnAsync(world, "ref_kind")).ShouldBe("pull_request");
@@ -487,10 +569,10 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_VerifiedCaller_OutboxCarriesTheIdentityBlock()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "jti-outbox", "refs/heads/main", Sha);
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "jti-outbox"), RunCreationTests.RunBody(world.ManifestId));
+            world.Api, world.Org, world.Project, Producer(world.Project, "token-outbox"), RunCreationTests.RunBody(world.ManifestId));
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
 
@@ -512,10 +594,10 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_VerifiedCaller_GetRunReportsTheIdentityBlock()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "jti-read", "refs/heads/main", Sha);
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "jti-read"), RunCreationTests.RunBody(world.ManifestId));
+            world.Api, world.Org, world.Project, Producer(world.Project, "token-read"), RunCreationTests.RunBody(world.ManifestId));
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         var answer = await GetRunAsync(world, result.Value.RunId);
@@ -558,7 +640,7 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_NoClaims_UnverifiedRef()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "jti-inbound");
+        var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "token-inbound");
         var body = BodyWithRef(
             world,
             $$$"""{"kind":"branch","name":"feature/05.2.2-T1","head_sha":"{{{Sha}}}","base_sha":"{{{OtherSha}}}","trigger_event":"dispatch","is_fork":false}""");
@@ -580,7 +662,7 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_NoClaimNoRef_StoresNoIdentityAndIsNotUnverified()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "jti-empty");
+        var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "token-empty");
 
         var result = await RunCreationSeams.SendDirectAsync(
             world.Api, world.Org, world.Project, principal, RunCreationTests.RunBody(world.ManifestId));
@@ -598,7 +680,7 @@ public sealed class CreateRunIdentityTests
     {
         // Only the body can set is_fork: a fork PR exchange is refused 403 by 02.4.1, so no verified caller is a fork.
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "jti-fork");
+        var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "token-fork");
 
         var result = await RunCreationSeams.SendDirectAsync(
             world.Api,
@@ -619,12 +701,12 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_ClaimConflict_ClaimWins()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "jti-conflict", "refs/heads/main", Sha);
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
         var body = BodyWithRef(
             world,
             $$$"""{"kind":"pull_request","name":"999/merge","pr_number":999,"head_sha":"{{{OtherSha}}}","trigger_event":"push","is_fork":true}""");
 
-        var result = await RunCreationSeams.SendDirectAsync(world.Api, world.Org, world.Project, Producer(world.Project, "jti-conflict"), body);
+        var result = await RunCreationSeams.SendDirectAsync(world.Api, world.Org, world.Project, Producer(world.Project, "token-conflict"), body);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
 
@@ -651,7 +733,7 @@ public sealed class CreateRunIdentityTests
             world.Api,
             world.Org,
             world.Project,
-            Producer(world.Project, "jti-absent"),
+            Producer(world.Project, "token-absent"),
             BodyWithRef(world, """{"kind":"tag","name":"v9"}"""));
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
@@ -664,22 +746,84 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_AnotherProjectsIssueRow_DoesNotVerifyTheCaller()
     {
-        // The claim is read for this project, so a row minted for another project of the same org can never verify.
+        // The claim is read for this project (and this run attempt), so a row minted for another project of the same org
+        // can never verify — even though its run reference matches this caller's.
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var other = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
-        await SeedClaimAsync(world.Database, world.Org, other, "jti-foreign", "refs/heads/main", Sha);
+        await SeedClaimAsync(world.Database, world.Org, other, "refs/heads/main", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
             world.Api,
             world.Org,
             world.Project,
-            Producer(world.Project, "jti-foreign"),
+            Producer(world.Project, "token-foreign"),
             BodyWithRef(world, """{"kind":"branch","name":"feature/x"}"""));
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         (await ColumnAsync(world, "ref_kind")).ShouldBe("branch");
         (await ColumnAsync(world, "ref_name")).ShouldBe("feature/x");
         result.Value.UnverifiedRef.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task CreateRun_SameAttemptSeveralIssueRows_NewestRowWinsWithoutException()
+    {
+        // One run attempt can exchange several tokens, so it can have several ci_token_issue rows. ref/sha are fixed
+        // per attempt, so the newest row is authoritative: an older row carrying another ref must not win, and two
+        // matching rows must not make the read throw (the statement takes limit 1).
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await SeedClaimAsync(
+            world.Database, world.Org, world.Project, "refs/heads/stale", Sha, createdAt: DateTimeOffset.UtcNow.AddHours(-1));
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", OtherSha);
+
+        var result = await RunCreationSeams.SendDirectAsync(
+            world.Api, world.Org, world.Project, Producer(world.Project, "token-newest"), RunCreationTests.RunBody(world.ManifestId));
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        (await ColumnAsync(world, "ref_kind")).ShouldBe("branch");
+        (await ColumnAsync(world, "ref_name")).ShouldBe("main");
+        (await ColumnAsync(world, "head_sha")).ShouldBe(OtherSha);
+        result.Value.UnverifiedRef.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task CreateRun_DifferentRunAttempt_DoesNotVerifyTheCaller()
+    {
+        // The run attempt is part of the lookup key: a row of the same repository and run but another attempt is not
+        // this caller's, so the caller is unverified and its body is stored and labelled.
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
+
+        var result = await RunCreationSeams.SendDirectAsync(
+            world.Api,
+            world.Org,
+            world.Project,
+            Producer(world.Project, "token-other-attempt", attempt: CiRunAttempt + 1),
+            BodyWithRef(world, """{"kind":"branch","name":"feature/x"}"""));
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        (await ColumnAsync(world, "ref_kind")).ShouldBe("branch");
+        (await ColumnAsync(world, "ref_name")).ShouldBe("feature/x");
+        result.Value.UnverifiedRef.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task CreateRun_MintedTokenJtiDiffersFromIssueRowJti_StillVerifies()
+    {
+        // The 02.4.1 exchange mints a fresh GUID jti for the presented token and stores the GitHub OIDC jti in the
+        // row, so the principal's credential id and the row's jti are unrelated (the production shape): the run
+        // reference, not the jti, is what links them.
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await SeedClaimAsync(
+            world.Database, world.Org, world.Project, "refs/heads/main", Sha, jti: "github-oidc-jwt-jti-42");
+
+        var result = await RunCreationSeams.SendDirectAsync(
+            world.Api, world.Org, world.Project, Producer(world.Project, "minted-token-jti-9f2c1a"), RunCreationTests.RunBody(world.ManifestId));
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        (await ColumnAsync(world, "ref_kind")).ShouldBe("branch");
+        (await ColumnAsync(world, "ref_name")).ShouldBe("main");
+        result.Value.UnverifiedRef.ShouldBeFalse();
     }
 
     // ------------------------------------------------------------------ AC4: shape validation
@@ -724,6 +868,29 @@ public sealed class CreateRunIdentityTests
         await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
     }
 
+    [Theory]
+    [InlineData("a\nb")]
+    [InlineData("a\rb")]
+    [InlineData("a\tb")]
+    [InlineData("a\u007Fb")]
+    [InlineData("a\u0085b")]
+    public async Task CreateRun_RefNameWithAControlCharacter_422RequestInvalidAndNoRows(string name)
+    {
+        // A git ref name cannot carry a C0/C1 control or DEL, so the body's ref_name is refused invalid_value like any
+        // other bad name, before any write (SEC-F3). (NUL and a lone surrogate are refused even earlier, by the
+        // unstorable-text pass; see CreateRunIdentityQaTests.)
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+
+        var answer = await RunCreationTests.CreateRunAsync(world, BodyWithRef(world, JsonSerializer.Serialize(new { name })));
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("request_invalid");
+        answer.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+            .Select(detail => detail.GetProperty("path").GetString())
+            .ShouldContain("/ref/name");
+        await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
+    }
+
     [Fact]
     public async Task CreateRun_ValidBodyRef_IsAccepted()
     {
@@ -744,16 +911,17 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_Replay_SameIdentity()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "jti-replay", "refs/heads/main", Sha);
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
         var key = NewKey();
         var body = RunCreationTests.RunBody(world.ManifestId);
 
-        var first = await RunCreationSeams.SendDirectAsync(world.Api, world.Org, world.Project, Producer(world.Project, "jti-replay"), body, key);
+        var first = await RunCreationSeams.SendDirectAsync(world.Api, world.Org, world.Project, Producer(world.Project, "token-replay"), body, key);
         first.IsSuccess.ShouldBeTrue(first.Error?.Message);
 
-        // A re-minted token for the same run attempt carries a different jti and must still replay.
+        // A re-minted token for the same run attempt carries a different (and, as in production, unrelated) jti and
+        // must still verify and replay.
         var replay = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "jti-replay-2"), body, key);
+            world.Api, world.Org, world.Project, Producer(world.Project, "token-replay-2"), body, key);
 
         replay.IsSuccess.ShouldBeTrue(replay.Error?.Message);
         replay.Value.RunId.ShouldBe(first.Value.RunId);
@@ -766,18 +934,19 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_Replay_DifferentIdentity_409()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "jti-attempt", "refs/heads/main", Sha);
+        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha, runAttempt: 1);
         var key = NewKey();
         var body = RunCreationTests.RunBody(world.ManifestId);
 
         var first = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "jti-attempt", attempt: 1), body, key);
+            world.Api, world.Org, world.Project, Producer(world.Project, "token-attempt", attempt: 1), body, key);
         first.IsSuccess.ShouldBeTrue(first.Error?.Message);
+        first.Value.UnverifiedRef.ShouldBeFalse();
 
         // The same key and the same body from a different run attempt of the repository is a different request
         // identity, so it must conflict rather than silently replay the first run (AC9).
         var conflict = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "jti-attempt", attempt: 2), body, key);
+            world.Api, world.Org, world.Project, Producer(world.Project, "token-attempt", attempt: 2), body, key);
 
         conflict.IsSuccess.ShouldBeFalse();
         conflict.Error!.Code.ShouldBe(ApiErrorCode.IdempotencyConflict);

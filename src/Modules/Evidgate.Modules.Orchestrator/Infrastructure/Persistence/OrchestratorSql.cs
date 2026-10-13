@@ -151,22 +151,30 @@ internal static class OrchestratorSql
     // ------------------------------------------------------------------ 05.2.2 run identity
 
     /// <summary>
-    /// The verified <c>ref</c>/<c>sha</c> claims of the credential that minted the caller's token (05.2.2-T1.3): the
-    /// <c>ci_token_issue</c> row the 02.4.1 exchange wrote from the GitHub OIDC token it had already verified, keyed by
-    /// the minted token's <c>jti</c>. It is the only source of a verified run identity, so the create handler reads it
-    /// inside the run's tenant transaction, before any write, and only for a caller that carries a CI run reference.
+    /// The verified <c>ref</c>/<c>sha</c> claims of the CI run the caller's credential was minted for (05.2.2-T1.3):
+    /// the <c>ci_token_issue</c> row the 02.4.1 exchange wrote from the GitHub OIDC token it had already verified,
+    /// keyed by the run reference the minted token carries (<c>repository_id</c>, <c>run_id</c>, <c>run_attempt</c>) —
+    /// not by the minted token's <c>jti</c>, which the exchange sets to a fresh GUID unrelated to the row (D-S45-Q2).
+    /// It is the only source of a verified run identity, so the create handler reads it inside the run's tenant
+    /// transaction, before any write, and only for a caller that carries a CI run reference.
     /// <para>
     /// The Identity module owns the table; this module reads it as raw SQL like the Evidence module reads <c>run</c>
     /// (the cross-module read precedent), which is why no Identity contract is involved. RLS already restricts the row
     /// to the caller's tenant (<c>ci_token_issue_app_tenant</c>, 0017); <c>org_id</c> and <c>project_id</c> repeat the
     /// scope in the statement as defence in depth (00 §5.4), so a token of another project of the same org can never
-    /// verify an identity here. <c>jti</c> is unique, so the result is one row or none.
+    /// verify an identity here. <c>ref</c> and <c>sha</c> are fixed for a GitHub run attempt, so the newest row for the
+    /// attempt is authoritative: <c>order by created_at desc limit 1</c> returns it and never throws, even when one
+    /// attempt exchanged several tokens (each keyed by its own <c>jti</c>). <c>ci_token_issue_run_idx</c>
+    /// (migration 0037) serves the predicate and the order as one index scan.
     /// </para>
     /// </summary>
     internal const string CiTokenIssueClaim = """
         select ref, sha
           from public.ci_token_issue
-         where org_id = @org_id and project_id = @project_id and jti = @jti
+         where org_id = @org_id and project_id = @project_id
+           and repository_id = @repository_id and run_id = @run_id and run_attempt = @run_attempt
+         order by created_at desc
+         limit 1
         """;
 
     // ------------------------------------------------------------------ 06.1.2 upload-url run scope

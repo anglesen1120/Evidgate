@@ -340,6 +340,32 @@ public sealed class RunIdentitySchemaTests
         (await _fixture.RowSecurityAsync(database, "run")).ShouldBe((true, true));
     }
 
+    [Fact]
+    public async Task CiTokenIssueRunIndex_ExistsOnTheRunReferenceKeys_AndSurvivesTheReRun()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+
+        async Task<string> DefinitionAsync() =>
+            (await _fixture.IndexesAsync(database, "ci_token_issue"))
+                .SingleOrDefault(index => index.StartsWith("ci_token_issue_run_idx:", StringComparison.Ordinal))
+            ?? string.Empty;
+
+        // D-S45-Q2: the verified-caller read filters (project_id, repository_id, run_id, run_attempt) and
+        // takes the newest row of the attempt (created_at desc), so 0037 adds exactly this btree index to
+        // the Identity-owned `ci_token_issue` — no grant, policy or RLS change.
+        var definition = await DefinitionAsync();
+        definition.ShouldContain("ON public.ci_token_issue USING btree (project_id, repository_id, run_id, run_attempt, created_at DESC)");
+
+        // `create index if not exists`: the second application of 0037 must not fail on the index it
+        // already created and must leave exactly that one behind.
+        await ReRunMigrationAsync(database);
+
+        (await DefinitionAsync()).ShouldBe(definition);
+        (await _fixture.IndexesAsync(database, "ci_token_issue"))
+            .Count(index => index.StartsWith("ci_token_issue_run_idx:", StringComparison.Ordinal))
+            .ShouldBe(1);
+    }
+
     // ------------------------------------------------------------------ (b) AC4: the shape constraints
 
     [Theory]
