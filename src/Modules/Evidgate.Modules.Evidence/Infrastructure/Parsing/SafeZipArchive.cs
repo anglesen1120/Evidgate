@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Buffers.Binary;
+using System.Globalization;
 using System.IO.Compression;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Contracts;
@@ -14,19 +16,30 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing;
 /// the extraction root. A hostile archive costs bounded CPU and memory and ends a <c>Result</c> failure, never a
 /// <c>ready</c> artifact.
 /// <para>
-/// Everything derivable from the central directory — the entry count, each name, duplicate normalized names, a
-/// symbolic-link entry — is checked before a single entry byte is written. The caps that need the content
-/// (expanded size, ratio, nesting) abort at the first breach, and when extraction is offered they are proven by
-/// a non-extracting pass over the same bounded bytes before the extraction pass runs, so a content-derived
-/// breach never leaves even a partial file: the root is created by the extraction pass alone. Every file is then
-/// written under that unique temporary root, which this class owns and deletes on dispose or failure, each
-/// destination path is re-checked against the root after normalization, and no existing file is overwritten
-/// (<see cref="FileMode.CreateNew"/>) or followed.
+/// Everything derivable from the central directory — the declared entry count, each name, duplicate normalized
+/// names, a symbolic-link entry — is checked before a single entry byte is written. The caps that need the
+/// content (expanded size, ratio, nesting) abort at the first breach, and when extraction is offered they are
+/// proven by a non-extracting pass over the same bounded bytes before the extraction pass runs, so a
+/// content-derived breach never leaves even a partial file: the root is created by the extraction pass alone.
+/// Every file is then written under that unique temporary root, which this class owns and deletes on dispose or
+/// failure, each destination path is re-checked against the root after normalization, and no existing file is
+/// overwritten (<see cref="FileMode.CreateNew"/>) or followed.
 /// </para>
 /// <para>
-/// The walk is synchronous and its <c>ParsingLimits.ParseTimeout</c> is cooperative — checked between reads, so
-/// a caller MUST pass an already-buffered, bounded stream; hard isolation from a runaway walk is 06.3.6. No
-/// failure message, reason or metric ever carries an entry name or an artifact byte (00 §5.7 S3).
+/// A nested archive is recognized by the leading PK magic of the entry's content alone, never by its name: a
+/// <c>.zip</c> entry whose content is not a zip is not recursed into, and an entry that is one is recursed
+/// whatever it is called. Because the nested archive is bounded and re-validated here, a consumer that later
+/// opens an extracted file must run it through this profile again rather than trusting the extraction
+/// (hand-over to 04.4.1's trace mapper and 06.3.4's report bundle reader).
+/// </para>
+/// <para>
+/// The walk is synchronous and its <c>ParsingLimits.ParseTimeout</c> is cooperative — checked between entries and
+/// between reads, so a caller MUST pass an already-buffered, bounded stream; hard isolation from a runaway walk
+/// is 06.3.6. The walk's own footprint is the bounding buffer (the kind's byte cap) plus the expanded budget,
+/// with at most one nested archive buffered at a time; a process-wide memory or concurrency bound, and spooling a
+/// large object to a temp file instead of holding it, belong to 06.3.6 rather than to this profile (recorded as
+/// the 06.3.1-T2 perf hand-over). No failure message, reason or metric ever carries an entry name or an artifact
+/// byte (00 §5.7 S3).
 /// </para>
 /// </summary>
 internal static class SafeZipArchive
@@ -39,6 +52,36 @@ internal static class SafeZipArchive
 
     /// <summary>The Unix <c>S_IFLNK</c> file type: a symbolic link, which the profile never follows.</summary>
     private const int UnixSymlinkType = 0xA000;
+
+    /// <summary>The classic end-of-central-directory signature (<c>PK\x05\x06</c>).</summary>
+    private const uint EndOfCentralDirectorySignature = 0x0605_4B50;
+
+    /// <summary>The classic end-of-central-directory record's fixed length, before its comment.</summary>
+    private const int EndOfCentralDirectoryLength = 22;
+
+    /// <summary>Where the classic record's total entry count sits, relative to its signature.</summary>
+    private const int EndOfCentralDirectoryTotalEntriesOffset = 10;
+
+    /// <summary>Where the classic record's comment length sits, relative to its signature.</summary>
+    private const int EndOfCentralDirectoryCommentLengthOffset = 20;
+
+    /// <summary>The largest comment a classic record can declare (a <c>ushort</c>).</summary>
+    private const int MaxEndOfCentralDirectoryComment = 0xFFFF;
+
+    /// <summary>The ZIP64 end-of-central-directory locator's signature (<c>PK\x06\x07</c>).</summary>
+    private const uint Zip64LocatorSignature = 0x0706_4B50;
+
+    /// <summary>The locator's fixed length; its ZIP64 record offset sits at <c>+8</c>.</summary>
+    private const int Zip64LocatorLength = 20;
+
+    /// <summary>The ZIP64 end-of-central-directory record's signature (<c>PK\x06\x06</c>).</summary>
+    private const uint Zip64RecordSignature = 0x0606_4B50;
+
+    /// <summary>The ZIP64 record's fixed length, which holds its total entry count at <c>+32</c>.</summary>
+    private const int Zip64RecordLength = 40;
+
+    /// <summary>Where the ZIP64 record's total entry count sits, relative to its signature.</summary>
+    private const int Zip64RecordTotalEntriesOffset = 32;
 
     /// <summary>
     /// Enumerates one archive against the profile and returns its entry metadata. No entry content is returned
@@ -88,6 +131,12 @@ internal static class SafeZipArchive
     /// <param name="options">The caps for this walk.</param>
     /// <param name="cancellationToken">The caller's cancellation; a caller cancellation is never swallowed.</param>
     /// <returns>The extraction handle (dispose it to delete the tree), or the profile failure.</returns>
+    /// <remarks>
+    /// No production path extracts an archive yet — <see cref="Enumerate"/> is what the <c>complete</c> verifier
+    /// calls, and extraction is the arm the trace and report-bundle consumers (04.4.1, 06.3.4) will call. A
+    /// consumer that feeds an extracted file to a parser MUST run it back through this profile: the file is
+    /// validated only for what this walk read of it.
+    /// </remarks>
     internal static Result<ArchiveExtraction> Extract(
         Stream content,
         long maxBytes,
@@ -126,6 +175,7 @@ internal static class SafeZipArchive
         var token = timeoutSource.Token;
 
         var state = new WalkState(options.MaxExpandedBytes);
+        var handedOver = false;
 
         try
         {
@@ -140,65 +190,78 @@ internal static class SafeZipArchive
                 using var probe = new MemoryStream(buffer, 0, length, writable: false);
                 using var probeSource = new CountingStream(probe);
 
-                _ = WalkArchive(probeSource, options, probeState, extract: false, depth: 1, token);
+                _ = WalkArchive(
+                    probeSource, buffer.AsSpan(0, length), options, probeState, extract: false, depth: 1, token);
             }
 
             using var memory = new MemoryStream(buffer, 0, length, writable: false);
             using var source = new CountingStream(memory);
 
-            var entries = WalkArchive(source, options, state, extract, depth: 1, token);
+            var entries = WalkArchive(
+                source, buffer.AsSpan(0, length), options, state, extract, depth: 1, token);
+            var walk = Result.Success(new ArchiveWalk(entries, state.Root));
+            handedOver = true;
 
-            return Result.Success(new ArchiveWalk(entries, state.Root));
+            return walk;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // The caller's own cancellation propagates; only the profile's timeout becomes a failure value.
-            DeleteTree(state.Root);
             return Result.Failure<ArchiveWalk>(ParsingFailure.For(ParsingFailureReason.Timeout));
         }
         catch (ContentTooLongException)
         {
             // The bounded read refused the object: it is longer than the kind's cap.
-            DeleteTree(state.Root);
             return Result.Failure<ArchiveWalk>(ParsingFailure.For(ParsingFailureReason.SizeExceeded));
         }
         catch (ArchiveLimitException limit)
         {
-            DeleteTree(state.Root);
             return Result.Failure<ArchiveWalk>(ParsingFailure.For(limit.Reason));
         }
-        catch (InvalidDataException)
+        catch (Exception exception) when (exception is not OutOfMemoryException && !cancellationToken.IsCancellationRequested)
         {
-            // ZipArchive reports a truncated or non-zip object through InvalidDataException — malformed content,
-            // not a breached cap.
-            DeleteTree(state.Root);
-            return Result.Failure<ArchiveWalk>(ParsingFailure.For(ParsingFailureReason.Malformed));
+            // ZipArchive reports a truncated or non-zip object, and the file system a destination it cannot
+            // materialize, as ordinary exceptions; an entry shape the profile did not anticipate can surface as
+            // another. None of them may escape as a 500 (00 §5.7 S5), so they all end a failure value — timeout
+            // when the profile's own cap fired, malformed otherwise. An out-of-memory condition is left to the
+            // host: it says nothing about one artifact.
+            var reason = token.IsCancellationRequested
+                ? ParsingFailureReason.Timeout
+                : ParsingFailureReason.Malformed;
+
+            return Result.Failure<ArchiveWalk>(ParsingFailure.For(reason));
         }
-        catch (IOException)
+        finally
         {
-            // The file system refused a destination (a path component is a file, a name longer than the volume
-            // allows): an archive that cannot be materialized is malformed, and its partial tree is removed.
-            DeleteTree(state.Root);
-            return Result.Failure<ArchiveWalk>(ParsingFailure.For(ParsingFailureReason.Malformed));
+            if (!handedOver)
+            {
+                // One cleanup point: a rejected object, a caller cancellation and an abandoned run all leave no
+                // partial tree, and a successful extraction passes its root to the handle that owns it.
+                DeleteTree(state.Root);
+            }
         }
     }
 
     /// <summary>
-    /// Walks one archive (a top-level object or a nested zip already buffered): validates the whole central
+    /// Walks one archive (a top-level object or a nested zip already buffered): refuses a declared entry count
+    /// over the cap before <see cref="ZipArchive"/> materializes the directory, then validates the whole central
     /// directory, then reads every entry under the caps. Returns this level's entry metadata; a nested archive's
     /// entries are validated but not returned.
     /// </summary>
     private static List<ArchiveEntry> WalkArchive(
         CountingStream source,
+        ReadOnlySpan<byte> bytes,
         ZipArchiveOptions options,
         WalkState state,
         bool extract,
         int depth,
         CancellationToken token)
     {
+        CheckDeclaredEntryCount(bytes, options);
+
         using var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true);
 
-        var validated = ValidateDirectory(archive, options);
+        var validated = ValidateDirectory(archive, options, token);
 
         if (extract && state.Root is null)
         {
@@ -246,7 +309,6 @@ internal static class SafeZipArchive
         token.ThrowIfCancellationRequested();
 
         var entry = candidate.Entry;
-        var compressedDeclared = entry.CompressedLength;
 
         using var stream = entry.Open();
 
@@ -293,7 +355,11 @@ internal static class SafeZipArchive
 
                 expanded += read;
                 state.Charge(read);
-                CheckRatio(expanded, compressedDeclared, options);
+
+                // Both sides of the ratio are measured from what actually happened by now: the bytes read out of
+                // the entry against the bytes consumed for it. A bomb therefore hits the cap while it is still
+                // being read, before it is buffered whole, and a lying declared length cannot widen the allowance.
+                CheckRatio(expanded, source.BytesRead - compressedBefore, options);
 
                 destination?.Write(scratch, 0, read);
                 nested?.Write(scratch, 0, read);
@@ -301,24 +367,23 @@ internal static class SafeZipArchive
 
             var compressedRead = source.BytesRead - compressedBefore;
 
-            // The final ratio uses the bytes actually consumed (the inner check above ran on the declared length,
-            // so a bomb is refused early, without buffering it whole).
-            CheckRatio(expanded, compressedRead > 0 ? compressedRead : compressedDeclared, options);
-
             if (nested is not null)
             {
                 nested.Position = 0;
 
                 // A nested archive is walked for its caps and its names only: its children are not written, so
                 // a nested path can never collide with a top-level destination inside the same root.
+                var nestedBytes = nested.GetBuffer().AsSpan(0, (int)nested.Length);
+
                 using var nestedSource = new CountingStream(nested);
-                _ = WalkArchive(nestedSource, options, state, extract: false, depth + 1, token);
+                _ = WalkArchive(nestedSource, nestedBytes, options, state, extract: false, depth + 1, token);
             }
 
             return new ArchiveEntry(candidate.Normalized, compressedRead, expanded, IsDirectory: false);
         }
         finally
         {
+            // Cleared on return: the scratch held untrusted artifact bytes and the pool is shared process-wide.
             ArrayPool<byte>.Shared.Return(scratch, clearArray: true);
             nested?.Dispose();
         }
@@ -326,9 +391,13 @@ internal static class SafeZipArchive
 
     /// <summary>
     /// The central-directory pass: the entry count, then each entry's name (normalized and validated), its
-    /// duplicate check and its symbolic-link flag. Throws before any byte is written.
+    /// duplicate check and its symbolic-link flag. The ancestor folders of every name are collected in the same
+    /// pass, so the one file-shadows-a-folder check at the end is a set lookup. Throws before any byte is written.
     /// </summary>
-    private static List<Candidate> ValidateDirectory(ZipArchive archive, ZipArchiveOptions options)
+    private static List<Candidate> ValidateDirectory(
+        ZipArchive archive,
+        ZipArchiveOptions options,
+        CancellationToken token)
     {
         if (archive.Entries.Count > options.MaxEntries)
         {
@@ -336,10 +405,16 @@ internal static class SafeZipArchive
         }
 
         var validated = new List<Candidate>(archive.Entries.Count);
-        var seen = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // An alternate lookup so the ancestor walk compares spans and allocates no substring for a name.
+        var folderLookup = folders.GetAlternateLookup<ReadOnlySpan<char>>();
 
         foreach (var entry in archive.Entries)
         {
+            token.ThrowIfCancellationRequested();
+
             var isDirectory = entry.FullName.EndsWith('/');
 
             if (IsSymbolicLink(entry) || !TryNormalize(entry.FullName, out var normalized))
@@ -347,9 +422,32 @@ internal static class SafeZipArchive
                 throw new ArchiveLimitException(ParsingFailureReason.UnsafeEntryName);
             }
 
-            if (!seen.TryAdd(normalized, isDirectory))
+            if (!seen.Add(normalized))
             {
                 throw new ArchiveLimitException(ParsingFailureReason.DuplicateEntry);
+            }
+
+            var name = normalized.AsSpan();
+
+            if (isDirectory)
+            {
+                folderLookup.Add(name);
+            }
+
+            // Every ancestor folder of this name, so one pass over the names yields the whole set of paths that
+            // have to be folders.
+            var offset = 0;
+            while (true)
+            {
+                var relative = name[offset..].IndexOf('/');
+                if (relative < 0)
+                {
+                    break;
+                }
+
+                offset += relative;
+                folderLookup.Add(name[..offset]);
+                offset++;
             }
 
             validated.Add(new Candidate(entry, normalized, isDirectory));
@@ -359,22 +457,9 @@ internal static class SafeZipArchive
         // without one shadowing the other, so it is refused here, from the central directory alone.
         foreach (var candidate in validated)
         {
-            if (candidate.IsDirectory)
+            if (!candidate.IsDirectory && folderLookup.Contains(candidate.Normalized.AsSpan()))
             {
-                continue;
-            }
-
-            var separator = candidate.Normalized.LastIndexOf('/');
-            while (separator > 0)
-            {
-                var ancestor = candidate.Normalized[..separator];
-
-                if (seen.TryGetValue(ancestor, out var ancestorIsDirectory) && !ancestorIsDirectory)
-                {
-                    throw new ArchiveLimitException(ParsingFailureReason.DuplicateEntry);
-                }
-
-                separator = candidate.Normalized.LastIndexOf('/', separator - 1);
+                throw new ArchiveLimitException(ParsingFailureReason.DuplicateEntry);
             }
         }
 
@@ -390,9 +475,16 @@ internal static class SafeZipArchive
 
     /// <summary>
     /// Normalizes one archive entry name: rejects a backslash separator, a drive letter or <c>:</c>, an absolute
-    /// (leading <c>/</c>) name and any control character (NUL included); collapses <c>//</c> and <c>.</c>
-    /// segments so <c>a//b</c> and <c>A/./b</c> normalize to the same path (and so collide as a duplicate); and
-    /// rejects any <c>..</c> segment, so no normalized name can leave its root. Returns false for an unsafe name.
+    /// (leading <c>/</c>) name, a name longer than <see cref="ParsingLimits.MaxEntryNameLength"/> or deeper than
+    /// <see cref="ParsingLimits.MaxEntryNameSegments"/>, a character that does not render as itself (a control,
+    /// format, line/paragraph separator or private-use character, or an unpaired surrogate), and a segment ending
+    /// in <c>.</c> or a space; collapses <c>//</c> and <c>.</c> segments so <c>a//b</c> and <c>A/./b</c>
+    /// normalize to the same path (and so collide as a duplicate); and rejects any <c>..</c> segment, so no
+    /// normalized name can leave its root. Returns false for an unsafe name.
+    /// <para>
+    /// The two bounds are checked before <see cref="string.Split(char)"/> so a hostile name cannot ask for a
+    /// large allocation, and everything else stays linear in the name's own length.
+    /// </para>
     /// <para>
     /// Internal rather than private so the AC4 normalization tests can assert the guard directly, including the
     /// names a <see cref="ZipArchive"/> writer cannot represent (an empty name); the walk still applies it to
@@ -403,12 +495,23 @@ internal static class SafeZipArchive
     {
         normalized = string.Empty;
 
-        if (string.IsNullOrEmpty(raw) || raw.StartsWith('/') || raw.Contains('\\') || raw.Contains(':'))
+        if (string.IsNullOrEmpty(raw) || raw.Length > ParsingLimits.MaxEntryNameLength)
+        {
+            return false;
+        }
+
+        if (raw.StartsWith('/') || raw.Contains('\\') || raw.Contains(':'))
         {
             return false;
         }
 
         var segments = raw.Split('/');
+
+        if (segments.Length > ParsingLimits.MaxEntryNameSegments)
+        {
+            return false;
+        }
+
         var kept = new List<string>(segments.Length);
 
         foreach (var segment in segments)
@@ -419,17 +522,9 @@ internal static class SafeZipArchive
                 continue;
             }
 
-            if (segment == "..")
+            if (segment == ".." || !IsRenderable(segment) || segment[^1] is '.' or ' ')
             {
                 return false;
-            }
-
-            foreach (var character in segment)
-            {
-                if (char.IsControl(character))
-                {
-                    return false;
-                }
             }
 
             kept.Add(segment);
@@ -445,6 +540,50 @@ internal static class SafeZipArchive
         return true;
     }
 
+    /// <summary>
+    /// True when every character of one segment renders as itself: a control character, a format character (a
+    /// bidi override such as U+202E, a zero-width space such as U+200B), a line or paragraph separator
+    /// (U+2028/U+2029), a private-use character or an unpaired surrogate is refused, because a name containing
+    /// one reads as something other than the path it resolves to.
+    /// </summary>
+    private static bool IsRenderable(string segment)
+    {
+        for (var index = 0; index < segment.Length; index++)
+        {
+            var character = segment[index];
+
+            if (char.IsControl(character) || HasUnsafeCategory(character))
+            {
+                return false;
+            }
+
+            if (char.IsHighSurrogate(character))
+            {
+                if (index + 1 >= segment.Length || !char.IsLowSurrogate(segment[index + 1]))
+                {
+                    return false;
+                }
+
+                // A valid pair is one supplementary code point, so its low half is consumed here.
+                index++;
+            }
+            else if (char.IsLowSurrogate(character))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The Unicode categories the profile refuses outright in a name.</summary>
+    private static bool HasUnsafeCategory(char character) =>
+        char.GetUnicodeCategory(character) is
+            UnicodeCategory.Format
+            or UnicodeCategory.LineSeparator
+            or UnicodeCategory.ParagraphSeparator
+            or UnicodeCategory.PrivateUse;
+
     /// <summary>True when the leading bytes are a zip signature (local header, or an empty/spanned archive).</summary>
     private static bool IsZipMagic(ReadOnlySpan<byte> prefix) =>
         prefix.Length >= ZipMagicBytes
@@ -453,6 +592,88 @@ internal static class SafeZipArchive
         && ((prefix[2] == 3 && prefix[3] == 4)
             || (prefix[2] == 5 && prefix[3] == 6)
             || (prefix[2] == 7 && prefix[3] == 8));
+
+    /// <summary>
+    /// Refuses an archive whose end-of-central-directory record declares more entries than the profile allows,
+    /// before <see cref="ZipArchive"/> materializes the directory: the declared count is the whole-directory cost
+    /// a hostile object can announce, and a few hundred bytes can announce millions. A record that is missing,
+    /// truncated or inconsistent is left to the normal <c>malformed</c> path.
+    /// </summary>
+    private static void CheckDeclaredEntryCount(ReadOnlySpan<byte> bytes, ZipArchiveOptions options)
+    {
+        if (!TryFindEndOfCentralDirectory(bytes, out var endOfCentralDirectory))
+        {
+            return;
+        }
+
+        // A ZIP64 archive points at its own record from a locator directly before the classic one.
+        var locator = endOfCentralDirectory - Zip64LocatorLength;
+        var zip64Window = bytes.Length - Zip64RecordLength;
+
+        if (locator >= 0 && zip64Window >= 0 && ReadUInt32(bytes, locator) == Zip64LocatorSignature)
+        {
+            var record = ReadUInt64(bytes, locator + 8);
+
+            if (record <= (ulong)zip64Window && ReadUInt32(bytes, (int)record) == Zip64RecordSignature)
+            {
+                if (ReadUInt64(bytes, (int)record + Zip64RecordTotalEntriesOffset) > (ulong)options.MaxEntries)
+                {
+                    throw new ArchiveLimitException(ParsingFailureReason.EntryCountExceeded);
+                }
+
+                return;
+            }
+        }
+
+        // The classic count. A ZIP64 archive's classic record carries the 0xFFFF marker instead of a real count,
+        // and that is over any cap the profile sets, so a ZIP64 record the locator did not point at still fails
+        // closed rather than passing.
+        if (ReadUInt16(bytes, endOfCentralDirectory + EndOfCentralDirectoryTotalEntriesOffset) > options.MaxEntries)
+        {
+            throw new ArchiveLimitException(ParsingFailureReason.EntryCountExceeded);
+        }
+    }
+
+    /// <summary>
+    /// Locates the classic end-of-central-directory record: the last occurrence whose declared comment length
+    /// reaches exactly to the end of the object, which is what tells the real record apart from the same four
+    /// bytes appearing inside a comment. Returns false when the object has no such record.
+    /// </summary>
+    private static bool TryFindEndOfCentralDirectory(ReadOnlySpan<byte> bytes, out int index)
+    {
+        index = -1;
+
+        var earliest = Math.Max(0, bytes.Length - EndOfCentralDirectoryLength - MaxEndOfCentralDirectoryComment);
+
+        for (var candidate = bytes.Length - EndOfCentralDirectoryLength; candidate >= earliest; candidate--)
+        {
+            if (ReadUInt32(bytes, candidate) != EndOfCentralDirectorySignature)
+            {
+                continue;
+            }
+
+            if (candidate + EndOfCentralDirectoryLength
+                + ReadUInt16(bytes, candidate + EndOfCentralDirectoryCommentLengthOffset) == bytes.Length)
+            {
+                index = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>A little-endian 16-bit read at an offset the caller has already bounded.</summary>
+    private static ushort ReadUInt16(ReadOnlySpan<byte> bytes, int offset) =>
+        BinaryPrimitives.ReadUInt16LittleEndian(bytes[offset..]);
+
+    /// <summary>A little-endian 32-bit read at an offset the caller has already bounded.</summary>
+    private static uint ReadUInt32(ReadOnlySpan<byte> bytes, int offset) =>
+        BinaryPrimitives.ReadUInt32LittleEndian(bytes[offset..]);
+
+    /// <summary>A little-endian 64-bit read at an offset the caller has already bounded.</summary>
+    private static ulong ReadUInt64(ReadOnlySpan<byte> bytes, int offset) =>
+        BinaryPrimitives.ReadUInt64LittleEndian(bytes[offset..]);
 
     /// <summary>Refuses an entry whose expanded bytes exceed the profile ratio times its compressed bytes.</summary>
     private static void CheckRatio(long expanded, long compressed, ZipArchiveOptions options)
@@ -503,11 +724,25 @@ internal static class SafeZipArchive
         return filled;
     }
 
-    /// <summary>The unique temporary root this class creates and owns, under the process temp directory.</summary>
+    /// <summary>
+    /// The unique temporary root this class creates and owns, under the process temp directory. On a Unix-like
+    /// system it is created with owner-only permissions (0700): everything that will live under it is untrusted
+    /// artifact content, and the process temp directory itself is often shared.
+    /// </summary>
     private static string CreateRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "evidgate-parse-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
+
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(root);
+        }
+        else
+        {
+            Directory.CreateDirectory(
+                root,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
 
         return root;
     }
@@ -519,7 +754,8 @@ internal static class SafeZipArchive
     /// <summary>
     /// Opens one entry's destination file inside the root. The resolved path is checked against the root prefix
     /// after normalization (defense in depth: normalization already refuses <c>..</c> and absolute names) and
-    /// opened with <see cref="FileMode.CreateNew"/>, so an existing file is never overwritten or followed.
+    /// opened with <see cref="FileMode.CreateNew"/>, so an existing file is never overwritten or followed; on a
+    /// Unix-like system the file is created owner-only (0600), like the root it lives in.
     /// </summary>
     private static FileStream OpenDestination(WalkState state, Candidate candidate)
     {
@@ -527,7 +763,19 @@ internal static class SafeZipArchive
 
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
 
-        return new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.None,
+        };
+
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        return new FileStream(destination, options);
     }
 
     /// <summary>
@@ -691,6 +939,12 @@ internal sealed record ZipArchiveOptions(
 /// One validated archive extracted under a temporary root this handle owns (06.3.1 AC4). The root is created
 /// by the profile, every file inside it was written with <see cref="FileMode.CreateNew"/>, and
 /// <see cref="Dispose"/> deletes the whole tree, so extracted artifact bytes never survive a caller.
+/// <para>
+/// The handle is the profile's only extraction surface and today only the tests take one; a consumer (04.4.1's
+/// trace mapper, 06.3.4's report-bundle reader) owns the handle for as long as it reads the tree. A file inside
+/// the root was validated as archive content, not as a document: a consumer that parses one runs it through the
+/// profile again.
+/// </para>
 /// </summary>
 internal sealed class ArchiveExtraction : IDisposable
 {

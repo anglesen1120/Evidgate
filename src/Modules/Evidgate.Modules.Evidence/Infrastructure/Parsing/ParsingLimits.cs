@@ -45,6 +45,19 @@ internal static class ParsingLimits
     /// refused with <c>nesting_exceeded</c>.
     /// </summary>
     public const int MaxNesting = 2;
+
+    /// <summary>
+    /// The longest one entry name may be, in <see cref="char"/>s (06.3.1 AC4). The bound is what keeps name
+    /// normalization linear: without it a hostile central directory could hand the walk a single multi-megabyte
+    /// name, and every separator in it would cost a substring.
+    /// </summary>
+    public const int MaxEntryNameLength = 1024;
+
+    /// <summary>
+    /// The most path segments one entry name may hold (06.3.1 AC4); together with
+    /// <see cref="MaxEntryNameLength"/> it bounds the ancestor walk one name can ask for.
+    /// </summary>
+    public const int MaxEntryNameSegments = 64;
 }
 
 /// <summary>

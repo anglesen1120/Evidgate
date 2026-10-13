@@ -101,6 +101,34 @@ internal static class MediaSniffer
         return SniffResult.Mismatch;
     }
 
+    /// <summary>
+    /// True when the profile holds a signature for <paramref name="declaredMediaType"/> (06.3.1-T2.2), so
+    /// <see cref="Check"/> can decide a Match or a Mismatch from the leading bytes. A declared type with no
+    /// signature is a Mismatch by definition, so the caller can refuse the artifact without reading any bytes at
+    /// all (00 §5.7 P1: the <c>complete</c> hot path never issues a ranged GET it cannot use). The normalisation
+    /// is the one <see cref="Check"/> applies — parameters after <c>;</c> dropped, surrounding whitespace trimmed,
+    /// case-insensitive — so the two members always agree on which type is in the table.
+    /// </summary>
+    /// <param name="declaredMediaType">The declared <c>media_type</c>.</param>
+    /// <returns>True when the table holds a signature for the bare type.</returns>
+    public static bool HasSignature(string declaredMediaType)
+    {
+        if (string.IsNullOrWhiteSpace(declaredMediaType))
+        {
+            return false;
+        }
+
+        var bare = BareType(declaredMediaType.AsSpan());
+
+        return IsXml(bare)
+            || IsJson(bare)
+            || bare.Equals(HtmlType.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            || bare.Equals(ZipType.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            || bare.Equals(PngType.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            || bare.Equals(JpegType.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            || bare.Equals(Mp4Type.AsSpan(), StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>The bare type: the parameters after the first <c>;</c> are dropped, surrounding whitespace trimmed.</summary>
     private static ReadOnlySpan<char> BareType(ReadOnlySpan<char> declaredMediaType)
     {
@@ -217,7 +245,10 @@ internal static class MediaSniffer
     /// <summary>
     /// JSON must start with <c>{</c>, <c>[</c>, <c>"</c>, a number or one of the three literals; a literal
     /// only counts when it is a whole token (the prefix ends there or the next byte closes it), so
-    /// <c>falsey</c> contradicts a declared JSON type.
+    /// <c>falsey</c> contradicts a declared JSON type. Only UTF-8 (with or without a BOM) is recognised for the
+    /// JSON family: the profile's JSON parser reads UTF-8 bytes (<c>SafeJson</c>, 06.3.1-T1), so a wide-encoded
+    /// body is a <see cref="SniffResult.Mismatch"/> rather than a pass the parser could not honour — unlike the
+    /// XML family, whose parser accepts a BOM-named UTF-16/UTF-32 document.
     /// </summary>
     private static SniffResult CheckJson(ReadOnlySpan<byte> prefix)
     {

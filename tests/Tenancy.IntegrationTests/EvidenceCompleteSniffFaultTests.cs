@@ -6,6 +6,10 @@
 //   (b) the final object vanished between the post-copy HEAD and the final prefix read, so the read is null;
 //   (c) the staging prefix read finds the object gone (the 24 h lifecycle race), which must fall through to the
 //       copy/retry path rather than reject.
+//   (d) both prefix reads carry the ETag the preceding HEAD reported (the T2.2 pin), and
+//   (e) a 412 PreconditionFailed on either pinned read is a terminal rejection: the object was replaced, so the
+//       bytes are no longer the verified ones (staging: the copy never runs; final: already promoted, still
+//       rejected, never ready).
 // The decorator only wraps the adapter (ConfigureTestServices); every other seam is production. Expectations
 // come from the plan (06.3.1 §2 AC5, §7) and the shared contract, not from the current behaviour.
 #pragma warning disable CA1861
@@ -334,6 +338,114 @@ public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixtu
         world.Storage.PrefixReads.ShouldBe(2);
     }
 
+    // ------------------------------------------- (d) the conditional read carries the HEAD ETag (T2.2 pinning)
+
+    /// <summary>
+    /// 06.3.1-T2.2: both prefix reads are pinned to the ETag the preceding <c>HEAD</c> reported — the staging read
+    /// to the staging <c>HEAD</c>, the final read to the post-copy re-<c>HEAD</c> of the promoted object. The
+    /// assertion compares against the ETags the store actually reported, so passing <c>null</c> (an unpinned read)
+    /// fails it.
+    /// </summary>
+    [Fact]
+    public async Task Complete_PinsBothPrefixReadsToTheHeadETags()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        await InsertXmlPolicyAsync(world);
+
+        var (artifactId, stagingKey, finalKey) = await MintAndUploadAsync(world, runId, XmlBody, XmlType);
+
+        var answer = await CompleteAsync(world, artifactId, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Text("state").ShouldBe("ready");
+
+        var reads = world.Storage.ReadCalls.ToArray();
+        reads.Length.ShouldBe(2, "a signed declared type reads the staging prefix, then the final prefix");
+        reads[0].Key.ShouldBe(stagingKey);
+        reads[1].Key.ShouldBe(finalKey);
+
+        var stagingETag = world.Storage.HeadETags[stagingKey];
+        var finalETag = world.Storage.HeadETags[finalKey];
+        stagingETag.ShouldNotBeNullOrWhiteSpace("SeaweedFS reports an ETag on the staging HEAD");
+        finalETag.ShouldNotBeNullOrWhiteSpace("SeaweedFS reports an ETag on the final re-HEAD");
+
+        reads[0].IfMatch.ShouldBe(stagingETag, "the staging read is pinned to the staging HEAD ETag");
+        reads[1].IfMatch.ShouldBe(finalETag, "the final read is pinned to the post-copy re-HEAD ETag");
+    }
+
+    // ------------------------------------------- (e) a 412 on the pinned read is terminal (T2.2)
+
+    /// <summary>
+    /// 06.3.1-T2.2: the staging prefix read is pinned to the staging <c>HEAD</c> ETag; a store that answers
+    /// <c>412 PreconditionFailed</c> (the object was replaced between the <c>HEAD</c> and the read) means the bytes
+    /// a copy would promote are not the verified bytes. The completion is a committed 200
+    /// <c>rejected</c>/<c>object_missing</c> and the COPY NEVER RUNS — the final key is never created.
+    /// </summary>
+    [Fact]
+    public async Task Complete_StagingPrefixReadPreconditionFailed_RejectedObjectMissing_NoCopy()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        await InsertXmlPolicyAsync(world);
+
+        var (artifactId, stagingKey, finalKey) = await MintAndUploadAsync(world, runId, XmlBody, XmlType);
+
+        world.Storage.PreconditionFailedKeys.Add(stagingKey);
+
+        var answer = await CompleteAsync(world, artifactId, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Text("state").ShouldBe("rejected");
+        answer.Text("failure_code").ShouldBe("object_missing");
+        (await ArtifactColumnAsync(world, artifactId, "state")).ShouldBe("rejected");
+        (await ArtifactColumnAsync(world, artifactId, "failure_code")).ShouldBe("object_missing");
+
+        // The staging read carried the pin the staging HEAD reported (a null would not be pinned).
+        world.Storage.ReadCalls.Single().IfMatch.ShouldBe(
+            world.Storage.HeadETags[stagingKey], "the refused read was pinned to the staging HEAD ETag");
+
+        // Terminal: the refusal is decided before the promotion, so the copy never ran.
+        (await _store.ExistsAsync(finalKey)).ShouldBeFalse("a replaced staging object is never promoted");
+        (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(0);
+        (await OutboxCountAsync(world, StagingDeleteTask, artifactId)).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// 06.3.1-T2.2: the final prefix read is pinned to the ETag the post-copy re-<c>HEAD</c> reported; a
+    /// <c>412</c> means the final object is no longer the one just verified, so the completion is a committed 200
+    /// <c>rejected</c>/<c>object_missing</c> — never <c>ready</c>, even though the promotion already ran.
+    /// </summary>
+    [Fact]
+    public async Task Complete_FinalPrefixReadPreconditionFailed_RejectedObjectMissing()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        await InsertXmlPolicyAsync(world);
+
+        var (artifactId, stagingKey, finalKey) = await MintAndUploadAsync(world, runId, XmlBody, XmlType);
+
+        world.Storage.PreconditionFailedKeys.Add(finalKey);
+
+        var answer = await CompleteAsync(world, artifactId, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Text("state").ShouldBe("rejected");
+        answer.Text("failure_code").ShouldBe("object_missing");
+        (await ArtifactColumnAsync(world, artifactId, "failure_code")).ShouldBe("object_missing");
+
+        var reads = world.Storage.ReadCalls.ToArray();
+        reads.Length.ShouldBe(2, "the staging read matched, then the final read was refused");
+        reads[0].Key.ShouldBe(stagingKey);
+        reads[0].IfMatch.ShouldBe(world.Storage.HeadETags[stagingKey], "the staging read is pinned");
+        reads[1].Key.ShouldBe(finalKey);
+        reads[1].IfMatch.ShouldBe(world.Storage.HeadETags[finalKey], "the final read is pinned to the re-HEAD ETag");
+
+        (await _store.ExistsAsync(finalKey)).ShouldBeTrue("the promotion ran before the final read refused it");
+        (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(0);
+        (await OutboxCountAsync(world, StagingDeleteTask, artifactId)).ShouldBe(0);
+    }
+
     private static byte[] BuildPngBody()
     {
         var body = new byte[256];
@@ -366,6 +478,16 @@ internal sealed class FaultInjectingObjectStorage : IObjectStorage, IDisposable
     /// ETag the preceding <c>HEAD</c> reported), regardless of the store (06.3.1-T2.2).
     /// </summary>
     public HashSet<string> PreconditionFailedKeys { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>The ETag the last <c>HEAD</c> of each key reported, so a test can prove a read was pinned to it.</summary>
+    public ConcurrentDictionary<string, string?> HeadETags { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Every prefix read in order, with the <c>If-Match</c> the caller passed: the pinning proof (06.3.1-T2.2).
+    /// The entry is recorded before any short-circuit, so an injected <c>null</c> or <c>412</c> read still shows
+    /// the ETag the verifier passed.
+    /// </summary>
+    public ConcurrentQueue<(string Key, string? IfMatch)> ReadCalls { get; } = new();
 
     /// <summary>
     /// Replaces the prefix response for a key's nth read (1-based) when it returns a non-null array; returning
@@ -400,8 +522,16 @@ internal sealed class FaultInjectingObjectStorage : IObjectStorage, IDisposable
     public PresignedPut PresignPut(PresignPutRequest request) => Inner().PresignPut(request);
 
     /// <inheritdoc />
-    public Task<ObjectHead?> HeadAsync(string objectKey, CancellationToken cancellationToken) =>
-        Inner().HeadAsync(objectKey, cancellationToken);
+    public async Task<ObjectHead?> HeadAsync(string objectKey, CancellationToken cancellationToken)
+    {
+        var head = await Inner().HeadAsync(objectKey, cancellationToken).ConfigureAwait(false);
+        if (head is not null)
+        {
+            HeadETags[objectKey] = head.ETag;
+        }
+
+        return head;
+    }
 
     /// <inheritdoc />
     public Task<byte[]?> ReadPrefixAsync(
@@ -409,6 +539,7 @@ internal sealed class FaultInjectingObjectStorage : IObjectStorage, IDisposable
     {
         Interlocked.Increment(ref _prefixReads);
         var index = _readsPerKey.AddOrUpdate(objectKey, 1, (_, previous) => previous + 1);
+        ReadCalls.Enqueue((objectKey, ifMatch));
 
         if (AbsentPrefixKeys.Contains(objectKey))
         {

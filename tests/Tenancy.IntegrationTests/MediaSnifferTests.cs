@@ -85,7 +85,7 @@ public sealed class MediaSnifferTests
         MediaSniffer.Check("application/xml", Utf16("plain", littleEndian: false)).ShouldBe(SniffResult.Mismatch);
 
         // A prefix cut inside a code unit is a mismatch (fail closed), never an exception.
-        MediaSniffer.Check("application/xml", [0xFF, 0xFE, (byte)'<']).ShouldBe(SniffResult.Mismatch);
+        Sniff("application/xml", "\u00FF\u00FE<").ShouldBe(SniffResult.Mismatch);
     }
 
     [Theory]
@@ -151,7 +151,7 @@ public sealed class MediaSnifferTests
         MediaSniffer.Check("APPLICATION/ZIP; version=2", EmptyZipMagic).ShouldBe(SniffResult.Match);
 
         // A Playwright trace / report bundle begins with the local header followed by the rest of the entry.
-        MediaSniffer.Check("application/zip", [.. ZipMagic, 0x14, 0x00, 0x00, 0x00]).ShouldBe(SniffResult.Match);
+        Sniff("application/zip", "PK\u0003\u0004\u0014\u0000\u0000\u0000").ShouldBe(SniffResult.Match);
     }
 
     [Theory]
@@ -170,10 +170,10 @@ public sealed class MediaSnifferTests
     public void DeclaredPngMatchesOnlyTheExactEightByteSignature()
     {
         MediaSniffer.Check("image/png", PngMagic).ShouldBe(SniffResult.Match);
-        MediaSniffer.Check("IMAGE/PNG", [.. PngMagic, 0x00, 0x00, 0x00, 0x0D]).ShouldBe(SniffResult.Match);
+        Sniff("IMAGE/PNG", "\u0089PNG\r\n\u001A\n\u0000\u0000\u0000\r").ShouldBe(SniffResult.Match);
 
         MediaSniffer.Check("image/png", PngMagic.AsSpan(..7)).ShouldBe(SniffResult.Mismatch);
-        MediaSniffer.Check("image/png", [0x89, 0x50, 0x4E, 0x48, 0x0D, 0x0A, 0x1A, 0x0A]).ShouldBe(SniffResult.Mismatch);
+        Sniff("image/png", "\u0089PNH\r\n\u001A\n").ShouldBe(SniffResult.Mismatch);
         MediaSniffer.Check("image/png", ZipMagic).ShouldBe(SniffResult.Mismatch);
     }
 
@@ -181,10 +181,10 @@ public sealed class MediaSnifferTests
     public void DeclaredJpegMatchesOnlyTheSoiMarker()
     {
         MediaSniffer.Check("image/jpeg", JpegMagic).ShouldBe(SniffResult.Match);
-        MediaSniffer.Check("image/jpeg", [0xFF, 0xD8, 0xFF]).ShouldBe(SniffResult.Match);
+        Sniff("image/jpeg", "\u00FF\u00D8\u00FF").ShouldBe(SniffResult.Match);
 
-        MediaSniffer.Check("image/jpeg", [0xFF, 0xD8]).ShouldBe(SniffResult.Mismatch);
-        MediaSniffer.Check("image/jpeg", [0xFF, 0xD8, 0x00]).ShouldBe(SniffResult.Mismatch);
+        Sniff("image/jpeg", "\u00FF\u00D8").ShouldBe(SniffResult.Mismatch);
+        Sniff("image/jpeg", "\u00FF\u00D8\u0000").ShouldBe(SniffResult.Mismatch);
         MediaSniffer.Check("image/jpeg", PngMagic).ShouldBe(SniffResult.Mismatch);
     }
 
@@ -192,8 +192,7 @@ public sealed class MediaSnifferTests
     public void DeclaredMp4MatchesAnFtypBoxWithAPlausibleSizeAndBrand()
     {
         MediaSniffer.Check("video/mp4", Mp4Magic).ShouldBe(SniffResult.Match);
-        MediaSniffer.Check("VIDEO/MP4; codecs=avc1", [0x00, 0x00, 0x00, 0x20, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'M', (byte)'4', (byte)'V', (byte)' '])
-            .ShouldBe(SniffResult.Match);
+        Sniff("VIDEO/MP4; codecs=avc1", "\u0000\u0000\u0000\u0020ftypM4V\u0020").ShouldBe(SniffResult.Match);
     }
 
     [Theory]
@@ -213,7 +212,7 @@ public sealed class MediaSnifferTests
     {
         // Fewer than 12 bytes cannot carry size + 'ftyp' + brand: fail closed, never a partial match.
         MediaSniffer.Check("video/mp4", Mp4Magic.AsSpan(..11)).ShouldBe(SniffResult.Mismatch);
-        MediaSniffer.Check("video/mp4", [0x00, 0x00, 0x00, 0x18, (byte)'f', (byte)'t', (byte)'y', (byte)'p']).ShouldBe(SniffResult.Mismatch);
+        Sniff("video/mp4", "\u0000\u0000\u0000\u0018ftyp").ShouldBe(SniffResult.Mismatch);
     }
 
     // ---------------------------------------------------------------- every type is sniffed or rejected
@@ -242,6 +241,56 @@ public sealed class MediaSnifferTests
         Sniff(declared, "<?xml version=\"1.0\"?>").ShouldBe(SniffResult.Mismatch);
         Sniff(declared, "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>x</script></svg>").ShouldBe(SniffResult.Mismatch);
         Sniff(declared, "").ShouldBe(SniffResult.Mismatch);
+    }
+
+    /// <summary>
+    /// 06.3.1-T2.2: <see cref="MediaSniffer.HasSignature"/> names exactly the declared types
+    /// <see cref="MediaSniffer.Check"/> can decide, so the completion can refuse an unsigned declared type without
+    /// issuing a prefix GET — and the two members can never disagree about what is in the table. The normalisation
+    /// is the one <see cref="MediaSniffer.Check"/> applies (parameters dropped, trimmed, case-insensitive).
+    /// </summary>
+    [Theory]
+    [InlineData("application/xml", true)]
+    [InlineData("text/xml", true)]
+    [InlineData("application/atom+xml", true)]
+    [InlineData("APPLICATION/XML; charset=utf-8", true)]
+    [InlineData("application/json", true)]
+    [InlineData("application/ld+json", true)]
+    [InlineData("text/html", true)]
+    [InlineData("TEXT/HTML; charset=utf-8", true)]
+    [InlineData("application/zip", true)]
+    [InlineData("image/png", true)]
+    [InlineData("image/jpeg", true)]
+    [InlineData("video/mp4", true)]
+    [InlineData("image/svg+xml", false)]
+    [InlineData("text/plain", false)]
+    [InlineData("application/octet-stream", false)]
+    [InlineData("application/pdf", false)]
+    [InlineData("application/xmlx", false)]
+    [InlineData("application/jsonx", false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    public void HasSignatureAgreesWithTheTable(string declared, bool expected) =>
+        MediaSniffer.HasSignature(declared).ShouldBe(expected);
+
+    /// <summary>
+    /// 06.3.1-T2.2: a declared type with no signature is a <see cref="SniffResult.Mismatch"/> for EVERY prefix, so
+    /// skipping the read for it (the completion's fail-closed shortcut) can never let an artifact through.
+    /// </summary>
+    [Fact]
+    public void AnUnsignedDeclaredTypeIsAlwaysAMismatch()
+    {
+        foreach (var declared in new[]
+                 {
+                     "image/svg+xml", "text/plain", "application/octet-stream", "application/pdf",
+                     "application/xmlx", string.Empty,
+                 })
+        {
+            MediaSniffer.HasSignature(declared).ShouldBeFalse();
+            MediaSniffer.Check(declared, Encoding.ASCII.GetBytes("<?xml version=\"1.0\"?>")).ShouldBe(SniffResult.Mismatch);
+            MediaSniffer.Check(declared, PngMagic).ShouldBe(SniffResult.Mismatch);
+            MediaSniffer.Check(declared, ReadOnlySpan<byte>.Empty).ShouldBe(SniffResult.Mismatch);
+        }
     }
 
     /// <summary>

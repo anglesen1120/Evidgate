@@ -23,6 +23,13 @@ public sealed class SafeZipArchiveTests
     /// <summary>The Unix <c>S_IFLNK</c> file type, in the upper 16 bits of <c>ExternalAttributes</c>.</summary>
     private const uint UnixSymlinkAttributes = (0xA000u | 0x1FFu) << 16;
 
+    /// <summary>The mode the profile creates its extraction root with: owner-only (0700).</summary>
+    private const UnixFileMode UserOnlyDirectory =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
+    /// <summary>The mode the profile creates every extracted file with: owner-only (0600).</summary>
+    private const UnixFileMode UserOnlyFile = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
     /// <summary>The normalized names the well-formed archive exposes, in archive order (CA1861).</summary>
     private static readonly string[] WellFormedNames =
     [
@@ -89,6 +96,37 @@ public sealed class SafeZipArchiveTests
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
         result.Error.Status.ShouldBe(422);
+        ReasonOf(result).ShouldBe(ParsingFailureReason.EntryCountExceeded);
+    }
+
+    [Fact]
+    public void RejectsADeclaredEntryCountOverTheCap()
+    {
+        // AC3: the count the end-of-central-directory record declares is the whole-directory cost a hostile object
+        // can announce, so it is refused before ZipArchive materializes the directory — the archive really holds
+        // one entry, but its record claims 0xFFFF, and the refusal is the cap rather than the mismatch that a
+        // directory-materializing read would report as malformed.
+        var archive = RawZip(("a.txt", Encoding.UTF8.GetBytes("x")));
+        PatchDeclaredEntryCount(archive, ushort.MaxValue);
+
+        var result = Enumerate(archive, MaxBytes, Options(maxEntries: 10));
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
+        ReasonOf(result).ShouldBe(ParsingFailureReason.EntryCountExceeded);
+    }
+
+    [Fact]
+    public void RejectsADeclaredEntryCountOverTheCapInAZip64Record()
+    {
+        // AC3: a ZIP64 archive keeps its real count in the ZIP64 record the locator points at. The classic record
+        // here declares a count the cap accepts, so only the ZIP64 record can produce the refusal.
+        var archive = Zip64WithDeclaredEntryCount(1_000_000);
+
+        var result = Enumerate(archive, MaxBytes, Options(maxEntries: 10));
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
         ReasonOf(result).ShouldBe(ParsingFailureReason.EntryCountExceeded);
     }
 
@@ -201,10 +239,54 @@ public sealed class SafeZipArchiveTests
     [InlineData("C:/x")]
     [InlineData("a\\b")]
     [InlineData("bad\u0001name")]
+    [InlineData("a\u202Eb")] // a bidi override: the name reads in one order and resolves in another
+    [InlineData("a\u200Bb")] // a zero-width space: an invisible character inside a path
+    [InlineData("a\u2028b")] // a line separator
+    [InlineData("a\u2029b")] // a paragraph separator
+    [InlineData("a\uE000b")] // a private-use character
+    [InlineData("a\uD800b")] // an unpaired high surrogate
+    [InlineData("a\uDC00b")] // an unpaired low surrogate
+    [InlineData("a.")] // a segment trailing a dot, which Windows strips
+    [InlineData("a ")] // a segment trailing a space, which Windows strips
+    [InlineData("a. ")]
     public void NormalizationRefusesUnsafeNames(string name)
     {
         // AC4: the guard itself, including the empty name a ZipArchive writer cannot store.
         SafeZipArchive.TryNormalize(name, out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void RejectsANameLongerThanTheProfileBound()
+    {
+        // AC4: the length bound is what keeps normalization linear — without it one entry name could be arbitrarily
+        // long, and every separator in it would cost a substring.
+        SafeZipArchive.TryNormalize(new string('a', ParsingLimits.MaxEntryNameLength + 1), out _).ShouldBeFalse();
+        SafeZipArchive.TryNormalize(new string('a', ParsingLimits.MaxEntryNameLength), out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void RejectsANameDeeperThanTheProfileSegmentBound()
+    {
+        // AC4: the segment bound bounds the ancestor walk one name can ask for. The names here are far inside the
+        // length bound, so only the segment count can produce the refusal.
+        var tooDeep = string.Join('/', Enumerable.Repeat("a", ParsingLimits.MaxEntryNameSegments + 1));
+        var atTheBound = string.Join('/', Enumerable.Repeat("a", ParsingLimits.MaxEntryNameSegments));
+
+        tooDeep.Length.ShouldBeLessThan(ParsingLimits.MaxEntryNameLength);
+        SafeZipArchive.TryNormalize(tooDeep, out _).ShouldBeFalse();
+        SafeZipArchive.TryNormalize(atTheBound, out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void NormalizationKeepsANonAsciiNameWithASurrogatePair()
+    {
+        // AC4: the character rule refuses what does not render as itself, never what does: a Vietnamese path and an
+        // astral code point (one surrogate pair) are kept verbatim.
+        const string Name = "báo cáo/\uD83D\uDE00.json";
+
+        SafeZipArchive.TryNormalize(Name, out var normalized).ShouldBeTrue();
+
+        normalized.ShouldBe(Name);
     }
 
     [Theory]
@@ -296,6 +378,17 @@ public sealed class SafeZipArchiveTests
             var written = Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories).ToArray();
             written.ShouldNotBeEmpty();
             written.ShouldAllBe(path => path.StartsWith(prefix, StringComparison.Ordinal));
+
+            if (!OperatingSystem.IsWindows())
+            {
+                // The root and every extracted file are owner-only: the tree holds untrusted artifact bytes under a
+                // process temp directory other local users can reach.
+                File.GetUnixFileMode(root).ShouldBe(UserOnlyDirectory);
+                foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                {
+                    File.GetUnixFileMode(file).ShouldBe(UserOnlyFile);
+                }
+            }
         }
         finally
         {
@@ -416,6 +509,25 @@ public sealed class SafeZipArchiveTests
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         result.Value.ShouldHaveSingleItem().Name.ShouldBe("a.txt");
+    }
+
+    [Fact]
+    public void ACallerCancellationPropagatesAndLeavesNoRoot()
+    {
+        // The profile never swallows a caller's cancellation: it propagates, and no extraction tree survives it.
+        // The token is cancelled on the stream's first read, so the walk is already inside the profile — the same
+        // place a cancellation mid-walk lands, where the walk's single cleanup point deletes the root it created.
+        var archive = CreateZip(("a.txt", Encoding.UTF8.GetBytes("x")));
+        var before = ParseRoots();
+        using var cancellation = new CancellationTokenSource();
+        using var content = new CancellingStream(archive, cancellation);
+
+        Should.Throw<OperationCanceledException>(() =>
+        {
+            _ = SafeZipArchive.Extract(content, MaxBytes, Options(), cancellation.Token);
+        });
+
+        ParseRoots().ShouldBe(before);
     }
 
     /// <summary>Scaled-down caps; the defaults the profile enforces are <see cref="ParsingLimits"/>.</summary>
@@ -551,6 +663,93 @@ public sealed class SafeZipArchiveTests
         writer.Flush();
 
         return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Rewrites the entry count a classic end-of-central-directory record declares. <see cref="RawZip"/> writes the
+    /// record without a comment, so it is the object's last 22 bytes and its count sits 10 bytes in.
+    /// </summary>
+    private static void PatchDeclaredEntryCount(byte[] archive, ushort declared)
+    {
+        var count = archive.Length - 22 + 10;
+
+        archive[count] = (byte)(declared & 0xFF);
+        archive[count + 1] = (byte)(declared >> 8);
+    }
+
+    /// <summary>
+    /// A ZIP64 end-of-central-directory record, its locator and a classic record, declaring
+    /// <paramref name="declared"/> entries in the ZIP64 record. The classic record's own count is inside any cap,
+    /// so the ZIP64 record is the only place the declared count can be read from.
+    /// </summary>
+    private static byte[] Zip64WithDeclaredEntryCount(ulong declared)
+    {
+        using var buffer = new MemoryStream();
+        using var writer = new BinaryWriter(buffer, Encoding.UTF8, leaveOpen: true);
+
+        // The ZIP64 record's fixed part: signature, the size of the rest, versions, disk numbers, then the entry
+        // count for this disk and the total.
+        writer.Write(0x06064b50u);
+        writer.Write(44ul);
+        writer.Write((ushort)45);
+        writer.Write((ushort)45);
+        writer.Write(0u);
+        writer.Write(0u);
+        writer.Write(declared);
+        writer.Write(declared);
+
+        // The locator, directly before the classic record, pointing at the ZIP64 record at offset 0.
+        writer.Write(0x07064b50u);
+        writer.Write(0u);
+        writer.Write(0ul);
+        writer.Write(1u);
+
+        // The classic record, with no comment and a count the cap accepts.
+        writer.Write(0x06054b50u);
+        writer.Write((ushort)0);
+        writer.Write((ushort)0);
+        writer.Write((ushort)1);
+        writer.Write((ushort)1);
+        writer.Write(0u);
+        writer.Write(0u);
+        writer.Write((ushort)0);
+        writer.Flush();
+
+        return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// A stream that cancels the caller's token on its first read, so a walk is interrupted while it is already
+    /// inside the profile.
+    /// </summary>
+    private sealed class CancellingStream(byte[] content, CancellationTokenSource cancellation) : MemoryStream(content)
+    {
+        private bool cancelled;
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Cancel();
+
+            return base.Read(buffer, offset, count);
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            Cancel();
+
+            return base.Read(buffer);
+        }
+
+        private void Cancel()
+        {
+            if (cancelled)
+            {
+                return;
+            }
+
+            cancelled = true;
+            cancellation.Cancel();
+        }
     }
 
     private static uint Crc32(ReadOnlySpan<byte> content)

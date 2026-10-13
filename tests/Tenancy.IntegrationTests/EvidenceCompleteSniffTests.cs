@@ -509,12 +509,13 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
     }
 
     /// <summary>
-    /// 06.3.1-T2.2 fail closed: a declared type outside the sniff table is still read (there is no
-    /// <c>IsSniffed</c> skip any more), and the read's verdict is a mismatch, so the artifact is rejected and never
-    /// promoted. The T1 "zero prefix reads for an unknown type" behaviour is gone.
+    /// 06.3.1-T2.2 fail closed without a read: a declared type the sniff table has no signature for can never be
+    /// verified, so the completion refuses it (<c>media_type_mismatch</c>) before the promotion and issues ZERO
+    /// <c>ReadPrefixAsync</c> calls — there is no prefix it could use (00 §5.7 P1). The artifact is never
+    /// promoted to the final key.
     /// </summary>
     [Fact]
-    public async Task Complete_DeclaredTypeOutsideTheSniffTable_IssuesAPrefixReadAndRejects()
+    public async Task Complete_DeclaredTypeOutsideTheSniffTable_IssuesNoPrefixReadAndRejects()
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
@@ -533,7 +534,7 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         answer.Text("state").ShouldBe("rejected");
         answer.Text("failure_code").ShouldBe("media_type_mismatch");
-        storage.PrefixReads.ShouldBeGreaterThan(0, "an out-of-table type is read and fails closed, never skipped");
+        storage.PrefixReads.ShouldBe(0, "an unsigned declared type is refused without any prefix read");
         (await OutboxCountAsync(world, SecretScanTask, artifactId)).ShouldBe(0);
         (await _store.ExistsAsync(finalKey)).ShouldBeFalse("a mismatching artifact is never copied to the final key");
     }

@@ -335,12 +335,37 @@ internal sealed class ArtifactCompletionVerifier(
     /// staging object are read and the declared media type is checked against them, so a mismatching artifact is
     /// never copied to the final key. The read is a storage call and runs with no transaction open, exactly like
     /// the <c>HEAD</c>s and the copy (00 §5.7 P5). The read is pinned to the ETag the staging <c>HEAD</c> reported
-    /// (<paramref name="stagingETag"/>), so the bytes are the verified object (06.3.1-T2.2). Returns the failure
-    /// code when the completion must be rejected — a <see cref="SniffResult.Mismatch"/> (every declared type is
-    /// sniffed now; a type outside the table is a mismatch, fail closed) or a store that reports the pinned object
-    /// changed (<c>412</c>, treated as <c>object_missing</c>: the verified object is gone) — or <c>null</c> when
-    /// the promotion may proceed. A prefix read that finds the staging object gone (the 24 h lifecycle) also
-    /// returns <c>null</c>: the copy then reports the missing source and the caller falls through to the retry path.
+    /// (<paramref name="stagingETag"/>), so the bytes are the verified object (06.3.1-T2.2).
+    /// <para>
+    /// Returns the failure code when the completion must be rejected, or <c>null</c> when the promotion may
+    /// proceed. Three branches decide it:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>
+    /// A declared type the profile has no signature for (<see cref="MediaSniffer.HasSignature"/> is false) is a
+    /// <c>media_type_mismatch</c> with NO read at all: it can never be verified, so the refusal is decided before
+    /// the promotion and both prefix GETs are skipped (06.3.1-T2.2, 00 §5.7 P1).
+    /// </item>
+    /// <item>
+    /// A <see cref="SniffResult.Mismatch"/> on the bytes read is a <c>media_type_mismatch</c>.
+    /// </item>
+    /// <item>
+    /// A store that refuses the conditional read because the object no longer carries the pinned ETag
+    /// (<c>412 PreconditionFailed</c>) is a TERMINAL <c>object_missing</c>: the object was replaced between the
+    /// <c>HEAD</c> and this read, so the bytes a copy would promote are not the bytes the size/checksum checks
+    /// verified, and the copy is never attempted. This is deliberately different from a staging read that finds
+    /// the object GONE (<c>null</c>, the 24 h lifecycle race): that returns <c>null</c> so the promotion proceeds
+    /// and the copy reports the missing source, letting the caller fall through to the retry path — an absent
+    /// object is recoverable, a replaced one is not.
+    /// </item>
+    /// </list>
+    /// <para>
+    /// When the store reports no ETag at <c>HEAD</c> (<paramref name="stagingETag"/> is <c>null</c>) the read is
+    /// unpinned — the store offers nothing to pin it to. That is bounded rather than fail-open: the promoted
+    /// object's own SHA-256 is re-<c>HEAD</c>ed after the copy and compared against the declared content address
+    /// (<c>checksum_mismatch</c>), so an object swapped in that window is still refused before the artifact
+    /// becomes <c>ready</c>.
+    /// </para>
     /// </summary>
     /// <param name="stagingKey">The derived <c>pending/</c> staging key.</param>
     /// <param name="facts">The declared facts of the row (the media type is sniffed against the bytes).</param>
@@ -349,6 +374,14 @@ internal sealed class ArtifactCompletionVerifier(
     private async ValueTask<string?> StagingSniffFailureAsync(
         string stagingKey, ArtifactFacts facts, string? stagingETag, CancellationToken cancellationToken)
     {
+        // Fail closed without a read (06.3.1-T2.2): a declared type the profile has no signature for can never be
+        // verified, so it is a Mismatch by definition. The refusal is decided here — before the promotion — and
+        // both prefix GETs are skipped, so an unsigned declared type costs no storage call (00 §5.7 P1).
+        if (!MediaSniffer.HasSignature(facts.MediaType))
+        {
+            return ArtifactFailureCode.MediaTypeMismatch;
+        }
+
         byte[]? prefix;
         try
         {
@@ -378,6 +411,13 @@ internal sealed class ArtifactCompletionVerifier(
     /// with <c>media_type_mismatch</c>; a prefix that is gone (the object vanished between the <c>HEAD</c> and
     /// this read) rejects with <c>object_missing</c>; a store that reports the pinned object changed (<c>412</c>)
     /// rejects with <c>object_missing</c> too — never a 500, never <c>ready</c>.
+    /// <para>
+    /// A declared type with no signature is a <c>media_type_mismatch</c> with no read here as well, the same
+    /// fail-closed rule the staging sniff applies (the staging sniff already refuses such an artifact, so this
+    /// arm is a belt-and-braces guard, not a reachable path). When the store reports no ETag at the final
+    /// <c>HEAD</c> (<paramref name="finalETag"/> is <c>null</c>) the read is unpinned; the SHA-256 comparison the
+    /// caller already ran against the final <c>HEAD</c> is what bounds that case.
+    /// </para>
     /// </summary>
     /// <param name="facts">The declared facts of the row (the media type is sniffed against the bytes).</param>
     /// <param name="verifiedBytes">The length the final <c>HEAD</c> reported, carried into an accepted verdict.</param>
@@ -386,6 +426,11 @@ internal sealed class ArtifactCompletionVerifier(
     private async ValueTask<ArtifactCompletionVerdict> SniffAsync(
         ArtifactFacts facts, long verifiedBytes, string? finalETag, CancellationToken cancellationToken)
     {
+        if (!MediaSniffer.HasSignature(facts.MediaType))
+        {
+            return ArtifactCompletionVerdict.Reject(ArtifactFailureCode.MediaTypeMismatch);
+        }
+
         byte[]? prefix;
         try
         {
