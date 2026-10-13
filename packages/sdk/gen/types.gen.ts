@@ -40,6 +40,11 @@ export type RunStateDto = {
     current_evidence_revision_id: string | null;
     version: number;
     purpose: 'regular' | 'replay';
+    ref: RunRef;
+    /**
+     * True when at least one stored identity value came from the request body instead of a verified CI claim (05.2.2-T1); false for a verified CI caller and for a run with no identity at all.
+     */
+    unverified_ref: boolean;
 };
 
 export type RunSummary = {
@@ -74,11 +79,54 @@ export type CreateRunRequest = {
     components?: {
         [key: string]: unknown;
     };
+    ref?: RunRefRequest;
 };
 
 export type RunCreated = {
     run_id: string;
     state: 'queued';
+    /**
+     * True when the stored identity block carries at least one body-supplied value (05.2.2-T1); false for a verified CI caller and for a run created without an identity.
+     */
+    unverified_ref: boolean;
+};
+
+/**
+ * Optional run identity supplied by the caller (00 §7/§8.1, 05.2.2-T1). A verified CI caller's OIDC claims always win and a conflicting member is ignored, never rejected (AC3); every value stored from here marks the run `unverified_ref = true`. An unknown member is 422 `request_invalid` (`details[].path` `/ref/<member>`, reason `additional_properties`), like every other shape failure of this body.
+ */
+export type RunRefRequest = {
+    /**
+     * `pull_request` requires `pr_number`, checked on the values after the verified-claim merge → 422 `request_invalid`.
+     */
+    kind?: 'branch' | 'tag' | 'pull_request';
+    /**
+     * Branch or tag name; for a PR the GITHUB_REF_NAME form `<N>/merge`.
+     */
+    name?: string;
+    pr_number?: number;
+    /**
+     * 40 hex for a SHA-1 repo, 64 for a SHA-256 repo.
+     */
+    head_sha?: string;
+    base_sha?: string;
+    trigger_event?: 'push' | 'pull_request' | 'schedule' | 'manual' | 'dispatch';
+    /**
+     * Only a body value can set this: a verified CI caller is never a fork (02.4.1 refuses a fork exchange 403).
+     */
+    is_fork?: boolean;
+};
+
+/**
+ * The run's stored identity block (00 §7/§8.1, 05.2.2-T1). Every member is present, `null` where unknown; an existing run created before 05.2.2 has all members null and `is_fork` false. A verified `ci_producer` caller's `ref`/`sha` claims win over the request body; the remaining values are body-supplied and the run carries `unverified_ref = true`. `head_sha` is only ever the verified `sha` claim of a `branch` or `tag` ref: for a `pull_request` ref that claim is GitHub's test-merge commit and is not stored.
+ */
+export type RunRef = {
+    kind: 'branch' | 'tag' | 'pull_request' | null;
+    name: string | null;
+    pr_number: number | null;
+    head_sha: string | null;
+    base_sha: string | null;
+    trigger_event: 'push' | 'pull_request' | 'schedule' | 'manual' | 'dispatch' | null;
+    is_fork: boolean;
 };
 
 /**
