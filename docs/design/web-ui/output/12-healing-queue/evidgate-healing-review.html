@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-page="12" data-nav="healing">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Healing Review · Evidgate</title>
+  <link rel="stylesheet" href="../assets/evidgate.css">
+<script src="../assets/evidgate.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">Skip to content</a>
+  <div class="shell" id="appShell">
+    <aside class="eg-nav" id="evidgateSidebar" data-eg-nav aria-label="Primary navigation"></aside>
+    <div class="main">
+      <header class="topbar">
+        <div class="crumbs"><span data-i18n="project">Project</span> / checkout-web / <strong data-i18n="healing">Healing Review</strong></div>
+        <div class="top-actions">
+          <button class="locale-button" id="localeToggle" type="button" aria-label="Switch language" data-od-id="locale-toggle">VI</button>
+          <button class="icon-button" id="themeToggle" type="button" aria-label="Switch to dark theme" title="Switch theme" data-od-id="theme-toggle"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4m7.8 7.8 1.4 1.4m0-10.6-1.4 1.4m-7.8 7.8-1.4 1.4M10 6.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/></svg></button>
+        </div>
+      </header>
+      <main class="content" id="main" data-od-id="healing-review-page">
+        <div class="mobile-notice" data-od-id="mobile-readonly-notice"><strong data-i18n="desktopNotice">Use a desktop to make changes</strong><span data-i18n="mobileReadOnly">Read-only candidate details remain available; use a desktop to make changes.</span></div>
+        <section class="page-head" data-od-id="page-heading">
+          <div><p class="eyebrow" data-i18n="eyebrow">TEST MAINTENANCE</p><h1 data-i18n="title" data-od-id="healing-title">Healing Review</h1><p data-i18n="intro">Inspect shadow proposals against their source evidence. The original test result stays intact.</p></div>
+          <div class="scope-note"><span data-i18n="scope">Project scope</span><br><span class="mono">checkout-web · healing:triage</span></div>
+        </section>
+        <section class="shadow-banner" aria-label="Shadow mode status" data-od-id="shadow-status">
+          <div><strong data-i18n="shadowTitle">Shadow — proposals only</strong><span> · <span data-i18n="shadowSub">No test is changed by this review.</span></span></div>
+          <span class="status proposed" data-i18n="proposalOnly">Proposal only</span>
+        </section>
+        <section class="availability" aria-label="Resolved shadow availability" data-od-id="availability-scope">
+          <div class="availability-item"><span class="field-label" data-i18n="system">System</span><div class="availability-value"><span class="dot" aria-hidden="true"></span><span data-i18n="enabled">Enabled</span></div></div>
+          <div class="availability-item"><span class="field-label" data-i18n="tenant">Tenant</span><div class="availability-value"><span class="dot" aria-hidden="true"></span><span data-i18n="shadow">Shadow</span><span class="scope-value">· Northstar Commerce</span></div></div>
+          <div class="availability-item"><span class="field-label" data-i18n="projectLabel">Project</span><div class="availability-value"><span class="dot" aria-hidden="true"></span><span data-i18n="enabled">Enabled</span><span class="scope-value">· checkout-web</span></div></div>
+        </section>
+
+        <section class="state-message warning" id="dependencyBanner" hidden role="status" aria-live="polite" data-od-id="dependency-banner">
+          <h2 data-i18n="unavailableTitle" data-od-id="unavailable-heading">Healing unavailable</h2><p data-i18n="dependencyCopy">Candidate review is temporarily unavailable because a dependency health check is unresolved. Tests and gates continue normally.</p><p><span data-i18n="requestId">Request ID</span>: <span class="mono">req-health-4c21</span> · <span data-i18n="safeHistory">Safe historical metadata remains visible.</span></p>
+        </section>
+
+        <section id="queueSection" data-od-id="candidate-queue">
+          <div class="filters" aria-label="Candidate filters">
+            <div class="filter search"><label for="searchInput" data-i18n="search">Search candidate or test</label><input id="searchInput" type="search" placeholder="cand-73, checkout…" autocomplete="off" data-od-id="candidate-search"></div>
+            <div class="filter"><label for="statusFilter" data-i18n="statusFilter">Proposal status</label><select id="statusFilter" data-od-id="status-filter"><option value="all" data-i18n="allStatuses">All statuses</option><option value="validated">validated</option><option value="proposed">proposed</option><option value="insufficient_evidence">insufficient_evidence</option><option value="expired">expired</option><option value="historical">historical</option></select></div>
+            <div class="filter"><label for="availabilityFilter" data-i18n="availabilityFilter">Availability</label><select id="availabilityFilter" data-od-id="availability-filter"><option value="all" data-i18n="allAvailability">All availability</option><option value="available">available</option><option value="unavailable">unavailable</option><option value="disabled">operator_disabled</option></select></div>
+            <div class="filter"><label for="pageSize" data-i18n="rowsPerPage">Rows per page</label><select id="pageSize" data-od-id="page-size"><option selected>50</option><option>100</option><option>200</option></select></div>
+            <span class="result-count" id="resultCount" aria-live="polite">8 illustrative rows</span>
+          </div>
+          <div class="review-grid">
+            <section class="queue" aria-labelledby="queueTitle">
+              <header class="queue-head"><div><h2 id="queueTitle" data-i18n="queueTitle" data-od-id="queue-title">Shadow proposals</h2><p data-i18n="queueSub">Source labels are retained; only human labels are ground truth.</p></div><span class="mono">UTC</span></header>
+              <div class="table-scroll" tabindex="0" aria-label="Scrollable candidate table">
+                <table>
+                  <thead><tr><th scope="col" data-i18n="candidate">Candidate</th><th scope="col" data-i18n="source">Label source</th><th scope="col" data-i18n="validation">Validation</th><th scope="col" data-i18n="samples">Samples observed</th><th scope="col" data-i18n="action">Action</th></tr></thead>
+                  <tbody id="candidateRows">
+                    <tr data-candidate="cand-73" data-status="validated" data-availability="available" class="selected" data-od-id="candidate-cand-73"><td><span class="candidate-name">checkout confirms order</span><span class="subline"><span class="mono">cand-73</span> · inc-91</span></td><td><span class="source-tag">human</span><span class="subline">test_drift</span></td><td><span class="status validated">validated</span></td><td>24</td><td><button class="text-button open-candidate" type="button" data-id="cand-73" aria-label="Open candidate cand-73" data-i18n="openCandidate">Open candidate</button></td></tr>
+                    <tr data-candidate="cand-74" data-status="proposed" data-availability="available" data-od-id="candidate-cand-74"><td><span class="candidate-name">address-label</span><span class="subline"><span class="mono">cand-74</span> · inc-88</span></td><td><span class="source-tag">model</span><span class="subline">test_drift</span></td><td><span class="status proposed">proposed</span></td><td><span data-i18n="unavailable">Unavailable</span></td><td><button class="text-button open-candidate" type="button" data-id="cand-74" aria-label="Open candidate cand-74" data-i18n="openCandidate">Open candidate</button></td></tr>
+                    <tr data-candidate="cand-75" data-status="insufficient_evidence" data-availability="unavailable" data-od-id="candidate-cand-75"><td><span class="candidate-name">search locale</span><span class="subline"><span class="mono">cand-75</span> · inc-77</span></td><td><span class="source-tag">rule</span><span class="subline">unknown</span></td><td><span class="status insufficient">insufficient_evidence</span></td><td>—</td><td><button class="text-button open-candidate" type="button" data-id="cand-75" aria-label="Open candidate cand-75" data-i18n="openCandidate">Open candidate</button></td></tr>
+                    <tr data-candidate="cand-76" data-status="expired" data-availability="unavailable" data-od-id="candidate-cand-76"><td><span class="candidate-name">—</span><span class="subline"><span class="mono">cand-76</span></span></td><td><span class="source-tag">—</span><span class="subline">—</span></td><td><span class="status expired">expired</span><span class="subline mono">2026-10-12T18:00Z</span></td><td>—</td><td><button class="text-button open-candidate" type="button" data-id="cand-76" aria-label="Open candidate cand-76" data-i18n="openCandidate">Open candidate</button></td></tr>
+                    <tr data-candidate="hist-18" data-status="historical" data-availability="disabled" data-od-id="candidate-hist-18"><td><span class="candidate-name">payment method label</span><span class="subline"><span class="mono">hist-18</span> · historical record</span></td><td><span class="source-tag">—</span><span class="subline">—</span></td><td><span class="status historical">historical · approved</span></td><td>—</td><td><button class="text-button open-candidate" type="button" data-id="hist-18" aria-label="Open historical record hist-18">Open record</button></td></tr>
+                    <tr data-candidate="hist-21" data-status="historical" data-availability="disabled" data-od-id="candidate-hist-21"><td><span class="candidate-name">shipping option summary</span><span class="subline"><span class="mono">hist-21</span> · historical record</span></td><td><span class="source-tag">—</span><span class="subline">—</span></td><td><span class="status historical">historical · revoked</span></td><td>—</td><td><button class="text-button open-candidate" type="button" data-id="hist-21" aria-label="Open historical record hist-21">Open record</button></td></tr>
+                    <tr data-candidate="hist-25" data-status="historical" data-availability="disabled" data-od-id="candidate-hist-25"><td><span class="candidate-name">cart item count</span><span class="subline"><span class="mono">hist-25</span> · historical record</span></td><td><span class="source-tag">—</span><span class="subline">—</span></td><td><span class="status historical">historical · rejected</span></td><td>—</td><td><button class="text-button open-candidate" type="button" data-id="hist-25" aria-label="Open historical record hist-25">Open record</button></td></tr>
+                    <tr data-candidate="hist-31" data-status="historical" data-availability="disabled" data-od-id="candidate-hist-31"><td><span class="candidate-name">checkout confirmation heading — localized variant with a deliberately long test name</span><span class="subline"><span class="mono">hist-31</span> · historical record</span></td><td><span class="source-tag">—</span><span class="subline">—</span></td><td><span class="status historical">historical · applied</span></td><td>—</td><td><button class="text-button open-candidate" type="button" data-id="hist-31" aria-label="Open historical record hist-31">Open record</button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-foot"><span data-i18n="cursorNote">Illustrative fixture · cursor has no next page</span><div class="pager"><span>1–8 / 8</span><button class="button" type="button" disabled aria-label="Previous page" data-od-id="previous-page">‹</button><button class="button" type="button" disabled aria-label="Next page" data-od-id="next-page">›</button></div></div><p class="history-note" data-i18n="historyNote">Historical state is shown for audit context only; it does not imply current V1 reachability.</p>
+            </section>
+
+            <aside class="detail" aria-labelledby="detailTitle" data-od-id="candidate-detail">
+              <header class="detail-header"><div class="detail-title-row"><div><p class="eyebrow" data-i18n="selectedCandidate">SELECTED CANDIDATE</p><h2 id="detailTitle" data-od-id="candidate-detail-title">checkout confirms order</h2><p><span class="mono" id="detailId">cand-73</span> · <span data-i18n="proposalOnly">Proposal only</span></p></div><span class="read-only-tag" data-i18n="readOnly">READ ONLY</span></div></header>
+              <div class="detail-body">
+                <dl class="data-list" id="detailData">
+                  <div class="data-row"><dt data-i18n="sourceLabel">Source label</dt><dd>human · <span class="mono">test_drift</span></dd></div>
+                  <div class="data-row"><dt data-i18n="proposalKind">Proposal kind</dt><dd data-i18n="locatorOnly">Locator only</dd></div>
+                  <div class="data-row"><dt data-i18n="samples">Samples observed</dt><dd>24 independent samples</dd></div>
+                  <div class="data-row"><dt data-i18n="baseRevision">Base revision</dt><dd><span class="mono">9af317c</span></dd></div>
+                  <div class="data-row"><dt data-i18n="candidateHash">Candidate hash</dt><dd><span class="mono" title="Full hash is not present in this illustrative fixture">ch-8af2…3e20</span></dd></div>
+                  <div class="data-row"><dt data-i18n="availability">Availability</dt><dd>system enabled · tenant shadow · project enabled</dd></div>
+                  <div class="data-row"><dt data-i18n="observed">Observed at</dt><dd><time datetime="2026-10-13T02:42:00Z">2026-10-13T02:42:00Z</time></dd></div>
+                </dl>
+                <div class="validation-box"><strong data-i18n="negativeControl">Negative control</strong><p data-i18n="negativeControlCopy">Failed as required. The proposal is locator-only; no assertion or product behavior is changed.</p></div>
+              </div>
+              <div class="historical-block"><strong data-i18n="originalOutcome">Original test outcome remains separate</strong><p><span class="mono">run-1842</span> · attempt #1 · raw <span class="mono">failed</span> · evidence revision <span class="mono">ev-3</span>. A proposal does not replace this record.</p></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="below-grid" aria-label="Design state review">
+          <div class="review-controls" data-od-id="design-review-controls">
+            <header><h2 data-i18n="reviewControls" data-od-id="design-review-controls-title">Design review controls</h2><span data-i18n="notProductionNav">Not production navigation</span></header>
+            <div class="control-row"><label for="stateSelect" data-i18n="visibleState">Visible state</label><select id="stateSelect" aria-label="Design review state" data-od-id="review-state-select"><option value="default" data-i18n="stateDefault">Default</option><option value="loading" data-i18n="stateLoading">Loading</option><option value="empty" data-i18n="stateEmpty">Empty · no proposals</option><option value="no-match" data-i18n="stateNoMatch">Empty · no filter matches</option><option value="error" data-i18n="stateError">Error · 429</option><option value="success" data-i18n="stateSuccess">Success · illustrative 200</option><option value="unauthenticated" data-i18n="state401">401 · re-auth</option><option value="forbidden" data-i18n="state403">403 · permission denied</option><option value="not-found" data-i18n="state404">404 · not found</option><option value="conflict" data-i18n="state412">412 · linked V2 edit specimen</option><option value="dependency" data-i18n="stateDependency">Dependency unavailable</option><option value="operator-disabled" data-i18n="stateOperator">Operator disabled</option><option value="derived-unavailable" data-i18n="stateDerived">Derived unavailable</option><option value="long" data-i18n="stateLong">Long content</option></select></div>
+          </div>
+          <section class="state-message" id="statePanel" role="status" aria-live="polite" aria-atomic="true" data-od-id="state-panel"><h2 id="stateHeading" data-od-id="state-heading">Default · populated queue</h2><p id="stateCopy">Illustrative local fixture values. No server request is made from this page.</p></section>
+        </section>
+        <section class="page-notes" data-od-id="design-notes">
+          <div><strong data-i18n="designNotes">Design notes</strong><p data-i18n="tokenNote">Light brand tokens follow the supplied Evidgate palette. Dark surface, status, radius, spacing and type scale tokens are proposals for app review. No local font files are included; Manrope and Public Sans use system fallback stacks without external font requests.</p><p id="fixtureNote">All visible dates, revisions, and sample counts are illustrative fixture values, not live claims.</p></div>
+          <div><strong data-i18n="sourceContracts">Unresolved source contracts</strong><p data-i18n="contractNote">API query and cursor shape, server permission declarations, status transitions, dependency-health source, and candidate hash completeness need confirmation. This artifact uses local fixtures only and makes no acceptance-test claim.</p></div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+    (function () {
+      'use strict';
+      // In-page navigation targets (static design fixture).
+      var ROUTES = {
+        candidateDetail: '../13-healing-shadow-detail/evidgate-candidate-detail.html',
+        knowledgeRecord: '../15-knowledge-revocation/evidgate-knowledge-lineage.html'
+      };
+      var html = document.documentElement;
+      var appShell = document.getElementById('appShell');
+      var themeToggle = document.getElementById('themeToggle');
+      var localeToggle = document.getElementById('localeToggle');
+      var stateSelect = document.getElementById('stateSelect');
+      var statePanel = document.getElementById('statePanel');
+      var stateHeading = document.getElementById('stateHeading');
+      var stateCopy = document.getElementById('stateCopy');
+      var toast = document.getElementById('toast');
+      var searchInput = document.getElementById('searchInput');
+      var statusFilter = document.getElementById('statusFilter');
+      var availabilityFilter = document.getElementById('availabilityFilter');
+      var pageSize = document.getElementById('pageSize');
+      var rowEls = Array.prototype.slice.call(document.querySelectorAll('#candidateRows tr'));
+      var locale = 'en';
+      var theme = 'light';
+      var currentState = 'default';
+      var toastTimer;
+      var messages = {
+          en: {
+          skip:'Skip to content',workspace:'Workspace',workspaceNav:'WORKSPACE',runs:'Runs',failures:'Failures',incidents:'Incidents',healing:'Healing Review',releaseNav:'RELEASE',policies:'Policies',project:'Project',eyebrow:'TEST MAINTENANCE',title:'Healing Review',intro:'Inspect shadow proposals against their source evidence. The original test result stays intact.',scope:'Project scope',desktopNotice:'Use a desktop to make changes',mobileReadOnly:'This view is read-only on mobile. Candidate review is unavailable here.',shadowTitle:'Shadow — proposals only',shadowSub:'No test is changed by this review.',proposalOnly:'Proposal only',system:'System',tenant:'Tenant',projectLabel:'Project',enabled:'Enabled',shadow:'Shadow',unavailableTitle:'Healing unavailable',dependencyCopy:'Candidate review is temporarily unavailable because a dependency health check is unresolved. Tests and gates continue normally.',requestId:'Request ID',safeHistory:'Safe historical metadata remains visible.',notFound:'Not found',notFoundCopy:'This resource could not be found.',authTitle:'Sign-in required',authCopy:'Your session needs renewal. The safe return route is preserved: /healing/candidates.',search:'Search candidate or test',statusFilter:'Proposal status',allStatuses:'All statuses',availabilityFilter:'Availability',allAvailability:'All availability',rowsPerPage:'Rows per page',queueTitle:'Shadow proposals',queueSub:'Source labels are retained; only human labels are ground truth.',candidate:'Candidate',source:'Label source',validation:'Validation',samples:'Samples observed',action:'Action',unavailable:'Unavailable',cursorNote:'Illustrative fixture · cursor has no next page',selectedCandidate:'SELECTED CANDIDATE',readOnly:'READ ONLY',sourceLabel:'Source label',proposalKind:'Proposal kind',locatorOnly:'Locator only',baseRevision:'Base revision',candidateHash:'Candidate hash',availability:'Availability',observed:'Observed at',negativeControl:'Negative control',negativeControlCopy:'Failed as required. The proposal is locator-only; no assertion or product behavior is changed.',openCandidate:'Open candidate',originalOutcome:'Original test outcome remains separate',reviewControls:'Design review controls',notProductionNav:'Not production navigation',visibleState:'Visible state',designNotes:'Design notes',tokenNote:'Light brand tokens follow the supplied Evidgate palette. Dark surface, status, radius, spacing and type scale tokens are proposals for app review. Manrope and Public Sans are named stacks with system fallbacks; no external fonts are loaded.',sourceContracts:'Unresolved source contracts',contractNote:'API query and cursor shape, server permission declarations, status transitions, dependency-health source, and candidate hash completeness need confirmation. This artifact uses local fixtures only and makes no acceptance-test claim.',emptyTitle:'No proposals',emptyCopy:'There are no proposals in this illustrative result set. This differs from a filter returning no matches.',noMatchTitle:'No results match these filters',noMatchCopy:'Clear or adjust the candidate, status, or availability filters to inspect available fixture rows.',loadingTitle:'Loading candidate queue',loadingCopy:'The final layout space is reserved while this local loading state is shown. Duplicate submissions are disabled; this screen sends no request.',errorTitle:'Request could not be completed',errorCopy:'The illustrative server response is 429 Too Many Requests. Retry-After: 30 seconds (server supplied). Request ID: req-429-a91c. Retry only when ready.',retry:'Retry',forbiddenTitle:'Not authorized',forbiddenCopy:'You do not have the project-scoped healing:triage permission. Refresh permissions or return to the project overview.',conflictTitle:'Someone else changed this — reload',conflictCopy:'Shared linked V2 editing-conflict specimen only; this is NOT a response from the V1 read endpoint. Loaded revision 7 · current revision 8. Changed fields: label source and candidate revision. Unsaved draft remains visible below; choose Reload to discard it. No merge or resubmission occurs.',draftLabel:'Unsaved draft (illustrative)',reload:'Reload',dependencyState:'Dependency unavailable',operatorTitle:'Operator disabled',operatorCopy:'The operator has explicitly disabled this capability for the current scope. The queue remains read-only; no review action is available.',derivedTitle:'Derived unavailable',derivedCopy:'Availability could not be resolved from scope declarations. Treat as unavailable until the server resolves it; do not infer enablement.',longTitle:'Long-content fixture selected',longCopy:'Long candidate and test names wrap within their cells. Full hash is not present in this fixture; abbreviated values are not expandable.',retryNotice:'Retry selected · local fixture only; no request was sent.',reloadNotice:'Reload selected · local specimen reset to the default state.',openNotice:'Read-only candidate opened in the local detail panel.',mobileNoticeToast:'Candidate review is read-only below 768px.',errorRequest:'Request ID',longName:'checkout confirmation heading — localized variant with a deliberately long test name',historyNote:'Historical state is shown for audit context only; it does not imply current V1 reachability.',emptyFilterPlaceholder:'Try a candidate name or ID'
+        },
+          vi: {
+          skip:'Đến nội dung chính',workspace:'Không gian làm việc',workspaceNav:'KHÔNG GIAN LÀM VIỆC',runs:'Lượt chạy',failures:'Lỗi kiểm thử',incidents:'Sự cố',healing:'Xem xét sửa kiểm thử',releaseNav:'PHÁT HÀNH',policies:'Chính sách',project:'Dự án',eyebrow:'BẢO TRÌ KIỂM THỬ',title:'Xem xét sửa kiểm thử',intro:'Đối chiếu đề xuất mô phỏng với bằng chứng nguồn. Kết quả kiểm thử gốc được giữ nguyên.',scope:'Phạm vi dự án',desktopNotice:'Sử dụng máy tính để thay đổi dữ liệu',mobileReadOnly:'Trang này chỉ xem trên điện thoại. Không thể xem xét ứng viên tại đây.',shadowTitle:'Mô phỏng — chỉ có đề xuất',shadowSub:'Việc xem xét này không thay đổi bài kiểm thử.',proposalOnly:'Chỉ là đề xuất',system:'Hệ thống',tenant:'Tenant',projectLabel:'Dự án',enabled:'Đã bật',shadow:'Mô phỏng',unavailableTitle:'Không thể sử dụng sửa cơ chế kiểm thử',dependencyCopy:'Tạm thời không thể xem xét ứng viên do chưa xác định được tình trạng một phụ thuộc. Kiểm thử và cổng phát hành vẫn hoạt động bình thường.',requestId:'Mã yêu cầu',safeHistory:'Thông tin lịch sử an toàn vẫn hiển thị.',notFound:'Không tìm thấy',notFoundCopy:'Không thể tìm thấy tài nguyên này.',authTitle:'Cần đăng nhập lại',authCopy:'Phiên đăng nhập cần được gia hạn. Đường dẫn quay lại an toàn được giữ lại: /healing/candidates.',search:'Tìm ứng viên hoặc bài kiểm thử',statusFilter:'Trạng thái đề xuất',allStatuses:'Mọi trạng thái',availabilityFilter:'Khả dụng',allAvailability:'Mọi trạng thái khả dụng',rowsPerPage:'Số dòng mỗi trang',queueTitle:'Đề xuất ở chế độ mô phỏng',queueSub:'Giữ nguyên nguồn nhãn; chỉ nhãn của con người là dữ liệu chuẩn.',candidate:'Ứng viên',source:'Nguồn nhãn',validation:'Kiểm chứng',samples:'Số mẫu đã quan sát',action:'Thao tác',unavailable:'Không có dữ liệu',cursorNote:'Dữ liệu minh họa · không có trang tiếp theo',selectedCandidate:'ỨNG VIÊN ĐANG CHỌN',readOnly:'CHỈ XEM',sourceLabel:'Nhãn nguồn',proposalKind:'Loại đề xuất',locatorOnly:'Chỉ bộ định vị',baseRevision:'Bản sửa cơ sở',candidateHash:'Mã băm ứng viên',availability:'Khả dụng',observed:'Thời điểm ghi nhận',negativeControl:'Kiểm soát âm',negativeControlCopy:'Thất bại như yêu cầu. Đề xuất chỉ thay bộ định vị; không thay đổi assertion hoặc hành vi sản phẩm.',openCandidate:'Mở ứng viên',originalOutcome:'Kết quả kiểm thử gốc được tách riêng',reviewControls:'Điều khiển xem xét thiết kế',notProductionNav:'Không phải điều hướng sản phẩm',visibleState:'Trạng thái hiển thị',designNotes:'Ghi chú thiết kế',tokenNote:'Token giao diện sáng theo bảng màu Evidgate đã cung cấp. Token bề mặt tối, trạng thái, bo góc, khoảng cách và cỡ chữ là đề xuất để xem xét trong ứng dụng. Manrope và Public Sans có chuỗi phông dự phòng; không tải phông bên ngoài.',sourceContracts:'Hợp đồng nguồn cần xác nhận',contractNote:'Cần xác nhận truy vấn API và cấu trúc cursor, quyền do máy chủ khai báo, chuyển trạng thái, nguồn kiểm tra tình trạng phụ thuộc và tính đầy đủ của mã băm ứng viên. Trang dùng dữ liệu cục bộ minh họa và không khẳng định đã đạt kiểm thử chấp nhận.',emptyTitle:'Không có đề xuất',emptyCopy:'Không có đề xuất trong tập dữ liệu minh họa này. Trường hợp này khác với bộ lọc không tìm thấy kết quả.',noMatchTitle:'Không có kết quả phù hợp với bộ lọc',noMatchCopy:'Xóa hoặc điều chỉnh bộ lọc ứng viên, trạng thái hay khả dụng để xem dữ liệu minh họa.',loadingTitle:'Đang tải hàng đợi ứng viên',loadingCopy:'Khu vực bố cục cuối được giữ chỗ trong trạng thái tải cục bộ này. Gửi trùng bị tắt; trang không gửi yêu cầu.',errorTitle:'Không thể hoàn tất yêu cầu',errorCopy:'Phản hồi máy chủ minh họa là 429 Too Many Requests. Retry-After: 30 seconds (do máy chủ cung cấp). Mã yêu cầu: req-429-a91c. Chỉ thử lại khi sẵn sàng.',retry:'Thử lại',forbiddenTitle:'Bạn không có quyền truy cập',forbiddenCopy:'Bạn không có quyền healing:triage trong phạm vi dự án. Làm mới quyền hoặc quay lại tổng quan dự án.',conflictTitle:'Người khác đã thay đổi dữ liệu — tải lại',conflictCopy:'Chỉ là minh họa xung đột chỉnh sửa liên kết ở V2; đây KHÔNG phải phản hồi từ endpoint đọc V1. Bản đã tải 7 · bản hiện tại 8. Trường đã đổi: nguồn nhãn và bản sửa ứng viên. Bản nháp chưa lưu vẫn hiển thị bên dưới; chọn Tải lại để bỏ bản nháp. Không tự gộp hoặc gửi lại.',draftLabel:'Bản nháp chưa lưu (minh họa)',reload:'Tải lại',dependencyState:'Phụ thuộc không khả dụng',operatorTitle:'Đã tắt bởi người vận hành',operatorCopy:'Người vận hành đã chủ động tắt khả năng này trong phạm vi hiện tại. Hàng đợi chỉ xem; không có thao tác xem xét.',derivedTitle:'Không xác định được khả dụng',derivedCopy:'Không thể xác định tính khả dụng từ khai báo phạm vi. Hãy xem như không khả dụng cho đến khi máy chủ xác định; không tự suy ra là đã bật.',longTitle:'Đã chọn nội dung dài',longCopy:'Tên ứng viên và bài kiểm thử dài được xuống dòng trong ô. Fixture không có mã băm đầy đủ; giá trị rút gọn không thể mở rộng.',retryNotice:'Đã chọn thử lại · chỉ fixture cục bộ; không gửi yêu cầu.',reloadNotice:'Đã chọn tải lại · trạng thái minh họa cục bộ được đặt lại.',openNotice:'Ứng viên đã mở trong bảng chi tiết cục bộ chỉ xem.',mobileNoticeToast:'Xem xét ứng viên chỉ xem dưới 768px.',errorRequest:'Mã yêu cầu',longName:'checkout confirmation heading — localized variant with a deliberately long test name',historyNote:'Trạng thái lịch sử chỉ để tham khảo kiểm toán; không hàm ý có thể truy cập trong V1 hiện tại.',emptyFilterPlaceholder:'Thử tên hoặc mã ứng viên'
+        }
+      };
+      var stateCopyById = {
+        default:['Default · populated queue','Illustrative local fixture values. No server request is made from this page.',''],
+        loading:['loadingTitle','loadingCopy','loading'],
+        empty:['emptyTitle','emptyCopy',''],
+        'no-match':['noMatchTitle','noMatchCopy',''],
+        error:['errorTitle','errorCopy','error'],
+        unauthenticated:['authTitle','authCopy','error'],
+        forbidden:['forbiddenTitle','forbiddenCopy','error'],
+        'not-found':['notFound','notFoundCopy','error'],
+        conflict:['conflictTitle','conflictCopy','warning'],
+        dependency:['unavailableTitle','dependencyCopy','warning'],
+        'operator-disabled':['operatorTitle','operatorCopy','warning'],
+        'derived-unavailable':['derivedTitle','derivedCopy','warning'],
+        long:['longTitle','longCopy','']
+      };
+      messages.en.stateSuccess='Success · illustrative 200';
+      messages.vi.stateSuccess='Thành công · minh họa 200';
+      messages.en.successTitle='Candidate details loaded · illustrative result';
+      messages.en.successCopy='Static fixture response: HTTP 200 OK. This preview state is not a live server result and records no write.';
+      messages.vi.successTitle='Đã tải chi tiết ứng viên · kết quả minh họa';
+      messages.vi.successCopy='Phản hồi fixture tĩnh: HTTP 200 OK. Đây không phải kết quả máy chủ trực tiếp và không ghi dữ liệu.';
+      stateCopyById.success=['successTitle','successCopy','success'];
+      function t(key) { return (messages[locale] && messages[locale][key]) || messages.en[key] || key; }
+      function applyLocale() {
+        html.lang = locale;
+        document.querySelectorAll('[data-i18n]').forEach(function (el) { el.textContent = t(el.getAttribute('data-i18n')); });
+        document.getElementById('stateSelect').setAttribute('aria-label', locale === 'en' ? 'Design review state' : 'Trạng thái xem xét thiết kế');
+        document.querySelectorAll('.open-candidate').forEach(function (button) { button.setAttribute('aria-label',(locale === 'en' ? 'Open candidate ' : 'Mở ứng viên ') + button.dataset.id); });
+        document.querySelector('.table-scroll').setAttribute('aria-label',locale === 'en' ? 'Scrollable candidate table' : 'Bảng ứng viên có thể cuộn');
+        document.getElementById('evidgateSidebar').setAttribute('aria-label',locale === 'en' ? 'Primary navigation' : 'Điều hướng chính');
+        document.querySelector('[data-od-id="previous-page"]').setAttribute('aria-label',locale === 'en' ? 'Previous page' : 'Trang trước');
+        document.querySelector('[data-od-id="next-page"]').setAttribute('aria-label',locale === 'en' ? 'Next page' : 'Trang tiếp theo');
+        var stateLabels = locale === 'en' ? ['Default','Loading','Empty · no proposals','Empty · no filter matches','Error · 429','Success · illustrative 200','401 · re-auth','403 · permission denied','404 · not found','412 · linked V2 edit specimen','Dependency unavailable','Operator disabled','Derived unavailable','Long content'] : ['Mặc định','Đang tải','Trống · không có đề xuất','Trống · không khớp bộ lọc','Lỗi · 429','Thành công · minh họa 200','401 · đăng nhập lại','403 · không có quyền','404 · không tìm thấy','412 · minh họa chỉnh sửa V2','Phụ thuộc không khả dụng','Đã tắt bởi người vận hành','Không xác định khả dụng','Nội dung dài'];
+        Array.prototype.forEach.call(stateSelect.options,function (option,index) { option.textContent = stateLabels[index]; });
+        document.querySelector('.mobile-notice span').textContent = locale === 'en' ? 'Read-only candidate details remain available; use a desktop to make changes.' : 'Có thể xem chi tiết ứng viên; hãy dùng máy tính để thay đổi dữ liệu.';
+        document.getElementById('fixtureNote').textContent = locale === 'en' ? 'All visible dates, revisions, and sample counts are illustrative fixture values, not live claims.' : 'Mọi ngày, bản sửa và số mẫu hiển thị đều là dữ liệu minh họa, không phải dữ liệu trực tiếp.';
+        document.querySelector('[data-i18n="tokenNote"]').textContent = locale === 'en' ? 'Light brand tokens follow the supplied Evidgate palette. Dark surface, status, radius, spacing and type scale tokens are proposals for app review. No local font files are included; Manrope and Public Sans use system fallback stacks without external font requests.' : 'Token thương hiệu sáng theo bảng màu Evidgate đã cung cấp. Token bề mặt tối, trạng thái, bo góc, khoảng cách và cỡ chữ là đề xuất để xem xét. Không có tệp phông cục bộ; Manrope và Public Sans dùng phông hệ thống dự phòng, không tải phông bên ngoài.';
+        localeToggle.textContent = locale === 'en' ? 'VI' : 'EN';
+        localeToggle.setAttribute('aria-label', locale === 'en' ? 'Switch language to Vietnamese' : 'Chuyển ngôn ngữ sang tiếng Anh');
+        searchInput.placeholder = locale === 'en' ? 'cand-73, checkout…' : 'cand-73, checkout…';
+        renderState(currentState);
+        applyFilters(false);
+        selectCandidate(document.getElementById('detailId').textContent,true);
+      }
+      function setTheme(next) {
+        theme = next;
+        html.setAttribute('data-theme', theme);
+        themeToggle.setAttribute('aria-label', theme === 'light' ? (locale === 'en' ? 'Switch to dark theme' : 'Chuyển sang giao diện tối') : (locale === 'en' ? 'Switch to light theme' : 'Chuyển sang giao diện sáng'));
+        themeToggle.title = theme === 'light' ? (locale === 'en' ? 'Switch theme' : 'Đổi giao diện') : (locale === 'en' ? 'Switch theme' : 'Đổi giao diện');
+        try { localStorage.setItem('evidgate-review-theme', theme); } catch (_) {}
+      }
+      function showToast(copy) {
+        window.clearTimeout(toastTimer);
+        toast.textContent = copy;
+        toast.classList.add('show');
+        toastTimer = window.setTimeout(function () { toast.classList.remove('show'); }, 2800);
+      }
+      function renderState(id) {
+        currentState = id;
+        statePanel.querySelectorAll('.dynamic-state').forEach(function (node) { node.remove(); });
+        var data = stateCopyById[id] || stateCopyById.default;
+        stateHeading.textContent = messages[locale][data[0]] || data[0];
+        stateCopy.textContent = messages[locale][data[1]] || data[1];
+        statePanel.className = 'state-message' + (data[2] ? ' ' + data[2] : '');
+        statePanel.hidden = false;
+        document.getElementById('dependencyBanner').hidden = id !== 'dependency' && id !== 'operator-disabled' && id !== 'derived-unavailable';
+        document.getElementById('queueSection').classList.toggle('hidden-state', id === 'not-found' || id === 'unauthenticated' || id === 'forbidden');
+        document.querySelector('.detail').hidden = ['empty','no-match','not-found','unauthenticated','forbidden'].indexOf(id) >= 0;
+        statePanel.hidden = id === 'dependency';
+        if (id === 'loading') {
+          var lines = document.createElement('div'); lines.className = 'loading-lines dynamic-state'; lines.setAttribute('aria-label',t('loadingTitle'));
+          for (var li=0;li<3;li++) { var line=document.createElement('span'); line.className='loading-line'; lines.appendChild(line); }
+          stateCopy.after(lines);
+        }
+        if (id === 'error') {
+          var retry = document.createElement('button'); retry.type = 'button'; retry.className = 'button inline-action dynamic-state'; retry.textContent = t('retry'); retry.addEventListener('click', function () { showToast(t('retryNotice')); }); statePanel.appendChild(retry);
+        }
+        if (id === 'conflict') {
+          var draft = document.createElement('p'); draft.className='dynamic-state'; var draftStrong=document.createElement('strong'); draftStrong.textContent=t('draftLabel')+':'; draft.appendChild(draftStrong); draft.appendChild(document.createTextNode(' ')); var draftValue=document.createElement('span'); draftValue.className='mono'; draftValue.textContent='candidate label = test_drift'; draft.appendChild(draftValue); statePanel.appendChild(draft);
+          var diff = document.createElement('p'); diff.className='dynamic-state mono'; diff.textContent=locale === 'en' ? 'Illustrative diff · candidate.label_source: model → human · candidate.revision: 7 → 8' : 'Chênh lệch minh họa · candidate.label_source: model → human · candidate.revision: 7 → 8'; statePanel.appendChild(diff);
+          var reload = document.createElement('button'); reload.type = 'button'; reload.className = 'button inline-action dynamic-state'; reload.textContent = t('reload'); reload.addEventListener('click', function () { stateSelect.value = 'default'; renderState('default'); showToast(t('reloadNotice')); }); statePanel.appendChild(reload);
+        }
+        var unavailable = id === 'dependency' || id === 'operator-disabled' || id === 'derived-unavailable' || id === 'forbidden' || id === 'loading';
+        document.querySelectorAll('.open-candidate,.open-detail').forEach(function (button) { button.disabled = unavailable; });
+        if (id === 'empty') rowEls.forEach(function (row) { row.hidden = true; });
+        else if (id === 'no-match') rowEls.forEach(function (row) { row.hidden = true; });
+        else applyFilters(false);
+        if (id === 'empty' || id === 'no-match') document.getElementById('resultCount').textContent = id === 'empty' ? '0 proposals' : '0 matching rows';
+        else updateCount();
+      }
+      function updateCount() {
+        var visible = rowEls.filter(function (row) { return !row.hidden; }).length;
+        document.getElementById('resultCount').textContent = locale === 'en' ? visible + ' illustrative rows' : visible + ' dòng minh họa';
+      }
+      function applyFilters(updateUrl) {
+        if (currentState === 'empty' || currentState === 'no-match' || currentState === 'not-found' || currentState === 'unauthenticated' || currentState === 'forbidden') return;
+        var q = searchInput.value.trim().toLowerCase();
+        var status = statusFilter.value;
+        var availability = availabilityFilter.value;
+        rowEls.forEach(function (row) {
+          var text = row.textContent.toLowerCase();
+          var match = (!q || text.indexOf(q) >= 0) && (status === 'all' || row.dataset.status === status) && (availability === 'all' || row.dataset.availability === availability);
+          row.hidden = !match;
+        });
+        updateCount();
+        if (updateUrl !== false) {
+          var url = new URL(window.location.href);
+          q ? url.searchParams.set('q',q) : url.searchParams.delete('q');
+          status !== 'all' ? url.searchParams.set('status',status) : url.searchParams.delete('status');
+          availability !== 'all' ? url.searchParams.set('availability',availability) : url.searchParams.delete('availability');
+          url.searchParams.set('limit',pageSize.value);
+          history.replaceState(null,'',url.pathname + url.search + url.hash);
+        }
+      }
+      function selectCandidate(id,silent) {
+        var row = rowEls.find(function (item) { return item.dataset.candidate === id; });
+        if (!row || (row.hidden && !silent)) return;
+        rowEls.forEach(function (item) { item.classList.toggle('selected',item === row); });
+        var title = row.querySelector('.candidate-name').textContent;
+        document.getElementById('detailTitle').textContent = title;
+        document.getElementById('detailId').textContent = id;
+        var meta = {
+          'cand-73': {source:'human · test_drift',kind:'Locator only',samples:'24 independent samples',base:'9af317c',hash:'ch-8af2…3e20',note:'Negative control failed as required. The proposal is locator-only; no assertion or product behavior is changed.',raw:'run-1842 · attempt #1 · raw failed · evidence revision ev-3'},
+          'cand-74': {source:'model · test_drift',kind:'Proposal details not present in this fixture',samples:'Unavailable',base:'Unavailable',hash:'Unavailable',observed:'Unavailable',note:'Sample count is unavailable in this fixture. Validation remains proposed.',raw:'Original attempt and evidence revision are not present in this fixture.'},
+          'cand-75': {source:'rule · unknown',kind:'No automation',samples:'Unavailable',base:'Unavailable',hash:'Unavailable',observed:'Unavailable',note:'Insufficient evidence. No automation is available for this candidate.',raw:'Original attempt and evidence revision are not present in this fixture.'},
+          'cand-76': {source:'Unavailable',kind:'Expired proposal',samples:'Unavailable',base:'Unavailable',hash:'Unavailable',observed:'Unavailable',note:'Expired at 2026-10-12T18:00Z. Other candidate metadata is unavailable in this fixture.',raw:'Original attempt and evidence revision are not present in this fixture.'}
+        };
+        var selected = meta[id];
+        if (selected) {
+          var values = document.querySelectorAll('#detailData .data-row dd');
+          var translated = locale === 'en' ? [selected.source,selected.kind,selected.samples,selected.base,selected.hash,'system enabled · tenant shadow · project enabled',selected.observed || '2026-10-13T02:42:00Z'] : [selected.source,selected.kind==='Locator only'?'Chỉ bộ định vị':selected.kind==='No automation'?'Không có tự động hóa':selected.kind==='Expired proposal'?'Đề xuất đã hết hạn':selected.kind,selected.samples==='24 independent samples'?'24 mẫu độc lập':selected.samples==='Unavailable'?'Không có dữ liệu':selected.samples,selected.base==='Unavailable'?'Không có dữ liệu':selected.base,selected.hash==='Unavailable'?'Không có dữ liệu':selected.hash,'hệ thống đã bật · tenant mô phỏng · dự án đã bật',selected.observed ? 'Không có dữ liệu' : '2026-10-13T02:42:00Z'];
+          translated.forEach(function (value,index) { values[index].textContent=value; });
+          document.querySelector('.validation-box p').textContent=locale === 'en' ? selected.note : id === 'cand-73' ? 'Kiểm soát âm thất bại như yêu cầu. Đề xuất chỉ thay bộ định vị; không thay đổi assertion hoặc hành vi sản phẩm.' : id === 'cand-74' ? 'Không có số mẫu trong dữ liệu minh họa. Trạng thái kiểm chứng vẫn là proposed.' : id === 'cand-75' ? 'Bằng chứng chưa đầy đủ. Ứng viên này không có tự động hóa.' : 'Đã hết hạn tại 2026-10-12T18:00Z. Các metadata khác không có trong dữ liệu minh họa.';
+          document.querySelector('.historical-block p').textContent=locale === 'en' ? selected.raw : id === 'cand-73' ? 'run-1842 · lần thử #1 · trạng thái thô failed · phiên bản bằng chứng ev-3' : 'Lần thử gốc và phiên bản bằng chứng không có trong dữ liệu minh họa này.';
+        } else {
+          var historicValues = document.querySelectorAll('#detailData .data-row dd');
+          for (var hi=0;hi<6;hi++) historicValues[hi].textContent=locale === 'en' ? 'Not present in this fixture' : 'Không có trong dữ liệu minh họa này';
+          document.querySelector('.validation-box p').textContent=t('historyNote');
+          document.querySelector('.historical-block p').textContent=t('historyNote');
+        }
+        if (!silent) showToast(t('openNotice'));
+      }
+      function restorePrefs() {
+        try { var savedTheme = localStorage.getItem('evidgate-review-theme'); if (savedTheme === 'dark' || savedTheme === 'light') theme = savedTheme; } catch (_) {}
+        try { var savedLocale = localStorage.getItem('evidgate-review-locale'); if (savedLocale === 'vi' || savedLocale === 'en') locale = savedLocale; } catch (_) {}
+        setTheme(theme);
+        var params = new URLSearchParams(window.location.search);
+        searchInput.value = params.get('q') || '';
+        if (['validated','proposed','insufficient_evidence','expired','historical'].indexOf(params.get('status')) >= 0) statusFilter.value = params.get('status');
+        if (['available','unavailable','disabled'].indexOf(params.get('availability')) >= 0) availabilityFilter.value = params.get('availability');
+        if (['50','100','200'].indexOf(params.get('limit')) >= 0) pageSize.value = params.get('limit');
+      }
+      themeToggle.addEventListener('click', function () { setTheme(theme === 'light' ? 'dark' : 'light'); });
+      localeToggle.addEventListener('click', function () { locale = locale === 'en' ? 'vi' : 'en'; try { localStorage.setItem('evidgate-review-locale',locale); } catch (_) {} applyLocale(); });
+      function filterChanged() {
+        stateSelect.value='default'; renderState('default'); applyFilters(true);
+        if (rowEls.every(function (row) { return row.hidden; })) { stateSelect.value='no-match'; renderState('no-match'); }
+      }
+      [searchInput,statusFilter,availabilityFilter,pageSize].forEach(function (el) { el.addEventListener('input',filterChanged); el.addEventListener('change',filterChanged); });
+      stateSelect.addEventListener('change',function () { renderState(stateSelect.value); });
+      document.querySelectorAll('.open-candidate').forEach(function (button) {
+        button.addEventListener('click',function (event) {
+          event.stopPropagation();
+          var id = button.dataset.id || '';
+          location.href = id.indexOf('hist-') === 0 ? ROUTES.knowledgeRecord : ROUTES.candidateDetail;
+        });
+      });
+      // Row activates the in-page preview; the Open buttons above navigate to the detail pages.
+      rowEls.forEach(function (row) {
+        row.setAttribute('tabindex','0');
+        row.addEventListener('click',function () { selectCandidate(row.dataset.candidate); });
+        row.addEventListener('keydown',function (event) { if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') { event.preventDefault(); selectCandidate(row.dataset.candidate); } });
+      });
+      window.addEventListener('resize',function () { var isMobile = window.matchMedia('(max-width: 767px)').matches; appShell.classList.toggle('mobile-read-only',isMobile); document.querySelectorAll('.open-candidate,.open-detail').forEach(function (button) { button.disabled = ['dependency','operator-disabled','derived-unavailable','forbidden','loading'].indexOf(currentState) >= 0; }); });
+      restorePrefs();
+      applyLocale();
+      appShell.classList.toggle('mobile-read-only',window.matchMedia('(max-width: 767px)').matches);
+      var initialState = new URLSearchParams(window.location.search).get('reviewState');
+      if (initialState && stateCopyById[initialState]) stateSelect.value = initialState;
+      renderState(stateSelect.value || 'default');
+      if (!initialState && rowEls.every(function (row) { return row.hidden; })) { stateSelect.value='no-match'; renderState('no-match'); }
+    })();
+  </script>
+</body>
+</html>

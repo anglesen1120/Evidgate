@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-page="16" data-nav="availability">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Healing availability · Evidgate</title>
+  <link rel="stylesheet" href="../assets/evidgate.css">
+<script src="../assets/evidgate.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">Skip to content</a>
+  <div class="normal-view">
+    <div class="shell">
+      <aside class="eg-nav" id="evidgateSidebar" data-eg-nav aria-label="Primary navigation"></aside>
+      <div class="main">
+        <header class="topbar" data-od-id="page-toolbar">
+          <div class="crumbs"><span data-i18n="breadcrumbWorkspace">Workspace</span> / <a data-i18n="healing" href="../12-healing-queue/evidgate-healing-review.html">Healing</a> / <strong data-i18n="availability">Availability</strong></div>
+          <div class="top-actions">
+            <button type="button" class="icon-button" id="themeToggle" aria-label="Switch to dark theme" title="Switch theme" data-od-id="theme-toggle"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2"/></svg></button>
+            <button type="button" class="locale-button" id="localeToggle" aria-label="Switch language to Vietnamese" data-od-id="locale-toggle">VI</button>
+          </div>
+        </header>
+        <div class="mobile-notice" role="note" data-od-id="mobile-read-only-notice"><strong data-i18n="desktopRequired">Use a desktop to make changes</strong><span data-i18n="mobileReadOnly">This compact view is read-only.</span></div>
+        <main class="content" id="main" tabindex="-1">
+          <section class="page-head" data-od-id="availability-heading">
+            <div><div class="eyebrow" data-i18n="healingSettings">Healing settings</div><h1 data-od-id="availability-title" data-i18n="availability">Healing availability</h1><p data-i18n="intro">See the most restrictive configured scope and manage tenant or project availability. The server supplies the effective state.</p></div>
+            <div class="scope-note"><strong data-i18n="activeScope">Lotus Commerce · storefront-web</strong><span data-i18n="fixtureNote">Illustrative fixture · timestamps shown in UTC</span></div>
+          </section>
+          <div class="shadow-banner" role="note" data-od-id="runtime-auto-apply-banner"><div class="shadow-copy"><strong data-i18n="autoApplyOff">Runtime auto-apply is off</strong><span data-i18n="eligibilityNote">Enabled availability makes review behavior eligible; it does not apply changes during a run.</span></div><span class="fixture">V1 / V2</span></div>
+          <section class="summary" aria-label="Healing availability summary" data-od-id="availability-summary">
+            <div class="summary-item"><span class="field-label" data-i18n="effectiveState">Effective state</span><div class="summary-value"><span id="effectiveDisabled" class="state-pill disabled" data-i18n="disabledOrg">Disabled by organization</span><span id="effectiveUnavailable" class="state-pill unavailable hidden" data-i18n="dependencyUnavailable">Dependency unavailable</span></div><div class="summary-note" id="effectiveSource" data-i18n="serverValue">Server-reported · no client-side resolution</div></div>
+            <div class="summary-item"><span class="field-label" data-i18n="restrictiveScope">Restrictive scope</span><div class="summary-value" id="restrictiveScopeValue" data-i18n="organization">Organization</div><div class="summary-note"><span data-i18n="updatedBy">Updated by</span> Hà Lê · <time class="mono" datetime="2026-10-13T10:05:00Z">2026-10-13T10:05Z</time></div></div>
+            <div class="summary-item"><span class="field-label" data-i18n="projectSetting">Project setting</span><div class="summary-value"><span class="state-pill enabled" data-i18n="enabled">Enabled</span></div><div class="summary-note" data-i18n="projectLocked">Cannot widen availability beyond the organization scope</div></div>
+          </section>
+          <div class="main-grid">
+            <section class="panel" data-od-id="scope-hierarchy-panel">
+              <div class="panel-head"><div><h2 data-od-id="scope-hierarchy-heading" data-i18n="scopeHierarchy">Scope hierarchy</h2><p data-i18n="hierarchyHelp">Configured values are shown beside the server-declared effective state.</p></div><span class="fixture" data-i18n="illustrative">Illustrative data</span></div>
+              <div class="table-scroll"><table aria-label="Healing availability by scope"><thead><tr><th scope="col" data-i18n="scope">Scope</th><th scope="col" data-i18n="configuredState">Configured state</th><th scope="col" data-i18n="access">Access</th><th scope="col" data-i18n="lastUpdated">Last updated</th></tr></thead><tbody>
+                <tr data-od-id="scope-row-system"><td><span class="scope-name" data-i18n="system">System</span><span class="scope-meta" data-i18n="systemGlobal">Platform-wide setting</span></td><td><span class="state-pill enabled" data-i18n="enabled">Enabled</span></td><td><span class="state-pill locked" data-i18n="readOnly">Read-only</span></td><td><span class="mono">—</span></td></tr>
+                <tr data-od-id="scope-row-organization"><td><span class="scope-name" data-i18n="organization">Organization</span><span class="scope-meta">Lotus Commerce · <span class="mono">org-lotus-01</span></span></td><td><span class="state-pill disabled" data-i18n="disabled">Disabled</span></td><td><span class="scope-meta" data-i18n="editableScope">Configurable at this scope</span></td><td><span class="mono">2026-10-13<br>10:05Z</span><span class="scope-meta">Hà Lê</span></td></tr>
+                <tr data-od-id="scope-row-project"><td><span class="scope-name" data-i18n="project">Project</span><span class="scope-meta">storefront-web · <span class="mono">prj-7c91</span></span></td><td><span class="state-pill enabled" data-i18n="enabled">Enabled</span></td><td><span class="state-pill locked" data-i18n="ancestorLock">Locked by organization</span></td><td><span class="mono">2026-10-12T16:22Z</span></td></tr>
+              </tbody></table></div>
+              <div class="table-note"><span><strong data-i18n="effective">Effective</strong> · <span class="mono" id="effectiveRaw">disabled</span></span><span data-i18n="serverAuthority">Value supplied by server</span></div>
+            </section>
+            <section class="panel" data-od-id="availability-config-panel">
+              <div class="config-card">
+                <div class="config-heading"><div><h2 data-od-id="configuration-heading" data-i18n="configuration">Configure availability</h2><p data-i18n="memberScopeOnly">Changes are limited to scopes you can configure.</p></div><span class="permission-tag">healing:configure</span></div>
+                <div class="scope-control"><label for="orgSetting" data-i18n="organizationSetting">Organization setting</label><select id="orgSetting" class="mutating-control" data-od-id="organization-setting"><option value="enabled" data-en="Enabled" data-vi="Bật">Enabled</option><option value="shadow" data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</option><option value="disabled" selected data-en="Disabled" data-vi="Tắt">Disabled</option></select><p class="helper" data-i18n="scopeReasonHelp">Choose enabled, shadow only, or disabled for this organization.</p></div>
+                <div class="scope-control"><label for="projectSettingSelect" data-i18n="projectSettingLabel">Project setting</label><select id="projectSettingSelect" disabled aria-describedby="project-lock-help" data-od-id="project-setting"><option selected data-en="Enabled" data-vi="Bật">Enabled</option><option data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</option><option data-en="Disabled" data-vi="Tắt">Disabled</option></select><p class="helper" id="project-lock-help" data-i18n="ancestorLockHelp">Locked because the organization is disabled. An ordinary tenant admin cannot edit System.</p></div>
+                <div class="locked-message" data-od-id="system-scope-lock"><span aria-hidden="true">⊘</span><div><strong data-i18n="systemScopeLocked">System scope is read-only</strong><br><span data-i18n="noPlatformAdmin">Tenant administrators cannot change platform settings.</span></div></div>
+                <div class="reason"><label for="reasonInput" data-i18n="reasonLabel">Reason / context</label><textarea id="reasonInput" class="mutating-control" data-od-id="change-reason" placeholder="Required for this configuration change" data-placeholder-en="Required for this configuration change" data-placeholder-vi="Bắt buộc khi thay đổi cấu hình"></textarea></div>
+                <label class="confirm-row mutating-control"><input id="confirmChange" type="checkbox"><span data-i18n="confirmImpact">I understand this changes availability for the organization and its projects.</span></label>
+                <div class="form-actions"><span class="form-status" id="formStatus" aria-live="polite" data-i18n="noDraft">No unsaved changes</span><button type="button" class="button primary mutating-control" id="saveButton" data-od-id="save-availability" disabled data-i18n="saveAvailability">Save availability</button></div>
+                <section class="approval-panel" aria-labelledby="approval-heading" data-od-id="healing-approval-panel"><h3 id="approval-heading" data-i18n="approvalHeading">Healing approval</h3><p data-i18n="approvalReadOnly">Review and approval happen in Healing Review. Approval actions are unavailable on this settings page.</p><div class="approval-actions"><button class="button" type="button" disabled data-i18n="approve">Approve</button><button class="button" type="button" disabled data-i18n="requestChanges">Request changes</button><a class="approval-link" href="../12-healing-queue/evidgate-healing-review.html" data-i18n="openHealingReview">Open Healing Review</a></div></section>
+                <div class="dependency hidden" id="dependencyNotice" role="status" data-od-id="dependency-unavailable"><strong data-i18n="dependencyUnavailable">Dependency unavailable</strong><p><span class="mono">knowledge_store_unavailable</span> · <span data-i18n="dependencyDetail">The knowledge store is unhealthy. Configuration remains visible; unavailable is not an editable setting.</span></p></div>
+              </div>
+            </section>
+          </div>
+          <section class="review-section" aria-labelledby="review-controls-heading" data-od-id="design-review-controls">
+            <div class="review-head"><div class="review-title"><strong id="review-controls-heading" data-i18n="reviewControls">Design review controls</strong><span>/ <span data-i18n="reviewControlsVi">Điều khiển xem xét thiết kế</span></span></div><div class="review-select"><label for="scenarioSelect" data-i18n="scenario">Scenario</label><select id="scenarioSelect" data-od-id="scenario-selector"><option value="default" data-en="Default · populated" data-vi="Mặc định · có dữ liệu">Default · populated</option><option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option><option value="empty" data-en="Empty · no resources" data-vi="Trống · không có tài nguyên">Empty · no resources</option><option value="nomatch" data-en="Empty · no filter matches" data-vi="Trống · không khớp bộ lọc">Empty · no filter matches</option><option value="error" data-en="Error" data-vi="Lỗi">Error</option><option value="403" data-en="403 · configure revoked" data-vi="403 · quyền cấu hình đã bị thu hồi">403 · configure revoked</option><option value="404" data-en="404 · not found" data-vi="404 · không tìm thấy">404 · not found</option><option value="401" data-en="401 · re-authentication" data-vi="401 · xác thực lại">401 · re-authentication</option><option value="429" data-en="429 · rate limited" data-vi="429 · giới hạn tốc độ">429 · rate limited</option><option value="412" data-en="412 · shared conflict" data-vi="412 · xung đột dùng chung">412 · shared conflict</option><option value="unavailable" data-en="Derived unavailable" data-vi="Không khả dụng do phụ thuộc">Derived unavailable</option><option value="success" data-en="Success · server result" data-vi="Thành công · kết quả máy chủ">Success · server result</option><option value="submitting" data-en="Submitting" data-vi="Đang gửi">Submitting</option><option value="long" data-en="Long content" data-vi="Nội dung dài">Long content</option></select></div></div>
+            <div class="review-output" id="reviewOutput" aria-live="polite" aria-atomic="true" data-od-id="scenario-output"><h3 data-i18n="defaultStateTitle">Effective state: Disabled by organization</h3><p data-i18n="defaultStateBody">The server reports organization as the restrictive scope. Project is configured as enabled but remains unavailable while the ancestor is disabled.</p><p><span data-i18n="permissionResolved">Resolved permission</span>: <span class="mono">healing:triage</span> · <span class="mono">healing:configure</span></p></div>
+          </section>
+          <section class="page-notes" data-od-id="design-notes">
+            <div><strong data-i18n="designNotes">Design notes</strong><p data-i18n="proposedTokens">Dark surfaces, status colors, compact radii, and app spacing are proposed application tokens. Font files were not supplied; local fallback stacks are used without fetching external fonts.</p></div>
+            <div><strong data-i18n="sourceContracts">Source contracts still open</strong><p data-i18n="contractsBody">Server permission declarations, authoritative effective-state response, concurrent-write behavior, and dependency-health response shape need product/API confirmation. Values here are illustrative fixtures.</p></div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </div>
+  <section class="not-found" id="notFound" role="alert" data-od-id="not-found-state"><div class="eyebrow">404</div><h1 data-i18n="notFound">Not found</h1><p data-i18n="notFoundBody">This resource could not be found.</p><p class="mono">request_id: req_design_4a82</p></section>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+    (function () {
+      const root = document.documentElement;
+      const body = document.body;
+      const themeButton = document.getElementById('themeToggle');
+      const localeButton = document.getElementById('localeToggle');
+      const scenario = document.getElementById('scenarioSelect');
+      const output = document.getElementById('reviewOutput');
+      const orgSetting = document.getElementById('orgSetting');
+      const reason = document.getElementById('reasonInput');
+      const confirm = document.getElementById('confirmChange');
+      const save = document.getElementById('saveButton');
+      const formStatus = document.getElementById('formStatus');
+      const toast = document.getElementById('toast');
+      let locale = localStorage.getItem('evidgate-locale') || 'en';
+      let draft = false;
+      let toastTimer;
+      const copy = {
+          en: {
+          skip:'Skip to content',workspace:'Workspace',workspaceNav:'Workspace',overview:'Overview',runs:'Runs',healing:'Healing',policies:'Policies',pilotWorkspace:'Pilot workspace',breadcrumbWorkspace:'Workspace',availability:'Healing availability',healingSettings:'Healing settings',intro:'See the most restrictive configured scope and manage tenant or project availability. The server supplies the effective state.',activeScope:'Lotus Commerce · storefront-web',fixtureNote:'Illustrative fixture · timestamps shown in UTC',autoApplyOff:'Runtime auto-apply is off',eligibilityNote:'Enabled availability makes review behavior eligible; it does not apply changes during a run.',effectiveState:'Effective state',disabledOrg:'Disabled by organization',serverValue:'Server-reported · no client-side resolution',restrictiveScope:'Restrictive scope',organization:'Organization',updatedBy:'Updated by',projectSetting:'Project setting',enabled:'Enabled',projectLocked:'Cannot widen availability beyond the organization scope',scopeHierarchy:'Scope hierarchy',hierarchyHelp:'Configured values are shown beside the server-declared effective state.',illustrative:'Illustrative data',scope:'Scope',configuredState:'Configured state',access:'Access',lastUpdated:'Last updated',system:'System',systemGlobal:'Platform-wide setting',readOnly:'Read-only',editableScope:'Configurable at this scope',project:'Project',ancestorLock:'Locked by organization',effective:'Effective',serverAuthority:'Value supplied by server',configuration:'Configure availability',memberScopeOnly:'Changes are limited to scopes you can configure.',organizationSetting:'Organization setting',scopeReasonHelp:'Choose enabled, shadow only, or disabled for this organization.',projectSettingLabel:'Project setting',ancestorLockHelp:'Locked because the organization is disabled. An ordinary tenant admin cannot edit System.',systemScopeLocked:'System scope is read-only',noPlatformAdmin:'Tenant administrators cannot change platform settings.',reasonLabel:'Reason / context',confirmImpact:'I understand this changes availability for the organization and its projects.',noDraft:'No unsaved changes',saveAvailability:'Save availability',approvalLink:'Need a healing approval? Open Healing Review',dependencyUnavailable:'Dependency unavailable',dependencyDetail:'The knowledge store is unhealthy. Configuration remains visible; unavailable is not an editable setting.',reviewControls:'Design review controls',reviewControlsVi:'Điều khiển xem xét thiết kế',scenario:'Scenario',defaultStateTitle:'Effective state: Disabled by organization',defaultStateBody:'The server reports organization as the restrictive scope. Project is configured as enabled but remains unavailable while the ancestor is disabled.',permissionResolved:'Resolved permission',designNotes:'Design notes',proposedTokens:'Dark surfaces, status colors, compact radii, and app spacing are proposed application tokens. Font files were not supplied; local fallback stacks are used without fetching external fonts.',sourceContracts:'Source contracts still open',contractsBody:'Server permission declarations, authoritative effective-state response, concurrent-write behavior, and dependency-health response shape need product/API confirmation. Values here are illustrative fixtures.',desktopRequired:'Use a desktop to make changes',mobileReadOnly:'This compact view is read-only.',notFound:'Not found',notFoundBody:'This resource could not be found.',
+          state:{default:['Effective state: Disabled by organization','The server reports organization as the restrictive scope. Project is configured as enabled but remains unavailable while the ancestor is disabled.'],loading:['Loading availability','The page is fetching the final layout. Existing space is reserved and duplicate submissions are disabled.'],empty:['Configuration unavailable','No healing availability resources are configured for this scope. Missing configuration is not interpreted as enabled.'],nomatch:['No results match these filters','No scope rows match the current filter. Clear the filter to see configured scopes.'],error:['Could not load availability','The request did not complete. Safe scope context is retained. Request ID: req_design_89c1.'],403:['Not authorized','Your healing:configure permission was revoked. The server remains authoritative; configuration controls are hidden. Request ID: req_design_403a.'],404:['Not found','This resource could not be found. Tenant and unknown identifiers use the same response. Request ID: req_design_4a82.'],401:['Sign-in expired','Sign in again to continue. Your safe return route is preserved as /workspace/healing/availability.'],429:['Too many requests','Wait before retrying. Server Retry-After: 2026-10-13T10:07:30Z.'],412:['Someone else changed this — reload','This is a shared conflict-pattern specimen from an editing action, not a read-endpoint response. Your unsaved draft remains visible; no automatic merge or resubmission occurs. Current revision: rev-18.'],unavailable:['Dependency unavailable','The server reports knowledge_store_unavailable. Configured values remain visible, unavailable cannot be selected, and tests and gates continue normally.'],success:['Saved','Design review fixture: the supplied server result confirms the organization setting was saved. Effective state remains the server-reported value until refreshed. Request ID: req_design_save_18c2.'],submitting:['Submitting change','Saving is in progress. Duplicate submissions are disabled while this reserved result area remains stable.'],long:['Long content and full-value access','A long scope identifier remains selectable and wraps within its cell: storefront-web-eu-west-checkout-regression-project-archive-2026. UTC timestamp: 2026-10-13T10:05:42.381Z.']},
+          approvalHeading:'Healing approval',approvalReadOnly:'Review and approval happen in Healing Review. Approval actions are unavailable on this settings page.',approve:'Approve',requestChanges:'Request changes',openHealingReview:'Open Healing Review',unresolved:'Not resolved',effectiveUnavailableNote:'Effective state unavailable · dependency response',themeDarkLabel:'Switch to dark theme',themeLightLabel:'Switch to light theme',primaryNavigation:'Primary navigation',availabilitySummary:'Healing availability summary',scopeTable:'Healing availability by scope',disabled:'Disabled',retry:'Retry',reload:'Reload',retainDraft:'Unsaved draft retained',currentRevision:'Current revision',draftRevision:'Your draft',reasonChanged:'Reason/context',serverChanged:'Disabled → shadow only',draftChanged:'Enabled → disabled',retryAfter:'Retry after',savedFixture:'Server result fixture',saving:'Saving…',savedStatus:'Saved · server confirmed',disabledBy403:'Configure permission is unavailable.',dirty:'Unsaved draft',
+        },
+        vi: {
+          skip:'Chuyển đến nội dung',workspace:'Không gian làm việc',workspaceNav:'Không gian làm việc',overview:'Tổng quan',runs:'Lượt chạy',healing:'Healing',policies:'Chính sách',pilotWorkspace:'Không gian thử nghiệm',breadcrumbWorkspace:'Không gian làm việc',availability:'Trạng thái sửa cơ chế kiểm thử',healingSettings:'Cài đặt Healing',intro:'Xem phạm vi cấu hình hạn chế nhất và quản lý trạng thái ở cấp tổ chức hoặc dự án. Máy chủ cung cấp trạng thái có hiệu lực.',activeScope:'Lotus Commerce · storefront-web',fixtureNote:'Dữ liệu minh họa · thời gian theo UTC',autoApplyOff:'Tự động áp dụng khi chạy đang tắt',eligibilityNote:'Trạng thái bật cho phép quy trình xem xét đủ điều kiện; thay đổi không được áp dụng trong lúc chạy.',effectiveState:'Trạng thái có hiệu lực',disabledOrg:'Bị tổ chức vô hiệu hóa',serverValue:'Do máy chủ cung cấp · không tự tính ở trình duyệt',restrictiveScope:'Phạm vi hạn chế',organization:'Tổ chức',updatedBy:'Cập nhật bởi',projectSetting:'Cấu hình dự án',enabled:'Bật',projectLocked:'Không thể mở rộng trạng thái vượt phạm vi tổ chức',scopeHierarchy:'Phân cấp phạm vi',hierarchyHelp:'Giá trị cấu hình được hiển thị cùng trạng thái có hiệu lực do máy chủ khai báo.',illustrative:'Dữ liệu minh họa',scope:'Phạm vi',configuredState:'Trạng thái cấu hình',access:'Quyền truy cập',lastUpdated:'Cập nhật gần nhất',system:'Hệ thống',systemGlobal:'Cài đặt toàn nền tảng',readOnly:'Chỉ đọc',editableScope:'Có thể cấu hình tại phạm vi này',project:'Dự án',ancestorLock:'Bị tổ chức khóa',effective:'Có hiệu lực',serverAuthority:'Giá trị do máy chủ cung cấp',configuration:'Cấu hình trạng thái',memberScopeOnly:'Chỉ thay đổi trong phạm vi bạn có quyền cấu hình.',organizationSetting:'Cấu hình tổ chức',scopeReasonHelp:'Chọn bật, chỉ mô phỏng hoặc tắt cho tổ chức này.',projectSettingLabel:'Cấu hình dự án',ancestorLockHelp:'Bị khóa vì tổ chức đã tắt. Quản trị viên tenant thông thường không thể sửa Hệ thống.',systemScopeLocked:'Phạm vi Hệ thống chỉ đọc',noPlatformAdmin:'Quản trị viên tenant không thể đổi cài đặt nền tảng.',reasonLabel:'Lý do / ngữ cảnh',confirmImpact:'Tôi hiểu thay đổi này ảnh hưởng trạng thái của tổ chức và các dự án.',noDraft:'Không có thay đổi chưa lưu',saveAvailability:'Lưu trạng thái',approvalLink:'Cần phê duyệt Healing? Mở Healing Review',dependencyUnavailable:'Phụ thuộc không khả dụng',dependencyDetail:'Kho tri thức đang gặp sự cố. Cấu hình vẫn hiển thị; không thể chọn trạng thái không khả dụng.',reviewControls:'Điều khiển xem xét thiết kế',reviewControlsVi:'Design review controls',scenario:'Kịch bản',defaultStateTitle:'Trạng thái có hiệu lực: Bị tổ chức vô hiệu hóa',defaultStateBody:'Máy chủ báo tổ chức là phạm vi hạn chế. Dự án được cấu hình bật nhưng vẫn không khả dụng khi phạm vi cha đã tắt.',permissionResolved:'Quyền đã phân giải',designNotes:'Ghi chú thiết kế',proposedTokens:'Bề mặt tối, màu trạng thái, bán kính gọn và khoảng cách ứng dụng là token đề xuất. Dự án không cung cấp tệp phông chữ; dùng phông cục bộ dự phòng và không tải phông bên ngoài.',sourceContracts:'Hợp đồng nguồn còn mở',contractsBody:'Cần xác nhận từ sản phẩm/API về khai báo quyền máy chủ, phản hồi trạng thái có hiệu lực có thẩm quyền, xử lý ghi đồng thời và cấu trúc phản hồi tình trạng phụ thuộc. Dữ liệu ở đây là minh họa.',desktopRequired:'Sử dụng máy tính để thay đổi dữ liệu',mobileReadOnly:'Chế độ xem gọn này chỉ đọc.',notFound:'Không tìm thấy',notFoundBody:'Không tìm thấy tài nguyên này.',
+          state:{default:['Trạng thái có hiệu lực: Bị tổ chức vô hiệu hóa','Máy chủ báo tổ chức là phạm vi hạn chế. Dự án được cấu hình bật nhưng vẫn không khả dụng khi phạm vi cha đã tắt.'],loading:['Đang tải trạng thái','Trang đang tải bố cục hoàn chỉnh. Khu vực cuối được dành sẵn và thao tác gửi trùng bị vô hiệu.'],empty:['Cấu hình không khả dụng','Chưa cấu hình tài nguyên trạng thái sửa cơ chế kiểm thử cho phạm vi này. Thiếu cấu hình không được hiểu là đã bật.'],nomatch:['Không có kết quả phù hợp với bộ lọc','Không có hàng phạm vi nào khớp bộ lọc hiện tại. Xóa bộ lọc để xem các phạm vi đã cấu hình.'],error:['Không tải được trạng thái','Yêu cầu chưa hoàn tất. Ngữ cảnh phạm vi an toàn vẫn được giữ. Mã yêu cầu: req_design_89c1.'],403:['Bạn không có quyền truy cập','Quyền healing:configure đã bị thu hồi. Máy chủ là nguồn quyết định; các điều khiển cấu hình đã bị ẩn. Mã yêu cầu: req_design_403a.'],404:['Không tìm thấy','Không tìm thấy tài nguyên này. ID tenant lạ và ID không tồn tại dùng cùng phản hồi. Mã yêu cầu: req_design_4a82.'],401:['Phiên đăng nhập đã hết hạn','Đăng nhập lại để tiếp tục. Đường dẫn quay lại an toàn được giữ là /workspace/healing/availability.'],429:['Quá nhiều yêu cầu','Chờ trước khi thử lại. Retry-After từ máy chủ: 2026-10-13T10:07:30Z.'],412:['Người khác đã thay đổi dữ liệu — tải lại','Đây là mẫu xung đột dùng chung từ thao tác chỉnh sửa, không phải phản hồi của API đọc. Bản nháp chưa lưu vẫn hiển thị; không tự gộp hoặc gửi lại. Phiên bản hiện tại: rev-18.'],unavailable:['Phụ thuộc không khả dụng','Máy chủ báo knowledge_store_unavailable. Cấu hình vẫn hiển thị, không thể chọn trạng thái không khả dụng; kiểm thử và cổng tiếp tục bình thường.'],success:['Đã lưu','Mẫu xem xét thiết kế: kết quả máy chủ được cung cấp xác nhận cấu hình tổ chức đã lưu. Trạng thái có hiệu lực vẫn là giá trị máy chủ báo cho đến khi tải lại. Mã yêu cầu: req_design_save_18c2.'],submitting:['Đang gửi thay đổi','Thao tác lưu đang chạy. Gửi trùng bị vô hiệu trong khi khu vực kết quả được giữ ổn định.'],long:['Nội dung dài và truy cập đầy đủ','Mã phạm vi dài có thể chọn và tự xuống dòng trong ô: storefront-web-eu-west-checkout-regression-project-archive-2026. Thời gian UTC: 2026-10-13T10:05:42.381Z.']},
+          approvalHeading:'Phê duyệt Healing',approvalReadOnly:'Xem xét và phê duyệt được thực hiện trong Healing Review. Không thể phê duyệt tại trang cài đặt này.',approve:'Phê duyệt',requestChanges:'Yêu cầu chỉnh sửa',openHealingReview:'Mở Healing Review',unresolved:'Chưa phân giải',effectiveUnavailableNote:'Trạng thái có hiệu lực không khả dụng · phản hồi phụ thuộc',themeDarkLabel:'Chuyển sang giao diện tối',themeLightLabel:'Chuyển sang giao diện sáng',primaryNavigation:'Điều hướng chính',availabilitySummary:'Tóm tắt trạng thái sửa cơ chế kiểm thử',scopeTable:'Trạng thái theo phạm vi',disabled:'Tắt',retry:'Thử lại',reload:'Tải lại',retainDraft:'Bản nháp chưa lưu được giữ lại',currentRevision:'Phiên bản hiện tại',draftRevision:'Bản nháp của bạn',reasonChanged:'Lý do/ngữ cảnh',serverChanged:'Tắt → chỉ mô phỏng',draftChanged:'Bật → tắt',retryAfter:'Thử lại sau',savedFixture:'Mẫu kết quả máy chủ',saving:'Đang lưu…',savedStatus:'Đã lưu · máy chủ xác nhận',disabledBy403:'Không có quyền cấu hình.',
+        }
+      };
+      function t(key) { return copy[locale][key] || copy.en[key] || key; }
+      function setLocale(next) {
+        locale = next; localStorage.setItem('evidgate-locale', locale); root.lang = locale;
+        document.querySelectorAll('[data-i18n]').forEach(el => { const value = t(el.dataset.i18n); if (value) el.textContent = value; });
+        document.querySelectorAll('option[data-en]').forEach(option => { option.textContent = option.dataset[locale]; });
+        document.querySelectorAll('[data-placeholder-en]').forEach(el => { el.placeholder = el.dataset['placeholder' + (locale === 'en' ? 'En' : 'Vi')]; });
+        localeButton.textContent = locale === 'en' ? 'VI' : 'EN';
+        localeButton.setAttribute('aria-label', locale === 'en' ? 'Switch language to Vietnamese' : 'Chuyển ngôn ngữ sang tiếng Anh');
+        document.querySelector('.summary').setAttribute('aria-label', t('availabilitySummary'));
+        document.querySelector('.table-scroll table').setAttribute('aria-label', t('scopeTable'));
+        setTheme(root.dataset.theme);
+        renderScenario(scenario.value);
+        updateForm();
+      }
+      function setTheme(theme) {
+        root.dataset.theme = theme; localStorage.setItem('evidgate-theme', theme);
+        themeButton.setAttribute('aria-label', t(theme === 'light' ? 'themeDarkLabel' : 'themeLightLabel'));
+        themeButton.title = t(theme === 'light' ? 'themeDarkLabel' : 'themeLightLabel');
+      }
+      function toastMessage(message) {
+        toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+      }
+      function renderScenario(name) {
+        body.classList.toggle('is-404', name === '404');
+        body.classList.toggle('is-403', name === '403');
+        body.classList.toggle('is-unavailable', name === 'unavailable');
+        body.classList.toggle('is-empty', name === 'empty');
+        body.classList.toggle('is-nomatch', name === 'nomatch');
+        body.classList.toggle('is-conflict', name === '412');
+        const loading = name === 'loading' || name === 'submitting';
+        orgSetting.disabled = loading;
+        reason.disabled = loading;
+        confirm.disabled = loading;
+        const unavailable = name === 'unavailable';
+        document.getElementById('effectiveDisabled').classList.toggle('hidden', unavailable);
+        document.getElementById('effectiveUnavailable').classList.toggle('hidden', !unavailable);
+        document.getElementById('effectiveSource').textContent = unavailable ? t('effectiveUnavailableNote') : t('serverValue');
+        document.getElementById('restrictiveScopeValue').textContent = unavailable ? t('unresolved') : t('organization');
+        document.getElementById('effectiveRaw').textContent = unavailable ? 'unavailable' : 'disabled';
+        document.getElementById('dependencyNotice').classList.toggle('hidden', name !== 'unavailable');
+        if (name === '404') { output.hidden = true; return; }
+        output.hidden = false; output.className = 'review-output';
+        const state = copy[locale].state[name];
+        if (!state) return;
+        let title = state[0], bodyText = state[1], actions = '';
+        if (['403','404','401','error'].includes(name)) output.classList.add('error');
+        if (['429','unavailable','empty','nomatch'].includes(name)) output.classList.add('warning');
+        if (name === 'success') output.classList.add('success');
+        if (name === 'loading' || name === 'submitting') {
+          output.innerHTML = `<h3>${title}</h3><p>${bodyText}</p><div class="loading-lines" aria-hidden="true"><div class="loading-line"></div><div class="loading-line"></div><div class="loading-line"></div></div>`;
+          save.disabled = true; return;
+        }
+        if (name === 'default') {
+          actions = `<p>${t('permissionResolved')}: <span class="mono">healing:triage</span> · <span class="mono">healing:configure</span></p>`;
+        } else if (name === '412') {
+          actions = `<div class="conflict-diff"><div class="diff-cell"><strong>${t('currentRevision')} · rev-18</strong>${t('serverChanged')}</div><div class="diff-cell"><strong>${t('draftRevision')} · unsaved</strong>${t('draftChanged')} · ${t('reasonChanged')}: ${escapeText(reason.value || '—')}</div></div><p>${t('retainDraft')}</p><div class="output-actions"><button type="button" class="button" id="reloadConflict">${t('reload')}</button></div>`;
+        } else if (['error','429','unavailable'].includes(name)) {
+          actions = `<div class="output-actions"><button type="button" class="button" id="retryAction">${t('retry')}</button></div>`;
+        } else if (name === '401') {
+          actions = `<div class="output-actions"><button type="button" class="button" id="reauthAction">${locale === 'en' ? 'Sign in again' : 'Đăng nhập lại'}</button></div>`;
+        } else if (name === 'success') {
+          actions = `<p>${t('savedFixture')} · tenant setting recorded in this local design fixture.</p>`;
+        }
+        output.innerHTML = `<h3>${title}</h3><p>${bodyText}</p>${actions}`;
+        const retry = document.getElementById('retryAction');
+        if (retry) retry.addEventListener('click', () => { if (name === 'error' || name === 'unavailable') renderScenario('default'); else toastMessage(t('retryAfter') + ': 2026-10-13T10:07:30Z'); });
+        const reload = document.getElementById('reloadConflict');
+        if (reload) reload.addEventListener('click', () => { orgSetting.value = 'disabled'; reason.value = ''; confirm.checked = false; draft = false; updateForm(); renderScenario('default'); toastMessage(locale === 'en' ? 'Reloaded current server fixture' : 'Đã tải lại mẫu máy chủ hiện tại'); });
+        const reauth = document.getElementById('reauthAction');
+        if (reauth) reauth.addEventListener('click', () => toastMessage(locale === 'en' ? 'Re-authentication is a design fixture' : 'Xác thực lại là mẫu thiết kế'));
+      }
+      function escapeText(value) { return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])); }
+      function updateForm() {
+        const valid = draft && reason.value.trim().length > 0 && confirm.checked;
+        save.disabled = !valid || ['403','loading','submitting'].includes(scenario.value) || window.innerWidth < 768;
+        formStatus.textContent = draft ? t('dirty') : t('noDraft');
+      }
+      orgSetting.addEventListener('change', () => { draft = true; updateForm(); });
+      reason.addEventListener('input', () => { if (reason.value.trim()) draft = true; updateForm(); });
+      confirm.addEventListener('change', updateForm);
+      save.addEventListener('click', () => {
+        if (save.disabled) return;
+        scenario.value = 'submitting'; renderScenario('submitting');
+        setTimeout(() => {
+          scenario.value = 'success';
+          // Keep the last observed effective state separate from this illustrative server acknowledgment.
+          renderScenario('success');
+          formStatus.textContent = t('savedStatus');
+          draft = false; updateForm();
+        }, 650);
+      });
+      scenario.addEventListener('change', () => {
+        if (scenario.value === '412' && !draft) {
+          orgSetting.value = 'enabled'; reason.value = 'Review scope change for checkout pilot'; confirm.checked = true; draft = true;
+        }
+        renderScenario(scenario.value); updateForm();
+      });
+      themeButton.addEventListener('click', () => setTheme(root.dataset.theme === 'light' ? 'dark' : 'light'));
+      localeButton.addEventListener('click', () => setLocale(locale === 'en' ? 'vi' : 'en'));
+      window.addEventListener('resize', updateForm);
+      setTheme(localStorage.getItem('evidgate-theme') || 'light');
+      setLocale(locale === 'vi' ? 'vi' : 'en');
+      updateForm();
+    })();
+  </script>
+</body>
+</html>

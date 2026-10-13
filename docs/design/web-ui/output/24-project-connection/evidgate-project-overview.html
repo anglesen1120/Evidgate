@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-page="24" data-nav="overview">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Project overview · Evidgate</title>
+<link rel="stylesheet" href="../assets/evidgate.css">
+<script src="../assets/evidgate.js"></script>
+</head>
+<body data-state="default">
+<a class="skip" href="#main" data-od-id="skip-link" data-i18n="skip">Skip to main content</a>
+<div class="readonly-mobile" role="note" data-i18n="desktopNotice">Use a desktop to make changes. This view is read-only on mobile.</div>
+<div class="review-controls" data-od-id="review-controls">
+  <div><div class="review-title" data-i18n="reviewControls">Design review controls / Điều khiển xem xét thiết kế</div><div class="loading-label" aria-live="polite" data-i18n="loading">Loading</div></div>
+  <label class="sr-only" for="state-select" data-i18n="stateLabel">Review state</label>
+  <select id="state-select" class="select-control review-select" aria-label="Design review state" data-od-id="state-switcher">
+    <option value="default">Default</option><option value="loading">Loading</option><option value="empty">Empty / no filter matches</option>
+    <option value="no-projects">Empty / no projects</option><option value="error">Error</option><option value="403">403 · Not authorized</option>
+    <option value="404">404 · Not found</option><option value="412">412 · Shared edit conflict</option><option value="401">401 · Re-authenticate</option><option value="429">429 · Rate limited</option><option value="no-ingest">No ingest received</option><option value="no-binding">No CI binding</option>
+    <option value="binding-disabled">Binding disabled</option><option value="token-expired">Token expired</option><option value="token-rotated">Token rotated</option><option value="token-revoked">Token revoked</option><option value="ingest-unavailable">Last ingest unavailable</option>
+    <option value="onboarding-partial">Partial onboarding</option><option value="long-content">Long value layout specimen</option><option value="copy-success">Copy success</option><option value="copy-failure">Copy failure</option>
+  </select>
+</div>
+<div id="state-banner" class="state-banner" role="status" aria-live="polite" hidden></div>
+<div class="not-found" role="status"><span class="eyebrow">404</span><h1 data-i18n="notFound">Not found</h1><p data-i18n="notFoundBody">This project could not be found.</p></div>
+<div class="layout" id="app-layout">
+  <aside class="eg-nav" id="evidgateSidebar" data-eg-nav aria-label="Primary navigation"></aside>
+  <div class="main">
+    <header class="topbar" data-od-id="topbar">
+      <div class="breadcrumb"><span data-i18n="projects">Projects</span><span class="crumb-sep">/</span><strong data-i18n="projectOverview">Project overview</strong></div>
+      <div class="tools">
+        <button class="tool-button" id="theme-toggle" type="button" aria-label="Switch theme" data-od-id="theme-toggle"><span aria-hidden="true">◐</span><span data-i18n="theme">Dark</span></button>
+        <label class="sr-only" for="locale-select" data-i18n="language">Language</label>
+        <select class="select-control" id="locale-select" aria-label="Language" data-od-id="locale-switcher"><option value="en">EN</option><option value="vi">VI</option></select>
+      </div>
+    </header>
+    <main id="main" class="content page-content">
+      <div class="no-projects panel" style="padding:28px" role="status"><span class="eyebrow" data-i18n="projects">Projects</span><h1 data-i18n="noProjects">No projects yet</h1><p class="subtitle" data-i18n="noProjectsBody">Create a project to connect a repository and begin receiving test evidence.</p><button class="button primary mutation" type="button" data-launch="create" data-od-id="create-project-action" data-i18n="createProject">Create project</button><p class="code-caption" style="margin-top:10px" data-i18n="createPermissionContext">Project creation requires server-declared project:create.</p></div>
+      <section class="normal-content">
+        <div class="page-head" data-od-id="page-heading">
+          <div class="title-block"><div class="eyebrow" data-i18n="workspace">Workspace</div><h1 data-i18n="projectOverview">Project overview</h1><p class="subtitle" data-i18n="overviewSubtitle">Setup and connection health for this project. Test quality and release decisions remain separate.</p></div>
+          <div class="project-picker"><label class="field-label" for="project-select" data-i18n="project">Project</label><select class="select-control" id="project-select" data-od-id="project-switcher"><option value="storefront">storefront-web</option><option value="e2e">evidgate-e2e</option><option value="warehouse">warehouse-integration</option></select></div>
+        </div>
+        <div class="summary" data-od-id="project-summary">
+          <div class="summary-item"><div class="meta-label" data-i18n="projectStatus">Project status</div><div class="summary-value inline-status"><span class="dot"></span><span id="summary-project-state" data-i18n="connectedActive">Connected · Active</span></div></div>
+          <div class="summary-item"><div class="meta-label" data-i18n="catalog">Catalog</div><div class="summary-value" id="summary-catalog">sr-27</div></div>
+          <div class="summary-item"><div class="meta-label" data-i18n="policy">Current policy</div><div class="summary-value policy-value"><a href="../30-policy-revisions/evidgate-policy-revisions.html">advisory · pr-12</a></div></div>
+        </div>
+        <section class="section split">
+          <article class="panel" id="connection" data-od-id="connection-health">
+            <div class="panel-head"><div><h2 data-i18n="connectionHealth">Connection health</h2><p data-i18n="ingestReceived" class="ingest-state-label">Ingest received</p></div><span class="status-pill active binding-state"><span class="dot"></span><span class="binding-label" data-i18n="bindingActive">Binding active</span></span></div>
+            <div class="panel-body health-data">
+              <div class="loading-skeleton" aria-hidden="true" style="width:38%"></div>
+              <dl class="kv">
+                <dt data-i18n="repository">Repository</dt><dd id="repository-value">lotus-commerce/storefront</dd>
+                <dt data-i18n="ciBinding">CI binding</dt><dd data-field="binding"><span class="mono binding-id">cb-19</span> · <span class="binding-kind">GitHub OIDC</span></dd>
+                <dt data-i18n="workflow">Workflow</dt><dd data-field="binding" class="mono workflow-value">.github/workflows/e2e.yml</dd>
+                <dt data-i18n="branch">Branch</dt><dd data-field="binding"><code class="mono branch-value">develop</code></dd>
+                <dt data-i18n="lastIngest">Last successful ingest</dt><dd id="last-ingest" data-field="last-ingest"><span class="field-value mono">2026-10-13T09:47:00Z</span><span class="unavailable" data-i18n="unavailable">Unavailable</span></dd>
+                <dt data-i18n="tokenMetadata" data-token-meta>Ingest token</dt><dd data-token-meta><span class="status-pill token-state"><span class="mono token-prefix">eg_ci_84</span><span class="token-label" data-i18n="prefixOnly">prefix only</span></span></dd>
+                <dt data-i18n="lastRotated" data-token-meta>Last rotated</dt><dd class="mono" data-token-meta>2026-10-01</dd>
+                <dt data-i18n="expires" data-token-meta>Expires</dt><dd class="mono" data-token-meta>2026-11-13</dd>
+              </dl>
+              <div data-role="no-binding" class="notice"><strong data-i18n="noBinding">No CI binding is configured.</strong> <span data-i18n="connectWhenReady">Connection metadata is not recorded yet.</span></div>
+              <div class="rule"></div>
+              <div class="notice"><strong data-i18n="secretSafety">Secret values are never shown here.</strong> <span data-i18n="secretMetadata">Only token metadata and a non-secret prefix are displayed.</span></div>
+              <p class="code-caption" style="margin-top:10px" data-i18n="permissionsContext">Setup controls are previews for server-declared scope only: ci_binding:write and ingest_token:write. The server remains authoritative.</p>
+              <div class="links">
+                <a href="../25-test-catalog/evidgate-test-catalog.html" data-od-id="catalog-link" data-i18n="openCatalog">Open Catalog</a>
+                <a href="../03-run-list/evidgate-runs.html" data-od-id="runs-link" data-i18n="viewRuns">View runs</a>
+                <a href="#onboarding" class="mutation" data-launch="resume" data-od-id="resume-onboarding-link" data-i18n="resumeOnboarding">Resume onboarding</a>
+                <a href="#connection" class="mutation" data-launch="connection" data-od-id="connection-setup-link" data-i18n="connectionSetup">Connection setup</a>
+              </div>
+            </div>
+          </article>
+          <div class="secondary-grid">
+            <article class="panel" data-od-id="latest-run">
+              <div class="panel-head"><div><h2 data-i18n="latestRun">Latest run</h2><p><a class="run-link mono" href="../04-run-detail/evidgate-run-detail.html">run-1842</a> · 2026-10-13T09:47:00Z</p></div><span class="status-pill warning" data-i18n="illustrative">Illustrative</span></div>
+              <div class="panel-body outcome-list">
+                <div class="outcome"><span data-i18n="collection">Collection completeness</span><span class="status-pill warning" data-i18n="incomplete">INCOMPLETE</span></div>
+                <div class="outcome"><span data-i18n="testOutcome">Test outcome</span><span class="status-pill danger"><span class="mono">has_failures</span></span></div>
+                <div class="outcome"><span data-i18n="releaseDecision">Release decision</span><span class="status-pill danger" data-i18n="fail">FAIL</span></div>
+                <p class="notice" style="margin:4px 0 0" data-i18n="runSeparation">Ingest health means evidence arrived; it is not a release verdict.</p>
+              </div>
+            </article>
+            <article class="panel" data-od-id="quickstart">
+              <div class="panel-head"><div><h2 data-i18n="quickstart">CLI quickstart</h2><p data-i18n="quickstartCaption">Secret-free storefront-web example for existing CI configuration</p></div></div>
+              <div class="panel-body">
+                <div class="codebox"><pre id="quickstart-code" aria-label="Illustrative CLI commands">export EVIDGATE_PROJECT=p-storefront
+evidgate ingest --project p-storefront --report ./reports/junit.xml</pre><div class="code-actions"><span class="code-caption" data-i18n="cliContract">Illustrative syntax; confirm exact CLI contract.</span><button class="button" id="copy-snippet" type="button" data-od-id="copy-snippet" data-i18n="copySnippet">Copy snippet</button></div></div>
+                <p class="code-caption copy-status" id="copy-status" aria-live="polite" style="margin:10px 0 0" data-i18n="authExisting">Authentication comes from the existing CI/environment configuration.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section class="section panel" id="onboarding" data-od-id="onboarding-progress">
+          <div class="onboarding">
+            <div><div class="eyebrow" data-i18n="setup">Setup</div><h2 style="margin-top:4px" data-i18n="onboardingTitle">Project onboarding</h2><p style="margin:5px 0 0;color:var(--muted);font-size:13px" data-i18n="onboardingBody">A resumable setup path; progress shown here is illustrative and local to this review.</p>
+              <div class="steps" aria-label="Onboarding progress"><div class="step complete"><span class="step-index">01</span><span data-i18n="stepProject">Project</span></div><div class="step complete"><span class="step-index">02</span><span data-i18n="stepRepository">Repository</span></div><div class="step complete"><span class="step-index">03</span><span data-i18n="stepConnection">CI connection</span></div><div class="step current"><span class="step-index">04</span><span data-i18n="stepFirstIngest">First ingest</span></div></div>
+            </div><button class="button primary mutation" type="button" data-launch="resume" data-od-id="resume-setup" data-i18n="resumeOnboarding">Resume onboarding</button>
+          </div>
+          <details class="design-notes" data-od-id="design-notes"><summary data-i18n="designNotes">Design notes & source contracts</summary><p data-i18n="designNotesBody">Dark surfaces, spacing, radii and semantic state colors are proposed app tokens, not approved brand tokens. Manrope and Public Sans are named stacks with local system fallbacks; no web fonts are embedded. Project creation, CI binding/token changes and CLI syntax require confirmed server/CLI contracts. This artifact uses local illustrative fixtures and does not send requests or persist project mutations.</p></details>
+        </section>
+      </section>
+      <section class="empty-content panel" role="status"><span class="eyebrow" data-i18n="projects">Projects</span><h2 style="margin:8px 0" data-i18n="emptyTitle">No results match these filters</h2><p class="subtitle" style="margin-inline:auto" data-i18n="emptyBody">Clear a project filter or choose another project.</p><button class="button" type="button" id="clear-filter" data-i18n="clearFilter">Clear filter</button></section>
+    </main>
+  </div>
+</div>
+<dialog class="dialog" id="onboarding-dialog" aria-labelledby="dialog-title">
+  <div class="dialog-head"><div><div class="eyebrow" data-i18n="setup">Setup</div><h2 id="dialog-title" style="margin-top:4px" data-i18n="onboardingTitle">Project onboarding</h2></div><button type="button" class="dialog-close" id="dialog-close" aria-label="Close">×</button></div>
+  <div class="dialog-body">
+    <div class="wizard-progress" id="wizard-progress" aria-label="Setup steps"></div>
+    <div class="wizard-content" id="wizard-content" aria-live="polite"></div>
+    <p class="wizard-note" data-i18n="wizardNote">Review prototype only. Values are illustrative; continuing changes this local preview, not a project or server record.</p>
+  </div>
+  <div class="dialog-foot"><button class="button" id="wizard-back" type="button" data-i18n="back">Back</button><div class="dialog-actions"><button class="button" id="wizard-cancel" type="button" data-i18n="cancel">Cancel</button><button class="button primary" id="wizard-next" type="button" data-i18n="continue">Continue</button></div></div>
+</dialog>
+<script>
+(function(){
+  const $ = (s, root=document) => root.querySelector(s);
+  const $$ = (s, root=document) => [...root.querySelectorAll(s)];
+  const dict = {
+    en:{skip:"Skip to main content",desktopNotice:"Use a desktop to make changes. This view is read-only on mobile.",reviewControls:"Design review controls / Điều khiển xem xét thiết kế",loading:"Loading",stateLabel:"Review state",notFound:"Not found",notFoundBody:"This project could not be found.",organization:"Organization",workspace:"Workspace",overview:"Overview",catalog:"Catalog",runs:"Runs",settings:"Settings",connections:"Connections",notLive:"Not live data",projects:"Projects",projectOverview:"Project overview",theme:"Dark",themeLight:"Light",language:"Language",project:"Project",projectStatus:"Project status",connectedActive:"Connected · Active",policy:"Current policy",overviewSubtitle:"Setup and connection health for this project. Test quality and release decisions remain separate.",connectionHealth:"Connection health",ingestReceived:"Ingest received",bindingActive:"Binding active",repository:"Repository",ciBinding:"CI binding",workflow:"Workflow",branch:"Branch",lastIngest:"Last successful ingest",tokenMetadata:"Ingest token",prefixOnly:"prefix only",lastRotated:"Last rotated",expires:"Expires",unavailable:"Unavailable",noBinding:"No CI binding is configured.",connectWhenReady:"Connection metadata is not recorded yet.",secretSafety:"Secret values are never shown here.",secretMetadata:"Only token metadata and a non-secret prefix are displayed.",openCatalog:"Open Catalog",viewRuns:"View runs",resumeOnboarding:"Resume onboarding",connectionSetup:"Connection setup",latestRun:"Latest run",illustrative:"Illustrative",collection:"Collection completeness",incomplete:"INCOMPLETE",testOutcome:"Test outcome",releaseDecision:"Release decision",fail:"FAIL",runSeparation:"Ingest health means evidence arrived; it is not a release verdict.",quickstart:"CLI quickstart",quickstartCaption:"Secret-free example for existing CI configuration",cliContract:"Illustrative syntax; confirm exact CLI contract.",copySnippet:"Copy snippet",authExisting:"Authentication comes from the existing CI/environment configuration.",setup:"Setup",onboardingTitle:"Project onboarding",onboardingBody:"A resumable setup path; progress shown here is illustrative and local to this review.",stepProject:"Project",stepRepository:"Repository",stepConnection:"CI connection",stepFirstIngest:"First ingest",designNotes:"Design notes & source contracts",designNotesBody:"Dark surfaces, spacing, radii and semantic state colors are proposed app tokens, not approved brand tokens. Manrope and Public Sans are named stacks with local system fallbacks; no web fonts are embedded. Project creation, CI binding/token changes and CLI syntax require confirmed server/CLI contracts. This artifact uses local illustrative fixtures and does not send requests or persist project mutations.",createProject:"Create project",noProjects:"No projects yet",noProjectsBody:"Create a project to connect a repository and begin receiving test evidence.",back:"Back",cancel:"Cancel",continue:"Continue",wizardNote:"Review prototype only. Values are illustrative; continuing changes this local preview, not a project or server record.",errorTitle:"Connection health could not be loaded",errorBody:"Safe context retained. Request ID: req-demo-4f21. Retry is an explicit review action; no request is sent.",retry:"Retry",forbiddenTitle:"Not authorized",forbiddenBody:"Your current project scope does not allow this action. The server remains authoritative.",conflictTitle:"Someone else changed this — reload",conflictBody:"Shared edit conflict specimen from a linked project edit. This is not a project overview read response or an asserted ETag contract.",currentRevision:"Current revision",draftRevision:"Unsaved draft",changedFields:"Changed fields",reload:"Reload",emptyTitle:"No results match these filters",emptyBody:"Clear a project filter or choose another project.",clearFilter:"Clear filter",noProjectsTitle:"No projects yet",noProjectsDetail:"Create a project to start setup. Creation requires project:create.",connectedOther:"Connected · Active",setupIncomplete:"Setup incomplete",notRecorded:"Not recorded",noBindingState:"No CI binding",bindingDisabled:"Binding disabled",tokenExpired:"Token expired",tokenRotated:"Rotated · prefix only",ingestUnavailable:"Unavailable",ingestNever:"No ingest received yet",stepOneTitle:"Project",stepOneBody:"Create a project under Lotus Commerce. The organization scope is shown as an illustrative fixture.",projectName:"Project name",stepTwoTitle:"Repository",stepTwoBody:"Associate the code repository that will produce test evidence. Storefront is retained from the local draft.",repositoryAddress:"Repository",stepThreeTitle:"CI connection",stepThreeBody:"Bind a supported workflow. This review does not create an OIDC trust or ingest token.",workflowAddress:"Workflow path",stepFourTitle:"First ingest",stepFourBody:"Use the secret-free quickstart with authentication already supplied by your CI environment.",wizardComplete:"Review complete",wizardCompleteBody:"No project or server resource was created. The draft remains illustrative.",finish:"Finish",emptyProject:"Project resources unavailable",emptyProjectBody:"No matching project records are in this local fixture.",retried:"Retry state cleared. No network request was sent.",copyFailure:"Copy was blocked. Select the commands and copy them manually.",copySuccess:"Snippet copied. No credential is included."},
+    vi:{skip:"Bỏ qua đến nội dung chính",desktopNotice:"Dùng máy tính để thay đổi. Trên điện thoại, chế độ xem này chỉ đọc.",reviewControls:"Design review controls / Điều khiển xem xét thiết kế",loading:"Đang tải",stateLabel:"Trạng thái xem xét",notFound:"Không tìm thấy",notFoundBody:"Không tìm thấy dự án này.",organization:"Tổ chức",workspace:"Không gian làm việc",overview:"Tổng quan",catalog:"Danh mục",runs:"Lượt chạy",settings:"Cài đặt",connections:"Kết nối",notLive:"Dữ liệu minh họa",projects:"Dự án",projectOverview:"Tổng quan dự án",theme:"Tối",themeLight:"Sáng",language:"Ngôn ngữ",project:"Dự án",projectStatus:"Trạng thái dự án",connectedActive:"Đã kết nối · Đang hoạt động",policy:"Policy hiện tại",overviewSubtitle:"Thiết lập và tình trạng kết nối của dự án. Chất lượng kiểm thử và quyết định phát hành được hiển thị riêng.",connectionHealth:"Tình trạng kết nối",ingestReceived:"Đã nhận dữ liệu",bindingActive:"Binding đang hoạt động",repository:"Kho mã nguồn",ciBinding:"CI binding",workflow:"Workflow",branch:"Nhánh",lastIngest:"Lần nhận dữ liệu thành công gần nhất",tokenMetadata:"Ingest token",prefixOnly:"chỉ tiền tố",lastRotated:"Xoay vòng lần cuối",expires:"Hết hạn",unavailable:"Không khả dụng",noBinding:"Chưa cấu hình CI binding.",connectWhenReady:"Chưa có thông tin kết nối được ghi nhận.",secretSafety:"Không hiển thị giá trị bí mật.",secretMetadata:"Chỉ hiển thị metadata token và tiền tố không bí mật.",openCatalog:"Mở Danh mục",viewRuns:"Xem lượt chạy",resumeOnboarding:"Tiếp tục thiết lập",connectionSetup:"Thiết lập kết nối",latestRun:"Lượt chạy gần nhất",illustrative:"Minh họa",collection:"Mức độ đầy đủ của bằng chứng",incomplete:"INCOMPLETE",testOutcome:"Kết quả kiểm thử",releaseDecision:"Quyết định phát hành",fail:"FAIL",runSeparation:"Tình trạng ingest cho biết bằng chứng đã đến; đây không phải verdict phát hành.",quickstart:"Bắt đầu nhanh với CLI",quickstartCaption:"Ví dụ không chứa bí mật cho cấu hình CI hiện có",cliContract:"Cú pháp minh họa; cần xác nhận hợp đồng CLI.",copySnippet:"Sao chép đoạn lệnh",authExisting:"Xác thực dùng cấu hình CI/môi trường hiện có.",setup:"Thiết lập",onboardingTitle:"Thiết lập dự án",onboardingBody:"Luồng thiết lập có thể tiếp tục; tiến độ chỉ là dữ liệu minh họa trong bản xem xét này.",stepProject:"Dự án",stepRepository:"Kho mã",stepConnection:"Kết nối CI",stepFirstIngest:"Ingest đầu tiên",designNotes:"Ghi chú thiết kế và hợp đồng nguồn",designNotesBody:"Bề mặt tối, khoảng cách, bo góc và màu trạng thái là token ứng dụng đề xuất, chưa phải token thương hiệu đã duyệt. Manrope và Public Sans dùng system fallback cục bộ; không nhúng web font. Tạo dự án, thay đổi CI binding/token và cú pháp CLI cần hợp đồng server/CLI được xác nhận. Artifact dùng fixture minh họa cục bộ, không gửi request hoặc lưu thay đổi dự án.",createProject:"Tạo dự án",noProjects:"Chưa có dự án",noProjectsBody:"Tạo dự án để kết nối kho mã và bắt đầu nhận bằng chứng kiểm thử.",back:"Quay lại",cancel:"Hủy",continue:"Tiếp tục",wizardNote:"Chỉ là prototype xem xét. Giá trị minh họa; thao tác tiếp tục chỉ đổi bản xem trước cục bộ, không tạo dự án hay bản ghi server.",errorTitle:"Không tải được tình trạng kết nối",errorBody:"Giữ ngữ cảnh an toàn. Request ID: req-demo-4f21. Thử lại là thao tác xem xét rõ ràng; không gửi request.",retry:"Thử lại",forbiddenTitle:"Bạn không có quyền truy cập",forbiddenBody:"Phạm vi dự án hiện tại không cho phép thao tác này. Server vẫn là nguồn xác thực cuối cùng.",conflictTitle:"Người khác đã thay đổi dữ liệu — tải lại",conflictBody:"Mẫu xung đột chỉnh sửa dùng chung từ thao tác sửa dự án được liên kết. Đây không phải phản hồi đọc tổng quan dự án hay hợp đồng ETag đã xác nhận.",currentRevision:"Phiên bản hiện tại",draftRevision:"Bản nháp chưa lưu",changedFields:"Trường đã đổi",reload:"Tải lại",emptyTitle:"Không có kết quả phù hợp với bộ lọc",emptyBody:"Xóa bộ lọc dự án hoặc chọn dự án khác.",clearFilter:"Xóa bộ lọc",noProjectsTitle:"Chưa có dự án",noProjectsDetail:"Tạo dự án để bắt đầu thiết lập. Cần quyền project:create.",connectedOther:"Đã kết nối · Đang hoạt động",setupIncomplete:"Thiết lập chưa hoàn tất",notRecorded:"Chưa ghi nhận",noBindingState:"Chưa có CI binding",bindingDisabled:"Binding đã tắt",tokenExpired:"Token đã hết hạn",tokenRotated:"Đã xoay vòng · chỉ tiền tố",ingestUnavailable:"Không khả dụng",ingestNever:"Chưa nhận được dữ liệu",stepOneTitle:"Dự án",stepOneBody:"Tạo dự án trong Lotus Commerce. Phạm vi tổ chức là fixture minh họa.",projectName:"Tên dự án",stepTwoTitle:"Kho mã nguồn",stepTwoBody:"Liên kết kho mã sẽ tạo bằng chứng kiểm thử. Storefront được giữ lại trong bản nháp cục bộ.",repositoryAddress:"Kho mã nguồn",stepThreeTitle:"Kết nối CI",stepThreeBody:"Gắn workflow được hỗ trợ. Bản xem xét này không tạo OIDC trust hay ingest token.",workflowAddress:"Đường dẫn workflow",stepFourTitle:"Ingest đầu tiên",stepFourBody:"Dùng quickstart không chứa bí mật với xác thực đã có trong môi trường CI.",wizardComplete:"Hoàn tất xem xét",wizardCompleteBody:"Không có dự án hay tài nguyên server nào được tạo. Bản nháp vẫn mang tính minh họa.",finish:"Hoàn tất",emptyProject:"Không có tài nguyên dự án",emptyProjectBody:"Fixture cục bộ không có bản ghi dự án phù hợp.",retried:"Đã xóa trạng thái thử lại. Không gửi request mạng.",copyFailure:"Không thể sao chép. Hãy chọn lệnh và sao chép thủ công.",copySuccess:"Đã sao chép đoạn lệnh. Không bao gồm thông tin xác thực."}
+  };
+  dict.en.notSupplied='Not supplied'; dict.vi.notSupplied='Chưa cung cấp';
+  dict.en.quickstartCaption='Secret-free storefront-web example for existing CI configuration';
+  dict.vi.quickstartCaption='Ví dụ storefront-web không chứa bí mật cho cấu hình CI hiện có';
+  dict.en.unsavedDraft='Unsaved local draft'; dict.vi.unsavedDraft='Bản nháp cục bộ chưa lưu';
+  dict.en.permissionsContext='Setup controls are previews for server-declared scope only: ci_binding:write and ingest_token:write. The server remains authoritative.';
+  dict.vi.permissionsContext='Điều khiển thiết lập chỉ xem trước phạm vi do server khai báo: ci_binding:write và ingest_token:write. Server vẫn là nguồn xác thực cuối cùng.';
+  dict.en.createPermissionContext='Project creation requires server-declared project:create.';
+  dict.vi.createPermissionContext='Tạo dự án cần quyền project:create do server khai báo.';
+  dict.en.reauthTitle='Sign in again'; dict.vi.reauthTitle='Đăng nhập lại';
+  dict.en.reauthBody='Your session needs a new sign-in. The safe return route is preserved as /projects/storefront-web.';
+  dict.vi.reauthBody='Phiên làm việc cần đăng nhập lại. Đường dẫn quay về an toàn được giữ là /projects/storefront-web.';
+  dict.en.retryAfterTitle='Too many requests'; dict.vi.retryAfterTitle='Quá nhiều yêu cầu';
+  dict.en.retryAfterBody='Retry-After: 60 seconds (illustrative server-supplied value). No timer is inferred.';
+  dict.vi.retryAfterBody='Retry-After: 60 giây (giá trị minh họa do server cung cấp). Không tự suy đoán bộ đếm thời gian.';
+  dict.en.noIngestTitle='No ingest received yet'; dict.vi.noIngestTitle='Chưa nhận được dữ liệu';
+  dict.en.noIngestBody='No ingest record is present in this fixture. This differs from unavailable health data.';
+  dict.vi.noIngestBody='Fixture này chưa có bản ghi ingest. Trạng thái này khác với dữ liệu tình trạng không khả dụng.';
+  dict.en.tokenRevoked='Revoked · prefix only'; dict.vi.tokenRevoked='Đã thu hồi · chỉ tiền tố';
+  dict.en.longContentTitle='Long-value layout specimen'; dict.vi.longContentTitle='Mẫu kiểm tra giá trị dài';
+  dict.en.longContentBody='Illustrative layout stress fixture only; this repository value is not a Lotus Commerce record.';
+  dict.vi.longContentBody='Chỉ là fixture minh họa để kiểm tra bố cục; giá trị kho mã này không phải bản ghi Lotus Commerce.';
+  dict.en.longRepo='lotus-commerce/storefront-web-tenant-administration-test-integration-monorepo';
+  dict.vi.longRepo='lotus-commerce/storefront-web-tenant-administration-test-integration-monorepo';
+  dict.en.copying='Copying…'; dict.vi.copying='Đang sao chép…';
+  dict.en.partialSetupTitle='Setup paused'; dict.vi.partialSetupTitle='Thiết lập đang tạm dừng';
+  dict.en.partialSetupBody='The warehouse-integration project resource is retained in this local fixture. Repository and CI binding details are not supplied; resume begins at connection setup. No secret is generated or revealed.';
+  dict.vi.partialSetupBody='Tài nguyên dự án warehouse-integration được giữ trong fixture cục bộ. Chưa có thông tin kho mã và CI binding; tiếp tục từ bước kết nối. Không tạo hay tiết lộ bí mật.';
+  let locale='en', theme='light';
+  try { locale=localStorage.getItem('evidgate-project-locale') || 'en'; theme=localStorage.getItem('evidgate-project-theme') || 'light'; } catch (_) {}
+  let wizardStep = 1, wizardMode='resume', opener=null;
+  document.documentElement.dataset.theme = theme;
+  $('#locale-select').value = locale;
+  function t(key){ return (dict[locale]||dict.en)[key] || dict.en[key] || key; }
+  function applyLocale(){
+    document.documentElement.lang=locale;
+    $$('[data-i18n]').forEach(el=>{ const key=el.dataset.i18n; if(dict[locale][key]) el.textContent=t(key); });
+    $('#state-select').setAttribute('aria-label', t('stateLabel'));
+    updateStateBanner();
+    updateWizard();
+    updateProject();
+  }
+  const stateText={
+    '401':()=>`<p><strong>${t('reauthTitle')}.</strong> ${t('reauthBody')}</p>`,
+    '429':()=>`<p><strong>${t('retryAfterTitle')}.</strong> ${t('retryAfterBody')}</p>`,
+    'no-ingest':()=>`<p><strong>${t('noIngestTitle')}.</strong> ${t('noIngestBody')}</p>`,
+    'long-content':()=>`<p><strong>${t('longContentTitle')}.</strong> ${t('longContentBody')}</p>`,
+    'onboarding-partial':()=>`<p><strong>${t('partialSetupTitle')}.</strong> ${t('partialSetupBody')}</p>`,
+    error:()=>`<p><strong>${t('errorTitle')}.</strong> ${t('errorBody')} <button type="button" class="button" id="retry-state">${t('retry')}</button></p>`,
+    '403':()=>`<p><strong>${t('forbiddenTitle')}.</strong> ${t('forbiddenBody')}</p>`,
+    '412':()=>`<p><strong>${t('conflictTitle')}.</strong> ${t('conflictBody')}</p><div class="conflict"><div>${t('currentRevision')}: <code>cb-20</code> · ${t('draftRevision')}: <code>cb-19</code></div><div>${t('changedFields')}: <code>branch</code> develop → release/2.18</div><p style="margin:8px 0 0"><strong>${t('unsavedDraft')}:</strong> workflow path <code>.github/workflows/e2e.yml</code> <button class="button" id="reload-draft">${t('reload')}</button></p></div>`
+  };
+  function updateStateBanner(){
+    const s=document.body.dataset.state, box=$('#state-banner');
+    if(s==='error'||s==='403'||s==='412'||s==='401'||s==='429'||s==='no-ingest'||s==='onboarding-partial'||s==='long-content') {box.hidden=false; box.className='state-banner '+(s==='error'||s==='401'?'error':s==='412'||s==='429'?'warning':''); box.innerHTML=stateText[s]();}
+    else {box.hidden=true;box.innerHTML='';}
+    const retry=$('#retry-state'); if(retry) retry.onclick=()=>{document.body.dataset.state='default';$('#state-select').value='default';box.hidden=false;box.className='state-banner success';box.textContent=t('retried');setTimeout(()=>{if(box.textContent===t('retried'))box.hidden=true;},2600);};
+    const reload=$('#reload-draft'); if(reload) reload.onclick=()=>{document.body.dataset.state='default';$('#state-select').value='default';box.hidden=true;};
+  }
+  const projects={
+    storefront:{name:'storefront-web',repo:'lotus-commerce/storefront',catalog:'sr-27',stateKey:'connectedActive',binding:true,details:true},
+    e2e:{name:'evidgate-e2e',repo:'Not supplied',catalog:'Not supplied',stateKey:'connectedOther',binding:true,details:false},
+    warehouse:{name:'warehouse-integration',repo:'Not recorded',catalog:'Not recorded',stateKey:'setupIncomplete',binding:false,details:false}
+  };
+  function updateProject(){
+    const p=projects[$('#project-select').value]||projects.storefront;
+    $('#repository-value').textContent=document.body.dataset.state==='long-content'?t('longRepo'):p.repo; $('#summary-catalog').textContent=p.catalog; $('#summary-project-state').textContent=t(p.stateKey);
+    $('.summary .dot').classList.toggle('warn',p.stateKey==='setupIncomplete');
+    $('.summary .dot').classList.toggle('neutral',p.stateKey!=='setupIncomplete'&&!p.binding);
+    $('.policy-value').innerHTML=p.details?'<a href="../30-policy-revisions/evidgate-policy-revisions.html">advisory · pr-12</a>':t('notSupplied');
+    $('[data-od-id="latest-run"]').hidden=!p.details;
+    $$('[data-field="binding"]').forEach(el=>el.hidden=!p.binding);
+    $('[data-role="no-binding"]').hidden=p.binding;
+    $('.binding-id').textContent=p.details?'cb-19':t('notSupplied');
+    $('.binding-kind').textContent=p.details?'GitHub OIDC':t('notSupplied');
+    $('.workflow-value').textContent=p.details?'.github/workflows/e2e.yml':t('notSupplied');
+    $('.branch-value').textContent=p.details?'develop':t('notSupplied');
+    $('#last-ingest .field-value').textContent=p.details?'2026-10-13T09:47:00Z':t('notSupplied');
+    $('.token-prefix').textContent=p.details?'eg_ci_84':t('notSupplied');
+    $$('[data-token-meta]').forEach(el=>el.hidden=!p.details);
+    $('.ingest-state-label').textContent=p.details?t('ingestReceived'):t('notSupplied');
+    $('.binding-label').textContent=p.binding?t('bindingActive'):t('noBindingState');
+    $('.binding-state').classList.toggle('active',p.binding);
+    $('.binding-state .dot').classList.toggle('neutral',!p.binding);
+    $('.token-state .token-label').textContent=p.details?t('prefixOnly'):t('notSupplied');
+  }
+  function syncReviewState(){
+    const s=document.body.dataset.state;
+    const p=projects[$('#project-select').value]||projects.storefront;
+    $('.binding-label').textContent=s==='binding-disabled'?t('bindingDisabled'):p.binding?t('bindingActive'):t('noBindingState');
+    $('.token-state .token-label').textContent=s==='token-expired'?t('tokenExpired'):s==='token-revoked'?t('tokenRevoked'):s==='token-rotated'?t('tokenRotated'):p.details?t('prefixOnly'):t('notSupplied');
+    $('.ingest-state-label').textContent=s==='ingest-unavailable'?t('unavailable'):s==='no-ingest'?t('ingestNever'):p.details?t('ingestReceived'):t('notSupplied');
+    if(s==='no-ingest') $('#last-ingest .field-value').textContent=t('ingestNever');
+    else $('#last-ingest .field-value').textContent=p.details?'2026-10-13T09:47:00Z':t('notSupplied');
+    $('.binding-state').classList.toggle('active',p.binding&&s!=='binding-disabled');
+    $('.binding-state').classList.toggle('warning',s==='binding-disabled');
+    $('.token-state').classList.toggle('warning',s==='token-expired'||s==='token-revoked');
+    $('#main').setAttribute('aria-busy',String(s==='loading'));
+    $$('.mutation').forEach(el=>{
+      if(el.tagName==='BUTTON') el.disabled=s==='loading';
+      else if(s==='loading') el.setAttribute('aria-disabled','true');
+      else el.removeAttribute('aria-disabled');
+    });
+    const copyStatus=$('#copy-status');
+    if(s==='copy-success') copyStatus.textContent=t('copySuccess');
+    else if(s==='copy-failure') copyStatus.textContent=t('copyFailure');
+    else copyStatus.textContent=t('authExisting');
+  }
+  const stateOptions=['default','loading','empty','no-projects','error','403','404','412','401','429','no-ingest','no-binding','binding-disabled','token-expired','token-rotated','token-revoked','ingest-unavailable','onboarding-partial','long-content','copy-success','copy-failure'];
+  $('#state-select').addEventListener('change',e=>{
+    document.body.dataset.state=e.target.value;
+    if(e.target.value==='onboarding-partial'){$('#project-select').value='warehouse';updateProject();}
+    if(e.target.value==='no-binding'){$('#project-select').value='warehouse';updateProject();}
+    if(['binding-disabled','token-expired','token-rotated','token-revoked','ingest-unavailable','no-ingest'].includes(e.target.value)){$('#project-select').value='storefront';updateProject();}
+    if(e.target.value==='long-content'){$('#project-select').value='storefront';updateProject();}
+    syncReviewState();
+    updateStateBanner();
+  });
+  $('#project-select').addEventListener('change',()=>{$('#state-select').value='default';document.body.dataset.state='default';updateProject();syncReviewState();updateStateBanner();});
+  $('#locale-select').addEventListener('change',e=>{locale=e.target.value;try{localStorage.setItem('evidgate-project-locale',locale)}catch(_){}applyLocale();});
+  $('#theme-toggle').addEventListener('click',()=>{theme=theme==='light'?'dark':'light';document.documentElement.dataset.theme=theme;try{localStorage.setItem('evidgate-project-theme',theme)}catch(_){}$('#theme-toggle').lastElementChild.textContent=theme==='light'?t('theme'):t('themeLight');});
+  function copyFallback(){const range=document.createRange();range.selectNodeContents($('#quickstart-code'));const sel=getSelection();sel.removeAllRanges();sel.addRange(range);return false;}
+  $('#copy-snippet').addEventListener('click',async()=>{
+    const status=$('#copy-status'), button=$('#copy-snippet');
+    button.disabled=true;button.setAttribute('aria-busy','true');button.textContent=t('copying');
+    try { if(!navigator.clipboard||!navigator.clipboard.writeText) throw new Error('unavailable'); await navigator.clipboard.writeText($('#quickstart-code').textContent);status.textContent=t('copySuccess');document.body.dataset.state='copy-success';$('#state-select').value='copy-success'; }
+    catch(_){ copyFallback();status.textContent=t('copyFailure');document.body.dataset.state='copy-failure';$('#state-select').value='copy-failure'; }
+    finally {button.disabled=false;button.removeAttribute('aria-busy');button.textContent=t('copySnippet');}
+    setTimeout(()=>{status.textContent=t('authExisting');if(['copy-success','copy-failure'].includes(document.body.dataset.state)){document.body.dataset.state='default';$('#state-select').value='default';}},3200);
+  });
+  const dialog=$('#onboarding-dialog');
+  const steps=['stepOne','stepTwo','stepThree','stepFour'];
+  function updateWizard(){
+    const progress=$('#wizard-progress'), content=$('#wizard-content');
+    if(wizardStep>4){progress.innerHTML='';content.innerHTML=`<h3>${t('wizardComplete')}</h3><p>${t('wizardCompleteBody')}</p>`;$('#wizard-back').disabled=true;$('#wizard-next').textContent=t('finish');return;}
+    progress.innerHTML=steps.map((s,i)=>`<span ${i+1===wizardStep?'aria-current="step"':''}>${String(i+1).padStart(2,'0')} · ${t(['stepProject','stepRepository','stepConnection','stepFirstIngest'][i])}</span>`).join('');
+    const key=steps[wizardStep-1];
+    const title=t(key+'Title'), body=t(key+'Body');
+    const fields=[
+      `<label class="wizard-field"><span>${t('projectName')}</span><input value="${wizardMode==='create'?'new-project':'storefront-web'}" aria-label="${t('projectName')}"></label>`,
+      `<label class="wizard-field"><span>${t('repositoryAddress')}</span><input value="lotus-commerce/storefront" aria-label="${t('repositoryAddress')}"></label>`,
+      `<label class="wizard-field"><span>${t('workflowAddress')}</span><input value=".github/workflows/e2e.yml" aria-label="${t('workflowAddress')}"></label>`,
+      `<div class="codebox"><pre>export EVIDGATE_PROJECT=p-storefront\nevidgate ingest --project p-storefront --report ./reports/junit.xml</pre></div>`
+    ];
+    content.innerHTML=`<h3>${title}</h3><p>${body}</p><div class="wizard-fields">${fields[wizardStep-1]}</div>`;
+    $('#wizard-back').disabled=wizardStep===1;
+    $('#wizard-next').textContent=t(wizardStep===4?'finish':'continue');
+  }
+  function openWizard(mode){
+    opener=document.activeElement;wizardMode=mode;wizardStep= mode==='create'?1:mode==='connection'?3:2;
+    if(document.body.dataset.state==='onboarding-partial')wizardStep=3;
+    updateWizard();dialog.showModal();$('#dialog-close').focus();
+  }
+  $$('[data-launch]').forEach(btn=>btn.addEventListener('click',e=>{e.preventDefault();openWizard(btn.dataset.launch);}));
+  function closeWizard(){dialog.close();if(opener&&opener.focus)opener.focus();}
+  $('#dialog-close').addEventListener('click',closeWizard);$('#wizard-cancel').addEventListener('click',closeWizard);
+  $('#wizard-back').addEventListener('click',()=>{if(wizardStep>1){wizardStep--;updateWizard();}});
+  $('#wizard-next').addEventListener('click',()=>{if(wizardStep<4){wizardStep++;updateWizard();}else if(wizardStep===4){wizardStep=5;updateWizard();$('#wizard-next').textContent=t('finish');}else{closeWizard();document.body.dataset.state='default';$('#state-select').value='default';updateStateBanner();}});
+  dialog.addEventListener('click',e=>{if(e.target===dialog)closeWizard();});
+  $('#clear-filter').addEventListener('click',()=>{$('#project-select').value='storefront';$('#state-select').value='default';document.body.dataset.state='default';updateProject();syncReviewState();});
+  const stateOptionsTranslated={en:['Default','Loading','Empty / no filter matches','Empty / no projects','Error','403 · Not authorized','404 · Not found','412 · Shared edit conflict','401 · Re-authenticate','429 · Rate limited','No ingest received','No CI binding','Binding disabled','Token expired','Token rotated','Token revoked','Last ingest unavailable','Partial onboarding','Long value layout specimen','Copy success','Copy failure'],vi:['Mặc định','Đang tải','Trống / không khớp bộ lọc','Trống / chưa có dự án','Lỗi','403 · Không có quyền','404 · Không tìm thấy','412 · Xung đột chỉnh sửa','401 · Đăng nhập lại','429 · Giới hạn yêu cầu','Chưa nhận ingest','Chưa có CI binding','Binding đã tắt','Token hết hạn','Token đã xoay vòng','Token đã thu hồi','Ingest gần nhất không khả dụng','Thiết lập chưa hoàn tất','Mẫu kiểm tra giá trị dài','Sao chép thành công','Sao chép thất bại']};
+  function translateStateOptions(){ [...$('#state-select').options].forEach((o,i)=>o.textContent=stateOptionsTranslated[locale][i]||o.textContent); }
+  const oldApplyLocale=applyLocale;
+  applyLocale=function(){oldApplyLocale();translateStateOptions();syncReviewState();$('#theme-toggle').lastElementChild.textContent=theme==='light'?t('theme'):t('themeLight');};
+  applyLocale();updateProject();syncReviewState();
+})();
+</script>
+</body>
+</html>
