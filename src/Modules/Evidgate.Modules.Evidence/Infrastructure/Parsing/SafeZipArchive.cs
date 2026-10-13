@@ -646,6 +646,15 @@ internal static class SafeZipArchive
                     throw new ArchiveLimitException(ParsingFailureReason.EntryCountExceeded);
                 }
 
+                // A real classic count (not the 0xFFFF marker) is also bounded: a reader that ignores the ZIP64
+                // record when no marker is present would use it.
+                var classic = ReadUInt16(bytes, endOfCentralDirectory + EndOfCentralDirectoryTotalEntriesOffset);
+
+                if (classic != ushort.MaxValue && classic > options.MaxEntries)
+                {
+                    throw new ArchiveLimitException(ParsingFailureReason.EntryCountExceeded);
+                }
+
                 return;
             }
         }
