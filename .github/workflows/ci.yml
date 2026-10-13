@@ -30,11 +30,19 @@ on:
     branches:
       - develop
       - main
+  # 06.3.2-T2.1 (AC4): the nightly fuzz run. The `fixtures-fuzz` job below is the only one that belongs to it and
+  # every merge-path job is inverted off it, so the schedule adds the fuzz harness alone and no PR job runs
+  # nightly. A manual "Run workflow" is the same nightly job.
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
 
 concurrency:
-  # One in-flight run per ref; a superseded commit's run is cancelled so stale
-  # results never hold a runner or report after a newer push.
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # One in-flight run per ref and event kind: a superseded commit's push/PR run is
+  # cancelled so stale results never hold a runner or report after a newer push. The
+  # nightly schedule and a manual dispatch key on their own `nightly` group, so a
+  # nightly fuzz run and a push run never cancel each other.
+  group: ${{ github.workflow }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'nightly' || 'ref' }}-${{ github.ref }}
   cancel-in-progress: true
 
 # 00 §5.7 S3: least privilege — no secret is needed beyond the default token.
@@ -42,8 +50,12 @@ permissions:
   contents: read
 
 jobs:
+  # 06.3.2-T2.1 (AC4): the workflow also runs on the nightly schedule, and only the `fixtures-fuzz` job belongs to
+  # that run. Every merge-path job therefore carries `if: github.event_name == 'pull_request' || github.event_name
+  # == 'push'`, so adding the schedule changes no PR behaviour and the nightly run stays the fuzz harness alone.
   verify:
     name: 'verify (dotnet)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -75,6 +87,7 @@ jobs:
   # yet enforced by branch protection.
   isolation:
     name: 'isolation (M1 gate)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -102,8 +115,67 @@ jobs:
           path: artifacts/test-results/isolation.junit.xml
           retention-days: 14
 
+  # 06.3.2-T1.2 (AC2): the committed hostile-input corpus and its mutation smoke are their own job on the PR
+  # trigger, so a parser-profile guard that regresses fails a named check instead of one case inside the suite.
+  # `--stage build` precedes the stage because it runs `dotnet test --no-build -c Release`.
+  fixtures-hostile:
+    name: 'verify (hostile fixtures)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, hostile-input fixtures — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage fixtures-hostile
+
+  # 06.3.2-T2.1 (AC4): the nightly fuzz job — the seeded-mutation harness over the 06.3.1 parser profile, seeded
+  # from fixtures/hostile/, on the ten-minute budget the `fixtures-fuzz` stage sets. It runs on the nightly
+  # schedule and on demand, never on a PR, so the extra minutes never land on the merge path. `--stage build`
+  # precedes the stage because it runs `dotnet test --no-build -c Release`; the 30-minute timeout is the 600 s
+  # budget plus two builds of margin. It runs only verify.sh stages (check-ci-parity enforces it) and uploads the
+  # findings directory on failure.
+  fixtures-fuzz:
+    name: 'verify (fuzz, nightly)'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, fuzz — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage fixtures-fuzz
+      - name: 'Upload the fuzz findings on failure'
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-findings
+          path: artifacts/fuzz-findings
+          retention-days: 14
+
   web:
     name: 'verify (web)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -140,6 +212,7 @@ jobs:
 
   policy:
     name: 'verify (policy)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -185,6 +258,7 @@ jobs:
   # head and the Api image reports ready against it.
   images:
     name: 'verify (images)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -198,6 +272,7 @@ jobs:
   # apps/web has a Playwright spec, but the suite is still a scaffold.
   e2e:
     name: 'e2e (playwright, non-blocking until 09)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     continue-on-error: true
@@ -229,6 +304,7 @@ jobs:
   # can never diverge (check-ci-parity enforces it).
   supply-chain:
     name: 'verify (supply chain)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
