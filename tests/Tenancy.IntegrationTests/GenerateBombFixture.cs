@@ -43,6 +43,8 @@ internal static class GenerateBombFixture
             for (var index = 0; index < EntryCount; index++)
             {
                 var entry = archive.CreateEntry(Name(index), CompressionLevel.Optimal);
+                // A fixed DOS timestamp keeps the archive a pure function of the seed (the wall clock would not).
+                entry.LastWriteTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
                 using var content = entry.Open();
                 content.Write(Content(seed, index));
