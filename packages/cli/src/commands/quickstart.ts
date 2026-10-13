@@ -201,9 +201,28 @@ jobs:
       # Exchange the GitHub OIDC token for a short-lived Evidgate CI token. The token
       # is written only to the 0600 cache, never printed.
       - run: ${npx(version, 'auth login')}
-      - run: ${npx(version, 'manifests upload --file evidgate-manifest.json')}
+      # Upload the manifest and keep its ids for the run step. Each id is registered
+      # with ::add-mask:: before the $GITHUB_OUTPUT write: R4 in
+      # docs/security/customer-ci-recipe.md requires a masked payload there (the
+      # runner then redacts the ids in the log).
+      - id: manifest
+        run: |
+          out=$(${npx(version, 'manifests upload --file evidgate-manifest.json --json')})
+          manifest_id=$(printf '%s' "$out" | jq -r .manifest_id)
+          manifest_hash=$(printf '%s' "$out" | jq -r .manifest_hash)
+          echo "::add-mask::$manifest_id"
+          echo "::add-mask::$manifest_hash"
+          echo "manifest_id=$manifest_id" >> "$GITHUB_OUTPUT"
+          echo "manifest_hash=$manifest_hash" >> "$GITHUB_OUTPUT"
+      # Create the run for that manifest. The ids travel in the step env, never
+      # interpolated into the script. GITHUB_REF is a full ref for this job's events
+      # (refs/heads/main); the CLI also accepts refs/tags/<tag> and
+      # refs/pull/<n>/merge.
+      - env:
+          MANIFEST_ID: \${{ steps.manifest.outputs.manifest_id }}
+          MANIFEST_HASH: \${{ steps.manifest.outputs.manifest_hash }}
+        run: ${npx(version, 'runs create --manifest-id "$MANIFEST_ID" --manifest-hash "$MANIFEST_HASH" --ci-ref "$GITHUB_REF"')}
       # Not yet available — these steps land with their owning tasks:
-      #   runs create (04.2.2-T2)
       #   events send + runs finalize (04.2.3-T1/T2)
       #   artifacts upload (04.2.4-T1)
 `;
@@ -237,10 +256,16 @@ export EVIDGATE_PROJECT='${project}'
 # only to the 0600 cache, never printed.
 ${npx(version, 'auth login')}
 
-${npx(version, 'manifests upload --file evidgate-manifest.json')}
+# Upload the manifest and keep its ids in shell variables for the run step.
+out=$(${npx(version, 'manifests upload --file evidgate-manifest.json --json')})
+manifest_id=$(node -p 'JSON.parse(process.argv[1]).manifest_id' "$out")
+manifest_hash=$(node -p 'JSON.parse(process.argv[1]).manifest_hash' "$out")
+
+# Create the run for that manifest. Add --ci-ref refs/heads/<branch> (or
+# refs/tags/<tag>) here to record where the run came from.
+${npx(version, 'runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash"')}
 
 # Not yet available — these steps land with their owning tasks:
-#   runs create (04.2.2-T2)
 #   events send + runs finalize (04.2.3-T1/T2)
 #   artifacts upload (04.2.4-T1)
 `;

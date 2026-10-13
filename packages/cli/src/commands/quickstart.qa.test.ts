@@ -1,4 +1,4 @@
-// Independent QA for 04.2.4-T2 (AC5, contracts/cli.md §9).
+// Independent QA for 04.2.4-T2 (AC5, contracts/cli.md §10).
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
