@@ -74,8 +74,8 @@ internal sealed record FuzzRunResult(
 }
 
 /// <summary>
-/// The run's bounds, read from the environment so the same class serves the few-second smoke (<c>test</c> and
-/// <c>fixtures-hostile</c> stages) and the <c>fixtures-fuzz</c> stage's 10-minute nightly budget. Both a
+/// The run's bounds, read from the environment so the same class serves the few-second smoke (the <c>test</c>
+/// stage, which runs the whole solution) and the <c>fixtures-fuzz</c> stage's 10-minute nightly budget. Both a
 /// wall-clock budget and an iteration cap are enforced; the seed is always recorded.
 /// </summary>
 /// <param name="Seed">The deterministic PRNG seed.</param>
@@ -122,29 +122,69 @@ internal sealed record FuzzRunOptions(
 
     /// <summary>The bounds for this process: every value from its variable, or the documented default.</summary>
     /// <returns>The options the harness runs with.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// A variable is set to a value the harness cannot read. An unset variable keeps its default, but a typo fails
+    /// the run rather than silently shrinking it: a zero budget or cap would otherwise drive no input at all and
+    /// still leave the run green, and a mistyped seed would silently replay the default run instead.
+    /// </exception>
     internal static FuzzRunOptions FromEnvironment() => new(
-        Seed: Parse(SeedVariable, DefaultSeed),
-        BudgetSeconds: Parse(BudgetVariable, SmokeBudgetSeconds),
-        MaxIterations: Parse(IterationsVariable, DefaultMaxIterations),
-        PerInputMilliseconds: Parse(PerInputVariable, DefaultPerInputMilliseconds),
+        Seed: ParseSeed(SeedVariable, DefaultSeed),
+        BudgetSeconds: ParsePositive(BudgetVariable, SmokeBudgetSeconds),
+        MaxIterations: ParsePositive(IterationsVariable, DefaultMaxIterations),
+        PerInputMilliseconds: ParsePositive(PerInputVariable, DefaultPerInputMilliseconds),
         FindingsDirectory: Environment.GetEnvironmentVariable(FindingsDirectoryVariable) is { Length: > 0 } directory
             ? directory
             : Path.Combine(Path.GetTempPath(), "evidgate-fuzz-findings"));
 
-    private static ulong Parse(string name, ulong fallback) =>
-        ulong.TryParse(Environment.GetEnvironmentVariable(name), CultureInfo.InvariantCulture, out var value)
-            ? value
-            : fallback;
+    /// <summary>
+    /// Reads the PRNG seed. Unset keeps the constant default; a value that is set but is not an unsigned integer —
+    /// a negative value included — throws, so a mistyped seed cannot pass for a replay of a recorded run.
+    /// </summary>
+    private static ulong ParseSeed(string name, ulong fallback)
+    {
+        if (Environment.GetEnvironmentVariable(name) is not { Length: > 0 } raw)
+        {
+            return fallback;
+        }
 
-    private static int Parse(string name, int fallback) =>
-        int.TryParse(Environment.GetEnvironmentVariable(name), CultureInfo.InvariantCulture, out var value)
+        return ulong.TryParse(raw, CultureInfo.InvariantCulture, out var value)
             ? value
-            : fallback;
+            : throw Unparsable(name, raw, "an unsigned integer");
+    }
 
-    private static long Parse(string name, long fallback) =>
-        long.TryParse(Environment.GetEnvironmentVariable(name), CultureInfo.InvariantCulture, out var value)
+    /// <summary>
+    /// Reads one positive bound. Unset keeps <paramref name="fallback"/>; a value that is set but is not a positive
+    /// integer throws, because a zero budget or iteration cap ends the run before it drove a single input and still
+    /// leaves it green.
+    /// </summary>
+    private static int ParsePositive(string name, int fallback)
+    {
+        if (Environment.GetEnvironmentVariable(name) is not { Length: > 0 } raw)
+        {
+            return fallback;
+        }
+
+        return int.TryParse(raw, CultureInfo.InvariantCulture, out var value) && value > 0
             ? value
-            : fallback;
+            : throw Unparsable(name, raw, "a positive integer");
+    }
+
+    /// <summary>Reads one positive bound as a long; otherwise the same rule as the int overload.</summary>
+    private static long ParsePositive(string name, long fallback)
+    {
+        if (Environment.GetEnvironmentVariable(name) is not { Length: > 0 } raw)
+        {
+            return fallback;
+        }
+
+        return long.TryParse(raw, CultureInfo.InvariantCulture, out var value) && value > 0
+            ? value
+            : throw Unparsable(name, raw, "a positive integer");
+    }
+
+    /// <summary>The refusal for a variable that is set to something the harness cannot read.</summary>
+    private static InvalidOperationException Unparsable(string name, string raw, string expected) =>
+        new($"{name} is set to '{raw}'; expected {expected}, or unset the variable for the default");
 }
 
 /// <summary>
@@ -240,7 +280,10 @@ internal static class HostileFuzz
                     // real crash tightens it to the reason the fixed profile returns (the corpus test then proves
                     // the row and fails if it is still wrong).
                     var promoted = FuzzPromotion.Promote(finding, HostileFixtureCorpus.DirectoryPath, ParsingFailureReason.Malformed, allowPromotion: true);
-                    log?.Invoke($"fuzz promoted: {promoted.File} ({promoted.GuardId})");
+
+                    log?.Invoke(promoted.AlreadyPromoted
+                        ? $"fuzz already promoted: {promoted.File} is in the corpus with the same bytes"
+                        : $"fuzz promoted: {promoted.File} ({promoted.GuardId})");
                 }
             }
 
@@ -782,12 +825,17 @@ internal static class FuzzPromotion
     /// Writes <paramref name="finding"/>'s bytes into the corpus directory and appends its manifest row. The row
     /// names the guard that owns the finding's entry point, the entry point itself, and the documented refusal the
     /// input must produce — so the promoted file is an ordinary corpus row the 06.3.2-T1 suite asserts from then on.
+    /// The call is idempotent per finding: the file name is the finding's content hash, so a second promotion of
+    /// the same finding finds identical bytes and changes nothing.
     /// </summary>
     /// <param name="finding">The finding to promote.</param>
     /// <param name="corpusDirectory">The corpus directory (the real one locally, a temp copy in the smoke test).</param>
     /// <param name="expectedFailureCode">The documented <see cref="ParsingFailureReason"/> the fixed profile must answer with.</param>
     /// <param name="allowPromotion">The explicit opt-in; false refuses and writes nothing.</param>
-    /// <returns>The row that was written.</returns>
+    /// <returns>
+    /// The finding's row: the one written here, or — when the identical file was already next to the corpus — the
+    /// same values with <see cref="PromotedFixture.AlreadyPromoted"/> set, in which case nothing was written.
+    /// </returns>
     internal static PromotedFixture Promote(
         FuzzFinding finding,
         string corpusDirectory,
@@ -812,14 +860,28 @@ internal static class FuzzPromotion
         var file = $"fuzz_{HostileFuzz.Sha256Hex(finding.Bytes)[..12]}{extension}";
         var path = Path.Combine(corpusDirectory, file);
 
-        if (File.Exists(path))
-        {
-            throw new InvalidOperationException($"{file} is already in {corpusDirectory}");
-        }
-
         // The guard sentence names no exception text: a finding's detail can quote input bytes, and the corpus
         // manifest is committed (00 §5.7 S3). The detail stays in the findings directory.
         var guard = $"{guardId} — fuzz-promoted from {finding.SeedName}; the profile answered outside its documented outcomes";
+
+        if (File.Exists(path))
+        {
+            // The file name is the finding's content hash, so an existing file with identical bytes is the same
+            // finding an earlier run promoted: report it as already promoted and write nothing — no second manifest
+            // row, and no abort that would skip the rest of the run. Different bytes under the same name mean the
+            // name no longer identifies the content, which is a real inconsistency, so that still refuses.
+            if (!File.ReadAllBytes(path).AsSpan().SequenceEqual(finding.Bytes))
+            {
+                throw new InvalidOperationException(
+                    $"{file} is already in {corpusDirectory} with different bytes than this finding; "
+                    + "resolve it by hand rather than overwriting a committed fixture");
+            }
+
+            return new PromotedFixture(file, guard, driveMode, expectedFailureCode, path)
+            {
+                AlreadyPromoted = true,
+            };
+        }
 
         File.WriteAllBytes(path, finding.Bytes);
         AppendRow(corpusDirectory, file, guard, driveMode, expectedFailureCode);
@@ -840,6 +902,12 @@ internal static class FuzzPromotion
         string ExpectedFailureCode,
         string Path)
     {
+        /// <summary>
+        /// True when the finding's file was already next to the corpus with byte-identical content, so this call
+        /// wrote nothing: the run reports it as already promoted instead of aborting, and appends no second row.
+        /// </summary>
+        internal bool AlreadyPromoted { get; init; }
+
         /// <summary>The guard id: the first word of <see cref="Guard"/>, as the manifest loader reads it.</summary>
         internal string GuardId => Guard.Split(' ', 2)[0];
     }

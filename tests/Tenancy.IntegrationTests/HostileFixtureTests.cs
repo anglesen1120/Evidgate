@@ -196,14 +196,20 @@ public sealed class HostileFixtureTests(GeneratedHostileFixtures generated) : IC
     [Fact]
     public void TheCorpusIsTheSingleSourceOfHostileFixtures()
     {
-        var corpus = Path.GetRelativePath(RlsExceptionFile.RepositoryRoot, HostileFixtureCorpus.DirectoryPath);
+        // Only the real corpus directory is exempt. A bare prefix would also exempt a sibling that merely starts
+        // with the same characters (fixtures/hostile-old/, fixtures/hostile2/), so the prefix carries the separator;
+        // both sides are normalised to it first.
+        var corpus = Path.GetRelativePath(RlsExceptionFile.RepositoryRoot, HostileFixtureCorpus.DirectoryPath)
+            .Replace(Path.DirectorySeparatorChar, '/');
+        var corpusPrefix = corpus.TrimEnd('/') + '/';
         var offenders = new List<string>();
 
         foreach (var path in RepositoryFiles(RlsExceptionFile.RepositoryRoot))
         {
-            var relative = Path.GetRelativePath(RlsExceptionFile.RepositoryRoot, path);
+            var relative = Path.GetRelativePath(RlsExceptionFile.RepositoryRoot, path)
+                .Replace(Path.DirectorySeparatorChar, '/');
 
-            if (relative.StartsWith(corpus, StringComparison.Ordinal))
+            if (relative.StartsWith(corpusPrefix, StringComparison.Ordinal))
             {
                 continue;
             }

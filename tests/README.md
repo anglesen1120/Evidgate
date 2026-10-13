@@ -53,11 +53,14 @@ reason is in the closed `ParsingFailureReason` set under the code and status tha
 input abandoned at the per-input bound, a failure with an undocumented reason, path, status or detail count — is a
 finding: its bytes go to the findings directory and the test fails. Mutated bytes are never executed or extracted.
 
-**Budget.** `EVIDGATE_FUZZ_SEED` (default `20261013`), `EVIDGATE_FUZZ_BUDGET_SECONDS` (default 5; the
-`fixtures-fuzz` stage exports 600 unless the caller already set one), `EVIDGATE_FUZZ_MAX_ITERATIONS`,
-`EVIDGATE_FUZZ_PER_INPUT_MS` and `EVIDGATE_FUZZ_FINDINGS_DIR` (default a temp directory; the stage points it at
-`artifacts/fuzz-findings`, which the nightly job uploads on failure and which always receives a `run.json`). The
-`test` and `fixtures-hostile` stages therefore run only the few-second smoke, never the ten-minute budget.
+**Budget.** `EVIDGATE_FUZZ_BUDGET_SECONDS` (default 5; the `fixtures-fuzz` stage exports 600 unless the caller
+already set one), `EVIDGATE_FUZZ_MAX_ITERATIONS`, `EVIDGATE_FUZZ_PER_INPUT_MS` and `EVIDGATE_FUZZ_FINDINGS_DIR`
+(default a temp directory; the stage points it at `artifacts/fuzz-findings`, which the nightly job uploads on
+failure and which always receives a `run.json`). `EVIDGATE_FUZZ_SEED` replays a run exactly: the `fixtures-fuzz`
+stage sets it from the CI run id (the clock outside CI) and echoes it, so consecutive nights do not repeat one
+PRNG stream, while the harness's constant default `20261013` covers the PR smoke, which never sets the variable.
+The `test` stage therefore runs only the few-second smoke, never the ten-minute budget; the `fixtures-hostile`
+stage selects `Category=Hostile` only and never runs the fuzz harness.
 
 **Promotion.** `FuzzPromotion.Promote` writes a finding into `fixtures/hostile/` as a new committed fixture plus
 its `manifest.json` row, so a crash the nightly run finds becomes a permanent case the T1 suite asserts from then

@@ -50,16 +50,19 @@ repository (AC5).
 `zip_long_comment.zip` is the positive control: a long but well-formed comment closes exactly at the object's end,
 so the profile must ACCEPT it — a corpus that only ever expects refusals cannot tell a guard from a blanket
 refusal. `planted_secret.txt` carries a synthetic, self-describing value
-(`EVIDGATE-DUMMY-NOT-A-SECRET-…`); `scripts/check-no-secret-literals.sh` treats that prefix as a documented
-non-secret (see `scripts/no-secret-literals-allow.txt`).
+(`EVIDGATE-DUMMY-NOT-A-SECRET-…`); `scripts/check-no-secret-literals.sh` never reaches it — `fixtures/` is outside
+that scanner's scope and no rule shape matches the dummy — so the corpus needs no
+`scripts/no-secret-literals-allow.txt` row.
 
 ## Fuzzing and promotion (06.3.2-T2)
 
 This corpus is also the seed set of the 06.3.2-T2.1 fuzz harness (`HostileFuzzHarness.cs`, classes
 `HostileFuzzTests` / `FuzzPromotionTests`, `[Trait("Category","Fuzz")]`, run by `scripts/verify.sh --stage
 fixtures-fuzz` and the nightly `fixtures-fuzz` CI job on a 10-minute budget). It mutates these bytes with a
-deterministic PRNG — a recorded seed (`EVIDGATE_FUZZ_SEED`, default `20261013`) replays a run exactly — and drives
-every input through `IParsing.ParseXmlReport` and `IParsing.EnumerateArchive`, allowing only the documented
+deterministic PRNG — a recorded seed replays a run exactly, the `fixtures-fuzz` stage setting `EVIDGATE_FUZZ_SEED`
+from the CI run id (the clock outside CI) and echoing it so consecutive nights do not repeat one PRNG stream,
+while the harness's constant default `20261013` covers the PR smoke — and drives every input through
+`IParsing.ParseXmlReport` and `IParsing.EnumerateArchive`, allowing only the documented
 outcomes (`artifact_invalid`/422 with a closed `ParsingFailureReason`, or `payload_too_large`/413 for
 `size_exceeded`). An escaped exception, an abandoned input or an undocumented reason is a finding: the bytes go
 to the findings directory (`artifacts/fuzz-findings` in CI, uploaded on failure) and the run fails.

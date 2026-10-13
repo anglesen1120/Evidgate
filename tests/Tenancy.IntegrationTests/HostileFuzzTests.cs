@@ -1,8 +1,9 @@
 // 06.3.2-T2.1 (AC4, plan §9 "Nightly fuzz budget finds no unreported crash"): the nightly fuzz run. It is the
-// same class in every stage — only its bounds change: `test` and `fixtures-hostile` run the few-second smoke
+// same class in every stage that selects it — only its bounds change: the `test` stage runs the few-second smoke
 // default, and the `fixtures-fuzz` stage exports EVIDGATE_FUZZ_BUDGET_SECONDS=600 for the ten-minute budget, so
-// the extra minutes never land on the merge path. The seed is always printed, so a red nightly run is replayable
-// with EVIDGATE_FUZZ_SEED.
+// the extra minutes never land on the merge path. The `fixtures-hostile` stage selects `Category=Hostile` only, so
+// it runs no case from this class. The seed is always printed, so a red nightly run is replayable with
+// EVIDGATE_FUZZ_SEED.
 using Shouldly;
 using Xunit;
 
@@ -42,6 +43,10 @@ public sealed class HostileFuzzTests(ITestOutputHelper output)
         {
             output.WriteLine($"  finding: {finding.SeedName} [{finding.Target}] #{finding.Iteration}: {finding.Detail}");
         }
+
+        // A run that drove nothing would be green for the wrong reason: the bounds are validated, so a zero budget
+        // or cap throws rather than falling back, and this is the other half of that guard.
+        result.Iterations.ShouldBeGreaterThan(0, "the run drove no input");
 
         result.IsClean.ShouldBeTrue(
             $"{result.Findings.Count} input(s) answered outside the documented outcomes; the bytes are under "

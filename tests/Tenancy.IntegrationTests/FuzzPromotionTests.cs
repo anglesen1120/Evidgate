@@ -1,7 +1,9 @@
 // 06.3.2-T2.1 (AC4, plan §9 "A seeded crash is promoted into the corpus, not swallowed"): the promotion smoke.
 // It drives the real helper against a TEMP COPY of fixtures/hostile/ — never the committed corpus — with one
 // synthetic crash, and asserts the two things promotion has to do: a new committed fixture file appears next to
-// the corpus, and its manifest row appears (so the 06.3.2-T1 suite asserts it from then on). It also proves the
+// the corpus, and its manifest row appears (so the 06.3.2-T1 suite asserts it from then on). Promoting the same
+// finding again is a no-op — the file name is the finding's content hash — so a replay neither duplicates the row
+// nor aborts the run, while bytes under that name that differ from the finding are refused. It also proves the
 // helper writes nothing without the explicit opt-in, which is what keeps a CI run read-only.
 using System.Text;
 using System.Text.Json.Nodes;
@@ -118,6 +120,63 @@ public sealed class FuzzPromotionTests : IDisposable
             () => FuzzPromotion.Promote(MarkupCrash(), _corpus, "not_a_documented_reason", allowPromotion: true));
 
         ReadRows(_corpus).Count.ShouldBe(rowsBefore);
+    }
+
+    /// <summary>
+    /// AC4: the file name is the finding's content hash, so promoting the same finding a second time finds its own
+    /// bytes already next to the corpus: the helper reports the row as already promoted and changes nothing — no
+    /// second file, no second manifest row, and no abort that would cut the run short.
+    /// </summary>
+    [Fact]
+    public void PromotingTheSameFindingTwiceIsANoOp()
+    {
+        var finding = MarkupCrash();
+
+        var first = FuzzPromotion.Promote(finding, _corpus, ParsingFailureReason.Malformed, allowPromotion: true);
+        var rowsAfterFirst = ReadRows(_corpus).Count;
+        var filesAfterFirst = CorpusFiles(_corpus).ToList();
+
+        first.AlreadyPromoted.ShouldBeFalse("the first promotion writes the fixture");
+
+        var second = FuzzPromotion.Promote(finding, _corpus, ParsingFailureReason.Malformed, allowPromotion: true);
+
+        second.AlreadyPromoted.ShouldBeTrue("the second promotion finds the identical file already in the corpus");
+        second.File.ShouldBe(first.File);
+        second.GuardId.ShouldBe(first.GuardId);
+        second.Path.ShouldBe(first.Path);
+
+        ReadRows(_corpus).Count.ShouldBe(rowsAfterFirst, "an already-promoted finding appends no second row");
+        CorpusFiles(_corpus).ShouldBe(filesAfterFirst, "an already-promoted finding writes no second file");
+        ReadRows(_corpus).Count.ShouldBe(CorpusFiles(_corpus).Count + GeneratedRows(ReadRows(_corpus)));
+        File.ReadAllBytes(second.Path).ShouldBe(finding.Bytes, "the committed bytes are the finding's own");
+    }
+
+    /// <summary>
+    /// AC4: bytes under the promoted name that are not the finding's own mean the name no longer identifies the
+    /// content, so the helper refuses instead of overwriting a committed fixture and writes nothing.
+    /// </summary>
+    [Fact]
+    public void PromotionRefusesAnExistingFileWithDifferentBytes()
+    {
+        var finding = MarkupCrash();
+
+        var first = FuzzPromotion.Promote(finding, _corpus, ParsingFailureReason.Malformed, allowPromotion: true);
+        var rowsAfterFirst = ReadRows(_corpus).Count;
+        var foreign = Encoding.UTF8.GetBytes("not this finding's bytes");
+
+        // The foreign bytes replace the file the first promotion wrote; the file set is captured with them in place,
+        // so the refusal below is asserted against the corpus as it now stands.
+        File.WriteAllBytes(first.Path, foreign);
+
+        var filesAfterFirst = CorpusFiles(_corpus).ToList();
+
+        var refused = Should.Throw<InvalidOperationException>(
+            () => FuzzPromotion.Promote(finding, _corpus, ParsingFailureReason.Malformed, allowPromotion: true));
+
+        refused.Message.ShouldContain(first.File);
+        ReadRows(_corpus).Count.ShouldBe(rowsAfterFirst, "a refused promotion appends no row");
+        CorpusFiles(_corpus).ShouldBe(filesAfterFirst, "a refused promotion writes no file");
+        File.ReadAllBytes(first.Path).ShouldBe(foreign, "the existing bytes are left alone");
     }
 
     /// <summary>Deletes the suite's temp corpus; a leftover temp tree never fails the run.</summary>

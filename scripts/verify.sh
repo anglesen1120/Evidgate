@@ -133,14 +133,19 @@ run_stage() {
   fixtures-fuzz)
     # 06.3.2-T2.1 (AC4): the seeded-mutation fuzz harness (HostileFuzzTests, FuzzPromotionTests) over
     # IParsing.ParseXmlReport/EnumerateArchive, selected by [Trait("Category","Fuzz")] and run on the built
-    # assembly, so the stage needs no Docker daemon. The ten-minute budget is set HERE, so the `test` and
-    # `fixtures-hostile` stages run only the harness's few-second smoke default (a caller that already exported
-    # EVIDGATE_FUZZ_BUDGET_SECONDS keeps its value). Findings go under artifacts/fuzz-findings, which the nightly
-    # job uploads. `--ignore-exit-code 8` follows the `test` stage's skip path: every other assembly of the
+    # assembly, so the stage needs no Docker daemon. The ten-minute budget is set HERE, so the `test` stage — the
+    # only other stage that selects the Fuzz trait — runs the harness's few-second smoke default (a caller that
+    # already exported EVIDGATE_FUZZ_BUDGET_SECONDS keeps its value); the `fixtures-hostile` stage filters
+    # Category=Hostile only and never runs this harness. The seed is set HERE too: one per run, from the CI run id
+    # (or the clock outside CI), so consecutive nights do not replay one PRNG stream; it is echoed below so a red
+    # run can be replayed with EVIDGATE_FUZZ_SEED=<value>. Findings go under artifacts/fuzz-findings, which the
+    # nightly job uploads. `--ignore-exit-code 8` follows the `test` stage's skip path: every other assembly of the
     # solution holds no Fuzz test, which MTP reports as exit code 8.
     export EVIDGATE_FUZZ_BUDGET_SECONDS="${EVIDGATE_FUZZ_BUDGET_SECONDS:-600}"
     export EVIDGATE_FUZZ_FINDINGS_DIR="${EVIDGATE_FUZZ_FINDINGS_DIR:-$ROOT/artifacts/fuzz-findings}"
+    export EVIDGATE_FUZZ_SEED="${EVIDGATE_FUZZ_SEED:-${GITHUB_RUN_ID:-$(date +%s)}}"
     stage "dotnet test (fuzz harness, ${EVIDGATE_FUZZ_BUDGET_SECONDS}s budget)"
+    echo "   EVIDGATE_FUZZ_SEED=${EVIDGATE_FUZZ_SEED}"
     dotnet test --no-build -c Release --solution Evidgate.slnx \
       --filter-trait "Category=Fuzz" --ignore-exit-code 8
     ;;

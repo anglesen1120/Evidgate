@@ -38,9 +38,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # One in-flight run per ref; a superseded commit's run is cancelled so stale
-  # results never hold a runner or report after a newer push.
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # One in-flight run per ref and event kind: a superseded commit's push/PR run is
+  # cancelled so stale results never hold a runner or report after a newer push. The
+  # nightly schedule and a manual dispatch key on their own `nightly` group, so a
+  # nightly fuzz run and a push run never cancel each other.
+  group: ${{ github.workflow }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'nightly' || 'ref' }}-${{ github.ref }}
   cancel-in-progress: true
 
 # 00 §5.7 S3: least privilege — no secret is needed beyond the default token.
