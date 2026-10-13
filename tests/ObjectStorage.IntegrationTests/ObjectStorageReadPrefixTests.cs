@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Microsoft.Extensions.Options;
@@ -12,6 +13,9 @@ namespace ObjectStorage.IntegrationTests;
 /// object, all of a shorter one, and <c>null</c> for a missing key (the same 404-is-an-outcome rule as
 /// <see cref="S3ObjectStorage.HeadAsync"/>). The cap is bounded (1..65536) and every key with traversal,
 /// an empty segment, a backslash or a control character is refused before any request leaves the process.
+/// 06.3.1-T2.2 adds the conditional read: when an <c>If-Match</c> ETag is supplied the GET carries it, so
+/// the bytes returned are the object a preceding <c>HEAD</c> verified, and a store that finds a different
+/// object answers <c>412</c> — surfaced as <see cref="ObjectStorageException"/>, never a stale prefix.
 /// </summary>
 [Collection(SeaweedFsCollectionDefinition.Name)]
 [Trait("Category", "Docker")]
@@ -174,6 +178,68 @@ public sealed class ObjectStorageReadPrefixTests(SeaweedFsFixture fixture) : IDi
         {
             exception.Message.ShouldNotContain(key, Case.Sensitive);
         }
+    }
+
+    /// <summary>
+    /// 06.3.1-T2.2: the prefix read is pinned to the ETag the preceding <c>HEAD</c> reported, so the bytes are
+    /// the object that HEAD verified.
+    /// </summary>
+    [Fact]
+    public async Task ReadPrefix_With_The_Matching_IfMatch_Returns_The_Verified_Object()
+    {
+        var body = RandomNumberGenerator.GetBytes(2048);
+        var key = StagingKey();
+        using var adapter = Adapter();
+
+        using var put = await PutAsync(
+            adapter.PresignPut(new PresignPutRequest(key, body.LongLength, Sha256Hex(body))), body);
+        put.IsSuccessStatusCode.ShouldBeTrue($"the signed PUT must be accepted; status={(int)put.StatusCode}");
+
+        var head = await adapter.HeadAsync(key, CancellationToken.None);
+
+        head.ShouldNotBeNull();
+        head!.ETag.ShouldNotBeNullOrWhiteSpace("the store reports an ETag on HEAD");
+
+        var prefix = await adapter.ReadPrefixAsync(key, 1024, CancellationToken.None, head.ETag);
+
+        prefix.ShouldNotBeNull();
+        prefix!.Length.ShouldBe(1024);
+        prefix.ShouldBe(body[..1024]);
+    }
+
+    /// <summary>
+    /// 06.3.1-T2.2: a store that finds the object no longer carries the pinned ETag answers <c>412</c>, which the
+    /// adapter surfaces as <see cref="ObjectStorageException"/> — never <c>null</c> and never a stale prefix — so
+    /// the caller fails closed instead of sniffing bytes that are not the verified object.
+    /// </summary>
+    [Fact]
+    public async Task ReadPrefix_With_A_Stale_IfMatch_Throws()
+    {
+        var first = RandomNumberGenerator.GetBytes(2048);
+        var second = RandomNumberGenerator.GetBytes(2048);
+        var key = StagingKey();
+        using var adapter = Adapter();
+
+        using var putFirst = await PutAsync(
+            adapter.PresignPut(new PresignPutRequest(key, first.LongLength, Sha256Hex(first))), first);
+        putFirst.IsSuccessStatusCode.ShouldBeTrue($"the signed PUT must be accepted; status={(int)putFirst.StatusCode}");
+
+        var head = await adapter.HeadAsync(key, CancellationToken.None);
+        head.ShouldNotBeNull();
+        var pinned = head!.ETag;
+        pinned.ShouldNotBeNullOrWhiteSpace("the store reports an ETag on HEAD");
+
+        // Replace the object: the pinned ETag is stale now.
+        using var putSecond = await PutAsync(
+            adapter.PresignPut(new PresignPutRequest(key, second.LongLength, Sha256Hex(second))), second);
+        putSecond.IsSuccessStatusCode.ShouldBeTrue($"the signed PUT must be accepted; status={(int)putSecond.StatusCode}");
+
+        var exception = await Should.ThrowAsync<ObjectStorageException>(() =>
+            adapter.ReadPrefixAsync(key, 1024, CancellationToken.None, pinned));
+
+        exception.HttpStatus.ShouldBe(HttpStatusCode.PreconditionFailed);
+        exception.Operation.ShouldBe("read-prefix");
+        exception.Message.ShouldNotContain(key, Case.Sensitive);
     }
 
     private S3ObjectStorage Adapter() => new(Options.Create(new ObjectStorageOptions

@@ -50,8 +50,8 @@ public sealed class EvidenceCompleteAuditTests(PostgresTenancyFixture fixture, S
 
     private const string StagingDeleteTask = "artifact_staging_delete";
 
-    /// <summary>The uploaded body on the happy path: exactly <see cref="Cap"/> bytes.</summary>
-    private static readonly byte[] GoodBody = Encoding.UTF8.GetBytes(new string('A', (int)Cap));
+    /// <summary>The uploaded body on the happy path: a zip signature then filler, exactly <see cref="Cap"/> bytes (the declared type is <c>application/zip</c>, 06.3.1-T2.2).</summary>
+    private static readonly byte[] GoodBody = [0x50, 0x4B, 0x03, 0x04, .. Encoding.UTF8.GetBytes(new string('A', (int)Cap - 4))];
 
     private readonly PostgresTenancyFixture _fixture = fixture;
 

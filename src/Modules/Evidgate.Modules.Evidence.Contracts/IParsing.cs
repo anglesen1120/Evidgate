@@ -57,9 +57,26 @@ public interface IParsing
     Result<JsonDocument> ParseJson(Stream content, long maxBytes, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Enumerates the entries of one zip archive (a Playwright trace, a report bundle) against the profile
+    /// (06.3.1 AC3, AC4). Synchronous: it returns only after every entry has been walked, so the caps are
+    /// enforced by the time it returns. The entry names are normalized (forward separators, no leading
+    /// separator, no <c>.</c>/<c>..</c> segments) and an entry whose name is unsafe — a traversal, an absolute
+    /// path, a drive letter, a backslash or control character, a symbolic link — is refused, as is a duplicate
+    /// normalized name; a failure never carries an entry name (00 §5.7 S3).
+    /// </summary>
+    /// <param name="content">
+    /// The untrusted, already-bounded archive bytes; the caller keeps ownership of the stream. The profile's
+    /// timeout is cooperative and cannot interrupt a blocking read, so a caller passes a buffered stream.
+    /// </param>
+    /// <param name="maxBytes">The per-kind cap for the archive object itself from <c>artifact_kind_policy.max_bytes</c>.</param>
+    /// <param name="cancellationToken">Cancels the walk; a timeout of its own is added by the profile.</param>
+    /// <returns>The entry metadata (no entry content), or the profile failure.</returns>
+    Result<IReadOnlyList<ArchiveEntry>> EnumerateArchive(Stream content, long maxBytes, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Checks the leading bytes of one object against its declared media type (06.3.1 AC5). The declared
-    /// type's parameters are stripped and compared case-insensitively; a type the profile does not sniff
-    /// yet (every type 06.3.1-T2.2 has not added) answers <see cref="MediaSniffVerdict.NotSniffed"/>.
+    /// type's parameters are stripped and compared case-insensitively; a type the profile has no signature
+    /// for answers <see cref="MediaSniffVerdict.Mismatch"/> (fail closed).
     /// </summary>
     /// <param name="declaredMediaType">The artifact's declared <c>media_type</c>.</param>
     /// <param name="prefix">The object's leading bytes (at most <c>ParsingLimits.SniffPrefixBytes</c>).</param>
@@ -103,20 +120,28 @@ public sealed class ParsedXmlReport
     public XmlReader OpenReader() => openReader();
 }
 
+/// <summary>
+/// The metadata of one zip entry the profile accepted (06.3.1 AC3, AC4), returned by
+/// <see cref="IParsing.EnumerateArchive"/>. It carries no entry content: <see cref="Name"/> is the entry's
+/// normalized relative path (forward separators, no leading separator, no <c>.</c>/<c>..</c> segment) and the
+/// two sizes are what the walk measured from the bytes it actually read, so a caller that serves a trace
+/// resource can match a requested path without re-opening the archive. The profile never writes a name to a
+/// log, a message or a metric (00 §5.7 S3).
+/// </summary>
+/// <param name="Name">The normalized relative entry path (forward separators).</param>
+/// <param name="CompressedBytes">The compressed bytes the walk consumed for this entry.</param>
+/// <param name="ExpandedBytes">The expanded bytes the walk actually counted for this entry.</param>
+/// <param name="IsDirectory">True for a directory entry (a name trailing <c>/</c> in the archive).</param>
+public sealed record ArchiveEntry(string Name, long CompressedBytes, long ExpandedBytes, bool IsDirectory);
+
 /// <summary>The media-sniff outcome of <see cref="IParsing.SniffMediaType"/> (06.3.1 AC5).</summary>
 public enum MediaSniffVerdict
 {
     /// <summary>The leading bytes match the declared media type.</summary>
     Match,
 
-    /// <summary>The leading bytes contradict the declared media type.</summary>
+    /// <summary>The leading bytes contradict the declared media type, or the profile has no signature for it (fail closed).</summary>
     Mismatch,
-
-    /// <summary>
-    /// The profile does not sniff this declared type yet; 06.3.1-T2.2 makes this fail closed at
-    /// <c>complete</c>. At T1 the <c>complete</c> route treats it as "no sniff" and keeps the artifact.
-    /// </summary>
-    NotSniffed,
 }
 
 /// <summary>
@@ -156,4 +181,19 @@ public static class ParsingFailureReason
 
     /// <summary>The content is not well-formed (XML/JSON syntax, or no document element).</summary>
     public const string Malformed = "malformed";
+
+    /// <summary>A zip entry name is unsafe: a traversal, an absolute path, a drive letter, a backslash or control character, or a symbolic link (06.3.1 AC4).</summary>
+    public const string UnsafeEntryName = "unsafe_entry_name";
+
+    /// <summary>Two zip entries normalize to the same path, so one could shadow the other (06.3.1 AC4).</summary>
+    public const string DuplicateEntry = "duplicate_entry";
+
+    /// <summary>The archive holds more entries than <c>ParsingLimits.MaxZipEntries</c> (06.3.1 AC3).</summary>
+    public const string EntryCountExceeded = "entry_count_exceeded";
+
+    /// <summary>A zip entry expands by more than <c>ParsingLimits.MaxCompressionRatio</c> against its compressed bytes (06.3.1 AC3).</summary>
+    public const string CompressionRatioExceeded = "compression_ratio_exceeded";
+
+    /// <summary>A zip nests deeper than <c>ParsingLimits.MaxNesting</c> (06.3.1 AC3).</summary>
+    public const string NestingExceeded = "nesting_exceeded";
 }

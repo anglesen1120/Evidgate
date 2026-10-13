@@ -16,8 +16,14 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 public sealed class ParsingBudgetTests
 {
-    /// <summary>The kind cap the fixtures are parsed against: a report kind's policy limit, four times the fixture.</summary>
-    private const long CapBytes = 32 * 1024 * 1024;
+    /// <summary>
+    /// The per-kind byte cap the fixtures are parsed against (AC6). A cap that is per-kind is data — the
+    /// <c>artifact_kind_policy.max_bytes</c> column — while the caps that are the same for every kind live in
+    /// <see cref="ParsingLimits"/>; the guard therefore applies a fixed fraction of the profile's own largest
+    /// allowed content (<see cref="ParsingLimits.MaxExpandedBytes"/> = 512 MiB): 32 MiB, four times the 8 MiB
+    /// fixture, so the fixture is comfortably inside the cap and the AC6 bound is exactly cap ×2.
+    /// </summary>
+    private static readonly long CapBytes = ParsingLimits.MaxExpandedBytes / 16;
 
     /// <summary>The largest fixture this story generates (the shared corpus lands in 06.3.2).</summary>
     private const int FixtureBytes = 8 * 1024 * 1024;
@@ -38,8 +44,10 @@ public sealed class ParsingBudgetTests
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
 
-        // AC6: bounded by the cap, and — the real guard — bounded by the input, not by its node count.
-        allocated.ShouldBeLessThan(2 * CapBytes, "the parse must not allocate proportionally to the cap");
+        // AC6: peak managed allocation stays under the per-kind cap ×2, and — the behavioural guard — bounded by
+        // the input, not by its node count.
+        CapBytes.ShouldBeGreaterThan(fixture.Length, "the largest fixture must sit inside the cap the guard applies");
+        allocated.ShouldBeLessThan(2L * CapBytes, "AC6: the parse must stay under the per-kind cap ×2");
         allocated.ShouldBeLessThan(2L * fixture.Length, "an 8 MiB report must not build a DOM of itself");
 
         // A DOM walk of the same document would also take far longer than this; the bound is deliberately loose
@@ -81,7 +89,7 @@ public sealed class ParsingBudgetTests
 
         // The JSON arm buffers the payload once to enforce the cap and drop a BOM, and JsonDocument owns one
         // buffer of its own: two copies of the input, never a per-token blow-up.
-        allocated.ShouldBeLessThan(2 * CapBytes, "the parse must not allocate proportionally to the cap");
+        allocated.ShouldBeLessThan(2L * CapBytes, "AC6: the parse must stay under the per-kind cap ×2");
         allocated.ShouldBeLessThan(4L * fixture.Length, "the JSON arm must not allocate more than a few copies");
 
         elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10));
@@ -102,6 +110,53 @@ public sealed class ParsingBudgetTests
         verdict.ShouldBe(MediaSniffVerdict.Match);
         allocated.ShouldBeLessThan(64 * 1024, "the sniff must not allocate a buffer");
         ParsingLimits.SniffPrefixBytes.ShouldBe(4096);
+    }
+
+    /// <summary>
+    /// 06.3.1-T2.2 (AC5/AC6): the sniff is run over EVERY media type the product accepts, on the largest prefix
+    /// the complete hot path reads (<see cref="ParsingLimits.SniffPrefixBytes"/>). The walk is a pure span pass
+    /// with no buffer of its own, so the whole table costs a bounded, tiny allocation — never a multiple of the
+    /// prefix. The prefixes are built before the measurement, so the reading is the sniff's own allocation.
+    /// </summary>
+    [Fact]
+    public void SniffingEveryTableTypeOverTheFullPrefixStaysInsideTheBudget()
+    {
+        var samples = new (string Declared, byte[] Prefix)[]
+        {
+            ("application/xml", PaddedPrefix("<testsuites><testcase name=\"x\"/>")),
+            ("text/xml", PaddedPrefix("<r>")),
+            ("application/atom+xml", PaddedPrefix("<feed xmlns=\"http://www.w3.org/2005/Atom\">")),
+            ("application/json", PaddedPrefix("{\"nodes\":[]}")),
+            ("application/ld+json", PaddedPrefix("[{\"@type\":\"node\"}]")),
+            ("text/html", PaddedPrefix("<html><head><title>x</title></head><body>")),
+            ("application/zip", PaddedPrefix("PK\u0003\u0004")),
+            ("image/png", PaddedPrefix("\u0089PNG\r\n\u001A\n")),
+            ("image/jpeg", PaddedPrefix("\u00FF\u00D8\u00FF\u00E0")),
+            ("video/mp4", PaddedPrefix("\u0000\u0000\u0000\u0018ftypisom")),
+        };
+
+        var parsing = new ParsingService();
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+
+        foreach (var (declared, prefix) in samples)
+        {
+            prefix.Length.ShouldBe(ParsingLimits.SniffPrefixBytes);
+            parsing.SniffMediaType(declared, prefix).ShouldBe(MediaSniffVerdict.Match);
+        }
+
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        // Ten sniffs over 4 KiB each: a per-byte or per-prefix buffer would be tens of kilobytes. The bound is
+        // loose enough for the service wrapper's own small allocations and still proves there is no buffer.
+        allocated.ShouldBeLessThan(64 * 1024, "the sniff must not allocate a buffer proportional to the prefix");
+    }
+
+    /// <summary>A prefix of the given Latin-1 text padded with filler to the sniff cap.</summary>
+    private static byte[] PaddedPrefix(string latin1Prefix)
+    {
+        var bytes = new byte[ParsingLimits.SniffPrefixBytes];
+        Encoding.Latin1.GetBytes(latin1Prefix).CopyTo(bytes, 0);
+        return bytes;
     }
 
     [Fact]

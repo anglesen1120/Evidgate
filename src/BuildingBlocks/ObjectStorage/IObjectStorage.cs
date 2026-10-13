@@ -48,13 +48,25 @@ public interface IObjectStorage
     /// is an outcome, not an exception, exactly like <see cref="HeadAsync"/>). A zero-byte object answers an
     /// empty array: the store may report the unsatisfiable range as 416 <c>InvalidRange</c>, which is also an
     /// outcome, not an exception.
+    /// <para>
+    /// When <paramref name="ifMatch"/> is set the GET is conditional (<c>If-Match</c>) on the ETag a preceding
+    /// <see cref="HeadAsync"/> of the same object reported (06.3.1-T2.2): the bytes returned are then the object
+    /// that HEAD verified, never a replacement written between the two calls. A store that finds a different
+    /// object answers <c>412 PreconditionFailed</c> and the adapter throws
+    /// <see cref="ObjectStorageException"/> (it is not an absent-object outcome), so the caller fails closed.
+    /// </para>
     /// </summary>
     /// <param name="objectKey">A server-minted staging or final key.</param>
     /// <param name="maxBytes">The prefix cap in bytes, between 1 and 65536.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
+    /// <param name="ifMatch">
+    /// The ETag the object must still carry, from the preceding <see cref="HeadAsync"/>, or <c>null</c> to read
+    /// unconditionally. Passed verbatim as <c>If-Match</c> (the store's own ETag value, quotes included).
+    /// </param>
     /// <returns>The first <paramref name="maxBytes"/> bytes (fewer when the object is shorter), or <c>null</c> when absent.</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxBytes"/> is below 1 or above 65536.</exception>
-    Task<byte[]?> ReadPrefixAsync(string objectKey, int maxBytes, CancellationToken cancellationToken);
+    /// <exception cref="ObjectStorageException">The store refused the conditional read (the object changed).</exception>
+    Task<byte[]?> ReadPrefixAsync(string objectKey, int maxBytes, CancellationToken cancellationToken, string? ifMatch = null);
 
     /// <summary>
     /// Copies the staging object <paramref name="sourceKey"/> (a <c>pending/</c> key) to the final
@@ -106,7 +118,10 @@ public sealed record PresignedPut(
 /// the lowercase hex of the SHA-256 the store recorded when the object was written (the signed
 /// <c>x-amz-checksum-sha256</c> of the presigned <c>PUT</c>), or <c>null</c> when the store holds no
 /// SHA-256 checksum for the object; a caller must treat <c>null</c> as "not verified".
+/// <see cref="ETag"/> is the entity tag the store reports (the value it would compare against
+/// <c>If-Match</c>), or <c>null</c> when the store reports none; 06.3.1-T2.2 pins the prefix read with it.
 /// </summary>
 /// <param name="ContentLength">The stored byte count.</param>
 /// <param name="ChecksumSha256Hex">64 lowercase hex characters, or <c>null</c> when none is recorded.</param>
-public sealed record ObjectHead(long ContentLength, string? ChecksumSha256Hex);
+/// <param name="ETag">The store's entity tag as reported, quotes included, or <c>null</c> when none is reported.</param>
+public sealed record ObjectHead(long ContentLength, string? ChecksumSha256Hex, string? ETag = null);
