@@ -19,9 +19,15 @@ export EVIDGATE_PROJECT='my-project'
 # only to the 0600 cache, never printed.
 npx --yes --package @evidgate/cli@0.0.0 -- evidgate auth login
 
-npx --yes --package @evidgate/cli@0.0.0 -- evidgate manifests upload --file evidgate-manifest.json
+# Upload the manifest and keep its ids in shell variables for the run step.
+out=$(npx --yes --package @evidgate/cli@0.0.0 -- evidgate manifests upload --file evidgate-manifest.json --json)
+manifest_id=$(node -p 'JSON.parse(process.argv[1]).manifest_id' "$out")
+manifest_hash=$(node -p 'JSON.parse(process.argv[1]).manifest_hash' "$out")
+
+# Create the run for that manifest. Add --ci-ref refs/heads/<branch> (or
+# refs/tags/<tag>) here to record where the run came from.
+npx --yes --package @evidgate/cli@0.0.0 -- evidgate runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash"
 
 # Not yet available — these steps land with their owning tasks:
-#   runs create (04.2.2-T2)
 #   events send + runs finalize (04.2.3-T1/T2)
 #   artifacts upload (04.2.4-T1)

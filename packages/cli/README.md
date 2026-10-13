@@ -53,6 +53,9 @@ cache and is never printed. The generic template names its credential only
 (`EVIDGATE_OIDC_TOKEN`, else a masked `EVIDGATE_INGEST_TOKEN`).
 
 Current state: the pinned `@evidgate/cli@<version>` is not installable until
-04.9.2-T1 publishes the package, and the steps for `runs create` (04.2.2-T2),
-events and `runs finalize` (04.2.3-T1/T2) and `artifacts upload` (04.2.4-T1)
-appear in the templates as comments naming their owning task.
+04.9.2-T1 publishes the package, and the steps for events and `runs finalize`
+(04.2.3-T1/T2) and `artifacts upload` (04.2.4-T1) appear in the templates as
+comments naming their owning task. `runs create` is a real step (04.2.2-T2): the
+GitHub template keeps the uploaded manifest's ids as step outputs and passes them
+to the command through step env, the generic one captures the `--json` output in
+shell variables.

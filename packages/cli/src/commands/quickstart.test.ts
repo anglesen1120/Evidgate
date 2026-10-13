@@ -205,7 +205,7 @@ describe('quickstart', () => {
         expect(resolved?.rest).toEqual([]);
       }
       for (const line of lines) {
-        for (const placeholder of ['runs create', 'runs finalize', 'artifacts upload']) {
+        for (const placeholder of ['runs finalize', 'artifacts upload']) {
           if (!line.includes(placeholder)) {
             continue;
           }
@@ -215,12 +215,42 @@ describe('quickstart', () => {
           expect(/04\.2\.[234]/.test(line), `placeholder without owning task: ${line}`).toBe(true);
         }
         if (!line.trimStart().startsWith('#')) {
-          expect(/evidgate (runs|events|artifacts)\b/.test(line), `fake command: ${line}`).toBe(
-            false,
-          );
+          // `runs create` is a real step now (04.2.2-T2); the remaining unbuilt
+          // commands must not appear as a fake command line.
+          expect(/evidgate (events|artifacts)\b/.test(line), `fake command: ${line}`).toBe(false);
         }
       }
     }
+  });
+
+  // 04.2.2-T2: `runs create` landed, so both templates carry the real step and the
+  // placeholder comment for it is gone. The id/hash reach the command: the GitHub
+  // template through step outputs (masked, per R4), the generic one through shell
+  // variables from the captured `--json` output.
+  it('renders the pinned runs create step and no runs-create placeholder', () => {
+    const npxPin = `npx --yes --package @evidgate/cli@${version}`;
+    const github = renderQuickstart({ format: 'github', project: sampleProject, version });
+    const generic = renderQuickstart({ format: 'generic', project: sampleProject, version });
+    for (const text of [github, generic]) {
+      expect(text).not.toContain('runs create (04.2.2-T2)');
+    }
+    expect(github).toContain(
+      `        run: ${npxPin} -- evidgate runs create --manifest-id "$MANIFEST_ID" --manifest-hash "$MANIFEST_HASH" --ci-ref "$GITHUB_REF"\n`,
+    );
+    expect(github).toContain(
+      `          out=$(${npxPin} -- evidgate manifests upload --file evidgate-manifest.json --json)\n`,
+    );
+    expect(github).toContain('          echo "manifest_id=$manifest_id" >> "$GITHUB_OUTPUT"\n');
+    expect(github).toContain('          MANIFEST_ID: ${{ steps.manifest.outputs.manifest_id }}\n');
+    expect(generic).toContain(
+      `out=$(${npxPin} -- evidgate manifests upload --file evidgate-manifest.json --json)\n`,
+    );
+    expect(generic).toContain(
+      `manifest_id=$(node -p 'JSON.parse(process.argv[1]).manifest_id' "$out")\n`,
+    );
+    expect(generic).toContain(
+      `${npxPin} -- evidgate runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash"\n`,
+    );
   });
 
   // AC5: a project that could break out of the YAML or shell template is refused, and
