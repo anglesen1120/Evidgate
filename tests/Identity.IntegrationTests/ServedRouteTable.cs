@@ -512,12 +512,14 @@ internal sealed record RouteRequestContext(
     Guid WaiverId,
     Guid QuarantineId,
     Guid CiBindingId,
-    Guid IngestTokenId)
+    Guid IngestTokenId,
+    Guid RunId)
 {
     /// <summary>The seeded tenant plus fresh ids for everything else.</summary>
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -660,6 +662,7 @@ internal static class RouteRequests
             new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/environments/staging/revisions", Environment(), IdempotencyKey: Key()));
         Add("GET", "/v1/environment-revisions/{id}", ctx =>
             new(HttpMethod.Get, $"/v1/environment-revisions/{ctx.EnvironmentRevisionId}"));
+        Add("GET", "/v1/runs/{r}", ctx => new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}"));
 
         // ---- Policy ------------------------------------------------------------------------------------------
         Add("POST", "/v1/projects/{p}/policies", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/policies",

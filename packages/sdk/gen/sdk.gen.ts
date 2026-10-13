@@ -88,6 +88,8 @@ export const createRun = <ThrowOnError extends boolean = false>(options: Options
 
 /**
  * Run state + current evidence revision
+ *
+ * One run's state machine position (05.3.1 AC7): `state` (00 §8.1), `current_evidence_revision_id` (null until 05.3.2 freezes a revision), `version` (the optimistic-concurrency token a transition echoes in `If-Match`) and `purpose` (`regular`/`replay`, T67). Another tenant's run — or, for a project-scoped credential, another project's — is 404, the same `not_found` body as an unknown id.
  */
 export const getRun = <ThrowOnError extends boolean = false>(options: Options<GetRunData, ThrowOnError>): RequestResult<GetRunResponses, GetRunErrors, ThrowOnError> => (options.client ?? client).get<GetRunResponses, GetRunErrors, ThrowOnError>({
     security: [{

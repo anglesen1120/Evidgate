@@ -279,26 +279,27 @@ paths:
       operationId: getRun
       tags: [runs]
       summary: Run state + current evidence revision
+      description: >-
+        One run's state machine position (05.3.1 AC7): `state` (00 §8.1),
+        `current_evidence_revision_id` (null until 05.3.2 freezes a revision),
+        `version` (the optimistic-concurrency token a transition echoes in
+        `If-Match`) and `purpose` (`regular`/`replay`, T67). Another tenant's run —
+        or, for a project-scoped credential, another project's — is 404, the same
+        `not_found` body as an unknown id.
       x-permission: run:read
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/RunId'
       responses:
         '200':
-          description: Run detail
+          description: Run state, current evidence revision, version and purpose
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/RunSummary'
-                  - type: object
-                    properties:
-                      evidence_revision:
-                        type: string
-                        format: uuid
+                $ref: '#/components/schemas/RunStateDto'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4364,6 +4365,29 @@ components:
             type: object
         next_cursor:
           type: [string, 'null']
+    RunStateDto:
+      type: object
+      required: [run_id, state, current_evidence_revision_id, version, purpose]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [created, queued, running, collecting, complete, incomplete, canceled]
+        current_evidence_revision_id:
+          type: [string, 'null']
+          format: uuid
+          description: >-
+            The evidence revision the run's current verdict was frozen from;
+            null while none exists (`run.current_evidence_revision_id`, 05.3.1;
+            05.3.2 owns the write side).
+        version:
+          type: integer
+          minimum: 0
+        purpose:
+          type: string
+          enum: [regular, replay]
     RunSummary:
       type: object
       properties:

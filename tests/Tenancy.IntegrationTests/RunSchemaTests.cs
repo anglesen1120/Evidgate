@@ -383,7 +383,10 @@ public sealed class RunSchemaTests
         var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
         await InsertRunAsync(world, parents);
 
-        (await CaptureAppErrorAsync(world, world.Org, "update public.run set state = 'queued'")).SqlState.ShouldBe("42501");
+        // 0031 revoked table-level UPDATE and 0034 granted `updated_at` (the T91 row lock); 05.3.1's 0036 adds
+        // `state` alone, so the arbitrary-column update below still fails at the privilege check while the
+        // guarded `state` write is the one column the app role may name.
+        (await CaptureAppErrorAsync(world, world.Org, "update public.run set purpose = 'replay'")).SqlState.ShouldBe("42501");
         (await CaptureAppErrorAsync(world, world.Org, "delete from public.run")).SqlState.ShouldBe("42501");
     }
 
