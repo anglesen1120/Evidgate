@@ -46,7 +46,9 @@ The playbook for changing a table without breaking the running version is
   (`project_id`, `repository_id`, `run_id`, `run_attempt`, `created_at desc`) that the verified-caller
   check reads — it keys on the minted token's run reference, not on the credential `jti`, which the
   exchange never stores (D-S45-Q2, 2026-10-13)
-  (`run_project_ref_idx` stays 05.2.2-T2.2's); the next free number is `0038`; a gap means two branches
+  and `0038` is 05.2.2-T2.2's `run_project_ref_idx (project_id, ref_name, created_at, id)` on `run`, the
+  keyset index of the run list's `ref_name` filter (plain `create index`, one transaction, no
+  `concurrently`: see the file header); the next free number is `0039`; a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and

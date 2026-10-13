@@ -381,7 +381,7 @@ internal static class RunIdentityRules
     /// <c>invalid_value</c> reason as any other bad name rather than stored (SEC-F3). Checked on runes, so the DEL and
     /// C1 (the <c>U+0080..U+009F</c> block, <c>U+0085</c> NEL included) characters are covered like <c>\n</c>/<c>\r</c>/<c>\t</c>.
     /// </summary>
-    private static bool IsStorableName(string? name)
+    internal static bool IsStorableName(string? name)
     {
         if (string.IsNullOrEmpty(name))
         {
@@ -404,7 +404,7 @@ internal static class RunIdentityRules
     /// <c>^[0-9a-f]{40}([0-9a-f]{24})?$</c> — GitHub's SHA-1 or SHA-256 commit id, the <c>head_sha</c>/<c>base_sha</c>
     /// CHECK. Lowercase only, and exactly 40 or 64 characters.
     /// </summary>
-    private static bool IsSha(string? sha)
+    internal static bool IsSha(string? sha)
     {
         if (sha is null || sha.Length is not (40 or 64))
         {

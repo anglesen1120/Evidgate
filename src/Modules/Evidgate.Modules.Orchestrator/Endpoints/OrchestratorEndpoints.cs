@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Observability;
@@ -32,6 +33,12 @@ public static class OrchestratorEndpoints
     /// <summary>The run-create transport cap (05.2.1 §5): the body is a manifest id, an optional release and components.</summary>
     internal const int MaxRunBytes = 64 * 1024;
 
+    /// <summary>Default page size of the run list (00 §9.1, as every other cursor list).</summary>
+    internal const int DefaultLimit = 50;
+
+    /// <summary>Largest accepted page size (00 §9.1).</summary>
+    internal const int MaxLimit = 200;
+
     /// <summary>Maps the routes and returns the <c>/v1</c> group so the host can apply its filters (00 §5.5 C8).</summary>
     public static RouteGroupBuilder MapOrchestratorEndpoints(this IEndpointRouteBuilder routes)
     {
@@ -63,6 +70,10 @@ public static class OrchestratorEndpoints
         group.MapGet("/runs/{r}", GetRunAsync)
             .Produces<RunStateDto>(StatusCodes.Status200OK)
             .WithSummary("One run's state, current evidence revision, version and purpose (05.3.1)");
+
+        group.MapGet("/projects/{p}/runs", ListRunsAsync)
+            .Produces<RunPage>(StatusCodes.Status200OK)
+            .WithSummary("Cursor list of a project's runs, filtered by the recorded branch/PR/commit identity (05.2.2)");
 
         return group;
     }
@@ -197,6 +208,133 @@ public static class OrchestratorEndpoints
         IMediator mediator,
         CancellationToken cancellationToken) =>
         await mediator.Send(new GetRunQuery(r), cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// <c>GET /v1/projects/{p}/runs</c> (05.2.2 §5, AC6): the project's runs in <c>(created_at, id)</c> order,
+    /// narrowed by the run's recorded identity. The delegate only binds and validates the 00 §9.1 query
+    /// parameters — <c>limit</c> (1–200), an opaque <c>cursor</c>, and the five identity filters
+    /// <c>ref_name</c>, <c>pr_number</c>, <c>head_sha</c>, <c>trigger_event</c>, <c>is_fork</c>; the handler owns
+    /// the project check, the tenant scope and the keyset page. An unknown query parameter is ignored (as on every
+    /// other list), a present-but-invalid filter value is <c>422 request_invalid</c> with
+    /// <c>details[].path</c> = the parameter name and reason <c>invalid_value</c> (a blank value is invalid, not
+    /// absent), and every value is passed to the handler as a bound parameter, never concatenated into SQL.
+    /// </summary>
+    private static async Task<Result<RunPage>> ListRunsAsync(
+        Guid p,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (LimitError(context.Request.Query["limit"], out var limit) is { } error)
+        {
+            return Result.Failure<RunPage>(error);
+        }
+
+        var query = context.Request.Query;
+
+        string? refName = null;
+        if (Present(query, "ref_name", out var rawRefName))
+        {
+            if (!RunIdentityRules.IsStorableName(rawRefName))
+            {
+                return Result.Failure<RunPage>(InvalidFilter("ref_name"));
+            }
+
+            refName = rawRefName;
+        }
+
+        int? prNumber = null;
+        if (Present(query, "pr_number", out var rawPrNumber))
+        {
+            if (!int.TryParse(rawPrNumber, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed < 1)
+            {
+                return Result.Failure<RunPage>(InvalidFilter("pr_number"));
+            }
+
+            prNumber = parsed;
+        }
+
+        string? headSha = null;
+        if (Present(query, "head_sha", out var rawHeadSha))
+        {
+            if (!RunIdentityRules.IsSha(rawHeadSha))
+            {
+                return Result.Failure<RunPage>(InvalidFilter("head_sha"));
+            }
+
+            headSha = rawHeadSha;
+        }
+
+        string? triggerEvent = null;
+        if (Present(query, "trigger_event", out var rawTriggerEvent))
+        {
+            if (!RunIdentityRules.TriggerEvents.Contains(rawTriggerEvent, StringComparer.Ordinal))
+            {
+                return Result.Failure<RunPage>(InvalidFilter("trigger_event"));
+            }
+
+            triggerEvent = rawTriggerEvent;
+        }
+
+        bool? isFork = null;
+        if (Present(query, "is_fork", out var rawIsFork))
+        {
+            if (rawIsFork is not ("true" or "false"))
+            {
+                return Result.Failure<RunPage>(InvalidFilter("is_fork"));
+            }
+
+            isFork = rawIsFork == "true";
+        }
+
+        return await mediator.Send(
+            new ListRunsQuery(
+                p,
+                new RunListFilters(refName, prNumber, headSha, triggerEvent, isFork),
+                Blank(query["cursor"]),
+                limit),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>True when the query carries <paramref name="name"/> at least once; <paramref name="value"/> is then its first value (possibly blank).</summary>
+    private static bool Present(IQueryCollection query, string name, out string value)
+    {
+        if (query.TryGetValue(name, out var values) && values.Count > 0)
+        {
+            value = values[0] ?? string.Empty;
+            return true;
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
+    /// <summary>422 for a filter value the shapes of 05.2.2 §5 cannot hold, naming the parameter (00 §9.2).</summary>
+    private static Error InvalidFilter(string name) =>
+        Error.Invalid($"{name} has an invalid value", [new ErrorDetail(name, "invalid_value")]);
+
+    private static string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
+
+    private static Error? LimitError(string? raw, out int limit)
+    {
+        limit = DefaultLimit;
+
+        if (string.IsNullOrEmpty(raw))
+        {
+            return null;
+        }
+
+        if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed < 1 || parsed > MaxLimit)
+        {
+            return Error.Invalid(
+                string.Create(CultureInfo.InvariantCulture, $"limit must be an integer between 1 and {MaxLimit} (00 §9.1)"),
+                [new ErrorDetail("limit", "out_of_range")]);
+        }
+
+        limit = parsed;
+
+        return null;
+    }
 
     /// <summary>The raw body, refused with 413 as soon as it passes <paramref name="limit"/> bytes (never buffered beyond it).</summary>
     private static async Task<(ReadOnlyMemory<byte> Bytes, Error? TooLarge)> ReadBodyAsync(HttpContext context, int limit, CancellationToken cancellationToken)

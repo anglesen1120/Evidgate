@@ -181,13 +181,29 @@ paths:
       operationId: listRuns
       tags: [runs]
       summary: Cursor list of runs with state, decision and rerun/reprocess labels
-      description: Cursor list (00 §9.1) with state, decision and rerun/reprocess labels (09).
+      description: >-
+        Cursor list (00 §9.1) of a project's runs, ordered by `(created_at, id)`
+        ascending, with state, decision and rerun/reprocess labels (09). Since
+        05.2.2 it is narrowed by the run's recorded identity: `ref_name`,
+        `pr_number`, `head_sha`, `trigger_event` and `is_fork`, all optional and
+        AND-combined exact matches, and every row carries `created_at`, `ref` and
+        `unverified_ref`. The opaque `cursor` is the last row's `(created_at, id)`
+        of the previous page and is not signed — it is bound to the caller's own
+        project and tenant by the query, so a well-formed cursor only moves the
+        page position inside those rows; a cursor this endpoint did not issue is
+        422 `request_invalid`. An unknown project (or another tenant's) is 404
+        `not_found`, the same body as an unknown one.
       x-permission: run:read
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/RunRefName'
+        - $ref: '#/components/parameters/RunPrNumber'
+        - $ref: '#/components/parameters/RunHeadSha'
+        - $ref: '#/components/parameters/RunTriggerEvent'
+        - $ref: '#/components/parameters/RunIsFork'
       responses:
         '200':
           description: Page of runs
@@ -197,20 +213,15 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/CursorList'
-                  - type: object
-                    properties:
-                      items:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/RunSummary'
+                $ref: '#/components/schemas/RunPage'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -4039,6 +4050,64 @@ components:
         default: 50
         minimum: 1
         maximum: 200
+    RunRefName:
+      name: ref_name
+      in: query
+      required: false
+      description: >-
+        Exact `ref_name` of the run's recorded identity (05.2.2 §5, AC6): the
+        branch of `refs/heads/<n>`, the tag of `refs/tags/<n>`, or GitHub's
+        `<N>/merge` for a pull request. 1..255 code points with no control
+        character; a present but invalid value is 422 `request_invalid` with
+        `details[].path` = `ref_name`.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    RunPrNumber:
+      name: pr_number
+      in: query
+      required: false
+      description: >-
+        Exact `pr_number` of the run's recorded identity (05.2.2 §5, AC6); an
+        integer ≥ 1, a present but invalid value is 422 `request_invalid` with
+        `details[].path` = `pr_number`.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+    RunHeadSha:
+      name: head_sha
+      in: query
+      required: false
+      description: >-
+        Exact `head_sha` of the run's recorded identity (05.2.2 §5, AC6):
+        GitHub's SHA-1 or SHA-256 commit id, lowercase. A present but invalid
+        value is 422 `request_invalid` with `details[].path` = `head_sha`.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{40}([0-9a-f]{24})?$'
+    RunTriggerEvent:
+      name: trigger_event
+      in: query
+      required: false
+      description: >-
+        Exact `trigger_event` of the run's recorded identity (05.2.2 §5, AC6).
+        A present but invalid value is 422 `request_invalid` with
+        `details[].path` = `trigger_event`.
+      schema:
+        type: string
+        enum: [push, pull_request, schedule, manual, dispatch]
+    RunIsFork:
+      name: is_fork
+      in: query
+      required: false
+      description: >-
+        Exact `is_fork` of the run's recorded identity (05.2.2 §5, AC6); the
+        literal `true` or `false`. A present but invalid value is 422
+        `request_invalid` with `details[].path` = `is_fork`.
+      schema:
+        type: boolean
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -4419,6 +4488,13 @@ components:
             verified CI caller and for a run with no identity at all.
     RunSummary:
       type: object
+      description: >-
+        One row of `GET /v1/projects/{p}/runs` (05.2.2 §5). Since 05.2.2-T2 the
+        list serves the run's state, `created_at`, the recorded identity `ref`
+        and `unverified_ref`; `decision`, `parent_run_id`, `rerun_label` and
+        `reprocess_label` remain optional here until 07 and 05.5.1/05.5.2 add
+        them.
+      required: [run_id, state, created_at, ref, unverified_ref]
       properties:
         run_id:
           type: string
@@ -4426,6 +4502,18 @@ components:
         state:
           type: string
           enum: [created, queued, running, collecting, complete, incomplete, canceled]
+        created_at:
+          type: string
+          format: date-time
+          description: Creation, UTC — the primary sort key of the list (AC6).
+        ref:
+          $ref: '#/components/schemas/RunRef'
+        unverified_ref:
+          type: boolean
+          description: >-
+            True when at least one stored identity value came from the request
+            body instead of a verified CI claim (05.2.2-T1); false for a
+            verified CI caller and for a run with no identity at all.
         decision:
           type: [string, 'null']
           enum: [PASS, FAIL, INCONCLUSIVE, null]
@@ -4437,6 +4525,15 @@ components:
           type: [string, 'null']
         reprocess_label:
           type: [string, 'null']
+    RunPage:
+      type: object
+      description: 00 §9.1 cursor page of `RunSummary`, keyset-ordered on `(created_at, id)` ascending (05.2.2-T2).
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RunSummary' }
+        next_cursor: { type: [string, 'null'] }
     CreateRunRequest:
       type: object
       additionalProperties: false

@@ -55,7 +55,7 @@ export const createManifest = <ThrowOnError extends boolean = false>(options: Op
 /**
  * Cursor list of runs with state, decision and rerun/reprocess labels
  *
- * Cursor list (00 §9.1) with state, decision and rerun/reprocess labels (09).
+ * Cursor list (00 §9.1) of a project's runs, ordered by `(created_at, id)` ascending, with state, decision and rerun/reprocess labels (09). Since 05.2.2 it is narrowed by the run's recorded identity: `ref_name`, `pr_number`, `head_sha`, `trigger_event` and `is_fork`, all optional and AND-combined exact matches, and every row carries `created_at`, `ref` and `unverified_ref`. The opaque `cursor` is the last row's `(created_at, id)` of the previous page and is not signed — it is bound to the caller's own project and tenant by the query, so a well-formed cursor only moves the page position inside those rows; a cursor this endpoint did not issue is 422 `request_invalid`. An unknown project (or another tenant's) is 404 `not_found`, the same body as an unknown one.
  */
 export const listRuns = <ThrowOnError extends boolean = false>(options: Options<ListRunsData, ThrowOnError>): RequestResult<ListRunsResponses, ListRunsErrors, ThrowOnError> => (options.client ?? client).get<ListRunsResponses, ListRunsErrors, ThrowOnError>({
     security: [{
