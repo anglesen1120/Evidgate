@@ -38,7 +38,11 @@ The playbook for changing a table without breaking the running version is
   04.1.2-T5's `producer_slot` declared-values columns (`declared_last_sequence`/`declared_count`) plus
   their non-negative CHECKs, the all-or-none `closed_at`/declared-values CHECK and the `closed_at`/declared-values column grant, and `0036` is
   05.3.1-T1's `run.current_evidence_revision_id` nullable pointer column (no FK yet: `evidence_revision`
-  arrives with 05.3.2-T5) plus the `update (state)` column grant on `run`; the next free number is `0037`; a gap means two branches
+  arrives with 05.3.2-T5) plus the `update (state)` column grant on `run`, and `0037` is 05.2.2-T1's
+  `run` branch/PR/commit identity columns (`ref_kind`, `ref_name`, `pr_number`, `head_sha`, `base_sha`,
+  `trigger_event`, `is_fork`, `unverified_ref`) with their bound CHECKs, the `run_pr_requires_number`
+  cross-column rule and the `run_identity_immutable` BEFORE UPDATE trigger that refuses any change to them
+  (`run_project_ref_idx` stays 05.2.2-T2.2's); the next free number is `0038`; a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and

@@ -37,8 +37,8 @@ Stage A order from `plans/features/SOLO-PATH.md` §2. "Type" tells you what clos
 | 12 | OI-03-03 taxonomy enum values | 03.2.1-T1 | owner decision | **Closed (D-A7)** Accept the 03.1.4 lists as a closed V1 catalogue in `contracts/schemas/taxonomy.v1.json`; columns land in 03.2.1-T1 so the revision hash never changes later |
 | 13 | OI-06-11 partition key `run_created_at` + composite FK | 04.1.1-T1, 05.2.1-T1, 05.3.3-T1 | TL decision + 00 edit | Adopt 06.4.6 default now (changes the 04.1.1-T2 `ON CONFLICT` target); a later change needs a data migration |
 | 14 | OI-04-04 gzip expanded-size/ratio cap | 04.1.1-T3 | owner decision | **Closed (D-A8)** Expanded ≤ 8 MiB per batch, ratio ≤ 20:1, streaming abort; relax after the 10.6.1 load test |
-| 15 | OI-05-03 run identity fields in 00 | 05.2.2-T1 | contract edit | Add `ref_kind`, `ref_name`, `pr_number`, `base_sha`, `head_sha`, `trust` to 00 §7/§8.1 |
-| 16 | OI-05-04 OIDC claim and payload names, fork token | 05.2.2-T1 | verify (GitHub OIDC docs) | Check `ref_type`, `event_name`, PR number and base SHA sources before coding |
+| 15 | OI-05-03 run identity fields in 00 | 05.2.2-T1 | contract edit | **Closed 2026-10-13 (05.2.2-T1, S45)** 00 §7/§8.1/§15 carry the eight fields (`ref_kind`, `ref_name`, `pr_number`, `head_sha`, `base_sha`, `trigger_event`, `is_fork`, `unverified_ref`), the verified-claim trust rules and the wire `ref` block |
+| 16 | OI-05-04 OIDC claim and payload names, fork token | 05.2.2-T1 | verify (GitHub OIDC docs) | **Answered for T1 2026-10-13 (05.2.2-T1, S45)** verified claims are `ref` and `sha` only: the PR number is parsed from `refs/pull/<N>/merge` and that `sha` is GitHub's test-merge commit (never `head_sha`); `event_name`/`ref_type`/base sha/fork flag are not in the token, so `trigger_event`/`base_sha` are body-only; a fork PR exchange is refused 403 (02.4.1 AC3). Fork-token doc ⚠️ → 05.2.2-T3 |
 | 17 | OI-04-05 OIDC token request from the CLI | 04.2.1-T1 | verify (GitHub Actions docs) | Use the documented request URL/token env vars with a custom audience |
 | 18 | OI-04-06 `contracts/cli.md` exit-code registry | 04.2.1-T2 | contract edit | **Closed 2026-10-07 (04.2.1-T2)** `contracts/cli.md` created with 0/1/2/3 from 00 §9.3 and FR-07-13; replay codes 10–19 stay `[OPEN]` for 04.9.1-T4 |
 | 19 | OI-04-01 Playwright reporter types + browserless e2e | 04.3.1-T1 | verify (Playwright 1.63 types) | Check `TestResult.retry`, steps, attachments in the pinned version |
@@ -56,7 +56,7 @@ Exact wording, sources and the information needed for each row are in the area f
 
 ## 3. Owner decisions taken
 
-The eleven Stage A owner-decision rows (2, 3, 5, 8, 9, 11, 12, 14, 24, 27, 28) were accepted with their recommended defaults on 2026-10-02 and recorded as DECISIONS §8.1 D-A1…D-A11. Stage A now has 15 open rows: contract edits (13, 15, 20, 21, 23, 26), done by the developer at the story's DoR; doc checks (1, 4, 6, 7, 16, 17, 19), each a short check at the start of the task; and paperwork or design (10, 22). Row 25 was closed earlier; row 18 was closed 2026-10-07 by 04.2.1-T2.
+The eleven Stage A owner-decision rows (2, 3, 5, 8, 9, 11, 12, 14, 24, 27, 28) were accepted with their recommended defaults on 2026-10-02 and recorded as DECISIONS §8.1 D-A1…D-A11. Stage A now has 14 open rows: contract edits (13, 20, 21, 23, 26), done by the developer at the story's DoR; doc checks (1, 4, 6, 7, 16, 17, 19), each a short check at the start of the task; and paperwork or design (10, 22). Row 25 was closed earlier; row 18 was closed 2026-10-07 by 04.2.1-T2; row 15 was closed 2026-10-13 by 05.2.2-T1, and row 16 is answered for the 05.2.2-T1 field set (its fork-token ⚠️ moves to 05.2.2-T3).
 
 Outside Stage A, the items with the longest lead time are:
 

@@ -107,7 +107,8 @@ public static class OrchestratorEndpoints
     {
         // Nothing of the body is read for a caller who is nobody; parsing and validation run in the handler, after the
         // pipeline's permission check (05.2.1 §5).
-        if (principals.Current is null)
+        var principal = principals.Current;
+        if (principal is null)
         {
             return Result.Failure<RunCreated>(Unauthenticated);
         }
@@ -118,7 +119,13 @@ public static class OrchestratorEndpoints
             return Result.Failure<RunCreated>(tooLarge);
         }
 
-        return await mediator.Send(new CreateRunCommand(p, bytes, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
+        // 05.2.2-T1.4: the caller's verified CI run reference joins the request identity the idempotency store keys on,
+        // so the same key and body replayed from a different run attempt of the repository is a 409 conflict instead of
+        // a replay (while a re-minted token for the same attempt still replays). Null for every caller whose token
+        // carries no reference, which leaves the digest of such a request exactly as it was before this story.
+        return await mediator.Send(
+            new CreateRunCommand(p, bytes, IdempotencyKey(context), principal.CiRun?.ToBindingReference()),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Result<EnvironmentRevisionCreated>> CreateEnvironmentRevisionAsync(

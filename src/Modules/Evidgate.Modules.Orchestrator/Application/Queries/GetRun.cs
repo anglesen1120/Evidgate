@@ -18,7 +18,9 @@ internal sealed record GetRunQuery(Guid RunId) : IQuery<Result<RunStateDto>>;
 
 /// <summary>
 /// Handler of <see cref="GetRunQuery"/>: one Dapper read over the ambient tenant scope (00 §5.5 C1/C3/C5), so RLS
-/// scopes the row and another tenant's run is the same <c>404 not_found</c> as an unknown id. The route names the run
+/// scopes the row and another tenant's run is the same <c>404 not_found</c> as an unknown id. The body reports the
+/// run's state machine position and the identity it records (05.2.2-T1: the <c>ref</c> block and
+/// <c>unverified_ref</c>; <c>advisory_only</c> is 05.2.2-T3.2's). The route names the run
 /// by id alone, so a project-scoped credential asking for a sibling project's run of the same org is that same
 /// <c>404 not_found</c>: <see cref="OrchestratorScope.Project"/>'s scope mismatch is mapped to it below, never to
 /// <c>403 project_scope_mismatch</c> — the same shape as the module's other read route
@@ -34,14 +36,17 @@ internal sealed class GetRunQueryHandler(
     : IQueryHandler<GetRunQuery, Result<RunStateDto>>
 {
     /// <summary>
-    /// The one statement of the read: the run's own columns by id. <c>org_id</c> is left to RLS (the row is readable
-    /// only inside the caller's tenant scope, and the policy is <c>FORCE</c>d, 0031), so an unknown id and another
-    /// tenant's id take the same branch. The <c>project</c> join of the environment-revision read is deliberately
-    /// absent: the run's other readers (<c>RunPlanReader</c>, <c>RunEventScopeReader</c>) resolve a run without
-    /// filtering a deleted project either.
+    /// The one statement of the read: the run's own columns by id, including the identity block 05.2.2-T1 adds
+    /// (<c>ref_kind</c>, <c>ref_name</c>, <c>pr_number</c>, <c>head_sha</c>, <c>base_sha</c>, <c>trigger_event</c>,
+    /// <c>is_fork</c>, <c>unverified_ref</c>). <c>org_id</c> is left to RLS (the row is readable only inside the
+    /// caller's tenant scope, and the policy is <c>FORCE</c>d, 0031), so an unknown id and another tenant's id take the
+    /// same branch. The <c>project</c> join of the environment-revision read is deliberately absent: the run's other
+    /// readers (<c>RunPlanReader</c>, <c>RunEventScopeReader</c>) resolve a run without filtering a deleted project
+    /// either.
     /// </summary>
     private const string RunStateById = """
-        select r.id as run_id, r.project_id, r.state, r.current_evidence_revision_id, r.version, r.purpose
+        select r.id as run_id, r.project_id, r.state, r.current_evidence_revision_id, r.version, r.purpose,
+               r.ref_kind, r.ref_name, r.pr_number, r.head_sha, r.base_sha, r.trigger_event, r.is_fork, r.unverified_ref
           from public.run r
          where r.id = @run_id
         """;
@@ -66,7 +71,16 @@ internal sealed class GetRunQueryHandler(
             row.State,
             row.CurrentEvidenceRevisionId,
             row.Version,
-            row.Purpose));
+            row.Purpose,
+            new RunRef(
+                row.RefKind,
+                row.RefName,
+                row.PrNumber,
+                row.HeadSha,
+                row.BaseSha,
+                row.TriggerEvent,
+                row.IsFork),
+            row.UnverifiedRef));
     }
 
     /// <summary>
@@ -91,5 +105,21 @@ internal sealed class GetRunQueryHandler(
         public int Version { get; set; }
 
         public string Purpose { get; set; } = string.Empty;
+
+        public string? RefKind { get; set; }
+
+        public string? RefName { get; set; }
+
+        public int? PrNumber { get; set; }
+
+        public string? HeadSha { get; set; }
+
+        public string? BaseSha { get; set; }
+
+        public string? TriggerEvent { get; set; }
+
+        public bool IsFork { get; set; }
+
+        public bool UnverifiedRef { get; set; }
     }
 }
