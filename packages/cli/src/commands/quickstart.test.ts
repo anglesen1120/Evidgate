@@ -321,7 +321,7 @@ describe('quickstart', () => {
     expect(stderr.join('')).toBe('');
   });
 
-  // §9 drift guard: the committed examples are exactly what the command renders.
+  // §10 drift guard: the committed examples are exactly what the command renders.
   it('matches the committed docs/quickstart examples byte-for-byte', async () => {
     const docs = fileURLToPath(new URL('../../../../docs/quickstart/', import.meta.url));
     expect(await readFile(join(docs, 'github-actions.yml'), 'utf8')).toBe(

@@ -14,7 +14,7 @@ holds only the process-level contract.
 - 04.2.1-T1 adds the auth-exchange section: `auth login`, the token cache
   location, and the `binding_pending` / `binding_conflict` rows.
 - 04.2.2-T1 adds `manifests upload` and §8 (the manifest upload, its 256 KiB cap
-  and the 401 purge); 04.2.2-T2 added `runs create` (§9).
+  and the 401 purge); 04.2.2-T2 adds `runs create` (§9).
 - 04.2.3 adds the spool format, its caps, `EVIDGATE_SPOOL_*` and
   `EVIDGATE_SEND_DEADLINE`, and `runs finalize`.
 - 04.2.4-T2 adds `quickstart` (§10); `artifacts upload` comes with 04.2.4-T1.
@@ -403,7 +403,7 @@ content is never echoed, not even under `--verbose`.
 | -------------------------------- | -------- | ---------------------------------------------------------- | ---------------------------------- |
 | `--manifest-id <uuid>`           | yes      | body `manifest_id`                                         | a UUID                             |
 | `--manifest-hash <sha256:64hex>` | yes      | not sent — the derived key and `manifest_hash` output only | `^sha256:[0-9a-f]{64}$`            |
-| `--release <name>`               | no       | body `release`                                             | trimmed, 1..128 characters         |
+| `--release <name>`               | no       | body `release`                                             | trimmed, 1..128 code points        |
 | `--ci-ref <ref>`                 | no       | body `ref`                                                 | a full git ref (below)             |
 | `--idempotency-key <k>`          | no       | header `Idempotency-Key`                                   | 1..128 printable ASCII (0x21–0x7E) |
 
@@ -419,13 +419,16 @@ Order of operations (observable):
    at all — not even the token exchange:
    - `--manifest-id` missing or not a UUID is exit 3 `usage`.
    - `--manifest-hash` missing or not `^sha256:[0-9a-f]{64}$` is exit 3 `usage`.
-   - `--release`, after trim, must be 1..128 characters, else exit 3 `usage`; a
+   - `--release`, after trim, must be 1..128 code points, else exit 3 `usage`; a
      name the server cannot resolve is 422 `release_unresolvable`, mapped as in
      step 4.
    - `--ci-ref` must be a full git ref (below), else exit 3 `usage` with the
      one-line help pointer.
    - `--idempotency-key` must be 1..128 printable ASCII characters (0x21–0x7E,
      no whitespace or control), else exit 3 `usage`.
+   - Every option may be given only once: a repeated option (e.g. `--release`
+     twice) is exit 3 `usage` with `--<flag> may be given only once`, before any
+     request.
 2. `getToken()` (04.2.1) supplies the bearer and `createApiClient` builds the
    redirect-refusing client; the generated `createRun` operation is called with
    that client explicitly (§6). The request carries `{p: <project>}`, the
@@ -434,8 +437,9 @@ Order of operations (observable):
    `replay_grant_id` are never sent. `--manifest-hash` feeds only the derived
    key and the output. The call has a 30 s timeout
    (`AbortSignal.timeout(30_000)`) and no retry.
-3. A 201 body must be `{ run_id: <uuid>, state: <non-empty string> }`; anything
-   else is exit 3 `request_failed` and the body is never echoed.
+3. A 201 body must be `{ run_id: <uuid>, state: <non-empty string> }` and its
+   `state` must match `^[a-z][a-z0-9_]{0,31}$`; anything else is exit 3
+   `request_failed` and the body is never echoed.
 4. A non-2xx reply maps through §5: the server's `error.code` when it is a safe
    identifier (else `request_failed`), its message redacted, capped at 200 code
    points and escaped, `request_id` from the body else the `X-Request-Id`
@@ -456,9 +460,10 @@ the request's `ref` member:
 
 - `refs/heads/<name>` → `{kind: "branch", name: "<name>"}`.
 - `refs/tags/<name>` → `{kind: "tag", name: "<name>"}`.
-- `refs/pull/<N>/merge` with a positive integer `N` →
-  `{kind: "pull_request", name: "<N>/merge", pr_number: <N>}`.
-- `<name>` must be 1..255 characters. Any other value — unprefixed, empty,
+- `refs/pull/<N>/merge` with `N` a safe integer ≥ 1 (≤ 9007199254740991) →
+  `{kind: "pull_request", name: "<N>/merge", pr_number: <N>}`; `name` is built
+  from `N`'s decimal digits (`<N>/merge`), and a larger `N` is exit 3 `usage`.
+- `<name>` must be 1..255 code points. Any other value — unprefixed, empty,
   another `refs/` namespace or a malformed PR ref — is exit 3 `usage` with the
   help pointer, before any token work.
 
