@@ -12,8 +12,15 @@ rulings T13/T84/T91), and it is the source for anyone reading the `event` table:
 ## 1. Arrival order is storage order; nothing is ever reordered
 
 - The batch is inserted by **one** `insert … select from jsonb_to_recordset(@events)` statement, in the
-  request's array order (04.1.1-T2, P2). Every row's `event.id` is a **server-minted UUIDv7** created in
-  that same order, so `order by id` reproduces the arrival order of a batch exactly.
+  request's array order (04.1.1-T2, P2). Every row's `event.id` is a **server-minted UUIDv7**.
+  **Nothing may depend on `id` for order.** A UUIDv7's sub-millisecond bits are not a documented monotonic
+  sequence, so `order by id` only _approximates_ arrival order across millisecond-separated moments (two
+  different requests) and promises **nothing** about the events of one batch — minting order inside a
+  millisecond is an implementation detail of the generator, not a contract. Within a batch every row also
+  shares one `received_at` (the statement's `now()`), so no stored column orders the rows of a batch: their
+  request order is reproducible only from the request body itself.
+- Batch boundaries are read from `received_at`, never from `id`: all rows of one accepted batch carry the
+  same `received_at` (one transaction), and successive batches of a run carry non-decreasing ones.
 - `event.sequence` and `event.received_at` keep what the producer sent / the server wrote; ingest never
   rewrites, renumbers or reorders them.
 - Out-of-order arrivals are stored **as sent**: a batch may carry a `sequence` below an earlier batch's
@@ -44,11 +51,18 @@ batch accepted at least one event (`UpdateSlotSql`, statement (h)). It is monoto
 and a batch with `accepted = 0` (an all-duplicate resend) does not touch it.
 
 There is deliberately **no** gap column and no gap flag. A consumer (05's reconciliation, plan 05 §4)
-derives the gap from what is on file:
+derives the gap from what is on file. Sequences need not start at 1 — the envelope allows
+`sequence >= 0` (`contracts/schemas/event-envelope.v1.json`, `sequence.minimum` 0) and
+`event_sequence_check` matches it — so the rule is stated base-independently:
 
-> For a `(run_id, producer_id)`, a gap exists while `producer_slot.last_sequence` is greater than the
-> number of distinct `event.sequence` values stored for that producer — i.e. some sequence numbers between
-> 1 and the high-water mark were never stored.
+> For a `(run_id, producer_id)`, with `min_stored` the lowest stored `event.sequence` and `last_sequence`
+> the slot's high-water mark, a gap exists while
+> `count(distinct event.sequence) < last_sequence - min_stored + 1` — i.e. some sequence in
+> `[min_stored, last_sequence]` was never stored. A hole _below_ `min_stored` (an unwritten prefix: the
+> producer simply started higher) is **not detectable** from these columns and is not reported.
+
+For a producer whose first sequence is 1 this is the familiar `last_sequence > count(distinct sequence)`;
+for 0-based producer (0, 1, 3 with a high-water mark of 3) it reports the missing 2.
 
 That comparison uses only stored columns, so it survives a restart, a re-upload and a replayed batch, and
 it needs no migration. Ingest records the high-water mark and **never rejects a batch for a gap**: a hole

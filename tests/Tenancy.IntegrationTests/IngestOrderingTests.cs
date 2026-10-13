@@ -197,23 +197,91 @@ public sealed class IngestOrderingTests
         second.Status.ShouldBe(HttpStatusCode.OK, second.ErrorMessage);
         second.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
 
-        // Stored as sent, in arrival order: `event.id` is the server UUIDv7 minted in request order, so
-        // `order by id` is 5,1,3 — while `occurred_at` order would be 3,5,1 and sequence order 1,3,5. Nothing
-        // was renumbered or reordered on the way in, and no batch was refused for the hole or the inversion.
-        (await world.ScalarAsync<string>("select string_agg(sequence::text, ',' order by id) from public.event"))
-            .ShouldBe("5,1,3");
-        (await world.ScalarAsync<string>(
-            "select string_agg(to_char(occurred_at at time zone 'UTC', 'HH24:MI'), ',' order by id) from public.event"))
-            .ShouldBe("10:00,12:00,09:00");
+        // Grouped by arrival, never by `id`: a UUIDv7's sub-millisecond bits promise no order inside a batch
+        // (contracts/events/ordering.md §1), so batch boundaries come from `received_at` — every row of one
+        // accepted batch shares its transaction's `now()`, and the next batch's is later. The first group is
+        // the batch that arrived first, holding 5 and 1 in stored (ascending) order: nothing was renumbered
+        // or reordered on the way in, and no batch was refused for the hole or the inversion.
+        (await world.ScalarAsync<string>("""
+            select string_agg(sequences, ';' order by received_at) from (
+                select received_at, string_agg(sequence::text, ',' order by sequence) as sequences
+                from public.event group by received_at) batch
+            """))
+            .ShouldBe("1,5;3");
 
-        // The reader's order is `(producer_id, sequence)`, served by `event_run_producer_sequence_key` (0034).
+        // `occurred_at` is stored as sent and orders nothing: in the first batch the earlier arrival
+        // (sequence 1) carries the later instant (12:00), and the later batch carries the earliest (09:00).
+        (await world.ScalarAsync<string>("""
+            select string_agg(instants, ';' order by received_at) from (
+                select received_at,
+                       string_agg(to_char(occurred_at at time zone 'UTC', 'HH24:MI'), ',' order by sequence) as instants
+                from public.event group by received_at) batch
+            """))
+            .ShouldBe("12:00,10:00;09:00");
+
+        // The only documented order anyone reads: `(producer_id, sequence)`, served by
+        // `event_run_producer_sequence_key` (0034).
         (await world.EventColumnAsync<long>("sequence")).ShouldBe([1L, 3L, 5L]);
 
         // The slot records the high-water mark, the reconciliation anchor a gap is derived from (no gap column):
-        // last_sequence = 5 while only three events exist, so 2 and 4 were never stored.
+        // last_sequence = 5 while only three events exist, so 2 and 4 were never stored (the derivation is
+        // pinned by `sequence_gap_rule_is_base_independent` below).
         (await LastSequenceAsync(world)).ShouldBe(5L);
         (await EventRowsAsync(world)).ShouldBe(3);
     }
+
+    // ---------------------------------------------------------------- T4.1: the gap derivation
+
+    [Fact]
+    public async Task sequence_gap_rule_is_base_independent()
+    {
+        // A producer may start at 0: the envelope allows `sequence >= 0` (contracts/schemas/event-envelope.v1.json)
+        // and `event_sequence_check` matches it. The derivation documented in contracts/events/ordering.md §3 is
+        // therefore `count(distinct sequence) < last_sequence - min(sequence) + 1`, not `last_sequence > count`.
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: 4);
+
+        var first = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            world.RunId,
+            IngestQaRequests.Batch(
+                IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 0),
+                IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 1), sequence: 1),
+                IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 2), sequence: 3)));
+
+        first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
+        first.Body.GetProperty("accepted").GetInt32().ShouldBe(3);
+
+        // Stored as sent, in the documented reader order, and the mark is the highest stored value.
+        (await world.EventColumnAsync<long>("sequence")).ShouldBe([0L, 1L, 3L]);
+        (await world.ScalarAsync<string>(
+            "select count(distinct sequence)::text || '/' || min(sequence)::text || '/' || max(sequence)::text from public.event"))
+            .ShouldBe("3/0/3");
+        (await LastSequenceAsync(world)).ShouldBe(3L);
+
+        // 3 < 3 - 0 + 1: sequence 2 is missing — and the batch was accepted anyway (a gap is never a refusal).
+        (await GapAsync(world)).ShouldBeTrue();
+
+        // Filling the hole makes the derivation false again (4 < 3 - 0 + 1 does not hold), while the mark stays
+        // a maximum: the high-water mark never moves up when a hole below it is filled.
+        var second = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            world.RunId,
+            IngestQaRequests.Batch(
+                IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 3), sequence: 2)));
+
+        second.Status.ShouldBe(HttpStatusCode.OK, second.ErrorMessage);
+        (await GapAsync(world)).ShouldBeFalse();
+        (await LastSequenceAsync(world)).ShouldBe(3L);
+    }
+
+    /// <summary>The §3 gap derivation over stored columns, for the seeded single-producer run (`shard-1`).</summary>
+    private static Task<bool> GapAsync(IngestTestWorld world) =>
+        world.ScalarAsync<bool>("""
+            select count(distinct sequence)
+                   < (select last_sequence from public.producer_slot where producer_id = 'shard-1')
+                     - min(sequence) + 1
+            from public.event
+            """);
 
     // ---------------------------------------------------------------- T4.2 / T84: restart
 
