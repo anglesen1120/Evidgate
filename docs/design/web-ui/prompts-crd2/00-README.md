@@ -17,7 +17,7 @@ The phase of a page comes from the Milestone cells of the 09.x tasks behind it (
 | # | Page | Phase | Action | Why (plan id) | Prompt |
 |---|---|---|---|---|---|
 | 01 | app shell + nav (`assets/evidgate.js`) | G1 | **Modify** | Nav regrouped by phase, phase switch, Authoring group first (13.4.1-T7) | B1-01 |
-| 02 | login | G1 | Keep | Footer tagline "Evidence-first release decisions" pending owner question 4 | — |
+| 02 | login | G1 | **Modify** | Footer tagline only: replace "Evidence-first release decisions" with the CR-D-2 lead (owner decision 4) | B1-01 |
 | 03 | run list | G2 | **Modify** | Local `evidgate run` vs CI source, script status, link to manual case (13.5.2) | B3-03 |
 | 04 / 05 | run detail, evidence panel | G2 | **Modify** | Manual case + script links, profile captured per bound step (13.5, 13.6.1) | B3-04 |
 | 06 | decision + waivers | G4 | Hide | 09.3.1-T5/T9/T11 moved to G3/G4 | — |
@@ -112,7 +112,7 @@ Format: [`TEMPLATE.md`](TEMPLATE.md). Each prompt is ≤ 60 lines and names one 
 
 ## 4. Open questions for the owner `[OPEN]`
 
-1. `[OPEN]` Is the nav label for the authoring group "Test design / Thiết kế kiểm thử" or "Authoring / Soạn kiểm thử"? The prompts use the first as a working assumption. It can be changed in one place, the nav array.
+1. `[DECISION]` 2026-10-23, owner: the authoring group label is "Test design / Thiết kế kiểm thử".
 2. `[OPEN]` What is the credit price per action (plan 13 Q2 `[OPEN]`)? Fixtures show credit counts only, with no money amounts.
 3. `[OPEN]` Should the G1 workspace show CI health at all? The prompts hide it until G2.
-4. `[OPEN]` The login footer tagline still reads "Evidence-first release decisions". Keep it, or change it to the CR-D-2 lead (authoring and self-learning repair)?
+4. `[DECISION]` 2026-10-23, owner: change the login footer tagline to the CR-D-2 lead. Working text (owner may reword): "Evidgate · From requirements to tests that repair themselves, under review / Evidgate · Từ yêu cầu đến kiểm thử tự sửa, luôn có người duyệt". Prompt B1-01 carries it.

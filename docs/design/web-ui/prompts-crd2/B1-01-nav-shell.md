@@ -21,6 +21,7 @@ Make the shared shell lead with test authoring and reveal later navigation only 
 - Keep existing `studio`, `suites`, `quality`, `releases`, `policies`, `deploy` at G4; keep their existing targets. Pages 06, 17–22, 30, 34, 35, 37, 38 must have no sidebar entry/teaser at G1–G3.
 - Add a labelled G1/G2/G3/G4 select, default G1, to `.review-dock[data-od-id="design-review-controls"]`; use the shared renderer for this review-only phase control on pages, preserving theme/locale/state. Later-phase items are absent, not disabled; phase does not grant permissions.
 - In `#main-content`, replace the run-heading, `.statusline`, evaluation-fields and run-tests-panel default specimen with a compact authoring workspace specimen and link to page 40; update the topbar breadcrumb. Remove release verdict/waiver specimens from component-state-sheet and scenarioArea at G1–G3; retain only G4 review specimens at G4.
+- Page 02 `02-login/evidgate-sign-in.html` (footer `data-t="footerLeft"` and its en and vi dictionary entries): replace only the tagline "Evidence-first release decisions" with "From requirements to tests that repair themselves, under review / Từ yêu cầu đến kiểm thử tự sửa, luôn có người duyệt"; no other change to the sign-in page.
 
 ## States (in addition to the shared switcher)
 
