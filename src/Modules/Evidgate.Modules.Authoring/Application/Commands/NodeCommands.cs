@@ -1,10 +1,12 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
+using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
@@ -83,6 +85,8 @@ internal sealed class CreateNodeCommandHandler(
     /// <inheritdoc />
     public async ValueTask<Result<CreateNodeResponse>> Handle(CreateNodeCommand command, CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(CreateNodeCommand));
+
         ArgumentNullException.ThrowIfNull(command);
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } mismatch)
@@ -219,6 +223,8 @@ internal sealed class UpdateNodeCommandHandler(
     /// <inheritdoc />
     public async ValueTask<Result<AuthoringChangeResponse>> Handle(UpdateNodeCommand command, CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(UpdateNodeCommand));
+
         ArgumentNullException.ThrowIfNull(command);
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } mismatch)
@@ -368,6 +374,8 @@ internal sealed class ReorderNodesCommandHandler(
     /// <inheritdoc />
     public async ValueTask<Result<ReorderNodesResponse>> Handle(ReorderNodesCommand command, CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ReorderNodesCommand));
+
         ArgumentNullException.ThrowIfNull(command);
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } mismatch)
@@ -468,6 +476,8 @@ internal sealed class DeleteNodeCommandHandler(
     /// <inheritdoc />
     public async ValueTask<Result<bool>> Handle(DeleteNodeCommand command, CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(DeleteNodeCommand));
+
         ArgumentNullException.ThrowIfNull(command);
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } mismatch)

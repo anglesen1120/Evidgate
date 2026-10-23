@@ -1,10 +1,12 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
+using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
@@ -36,7 +38,7 @@ internal sealed record CreateChecklistItemCommand(Guid ProjectId, JsonElement Bo
 /// An authoring write is audit-once (AC18): the pipeline appends the row described here, and an idempotency replay
 /// suppresses it (<c>AuditTrail.Suppress</c>) because the original request already wrote its own.
 /// </remarks>
-[AuditedAction("checklist_item.create")]
+[AuditedAction("authoring.checklist_item.create")]
 [Permission(Permissions.Authoring.Write)]
 internal sealed class CreateChecklistItemCommandHandler(
     ITenantDb db,
@@ -52,6 +54,8 @@ internal sealed class CreateChecklistItemCommandHandler(
         CreateChecklistItemCommand command,
         CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(CreateChecklistItemCommand));
+
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure<CreateChecklistItemResponse>(scopeError);

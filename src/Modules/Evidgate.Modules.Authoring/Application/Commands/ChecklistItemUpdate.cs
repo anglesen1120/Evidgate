@@ -1,10 +1,12 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
+using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
@@ -42,7 +44,7 @@ internal sealed record UpdateChecklistItemCommand(
 /// body (<c>changed = false</c>, nothing written). A retired item is 409 <c>invalid_transition</c> for **any** edit,
 /// which the writer also enforces; deciding it here keeps the answer free of a rolled-back write (AC20).
 /// </remarks>
-[AuditedAction("checklist_item.update")]
+[AuditedAction("authoring.checklist_item.update")]
 [Permission(Permissions.Authoring.Write)]
 internal sealed class UpdateChecklistItemCommandHandler(
     ITenantDb db,
@@ -58,6 +60,8 @@ internal sealed class UpdateChecklistItemCommandHandler(
         UpdateChecklistItemCommand command,
         CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(UpdateChecklistItemCommand));
+
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure<AuthoringChangeResponse>(scopeError);

@@ -64,9 +64,9 @@ internal sealed class UpdateProjectCommandValidator : AbstractValidator<UpdatePr
         // because ValidationBehaviour copies FluentValidation's PropertyName verbatim (CreateRole.cs:57 precedent for the
         // override), and the reason matches the `value_invalid` of the authoring routes.
         RuleFor(command => command.CasePrefix)
-            .OverridePropertyName("/case_prefix")
             .Must(TenancyRules.IsCasePrefix)
             .WithErrorCode("value_invalid")
+            .OverridePropertyName("/case_prefix")
             .When(command => command.CasePrefix is not null);
 
         RuleFor(command => command.ExpectedVersion)

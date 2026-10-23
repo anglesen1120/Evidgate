@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -8,6 +9,7 @@ using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
+using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Contracts;
@@ -59,6 +61,8 @@ internal sealed class CreateManualCaseCommandHandler(
         CreateManualCaseCommand command,
         CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(CreateManualCaseCommand));
+
         ArgumentNullException.ThrowIfNull(command);
 
         // AuthoringRules.Project first: a project-scoped credential addressing a sibling project of the same tenant is
@@ -188,6 +192,8 @@ internal sealed class UpdateManualCaseCommandHandler(
         UpdateManualCaseCommand command,
         CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(UpdateManualCaseCommand));
+
         ArgumentNullException.ThrowIfNull(command);
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
@@ -328,6 +334,8 @@ internal sealed class DeleteManualCaseCommandHandler(
     /// <inheritdoc />
     public async ValueTask<Result> Handle(DeleteManualCaseCommand command, CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(DeleteManualCaseCommand));
+
         ArgumentNullException.ThrowIfNull(command);
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
@@ -403,6 +411,8 @@ internal sealed class SetManualCaseStateCommandHandler(
         SetManualCaseStateCommand command,
         CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(SetManualCaseStateCommand));
+
         ArgumentNullException.ThrowIfNull(command);
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
@@ -513,6 +523,8 @@ internal sealed class MoveManualTestCaseCommandHandler(
         MoveManualTestCaseCommand command,
         CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(MoveManualTestCaseCommand));
+
         ArgumentNullException.ThrowIfNull(command);
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)

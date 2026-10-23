@@ -32,6 +32,8 @@ public sealed class AuthoringApiTests
 
         public string Nodes => $"/v1/projects/{Project}/authoring/nodes";
 
+        public string Tree => $"/v1/projects/{Project}/authoring/tree";
+
         public string Node(Guid n) => $"{Nodes}/{n:D}";
 
         public string Items => $"/v1/projects/{Project}/authoring/checklist-items";
@@ -70,6 +72,155 @@ public sealed class AuthoringApiTests
         created.Status.ShouldBe(HttpStatusCode.Created, $"{url} answers 201, not {created.Status}: {created.Body}");
         return created.Body.GetProperty(member).GetGuid();
     }
+
+    /// <summary>
+    /// One route of the permission sweep: what it is called, the verb, the URL, a body and <c>If-Match</c> tag that pass
+    /// the edge's own checks. §5 gates every write with <c>authoring:write</c>, so the verb decides which permission the
+    /// route needs.
+    /// </summary>
+    private sealed record Route(string Label, HttpMethod Method, string Url, object? Body = null, string? IfMatch = null)
+    {
+        /// <summary>True for a mutating route (13.1.1 §5's <c>authoring:write</c>), false for a read.</summary>
+        public bool IsWrite => Method != HttpMethod.Get;
+    }
+
+    /// <summary>
+    /// 13.1.1 §5/AC10: every one of the sixteen authoring routes asks for the permission §5 assigns it. A member holding
+    /// only the <c>viewer</c> role (which carries <c>authoring:read</c>, never <c>authoring:write</c>) is refused 403
+    /// <c>forbidden</c> on the twelve writes and served 200 on the four reads; a member holding no role at all is refused
+    /// 403 on a read too, so no route is ungated; the founder, who holds the permission, is never refused. The refused
+    /// writes leave no entity row, no version row and no audit row behind.
+    /// </summary>
+    /// <remarks>
+    /// The route delegates parse <c>If-Match</c> and member-check the body before <c>mediator.Send</c> (the
+    /// <c>[Permission]</c> is the C2 authorization stage), so the sweep sends conditional requests that would be
+    /// accepted if the caller held the permission: a 403 can then only be the permission, never the malformed edge.
+    /// </remarks>
+    [Fact]
+    public async Task EveryRoute_RequiresItsPermission()
+    {
+        await using var world = await StartAsync();
+
+        // The ladder, one item under the category and one case under the item (§4/AC1), so every route has a live target.
+        var module = await CreateAsync(world, world.Nodes, new { kind = "module", title = "Checkout" });
+        var feature = await CreateAsync(world, world.Nodes, new { parent_id = module, kind = "feature", title = "Payment" });
+        var category = await CreateAsync(world, world.Nodes, new { parent_id = feature, kind = "category", title = "Cards" });
+        var item = await CreateAsync(world, world.Items, new { node_id = category, title = "Item", priority = "high" }, "item_id");
+        var manualCase = await CreateAsync(world, world.Cases, new
+        {
+            checklist_item_id = item,
+            title = "Case",
+            steps = new[] { new { no = 1, action = "open", expected = "shown" } },
+            priority = "high",
+        }, "case_id");
+
+        var routes = new List<Route>
+        {
+            new("tree", HttpMethod.Get, world.Tree),
+            new("create node", HttpMethod.Post, world.Nodes, new { parent_id = module, kind = "feature", title = "Refunds" }),
+            new("patch node", HttpMethod.Patch, world.Node(feature), new { title = "Renamed feature" }, "\"1\""),
+            new("reorder nodes", HttpMethod.Post, $"{world.Node(feature)}/reorder", new { ordered_ids = new[] { feature } }, "\"order:sha256:" + new string('0', 64) + "\""),
+            new("delete node", HttpMethod.Delete, world.Node(category), null, "\"1\""),
+            new("list items", HttpMethod.Get, world.Items),
+            new("create item", HttpMethod.Post, world.Items, new { node_id = category, title = "Another item", priority = "low" }),
+            new("patch item", HttpMethod.Patch, world.Item(item), new { title = "Renamed item" }, "\"1\""),
+            new("delete item", HttpMethod.Delete, world.Item(item), null, "\"1\""),
+            new("list cases", HttpMethod.Get, world.Cases),
+            new("create case", HttpMethod.Post, world.Cases, new
+            {
+                checklist_item_id = item,
+                title = "Another case",
+                steps = new[] { new { no = 1, action = "open", expected = "shown" } },
+                priority = "low",
+            }),
+            new("case detail", HttpMethod.Get, world.Case(manualCase)),
+            new("patch case", HttpMethod.Patch, world.Case(manualCase), new { title = "Renamed case" }, "\"1\""),
+            new("case state", HttpMethod.Post, $"{world.Case(manualCase)}/state", new { state = "approved" }, "\"1\""),
+            new("case item move", HttpMethod.Post, $"{world.Case(manualCase)}/item", new { checklist_item_id = item }, "\"1\""),
+            new("delete case", HttpMethod.Delete, world.Case(manualCase), null, "\"1\""),
+        };
+
+        routes.Count.ShouldBe(16, "13.1.1 §5 numbers sixteen routes for this task");
+        routes.Count(route => route.IsWrite).ShouldBe(12, "§5 has twelve write routes and four reads in this task");
+
+        var viewer = await AddMemberAsync(world, "viewer");
+        var stranger = await AddMemberAsync(world, roleCode: null);
+        var asViewer = TenancyApiFactory.Resolved(user: viewer, orgHeader: world.Org);
+        var asStranger = TenancyApiFactory.Resolved(user: stranger, orgHeader: world.Org);
+        var before = await RowCountsAsync(world);
+
+        foreach (var route in routes)
+        {
+            if (route.IsWrite)
+            {
+                // A viewer holds authoring:read only: every write is 403 forbidden, whatever the body says.
+                var refused = await world.Client.SendAsync(route.Method, route.Url, asViewer, route.Body, NewKey(), route.IfMatch);
+
+                refused.Status.ShouldBe(HttpStatusCode.Forbidden, $"{route.Label}: a viewer must not write, not {refused.Status}");
+                refused.ErrorCode.ShouldBe("forbidden", route.Label);
+                continue;
+            }
+
+            // A read is open to the viewer and closed to a member holding no role at all.
+            var read = await world.Client.SendAsync(route.Method, route.Url, asViewer);
+
+            read.Status.ShouldBe(HttpStatusCode.OK, $"{route.Label}: authoring:read must serve the viewer, not {read.Status}");
+
+            var denied = await world.Client.SendAsync(route.Method, route.Url, asStranger);
+
+            denied.Status.ShouldBe(HttpStatusCode.Forbidden, $"{route.Label}: a member with no authoring code must not read");
+            denied.ErrorCode.ShouldBe("forbidden", route.Label);
+        }
+
+        (await RowCountsAsync(world)).ShouldBe(
+            before,
+            "no refused request may write a feature_node, checklist_item, manual_test_case, authoring_version or audit_log row");
+
+        // The control: the founder holds authoring:write, so no route refuses the same requests on the permission.
+        foreach (var route in routes)
+        {
+            var granted = await world.Client.SendAsync(route.Method, route.Url, world.As, route.Body, NewKey(), route.IfMatch);
+
+            granted.Status.ShouldNotBe(HttpStatusCode.Forbidden, $"{route.Label}: the granted caller must not be refused");
+            granted.Status.ShouldNotBe(HttpStatusCode.Unauthorized, route.Label);
+        }
+    }
+
+    /// <summary>An active member of the org, optionally holding one built-in role, granted by the founder through the API.</summary>
+    private async Task<Guid> AddMemberAsync(World world, string? roleCode)
+    {
+        var user = Guid.CreateVersion7();
+        var membership = Guid.CreateVersion7();
+
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            insert into public.membership (id, org_id, user_id, invited_email, status)
+            values ('{membership}', '{world.Org}', '{user}', 'member-{user:N}@example.test', 'active')
+            """);
+
+        if (roleCode is not null)
+        {
+            var role = await _fixture.ScalarAsync<Guid>(
+                world.Database, $"select id from public.role where code = '{roleCode}' and org_id is null");
+            var granted = await world.Client.SendAsync(
+                HttpMethod.Post, $"/v1/orgs/{world.Org}/memberships/{membership}/roles", world.As, new { role_id = role }, NewKey());
+
+            granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
+        }
+
+        return user;
+    }
+
+    /// <summary>The org's authoring row counts plus its audit rows, in a fixed order, for the "nothing was written" check.</summary>
+    private async Task<IReadOnlyList<long>> RowCountsAsync(World world) =>
+    [
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.feature_node where org_id = '{world.Org}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.checklist_item where org_id = '{world.Org}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.manual_test_case where org_id = '{world.Org}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.authoring_version where org_id = '{world.Org}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where org_id = '{world.Org}'"),
+    ];
 
     [Fact]
     public async Task IfMatch_Required_And_Stale()

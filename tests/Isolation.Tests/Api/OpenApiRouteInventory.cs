@@ -22,6 +22,7 @@ public static class OpenApiRouteInventory
 {
     private const int PathIndent = 2;
     private const int OperationIndent = 4;
+    private const int PermissionIndent = 6;
 
     private static readonly HashSet<string> OperationKeys = new(StringComparer.Ordinal)
     {
@@ -43,6 +44,144 @@ public static class OpenApiRouteInventory
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         return Parse(File.ReadAllLines(path), path);
+    }
+
+    /// <summary>
+    /// Every operation of the repository's spec with its <c>x-permission</c> (13.1.1-T2.4): the same operations
+    /// <see cref="Load()"/> returns, in the same order, plus the permission each documents — or null when it
+    /// documents none.
+    /// </summary>
+    public static IReadOnlyList<OperationPermissionDeclaration> Permissions() => Permissions(SpecPath);
+
+    /// <summary>Reads every operation of a spec file with its <c>x-permission</c>.</summary>
+    /// <param name="path">The spec file.</param>
+    /// <exception cref="InvalidOperationException">The spec's <c>servers</c> or <c>paths</c> block is malformed.</exception>
+    public static IReadOnlyList<OperationPermissionDeclaration> Permissions(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var lines = File.ReadAllLines(path);
+
+        return Permissions(lines, path);
+    }
+
+    /// <summary>Reads every operation of spec text with its <c>x-permission</c>.</summary>
+    /// <param name="lines">The spec's lines.</param>
+    /// <param name="source">The name used in error messages (a file path).</param>
+    /// <exception cref="InvalidOperationException">The <c>servers</c> or <c>paths</c> block is malformed; the message names the line.</exception>
+    public static IReadOnlyList<OperationPermissionDeclaration> Permissions(IReadOnlyList<string> lines, string source)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+
+        var prefix = ServerPrefix(lines, source);
+        var pathsLine = TopLevelKey(lines, "paths")
+            ?? throw Malformed(source, null, "no top-level 'paths:' block");
+
+        var operations = new List<OperationPermissionDeclaration>();
+        var end = SectionEnd(lines, pathsLine + 1);
+        string? currentPath = null;
+        string? method = null;
+        string? permission = null;
+
+        void Flush()
+        {
+            if (currentPath is not null && method is not null)
+            {
+                operations.Add(new OperationPermissionDeclaration(method, prefix + currentPath, permission));
+            }
+
+            method = null;
+            permission = null;
+        }
+
+        for (var i = pathsLine + 1; i < end; i++)
+        {
+            var line = lines[i];
+            if (IsBlank(line))
+            {
+                continue;
+            }
+
+            var indent = IndentOf(line);
+            if (indent > OperationIndent)
+            {
+                // Inside an operation, a path-level parameter list or a block scalar body: a block scalar's body is
+                // indented deeper than its key, so it can never be read as the operation's own x-permission.
+                if (indent == PermissionIndent && method is not null && TryKey(line, PermissionIndent, out var nested)
+                    && string.Equals(nested, "x-permission", StringComparison.Ordinal))
+                {
+                    permission = Unquoted(InlineValue(line));
+                }
+
+                continue;
+            }
+
+            if (indent == PathIndent)
+            {
+                Flush();
+                currentPath = TryKey(line, PathIndent, out var pathKey) ? pathKey : null;
+                continue;
+            }
+
+            if (indent != OperationIndent)
+            {
+                continue;
+            }
+
+            Flush();
+            if (TryKey(line, OperationIndent, out var key) && OperationKeys.Contains(key))
+            {
+                method = key;
+            }
+        }
+
+        Flush();
+
+        var routes = Parse(lines, source);
+        if (routes.Count != operations.Count)
+        {
+            throw Malformed(source, pathsLine, string.Create(
+                CultureInfo.InvariantCulture,
+                $"the operation reader found {operations.Count} operations but the inventory found {routes.Count}"));
+        }
+
+        return operations;
+    }
+
+    /// <summary>
+    /// The rule of 13.1.1-T2.4: every operation of the spec declares the <c>x-permission</c> that gates it. Returns one
+    /// message per operation that declares none, so a spec-wide run reports every gap at once.
+    /// </summary>
+    /// <param name="operations">The operations read by <see cref="Permissions()"/>.</param>
+    public static IReadOnlyList<string> EveryOperationDeclaresXPermission(IReadOnlyList<OperationPermissionDeclaration> operations)
+    {
+        ArgumentNullException.ThrowIfNull(operations);
+
+        return
+        [
+            .. operations
+                .Where(operation => string.IsNullOrWhiteSpace(operation.Permission))
+                .Select(operation => operation.Route + " declares no x-permission"),
+        ];
+    }
+
+    /// <summary>One spec operation and the <c>x-permission</c> it documents (13.1.1-T2.4).</summary>
+    /// <param name="Method">The lower-case method key as the spec writes it.</param>
+    /// <param name="Template">The route, <c>servers[0].url</c> prefixed.</param>
+    /// <param name="Permission">The declared permission, or null when the operation declares none.</param>
+    public sealed record OperationPermissionDeclaration(string Method, string Template, string? Permission)
+    {
+        /// <summary>The operation as <see cref="ApiRoute"/> compares it: upper-case method and normalised template.</summary>
+        public ApiRoute Route => new(Method, Template);
+
+        /// <summary>"GET /v1/orgs/{o} → org:read".</summary>
+        public override string ToString() => Route + " → " + (Permission ?? "none declared");
+    }
+
+    private static string Unquoted(string value)
+    {
+        var text = value.Trim();
+        return text.Length >= 2 && text[0] is '\'' or '"' && text[^1] == text[0] ? text[1..^1] : text;
     }
 
     /// <summary>Reads the operations of spec text, in document order, each once.</summary>

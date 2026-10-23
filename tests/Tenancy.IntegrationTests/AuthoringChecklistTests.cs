@@ -335,7 +335,7 @@ public sealed class AuthoringChecklistTests
         return new World(api, client, database, user, org, project, module, feature, category);
     }
 
-    private static Task InsertNodeAsync(
+    private static Task<int> InsertNodeAsync(
         TenantScope scope,
         Guid id,
         Guid org,
@@ -348,7 +348,7 @@ public sealed class AuthoringChecklistTests
         insert into public.feature_node (id, org_id, project_id, parent_id, kind, title, position)
         values (@id, @org_id, @project_id, @parent_id, @kind, @title, @position)
         """,
-        ("id", id), ("org_id", org), ("project_id", project), ("parent_id", parent),
+        ("id", id), ("org_id", org), ("project_id", project), ("parent_id", (object?)parent ?? DBNull.Value),
         ("kind", kind), ("title", title), ("position", position));
 
     private static async Task<Guid> CreateItemAsync(World world, string title)

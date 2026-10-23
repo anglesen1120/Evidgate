@@ -1,8 +1,10 @@
 using System.Globalization;
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
+using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
@@ -48,6 +50,8 @@ internal sealed class ListChecklistItemsQueryHandler(
         ListChecklistItemsQuery query,
         CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ListChecklistItemsQuery));
+
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure<ChecklistItemListResponse>(scopeError);

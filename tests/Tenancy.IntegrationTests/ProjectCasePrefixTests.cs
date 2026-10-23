@@ -67,7 +67,7 @@ public sealed class ProjectCasePrefixTests
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, founder, "acme");
-        var project = await CreateProjectAsync(client, founder, org, "shop");
+        var project = await RegistryApi.CreateProjectAsync(client, founder, org, "shop");
         var admin = TenancyApiFactory.Resolved(user: founder, orgHeader: org);
 
         var viewer = await AddMemberAsync(database, client, org, founder, "viewer");

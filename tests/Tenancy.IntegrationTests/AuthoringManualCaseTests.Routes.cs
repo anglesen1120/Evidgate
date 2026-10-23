@@ -133,7 +133,9 @@ public sealed partial class AuthoringManualCaseTests
             .Select(row => row.GetProperty("code").GetString()!)
             .ToArray();
         secondCodes.Length.ShouldBe(2);
-        secondCodes.ShouldNotIntersectWith(firstItems.Select(row => row.GetProperty("code").GetString()!));
+        var firstCodes = firstItems.Select(row => row.GetProperty("code").GetString()!).ToArray();
+        secondCodes.Intersect(firstCodes, StringComparer.Ordinal)
+            .ShouldBeEmpty("the keyset cursor never repeats a case the first page carried");
 
         // `q` is a literal substring, not a LIKE pattern: `%` matches only a title that contains one.
         var percent = await client.SendAsync(HttpMethod.Get, CasePath(project) + "?q=%25", caller);
@@ -257,8 +259,8 @@ public sealed partial class AuthoringManualCaseTests
         var invalid = new (string Because, string Steps)[]
         {
             ("an empty list", "[]"),
-            ("one step past the bound", Steps(101)),
-            ("a 2001-character action", Steps(1, action: new string('a', 2001))),
+            ("one step past the bound", StepsJson(101)),
+            ("a 2001-character action", StepsJson(1, action: new string('a', 2001))),
             ("an unknown member", """[{"no":1,"action":"a","expected":"e","surprise":"x"}]"""),
             ("a non-string data", """[{"no":1,"action":"a","expected":"e","data":{"nested":true}}]"""),
         };
@@ -298,7 +300,7 @@ public sealed partial class AuthoringManualCaseTests
             caller,
             Element("""{"checklist_item_id":"__ITEM__","title":"At the bound","steps":__STEPS__,"priority":"high"}"""
                 .Replace("__ITEM__", id, StringComparison.Ordinal)
-                .Replace("__STEPS__", Steps(100), StringComparison.Ordinal)),
+                .Replace("__STEPS__", StepsJson(100), StringComparison.Ordinal)),
             NewKey());
 
         accepted.Status.ShouldBe(HttpStatusCode.Created, accepted.ErrorMessage);
@@ -394,8 +396,8 @@ public sealed partial class AuthoringManualCaseTests
             .Replace("__ITEM__", item.ToString("D"), StringComparison.Ordinal)
             .Replace("__TITLE__", title, StringComparison.Ordinal));
 
-    /// <summary>A <c>steps</c> array of <paramref name="count"/> valid steps, as raw JSON.</summary>
-    private static string Steps(int count, string? action = null)
+    /// <summary>A <c>steps</c> array of <paramref name="count"/> valid steps, as raw JSON (the route suite's own fixture).</summary>
+    private static string StepsJson(int count, string? action = null)
     {
         var steps = Enumerable.Range(1, count).Select(no =>
             string.Create(
@@ -404,9 +406,6 @@ public sealed partial class AuthoringManualCaseTests
 
         return "[" + string.Join(',', steps) + "]";
     }
-
-    /// <summary>A raw JSON body, so an unknown member or an out-of-bound tree reaches the route exactly as written.</summary>
-    private static JsonElement Element(string json) => JsonDocument.Parse(json).RootElement.Clone();
 
     /// <summary>An org row as the owner.</summary>
     private async Task<Guid> SeedOrgAsync(string database, string slug)

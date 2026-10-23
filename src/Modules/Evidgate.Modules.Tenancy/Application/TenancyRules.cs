@@ -87,12 +87,12 @@ internal static class TenancyErrors
 
     /// <summary>
     /// A unique case-prefix key refused the write (13.1.1 AC4/OI-13-101): <c>project_org_case_prefix_uq</c> holds
-    /// <c>(org_id, case_prefix)</c>, so only a sibling project of the same org can collide. The code is spelled here
-    /// rather than taken from <see cref="ApiErrorCode"/> because that catalogue is the 00 §9.2 list another task owns;
-    /// it joins it as <c>case_prefix_taken</c>.
+    /// <c>(org_id, case_prefix)</c>, so only a sibling project of the same org can collide. The code comes from
+    /// <see cref="ApiErrorCode.CasePrefixTaken"/> like every other 00 §9.2 code, so the catalogue stays the one
+    /// definition of the wire code and its message key (<c>error.case_prefix_taken</c>).
     /// </summary>
     internal static Error CasePrefixTaken => Error.Conflict(
-        "case_prefix_taken",
+        ApiErrorCode.CasePrefixTaken,
         "another project of this organization already uses that case prefix");
 
     /// <summary>Mutations of a suspended org's registry are refused (02.1.1 §6).</summary>

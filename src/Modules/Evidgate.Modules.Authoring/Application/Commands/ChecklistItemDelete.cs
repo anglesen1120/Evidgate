@@ -1,9 +1,11 @@
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
+using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
@@ -35,7 +37,7 @@ internal sealed record DeleteChecklistItemCommand(
 /// check atomic (AC19), then one <c>delete</c> change through the writer, which refuses an item that still holds a live
 /// manual case with <c>409 authoring_not_empty</c> / <c>item_has_cases</c> (AC7) and writes nothing.
 /// </summary>
-[AuditedAction("checklist_item.delete")]
+[AuditedAction("authoring.checklist_item.delete")]
 [Permission(Permissions.Authoring.Write)]
 internal sealed class DeleteChecklistItemCommandHandler(
     ITenantDb db,
@@ -49,6 +51,8 @@ internal sealed class DeleteChecklistItemCommandHandler(
     /// <inheritdoc />
     public async ValueTask<Result> Handle(DeleteChecklistItemCommand command, CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(DeleteChecklistItemCommand));
+
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure(scopeError);

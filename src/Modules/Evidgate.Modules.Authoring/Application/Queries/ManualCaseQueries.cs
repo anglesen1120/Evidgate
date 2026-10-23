@@ -1,10 +1,12 @@
 using System.Globalization;
 using System.Text;
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
+using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Application;
@@ -64,6 +66,8 @@ internal sealed class ListManualCasesQueryHandler(
         ListManualCasesQuery query,
         CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ListManualCasesQuery));
+
         ArgumentNullException.ThrowIfNull(query);
 
         // The project-scope gate first (AuthoringRules): RLS scopes rows per org, so a project-scoped credential
@@ -176,6 +180,8 @@ internal sealed class GetManualCaseQueryHandler(
         GetManualCaseQuery query,
         CancellationToken cancellationToken)
     {
+        using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(GetManualCaseQuery));
+
         ArgumentNullException.ThrowIfNull(query);
 
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
