@@ -333,12 +333,13 @@ public sealed class AuthoringSchemaTests
             await seed.CommitAsync();
         }
 
-        // The deploy path: the journal already holds 0001-0038, so pointing the Migrator at the
-        // repository's own directory applies exactly the one pending file (and the runner's
-        // contiguous-run rule holds). A directory holding only 0039 is refused as a gap.
+        // The deploy path: every file before 0039 is journaled, so pointing the Migrator at the
+        // repository's own directory applies 0039 — and, once a later migration lands, that one too,
+        // which is why the assertion is about order and contiguity rather than an exact list.
+        // A directory holding only 0039 would be refused as a gap by the runner's contiguous-run rule.
         var applied = _fixture.ApplyMigrations(database);
         applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
-        applied.Result.AppliedNow.ShouldBe([MigrationFile]);
+        AssertDeployApplied(MigrationFile, applied);
 
         foreach (var org in new[] { first, second })
         {
@@ -406,11 +407,11 @@ public sealed class AuthoringSchemaTests
             await seed.CommitAsync();
         }
 
-        // Same deploy path as above: 0001-0038 are journaled, so the repository directory has
-        // exactly one pending file.
+        // Same deploy path as above: every file before 0039 is journaled, so the repository directory
+        // applies 0039 (content_hash is written as the snapshot of the backfilled rows).
         var applied = _fixture.ApplyMigrations(database);
         applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
-        applied.Result.AppliedNow.ShouldBe([MigrationFile]);
+        AssertDeployApplied(MigrationFile, applied);
 
         (await _fixture.ColumnAsync<string>(
             database,
@@ -659,6 +660,21 @@ public sealed class AuthoringSchemaTests
         await seed.CommitAsync();
 
         return org;
+    }
+
+    /// <summary>
+    /// What a deploy run over the repository's own migration directory must satisfy, independent of
+    /// how many files exist after <paramref name="migrationFile"/>: the file is applied, the applied
+    /// set is contiguous (nothing at or before it is re-applied) and it is applied in lexical order.
+    /// </summary>
+    private static void AssertDeployApplied(string migrationFile, MigrationRun run)
+    {
+        run.Result.AppliedNow.ShouldContain(migrationFile);
+        run.Result.AppliedNow
+            .Where(name => string.CompareOrdinal(name, migrationFile) < 0)
+            .ShouldBeEmpty($"no file at or before {migrationFile} may be re-applied; applied: {string.Join(", ", run.Result.AppliedNow)}");
+        run.Result.AppliedNow.Order(StringComparer.Ordinal).ToArray()
+            .ShouldBe(run.Result.AppliedNow.ToArray(), "the pending files are applied in lexical order");
     }
 
     /// <summary>A database brought to the head **before** 0039, so the backfill sees pre-existing rows.</summary>

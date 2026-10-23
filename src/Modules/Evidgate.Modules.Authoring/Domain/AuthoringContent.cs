@@ -174,6 +174,10 @@ internal static class AuthoringContent
         snapshot = null;
         var problems = new List<(string Path, string Reason)>();
 
+        // A process that cannot compose text is a deployment fault (00 §5.7 P7), not a caller error: fail loudly here,
+        // so the text guards below only ever answer bad input.
+        AuthoringText.EnsureNfcSupported();
+
         if (content.ValueKind != JsonValueKind.Object)
         {
             details = [("/content", "object_required")];
@@ -304,7 +308,29 @@ internal static class AuthoringContent
             return null;
         }
 
-        return AuthoringText.Normalize(value.GetString());
+        return Compose(value, path, problems);
+    }
+
+    /// <summary>
+    /// NFC-normalises one caller string, answering the single caller-error shape as a problem row instead of a 500: a
+    /// string that is not valid UTF-16 (an unpaired surrogate) makes both the reader and the normaliser throw. NFC
+    /// support itself is asserted once per parse (<see cref="Parse"/>), so nothing here can hide that fault.
+    /// </summary>
+    /// <param name="value">The JSON string value.</param>
+    /// <param name="path">The member path, without the <c>/content/</c> prefix.</param>
+    /// <param name="problems">The problem rows collected so far.</param>
+    /// <returns>The composed text, or null when the value cannot be stored.</returns>
+    private static string? Compose(JsonElement value, string path, List<(string Path, string Reason)> problems)
+    {
+        try
+        {
+            return AuthoringText.Normalize(value.GetString());
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
+        {
+            problems.Add(("/content/" + path, "invalid_text"));
+            return null;
+        }
     }
 
     private static string? NullableText(JsonElement content, string member, string path, List<(string Path, string Reason)> problems)
@@ -320,7 +346,7 @@ internal static class AuthoringContent
             case JsonValueKind.Null:
                 return null;
             case JsonValueKind.String:
-                var text = AuthoringText.Normalize(value.GetString());
+                var text = Compose(value, path, problems);
                 Length(text, path, MaximumLongTextLength, problems);
                 return text;
             default:
@@ -364,7 +390,24 @@ internal static class AuthoringContent
             return null;
         }
 
-        if (value.ValueKind != JsonValueKind.String || !Guid.TryParseExact(value.GetString(), "D", out var id))
+        if (value.ValueKind != JsonValueKind.String)
+        {
+            problems.Add(("/content/" + path, "uuid_required"));
+            return null;
+        }
+
+        string? text;
+        try
+        {
+            text = value.GetString();
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
+        {
+            problems.Add(("/content/" + path, "invalid_text"));
+            return null;
+        }
+
+        if (!Guid.TryParseExact(text, "D", out var id))
         {
             problems.Add(("/content/" + path, "uuid_required"));
             return null;
@@ -381,12 +424,37 @@ internal static class AuthoringContent
             return null;
         }
 
+        var raw = steps.GetRawText();
+
+        // A duplicate member name is a caller error the node model refuses to build, so it is refused here rather than
+        // surfacing as a 500 from JsonNode: the document never reaches the validator or the column.
+        try
+        {
+            using var _ = JsonDocument.Parse(
+                raw,
+                new JsonDocumentOptions { AllowDuplicateProperties = false });
+        }
+        catch (JsonException)
+        {
+            problems.Add(("/content/steps", "invalid_json"));
+            return null;
+        }
+
         // Every string leaf is NFC-normalised before the document is stored, so the composed and the decomposed spelling
         // of one step are one stored document, one content_hash and one version (AC14). Rebuilding the node tree keeps
         // member order, so the serialised text is stable.
-        return JsonNode.Parse(steps.GetRawText()) is { } node
-            ? NormaliseLeaves(node).ToJsonString()
-            : steps.GetRawText();
+        try
+        {
+            return JsonNode.Parse(raw) is { } node
+                ? NormaliseLeaves(node).ToJsonString()
+                : raw;
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
+        {
+            // An unpaired surrogate in a leaf: the value is not valid UTF-16, so it cannot be composed or stored.
+            problems.Add(("/content/steps", "invalid_text"));
+            return null;
+        }
     }
 
     /// <summary>NFC-normalises every string leaf of a JSON document in place; non-string leaves are left alone.</summary>

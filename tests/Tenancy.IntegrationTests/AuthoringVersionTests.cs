@@ -586,6 +586,64 @@ public sealed class AuthoringVersionTests
         results.Select(result => result.Value!.Number).ShouldBe([5L, 6L], ignoreOrder: true);
     }
 
+    // ------------------------------------------------------------------ AC5: the version history guard
+
+    [Fact]
+    public async Task Append_RefusesAVersionNoThatAlreadyExists_AndWritesNothing()
+    {
+        await using var world = await StartAsync();
+        var entity = Guid.CreateVersion7();
+        var id = entity.ToString("D");
+
+        (await AppendAsync(
+            world,
+            Guid.CreateVersion7(),
+            [EntityChange.Create(AuthoringEntityKind.FeatureNode, entity, NodeContent(FeatureNodeKinds.Module, "Shop", 0, null))]))
+            .IsSuccess.ShouldBeTrue();
+
+        // The owner seeds a version row at 2 while the entity row still stands at 1, so the next update would reuse 2.
+        await using (var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            await seed.ExecuteAsync(
+                """
+                insert into public.authoring_version
+                       (id, org_id, project_id, entity_kind, entity_id, version_no, batch_id, change_kind, content,
+                        content_hash, source)
+                values (@id, @org_id, @project_id, 'feature_node', @entity_id, 2, @batch_id, 'update', @content::jsonb,
+                        @content_hash, 'manual')
+                """,
+                ("id", Guid.CreateVersion7()),
+                ("org_id", world.Org),
+                ("project_id", world.Project),
+                ("entity_id", entity),
+                ("batch_id", Guid.CreateVersion7()),
+                ("content", "{\"kind\":\"module\",\"title\":\"Shop\",\"position\":0,\"parent_id\":null}"),
+                ("content_hash", "sha256:" + new string('a', 64)));
+            await seed.CommitAsync();
+        }
+
+        var duplicate = await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Update(AuthoringEntityKind.FeatureNode, entity, NodeContent(FeatureNodeKinds.Module, "Shop renamed", 0, null)),
+        ]);
+
+        // The guard refuses before the insert; the ON CONFLICT DO NOTHING row-count check is the second line of defence
+        // for the same shape (a stored history that is not the row's own).
+        duplicate.IsSuccess.ShouldBeFalse();
+        duplicate.Error!.Code.ShouldBe(Evidgate.BuildingBlocks.SharedKernel.Api.ApiErrorCode.InvalidTransition);
+        duplicate.Error.Message.ShouldContain("out of step");
+
+        // Nothing was written: the row keeps its title and version, and the only version rows are the create's and the seed.
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            "select title from public.feature_node where id = '" + id + "'")).ShouldBe("Shop");
+        (await _fixture.ScalarAsync<int>(
+            world.Database,
+            "select version from public.feature_node where id = '" + id + "'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<int>(
+            world.Database,
+            "select count(*)::int from public.authoring_version where entity_id = '" + id + "'")).ShouldBe(2);
+    }
+
     // ------------------------------------------------------------------ §6: the restore state rule
 
     [Fact]

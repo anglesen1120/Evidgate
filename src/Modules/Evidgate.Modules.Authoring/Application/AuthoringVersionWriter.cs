@@ -34,13 +34,15 @@ namespace Evidgate.Modules.Authoring.Application;
 /// stored history is out of step with the row it refuses with <c>409 invalid_transition</c> instead.
 /// </para>
 /// <para>
-/// <b>Lock order, one order for every path:</b> <c>feature_node</c> → <c>checklist_item</c> → <c>manual_test_case</c>,
-/// parent before child. A batch takes the locks of the entities it mutates in that order (rank, then id) before its
-/// first change; a move locks the target item before the case; a restore peeks its parent without a lock, takes the
-/// parent's <c>for share</c> lock, then locks the entity. A parent probe is always a share lock — it exists to block a
-/// concurrent soft delete of the parent, never to serialise siblings. Every lock of a call is bounded by one 5 s
-/// <c>lock_timeout</c>, and a lock timeout (55P03) or a deadlock (40P01) answers the retryable
-/// <c>503 unavailable</c> of §5 rather than a 500.
+/// <b>Lock order, one total order for every path:</b> <c>feature_node</c> → <c>checklist_item</c> →
+/// <c>manual_test_case</c>, and within a rank by id. A batch takes <em>every</em> lock it can need — the rows it mutates
+/// <c>for update</c> and the parents its content names <c>for share</c> — in that one sorted phase before its first
+/// change; a move locks the target item before the case; a restore peeks its parent without a lock, takes the parent's
+/// share lock, then locks the entity, and answers <c>503</c> if the row moved to another parent in between rather than
+/// taking a parent lock after the child. A parent probe is always a share lock — it exists to block a concurrent soft
+/// delete of the parent, never to serialise siblings. Every lock of a call is bounded by one 5 s <c>lock_timeout</c>,
+/// and a lock timeout (55P03) or a deadlock (40P01) answers the retryable <c>503 unavailable</c> of §5 rather than a
+/// 500, so even an order this comment missed degrades to a retry.
 /// </para>
 /// </remarks>
 internal sealed class AuthoringVersionWriter(
@@ -187,18 +189,10 @@ internal sealed class AuthoringVersionWriter(
             parsed.Add((change, snapshot));
         }
 
-        // Lock order, writer-wide: feature_node -> checklist_item -> manual_test_case, parent before child. A batch may
-        // name several existing entities, so their locks are taken in that global order (rank, then id) before the first
-        // change is applied; a parent probe inside CreateAsync then only ever asks for a share lock on a row of a lower
-        // rank, which cannot form a cycle with this order.
-        foreach (var entry in parsed
-            .Where(entry => entry.Change.ChangeKind != AuthoringChangeKind.Create)
-            .OrderBy(entry => LockRank(entry.Change.EntityKind))
-            .ThenBy(entry => entry.Change.EntityId))
-        {
-            // A missing row is not reported here: the change itself answers not_found with its own /changes/{i} path.
-            await LockAsync(orgId, projectId, entry.Change.EntityId, entry.Change.EntityKind, cancellationToken).ConfigureAwait(false);
-        }
+        // Every lock this batch can need is taken here, in one global order (rank, then id): the rows it mutates for
+        // update and the parents its content names for share. A probe inside CreateAsync/UpdateAsync then re-locks a row
+        // this transaction already holds, so no two batches can acquire two rows in opposite orders.
+        await LockBatchAsync(orgId, projectId, parsed, cancellationToken).ConfigureAwait(false);
 
         var appended = new List<PendingVersion>(parsed.Count);
         var unchanged = new List<Guid>();
@@ -575,9 +569,10 @@ internal sealed class AuthoringVersionWriter(
 
             if (ParentOf(snapshot) != ParentOf(peekedSnapshot))
             {
-                // The row moved to another parent between the peek and the lock: take that parent's share lock too, so
-                // the placement check below never passes under a parent nobody locked.
-                await LockRestoreParentAsync(orgId, projectId, snapshot, cancellationToken).ConfigureAwait(false);
+                // The row moved to another parent between the peek and the lock. Taking that parent's share lock now
+                // would be the one child-before-parent acquisition of the writer, so this is answered as the retryable
+                // 503 instead: a retry re-peeks and locks the right parent first.
+                return AuthoringErrors.Fail<AuthoringVersionRef>(AuthoringErrors.Unavailable());
             }
         }
 
@@ -1634,6 +1629,58 @@ internal sealed class AuthoringVersionWriter(
     /// <param name="exception">The database refusal.</param>
     private static bool IsContention(PostgresException exception) =>
         exception.SqlState is PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected;
+
+    /// <summary>
+    /// Takes every lock one batch can need, in the writer-wide order (rank, then id): the rows the batch mutates
+    /// <c>for update</c>, and the parents its new content names <c>for share</c>. Taking the parent probes here, in the
+    /// same sorted phase, is what makes the order total — a probe that only happened later, inside a change, could be
+    /// acquired after a higher-rank row and form a cycle with another batch (e.g. <c>[update node N, update case X]</c>
+    /// against <c>[update case X, create item under N]</c>). A row named both ways keeps the stronger lock.
+    /// </summary>
+    /// <param name="orgId">The tenant.</param>
+    /// <param name="projectId">The project.</param>
+    /// <param name="parsed">The validated batch.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async ValueTask LockBatchAsync(
+        Guid orgId,
+        Guid projectId,
+        List<(EntityChange Change, AuthoringSnapshot? Snapshot)> parsed,
+        CancellationToken cancellationToken)
+    {
+        var locks = new Dictionary<(AuthoringEntityKind Kind, Guid Id), bool>();
+
+        foreach (var (change, snapshot) in parsed)
+        {
+            if (change.ChangeKind != AuthoringChangeKind.Create)
+            {
+                locks[(change.EntityKind, change.EntityId)] = true;
+            }
+
+            if (snapshot is not null && ParentReferenceOf(snapshot) is { } parent)
+            {
+                locks[parent] = locks.TryGetValue(parent, out var mutated) && mutated;
+            }
+        }
+
+        foreach (var entry in locks
+            .OrderBy(entry => LockRank(entry.Key.Kind))
+            .ThenBy(entry => entry.Key.Id))
+        {
+            // A missing row is not reported here: the change answers not_found with its own /changes/{i} path, and a
+            // missing parent its own authoring_parent_invalid with its own details[].reason.
+            await LockAsync(orgId, projectId, entry.Key.Id, entry.Key.Kind, cancellationToken, shared: !entry.Value).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>The parent a snapshot names, or null for a root node.</summary>
+    /// <param name="snapshot">The snapshot.</param>
+    private static (AuthoringEntityKind Kind, Guid Id)? ParentReferenceOf(AuthoringSnapshot snapshot) => snapshot switch
+    {
+        FeatureNodeSnapshot { ParentId: { } parentId } => (AuthoringEntityKind.FeatureNode, parentId),
+        ChecklistItemSnapshot item => (AuthoringEntityKind.FeatureNode, item.FeatureNodeId),
+        ManualTestCaseSnapshot manualCase => (AuthoringEntityKind.ChecklistItem, manualCase.ChecklistItemId),
+        _ => null,
+    };
 
     /// <summary>The writer-wide lock rank: <c>feature_node</c> → <c>checklist_item</c> → <c>manual_test_case</c>.</summary>
     /// <param name="kind">The entity kind.</param>

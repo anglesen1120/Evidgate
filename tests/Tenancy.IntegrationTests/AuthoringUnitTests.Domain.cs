@@ -162,6 +162,63 @@ public sealed partial class AuthoringUnitTests
     }
 
     [Fact]
+    public void ContentParse_RefusesDuplicateMembersAndInvalidText()
+    {
+        var itemId = Guid.CreateVersion7().ToString("D");
+        var prefix = "{\"checklist_item_id\":\"" + itemId
+            + "\",\"code\":\"SHOP-001\",\"title\":\"x\",\"description\":null,\"precondition\":null,"
+            + "\"priority\":\"high\",\"state\":\"draft\",\"steps\":";
+
+        // A duplicate member name inside steps: the node model refuses to build such an object, so the parser answers
+        // invalid_json instead of surfacing that exception as a 500.
+        using var duplicate = JsonDocument.Parse(
+            prefix + "{\"steps\":[{\"no\":1,\"action\":\"a\",\"action\":\"b\",\"expected\":\"c\"}]}}");
+        AuthoringContent.Parse(AuthoringEntityKind.ManualTestCase, duplicate.RootElement, out var refusedDuplicate, out var duplicateDetails)
+            .ShouldBeFalse();
+        refusedDuplicate.ShouldBeNull();
+        duplicateDetails.ShouldContain(("/content/steps", "invalid_json"));
+
+        // The one input shape those guards exist for: NFC normalisation refuses text that is not valid UTF-16, so a lone
+        // surrogate can never be composed or stored.
+        Should.Throw<ArgumentException>(() => { _ = AuthoringText.Normalize("\ud800"); });
+
+        // Whether such an escape reaches the content parser at all depends on the reader; both boundaries answer a
+        // problem row and neither may throw. An unpaired surrogate inside steps is invalid_text, never a 500.
+        if (TryParse(prefix + "{\"steps\":[{\"no\":1,\"action\":\"\\ud800\",\"expected\":\"c\"}]}}") is { } surrogate)
+        {
+            using var document = surrogate;
+            AuthoringContent.Parse(AuthoringEntityKind.ManualTestCase, document.RootElement, out var refusedSurrogate, out var surrogateDetails)
+                .ShouldBeFalse();
+            refusedSurrogate.ShouldBeNull();
+            surrogateDetails.ShouldContain(("/content/steps", "invalid_text"));
+        }
+
+        // The same guard on a plain text member: a title that is not valid UTF-16 is a problem row, not a 500.
+        if (TryParse("{\"kind\":\"module\",\"title\":\"\\ud800\",\"position\":0,\"parent_id\":null}") is { } badTitle)
+        {
+            using var document = badTitle;
+            AuthoringContent.Parse(AuthoringEntityKind.FeatureNode, document.RootElement, out var refusedTitle, out var titleDetails)
+                .ShouldBeFalse();
+            refusedTitle.ShouldBeNull();
+            titleDetails.ShouldContain(("/content/title", "invalid_text"));
+        }
+    }
+
+    /// <summary>Parses a document, or null when the reader itself refuses it (the outer boundary for invalid text).</summary>
+    /// <param name="json">The raw document.</param>
+    private static JsonDocument? TryParse(string json)
+    {
+        try
+        {
+            return JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    [Fact]
     public void ContentHash_Rfc8785Vectors()
     {
         var inputDirectory = Path.Combine(RlsExceptionFile.RepositoryRoot, "fixtures", "rfc8785", "input");
