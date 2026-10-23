@@ -999,6 +999,7 @@
       "evidgate.modules.evidence": {
         "type": "Project",
         "dependencies": {
+          "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
           "Evidgate.BuildingBlocks.ObjectStorage": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
@@ -1089,6 +1090,7 @@
           "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Catalog.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )",
           "Evidgate.Modules.Ingestion.Contracts": "[1.0.0, )",
           "Evidgate.Modules.Orchestrator.Contracts": "[1.0.0, )",
           "Evidgate.Modules.Policy.Contracts": "[1.0.0, )",

@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Contracts;
+using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
@@ -53,6 +54,12 @@ internal static class EvidenceModule
         // and 04.4.1's report mapper is the first IParsing consumer, resolving this same singleton instead of
         // building its own readers (00 §5.7 S4).
         services.TryAddSingleton<IParsing, ParsingService>();
+
+        // 06.5.1-T1/T2: the one cross-module call 05's reconciler (05.3.2-T2) makes to freeze a run's evidence: the
+        // ready set with (execution_key, attempt_no) resolved to case_attempt, the requirement gaps and the canonical
+        // hash. Scoped like every other module service; it takes the ambient scope through ITenantDb and never opens
+        // a connection or a transaction of its own (00 §5.5 C3/C7).
+        services.TryAddScoped<IEvidenceFreeze, EvidenceFreeze>();
 
         return services;
     }
