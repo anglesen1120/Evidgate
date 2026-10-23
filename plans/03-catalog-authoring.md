@@ -1,10 +1,13 @@
-# 03 - Catalog and Authoring (M1, M4)
+# 03 - Catalog and Authoring (G1–G4)
 
 > Contracts: `00-overview.md` §3 (glossary: case, test revision, suite revision, variant, capability), §5.4 (tenancy), §7 (identifiers, hashes), §8 (states), §9 (API). Facts: `../DECISIONS.md` §3 A2/A4, §4 (stack, engines), §5 (safe-healing rules), §6 F1/F9, §9 R3. Source: design §4 (Test creation and management), §6 (Data model), §8 (Security and permission boundaries).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 14 · G2 6 · G3 4.5 · G4 13.5 person-days.
 ## 1. Purpose and scope
 
 **Goal.** A test has one stable identity across renames, moves and imports; every revision that was ever run is immutable and reproducible from a commit; suites declare exactly what a run must execute (members, variants, dependencies, shards, retries, environment needs); and authoring happens either through versioned templates + Git (V1) or through a draft workflow that only ever lands as a pull request (V2).
+
+**CR-D-2 scope split.** Authoring of requirements → checklist → manual test case — the feature tree, checklist, manual test cases with versions and timeline, batched review, project AI settings, the generation pipeline and the authoring screens — is owned by [`13`](13-product-phases.md) epics 13.1, 13.2, 13.3 and 13.4, phase G1. This plan keeps the layer those manual cases link to: stable case identity and immutable revisions (`03.1`, `03.2`; `13.1.1-T4` links a manual test case to a `test_case`), the Git, template and draft path (`03.4`, `03.5`, `03.6`), the AI-draft evaluation (`03.7.1-T3`) and history / baseline (`03.9`). Where this plan's prose describes AI drafting or an editor, read `13` §3–§4 for the current model.
 
 **In scope (V1, M1-M2).** Case identity from the `evidgate.id` annotation or a sidecar manifest; temporary identity for imports without an id; `test_revision` immutability; suite revisions with members, variant hashes, dependency DAG, shard strategy, retry policy and environment requirements; fixture revisions and per-run data namespaces with TTL cleanup of orphans; a GitHub App webhook that registers commits and syncs the catalog; templates for web, API, unit and (V2) mobile; the V1 "template + Git flow" authoring path.
 
@@ -53,23 +56,23 @@
 | Table | Key columns | Constraints / notes |
 |---|---|---|
 | `test_case` | `id`, `org_id`, `project_id`, `annotation_id`, `name`, `framework`, `status`, `owner_membership_id`, `first_seen_commit` | `unique (org_id, project_id, annotation_id)`, `unique (org_id, id)`; `annotation_id` immutable once set |
-| `case_identity_source` | `case_id`, `org_id`, `source` (`annotation` \| `sidecar` \| `imported`), `raw_key`, `commit_sha` | provenance for audits ("why is this the same case") |
-| `case_import_identity` | `id`, `org_id`, `project_id`, `producer_id`, `suite_key`, `name_hash`, `case_id` (null = unmapped), `state` | `unique (org_id, project_id, producer_id, suite_key, name_hash)` (D13) |
-| `case_rename_history` | `case_id`, `org_id`, `from_path`, `to_path`, `commit_sha`, `detected_at` | append-only; drives the UI rename list (09) |
-| `test_revision` | `id`, `org_id`, `case_id`, `revision_hash`, `commit_sha`, `file_path`, `framework`, `language`, `content_sha256`, `assertion_hash`, `metadata jsonb`, `created_at` | `unique (org_id, case_id, revision_hash)`; append-only (D3) |
+| `case_identity_source` | `id`, `case_id`, `org_id`, `source` (`annotation` \| `sidecar` \| `imported`), `raw_key`, `commit_sha` | `unique (org_id, id)` (T3); composite FK `references test_case (org_id, id)`; provenance for audits ("why is this the same case") |
+| `case_import_identity` | `id`, `org_id`, `project_id`, `producer_id`, `suite_key`, `name_hash`, `case_id` (null = unmapped), `state` | `unique (org_id, project_id, producer_id, suite_key, name_hash)` (D13), `unique (org_id, id)` (T3) |
+| `case_rename_history` | `id`, `case_id`, `org_id`, `from_path`, `to_path`, `commit_sha`, `detected_at` | `unique (org_id, id)` (T3); append-only; drives the UI rename list (09) |
+| `test_revision` | `id`, `org_id`, `case_id`, `revision_hash`, `commit_sha`, `file_path`, `framework`, `language`, `content_sha256`, `assertion_hash`, `metadata jsonb`, `created_at` | `unique (org_id, case_id, revision_hash)`, `unique (org_id, id)` (T3); append-only (D3) |
 | `suite` | `id`, `org_id`, `project_id`, `name`, `slug`, `status` | `unique (org_id, project_id, slug)`, `unique (org_id, id)` |
-| `suite_revision` | `id`, `org_id`, `suite_id`, `revision_no`, `revision_hash`, `shard_strategy`, `retry_policy jsonb`, `environment_requirements jsonb`, `created_by`, `created_at` | `unique (org_id, suite_id, revision_no)` and `unique (org_id, revision_hash)`; immutable after first referencing run; `environment_requirements` is secret-free and declares base URLs, dependency versions that affect results, the `data_isolation` mode and secret **references** only |
-| `suite_member` | `suite_revision_id`, `org_id`, `case_revision_id`, `variant_id`, `ordinal`, `required` | `unique (suite_revision_id, case_revision_id, variant_id)` |
-| `variant` | `id`, `org_id`, `project_id`, `variant_hash`, `params jsonb` (normalised, secret-free) | `unique (org_id, project_id, variant_hash)` |
-| `case_dependency` | `suite_revision_id`, `org_id`, `parent_member_id`, `child_member_id` | `unique (suite_revision_id, parent_member_id, child_member_id)`; DAG checked on write |
-| `fixture_revision` | `id`, `org_id`, `project_id`, `fixture_key`, `revision_no`, `revision_hash`, `seed_version`, `timeout_s`, `cleanup_policy`, `resource_prefix` | `unique (org_id, project_id, fixture_key, revision_no)` |
-| `data_namespace` | `id`, `org_id`, `project_id`, `run_id`, `namespace_key`, `expires_at`, `cleanup_state` | `unique (namespace_key)`; allocation is per run (FR-03-7) |
-| `template` | `id`, `org_id` (null = built-in), `kind` (`web` \| `api` \| `unit` \| `mobile`), `name`, `version`, `body_ref`, `conformance_rules jsonb`, `active` | content-addressed body; built-ins versioned like code |
-| `git_repo_binding` | `id`, `org_id`, `project_id`, `provider`, `installation_id`, `repository_id`, `default_branch`, `sync_state` | `unique (org_id, project_id, provider, repository_id)`; the CI-side binding stays in 02 (`ci_binding`) |
-| `webhook_delivery` | `id`, `org_id`, `provider`, `delivery_id`, `event`, `payload_hash`, `state` | `unique (provider, delivery_id)` — dedupe (A10) |
-| `catalog_sync` | `id`, `org_id`, `project_id`, `commit_sha`, `state`, `counts jsonb`, `error`, `started_at`, `finished_at` | one row per sync; drives the "catalog is stale" badge in 09 |
-| `draft` (V2) | `id`, `org_id`, `project_id`, `author_membership_id`, `kind`, `base_commit`, `status`, `version`, `content jsonb`, `provenance`, `ai_run_id`, `dry_run_id` | `version` is the ETag source (00 §9.1) |
-| `dry_run` (V2) | `id`, `org_id`, `draft_id`, `sandbox_ref`, `state`, `started_at`, `finished_at`, `result_evidence jsonb` | never produces official evidence (06/07 own that rule) |
+| `suite_revision` | `id`, `org_id`, `suite_id`, `revision_no`, `revision_hash`, `shard_strategy`, `retry_policy jsonb`, `environment_requirements jsonb`, `created_by`, `created_at` | `unique (org_id, suite_id, revision_no)` and `unique (org_id, revision_hash)`, `unique (org_id, id)` (T3); immutable after first referencing run; `environment_requirements` is secret-free and declares base URLs, dependency versions that affect results, the `data_isolation` mode and secret **references** only |
+| `suite_member` | `id`, `suite_revision_id`, `org_id`, `case_revision_id`, `variant_id`, `ordinal`, `required` | surrogate `id` + `unique (org_id, id)` (T46); `unique (suite_revision_id, case_revision_id, variant_id)`; dependency edges reference `suite_member.id` |
+| `variant` | `id`, `org_id`, `project_id`, `variant_hash`, `params jsonb` (normalised, secret-free) | `unique (org_id, project_id, variant_hash)`, `unique (org_id, id)` (T3) |
+| `case_dependency` | `id`, `suite_revision_id`, `org_id`, `parent_member_id`, `child_member_id` | `unique (org_id, id)` (T3); `unique (suite_revision_id, parent_member_id, child_member_id)`; `parent_member_id`/`child_member_id` are composite FKs `(org_id, member_id)` → `suite_member (org_id, id)` (T46); DAG checked on write |
+| `fixture_revision` | `id`, `org_id`, `project_id`, `fixture_key`, `revision_no`, `revision_hash`, `seed_version`, `timeout_s`, `cleanup_policy`, `resource_prefix` | `unique (org_id, project_id, fixture_key, revision_no)`, `unique (org_id, id)` (T3) |
+| `data_namespace` | `id`, `org_id`, `project_id`, `run_id`, `namespace_key`, `expires_at`, `cleanup_state` | `unique (namespace_key)`, `unique (org_id, id)` (T3); allocation is per run (FR-03-7) |
+| `template` | `id`, `org_id` (null = built-in), `kind` (`web` \| `api` \| `unit` \| `mobile`), `name`, `version`, `body_ref`, `conformance_rules jsonb`, `active` | content-addressed body; built-ins versioned like code; catalogue RLS policy `org_id IS NULL OR org_id = evidgate.current_org_id()`; `template` is on the platform-catalogue exception list of the 02.6.1-T2 lint (T46, T3) |
+| `git_repo_binding` | `id`, `org_id`, `project_id`, `provider`, `installation_id`, `repository_id`, `default_branch`, `sync_state` | `unique (org_id, project_id, provider, repository_id)`, `unique (org_id, id)` (T3); the CI-side binding stays in 02 (`ci_binding`) |
+| `webhook_delivery` | `id`, `org_id`, `provider`, `delivery_id`, `event`, `payload_hash`, `state` | `unique (provider, delivery_id)` — dedupe (A10), `unique (org_id, id)` (T3) |
+| `catalog_sync` | `id`, `org_id`, `project_id`, `commit_sha`, `state`, `counts jsonb`, `error`, `started_at`, `finished_at` | `unique (org_id, id)` (T3); one row per sync; drives the "catalog is stale" badge in 09 |
+| `draft` (V2) | `id`, `org_id`, `project_id`, `author_membership_id`, `kind`, `base_commit`, `status`, `version`, `content jsonb`, `provenance`, `ai_run_id`, `dry_run_id` | `unique (org_id, id)` (T3); `version` is the ETag source (00 §9.1) |
+| `dry_run` (V2) | `id`, `org_id`, `draft_id`, `sandbox_ref`, `state`, `started_at`, `finished_at`, `result_evidence jsonb` | `unique (org_id, id)` (T3); never produces official evidence (06/07 own that rule) |
 
 **`suite_revision.environment_requirements` (secret-free).** The JSON declares base URLs, warm-up/preconditions, dependency versions that affect results, secret **references** only (never values), and the `data_isolation` mode: `isolated` (default) or `shared`. `shared` means the suite declares that it cannot isolate its data, so it must not run concurrently with another run against the same environment: the V2 environment lock (05.7.3-T4) takes an exclusive claim keyed by environment. `isolated` means each run gets its own environment and data, so no lock is taken. This declaration is the single source of truth for isolation needs: `environment_revision` (05.1.2-T1) stores no isolation flag, and the lock reads this suite-side value (05 §4.1 `environment_lock`). The field is written with the revision and inherits its immutability (`revision_no + 1` supersedes it, D4).
 
@@ -83,16 +86,19 @@ Owned (shapes in `contracts/openapi.yaml`; 00 §9.1 conventions):
 | `POST /v1/projects/{p}/case-import-mappings`, `POST /v1/case-import-mappings/{m}/resolve` | `case:write` | resolve `unmapped`/`conflicted` import identities (D2, D13) |
 | `GET,POST /v1/projects/{p}/suites`, `POST /v1/suites/{s}/revisions`, `GET /v1/suite-revisions/{r}`, `GET /v1/suite-revisions/{r}/diff` | `suite:read` / `suite:write` | create is idempotent by `Idempotency-Key`; diff returns the member/variant/DAG delta vs another revision |
 | `GET,POST /v1/projects/{p}/fixtures`, `POST /v1/fixtures/{f}/revisions` | `fixture:write` | seeds and cleanup policies; no secret values accepted |
-| `POST /v1/webhooks/github` | signature (`X-Hub-Signature-256`), not a session | `unique (provider, delivery_id)` makes replays idempotent; forged signatures → 401 and never processed |
+| `POST /v1/webhooks/github` | signature (`X-Hub-Signature-256`), not a session | tenant resolved through an `evidgate_resolve` SECURITY DEFINER function keyed on the GitHub installation/repository id → `(org_id, project_id, binding_id, status)`, then the normal tenant scope opens (00 §5.4.8, T1); `unique (provider, delivery_id)` makes replays idempotent; forged signatures → 401 and never processed |
 | `GET,POST /v1/projects/{p}/drafts`, `GET,PATCH /v1/drafts/{d}` (V2) | `draft:write` | `ETag`/`If-Match`; stale → 412 |
 | `POST /v1/drafts/{d}/dry-run`, `POST /v1/drafts/{d}/pull-request` (V2) | `draft:dry_run` / `draft:merge_request` | PR creation is idempotent by `(branch, commit)` |
 | `POST /v1/projects/{p}/ai-drafts` (V2) | `ai_draft:request` | requires approved requirements as input; records provenance |
 
 Used: 04 supplies raw producer data for import identity; 05 locks a `suite_revision` into a manifest and allocates data namespaces; 06 holds fixture artifacts; 07 reads quarantine references to cases; 08 reads incidents and writes healing candidates against case revisions; 09 renders case/suite/draft screens; 11 owns secret storage behind the references used here; 12 meters usage.
 
+
+Additive endpoints accepted while detailing (TL T56; enter `contracts/openapi.yaml` with the story that builds them): `GET /v1/suites/{s}` (`suite:read`), `GET /v1/fixtures/{f}` (`suite:read`), `GET /v1/projects/{p}/case-import-mappings` (`case:read`), `POST /v1/projects/{p}/git-repo-bindings` (`project:write`, audited), `GET /v1/projects/{p}/catalog-syncs` (`suite:read`), `GET /v1/drafts/{d}/dry-runs` (`draft:dry_run`). New error codes (`case_field_immutable`, `mapping_conflict`, `suite_slug_taken`, `secret_value_rejected`, `namespace_collision`, `id_source_conflict`, `duplicate_case_id`, `revision_immutable`) are registered in `contracts/openapi.yaml` (T52). Draft transitions `dry_failed → dry_running` and `pr_open → draft` are in 00 §8.10.
+
 ### 4.3 Flows
 
-**Catalog sync (V1).** GitHub push/tag → `POST /v1/webhooks/github` → verify signature → dedupe by `delivery_id` → enqueue `catalog_sync` → worker fetches the commit tree via the App installation (read-only) → discovers `evidgate.id` annotations and sidecar manifests → upserts `test_case` (+ `case_identity_source`) and appends `test_revision` rows → detects renames/moves (`case_rename_history`) and duplicates (conflict report) → registers suite declarations as new `suite_revision` rows when their definition changed → emits `catalog.synced` through the outbox. A scheduled reconcile repairs missed deliveries without deleting anything (D8).
+**Catalog sync (V1).** GitHub push/tag → `POST /v1/webhooks/github` → verify signature → resolve the tenant through `evidgate_resolve` (SECURITY DEFINER, lookup key = GitHub `installation_id`/`repository_id`; 00 §5.4.8, T1) → open the tenant scope → dedupe by `delivery_id` → enqueue `catalog_sync` on the `task` queue (00 §5.3) → worker fetches the commit tree via the App installation (read-only; typed `HttpClient` + RS256 app JWT, T46) → discovers `evidgate.id` annotations and sidecar manifests → upserts `test_case` (+ `case_identity_source`) and appends `test_revision` rows → detects renames/moves (`case_rename_history`) and duplicates (conflict report) → registers suite declarations as new `suite_revision` rows when their definition changed → emits `catalog.synced` through the outbox. A scheduled reconcile (Cronos schedule with unique fire key `(schedule_name, fire_at)`, 00 §5.3) repairs missed deliveries without deleting anything (D8).
 
 **Import identity (V1).** A run's producer reports a test with no annotation → `case_import_identity` row in `unmapped` (key = `producer+suite+name`). If exactly one new annotation with the same classified name appears in the same commit-range and no other candidate matches, the sync proposes a mapping; anything else stays `conflicted`/`unmapped` for the UI to resolve (D2). Mapped rows keep the original key for future imports.
 
@@ -100,13 +106,13 @@ Used: 04 supplies raw producer data for import identity; 05 locks a `suite_revis
 
 **Suite revision.** Members + variants + edges + shard strategy + retry policy + environment requirements are written in one transaction: validate the DAG (topological sort; reject cycles with the path), validate that every member's `case_revision` belongs to the same org/project, compute `revision_hash`, insert. Referenced revisions cannot be edited (409) — a change creates `revision_no + 1` (D4).
 
-**Fixtures and namespaces.** A suite revision references fixture revisions; at run creation (05) the orchestrator asks the catalog service for a namespace `(tenant, project, run)`, which inserts `data_namespace` with `expires_at = run deadline + grace`. A TTL sweeper (pg-boss) cleans expired namespaces whose run is terminal and marks `cleanup_failed` for operator follow-up after N attempts; orphan namespaces (no live run) are always cleaned.
+**Fixtures and namespaces.** A suite revision references fixture revisions; at run creation (05) the orchestrator asks the catalog module (`Evidgate.Modules.Catalog.Contracts`) for a namespace `(tenant, project, run)`, which inserts `data_namespace` with `expires_at = run deadline + grace`. A TTL sweeper — a Cronos schedule firing one `task` row per fire via unique `(schedule_name, fire_at)` (00 §5.3) — cleans expired namespaces whose run is terminal and marks `cleanup_failed` for operator follow-up after N attempts; orphan namespaces (no live run) are always cleaned.
 
 **Draft → PR (V2).** Template or AI produces draft content → `dry_run` in the sandbox (own namespace, no tenant secrets, capability downgraded) → a `dry_passed` draft can create a branch + commit + PR via the App installation token; the PR body links the draft, the dry-run result and (for AI) the approved requirement. Merging the PR triggers the normal catalog sync, which reconciles the draft to the new case/revision (D10).
 
 **Bug → regression candidate (V2).** An incident labelled `product_defect` (08, human ground truth) may generate a candidate test draft from the failure evidence. If the buggy and fixed builds are both available as evidence, the candidate must fail on the buggy one and pass on the fixed one; otherwise the candidate carries an explicit recorded limitation and cannot be marked verified.
 
-### 4.4 States owned here (00 §8 has no entry; see §13 CR-2)
+### 4.4 States owned here (canonical list: 00 §8.10, T46)
 
 `case_import_identity`: `unmapped → mapped | conflicted` (`conflicted → mapped` after human resolution). `suite_revision`: `draft → published` (published = referenced by a run; effectively frozen). `catalog_sync`: `queued → running → done | failed`. `data_namespace`: `active → cleaned | cleanup_failed`. `draft` (V2): `draft → dry_running → dry_passed | dry_failed → pr_open → merged | closed`. `fixture_revision`: immutable on create. Every transition here is audited through 02.7.1.
 
@@ -151,7 +157,7 @@ Roles are seeded as data from `contracts/permissions.json` (02 §3 D2); 00 §2 l
 | App installation suspended or uninstalled | `git_repo_binding.sync_state = disabled`, sync stops, catalog keeps serving last known state; UI shows staleness | Losing Git access never destroys history |
 | GitHub API rate limit or 5xx during sync | Retry with backoff, `catalog_sync` failed, scheduled reconcile repairs later | Sync is resumable and idempotent |
 | OpenAPI skeleton cannot express an assertion | Template emits the request skeleton + schema-conformance checks only and marks the assertion as author-supplied | No inferred business assertion (FR-03-9) |
-| Dry run fails or sandbox unavailable | Draft stays `dry_failed` with the reason; PR creation requires `dry_passed` unless a `test_maintainer` sets `allow_undverified` (recorded in the PR body) | Unverified drafts cannot masquerade as verified |
+| Dry run fails or sandbox unavailable | Draft stays `dry_failed` with the reason; PR creation requires `dry_passed` unless a `test_maintainer` sets `allow_unverified` (recorded in the PR body) (T46) | Unverified drafts cannot masquerade as verified |
 | Stale `If-Match` on a draft edit | 412 (00 §9.1); the client reloads and re-applies | No lost update |
 | AI draft is asked to run in a pool with sensitive permissions | Refused while unapproved (`permission_denied`), only the sandbox capability is offered | Unapproved AI code never runs with sensitive permissions (FR-03-11) |
 | AI draft reproduces or weakens an assertion | Assertion hash + human review; the draft cannot modify an existing revision | Intent is never silently changed (healing rule 1) |
@@ -171,7 +177,7 @@ Roles are seeded as data from `contracts/permissions.json` (02 §3 D2); 00 §2 l
 - **Failure cases.** Forged webhook signature; repeated delivery id; App installation suspended; GitHub 5xx/429 mid-sync; malformed sidecar manifest; variant containing `api_token`; sandbox timeout; dry run that passes but whose PR is later rejected by CI.
 - **Fixtures.** Golden repos under `fixtures/catalog/`: `annotated-basic`, `renamed-file`, `duplicate-id`, `sidecar-manifest`, `no-ids-imported`, `monorepo-same-names`, `openapi-skeleton` — each with the expected case/revision/rename/mapping output as JSON.
 - **Proof of the bug→regression rule (V2).** A fixture pair of builds (one buggy, one fixed) with the same run evidence shape, asserting fail-on-buggy and pass-on-fixed, and a third case where only one build exists asserting the recorded limitation is set.
-- **Stack.** Vitest 5 unit tests for parsing, hashing and DAG validation; Testcontainers 12 integration tests for schema immutability, composite FKs and sync transactions; the sandbox dry run is tested against a mock runner in 05's contract tests.
+- **Stack.** xUnit v3 + Shouldly unit tests for parsing, hashing and DAG validation; Testcontainers.PostgreSQL integration tests for schema immutability, composite FKs, RLS and sync transactions (00 §5.5); template-emitted customer tests stay TypeScript/Vitest (unchanged); the sandbox dry run is tested against a mock runner in 05's contract tests.
 ## 8. Risks
 
 | Risk | Likelihood | Impact | Mitigation |
@@ -188,95 +194,128 @@ Roles are seeded as data from `contracts/permissions.json` (02 §3 D2); 00 §2 l
 | Suite revision immutability slows legitimate suite edits | low | low | New revision per change, `diff` endpoint to see the delta; the run references a revision, not a mutable suite |
 ## 9. Epics, stories and tasks
 
-Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3; milestones from 00 §4. Each epic total equals the sum of its task rows.
+Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stack .NET + Angular developer, CR-D-1). Version = V1/V2/V3; milestones from 00 §4. Each epic total equals the sum of its task rows.
 ### Epic 03.1 Test identity and revisions
 #### Story 03.1.1 Stable case identity — acceptance: a case keeps its id across rename/move; a duplicated id in one commit is a reported conflict and creates no revision for the offending files; the identity source is recorded.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.1.1-T1 | `test_case` + `case_identity_source` schema; `evidgate.id` annotation parser and sidecar manifest reader (fixed sidecar filename; annotation and sidecar disagreeing = conflict, 00 §7) | L | V1 | M1 | 02.1.1-T1, 01.4.1-T1 |
-| 03.1.1-T2 | Rename/move detection + `case_rename_history`; duplicate-id conflict reporting; `missing` status | S | V1 | M1 | 03.1.1-T1 |
+| 03.1.1-T1 | `test_case` + `case_identity_source` schema; `evidgate.id` annotation parser and sidecar manifest reader (fixed sidecar filename; annotation and sidecar disagreeing = conflict, 00 §7) | L | V1 | G1 | 02.1.1-T1, 01.4.1-T1 |
+| 03.1.1-T2 | Rename/move detection + `case_rename_history`; duplicate-id conflict reporting; `missing` status | S | V1 | G1 | 03.1.1-T1 |
 **Story 03.1.1 total: 2.5**
 #### Story 03.1.2 Imported identity and mapping — acceptance: an import without an id creates a provisional identity; a collision requires UI resolution; a mapped identity never absorbs an annotated case automatically.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.1.2-T1 | `case_import_identity` + provisional key `(producer, suite, name)` + unique-match proposal rules | M | V1 | M1 | 03.1.1-T1, 04.3.2-T1, 04.4.1-T1 |
-| 03.1.2-T2 | Mapping API + resolution rules for `conflicted`/`unmapped` (UI contract for 09) | M | V1 | M2 | 03.1.2-T1 |
+| 03.1.2-T1 | `case_import_identity` + provisional key `(producer, suite, name)` + unique-match proposal rules | M | V1 | G1 | 03.1.1-T1, 04.3.2-T1, 04.4.1-T1 |
+| 03.1.2-T2 | Mapping API + resolution rules for `conflicted`/`unmapped` (UI contract for 09) | M | V1 | G1 | 03.1.2-T1 |
 **Story 03.1.2 total: 2.0**
 #### Story 03.1.3 Immutable test revisions — acceptance: `test_revision` rows cannot be updated or deleted while referenced; the same content yields the same `revision_hash`; the assertion hash is stored.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.1.3-T1 | `test_revision` schema, content + assertion hashing, append-only enforcement (privileges + trigger) | M | V1 | M1 | 03.1.1-T1 |
+| 03.1.3-T1 | `test_revision` schema, content + assertion hashing, append-only enforcement (privileges + trigger) | M | V1 | G1 | 03.1.1-T1 |
 **Story 03.1.3 total: 1.0**
-**Epic 03.1 total: 5.5**
+#### Story 03.1.4 Requirement link, taxonomy and execution-coverage definition — acceptance: a case may carry an optional `requirement_ref`, platform × level × purpose are stored fields, and UI coverage is defined as declared executions, not code coverage.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 03.1.4-T1 | Decision + contract: optional `requirement_ref` on `test_case` (or recorded decision to drop it); 00 §7 and §15 updated before schema | S | V1 | G1 | 03.1.1-T1 |
+| 03.1.4-T2 | Add `platform`, `level`, `purpose` to suite/template with an enum catalogue; mobile emulation counts only as web | S | V1 | G1 | 03.2.1-T1 |
+| 03.1.4-T3 | State the coverage definition in 00 §3 and 09: ratio of declared case × variant executions with an accepted result; a Chromium pass never masks a Firefox failure | S | V1 | G1 | 03.1.4-T2, 03.2.1-T2 |
+
+**Story 03.1.4 total: 1.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
+**Epic 03.1 total: 7**
 ### Epic 03.2 Suite revisions
 #### Story 03.2.1 Versioned suites — acceptance: a suite revision pins members, variants, DAG, shard strategy, retry policy and environment requirements; cycles are rejected; a referenced revision cannot be edited.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.2.1-T1 | `suite` / `suite_revision` / `suite_member` schema + create API + `revision_hash` | M | V1 | M1 | 03.1.3-T1 |
-| 03.2.1-T2 | Variant normalisation, secret-free validation, `variant` dedupe by hash | S | V1 | M1 | 03.2.1-T1 |
-| 03.2.1-T3 | Dependency DAG validation (topological sort, cycle path in the 422) + `case_dependency` | M | V1 | M1 | 03.2.1-T1 |
-| 03.2.1-T4 | Shard strategy, retry policy and `environment_requirements` fields (base URLs, dependency versions that affect results, `data_isolation` (`isolated` = isolated data, `shared` = not isolated; read by 05.7.3-T4), secret references only) + secret-free validation against 05's manifest needs | M | V1 | M2 | 03.2.1-T3 |
-| 03.2.1-T5 | Suite revision diff/preview API + `ETag` on the suite head | S | V1 | M2 | 03.2.1-T4 |
+| 03.2.1-T1 | `suite` / `suite_revision` / `suite_member` schema + create API + `revision_hash` | M | V1 | G1 | 03.1.3-T1 |
+| 03.2.1-T2 | Variant normalisation, secret-free validation, `variant` dedupe by hash | S | V1 | G1 | 03.2.1-T1 |
+| 03.2.1-T3 | Dependency DAG validation (topological sort, cycle path in the 422) + `case_dependency` | M | V1 | G1 | 03.2.1-T1 |
+| 03.2.1-T4 | Shard strategy, retry policy and `environment_requirements` fields (base URLs, dependency versions that affect results, `data_isolation` (`isolated` = isolated data, `shared` = not isolated; read by 05.7.3-T4), secret references only) + secret-free validation against 05's manifest needs | M | V1 | G1 | 03.2.1-T3 |
+| 03.2.1-T5 | Suite revision diff/preview API + `ETag` on the suite head | S | V1 | G1 | 03.2.1-T4 |
 **Epic 03.2 total: 4.0**
 ### Epic 03.3 Fixtures and data namespaces
 #### Story 03.3.1 Fixtures and per-run data — acceptance: a suite revision references fixture revisions by identity; each run gets its own namespace; expired and orphan namespaces are cleaned and reported.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.3.1-T1 | `fixture_revision` schema + suite reference + seed versioning + cleanup policy fields | M | V1 | M2 | 03.2.1-T1 |
-| 03.3.1-T2 | `data_namespace` allocation interface used by 05 + TTL/orphan cleanup task | M | V1 | M2 | 03.3.1-T1, 01.5.1-T1 |
-| 03.3.1-T3 | Secret-reference rule + lint that rejects secret values in fixtures/suites/variants | S | V1 | M2 | 03.2.1-T2, 11.3.1-T1 |
+| 03.3.1-T1 | `fixture_revision` schema + suite reference + seed versioning + cleanup policy fields | M | V1 | G2 | 03.2.1-T1 |
+| 03.3.1-T2 | `data_namespace` allocation contract used by 05 + TTL/orphan cleanup as a Cronos schedule firing a `task` row (unique fire key, 00 §5.3) | M | V1 | G2 | 03.3.1-T1, 01.5.1-T1 |
+| 03.3.1-T3 | Secret-reference rule + lint that rejects secret values in fixtures/suites/variants | S | V1 | G2 | 03.2.1-T2, 11.3.1-T1 |
 **Epic 03.3 total: 2.5**
 ### Epic 03.4 Git integration
 #### Story 03.4.1 Commit registration and catalog sync — acceptance: a push registers the commit and syncs cases/suite revisions idempotently; a duplicate or forged delivery never changes data; a suspended installation stops sync without deleting history.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.4.1-T1 | GitHub App registration + installation binding (minimal permission list ⚠️ to verify here) + `git_repo_binding` | M | V1 | M2 | 02.1.1-T2 |
-| 03.4.1-T2 | Webhook receiver: signature verify, `webhook_delivery` dedupe, push/tag → `catalog_sync` queue | M | V1 | M2 | 03.4.1-T1 |
-| 03.4.1-T3 | Catalog sync job (tree walk, annotation/sidecar discovery, case upsert, revision append, rename + conflict report) + scheduled reconcile | M | V1 | M2 | 03.4.1-T2, 03.1.1-T2, 03.2.1-T1 |
-**Story 03.4.1 total: 3.0**
+| 03.4.1-T1 | GitHub App registration + installation binding (minimal permission list ⚠️ to verify here) + `git_repo_binding`; GitHub API access via typed `HttpClient` + RS256 app JWT (`Microsoft.IdentityModel.JsonWebTokens`), no Octokit (T46) | L | V1 | G1 | 02.1.1-T2 |
+| 03.4.1-T2 | Webhook receiver: `X-Hub-Signature-256` verify → `evidgate_resolve` SECURITY DEFINER pre-tenant resolution (`installation_id`/`repository_id` → `org_id`, T1) → tenant scope → `webhook_delivery` dedupe → `catalog_sync` task | M | V1 | G1 | 03.4.1-T1 |
+| 03.4.1-T3 | Catalog sync task (tree walk, annotation/sidecar discovery, case upsert, revision append, rename + conflict report) + scheduled reconcile (Cronos, 00 §5.3) | M | V1 | G2 | 03.4.1-T2, 03.1.1-T2, 03.2.1-T1 |
+**Story 03.4.1 total: 4.0**
 #### Story 03.4.2 Pull-request plumbing (V2) — acceptance: an installation token can create a branch, a commit and a PR for a draft, idempotently, and never pushes to a protected branch; the token is never persisted.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.4.2-T1 | Installation-token handling, branch/commit/PR creation service, idempotency by `(branch, commit)`, PR body with evidence links | M | V2 | M4 | 03.4.1-T1, 03.6.1-T1 |
-**Epic 03.4 total: 4.0 · (V1 3.0 · V2 1.0)**
+| 03.4.2-T1 | Installation-token handling, branch/commit/PR creation service (typed `HttpClient`, T46), idempotency by `(branch, commit)`, PR body with evidence links | M | V2 | G2 | 03.4.1-T1, 03.6.1-T1 |
+**Epic 03.4 total: 5.0 · (V1 4.0 · V2 1.0)**
 ### Epic 03.5 Templates
 #### Story 03.5.1 Template library and Git flow — acceptance: each template produces a test that registers a case id and passes conformance checks; the API template never invents business assertions; unit and mobile templates stay in their own frameworks.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.5.1-T1 | `template` registry + web template (role/name preference, test id, conformance rules) | M | V1 | M2 | 03.1.1-T1 |
-| 03.5.1-T2 | API template generated from an OpenAPI skeleton (request skeleton + schema conformance only; assertion left to the author) | M | V1 | M2 | 03.5.1-T1, 04.3.1-T1 |
-| 03.5.1-T3 | Unit template: keep the repo's own framework, evidence-only mapping rules | S | V1 | M2 | 04.4.1-T1 |
-| 03.5.1-T4 | `evidgate init` wiring + conformance check run in CI (template output must register a case id) | S | V1 | M2 | 03.5.1-T1, 03.5.1-T2 |
-| 03.5.1-T5 | Mobile capability template (Appium, separate fixtures and locators, platform capability document) | S | V2 | M4 | 03.5.1-T1, 05.7.3-T1 |
+| 03.5.1-T1 | `template` registry + web template (role/name preference, test id, conformance rules) | M | V1 | G4 | 03.1.1-T1 |
+| 03.5.1-T2 | API template generated from an OpenAPI skeleton (request skeleton + schema conformance only; assertion left to the author) | M | V1 | G4 | 03.5.1-T1, 04.3.1-T1 |
+| 03.5.1-T3 | Unit template: keep the repo's own framework, evidence-only mapping rules | S | V1 | G4 | 04.4.1-T1 |
+| 03.5.1-T4 | `evidgate init` wiring + conformance check run in CI (template output must register a case id) | S | V1 | G4 | 03.5.1-T1, 03.5.1-T2 |
+| 03.5.1-T5 | Mobile capability template (Appium, separate fixtures and locators, platform capability document) | S | V2 | G4 | 03.5.1-T1, 05.7.3-T1 |
 **Story 03.5.1 total: 3.5 · (V1 3.0 · V2 0.5)**
 **Epic 03.5 total: 3.5 · (V1 3.0 · V2 0.5)**
 ### Epic 03.6 Draft editor (V2)
 #### Story 03.6.1 Draft → dry run → PR — acceptance: a draft is edited with `If-Match` (stale → 412), dry runs in a sandbox with no tenant secrets, and reaches the repo only as a PR that links the draft and the dry-run result.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.6.1-T1 | `draft` schema, `version`-based `ETag`/`If-Match`, state machine, audit integration | M | V2 | M4 | 03.2.1-T5, 02.7.1-T2 |
-| 03.6.1-T2 | `dry_run` sandbox: ephemeral data namespace, capability downgrade, no tenant secrets, result capture | L | V2 | M4 | 03.3.1-T2, 05.7.4-T2, 05.7.3-T1 |
-| 03.6.1-T3 | PR creation from `dry_passed` drafts (delegates to 03.4.2-T1) + `allow_undverified` override with reason | M | V2 | M4 | 03.6.1-T2, 03.4.2-T1 |
-| 03.6.1-T4 | Draft reconciliation on PR merge/close (draft → catalog sync → case/revision link) | M | V2 | M4 | 03.6.1-T3, 03.4.1-T3 |
+| 03.6.1-T1 | `draft` schema, `version`-based `ETag`/`If-Match`, state machine, audit integration | M | V2 | G2 | 03.2.1-T5, 02.7.1-T2 |
+| 03.6.1-T2 | `dry_run` sandbox: ephemeral data namespace, capability downgrade, no tenant secrets, result capture | L | V2 | G4 | 03.3.1-T2, 05.7.4-T2, 05.7.3-T1 |
+| 03.6.1-T3 | PR creation from `dry_passed` drafts (delegates to 03.4.2-T1) + `allow_unverified` override with reason (T46) | M | V2 | G4 | 03.6.1-T2, 03.4.2-T1 |
+| 03.6.1-T4 | Draft reconciliation on PR merge/close (draft → catalog sync → case/revision link) | M | V2 | G4 | 03.6.1-T3, 03.4.1-T3 |
 **Epic 03.6 total: 5.0**
 ### Epic 03.7 AI drafts (V2)
 #### Story 03.7.1 AI-assisted drafts — acceptance: only approved requirements and allowed context are accepted; provenance is stored; an unapproved AI draft can never run with sensitive permissions; Playwright's generator agents are evaluated against a fixture set before any adoption.
+
+> **CR-D-2 note (2026-10-23).** `03.7.1-T1` and `03.7.1-T2` are **superseded by `13.3.1`** — requirement → checklist → test case generation through the gateway with redaction, opt-in, credits and provenance, plus batched review and immutable versions ([13 §3](13-product-phases.md) `[DECISION]`). In the CR-D-2 model AI output is authoring data, never executable code — script generation is `13.5` and reaches the repository only as a pull request (A2) — so the unapproved-AI-code path and its sandbox permission policy no longer exist `[INFERENCE]`. Both rows keep their ids and stay for history: each is G4 and no new work starts on it. `03.7.1-T3` is **kept** (G2) and feeds `13.5.1-T1`: the Playwright planner / generator evaluation is an input to script generation.
+
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.7.1-T1 | AI draft pipeline: approved-requirement input, context allowlist, redaction, provenance (`ai_run_id`, prompt hash, model) | L | V2 | M4 | 03.6.1-T1, 11.4.1-T3 |
-| 03.7.1-T2 | Permission policy enforcement: unapproved AI code runs only in the sandbox capability; approval before PR/merge; audit trail | M | V2 | M4 | 03.7.1-T1, 02.2.1-T2 |
-| 03.7.1-T3 | **Evaluate** Playwright planner/generator agents (DECISIONS F1 ✅) as draft generators against the fixture set: validity rate, no-skip compliance, review effort, cost | S | V2 | M4 | 03.6.1-T2, 03.1.3-T1 |
+| 03.7.1-T1 | AI draft pipeline: approved-requirement input, context allowlist, redaction, provenance (`ai_run_id`, prompt hash, model) | L | V2 | G4 | 03.6.1-T1, 11.4.1-T3 |
+| 03.7.1-T2 | Permission policy enforcement: unapproved AI code runs only in the sandbox capability; approval before PR/merge; audit trail | M | V2 | G4 | 03.7.1-T1, 02.2.1-T2 |
+| 03.7.1-T3 | **Evaluate** Playwright planner/generator agents (DECISIONS F1 ✅) as draft generators against the fixture set: validity rate, no-skip compliance, review effort, cost | S | V2 | G2 | 03.1.3-T1 |
 **Epic 03.7 total: 3.5**
 ### Epic 03.8 Confirmed bug → regression candidate (V2)
 #### Story 03.8.1 Regression candidates from confirmed bugs — acceptance: a candidate generated from a confirmed defect fails on the buggy build and passes on the fixed build when both are available; otherwise the limitation is recorded and the candidate cannot be marked verified.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.8.1-T1 | Candidate regression test draft from confirmed incident evidence (why the assertion matches the failure) | L | V2 | M4 | 03.7.1-T1, 08.2.2-T3 |
-| 03.8.1-T2 | Proof harness: fail-on-buggy / pass-on-fixed using run evidence; recorded-limitation field when a control build is missing | M | V2 | M4 | 03.8.1-T1, 06.1.2-T2, 07.2.1-T2 |
+| 03.8.1-T1 | Candidate regression test draft from confirmed incident evidence (why the assertion matches the failure) | L | V2 | G4 | 03.7.1-T1, 08.2.2-T3 |
+| 03.8.1-T2 | Proof harness: fail-on-buggy / pass-on-fixed using run evidence; recorded-limitation field when a control build is missing | M | V2 | G4 | 03.8.1-T1, 06.1.2-T2, 07.2.1-T2 |
 **Epic 03.8 total: 3.0**
+### Epic 03.9 History and baseline (V1) [PROPOSAL review 2026-10-02]
+#### Story 03.9.1 Case result history and baseline read model — acceptance: a case shows its recent results per variant, a new failure is distinguished from one already failing on the main branch, and history respects RLS and retention.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 03.9.1-T1 | `case_result_history` read table projected from accepted evidence revisions by an outbox consumer; Dapper read model | M | V1 | G3 | 05.3.2-T5, 06.4.6-T1 |
+| 03.9.1-T2 | Classification new failure vs failing on main and flake-rate input; `GET …/cases/{id}/history` with paging | M | V1 | G3 | 03.9.1-T1 |
+| 03.9.1-T3 | RLS, retention and replay tests (projection rebuild from revisions gives the same rows) | S | V1 | G3 | 03.9.1-T1 |
+
+**Story 03.9.1 total: 2.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
+#### Story 03.9.2 Historical import to seed a baseline — acceptance: a team can import past JUnit/Playwright JSON results as `purpose = import` runs that feed history and never a release decision.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 03.9.2-T1 | Import endpoint accepting an archive of past reports with explicit commit/branch/time; runs marked `import` and excluded from evaluation | M | V1 | G3 | 03.9.1-T1, 04.4.2-T1 |
+| 03.9.2-T2 | `evidgate import-history` CLI command with a dry run and a size cap | S | V1 | G3 | 03.9.2-T1, 04.2.3-T1 |
+| 03.9.2-T3 | Tests: an import never changes a decision or quota ledger beyond its own usage rows, and is idempotent | S | V1 | G3 | 03.9.2-T1 |
+
+**Story 03.9.2 total: 2** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
+
+**Epic 03.9 total: 4.5**
+
 ## 10. Dependencies
 
-- **01** (`01.4.1-T1` migrations, `01.3.1-T1` contracts pipeline, `01.5.1-T1` worker/pg-boss wiring).
+- **01** (`01.4.1-T1` migrations, `01.3.1-T1` contracts pipeline, `01.5.1-T1` worker/outbox + `task`-queue bootstrap).
 - **02** (`02.1.1-T1` org/project, `02.2.1-T1` permissions including `case:*`, `suite:*`, `fixture:*`, `draft:*`; `02.7.1-T2` audit writer; `02.6.*` RLS for every table here).
 - **04** (`04.4.1-T1` JUnit mapping, which produces the producer/suite/name keys imports without an id depend on; `04.3.1-T1` reporter skeleton and capability document; `04.2.1-T1` CLI exchange, which consumes the catalog's id rules).
 - **05** (`05.7.3-T1` pools and capability matching, `05.7.4-T2` executor for the dry-run sandbox, `05.1.1-T1` manifest that locks a suite revision).
@@ -288,7 +327,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | Q1 | Sidecar manifest filename, format and precedence vs the annotation when both exist in one file [OPEN] | Tech Lead + QA Lead | before 03.1.1-T1 is detailed |
 | Q2 | Where dependency edges are declared: test metadata, suite definition file, or a CLI flag | QA Lead | before 03.2.1-T3 |
 | Q3 | OpenAPI skeleton scope in V1: which parts of a spec produce assertions (status/schema only?) | Tech Lead | before 03.5.1-T2 |
-| Q4 | May a `test_maintainer` create a PR from a `dry_failed` draft (with `allow_undverified`), or is it admin-only? | Product owner + QA Lead | before 03.6.1-T3 |
+| Q4 | May a `test_maintainer` create a PR from a `dry_failed` draft (with `allow_unverified`), or is it admin-only? | Product owner + QA Lead | before 03.6.1-T3 |
 | Q5 | Which GitHub App permissions are the minimum for V1 sync only (marked ⚠️ unverified here) | Tech Lead | before 03.4.1-T1 |
 | Q6 | Fixture seed format and who authors seed data (customer repo vs Evidgate-side fixture repo) | QA Lead | before 03.3.1-T1 |
 | Q7 | Should imported (unmapped) results be visible in reports before mapping, or hidden until resolved? | Product owner | before 03.1.2-T2 |
@@ -297,22 +336,24 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
-| 03.1 Test identity and revisions | 5.5 | 0 | 0 | 5.5 |
+| 03.1 Test identity and revisions | 7.0 | 0 | 0 | 7.0 |
 | 03.2 Suite revisions | 4.0 | 0 | 0 | 4.0 |
 | 03.3 Fixtures and data namespaces | 2.5 | 0 | 0 | 2.5 |
-| 03.4 Git integration | 3.0 | 1.0 | 0 | 4.0 |
+| 03.4 Git integration | 4.0 | 1.0 | 0 | 5.0 |
 | 03.5 Templates | 3.0 | 0.5 | 0 | 3.5 |
 | 03.6 Draft editor | 0 | 5.0 | 0 | 5.0 |
 | 03.7 AI drafts | 0 | 3.5 | 0 | 3.5 |
 | 03.8 Bug → regression candidate | 0 | 3.0 | 0 | 3.0 |
-| **Total** | **18.0** | **13.0** | **0** | **31.0** |
+| 03.9 History and baseline | 4.5 | 0 | 0 | 4.5 |
+| **Total** | **25.0** | **13.0** | **0** | **38.0** |
 
-→ with 20 % buffer **37.2** person-days
+→ with 20 % buffer **45.6** person-days
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: CR-1 → 00 §7 (conflict rule; filename in 03.1.1-T1); CR-2 → 00 §8.10; CR-3 → 00 §3; CR-4 → 00 §9.3; CR-5 → 00 §2 (mapping owned by 03 §4); CR-6 confirmed after the 09 renumbering.
 
 > For the integrator; 00/`DECISIONS.md` are not edited by this plan.
+> 2026-09-25 CR-D-1 + TL review applied: migrated to the .NET 10 stack (`task` queue + Cronos schedules instead of pg-boss; xUnit v3 + Testcontainers.PostgreSQL instead of Vitest/Testcontainers 12 on server code) and rulings T1 (`evidgate_resolve` webhook pre-tenant resolution, 03.4.1-T2), T3 (`unique (org_id, id)` on every owned table), T46 (`suite_member` surrogate `id` so `case_dependency` FKs are implementable, `allow_unverified` typo fixed, suite/fixture revision states now in 00 §8.10, built-in `template` catalogue RLS pattern + lint exception, GitHub App via typed `HttpClient` + RS256 app JWT — no Octokit; 03.4.1-T1 resized M→L).
 
 | # | Request | Why |
 |---|---|---|
@@ -322,3 +363,5 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | CR-4 | 00 §9.3: add the catalog endpoints to the core list — `GET /v1/projects/{p}/cases`, `POST /v1/suites/{s}/revisions`, `GET /v1/suite-revisions/{r}/diff`, `POST /v1/webhooks/github`, and (V2) `POST /v1/drafts/{d}/dry-run` / `POST /v1/drafts/{d}/pull-request` | They are the only way to see cases, version suites and receive Git events; the SDK/OpenAPI story needs them listed |
 | CR-5 | 00 §2: add the permissions this plan uses (`case:read`, `case:write`, `suite:read`, `suite:write`, `fixture:write`, `draft:write`, `draft:dry_run`, `draft:merge_request`, `ai_draft:request`) to the default role mapping (`qa_engineer` gets draft/read; `test_maintainer` gets case/suite/fixture write; `release_approver` and `viewer` stay read-only) | Roles are seeded as data (02 §3 D2); the mapping must be defined once |
 | CR-6 | Integrator: 09's dependency set on this plan is **reconciled** (re-verified from disk 2026-09-24) — `09.6.1-T1` → `03.5.1-T1`, `09.6.1-T2` → `03.6.1-T1`, `09.6.1-T3` → `03.2.1-T5` + `03.6.1-T1`, `09.6.1-T4` → `03.6.1-T2`, `09.6.1-T5` → `03.7.1-T1`, `09.6.1-T6` → `03.2.1-T1` + `03.2.1-T3` + `03.2.1-T4`, `09.2.1-T6` → `03.1.1-T1` + `03.1.2-T2`; all of these exist in this plan. Keep 03's ids stable — fix any future mismatch on the 09 side, never by renumbering 03 | Earlier 09 revisions used a different 03 numbering (e.g. `03.3.2-T1`, which never existed); recorded so the integrator can confirm the 09↔03 matrix in one pass without moving 03's scope |
+
+2026-10-23 CR-D-2: requirement -> checklist -> manual test case authoring ownership moved to `13` epics 13.1 / 13.2 / 13.3 / 13.4 (G1); `03.7.1-T1` and `03.7.1-T2` marked superseded by `13.3.1` (rows kept, G4), `03.7.1-T3` kept (G2) and feeding `13.5.1-T1`; its dependency on `03.6.1-T2` (dry-run sandbox, G4) is dropped because the evaluation runs generated scripts locally or in the customer's CI (A5), as `13.5` does. No task ids or sizes changed; phases per 13 §4.4.

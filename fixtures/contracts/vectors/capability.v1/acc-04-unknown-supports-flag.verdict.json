@@ -1,0 +1,5 @@
+{
+  "schema": "capability.v1",
+  "valid": true,
+  "comment": "unknown supports flags are accepted (extensible) and stored verbatim, never evaluated (AC3)"
+}

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 01.5.1 + 01.4.2-T2.1: outbox, idempotency store, task queue, consumers and schedules on
+       Testcontainers.PostgreSQL, with migrations applied by the real Evidgate.Migrator.
+       Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up.
+       The xUnit/Shouldly package set and OutputType live in tests/Directory.Build.props (01.6.1-T1.1). -->
+  <PropertyGroup>
+    <RootNamespace>Tasks.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSQL" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Worker\Evidgate.Worker.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+  </ItemGroup>
+</Project>

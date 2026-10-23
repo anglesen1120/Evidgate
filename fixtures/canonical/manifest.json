@@ -1,0 +1,51 @@
+{
+  "name": "manifest",
+  "description": "Evidence manifest envelope: nested build/suite records, unicode suite names, an embedded artifact digest, keys deliberately unsorted.",
+  "input": {
+    "schema": "evidgate.manifest/1",
+    "manifest_id": "0193f2f0-1c2e-7c3a-9f4b-2d5e6a7b8c90",
+    "org_id": "11111111-1111-7111-8111-111111111111",
+    "project_id": "22222222-2222-7222-8222-222222222222",
+    "producer": "playwright",
+    "target_env": "staging",
+    "note": "line one\nline two\ttabbed",
+    "suites": [
+      {
+        "name": "checkout — køb i € 🔒",
+        "tests": 128,
+        "failed": 1,
+        "skipped": 2,
+        "duration_ms": 45678.5
+      },
+      {
+        "name": "search",
+        "tests": 64,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 1234
+      }
+    ],
+    "build": {
+      "commit": "7f3c1ab2e4d5f6a7b8c9d0e1f2a3b4c5d6e7f809",
+      "branch": "release/2026.09",
+      "run_url": "https://ci.example.test/evidgate/42",
+      "started_at": "2026-09-26T08:00:00.000Z"
+    },
+    "totals": {
+      "tests": 192,
+      "failed": 1,
+      "skipped": 2,
+      "duration_ms": 46912.5
+    },
+    "artifacts": [
+      {
+        "kind": "junit-xml",
+        "path": "reports/junit.xml",
+        "sha256": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "bytes": 20481
+      }
+    ]
+  },
+  "canonical": "{\"artifacts\":[{\"bytes\":20481,\"kind\":\"junit-xml\",\"path\":\"reports/junit.xml\",\"sha256\":\"sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"}],\"build\":{\"branch\":\"release/2026.09\",\"commit\":\"7f3c1ab2e4d5f6a7b8c9d0e1f2a3b4c5d6e7f809\",\"run_url\":\"https://ci.example.test/evidgate/42\",\"started_at\":\"2026-09-26T08:00:00.000Z\"},\"manifest_id\":\"0193f2f0-1c2e-7c3a-9f4b-2d5e6a7b8c90\",\"note\":\"line one\\nline two\\ttabbed\",\"org_id\":\"11111111-1111-7111-8111-111111111111\",\"producer\":\"playwright\",\"project_id\":\"22222222-2222-7222-8222-222222222222\",\"schema\":\"evidgate.manifest/1\",\"suites\":[{\"duration_ms\":45678.5,\"failed\":1,\"name\":\"checkout — køb i € 🔒\",\"skipped\":2,\"tests\":128},{\"duration_ms\":1234,\"failed\":0,\"name\":\"search\",\"skipped\":0,\"tests\":64}],\"target_env\":\"staging\",\"totals\":{\"duration_ms\":46912.5,\"failed\":1,\"skipped\":2,\"tests\":192}}",
+  "sha256": "sha256:f876a77132ac93180b8e1e19107deafcacaa5f1873a6818157546e63b1599071"
+}

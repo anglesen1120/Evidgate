@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "environment-requirements.v1.json",
+  "title": "Suite environment requirements v1",
+  "description": "What a suite revision needs from its environment, secret-free (03.2.1-T4.2, AC8): base URLs, dependency versions, warm-up, the data isolation mode (the single source for 05.7.3-T4) and the NAMES of the secrets the run needs. A secret value never appears here; the semantic secret-shape rules run in addition to this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "base_urls": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,31}$" },
+      "additionalProperties": { "type": "string", "format": "uri", "maxLength": 512 }
+    },
+    "dependency_versions": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._@/-]{0,63}$" },
+      "additionalProperties": { "type": "string", "maxLength": 64 }
+    },
+    "warm_up": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "maxLength": 256 },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 600 }
+      }
+    },
+    "data_isolation": { "enum": ["isolated", "shared"] },
+    "secrets": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" }
+    }
+  }
+}

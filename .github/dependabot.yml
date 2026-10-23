@@ -1,0 +1,73 @@
+# 01.7.1-T4.1 (AC6): Dependabot covers every update surface — NuGet via the
+# root (Central Package Management lives in Directory.Packages.props), npm at
+# the root plus each workspace manifest, and GitHub Actions so the SHA pins in
+# ci.yml stay current. Dependabot PRs run the same required checks as any PR —
+# a bump still needs its ADR-0002 row (check-adr-matrix.sh), licence-scan and
+# audit-deps pass (plans/01-foundation.md §5–§6, 01.7.1 §7).
+version: 2
+updates:
+  # NuGet — Central Package Management (Directory.Packages.props at repo root).
+  - package-ecosystem: 'nuget'
+    directories:
+      - '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'Etc/UTC'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      nuget-minor-patch:
+        applies-to: 'version-updates'
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # npm — root manifest plus every workspace (workspaces: apps/web, packages/*).
+  - package-ecosystem: 'npm'
+    directories:
+      - '/'
+      - '/apps/web'
+      - '/packages/*'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'Etc/UTC'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      npm-minor-patch:
+        applies-to: 'version-updates'
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # GitHub Actions — keeps the SHA pins in .github/workflows/*.yml current;
+  # check-action-pins.sh still requires the '# vX.Y.Z' comment on the new SHA.
+  - package-ecosystem: 'github-actions'
+    directories:
+      - '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'Etc/UTC'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(ci)'
+    groups:
+      actions-minor-patch:
+        applies-to: 'version-updates'
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'

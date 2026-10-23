@@ -1,0 +1,11 @@
+{
+  "schema": "capability.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/platforms",
+      "reason": "unique_items"
+    }
+  ]
+}

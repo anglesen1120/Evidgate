@@ -1,0 +1,5 @@
+{
+  "schema": "prepare.v1",
+  "valid": true,
+  "comment": "a failed phase reports error instead of its payload (contracts/adapter/README.md)"
+}

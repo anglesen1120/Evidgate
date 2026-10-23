@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "event-envelope.v1.json",
+  "title": "Event envelope v1",
+  "description": "00 §9.4 event envelope. The body of POST /v1/runs/{r}/events is a batch { events: [...] }; the §9.4 example is a single event and also validates against this schema. Batch caps: maxItems 500 events and x-max-bytes 1048576 (1 MiB before decompression — enforced at the transport layer, declared here because JSON Schema cannot express byte size).",
+  "x-max-bytes": 1048576,
+  "anyOf": [{ "$ref": "#/$defs/event" }, { "$ref": "#/$defs/batch" }],
+  "$defs": {
+    "batch": {
+      "type": "object",
+      "required": ["events"],
+      "additionalProperties": false,
+      "x-max-bytes": 1048576,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/event" }
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "event_id",
+        "producer_id",
+        "sequence",
+        "execution_key",
+        "attempt_no",
+        "type",
+        "occurred_at"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "event_id": { "type": "string", "format": "uuid" },
+        "producer_id": { "type": "string", "maxLength": 128 },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "job_id": { "type": ["string", "null"], "format": "uuid" },
+        "epoch": { "type": "integer", "minimum": 0 },
+        "execution_key": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "sha256(case_id ‖ variant_hash ‖ target_env) hex, computed by the server (00 §7)"
+        },
+        "attempt_no": { "type": "integer", "minimum": 1 },
+        "type": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$",
+          "description": "Dotted lower_snake event type, e.g. test.started|test.step|test.finished|run.log|producer.heartbeat (00 §9.4)"
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Raw producer status; required when type is test.finished (00 §9.4)"
+        },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC; runner clock, informative only (00 §9.4)"
+        },
+        "artifact_ids": {
+          "type": "array",
+          "items": { "type": "string", "format": "uuid" }
+        },
+        "ext": {
+          "type": "object",
+          "required": ["schema"],
+          "properties": {
+            "schema": { "type": "string", "maxLength": 128 }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "test.finished" } },
+            "required": ["type"]
+          },
+          "then": { "required": ["status"] }
+        }
+      ]
+    }
+  }
+}

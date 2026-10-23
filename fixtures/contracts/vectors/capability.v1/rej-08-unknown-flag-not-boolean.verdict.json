@@ -1,0 +1,12 @@
+{
+  "schema": "capability.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/supports/experimental_streaming",
+      "reason": "type"
+    }
+  ],
+  "comment": "an unknown flag is still typed boolean"
+}

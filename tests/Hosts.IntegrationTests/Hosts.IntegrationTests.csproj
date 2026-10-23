@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 01.1.2: Api/Worker boot, options validation, health, redaction, telemetry, envelope, shutdown, skeleton slice.
+       Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up. -->
+  <PropertyGroup>
+    <RootNamespace>Hosts.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio, Shouldly
+       and NSubstitute come from tests/Directory.Build.props (01.6.1-T1.1). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="Testcontainers.PostgreSQL" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Worker\Evidgate.Worker.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <!-- 01.5.1-T4.2: the operator-route tests run against a database brought to
+         head by the real migrator (same bootstrap as tests/Tasks.IntegrationTests). -->
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+  </ItemGroup>
+</Project>

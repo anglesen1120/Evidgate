@@ -1,0 +1,12 @@
+# 01.3.2-T4.1: the RFC 8785 vectors under this directory are byte-exact. `output/*.json`
+# is the expected canonical byte sequence (compact, no final newline), so an editor that
+# re-indents, adds a final newline or trims trailing whitespace would silently break the
+# comparison. `.prettierignore` excludes the directory from prettier.
+root = true
+
+[*.json]
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[*.md]
+insert_final_newline = true

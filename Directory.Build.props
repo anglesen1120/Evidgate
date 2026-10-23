@@ -1,0 +1,30 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+  <!-- 00 §5.7 P7: server-side process settings only for the long-lived entry points -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Api' or '$(MSBuildProjectName)' == 'Evidgate.Worker'">
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+  <!-- 10.2.1-T1.1 + 00 §11 (server runtime: Linux x64 + arm64): every shipped
+       project declares both container RIDs, so a locked mode restore resolves
+       the net10.0/linux-x64 and net10.0/linux-arm64 targets that the image
+       publish (infra/docker/Dockerfile.*, `dotnet publish -r linux-<arch>`
+       consuming the restored graph without restoring again) needs. The property
+       must be set on the referenced projects too: a RID publish propagates
+       RuntimeIdentifier through the whole project graph and locked mode refuses
+       a project whose lock file has no matching RID target (NU1004, measured
+       2026-09-27). Test projects are excluded: they restore and run RID-lessly
+       on the host. -->
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.StartsWith('$(MSBuildThisFileDirectory)src'))">
+    <RuntimeIdentifiers>linux-x64;linux-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+</Project>

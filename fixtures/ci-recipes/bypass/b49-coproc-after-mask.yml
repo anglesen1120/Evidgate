@@ -1,0 +1,13 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.6.1-T2.1, S20): `coproc V { …; }` rebinds a masked variable (coproc binds NAME and NAME_PID).
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          V=$(cat f)
+          echo "::add-mask::$V"
+          coproc V { cat g; }
+          echo "K=$V" >> $GITHUB_ENV

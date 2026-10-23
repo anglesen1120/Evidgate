@@ -1,7 +1,13 @@
+# .NET build output
+bin/
+obj/
+TestResults/
+
 # Secrets
 .env
 .env.*
 !.env.example
+!.env.dev.template
 *.pem
 *.key
 
@@ -13,6 +19,7 @@ coverage/
 
 # Local data and test output
 .local/
+artifacts/
 playwright-report/
 test-results/
 blob-report/

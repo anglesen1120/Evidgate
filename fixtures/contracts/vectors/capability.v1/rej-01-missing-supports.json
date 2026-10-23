@@ -1,0 +1,17 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "engine": {
+    "family": "p",
+    "version": "1"
+  },
+  "platforms": ["linux-x64"],
+  "supports": {
+    "discovery": true,
+    "step_events": true,
+    "retry": true
+  },
+  "mode": "full"
+}

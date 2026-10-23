@@ -1,0 +1,11 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "operation": "collect",
+  "error": {
+    "code": "collect_failed",
+    "message": "workspace directory unreadable"
+  }
+}

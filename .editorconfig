@@ -1,0 +1,72 @@
+# Formatting + analyzer severities for both ecosystems (01.2.1-T1/T2).
+# dotnet format reads this for C#; IDEs and prettier-adjacent tools for the rest.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# ---- C# ----
+[*.cs]
+indent_style = space
+indent_size = 4
+
+# Namespaces are file-scoped (01.1.1 templates use file-scoped).
+csharp_style_namespace_declarations = file_scoped:error
+
+# Analyzer severities (01.2.1-T1.1, AC3). TreatWarningsAsErrors already promotes
+# every warning to an error; these entries pin severity explicitly so a rule
+# stays an error even if defaults or AnalysisLevel change.
+# CS4014 — call returning Task/ValueTask not awaited. The core AC3 violation.
+dotnet_diagnostic.CS4014.severity = error
+
+# Microsoft.VisualStudio.Threading.Analyzers (VSTHRD) async rules.
+dotnet_diagnostic.VSTHRD001.severity = error # legacy thread switching APIs
+dotnet_diagnostic.VSTHRD002.severity = error # .Result / .Wait deadlock
+dotnet_diagnostic.VSTHRD003.severity = error # awaiting foreign Tasks (JoinableTaskContext)
+dotnet_diagnostic.VSTHRD004.severity = error # await SwitchToMainThreadAsync
+dotnet_diagnostic.VSTHRD010.severity = error # main-thread-affine members off main thread
+dotnet_diagnostic.VSTHRD100.severity = error # async void methods
+dotnet_diagnostic.VSTHRD101.severity = error # unsupported async types (AsyncVoid*)
+dotnet_diagnostic.VSTHRD103.severity = error # synchronous blocking API where async exists
+dotnet_diagnostic.VSTHRD105.severity = error # implicit method group to async void
+dotnet_diagnostic.VSTHRD107.severity = error # await Task inside using block
+dotnet_diagnostic.VSTHRD109.severity = error # switch to main thread instead of assert
+dotnet_diagnostic.VSTHRD110.severity = error # observe the result of awaitable calls
+
+# CA2007 (ConfigureAwait) and VSTHRD111 (Use ConfigureAwait(bool)) are
+# deliberately OFF: ASP.NET Core has no SynchronizationContext, so
+# ConfigureAwait(false) adds noise without changing behaviour — decided in
+# 01.2.1-T1.1.
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.VSTHRD111.severity = none
+
+# VSTHRD200 ("use Async suffix") is a naming convention, not a correctness rule;
+# ASP.NET endpoints, Minimal-API handlers and Mediator's Handle methods cannot
+# follow it. Suggestion only, so TreatWarningsAsErrors cannot promote it.
+dotnet_diagnostic.VSTHRD200.severity = suggestion
+
+# ---- TypeScript / JSON / YAML (prettier-compatible: 2 spaces) ----
+[*.{ts,tsx,mts,cts,js,mjs,cjs}]
+indent_style = space
+indent_size = 2
+
+[*.{json,yaml,yml}]
+indent_style = space
+indent_size = 2
+
+# ---- shell scripts ----
+[*.sh]
+indent_style = space
+indent_size = 2
+
+# ---- Markdown: trailing whitespace may be intentional (hard break) ----
+[*.md]
+trim_trailing_whitespace = false
+
+# ---- test code: plan §9 names use underscores (Domain_Not_Infrastructure) ----
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none

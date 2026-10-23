@@ -1,0 +1,5 @@
+{
+  "schema": "retry-policy.v1",
+  "valid": false,
+  "errors": [{ "index": null, "path": "/max_retries", "reason": "maximum" }]
+}

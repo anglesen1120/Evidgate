@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 01.8.1-T1: S3_Parity_* presigned PUT/GET assertions via AWSSDK.S3, runnable against any S3 endpoint (SeaweedFS locally, provider in 10.6.1-T2).
+       Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up. -->
+  <PropertyGroup>
+    <RootNamespace>ObjectStorage.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio, Shouldly
+       and NSubstitute come from tests/Directory.Build.props (01.6.1-T1.1). -->
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" />
+    <PackageReference Include="Testcontainers" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+  </ItemGroup>
+  <!-- 06.1.2-T1: the adapter, its options, the lazy validator and the secret
+       post-configure are internal to the product assembly (InternalsVisibleTo), so
+       the suite exercises the real S3ObjectStorage against the fixture. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\ObjectStorage\Evidgate.BuildingBlocks.ObjectStorage.csproj" />
+  </ItemGroup>
+</Project>

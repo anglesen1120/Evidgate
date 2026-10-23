@@ -1,0 +1,15 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, QA S17): `defaults.run.shell: python` makes every run step non-bash; refused.
+name: x
+on:
+  pull_request:
+permissions: {}
+defaults:
+  run:
+    shell: python
+jobs:
+  t:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          import os; open(os.environ["GITHUB_ENV"],"a").write("X="+open("f").read())

@@ -1,0 +1,11 @@
+{
+  "schema": "execute.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/events",
+      "reason": "min_items"
+    }
+  ]
+}

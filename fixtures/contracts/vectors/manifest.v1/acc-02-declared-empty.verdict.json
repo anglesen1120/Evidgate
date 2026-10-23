@@ -1,0 +1,5 @@
+{
+  "schema": "manifest.v1",
+  "valid": true,
+  "comment": "boundary: a declared-empty suite (05.1.1 §9) is a valid document; the semantic checks are 05.1.1-T2"
+}

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="dbup-postgresql" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 10.1.1-T2: the connection string resolves through ISecretProvider, which
+         lives in SharedKernel (dependency-free, so no package graph is added). -->
+    <ProjectReference Include="..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The redactor and the options' ToString are internal by design (00 §5.7 S3);
+         the integration suite asserts that no secret can reach a message or a log.
+         10.1.1-T2: MigratorOptions.ConnectionString has an internal setter so no
+         binder can write the secret; the suites whose fixtures build MigratorOptions
+         directly (tests/Shared/DatabaseFixture.cs is linked into Foundation and
+         Identity) see it here. -->
+    <InternalsVisibleTo Include="Migrator.IntegrationTests" />
+    <InternalsVisibleTo Include="Foundation.IntegrationTests" />
+    <InternalsVisibleTo Include="Hosts.IntegrationTests" />
+    <InternalsVisibleTo Include="Identity.IntegrationTests" />
+    <InternalsVisibleTo Include="Isolation.Tests" />
+    <InternalsVisibleTo Include="Persistence.IntegrationTests" />
+    <InternalsVisibleTo Include="Tasks.IntegrationTests" />
+    <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
+  </ItemGroup>
+</Project>

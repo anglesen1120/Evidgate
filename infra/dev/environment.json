@@ -1,0 +1,250 @@
+{
+  "//": [
+    "dev environment (10.1.1-T1.1): what the local stack of 01.8.1 provides.",
+    "config = the EVIDGATE_* key surface this environment answers for; origin is the",
+    "value's source (matrix source.dev, checked by scripts/check-env-matrix.mjs) and",
+    "value is present only for a non-secret key whose value is a literal here.",
+    "probes = the liveness/readiness behaviour of the two processes (00 §9.1 paths);",
+    "ingress = the provider-neutral public/operator/internal split, implemented by the",
+    "dev stack by binding every listener to 127.0.0.1 (infra/compose.dev.yml,",
+    ".env.dev ASPNETCORE_URLS) and checked by scripts/smoke-environment.sh --env dev.",
+    "See docs/runbooks/environments.md."
+  ],
+  "environment": "dev",
+  "description": "Local developer stack: PostgreSQL 18 and SeaweedFS in containers (infra/compose.dev.yml), Evidgate.Api and Evidgate.Worker under `dotnet watch` on the host, no public ingress at all — every listener is loopback-only. Started with scripts/dev/up.sh (01.8.1-T2).",
+  "config": {
+    "EVIDGATE__DATABASE__CONNECTIONSTRING": {
+      "origin": "env-file",
+      "from": ".env.dev, literal in .env.dev.template with __EVIDGATE_APP_PASSWORD__ replaced by up.sh (Host=127.0.0.1;Port=5432;Database=evidgate;Username=evidgate_app)"
+    },
+    "EVIDGATE__IDENTITY__CUSTOMROLESENABLED": {
+      "origin": "default",
+      "from": "option default false (V1: built-in roles only, RECOMMENDATIONS 02-Q3)"
+    },
+    "EVIDGATE__ISOLATION__SELFCHECK": {
+      "origin": "default",
+      "from": "not set: the option default Required applies (the self-check runs against the dev database)"
+    },
+    "EVIDGATE__OBJECT__ENDPOINT": {
+      "origin": "env-file",
+      "value": "http://127.0.0.1:8333",
+      "from": "the local SeaweedFS gateway — the same endpoint the EVIDGATE_S3_ENDPOINT dev-stack row declares, because the host processes talk to the same container"
+    },
+    "EVIDGATE__OBJECT__REGION": {
+      "origin": "env-file",
+      "value": "us-east-1",
+      "from": "the SeaweedFS gateway's signing region (scripts/dev/up.sh signs with aws:amz:us-east-1:s3)"
+    },
+    "EVIDGATE__OBJECT__BUCKET": {
+      "origin": "env-file",
+      "value": "evidgate-dev",
+      "from": "the bucket scripts/dev/up.sh creates and puts the pending/ 24 h lifecycle rule on (T18)"
+    },
+    "EVIDGATE__OBJECT__PRESIGNEXPIRYSECONDS": {
+      "origin": "default",
+      "from": "option default 900 (00 §9.3: at most 15 minutes)"
+    },
+    "EVIDGATE__OBJECT__FORCEPATHSTYLE": {
+      "origin": "env-file",
+      "value": "true",
+      "from": "SeaweedFS serves path-style addressing only"
+    },
+    "EVIDGATE__OBJECT__ACCESSKEY": {
+      "origin": "env-file",
+      "from": ".env.dev literal, the same local-only SeaweedFS identity as the EVIDGATE_S3_ACCESS_KEY dev-stack row (asserted equal to infra/seaweedfs/s3-config.json by scripts/dev/up.sh)"
+    },
+    "EVIDGATE__OBJECT__SECRETKEY": {
+      "origin": "env-file",
+      "from": ".env.dev literal, the same local-only SeaweedFS identity as the EVIDGATE_S3_SECRET_KEY dev-stack row (asserted equal to infra/seaweedfs/s3-config.json by scripts/dev/up.sh)"
+    },
+    "EVIDGATE__TASKS__BACKOFFBASESECONDS": {
+      "origin": "default",
+      "from": "option default 5"
+    },
+    "EVIDGATE__TASKS__BACKOFFMAXSECONDS": {
+      "origin": "default",
+      "from": "option default 3600"
+    },
+    "EVIDGATE__TASKS__BATCHSIZE": {
+      "origin": "default",
+      "from": "option default 50"
+    },
+    "EVIDGATE__TASKS__DEFAULTQUEUECONCURRENCY": {
+      "origin": "default",
+      "from": "option default 1"
+    },
+    "EVIDGATE__TASKS__DISPATCHBATCHSIZE": {
+      "origin": "default",
+      "from": "option default 200"
+    },
+    "EVIDGATE__TASKS__DISPATCHDEFAULTQUEUE": {
+      "origin": "default",
+      "from": "option default \"default\""
+    },
+    "EVIDGATE__TASKS__DISPATCHPOLLMILLISECONDS": {
+      "origin": "default",
+      "from": "option default 1000"
+    },
+    "EVIDGATE__TASKS__POLLINTERVALMILLISECONDS": {
+      "origin": "default",
+      "from": "option default 1000"
+    },
+    "EVIDGATE__TASKS__QUEUEROUTES__<n>__QUEUE": {
+      "origin": "default",
+      "from": "empty route list"
+    },
+    "EVIDGATE__TASKS__QUEUEROUTES__<n>__TASKTYPE": {
+      "origin": "default",
+      "from": "empty route list"
+    },
+    "EVIDGATE__TASKS__QUEUES__<n>__CONCURRENCY": {
+      "origin": "default",
+      "from": "empty queue list"
+    },
+    "EVIDGATE__TASKS__QUEUES__<n>__NAME": {
+      "origin": "default",
+      "from": "empty queue list"
+    },
+    "EVIDGATE__TASKS__SCHEDULELOOKBACKSECONDS": {
+      "origin": "default",
+      "from": "option default 300"
+    },
+    "EVIDGATE__TASKS__SCHEDULEPOLLMILLISECONDS": {
+      "origin": "default",
+      "from": "option default 60000"
+    },
+    "EVIDGATE__TASKS__SWEEPCONNECTIONSTRING": {
+      "origin": "env-file",
+      "from": ".env.dev, Username=evidgate_worker_sched with the __EVIDGATE_WORKER_SCHED_PASSWORD__ placeholder replaced by up.sh"
+    },
+    "EVIDGATE__TASKS__VISIBILITYTIMEOUTSECONDS": {
+      "origin": "default",
+      "from": "option default 300"
+    },
+    "EVIDGATE__TELEMETRY__OTLPENDPOINT": {
+      "origin": "default",
+      "from": "not set: the OTLP exporter stays off, because the dev stack runs no collector (10.3.1-T2 lands one; 00 §11 forbids a hard dependency on the backend)"
+    },
+    "EVIDGATE__WORKER__HEALTHADDRESS": {
+      "origin": "env-file",
+      "value": "127.0.0.1",
+      "from": "the dev environment: .env.dev, literal in .env.dev.template — the loopback bind is what makes /internal/health/* unreachable off-host; the Api gets the same effect from ASPNETCORE_URLS"
+    },
+    "EVIDGATE__WORKER__HEALTHPORT": {
+      "origin": "env-file",
+      "value": "8081"
+    },
+    "EVIDGATE__WORKER__READINESSPOLLMILLISECONDS": {
+      "origin": "default",
+      "from": "option default 1000"
+    },
+    "EVIDGATE_APP_PASSWORD": {
+      "origin": "env-file",
+      "from": ".env.dev, generated by up.sh from the __EVIDGATE_APP_PASSWORD__ placeholder (role evidgate_app; consumed through EVIDGATE__DATABASE__CONNECTIONSTRING)"
+    },
+    "EVIDGATE_DB_PORT": {
+      "origin": "env-file",
+      "value": "5432"
+    },
+    "EVIDGATE_DB_SUPERUSER_PASSWORD": {
+      "origin": "env-file",
+      "from": ".env.dev, generated by up.sh from the __EVIDGATE_DB_SUPERUSER_PASSWORD__ placeholder (compose superuser; bootstrap only)"
+    },
+    "EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS": {
+      "origin": "default",
+      "from": "option default 0 (no statement timeout)"
+    },
+    "EVIDGATE_MIGRATOR__CONNECTIONSTRING": {
+      "origin": "env-file",
+      "from": ".env.dev, literal in .env.dev.template with __EVIDGATE_OWNER_PASSWORD__ replaced by up.sh (Username=evidgate_owner)"
+    },
+    "EVIDGATE_MIGRATOR__MIGRATIONSPATH": {
+      "origin": "default",
+      "from": "not set: MigratorOptions resolves <checkout>/migrations by walking up to Evidgate.slnx"
+    },
+    "EVIDGATE_OPERATOR_PASSWORD": {
+      "origin": "env-file",
+      "from": ".env.dev, generated by up.sh from the __EVIDGATE_OPERATOR_PASSWORD__ placeholder (role evidgate_operator, audited read-only)"
+    },
+    "EVIDGATE_OWNER_PASSWORD": {
+      "origin": "env-file",
+      "from": ".env.dev, generated by up.sh from the __EVIDGATE_OWNER_PASSWORD__ placeholder (role evidgate_owner; consumed through EVIDGATE_MIGRATOR__CONNECTIONSTRING)"
+    },
+    "EVIDGATE_S3_ACCESS_KEY": {
+      "origin": "env-file",
+      "from": ".env.dev literal, asserted equal to infra/seaweedfs/s3-config.json by scripts/dev/up.sh (local-only identity)"
+    },
+    "EVIDGATE_S3_BUCKET": {
+      "origin": "env-file",
+      "value": "evidgate-dev"
+    },
+    "EVIDGATE_S3_ENDPOINT": {
+      "origin": "env-file",
+      "value": "http://127.0.0.1:8333"
+    },
+    "EVIDGATE_S3_PORT": {
+      "origin": "env-file",
+      "value": "8333"
+    },
+    "EVIDGATE_S3_REGION": {
+      "origin": "env-file",
+      "value": "us-east-1"
+    },
+    "EVIDGATE_S3_SECRET_KEY": {
+      "origin": "env-file",
+      "from": ".env.dev literal, asserted equal to infra/seaweedfs/s3-config.json by scripts/dev/up.sh (local-only identity)"
+    },
+    "EVIDGATE_SEAWEEDFS_S3_CONFIG": {
+      "origin": "repo-file",
+      "from": "scripts/dev/up.sh exports the content of infra/seaweedfs/s3-config.json; compose writes it to /etc/seaweedfs/s3-config.json inside the container"
+    },
+    "EVIDGATE_WORKER_SCHED_PASSWORD": {
+      "origin": "env-file",
+      "from": ".env.dev, generated by up.sh from the __EVIDGATE_WORKER_SCHED_PASSWORD__ placeholder (role evidgate_worker_sched; consumed through EVIDGATE__TASKS__SWEEPCONNECTIONSTRING)"
+    }
+  },
+  "probes": {
+    "api": {
+      "baseUrl": "http://127.0.0.1:8080",
+      "baseUrlNote": "ASPNETCORE_URLS=http://127.0.0.1:8080 in .env.dev; the probe runs on the workstation, where the Api runs as a host process",
+      "liveness": {
+        "path": "/internal/health/live",
+        "periodSeconds": 10,
+        "timeoutSeconds": 1,
+        "failureThreshold": 3
+      },
+      "readiness": {
+        "path": "/internal/health/ready",
+        "periodSeconds": 5,
+        "timeoutSeconds": 3,
+        "failureThreshold": 3,
+        "successThreshold": 1,
+        "startupGraceSeconds": 60
+      }
+    },
+    "worker": {
+      "baseUrl": "http://127.0.0.1:8081",
+      "baseUrlNote": "EVIDGATE__WORKER__HEALTHPORT=8081; scripts/dev/up.sh waits for this exact URL before it exits 0",
+      "liveness": {
+        "path": "/internal/health/live",
+        "periodSeconds": 10,
+        "timeoutSeconds": 1,
+        "failureThreshold": 3
+      },
+      "readiness": {
+        "path": "/internal/health/ready",
+        "periodSeconds": 5,
+        "timeoutSeconds": 3,
+        "failureThreshold": 3,
+        "successThreshold": 1,
+        "startupGraceSeconds": 60
+      }
+    }
+  },
+  "ingress": {
+    "publicPaths": ["/v1/*"],
+    "operatorPaths": ["/internal/operator/*"],
+    "internalOnlyPaths": ["/internal/*", "/metrics"],
+    "note": "Dev has no public ingress: every listener binds a loopback address — compose publishes 127.0.0.1:${EVIDGATE_DB_PORT} and 127.0.0.1:${EVIDGATE_S3_PORT}, the Api binds http://127.0.0.1:8080 from ASPNETCORE_URLS, and the Worker's health listener binds EVIDGATE__WORKER__HEALTHADDRESS=127.0.0.1. scripts/smoke-environment.sh --env dev asserts both health paths answer on the internal address, that every listener of the probed ports is loopback-only, and that the internal path is refused on a non-loopback address (00 §9.1)."
+  }
+}

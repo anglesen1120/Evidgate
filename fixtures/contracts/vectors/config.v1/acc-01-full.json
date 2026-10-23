@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "run_id": "00000000-0000-0000-0000-000000000090",
+  "project_id": "00000000-0000-0000-0000-000000000091",
+  "kinds": {
+    "trace": {
+      "capture_enabled": true,
+      "max_bytes": 104857600,
+      "redaction_rules": [
+        {
+          "rule_type": "header",
+          "name_pattern": "Authorization"
+        },
+        {
+          "rule_type": "query_param",
+          "name_pattern": "access_token"
+        }
+      ]
+    },
+    "video": {
+      "capture_enabled": false
+    }
+  }
+}

@@ -1,0 +1,17 @@
+# expect: R5-no-long-lived-credential
+# Synthetic fixture (11.2.1-T1.2): the credential travels as a CLI argument instead of env.
+
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: ./bin/upload --ingest-token "$UPLOAD_CREDENTIAL" ./test-results

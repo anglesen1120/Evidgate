@@ -1,0 +1,21 @@
+# expect: R3-token-permissions
+# Synthetic fixture (11.6.1-T2, S20): the job grants `id-token: write` and guards with a
+# negation (`!= 'pull_request'`), which the lint refuses: only a positive equality to a
+# non-pull_request event proves the job cannot run for a pull request.
+
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    if: "github.event_name != 'pull_request'"
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: npm ci

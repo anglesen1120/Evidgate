@@ -1,0 +1,5 @@
+{
+  "schema": "execute.v1",
+  "valid": true,
+  "comment": "the event is the shared 00 §9.4 envelope, referenced by $id from contracts/schemas/event-envelope.v1.json"
+}

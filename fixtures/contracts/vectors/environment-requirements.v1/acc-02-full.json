@@ -1,0 +1,7 @@
+{
+  "base_urls": { "web": "https://staging.example.com" },
+  "dependency_versions": { "postgres": "18" },
+  "warm_up": { "path": "/health", "timeout_seconds": 30 },
+  "data_isolation": "shared",
+  "secrets": ["API_TOKEN"]
+}

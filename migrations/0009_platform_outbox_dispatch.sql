@@ -1,0 +1,59 @@
+-- 0009_platform_outbox_dispatch.sql
+--
+-- Owner: 01.5.1-T3.1 (wave 5, slice D). This file is the grant 0006's header
+-- promised: "the dispatcher's claim needs `select … for update skip locked` and
+-- `update … set dispatched_at`; 01.5.1-T3 is a different task and adds that grant
+-- in its own migration". `outbox` (0006) is insert-only for `evidgate_app` until
+-- now because nothing may read or re-stamp a committed outbox row before the
+-- dispatcher exists (expand path: the write side shipped in wave 4, the read/
+-- stamp side ships here).
+--
+-- What the dispatcher does with these two privileges, and why they are exactly
+-- enough and not one bit more (00 §5.4.3 least privilege):
+--   * `select` on the table — the claim reads the whole row it moves:
+--     `where dispatched_at is null order by created_at, id limit @batch for
+--     update skip locked` takes id (also the task idempotency key), org_id,
+--     task_type, payload, idempotency_key and created_at (the dispatch-lag
+--     metric of 01.5.1 §7). A narrower column grant would mean the claim's
+--     predicate and its `order by` stop being able to use
+--     `outbox_undispatched_idx` without a re-check, and the row it stamps is
+--     the same row it reasons about.
+--   * `update (dispatched_at)` — column-scoped, not `update` on the table. The
+--     dispatcher stamps one column once; without the scoped form,
+--     `evidgate_app` could rewrite `payload`, `task_type`, `org_id` or
+--     `idempotency_key` of a committed outbox row, i.e. change what work will
+--     run and for which tenant after the business transaction that produced it
+--     has committed. The scoped grant leaves the insert-only posture of the
+--     write path intact for every other column.
+--   * Nothing else. `insert` was already granted by 0006 (the write path), and
+--     `delete`/`truncate` stay revoked: an outbox row is never deleted — the
+--     mechanism marks it dispatched and keeps it as the audit trail of "this
+--     committed change was queued" (nothing sweeps it in M1).
+--
+-- The column-scoped grant is sufficient for both statements, measured on the
+-- pinned postgres:18.6 (throwaway container, 2026-09-26):
+--   * `grant select on t to app; grant update (dispatched_at) on t to app;` then
+--     `set role app; select id from t where dispatched_at is null for update
+--     skip locked;` succeeds — row locking needs `select`, not table-level
+--     `update`.
+--   * `update t set dispatched_at = now();` succeeds while
+--     `update t set a = 'x';` fails with `42501 permission denied for table t`,
+--     and `has_table_privilege('app','t','UPDATE')` stays false while
+--     `has_column_privilege('app','t','dispatched_at','UPDATE')` is true. So the
+--     grant that makes the dispatcher work is also the one that cannot be used
+--     to rewrite the row. (Proven from the app-role side by the suite's
+--     `Dispatcher_Grant_IsMinimal_And_Sufficient`.)
+--
+-- One transaction, like every file here: the runner applies it with
+-- `WithTransactionPerScript` (01.4.1), so the two grants are atomic with the
+-- journal row and this file carries no explicit `begin`/`commit` (0006–0008 do
+-- not either; 0001's are the role DDL's own requirement).
+--
+-- No index and no column is added: the dispatcher's scan is served by
+-- `outbox_undispatched_idx` (0006), and the stamp writes a column that index
+-- already filters on, which only ever shrinks that partial index — the file that
+-- grants the privilege also leaves the plan of the statement it enables
+-- unchanged.
+
+grant select on public.outbox to evidgate_app;
+grant update (dispatched_at) on public.outbox to evidgate_app;

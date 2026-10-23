@@ -1,0 +1,5 @@
+{
+  "schema": "capability.v1",
+  "valid": true,
+  "comment": "capture_control: false is valid; the run it produces carries capture_uncontrolled (T97, AC7)"
+}

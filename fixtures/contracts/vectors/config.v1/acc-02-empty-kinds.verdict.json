@@ -1,0 +1,5 @@
+{
+  "schema": "config.v1",
+  "valid": true,
+  "comment": "boundary: no per-kind override is a valid document (a project with all defaults)"
+}

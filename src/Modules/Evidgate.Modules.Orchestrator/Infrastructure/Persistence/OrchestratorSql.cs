@@ -1,0 +1,198 @@
+namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
+
+/// <summary>The SQL of the manifest and environment-revision routes (05.1.1, 05.1.2); every statement runs in the request's tenant transaction.</summary>
+internal static class OrchestratorSql
+{
+    /// <summary>Whether the project exists, and whether the named environment revision (if any) belongs to it — one round trip.</summary>
+    internal const string ManifestTargets = """
+        select exists (select 1 from public.project where id = @project_id and status <> 'deleted') as project_exists,
+               (@environment_revision_id::uuid is null
+                or exists (select 1 from public.environment_revision
+                            where id = @environment_revision_id::uuid and project_id = @project_id)) as environment_known
+        """;
+
+    internal const string InsertManifest = """
+        insert into public.manifest
+               (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id,
+                shard_plan, matrix, env_needs, planned_count, document, verified_by)
+        values (@id, @org_id, @project_id, @manifest_hash, 1, @suite_revision_id, @environment_revision_id::uuid,
+                @shard_plan::jsonb, @matrix::jsonb, @env_needs::jsonb, @planned_count, @document::jsonb, @verified_by)
+        on conflict (org_id, project_id, manifest_hash) do nothing
+        returning id
+        """;
+
+    internal const string ManifestByHash = """
+        select id from public.manifest where org_id = @org_id and project_id = @project_id and manifest_hash = @manifest_hash
+        """;
+
+    /// <summary>Creates the environment on its first revision; a project that does not exist (or is deleted) inserts nothing.</summary>
+    internal const string EnsureEnvironment = """
+        insert into public.environment (id, org_id, project_id, environment_key, name)
+        select @id, @org_id, p.id, @environment_key, @name
+          from public.project p
+         where p.id = @project_id and p.status <> 'deleted'
+        on conflict (org_id, project_id, environment_key) do nothing
+        """;
+
+    internal const string LockTimeout = "select set_config('lock_timeout', '5000', true)";
+
+    /// <summary>The environment row, locked: it serialises the numbering of its revisions.</summary>
+    internal const string EnvironmentForUpdate = """
+        select e.id, e.current_revision_id, e.name
+          from public.environment e
+          join public.project p on p.org_id = e.org_id and p.id = e.project_id and p.status <> 'deleted'
+         where e.project_id = @project_id and e.environment_key = @environment_key
+           for no key update of e
+        """;
+
+    /// <summary>Dedupe and numbering in one round trip.</summary>
+    internal const string RevisionSlot = """
+        select same.id as existing_id, same.revision_no as existing_no,
+               (select coalesce(max(revision_no), 0) + 1 from public.environment_revision
+                 where org_id = @org_id and environment_id = @environment_id) as next_no
+          from (select 1) as one
+          left join lateral (
+                select id, revision_no from public.environment_revision
+                 where org_id = @org_id and environment_id = @environment_id and revision_hash = @revision_hash) as same on true
+        """;
+
+    internal const string InsertRevision = """
+        insert into public.environment_revision
+               (id, org_id, project_id, environment_id, revision_no, base_urls, dependency_versions, secret_refs, revision_hash, created_by)
+        select @id, @org_id, @project_id, @environment_id, @revision_no, @base_urls::jsonb, @dependency_versions::jsonb,
+               coalesce(array(select jsonb_array_elements_text(@secret_refs::jsonb)), '{}'), @revision_hash, @created_by
+        """;
+
+    /// <summary>Moves the pointer (and applies a new display name) only when something changes, so a replay does not bump the row version.</summary>
+    internal const string MovePointer = """
+        update public.environment
+           set current_revision_id = @revision_id,
+               name = coalesce(@name::text, name)
+         where id = @environment_id
+           and (current_revision_id is distinct from @revision_id or (@name::text is not null and name <> @name::text))
+        """;
+
+    internal const string RevisionById = """
+        select r.id as revision_id, r.environment_id, e.environment_key, r.project_id, r.revision_no, r.revision_hash,
+               r.base_urls::text as base_urls, r.dependency_versions::text as dependency_versions,
+               array_to_json(r.secret_refs)::text as secret_refs, r.created_at
+          from public.environment_revision r
+          join public.environment e on e.org_id = r.org_id and e.id = r.environment_id
+          join public.project p on p.org_id = r.org_id and p.id = r.project_id and p.status <> 'deleted'
+         where r.id = @revision_id
+        """;
+
+    // ------------------------------------------------------------------ 05.2.1 run creation
+
+    /// <summary>
+    /// The manifest a run is created from, by id and project, in one statement (05.2.1 §5). RLS makes another
+    /// tenant's manifest invisible, so an unknown or foreign id is the same 404. The handler derives the planned
+    /// executions and the shard ranges from the immutable document's own copy of <c>shard_plan</c>: the manifest
+    /// verifier already validated that copy at upload (05.1.1 §5), so <c>shard_plan</c> and <c>planned_count</c> are
+    /// not projected a second time.
+    /// </summary>
+    internal const string RunManifest = """
+        select suite_revision_id, environment_revision_id, document::text as document
+          from public.manifest
+         where org_id = @org_id and project_id = @project_id and id = @manifest_id
+        """;
+
+    /// <summary>
+    /// Whether the manifest's suite and environment revisions resolve in this project, in one statement and with no
+    /// row lock (05.2.1 AC5): the composite FKs enforce existence at insert, but the check runs first so an
+    /// unresolved reference is a 422 <c>manifest_invalid</c> before any write. The suite revision is project-scoped
+    /// through its suite, exactly like the manifest upload's check.
+    /// </summary>
+    internal const string RunRevisionTargets = """
+        select exists (select 1
+                         from public.suite_revision r
+                         join public.suite s on s.org_id = r.org_id and s.id = r.suite_id
+                        where r.id = @suite_revision_id and s.project_id = @project_id) as suite_known,
+               exists (select 1 from public.environment_revision
+                        where id = @environment_revision_id and project_id = @project_id) as environment_known
+        """;
+
+    /// <summary>
+    /// The run row (05.2.1 §4, T13/T88/T93; identity block added by 05.2.2-T1.3). <c>state</c> is <c>queued</c> because
+    /// the producer slots commit in this same transaction; <c>collection_deadline_at</c> is computed on the database
+    /// clock (<c>now()</c>, the same clock <c>created_at</c> defaults to) so the two can never disagree;
+    /// <c>policy_revision_id</c> is the active revision 07.1.1-T4.2 pins (null when the project has no active policy);
+    /// <c>ci_run_ref</c> comes from the caller's OIDC claims, never the body. The eight identity columns
+    /// (<c>ref_kind</c>, <c>ref_name</c>, <c>pr_number</c>, <c>head_sha</c>, <c>base_sha</c>, <c>trigger_event</c>,
+    /// <c>is_fork</c>, <c>unverified_ref</c>) are written once here and never updated (the migration's trigger refuses
+    /// it, AC5); their CHECKs live in migration 0037, so a value the handler already shape-checked cannot fail here.
+    /// </summary>
+    internal const string InsertRun = """
+        insert into public.run
+               (id, org_id, project_id, manifest_id, policy_revision_id, suite_revision_id, environment_revision_id,
+                ci_run_ref, components, purpose, state, collection_deadline_at, late_window_minutes,
+                ref_kind, ref_name, pr_number, head_sha, base_sha, trigger_event, is_fork, unverified_ref)
+        values (@id, @org_id, @project_id, @manifest_id, @policy_revision_id::uuid, @suite_revision_id, @environment_revision_id,
+                @ci_run_ref::jsonb, @components::jsonb, 'regular', 'queued',
+                now() + @collection_timeout::interval, @late_window_minutes,
+                @ref_kind, @ref_name, @pr_number, @head_sha, @base_sha, @trigger_event, @is_fork, @unverified_ref)
+        """;
+
+    /// <summary>
+    /// Every planned execution of the run in one batch insert (05.2.1 §5, 00 §5.7 P2): the rows travel as ONE
+    /// <c>jsonb</c> text parameter expanded by <c>jsonb_to_recordset</c>, so the statement count is constant in the
+    /// manifest's size and no array parameter reaches the read-only tenant Dapper path (the
+    /// <c>StringArrayTypeHandler</c> refuses array writes; precedent <c>SuiteReadSql.InsertMembers</c>).
+    /// <c>required</c> defaults true (the column default).
+    /// </summary>
+    internal const string InsertPlannedExecutions = """
+        insert into public.planned_execution
+               (id, org_id, run_id, execution_key, case_revision_id, variant_hash, target_env, shard_id, required)
+        select r.id, @org_id, @run_id, r.execution_key, r.case_revision_id, r.variant_hash, r.target_env, r.shard_id, true
+          from jsonb_to_recordset(@rows::jsonb)
+               as r(id uuid, execution_key text, case_revision_id uuid, variant_hash text, target_env text, shard_id text)
+        """;
+
+    // ------------------------------------------------------------------ 05.2.2 run identity
+
+    /// <summary>
+    /// The verified <c>ref</c>/<c>sha</c> claims of the CI run the caller's credential was minted for (05.2.2-T1.3):
+    /// the <c>ci_token_issue</c> row the 02.4.1 exchange wrote from the GitHub OIDC token it had already verified,
+    /// keyed by the run reference the minted token carries (<c>repository_id</c>, <c>run_id</c>, <c>run_attempt</c>) —
+    /// not by the minted token's <c>jti</c>, which the exchange sets to a fresh GUID unrelated to the row (D-S45-Q2).
+    /// It is the only source of a verified run identity, so the create handler reads it inside the run's tenant
+    /// transaction, before any write, and only for a caller that carries a CI run reference.
+    /// <para>
+    /// The Identity module owns the table; this module reads it as raw SQL like the Evidence module reads <c>run</c>
+    /// (the cross-module read precedent), which is why no Identity contract is involved. RLS already restricts the row
+    /// to the caller's tenant (<c>ci_token_issue_app_tenant</c>, 0017); <c>org_id</c> and <c>project_id</c> repeat the
+    /// scope in the statement as defence in depth (00 §5.4), so a token of another project of the same org can never
+    /// verify an identity here. <c>ref</c> and <c>sha</c> are fixed for a GitHub run attempt, so the newest row for the
+    /// attempt is authoritative: <c>order by created_at desc limit 1</c> returns it and never throws, even when one
+    /// attempt exchanged several tokens (each keyed by its own <c>jti</c>). <c>ci_token_issue_run_idx</c>
+    /// (migration 0037) serves the predicate and the order as one index scan.
+    /// </para>
+    /// </summary>
+    internal const string CiTokenIssueClaim = """
+        select ref, sha
+          from public.ci_token_issue
+         where org_id = @org_id and project_id = @project_id
+           and repository_id = @repository_id and run_id = @run_id and run_attempt = @run_attempt
+         order by created_at desc
+         limit 1
+        """;
+
+    // ------------------------------------------------------------------ 06.1.2 upload-url run scope
+
+    /// <summary>
+    /// The run's project, that project's state and whether the named execution key is planned, in one statement
+    /// (06.1.2 §5, <c>IRunPlanReader</c>). RLS makes another tenant's run invisible, so an unknown or foreign id is
+    /// the same null; the caller compares the returned project with its own scope, so a run of another project of
+    /// the same org is refused too. <c>planned_execution</c> has no <c>attempt_no</c> column, so only the key's
+    /// membership is answered here.
+    /// </summary>
+    internal const string RunPlan = """
+        select r.project_id as project_id,
+               p.status as project_state,
+               exists (select 1 from public.planned_execution pe
+                        where pe.org_id = r.org_id and pe.run_id = r.id and pe.execution_key = @execution_key) as planned
+          from public.run r
+          join public.project p on p.org_id = r.org_id and p.id = r.project_id
+         where r.id = @run_id
+        """;
+}

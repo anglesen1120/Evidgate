@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    01.2.1-T1.2: enforces the 00 §5.5 module shape and §5.7 S2 pipeline-authorization
+    rules. The assembly is deliberately NOT named Evidgate.* so the reflection scan
+    (Evidgate.*.dll in the output directory) never picks up its own fixtures.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Architecture.Tests</RootNamespace>
+  </PropertyGroup>
+  <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio, Shouldly
+       and NSubstitute come from tests/Directory.Build.props (01.6.1-T1.1). -->
+  <ItemGroup>
+    <PackageReference Include="Mediator.Abstractions" />
+  </ItemGroup>
+  <!--
+    Every Evidgate.* production project in Evidgate.slnx must be ProjectReferenced
+    here so its assembly lands in this project's output directory and is scanned by
+    the reflection rules. ModuleBoundariesTests.Test_Project_References_All_Slnx_Projects
+    keeps this list in sync when 01.1.2+ adds module projects.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Worker\Evidgate.Worker.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\ObjectStorage\Evidgate.BuildingBlocks.ObjectStorage.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity.Contracts\Evidgate.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy\Evidgate.Modules.Tenancy.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy.Contracts\Evidgate.Modules.Tenancy.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Orchestrator\Evidgate.Modules.Orchestrator.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion\Evidgate.Modules.Ingestion.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Evidence\Evidgate.Modules.Evidence.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Evidence.Contracts\Evidgate.Modules.Evidence.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Policy\Evidgate.Modules.Policy.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Policy.Contracts\Evidgate.Modules.Policy.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Healing\Evidgate.Modules.Healing.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Healing.Contracts\Evidgate.Modules.Healing.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Usage\Evidgate.Modules.Usage.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Usage.Contracts\Evidgate.Modules.Usage.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Audit\Evidgate.Modules.Audit.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Audit.Contracts\Evidgate.Modules.Audit.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Notifications\Evidgate.Modules.Notifications.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Notifications.Contracts\Evidgate.Modules.Notifications.Contracts.csproj" />
+  </ItemGroup>
+</Project>

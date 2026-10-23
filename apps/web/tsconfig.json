@@ -1,0 +1,20 @@
+{
+  // 01.2.1-T3.2: apps/web is part of the tsc -b project-reference graph so the
+  // strict flags in tsconfig.base.json apply from the first source file.
+  // Angular (09.x) replaces this with tsconfig.app.json/tsconfig.spec.json
+  // extending ../../tsconfig.base.json.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  // 01.6.1-T1.2: specs and the Vitest config are type-checked by tsconfig.spec.json and
+  // must never be emitted into dist.
+  "exclude": ["src/**/*.test.ts", "vitest.config.ts"],
+  // 01.3.2-T1.2: @evidgate/sdk workspace dependency — the build must see its emitted
+  // declarations (npm workspaces links it via node_modules).
+  "references": [{ "path": "../../packages/sdk" }]
+}

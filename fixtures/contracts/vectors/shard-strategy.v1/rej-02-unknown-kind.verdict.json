@@ -1,0 +1,5 @@
+{
+  "schema": "shard-strategy.v1",
+  "valid": false,
+  "errors": [{ "index": null, "path": "/kind", "reason": "enum" }]
+}

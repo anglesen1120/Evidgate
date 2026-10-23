@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Evidgate.BuildingBlocks.Persistence</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Cronos" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 01.5.1-T6: idempotency request_hash is the RFC 8785 canonical hash (01.3.2-T4). -->
+    <ProjectReference Include="..\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
+    <!-- 10.1.1-T2: ISecretProvider/SecretNames live in SharedKernel (dependency-free),
+         and this assembly is where the single DI registration of the provider sits. -->
+    <ProjectReference Include="..\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      02.6.1-T1.4: contracts/rls-exceptions.txt is the single source of the RLS
+      exception list, read by the boot-time isolation self-check. It is embedded
+      rather than copied to the output directory: the verdict must not depend on the
+      process's working directory (container, `dotnet run`, test host) and a
+      published app must not be able to start with the list missing, stale or
+      hand-edited. The file on disk stays the one source; the embedded copy is the
+      same bytes at build time.
+    -->
+    <EmbeddedResource Include="..\..\..\contracts\rls-exceptions.txt"
+                      LogicalName="Evidgate.BuildingBlocks.Persistence.rls-exceptions.txt" />
+  </ItemGroup>
+  <!--
+    01.1.2-T1.3 (AC3): the readiness gate compares public.schema_migration's head
+    with the head this build expects. The expected head is the lexically greatest
+    migrations/*.sql file name, baked into assembly metadata at build time, so
+    adding a migration file changes the gate without touching code. Ordering is a
+    lexical (ordinal) sort over file names; the sentinel "(none)" for a build with
+    no migrations must match ExpectedMigrationHead.NoMigrationsHead.
+  -->
+  <UsingTask
+    TaskName="GetExpectedMigrationHead"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <FileNames ParameterType="System.String[]" Required="false" />
+      <Head ParameterType="System.String" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+        var ordered = (FileNames ?? Array.Empty<string>())
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        Head = ordered.Length == 0 ? "(none)" : ordered[ordered.Length - 1];
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="BakeExpectedMigrationHead" BeforeTargets="GetAssemblyAttributes">
+    <ItemGroup>
+      <EvidgateMigrationFile Include="$(MSBuildThisFileDirectory)..\..\..\migrations\*.sql" />
+    </ItemGroup>
+
+    <GetExpectedMigrationHead
+      FileNames="@(EvidgateMigrationFile->'%(Filename)%(Extension)')">
+      <Output TaskParameter="Head" PropertyName="EvidgateExpectedMigrationHead" />
+    </GetExpectedMigrationHead>
+
+    <ItemGroup>
+      <AssemblyMetadata Include="ExpectedMigrationHead" Value="$(EvidgateExpectedMigrationHead)" />
+    </ItemGroup>
+
+    <Message Importance="normal" Text="Expected migration journal head: $(EvidgateExpectedMigrationHead)" />
+  </Target>
+</Project>

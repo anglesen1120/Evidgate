@@ -1,0 +1,8 @@
+# 04.3.2-T1.2: the per-directory sidecar manifest (03.1.1-T1, T55). It maps each test
+# file of this directory to the durable evidgate.id of the case it holds; the reporter
+# reads it once at onBegin. `sidecar.spec.mjs` has no `evidgate.id` annotation, so this
+# file is its only identity source.
+version: 1
+cases:
+  - file: sidecar.spec.mjs
+    evidgate.id: 44444444-4444-4444-4444-444444444444

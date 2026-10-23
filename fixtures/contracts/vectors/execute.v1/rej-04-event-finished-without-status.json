@@ -1,0 +1,19 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "operation": "execute",
+  "events": [
+    {
+      "schema_version": 1,
+      "event_id": "00000000-0000-0000-0000-000000000005",
+      "producer_id": "playwright-shard-1",
+      "sequence": 13,
+      "execution_key": "0000000000000000000000000000000000000000000000000000000000000000",
+      "attempt_no": 1,
+      "type": "test.finished",
+      "occurred_at": "2026-01-01T00:00:00Z"
+    }
+  ]
+}

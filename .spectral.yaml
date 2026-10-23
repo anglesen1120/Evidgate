@@ -1,0 +1,60 @@
+extends:
+  - - spectral:oas
+    - recommended
+# Custom Evidgate contract rules (01.3.1). Functions live in scripts/spectral/.
+# Functions must stay dependency-free (no imports) — spectral loads them in
+# isolation.
+functionsDir: scripts/spectral
+functions:
+  - evgPermission
+  - evgIdempotency
+  - evgXsrf
+  - evgErrorEnvelope
+  - evgNoInternalPaths
+aliases:
+  OperationObject:
+    - '$.paths.*.*'
+rules:
+  # AC3 (T51): every operation declares its permission. `x-permission: none` is
+  # allowed only for the non-permission routes of 00 §9.3 and then requires
+  # `x-auth` naming the credential.
+  evg-operation-permission:
+    description: Every operation has x-permission; 'none' requires x-auth
+    severity: error
+    given: '#OperationObject'
+    then:
+      function: evgPermission
+  # 00 §9.1: mutations that create resources or side effects require
+  # Idempotency-Key, except the documented exemption list (justified in the
+  # function and mirrored in contracts/README.md).
+  evg-mutation-idempotency:
+    description: Mutations document Idempotency-Key or are in the 00-grounded exemption list
+    severity: error
+    given: '#OperationObject'
+    then:
+      function: evgIdempotency
+  # T38 / 00 §9.1: every mutation reachable via the session cookie documents
+  # X-XSRF-TOKEN; bearer-only routes must not.
+  evg-cookie-xsrf:
+    description: Cookie-authenticated mutations document X-XSRF-TOKEN; bearer-only routes omit it
+    severity: error
+    given: '#OperationObject'
+    then:
+      function: evgXsrf
+  # Stub operations carry `summary` (00 §9.3 behaviour); full `description`
+  # lands with the implementing story of each area.
+  operation-description: off
+  # 00 §9.2: every 4xx/5xx (and default) response uses the ErrorEnvelope schema.
+  evg-error-envelope:
+    description: 4xx/5xx responses reference components/schemas/ErrorEnvelope
+    severity: error
+    given: '#OperationObject'
+    then:
+      function: evgErrorEnvelope
+  # 00 §9.1: /internal/* routes never appear in contracts/openapi.yaml.
+  evg-no-internal-paths:
+    description: No /internal path may appear in the public spec
+    severity: error
+    given: $.paths
+    then:
+      function: evgNoInternalPaths

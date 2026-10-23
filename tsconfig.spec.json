@@ -1,0 +1,9 @@
+{
+  // 01.6.1-T1.2: type-checks the two root Vitest configs without emitting. They are not in
+  // the tsc -b reference graph (tsconfig.json only references the workspaces), and Vitest
+  // does not type-check its config, so without this project a root config file would never
+  // be compiled. eslint.config.js points the parser for them at this file.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["vitest.config.ts", "vitest.config.base.mts"]
+}

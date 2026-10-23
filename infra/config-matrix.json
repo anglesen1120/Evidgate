@@ -1,0 +1,1407 @@
+{
+  "//": [
+    "Machine-readable EVIDGATE_* configuration matrix (10.1.1-T1.1). One row per",
+    "variable: who consumes it, its type and boot constraints, whether it is a",
+    "secret, and — per environment — whether the environment must provide it and",
+    "where its value comes from.",
+    "",
+    "scripts/check-env-matrix.mjs keeps this file honest: it discovers every key",
+    "from the options classes and key constants in src/, from .env.dev.template and",
+    "from infra/compose.dev.yml, and fails when a key is consumed but not declared,",
+    "declared but not consumed, or when a derivable field (consumers, type,",
+    "requiredAtBoot, constraints) disagrees with the source.",
+    "",
+    "Origins: env-file = a committed dev template/.env.dev; environment = a plain",
+    "environment variable injected at deploy; secret-store = secret material",
+    "resolved at runtime and never written to the repo (10.1.1-T2/T3, O3 swap",
+    "point); repo-file = materialised by the dev stack from a committed infra file;",
+    "default = not provided, the option's own default applies.",
+    "",
+    "required = required in that environment (the lint fails an environment that",
+    "does not declare it). requiredAtBoot = the process exits non-zero when it is",
+    "missing or malformed (01.1.2-T1's validated options). A row whose boot",
+    "requirement the parser cannot see names the enforcing site in requiredBy.",
+    "Provider-specific values are [OPEN] until 10.8.1 (O3) closes. See",
+    "docs/runbooks/environments.md."
+  ],
+  "version": 1,
+  "environments": ["dev", "staging", "prod"],
+  "keys": [
+    {
+      "key": "EVIDGATE__DATABASE__CONNECTIONSTRING",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack", "worker"],
+      "type": "string",
+      "requiredAtBoot": true,
+      "requiredBy": "src/BuildingBlocks/Persistence/Options/DatabaseOptions.cs",
+      "constraints": {
+        "minLength": 1
+      },
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "exactly the command-\"evidgate_app\" string, Host/Port/Database/Username/Password keys only: evidgate_app is the string `evidgate_app` and the boot refuses any other role name (00 §5.4.3); the password is generated per environment."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__CUSTOMROLESENABLED",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "boolean",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "the custom-role write flag of 02.2.1-T2.2 (RECOMMENDATIONS 02-Q3): off in V1, where built-in roles are the only roles, so POST/PATCH /v1/roles answer 403 `forbidden`; on, the flagged commands may add a role to the caller's org (422 `unknown_permission` / `permission_not_assignable` still apply, and a built-in role stays immutable, 409). Nothing about an existing tenant is read differently while it is off, so no environment sets it."
+    },
+    {
+      "key": "EVIDGATE__CI__SIGNINGKEY",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "base64 HS256 key (at least 32 bytes) that signs the `ci_producer` tokens minted by POST /v1/ci/token (02.4.1-T3.3, D7). Absent: the exchange answers 503 `unavailable` and no ci_producer bearer authenticates."
+    },
+    {
+      "key": "EVIDGATE__CI__ISSUER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`iss` of the minted ci_producer token (02.4.1); default `evidgate`."
+    },
+    {
+      "key": "EVIDGATE__CI__AUDIENCE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`aud` of the minted ci_producer token, which every ingest endpoint expects (02.4.1); default `evidgate`."
+    },
+    {
+      "key": "EVIDGATE__CI__TOKENLIFETIMEMINUTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 60
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "lifetime of a minted ci_producer token in minutes, at most 60 (02.4.1 AC6); default 60."
+    },
+    {
+      "key": "EVIDGATE__CI__PEPPER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "base64 current pepper (at least 32 bytes) behind the HMAC of ingest tokens and binding challenges (TL T5, DECISIONS D-A4). Absent: creating a binding or ingest token answers 503 `unavailable`."
+    },
+    {
+      "key": "EVIDGATE__CI__PEPPERVERSION",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "version stored beside every HMAC made with the current pepper; bump it when the pepper rotates (02.4.2); default 1."
+    },
+    {
+      "key": "EVIDGATE__CI__PREVIOUSPEPPER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "base64 previous pepper, kept while tokens made with it are still valid (rotation overlap, D-A4/D-A5)."
+    },
+    {
+      "key": "EVIDGATE__CI__PREVIOUSPEPPERVERSION",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "version of the previous pepper; must differ from the current one; default 1."
+    },
+    {
+      "key": "EVIDGATE__CI__GITHUBOIDCISSUER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "expected `iss` of a GitHub Actions OIDC token (02.4.1-T1.1); default https://token.actions.githubusercontent.com."
+    },
+    {
+      "key": "EVIDGATE__CI__GITHUBOIDCAUDIENCE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "expected `aud` of a GitHub Actions OIDC token, which the workflow requests (02.4.1); default `evidgate`."
+    },
+    {
+      "key": "EVIDGATE__CI__GITHUBJWKSURI",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "JWKS document of the GitHub issuer; the boot refuses anything that is not https on the issuer's host (S4 allowlist, 02.4.1-T1.2)."
+    },
+    {
+      "key": "EVIDGATE__CI__MAXSKEWSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 0,
+        "max": 300
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "clock skew tolerated on exp/nbf of a GitHub OIDC token (02.4.1-T4.2); default 60."
+    },
+    {
+      "key": "EVIDGATE__CI__EXCHANGEBURSTLIMIT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 10000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "exchange attempts allowed per key (client address, repository id, token prefix) within the window (02.4.1 AC8); default 30."
+    },
+    {
+      "key": "EVIDGATE__CI__DENIEDEVENTNAMES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "comma-separated GitHub event_name values refused at the exchange (02.4.1 review); default pull_request_target, which runs in the base repository context while it may execute fork code."
+    },
+    {
+      "key": "EVIDGATE__CI__EXCHANGEWINDOWSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3600
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "length of the exchange rate-limit window in seconds (02.4.1 AC8); default 60."
+    },
+    {
+      "key": "EVIDGATE__ISOLATION__SELFCHECK",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {
+        "enum": ["Required", "Disabled"]
+      },
+      "forbiddenValues": {
+        "staging": ["Disabled"],
+        "prod": ["Disabled"]
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "boot-time RLS self-check switch (02.6.1-T1.4): Required (default) refuses to start unless every non-exempt table is under database-enforced isolation; Disabled exists only for hosts that boot without a database (contract/shutdown suites) and is logged at Warning on every boot. A deployable environment never sets Disabled — the config lint enforces that through forbiddenValues, not through this note."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__ENDPOINT",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "absolute http(s) S3 endpoint of the object store (06.1.2-T1); empty selects the AWS regional endpoint of the region row. Dev points it at the local SeaweedFS gateway; staging and prod leave it unset until 10.1.1-T3 provisions the bucket. The options validator accepts only an absolute http(s) URL with no userinfo, query or fragment, so a crafted value cannot redirect the signed request at another host (SSRF-by-config)."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__REGION",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "SigV4 signing region of the object store (06.1.2-T1). Dev uses the SeaweedFS gateway's us-east-1; staging and prod set the provider region, which is [OPEN] until 10.8.1 (O3) and is a residency criterion for plan 11."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__BUCKET",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "bucket the pending/ staging keys live in (06.1.2-T1). Dev uses the same bucket scripts/dev/up.sh creates and puts the pending/ 24 h lifecycle rule on; staging and prod get their own bucket with versioning and lifecycle from 10.1.1-T3 and 10.5.1-T2."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__PRESIGNEXPIRYSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "lifetime of a presigned PUT in seconds (06.1.2-T1, 00 §9.3: at most 15 minutes); option default 900, and the options validator accepts 1..900 only. No environment sets it: the default is the contract."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__FORCEPATHSTYLE",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack", "worker"],
+      "type": "boolean",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "path-style S3 addressing (06.1.2-T1); option default true, which every S3-compatible emulator needs. Dev states it explicitly because SeaweedFS requires it; a real provider accepts virtual-host style, so staging and prod keep the default."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__ACCESSKEY",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "access key of the object-storage identity (06.1.2-T1), resolved through ISecretProvider by the options post-configurer and never bound from IConfiguration. Dev uses the local-only SeaweedFS identity that scripts/dev/up.sh asserts equals infra/seaweedfs/s3-config.json; staging and prod hold their own credential in the provider secret store (10.1.1-T3)."
+    },
+    {
+      "key": "EVIDGATE__OBJECT__SECRETKEY",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "secret key of the object-storage identity (06.1.2-T1), resolved through ISecretProvider by the options post-configurer and never bound from IConfiguration. Dev uses the local-only SeaweedFS identity that scripts/dev/up.sh asserts equals infra/seaweedfs/s3-config.json; staging and prod hold their own credential in the provider secret store (10.1.1-T3)."
+    },
+    {
+      "key": "EVIDGATE__INGESTION__MAXEXPANDEDBYTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion/Application/IngestionLimits.cs",
+      "constraints": {
+        "min": 1048576,
+        "max": 67108864
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "expanded-size cap of an event batch (04.1.1-T3.2, DECISIONS §8.1 D-A8): the byte count a `Content-Encoding: gzip` body may expand to on `POST /v1/runs/{r}/events`, measured while decoding and before any parse or write. Exceeding it — or the ratio cap of EVIDGATE__INGESTION__MAXEXPANSIONRATIO — is 413 `batch_too_large` with no write; the raw 1 MiB transport cap and the 500-event cap stay code constants (contract numbers, not options). Option default 8388608 (8 MiB); the range 1048576..67108864 stops a deployment from disabling the cap or setting it below one legal 1 MiB batch."
+    },
+    {
+      "key": "EVIDGATE__INGESTION__MAXEXPANSIONRATIO",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion/Application/IngestionLimits.cs",
+      "constraints": {
+        "min": 1,
+        "max": 1000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "expanded/compressed ratio cap of a gzip event batch (04.1.1-T3.2, DECISIONS §8.1 D-A8): decoding refuses once expanded bytes / compressed bytes read exceeds this value, so a small body cannot expand without bound (the 50 MiB-from-20 KiB bomb). Paired with EVIDGATE__INGESTION__MAXEXPANDEDBYTES; either overrun is 413 `batch_too_large` with no write. Option default 20 (20:1); the range 1..1000 keeps the guard meaningful."
+    },
+    {
+      "key": "EVIDGATE__RUNS__DEFAULTCOLLECTIONTIMEOUT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "collection deadline offset applied at run create when no policy revision is pinned (05.2.1 AC12, T93): run.collection_deadline_at = created_at + this value, computed on the database clock. A TimeSpan literal (02:00:00 = 2 h, the default; ⚠️ tuned ≈ p95 × 1.5). 07.1.1-T4 replaces it with the pinned policy's collection_timeout once the run-pinning handshake lands. Bounded at boot to more than 00:00:00 and at most 366 days (the scale of the 525600-minute late-window cap) by RunsOptions.CollectionTimeoutAttribute: a non-positive value would place collection_deadline_at at or before created_at on the immutable column, and an extreme value would overflow the interval arithmetic. No constraints block: the lint derives constraints from C# attributes, and no DataAnnotations range carries a TimeSpan."
+    },
+    {
+      "key": "EVIDGATE__RUNS__DEFAULTLATEWINDOWMINUTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 525600
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "late-window snapshot written at run create when no policy revision is pinned (05.2.1 AC12, T93/T62): run.late_window_minutes, immutable after create. Default 1440 (24 h). 07.1.1-T4 copies the pinned policy's late window instead."
+    },
+    {
+      "key": "EVIDGATE__TASKS__BACKOFFBASESECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3600
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "task-queue retry backoff base, `base × 2^attempts` (01.5.1-T1.3); default 5."
+    },
+    {
+      "key": "EVIDGATE__TASKS__BACKOFFMAXSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 86400
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "retry backoff ceiling; must be ≥ BACKOFFBASESECONDS (a relative rule the options Validate enforces); default 3600."
+    },
+    {
+      "key": "EVIDGATE__TASKS__BATCHSIZE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 500
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "rows one claim pass takes per queue; default 50."
+    },
+    {
+      "key": "EVIDGATE__TASKS__DEFAULTQUEUECONCURRENCY",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 64
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "concurrent claim loops for a queue only a schedule declares; default 1."
+    },
+    {
+      "key": "EVIDGATE__TASKS__DISPATCHBATCHSIZE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 1000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "undispatched outbox rows one dispatch batch moves (01.5.1-T3.1); default 200."
+    },
+    {
+      "key": "EVIDGATE__TASKS__DISPATCHDEFAULTQUEUE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "queue an outbox-dispatched task lands in when QUEUEROUTES has no entry; default \"default\"."
+    },
+    {
+      "key": "EVIDGATE__TASKS__DISPATCHPOLLMILLISECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 10,
+        "max": 60000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "milliseconds the outbox dispatcher waits between passes; default 1000."
+    },
+    {
+      "key": "EVIDGATE__TASKS__POLLINTERVALMILLISECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 10,
+        "max": 60000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "milliseconds one consumer loop waits between claim passes; default 1000."
+    },
+    {
+      "key": "EVIDGATE__TASKS__QUEUEROUTES__<n>__QUEUE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "indexed queue of QUEUEROUTES entry <n>; empty list by default."
+    },
+    {
+      "key": "EVIDGATE__TASKS__QUEUEROUTES__<n>__TASKTYPE",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "indexed task_type of QUEUEROUTES entry <n>, unique across entries; empty list by default."
+    },
+    {
+      "key": "EVIDGATE__TASKS__QUEUES__<n>__CONCURRENCY",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 64
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "concurrent claim loops for QUEUES entry <n>; empty list by default."
+    },
+    {
+      "key": "EVIDGATE__TASKS__QUEUES__<n>__NAME",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "non-empty queue name of QUEUES entry <n> (≤ 64 chars); empty list by default."
+    },
+    {
+      "key": "EVIDGATE__TASKS__SCHEDULELOOKBACKSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 60,
+        "max": 86400
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "how far back the schedule runner looks for due occurrences — wider than the poll interval on purpose, so a missed tick is late, not lost (01.5.1-T1.4); default 300."
+    },
+    {
+      "key": "EVIDGATE__TASKS__SCHEDULEPOLLMILLISECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1000,
+        "max": 3600000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "milliseconds between schedule-runner passes; default 60000."
+    },
+    {
+      "key": "EVIDGATE__TASKS__SWEEPCONNECTIONSTRING",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "command-\"evidgate_worker_sched\" string — the only role with EXECUTE on the owner SECURITY DEFINER sweeps (TL T80, e.g. the scheduled idempotency purge). Optional at boot: a Worker without it still consumes ordinary tasks and the sweep task fails loudly naming this key."
+    },
+    {
+      "key": "EVIDGATE__TASKS__VISIBILITYTIMEOUTSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 86400
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "task lease length (`locked_until = now() + this`); must exceed the longest handler because a handler that outlives its lease can run twice (at-least-once, A10); default 300."
+    },
+    {
+      "key": "EVIDGATE__TELEMETRY__OTLPENDPOINT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {
+        "format": "uri"
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "absolute http(s) OTLP/gRPC endpoint of the collector (10.3.1-T2). Unset disables the exporter, so dev omits it; staging and prod must set it (FR-10-5, 00 §11). Backend, region and exact endpoint are [OPEN] until 10.3.1-T2 settles them."
+    },
+    {
+      "key": "EVIDGATE__WORKER__HEALTHADDRESS",
+      "scope": "runtime",
+      "consumers": ["dev-stack", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "IP address the Worker's minimal /internal/health/* listener binds; the default is 0.0.0.0, which is what a container probe needs, so a deployment that wants a different address states it explicitly. Dev sets 127.0.0.1 (00 §5.7, §9.1: the operational path must not be reachable off-host) and the smoke test asserts the bind address. A malformed value fails the boot ([Required] plus the IP-literal validator); a missing one does not, because the default already satisfies the attribute — which is why requiredAtBoot is false while dev still declares it (a security-relevant value stays visible per environment)."
+    },
+    {
+      "key": "EVIDGATE__WORKER__HEALTHPORT",
+      "scope": "runtime",
+      "consumers": ["dev-stack", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 65535
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "TCP port of the Worker's minimal /internal/health/* listener; default 8081, and infra/<env>/environment.json probes.worker.baseUrl must point at the same port when a value is set."
+    },
+    {
+      "key": "EVIDGATE__WORKER__READINESSPOLLMILLISECONDS",
+      "scope": "runtime",
+      "consumers": ["worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 10,
+        "max": 60000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "milliseconds between readiness polls while the consumer waits for the database; default 1000."
+    },
+    {
+      "key": "EVIDGATE_APP_PASSWORD",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: password of the evidgate_app role, generated by scripts/dev/up.sh from the __EVIDGATE_APP_PASSWORD__ placeholder; it is what makes EVIDGATE__DATABASE__CONNECTIONSTRING concrete in dev. Staging/prod get the same role's password from the provider secret store instead."
+    },
+    {
+      "key": "EVIDGATE_DB_PORT",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: loopback port the compose PostgreSQL 18 publishes; the dev connection strings embed the same port (scripts/dev/up.sh does not rewrite them)."
+    },
+    {
+      "key": "EVIDGATE_DB_SUPERUSER_PASSWORD",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: password of the compose superuser, used by scripts/dev/db-init.sh for the bootstrap (roles + database) and never by Api, Worker or Migrator (00 §5.4.3)."
+    },
+    {
+      "key": "EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS",
+      "scope": "runtime",
+      "consumers": ["migrator"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "statement timeout of the migration job; 0 (default) means no timeout, because a long index build must not be cut in half — the deploy gate bounds the run instead (10.2.2)."
+    },
+    {
+      "key": "EVIDGATE_MIGRATOR__CONNECTIONSTRING",
+      "scope": "runtime",
+      "consumers": ["dev-stack", "migrator"],
+      "type": "string",
+      "requiredAtBoot": true,
+      "requiredBy": "src/Evidgate.Migrator/MigratorOptions.cs",
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "command-\"evidgate_owner\" string — the only writer of public.schema_migration and of DDL (01.4.1). MigratorOptions.FromEnvironment throws MigratorSetupException naming the variable, so a missing value exits non-zero before any connection is opened."
+    },
+    {
+      "key": "EVIDGATE_MIGRATOR__MIGRATIONSPATH",
+      "scope": "runtime",
+      "consumers": ["migrator"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "directory holding migrations/; unset resolves <checkout>/migrations by walking up to Evidgate.slnx and falls back to the application directory. ⚠️ what the Evidgate.Migrator image ships is settled in 10.2.1-T1."
+    },
+    {
+      "key": "EVIDGATE_OPERATOR_PASSWORD",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: password of the audited read-only evidgate_operator role (01.4.1-T2); consumed by the operator runbooks, not by the hosts."
+    },
+    {
+      "key": "EVIDGATE_OWNER_PASSWORD",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: password of the evidgate_owner migration role, generated by scripts/dev/up.sh; it is what makes EVIDGATE_MIGRATOR__CONNECTIONSTRING concrete in dev."
+    },
+    {
+      "key": "EVIDGATE_S3_ACCESS_KEY",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: local SeaweedFS identity access key; committed on purpose in infra/seaweedfs/s3-config.json and asserted equal by scripts/dev/up.sh, because it is accepted only by the local container (01.8.1-T1)."
+    },
+    {
+      "key": "EVIDGATE_S3_BUCKET",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: bucket scripts/dev/up.sh creates and carries the pending/ 24 h lifecycle rule (T18). The runtime object-storage options arrive with 06.3.1; staging/prod bucket names land with 10.1.1-T3."
+    },
+    {
+      "key": "EVIDGATE_S3_ENDPOINT",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {
+        "format": "uri"
+      },
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: absolute S3 endpoint of the local SeaweedFS gateway."
+    },
+    {
+      "key": "EVIDGATE_S3_PORT",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: loopback port the compose SeaweedFS gateway publishes and the port embedded in EVIDGATE_S3_ENDPOINT."
+    },
+    {
+      "key": "EVIDGATE_S3_REGION",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: SigV4 region the dev bucket requests are signed with (us-east-1 locally; the provider region is [OPEN] until O3)"
+    },
+    {
+      "key": "EVIDGATE_S3_SECRET_KEY",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: local SeaweedFS identity secret key, same committed local-only identity as EVIDGATE_S3_ACCESS_KEY."
+    },
+    {
+      "key": "EVIDGATE_SEAWEEDFS_S3_CONFIG",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "repo-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: the whole SeaweedFS identity file, exported by scripts/dev/up.sh from infra/seaweedfs/s3-config.json and written inside the container (a host bind mount is unusable under colima/virtiofs; infra/README.md records the evidence). Secret because it carries the access/secret key pair."
+    },
+    {
+      "key": "EVIDGATE_WORKER_SCHED_PASSWORD",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: password of the evidgate_worker_sched role, the only role with EXECUTE on the owner SECURITY DEFINER sweeps (TL T80); it is what makes EVIDGATE__TASKS__SWEEPCONNECTIONSTRING concrete in dev."
+    }
+  ]
+}

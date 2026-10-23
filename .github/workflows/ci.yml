@@ -1,0 +1,345 @@
+# Evidgate CI (01.7.1-T1 / FR-01-1, AC1–AC3). One pipeline, one command list:
+# every job invokes `scripts/verify.sh --stage …`, never a copy of the commands
+# inside it, so a local `scripts/verify.sh` pass and CI cannot diverge (AC2 —
+# enforced by scripts/check-ci-parity.sh, itself a verify.sh stage).
+#
+# Runner pin: ubuntu-24.04, not ubuntu-latest — the latest alias migrates to
+# Ubuntu 26 on 2026-10-19 (01.7.1 §7). The Testcontainers suites need a Docker
+# daemon, which GitHub-hosted Ubuntu runners provide (evidence: the interim
+# docker-tests.yml, actions run 36205176754 — that workflow is deleted by this
+# task, not extended; AC2 forbids a parallel copy).
+#
+# Supply chain (AC6): every `uses:` below is a full 40-hex commit SHA with the
+# release tag in a comment; scripts/check-action-pins.sh enforces it.
+#
+# Budget (AC3, NFR-01-1): a warm-cache run must stay under 10 min. NuGet is
+# cached on the `**/packages.lock.json` hash and npm on the `package-lock.json`
+# hash, so a no-dependency-change PR hits both. The first real run measures the
+# wall clock; this file deliberately does not fake a timing gate.
+#
+# Reserved: 01.7.1-T2 adds the `licence` job, 01.7.1-T4 the audit/SBOM gates and
+# 11.6.1 hooks the `security` (CodeQL) stage into this file (§5/§7).
+name: ci
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+  # 06.3.2-T2.1 (AC4): the nightly fuzz run. The `fixtures-fuzz` job below is the only one that belongs to it and
+  # every merge-path job is inverted off it, so the schedule adds the fuzz harness alone and no PR job runs
+  # nightly. A manual "Run workflow" is the same nightly job.
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # One in-flight run per ref and event kind: a superseded commit's push/PR run is
+  # cancelled so stale results never hold a runner or report after a newer push. The
+  # nightly schedule and a manual dispatch key on their own `nightly` group, so a
+  # nightly fuzz run and a push run never cancel each other.
+  group: ${{ github.workflow }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'nightly' || 'ref' }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# 00 §5.7 S3: least privilege — no secret is needed beyond the default token.
+permissions:
+  contents: read
+
+jobs:
+  # 06.3.2-T2.1 (AC4): the workflow also runs on the nightly schedule, and only the `fixtures-fuzz` job belongs to
+  # that run. Every merge-path job therefore carries `if: github.event_name == 'pull_request' || github.event_name
+  # == 'push'`, so adding the schedule changes no PR behaviour and the nightly run stays the fuzz harness alone.
+  verify:
+    name: 'verify (dotnet)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # FR-01-2: the SDK (10.0.x) comes from global.json, not a floating range.
+          global-json-file: global.json
+          # AC3: NuGet cache keyed on the locked package graph.
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, format, test — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage format
+          --stage test
+
+  # 02.9.1-T3.2 (AC6, T48): the M1 isolation gate — the RLS/composite-FK/API
+  # isolation suite as its own job, so the milestone has one check to point at as
+  # proof that tenant isolation held for the merge, and its JUnit report is the
+  # T48 dogfooding evidence. The job runs only verify.sh stages (check-ci-parity
+  # enforces it) and uploads the report even when the suite fails.
+  # Making this job a *required* check is owner-blocked under 01.7.1-T3.1: branch
+  # protection on the free private plan returns 403, so the check is wired but not
+  # yet enforced by branch protection.
+  isolation:
+    name: 'isolation (M1 gate)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # FR-01-2: the SDK (10.0.x) comes from global.json, not a floating range.
+          global-json-file: global.json
+          # AC3: NuGet cache keyed on the locked package graph.
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, isolation — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage isolation
+      - name: 'Upload the isolation JUnit report'
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: isolation-junit
+          path: artifacts/test-results/isolation.junit.xml
+          retention-days: 14
+
+  # 06.3.2-T1.2 (AC2): the committed hostile-input corpus and its mutation smoke are their own job on the PR
+  # trigger, so a parser-profile guard that regresses fails a named check instead of one case inside the suite.
+  # `--stage build` precedes the stage because it runs `dotnet test --no-build -c Release`.
+  fixtures-hostile:
+    name: 'verify (hostile fixtures)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, hostile-input fixtures — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage fixtures-hostile
+
+  # 06.3.2-T2.1 (AC4): the nightly fuzz job — the seeded-mutation harness over the 06.3.1 parser profile, seeded
+  # from fixtures/hostile/, on the ten-minute budget the `fixtures-fuzz` stage sets. It runs on the nightly
+  # schedule and on demand, never on a PR, so the extra minutes never land on the merge path. `--stage build`
+  # precedes the stage because it runs `dotnet test --no-build -c Release`; the 30-minute timeout is the 600 s
+  # budget plus two builds of margin. It runs only verify.sh stages (check-ci-parity enforces it) and uploads the
+  # findings directory on failure.
+  fixtures-fuzz:
+    name: 'verify (fuzz, nightly)'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, fuzz — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage fixtures-fuzz
+      - name: 'Upload the fuzz findings on failure'
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-findings
+          path: artifacts/fuzz-findings
+          retention-days: 14
+
+  web:
+    name: 'verify (web)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # FR-01-2: the Node version (26) comes from .nvmrc, not a floating range.
+          node-version-file: .nvmrc
+          # AC3: npm cache keyed on the lock-file hash.
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # verify.sh never installs; each job installs the dependencies it needs
+      # (locked modes only — npm ci, 00 §5.7 S6 / FR-01-1).
+      - name: 'Install npm workspaces (locked)'
+        run: npm ci --ignore-scripts
+      - name: 'tsc, vitest, eslint, prettier — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage tsc-build
+          --stage tsc-spec
+          --stage vitest
+          --stage eslint
+          --stage prettier
+      # Contract drift gate (AC1/§9, 01.3.2-T1.3): regenerates packages/sdk and
+      # fails on any diff — the spec is the only thing humans edit.
+      - name: 'Contract drift gate'
+        run: ./scripts/verify.sh --stage check-codegen-drift --stage check-permissions-drift --stage check-rls
+      # Web build (AC1): `apps/web` gains a build script in 09.1.1; until then
+      # --if-present keeps this step a no-op instead of a failure.
+      - name: 'Web build — activates with apps/web build script (09.1.1)'
+        run: npm run build --workspaces --if-present
+
+  policy:
+    name: 'verify (policy)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # check-dor-security diffs against origin/develop (11.1.1-T2); a
+          # shallow clone has no base ref and the stage fails closed.
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # check-sources.sh calls `dotnet nuget list source`; no package work
+          # happens here, so the NuGet cache stays off.
+          global-json-file: global.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # check-contract-conventions.sh runs `npx spectral lint` and check-ci-recipe
+      # (lint-ci-recipe.mjs) imports `yaml` — devDeps required.
+      - name: 'Install npm workspaces (locked)'
+        run: npm ci --ignore-scripts
+      - name: 'Layout, sources, ADR, links, contracts, env matrix, DoR, threat model, parity, pins, recipe lint, image pins — verify.sh stages'
+        run: >-
+          ./scripts/verify.sh
+          --stage check-layout
+          --stage check-sources
+          --stage check-adr-matrix
+          --stage check-adr
+          --stage check-links
+          --stage check-contract-conventions
+          --stage check-env-matrix
+          --stage check-dor-security
+          --stage check-threat-model
+          --stage check-ci-parity
+          --stage check-action-pins
+          --stage check-ci-recipe
+          --stage image-pins
+
+  # 10.2.1-T1 (AC1, AC5): the three service images build for the runner's platform
+  # on the digest-pinned bases; the Migrator image brings a throwaway PostgreSQL to
+  # head and the Api image reports ready against it.
+  images:
+    name: 'verify (images)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 'Build and check the service images — verify.sh stage'
+        run: ./scripts/verify.sh --stage images
+
+  # Non-blocking until the web milestone owns the suite (01.7.1-T1.3, 09):
+  # apps/web has a Playwright spec, but the suite is still a scaffold.
+  e2e:
+    name: 'e2e (playwright, non-blocking until 09)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: 'Install npm workspaces (locked)'
+        run: npm ci --ignore-scripts
+      - name: 'Install Playwright browsers'
+        run: npx playwright install --with-deps chromium
+      - name: 'Playwright e2e — apps/web'
+        run: npm run e2e -w apps/web
+      - name: 'Upload the Playwright report on failure'
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 14
+
+  # 01.7.1-T2/T4 (AC4, AC6, AC7): licence deny-list + vulnerability gates +
+  # CycloneDX SBOMs. Every command below is a verify.sh stage so local and CI
+  # can never diverge (check-ci-parity enforces it).
+  supply-chain:
+    name: 'verify (supply chain)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: 'Install npm workspaces (locked)'
+        run: npm ci --ignore-scripts
+      - name: 'Licence gate + audit + SBOM — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage licence-scan
+          --stage audit-deps
+          --stage sbom
+      - name: 'Upload SBOMs'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom
+          path: artifacts/sbom/
+          # §8: 14 days for PR evidence, 90 for main (release evidence).
+          retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 14 }}
+      - name: 'Upload licence report'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: licence-report
+          path: artifacts/licence-report.json
+          retention-days: 14

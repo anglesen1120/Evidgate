@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:evidgate:contract:permissions-schema:v1",
+  "title": "Evidgate permission catalogue",
+  "description": "Shape of contracts/permissions.json (00 §2, 02 D2). Deliberately NOT under contracts/schemas/, contracts/adapter/ or contracts/manifest/: both runtime schema loaders compile every *.json under those three roots, and this schema describes a build-time catalogue rather than a request body. Validated by tests/Contract.Tests/PermissionCatalogueTests.cs; the cross-field rules a JSON Schema cannot express (code == resource:action, role permissions ⊆ catalogue, the reserved/assignable invariants) are asserted there too.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "comment", "roles", "permissions"],
+  "properties": {
+    "version": {
+      "description": "Catalogue format version; a breaking change bumps this and the C# constants' namespace-free contract stays.",
+      "const": 1
+    },
+    "comment": {
+      "description": "Human note on how the file is consumed; never machine-read.",
+      "type": "string",
+      "minLength": 1
+    },
+    "roles": {
+      "description": "The 00 §2 built-in roles and their permission sets — the seed source of public.role / public.role_permission.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/role" }
+    },
+    "permissions": {
+      "description": "Every resource:action string any plan uses — the seed source of public.permission.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/permission" }
+    }
+  },
+  "$defs": {
+    "code": {
+      "description": "Permission code shape of 00 §2: resource:action, lower_snake on both sides (the same regex as PermissionAttribute).",
+      "type": "string",
+      "pattern": "^[a-z_]+:[a-z_]+$"
+    },
+    "roleCode": {
+      "description": "Role code shape (00 §2 role codes, snake_case).",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "name", "kind", "description", "permissions"],
+      "properties": {
+        "code": { "$ref": "#/$defs/roleCode" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "kind": {
+          "description": "Principal class the role is for: member = a human member of an org (T79's member principal), service = a CI/agent service identity, staff = Evidgate personnel.",
+          "enum": ["member", "service", "staff"]
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "permissions": {
+          "description": "Permission codes granted by this role; each must exist in `permissions[]`.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/code" }
+        }
+      }
+    },
+    "permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "resource",
+        "action",
+        "description",
+        "sensitive",
+        "reserved",
+        "tenant_assignable"
+      ],
+      "properties": {
+        "code": { "$ref": "#/$defs/code" },
+        "resource": {
+          "description": "The code's resource half (the text before ':').",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "action": {
+          "description": "The code's action half (the text after ':').",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "sensitive": {
+          "description": "True when the permission gates secret-adjacent data or returns a plaintext secret once; AC5 asserts no unprivileged role holds one.",
+          "type": "boolean"
+        },
+        "reserved": {
+          "description": "True when the string is catalogue-only today: its first consumer is a V2/V3 story, so no V1 endpoint or handler references it yet (AC2's 'referenced or reserved' rule).",
+          "type": "boolean"
+        },
+        "tenant_assignable": {
+          "description": "False for a code a member principal must never hold (support:*, billing:*, agent-only, T79): a custom role containing one is 422 permission_not_assignable and the evaluator filters it out of a member's grant set.",
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

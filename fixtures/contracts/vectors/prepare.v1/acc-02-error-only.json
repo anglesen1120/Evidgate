@@ -1,0 +1,11 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "operation": "prepare",
+  "error": {
+    "code": "prepare_failed",
+    "message": "sandbox image pull failed"
+  }
+}

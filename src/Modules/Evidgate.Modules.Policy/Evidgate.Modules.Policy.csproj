@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Evidgate.Modules.Policy</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Mediator.Abstractions" />
+    <!-- 07.1.1-T1: EF Core 10 write model (00 §5.5 C4); no EF migrations, the schema is plain SQL in migrations/. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+  <!-- 07.1.1-T3: the policy routes (00 §5.5 `Endpoints/`). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Evidgate.Modules.Policy.Contracts\Evidgate.Modules.Policy.Contracts.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <!-- 07.1.1-T3: the C2 pipeline seams (principal/tenant accessors) and the Corvus schema set. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+  </ItemGroup>
+  <!-- 01.1.2-T2.1: internal implementation, opened to the two composition roots and the tests. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Evidgate.Api" />
+    <InternalsVisibleTo Include="Evidgate.Worker" />
+    <InternalsVisibleTo Include="Hosts.IntegrationTests" />
+    <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
+  </ItemGroup>
+</Project>

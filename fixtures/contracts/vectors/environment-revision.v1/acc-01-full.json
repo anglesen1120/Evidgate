@@ -1,0 +1,10 @@
+{
+  "name": "Staging",
+  "revision_no": 3,
+  "base_urls": {
+    "web": "https://staging.example.test",
+    "api": "https://api.staging.example.test/v2"
+  },
+  "dependency_versions": { "postgres": "18.0", "@acme/payments": "4.2.1" },
+  "secret_refs": ["secret:db_password", "secret:stripe.key"]
+}

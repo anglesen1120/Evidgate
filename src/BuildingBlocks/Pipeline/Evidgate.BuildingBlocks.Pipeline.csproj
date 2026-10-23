@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    01.4.2-T4: the C2 Mediator pipeline behaviours (00 §5.5 C2 — telemetry,
+    validation, tenant transaction, authorization, idempotency), the request
+    tenant context they run against, and the AddEvidgatePipeline registration that
+    puts the behaviours in the fixed order. Only Mediator.Abstractions is a
+    dependency: the source generator (and its generated Mediator) must live in the
+    entry-point project that dispatches — two generated Mediators would shadow each
+    other, and the host's AddMediator call is the composition root's own.
+    BuildingBlocks are plain libraries: net10.0, ImplicitUsings/Nullable and
+    TreatWarningsAsErrors come from Directory.Build.props.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Evidgate.BuildingBlocks.Pipeline</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="Mediator.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <ProjectReference Include="..\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

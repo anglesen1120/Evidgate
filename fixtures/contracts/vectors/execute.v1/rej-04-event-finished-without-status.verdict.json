@@ -1,0 +1,12 @@
+{
+  "schema": "execute.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/events/0/status",
+      "reason": "required"
+    }
+  ],
+  "comment": "the referenced envelope's if/then (test.finished requires status) applies through the cross-file $ref"
+}

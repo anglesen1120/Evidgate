@@ -1,0 +1,49 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+  </Configurations>
+  <Project Path="src/Evidgate.Api/Evidgate.Api.csproj" />
+  <Project Path="src/Evidgate.Migrator/Evidgate.Migrator.csproj" />
+  <Project Path="src/Evidgate.Worker/Evidgate.Worker.csproj" />
+  <Project Path="src/BuildingBlocks/Canonicalization/Evidgate.BuildingBlocks.Canonicalization.csproj" />
+  <Project Path="src/BuildingBlocks/Contracts.Validation/Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+  <Project Path="src/BuildingBlocks/ObjectStorage/Evidgate.BuildingBlocks.ObjectStorage.csproj" />
+  <Project Path="src/BuildingBlocks/Observability/Evidgate.BuildingBlocks.Observability.csproj" />
+  <Project Path="src/BuildingBlocks/Persistence/Evidgate.BuildingBlocks.Persistence.csproj" />
+  <Project Path="src/BuildingBlocks/Pipeline/Evidgate.BuildingBlocks.Pipeline.csproj" />
+  <Project Path="src/BuildingBlocks/SharedKernel/Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Audit.Contracts/Evidgate.Modules.Audit.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Audit/Evidgate.Modules.Audit.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Catalog.Contracts/Evidgate.Modules.Catalog.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Catalog/Evidgate.Modules.Catalog.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Evidence.Contracts/Evidgate.Modules.Evidence.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Evidence/Evidgate.Modules.Evidence.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Healing.Contracts/Evidgate.Modules.Healing.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Healing/Evidgate.Modules.Healing.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Identity.Contracts/Evidgate.Modules.Identity.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Identity/Evidgate.Modules.Identity.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Ingestion.Contracts/Evidgate.Modules.Ingestion.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Ingestion/Evidgate.Modules.Ingestion.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Notifications.Contracts/Evidgate.Modules.Notifications.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Notifications/Evidgate.Modules.Notifications.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Orchestrator.Contracts/Evidgate.Modules.Orchestrator.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Orchestrator/Evidgate.Modules.Orchestrator.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Policy.Contracts/Evidgate.Modules.Policy.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Policy/Evidgate.Modules.Policy.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Tenancy.Contracts/Evidgate.Modules.Tenancy.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Tenancy/Evidgate.Modules.Tenancy.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Usage.Contracts/Evidgate.Modules.Usage.Contracts.csproj" />
+  <Project Path="src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj" />
+  <Project Path="tests/Architecture.Tests/Architecture.Tests.csproj" />
+  <Project Path="tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj" />
+  <Project Path="tests/Contract.Tests/Contract.Tests.csproj" />
+  <Project Path="tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj" />
+  <Project Path="tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj" />
+  <Project Path="tests/Identity.IntegrationTests/Identity.IntegrationTests.csproj" />
+  <Project Path="tests/Isolation.Tests/Isolation.Tests.csproj" />
+  <Project Path="tests/Migrator.IntegrationTests/Migrator.IntegrationTests.csproj" />
+  <Project Path="tests/ObjectStorage.IntegrationTests/ObjectStorage.IntegrationTests.csproj" />
+  <Project Path="tests/Persistence.IntegrationTests/Persistence.IntegrationTests.csproj" />
+  <Project Path="tests/Tasks.IntegrationTests/Tasks.IntegrationTests.csproj" />
+  <Project Path="tests/Tenancy.IntegrationTests/Tenancy.IntegrationTests.csproj" />
+</Solution>

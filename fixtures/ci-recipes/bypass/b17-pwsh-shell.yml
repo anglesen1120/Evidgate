@@ -1,0 +1,13 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, QA S17): a pwsh `run:` step cannot be analysed, so it is refused.
+name: x
+on:
+  pull_request:
+permissions: {}
+jobs:
+  t:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: pwsh
+        run: |
+          "X=$(Get-Content f)" >> $env:GITHUB_ENV

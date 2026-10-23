@@ -1,0 +1,14 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, review S17): `runs-on: ${{ matrix.os }}` may be Windows (default pwsh) and needs `shell: bash`.
+name: x
+on: push
+permissions: {}
+jobs:
+  j:
+    strategy:
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: |
+          "TOKEN=$(Get-Content t)" | Out-File -Append -FilePath $env:GITHUB_ENV

@@ -1,0 +1,15 @@
+{
+  "name": "@evidgate/web",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@evidgate/sdk": "*"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

@@ -1,0 +1,12 @@
+<LifecycleConfiguration>
+  <Rule>
+    <ID>evidgate-pending-24h</ID>
+    <Filter>
+      <Prefix>pending/</Prefix>
+    </Filter>
+    <Status>Enabled</Status>
+    <Expiration>
+      <Days>1</Days>
+    </Expiration>
+  </Rule>
+</LifecycleConfiguration>

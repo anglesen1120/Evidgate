@@ -1,0 +1,12 @@
+{
+  "schema": "capability.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/supports/capture_control",
+      "reason": "type"
+    }
+  ],
+  "comment": "a declared flag must be a boolean"
+}

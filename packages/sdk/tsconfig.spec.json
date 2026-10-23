@@ -1,0 +1,22 @@
+{
+  // 01.6.1-T1.2: type-checks the specs and the Vitest config without emitting, so they
+  // stay out of the dist build (see `exclude` in tsconfig.json). eslint.config.js points
+  // the parser for `*.test.ts` and `vitest.config.ts` at this file.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // The workspace config imports the shared base by its real `.mts` path: the
+    // Vitest native config loader (Node ESM) does not remap `.js`/`.mjs` specifiers
+    // to the `.mts` source, and tsc only allows the `.mts` extension under noEmit.
+    "allowImportingTsExtensions": true,
+    // 01.3.2-T1.4: same fetch-global typing as the emitting project (Request/Headers).
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts", "vitest.config.ts", "../../vitest.config.base.mts"],
+  // 01.3.2-T1: without references the spec program would compile `../gen/*.ts` source
+  // in-program under this project's flags — and generated code is not
+  // `exactOptionalPropertyTypes`-clean (see tsconfig.gen.json). Referencing the emitting
+  // projects makes `../gen/...` imports resolve to their emitted declarations instead,
+  // so a spec exercise of generated code type-checks exactly like a consumer does.
+  "references": [{ "path": "tsconfig.json" }, { "path": "tsconfig.gen.json" }]
+}

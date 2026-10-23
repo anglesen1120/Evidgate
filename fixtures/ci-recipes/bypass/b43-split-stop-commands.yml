@@ -1,0 +1,13 @@
+# expect: R4-add-mask
+# Synthetic fixture (11.2.1-T1.2, delta review S17): a quote-split `::stop-commands::`.
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          V=$(cat f)
+          echo "::stop-comm""ands::tok"
+          echo "::add-mask::$V"
+          echo "K=$V" >> $GITHUB_ENV

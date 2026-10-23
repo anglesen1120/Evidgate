@@ -1,0 +1,16 @@
+{
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "operation": "prepare",
+  "run_id": "00000000-0000-0000-0000-000000000090",
+  "workspace": {
+    "workspace_id": "ws-018f0e6f",
+    "engine": {
+      "family": "playwright",
+      "version": "1.49.0"
+    },
+    "secret_refs": ["secret:STAGING_BASE_URL"]
+  }
+}

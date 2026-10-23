@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "discover.v1.json",
+  "title": "Adapter operation: discover v1",
+  "description": "00 §10 protocol operation 'discover' (04.7.1-T1.2). Direction: adapter → server — the adapter reports the cases, variants and shards it can see for the locked suite revision, without any business side effect (source §4). The authoritative shard plan of a run is the manifest's (05.1.1); discover only proposes shard ids. The shared event envelope is referenced, never copied (00 §9.4). A failed phase reports `error` instead of the payload: at least one of `discovery` and `error` is required, never a silent success (contracts/adapter/README.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "operation"],
+  "anyOf": [
+    {
+      "required": ["discovery"]
+    },
+    {
+      "required": ["error"]
+    }
+  ],
+  "properties": {
+    "protocol": {
+      "$ref": "#/$defs/protocol"
+    },
+    "operation": {
+      "const": "discover"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_ids"],
+      "properties": {
+        "case_ids": {
+          "type": "array",
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "variant_hashes": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "shard_ids": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      }
+    },
+    "error": {
+      "$ref": "#/$defs/operationError"
+    }
+  },
+  "$defs": {
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["major", "minor"],
+      "properties": {
+        "major": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "minor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "operationError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "description": "lower_snake phase failure (e.g. setup_error); reported separately from events (source §4)"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    }
+  }
+}
