@@ -54,6 +54,62 @@ public sealed class ContractSchemaRegistryTests
         Schemas.Value.MaxBytes(ContractSchemaKeys.Manifest).ShouldBe(262144L);
     }
 
+    /// <summary>
+    /// 13.1.1-T1.2: the manual test case <c>steps</c> document is discovered like every other schema
+    /// (key = file name without <c>.json</c>, under <c>contracts/schemas</c>), its <c>$id</c> is its
+    /// own file name, and it declares no transport cap — it is not a request body but the jsonb value
+    /// carried inside one, whose 64 KiB cap belongs to the case route (plan 13.1.1 §8). The corpus the
+    /// CLI's Ajv suite reads is asserted to exist here as well: a schema without vectors would leave the
+    /// two runtimes unpinned.
+    /// </summary>
+    [Fact]
+    public void AuthoringStepsSchema_IsDiscovered()
+    {
+        Schemas.Value.Contains(ContractSchemaKeys.AuthoringSteps).ShouldBeTrue(
+            "'authoring-steps.v1' must be discovered under contracts/schemas (13.1.1 §3)");
+
+        var file = Path.Combine(
+            ContractPaths.ContractsDirectory,
+            "schemas",
+            ContractSchemaKeys.AuthoringSteps + ".json");
+        using var schema = JsonDocument.Parse(File.ReadAllText(file));
+        schema.RootElement.GetProperty("$schema").GetString().ShouldBe(Dialect);
+        schema.RootElement.GetProperty("$id").GetString().ShouldBe(ContractSchemaKeys.AuthoringSteps + ".json");
+
+        Schemas.Value.MaxBytes(ContractSchemaKeys.AuthoringSteps).ShouldBeNull(
+            "the steps document is a jsonb value, not a body: the case route's 64 KiB cap is not the schema's");
+
+        // The corpus both runtimes run (fixtures/contracts/README.md): one sidecar per vector.
+        var corpus = Path.Combine(
+            ContractPaths.FixturesDirectory,
+            "vectors",
+            ContractSchemaKeys.AuthoringSteps);
+        Directory.Exists(corpus).ShouldBeTrue($"the '{ContractSchemaKeys.AuthoringSteps}' vector directory must exist");
+
+        var vectors = Directory.EnumerateFiles(corpus, "*.json")
+            .Where(vector => !vector.EndsWith(".verdict.json", StringComparison.Ordinal))
+            .ToArray();
+        vectors.ShouldNotBeEmpty("a schema without accept/reject vectors is not pinned by either runtime");
+        foreach (var vector in vectors)
+        {
+            File.Exists(vector[..^".json".Length] + ".verdict.json")
+                .ShouldBeTrue($"missing verdict sidecar for {Path.GetFileName(vector)}");
+        }
+
+        // The declared bounds, through the discovered key: 100 steps is accepted, 101 is not.
+        string Steps(int count) => string.Join(
+            ',',
+            Enumerable.Range(1, count).Select(no => $$"""{"no":{{no}},"action":"Open the page","expected":"The page is shown"}"""));
+
+        using var accepted = JsonDocument.Parse($$"""{"steps":[{{Steps(100)}}]}""");
+        Schemas.Value.Validate(ContractSchemaKeys.AuthoringSteps, accepted.RootElement).IsValid
+            .ShouldBeTrue("100 steps is the declared maximum (plan 13.1.1 §3)");
+
+        using var refused = JsonDocument.Parse($$"""{"steps":[{{Steps(101)}}]}""");
+        Schemas.Value.Validate(ContractSchemaKeys.AuthoringSteps, refused.RootElement).Errors
+            .ShouldBe([new ContractValidationError(null, "/steps", "max_items")]);
+    }
+
     [Fact]
     public void Byte_Cap_Rejects_A_Body_Before_It_Is_Parsed()
     {

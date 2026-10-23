@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/steps/0/data",
+      "reason": "type"
+    }
+  ],
+  "comment": "'data' carries test data text, never a nested value (plan 13.1.1 §9)"
+}

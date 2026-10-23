@@ -11,9 +11,11 @@ import type { Io } from '../redact.js';
 import { authLoginCommand } from './authLogin.js';
 import { authLogoutCommand } from './authLogout.js';
 import { configCheckCommand } from './configCheck.js';
+import { eventsSendCommand } from './eventsSend.js';
 import { manifestsUploadCommand } from './manifestsUpload.js';
 import { quickstartCommand } from './quickstart.js';
 import { runsCreateCommand } from './runsCreate.js';
+import { runsFinalizeCommand } from './runsFinalize.js';
 
 /** Values `node:util` `parseArgs` returns for the merged global + command options. */
 export type ParsedValues = Record<string, string | boolean | Array<string | boolean> | undefined>;
@@ -62,6 +64,10 @@ export const commandRegistry: Readonly<Record<string, CommandDefinition>> = {
   [manifestsUploadCommand.name]: manifestsUploadCommand,
   [quickstartCommand.name]: quickstartCommand,
   [runsCreateCommand.name]: runsCreateCommand,
+  // 04.2.3: the two spool commands (`events send`, `runs finalize`). Appended here, so
+  // the dispatcher in `main.ts` never changes (contracts/cli.md §1).
+  [eventsSendCommand.name]: eventsSendCommand,
+  [runsFinalizeCommand.name]: runsFinalizeCommand,
 };
 
 export interface ResolvedCommand {

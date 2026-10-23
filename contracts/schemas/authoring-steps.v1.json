@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authoring-steps.v1.json",
+  "title": "Manual test case steps v1",
+  "description": "The steps document of one manual test case (13.1.1-T1.2, routes 13 and 15): an object carrying 1..100 steps, each with a number, an action, an expected result and optional data. Unknown members are refused at the document level and inside a step, so a typo is a 422 rather than silently stored content. The document is stored as the manual_test_case.steps jsonb value, whose CHECK is jsonb_typeof(steps) = 'object' (plan 13.1.1 §4), which is why the root is an object and the step array sits under 'steps'. Bounds: 1..100 steps and 2000 characters per field are plan 13.1.1 §3 (the schema file's own row); the 'no' range is [INFERENCE] — the plan names the member without a bound, so it is pinned to the same 1..1000 window a renumbered import can produce. No minLength: the plan states only the upper bound, so empty text is the command layer's semantic check, not this schema's. Text is NFC-normalised (Evidgate.Modules.Authoring.Domain.AuthoringText) before validation, never by the schema, and JSON Schema maxLength counts code points — the same unit as PostgreSQL char_length. No x-max-bytes: the 64 KiB cap is the case route's body cap (plan 13.1.1 §8), and the document is carried inside that body.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["steps"],
+  "properties": {
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "description": "The steps in the order the tester performs them; the array order is the step order, 'no' is the number shown to the tester.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["no", "action", "expected"],
+        "properties": {
+          "no": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "[INFERENCE] The step number shown to the tester; the plan names the member without a bound, pinned here to 1..1000 so an import that keeps its own numbering stays valid. Array order, not this value, is the order of execution."
+          },
+          "action": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "What the tester does (plan 13 §4.1 'action', at most 2000 characters — plan 13.1.1 §3)."
+          },
+          "expected": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "What the tester must observe (plan 13 §4.1 'expected', at most 2000 characters — plan 13.1.1 §3)."
+          },
+          "data": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Test data used by the step (plan 13 §4.1 'data'), optional and always text — never a nested object — at most 2000 characters (plan 13.1.1 §3)."
+          }
+        }
+      }
+    }
+  }
+}

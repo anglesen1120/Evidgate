@@ -137,6 +137,8 @@ src/Evidgate.Migrator/Evidgate.Migrator.csproj
 src/Evidgate.Worker/Evidgate.Worker.csproj
 src/Modules/Evidgate.Modules.Audit.Contracts/Evidgate.Modules.Audit.Contracts.csproj
 src/Modules/Evidgate.Modules.Audit/Evidgate.Modules.Audit.csproj
+src/Modules/Evidgate.Modules.Authoring.Contracts/Evidgate.Modules.Authoring.Contracts.csproj
+src/Modules/Evidgate.Modules.Authoring/Evidgate.Modules.Authoring.csproj
 src/Modules/Evidgate.Modules.Catalog.Contracts/Evidgate.Modules.Catalog.Contracts.csproj
 src/Modules/Evidgate.Modules.Catalog/Evidgate.Modules.Catalog.csproj
 src/Modules/Evidgate.Modules.Evidence.Contracts/Evidgate.Modules.Evidence.Contracts.csproj

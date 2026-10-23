@@ -51,5 +51,7 @@
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Audit.Contracts\Evidgate.Modules.Audit.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Notifications\Evidgate.Modules.Notifications.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Notifications.Contracts\Evidgate.Modules.Notifications.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring\Evidgate.Modules.Authoring.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring.Contracts\Evidgate.Modules.Authoring.Contracts.csproj" />
   </ItemGroup>
 </Project>

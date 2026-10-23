@@ -1,0 +1,5 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": true,
+  "comment": "'data' is optional and always text (plan 13 §4.1)"
+}

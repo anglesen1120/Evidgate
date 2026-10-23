@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/steps/0/no",
+      "reason": "maximum"
+    }
+  ],
+  "comment": "1000 is the top of the schema's [INFERENCE] step-number window"
+}

@@ -448,8 +448,30 @@ paths:
       tags: [runs]
       summary: Finalize a shard (202, reconcile async)
       description: >-
-        `producer`, `shard`, `last_sequence`, `count`, `manifest_hash`
-        (00 §9.3) → 202; reconciliation is asynchronous.
+        A CI shard declares it has sent everything for its producer slot:
+        `producer_id`, `shard`, `last_sequence`, `count`, `manifest_hash`
+        (00 §9.3) → 202 with no body; reconciliation is asynchronous. Only the
+        identity bound to that slot may finalize it (T9): the first accepted
+        write binds the slot to the caller's token identity, a different
+        identity is 403 `producer_slot_taken` with nothing changed, and a
+        producer id the run does not plan is 422 `unknown_producer`. `shard`
+        must be the slot's own 1-based manifest shard and `manifest_hash` must
+        be the hash of the run's own manifest; a mismatched hash is 422
+        `manifest_invalid` and closes nothing, so a finalize is never taken as
+        evidence against the wrong plan. The call is idempotent on the slot's
+        close: a repeat answers the same 202 and changes nothing — no second
+        state transition and no second reconcile trigger — and the first
+        declaration's `last_sequence` and `count` stay authoritative even when
+        a repeat declares different values. A project being deleted is 409
+        `project_deleting`, a suspended project 403 `org_suspended`. The request
+        body is capped at 8 KiB and is refused with 413 `payload_too_large`
+        before it is parsed. `Idempotency-Key` is REQUIRED (00 §9.1): a
+        missing, blank or longer-than-128-character key is 400
+        `request_invalid` before the body is parsed. A retry replays the stored
+        202 only for the same caller identity and the same body; the same key
+        with a different run, body or credential is 409 `idempotency_conflict`.
+        The slot's own closed marker, never the key, arbitrates a duplicate
+        finalize, so a repeat with a FRESH key is the same no-op 202.
       x-permission: event:write
       x-version: v1
       parameters:
@@ -462,19 +484,42 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               required: [producer_id, shard, last_sequence, count, manifest_hash]
               properties:
                 producer_id:
                   type: string
+                  minLength: 1
+                  maxLength: 128
+                  pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'
+                  description: >-
+                    The shard's deterministic producer id (T54) - it must name
+                    a slot the run planned.
                 shard:
                   type: integer
+                  minimum: 1
+                  maximum: 256
+                  description: >-
+                    The 1-based manifest shard index; it must equal the bound
+                    slot's own index (422 `request_invalid` otherwise), and a
+                    value outside 1..256 is 422 `request_invalid` on
+                    `/shard`.
                 last_sequence:
                   type: integer
+                  format: int64
+                  minimum: 0
+                  description: The highest producer sequence the shard declares it sent.
                 count:
                   type: integer
+                  format: int32
+                  minimum: 0
+                  description: How many events the shard declares it sent.
                 manifest_hash:
                   type: string
                   pattern: '^sha256:[0-9a-f]{64}$'
+                  description: >-
+                    The hash of the run's own manifest; a mismatch is 422
+                    `manifest_invalid` and closes nothing.
       responses:
         '202':
           description: Finalize accepted; reconcile async
@@ -489,6 +534,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':

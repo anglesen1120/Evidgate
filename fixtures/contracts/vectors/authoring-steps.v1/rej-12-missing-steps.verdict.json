@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/steps",
+      "reason": "required"
+    }
+  ],
+  "comment": "the stored jsonb value always carries the step array (jsonb_typeof = 'object')"
+}

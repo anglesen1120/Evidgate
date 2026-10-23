@@ -1,0 +1,20 @@
+{
+  "steps": [
+    {
+      "no": 1,
+      "action": "Open the page",
+      "expected": "The page is shown"
+    },
+    {
+      "no": 2,
+      "action": "Type the account",
+      "expected": "The account is listed",
+      "data": "qa-01@example.test"
+    },
+    {
+      "no": 3,
+      "action": "Open the page",
+      "expected": "The page is shown"
+    }
+  ]
+}
