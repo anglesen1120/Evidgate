@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { ExitCode } from '../exitCodes.js';
 
-import { commandRegistry, renderUsage, resolveCommand, type CommandDefinition } from './index.js';
+import {
+  commandRegistry,
+  renderUsage,
+  resolveCommand,
+  usageText,
+  type CommandDefinition,
+} from './index.js';
 
 function stub(name: string, summary: string, positionals?: string): CommandDefinition {
   const command: CommandDefinition = {
@@ -85,5 +91,43 @@ describe('command registry', () => {
   it('shows the positionals usage string in the help line', () => {
     const commands = [stub('manifests upload', 'upload a manifest', '<file>')];
     expect(renderUsage(commands)).toContain('  manifests upload <file>  upload a manifest');
+  });
+
+  // 04.2.3: the two spool commands are registered here and nowhere else; the dispatcher
+  // in `main.ts` only ever sees `resolveCommand`'s answer.
+  it('resolves events send and runs finalize, with single-use options', () => {
+    expect(resolveCommand(['events', 'send'])).toMatchObject({
+      command: commandRegistry['events send'],
+      words: 2,
+      rest: [],
+    });
+    expect(resolveCommand(['events', 'send', 'extra'])).toMatchObject({
+      command: commandRegistry['events send'],
+      words: 2,
+      rest: ['extra'],
+    });
+    expect(resolveCommand(['runs', 'finalize'])).toMatchObject({
+      command: commandRegistry['runs finalize'],
+      words: 2,
+      rest: [],
+    });
+    // A repetition must be observable, so every value option is `multiple: true`.
+    expect(commandRegistry['events send']?.options?.['run']).toEqual({
+      type: 'string',
+      multiple: true,
+    });
+    expect(commandRegistry['events send']?.options?.['producer']).toEqual({
+      type: 'string',
+      multiple: true,
+    });
+    expect(commandRegistry['events send']?.options?.['from']).toEqual({
+      type: 'string',
+      multiple: true,
+    });
+  });
+
+  it('lists both spool commands in the help text', () => {
+    expect(usageText).toContain('events send');
+    expect(usageText).toContain('runs finalize');
   });
 });
