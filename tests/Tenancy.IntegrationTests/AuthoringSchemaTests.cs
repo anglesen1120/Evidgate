@@ -480,7 +480,7 @@ public sealed class AuthoringSchemaTests
 
         await using var source = NpgsqlDataSource.Create(_fixture.AppConnectionString(database));
         var scopes = new NpgsqlTenantScopeFactory(source);
-        await using var scope = await scopes.BeginAsync(org);
+        await using var scope = await scopes.BeginAsync(org, cancellationToken: TestContext.Current.CancellationToken);
 
         var options = new DbContextOptionsBuilder<TenancyWriteModelContext>()
             .UseNpgsql(scope.Connection)
@@ -501,12 +501,12 @@ public sealed class AuthoringSchemaTests
 
         await using (var context = new TenancyWriteModelContext(options))
         {
-            await context.Database.UseTransactionAsync(scope.Transaction);
-            context.Set<Project>().Add(project);
-            await context.SaveChangesAsync();
+            await context.Database.UseTransactionAsync(scope.Transaction, TestContext.Current.CancellationToken);
+            await context.Set<Project>().AddAsync(project, TestContext.Current.CancellationToken);
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await scope.CommitAsync();
+        await scope.CommitAsync(TestContext.Current.CancellationToken);
 
         // "ef-project" -> "EFPR": the trigger filled the column EF omitted, and the seeded project in
         // this org already holds "CHEC", so nothing collides.
