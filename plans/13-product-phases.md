@@ -47,6 +47,7 @@
 - `generated_script` (`manual_test_case_id`, `test_case_id`, `state` draft / active / flaky / retired, `stability_runs`, `pr_url`).
 - `element_profile` (append-only per run and bound step; `case_revision_id`, `step_no`, profile jsonb, `profile_hash`, `spec_version`).
 All tables carry `org_id`, composite tenant FKs and FORCE RLS (00 §5.4).
+Refinements from the G1 feature plans (S52, 2026-10-23): `plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md` adds the support tables `authoring_code_counter` (per-project case-code counter), 13.1.2 adds `checklist_item_lineage` (merge and split lineage) and 13.2.1 adds `ai_settings_use` (one row per `ai_run_id`, the settings version a run used). Each carries `org_id`, composite tenant FKs and FORCE RLS like the tables above; none changes a task size.
 
 ### 4.2 Flows
 
