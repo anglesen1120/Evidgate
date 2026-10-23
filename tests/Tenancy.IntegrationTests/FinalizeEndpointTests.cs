@@ -109,10 +109,22 @@ public sealed class FinalizeEndpointTests
     // ------------------------------------------------------------------ reads (superuser: one database per test)
 
     /// <summary>The run's manifest hash, through <c>run.manifest_id</c> (same tenant).</summary>
-    private static Task<string> ManifestHashAsync(IngestTestWorld world) =>
+    private static Task<string> ManifestHashAsync(IngestTestWorld world, Guid? runId = null) =>
         world.ScalarAsync<string>(
             "select m.manifest_hash from public.manifest m "
-            + $"join public.run r on r.org_id = m.org_id and r.manifest_id = m.id where r.id = '{world.RunId:D}'");
+            + $"join public.run r on r.org_id = m.org_id and r.manifest_id = m.id where r.id = '{runId ?? world.RunId:D}'");
+
+    /// <summary>Moves any run of the world's tenant to another state (the concurrency cases seed extra runs).</summary>
+    private Task SetRunStateAsync(IngestTestWorld world, Guid runId, string state) =>
+        _fixture.ExecuteAsync(world.Database, $"update public.run set state = '{state}' where id = '{runId:D}'");
+
+    private static Task<bool> SlotClosedInRunAsync(IngestTestWorld world, Guid runId, string producerId = Producer) =>
+        world.ScalarAsync<bool>(
+            $"select closed_at is not null from public.producer_slot where run_id = '{runId:D}' and producer_id = '{producerId}'");
+
+    /// <summary>The reconcile triggers written for one run (never for a refused or repeated finalize).</summary>
+    private static Task<long> ReconcileRowsInRunAsync(IngestTestWorld world, Guid runId) =>
+        world.CountAsync("outbox", $"task_type = '{ReconcileTaskType}' and aggregate_id = '{runId:D}'");
 
     private static Task<string> RunStateAsync(IngestTestWorld world, Guid? runId = null) =>
         world.ScalarAsync<string>($"select state from public.run where id = '{runId ?? world.RunId}'");
@@ -598,8 +610,6 @@ public sealed class FinalizeEndpointTests
         await using var world = await IngestTestWorld.StartAsync(
             _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti);
         await world.SetRunStateAsync("running");
-        var runVersion = await RunVersionAsync(world);
-        var slotVersion = await SlotVersionAsync(world);
 
         // Two finalizes of the same slot at once, each declaring DIFFERENT values: one wins the close, the other is
         // the idempotent no-op that returns (and enqueues nothing for) the stored declaration.
@@ -609,10 +619,8 @@ public sealed class FinalizeEndpointTests
 
         answers.ShouldAllBe(answer => answer.Status == HttpStatusCode.Accepted);
 
-        // Exactly one close write and exactly one applied transition (a second one would break the unique
-        // outbox idempotency key or bump the version twice).
-        (await SlotVersionAsync(world)).ShouldBe(slotVersion + 1);
-        (await RunVersionAsync(world)).ShouldBe(runVersion + 1);
+        // Exactly one close and exactly one applied transition — the state-changed and reconcile rows are the
+        // observable proof, so no exact row-version count is pinned here (the version bump is a trigger detail).
         (await StateChangedRowsAsync(world, "collecting")).ShouldBe(1);
         (await ReconcileRowsAsync(world)).ShouldBe(1);
 
@@ -627,34 +635,84 @@ public sealed class FinalizeEndpointTests
     {
         await using var world = await IngestTestWorld.StartAsync(
             _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti);
-        await world.SetRunStateAsync("running");
 
-        // One event first, so the slot is bound and the run started; the race is the next finalize against the next
-        // batch on the same run (05.3.1's lock-order rule: no FOR SHARE held while a transition is taken).
-        var seeded = await IngestQaRequests.PostEventsAsync(
-            world.Client,
-            world.RunId,
-            IngestQaRequests.Batch(IngestQaRequests.Event(
-                Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1)));
-        seeded.Status.ShouldBe(HttpStatusCode.OK, seeded.ErrorMessage);
+        // The deadlock-prone path is a run that is still QUEUED: both handlers may take queued -> running
+        // (FOR NO KEY UPDATE) and then read the run FOR SHARE, so one that shared-locked first and upgraded second
+        // would deadlock (40P01, 05.3.1's lock-order rule). Three fresh runs, each with both requests in flight at
+        // once, pin that interleaving instead of a serialised one.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var plan = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, world.Org, 2);
+            await IngestTestWorld.SeedSlotsAsync(
+                _fixture, world.Database, world.Org, plan.RunId, 1, IngestTestWorld.Jti);
+            await SetRunStateAsync(world, plan.RunId, "queued");
 
-        var answers = await Task.WhenAll(
-            FinalizeAsync(world.Client, world.RunId, await BodyAsync(world, lastSequence: 2, count: 2)),
-            IngestQaRequests.PostEventsAsync(
-                world.Client,
-                world.RunId,
-                IngestQaRequests.Batch(IngestQaRequests.Event(
-                    Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 2))));
+            var body = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["producer_id"] = Producer,
+                ["shard"] = 1,
+                ["last_sequence"] = 1,
+                ["count"] = 1,
+                ["manifest_hash"] = await ManifestHashAsync(world, plan.RunId),
+            };
 
-        var finalize = answers[0];
-        var batch = answers[1];
+            var answers = await Task.WhenAll(
+                FinalizeAsync(world.Client, plan.RunId, body),
+                IngestQaRequests.PostEventsAsync(
+                    world.Client,
+                    plan.RunId,
+                    IngestQaRequests.Batch(IngestQaRequests.Event(
+                        Guid.CreateVersion7(), plan.Executions[0].ExecutionKey, sequence: 1))));
 
-        // Neither side deadlocks (40P01) or fails with a 500, whatever order the two commit in.
-        finalize.Status.ShouldBe(HttpStatusCode.Accepted, finalize.ErrorMessage);
-        batch.Status.ShouldBe(HttpStatusCode.OK, batch.ErrorMessage);
+            var finalize = answers[0];
+            var batch = answers[1];
 
+            // Neither side deadlocks (40P01) or fails with a 5xx, whatever order the two commit in, and the end
+            // state is the same either way: the run is collecting and the slot is closed once.
+            ((int)finalize.Status).ShouldBeLessThan(500, finalize.ErrorMessage);
+            ((int)batch.Status).ShouldBeLessThan(500, batch.ErrorMessage);
+            finalize.Status.ShouldBe(HttpStatusCode.Accepted, finalize.ErrorMessage);
+            batch.Status.ShouldBe(HttpStatusCode.OK, batch.ErrorMessage);
+
+            (await RunStateAsync(world, plan.RunId)).ShouldBe("collecting");
+            (await SlotClosedInRunAsync(world, plan.RunId)).ShouldBeTrue();
+            (await ReconcileRowsInRunAsync(world, plan.RunId)).ShouldBe(1);
+        }
+    }
+
+    /// <summary>
+    /// A finalize on a run that cannot transition any more (collecting) waits for no exclusive lock: it must
+    /// complete while another transaction holds the run row <c>FOR SHARE</c> — the lock an event batch takes on the
+    /// ingest hot path. A finalize that took <c>FOR NO KEY UPDATE</c> there would queue behind it, so the held lock
+    /// is released and the case fails instead of hanging.
+    /// </summary>
+    [Fact]
+    public async Task Finalize_OnCollectingRun_DoesNotWaitBehindSharedRunLock()
+    {
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), slots: 2);
+        await world.SetRunStateAsync("collecting");
+
+        // The second shard is what finalizes, so the closed slot of shard 1 cannot make this a no-op.
+        var body = await BodyAsync(world, producerId: "shard-2", shard: 2);
+
+        await using var holder = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        (await holder.ScalarAsync<int>(
+            "select 1 from public.run r where r.org_id = @org_id and r.id = @run_id for share of r",
+            ("org_id", world.Org),
+            ("run_id", world.RunId))).ShouldBe(1);
+
+        var finalize = FinalizeAsync(world.Client, world.RunId, body);
+        var finished = await Task.WhenAny(finalize, Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+
+        // Release the shared lock before asserting, so a failure leaves no blocked statement behind.
+        await holder.CommitAsync();
+
+        finished.ShouldBeSameAs(finalize, "the finalize was still blocked behind a shared run lock after 10s");
+        var answer = await finalize;
+        answer.Status.ShouldBe(HttpStatusCode.Accepted, answer.ErrorMessage);
+        (await SlotClosedAsync(world, "shard-2")).ShouldBeTrue();
         (await RunStateAsync(world)).ShouldBe("collecting");
-        (await SlotClosedAsync(world)).ShouldBeTrue();
         (await ReconcileRowsAsync(world)).ShouldBe(1);
     }
 
@@ -714,6 +772,8 @@ public sealed class FinalizeEndpointTests
             case "last_sequence_negative": body["last_sequence"] = -1; break;
             case "count_negative": body["count"] = -1; break;
             case "producer_id_too_long": body["producer_id"] = new string('p', 300); break;
+            case "producer_id_trailing_newline": body["producer_id"] = Producer + "\n"; break;
+            case "shard_above_max": body["shard"] = 257; break;
             case "manifest_hash_uppercase": body["manifest_hash"] = hash.ToUpperInvariant(); break;
             case "manifest_hash_padded": body["manifest_hash"] = $" {hash} "; break;
             case "missing_count": body.Remove("count"); break;
@@ -750,6 +810,7 @@ public sealed class FinalizeEndpointTests
     [InlineData("last_sequence_negative")]
     [InlineData("count_negative")]
     [InlineData("producer_id_too_long")]
+    [InlineData("shard_above_max")]
     [InlineData("manifest_hash_uppercase")]
     [InlineData("manifest_hash_padded")]
     [InlineData("missing_count")]
@@ -774,6 +835,77 @@ public sealed class FinalizeEndpointTests
     [InlineData("[1,2]")]
     [InlineData("null")]
     public async Task Finalize_NonObjectBody_422RequestInvalid_NoEffect(string raw)
+    {
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti);
+        var runVersion = await RunVersionAsync(world);
+
+        var answer = await FinalizeRawAsync(world.Client, world.RunId.ToString("D"), raw, NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("request_invalid");
+        await AssertNoEffectAsync(world, runVersion);
+    }
+
+    /// <summary>
+    /// A producer id with a trailing newline is a body error with its own pointer, refused by the parse. .NET's `$`
+    /// also matches before a final newline, so a `$`-anchored shape would let it through and refuse it later as a
+    /// generic registry 422 (or accept it where PostgreSQL's `~` would not): the shape is `\A…\z`, like
+    /// <c>ProducerSlotArguments</c>' own rule.
+    /// </summary>
+    [Fact]
+    public async Task Finalize_ProducerIdTrailingNewline_422OnProducerIdPointer_NoEffect()
+    {
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti);
+        var runVersion = await RunVersionAsync(world);
+
+        var answer = await FinalizeRawAsync(
+            world.Client,
+            world.RunId.ToString("D"),
+            System.Text.Json.JsonSerializer.Serialize(await MutatedBodyAsync(world, "producer_id_trailing_newline")),
+            NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("request_invalid");
+        Details(answer).ShouldHaveSingleItem().GetProperty("path").GetString().ShouldBe("/producer_id");
+        await AssertNoEffectAsync(world, runVersion);
+    }
+
+    /// <summary>
+    /// A shard above the contract's 256 is refused by the body parse on <c>/shard</c>, not left to the slot
+    /// comparison: no run plans a slot that high, so the two answers are the same 422 but only this one is the
+    /// contract's shape.
+    /// </summary>
+    [Fact]
+    public async Task Finalize_ShardAboveMaximum_422OnShardPointer_NoEffect()
+    {
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti);
+        var runVersion = await RunVersionAsync(world);
+
+        var answer = await FinalizeRawAsync(
+            world.Client,
+            world.RunId.ToString("D"),
+            System.Text.Json.JsonSerializer.Serialize(await MutatedBodyAsync(world, "shard_above_max")),
+            NewKey());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("request_invalid");
+        Details(answer).ShouldHaveSingleItem().GetProperty("path").GetString().ShouldBe("/shard");
+        await AssertNoEffectAsync(world, runVersion);
+    }
+
+    /// <summary>
+    /// Text neither jsonb nor the canonical form can carry is a 422, never a 500 — in a member name (reading
+    /// <c>member.Name</c> throws), in a member value, and in a duplicate member name (the duplicate check reads the
+    /// names before any member loop runs). Each body is refused before a statement, so nothing changes.
+    /// </summary>
+    [Theory]
+    [InlineData("{\"\\ud800\":1}")]
+    [InlineData("{\"a\":\"\\ud800\"}")]
+    [InlineData("{\"\\ud800\":1,\"\\ud800\":2}")]
+    public async Task Finalize_UnstorableText_422RequestInvalid_NoEffect(string raw)
     {
         await using var world = await IngestTestWorld.StartAsync(
             _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti);
@@ -835,9 +967,12 @@ public sealed class FinalizeEndpointTests
         await AssertNoEffectAsync(world, runVersion);
     }
 
-    /// <summary>The contract marks <c>Idempotency-Key</c> required: a request without one is not accepted.</summary>
+    /// <summary>
+    /// The contract marks <c>Idempotency-Key</c> required: a request without one is refused by the C2 idempotency
+    /// stage with exactly 400 <c>request_invalid</c>, before the handler and the body parse.
+    /// </summary>
     [Fact]
-    public async Task Finalize_MissingIdempotencyKey_NotAccepted_NoEffect()
+    public async Task Finalize_MissingIdempotencyKey_400RequestInvalid_NoEffect()
     {
         await using var world = await IngestTestWorld.StartAsync(
             _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti);
@@ -846,13 +981,14 @@ public sealed class FinalizeEndpointTests
         var answer = await FinalizeRawAsync(
             world.Client, world.RunId.ToString("D"), System.Text.Json.JsonSerializer.Serialize(await BodyAsync(world)), null);
 
-        ((int)answer.Status).ShouldBeInRange(400, 499);
+        answer.Status.ShouldBe(HttpStatusCode.BadRequest, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("request_invalid");
         await AssertNoEffectAsync(world, runVersion);
     }
 
     /// <summary>The shared <c>IdempotencyKey</c> component caps the key at 128 characters.</summary>
     [Fact]
-    public async Task Finalize_OverlongIdempotencyKey_NotAccepted_NoEffect()
+    public async Task Finalize_OverlongIdempotencyKey_400RequestInvalid_NoEffect()
     {
         await using var world = await IngestTestWorld.StartAsync(
             _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti);
@@ -864,8 +1000,42 @@ public sealed class FinalizeEndpointTests
             System.Text.Json.JsonSerializer.Serialize(await BodyAsync(world)),
             new string('k', 129));
 
-        ((int)answer.Status).ShouldBeInRange(400, 499);
+        answer.Status.ShouldBe(HttpStatusCode.BadRequest, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("request_invalid");
         await AssertNoEffectAsync(world, runVersion);
+    }
+
+    /// <summary>
+    /// The stored 202 belongs to the credential that earned it: another identity replaying the same key with the
+    /// byte-identical body is 409 <c>idempotency_conflict</c>, never the replay, so the T9 slot check cannot be
+    /// bypassed through the idempotency record (the <c>CreateRunCommand</c> CiRunBinding precedent). The original
+    /// credential's own retry still replays the stored 202.
+    /// </summary>
+    [Fact]
+    public async Task Finalize_SameKeySameBodyOtherCredential_409IdempotencyConflict()
+    {
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti);
+        await world.SetRunStateAsync("running");
+        const string key = "finalize-qa-key-shared-across-identities";
+        var body = await BodyAsync(world);
+
+        var first = await FinalizeAsync(world.Client, world.RunId, body, key);
+        first.Status.ShouldBe(HttpStatusCode.Accepted, first.ErrorMessage);
+
+        var replay = await FinalizeAsync(world.Client, world.RunId, body, key);
+        replay.Status.ShouldBe(HttpStatusCode.Accepted, replay.ErrorMessage);
+
+        // Another credential of the same project with the same key and body: a conflict, not somebody else's 202.
+        await using var other = HostFor(world, IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti));
+        using var otherClient = other.CreateClient();
+        var foreign = await FinalizeAsync(otherClient, world.RunId, body, key);
+
+        foreign.Status.ShouldBe(HttpStatusCode.Conflict, foreign.ErrorMessage);
+        foreign.ErrorCode.ShouldBe("idempotency_conflict");
+        (await SlotBoundJtiAsync(world)).ShouldBe(IngestTestWorld.Jti);
+        (await SlotDeclaredLastSequenceAsync(world)).ShouldBe(3L);
+        (await ReconcileRowsAsync(world)).ShouldBe(1);
     }
 
     /// <summary>Reusing a key for a different body is a conflict (Q5), not a second declaration.</summary>

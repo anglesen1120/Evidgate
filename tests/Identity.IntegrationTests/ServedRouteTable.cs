@@ -667,7 +667,9 @@ internal static class RouteRequests
 
         // 05.3.2-T1: the finalize route is the events route's twin — a resolved member session reaches the C2 pipeline's
         // `event:write` gate, which answers the matrix's 403, so the recipe uses a fresh run id and a shape-valid body:
-        // nothing is created for a random id, and the recipe never becomes an oracle over an existing run.
+        // nothing is created for a random id, and the recipe never becomes an oracle over an existing run. The route is
+        // an idempotent command, so it carries a key like every other mutation: without one the pipeline answers 400
+        // before the handler, and a caller that does hold `event:write` would never reach the gate it exercises.
         Add("POST", "/v1/runs/{r}/finalize", _ => new(HttpMethod.Post, $"/v1/runs/{Guid.CreateVersion7()}/finalize",
             new JsonObject
             {
@@ -676,7 +678,8 @@ internal static class RouteRequests
                 ["last_sequence"] = 0,
                 ["count"] = 0,
                 ["manifest_hash"] = "sha256:" + new string('a', 64),
-            }));
+            },
+            IdempotencyKey: Key()));
 
         // ---- Policy ------------------------------------------------------------------------------------------
         Add("POST", "/v1/projects/{p}/policies", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/policies",

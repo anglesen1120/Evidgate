@@ -1847,7 +1847,7 @@ export type FinalizeRunData = {
          */
         producer_id: string;
         /**
-         * The 1-based manifest shard index; it must equal the bound slot's own index (422 `request_invalid` otherwise).
+         * The 1-based manifest shard index; it must equal the bound slot's own index (422 `request_invalid` otherwise), and a value outside 1..256 is 422 `request_invalid` on `/shard`.
          */
         shard: number;
         /**

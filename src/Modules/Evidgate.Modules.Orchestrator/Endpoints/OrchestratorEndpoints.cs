@@ -245,15 +245,22 @@ public static class OrchestratorEndpoints
 
     /// <summary>
     /// <c>POST /v1/runs/{r}/finalize</c> (05.3.2 §5): a CI shard declares it has sent everything; the body is read
-    /// with a hard 8 KiB cap and handed to the handler as bytes, because the five member shapes are the handler's
-    /// (nothing is parsed for a caller who is nobody, and the C2 pipeline has already authorized the request). The
-    /// handler answers bodiless <c>202</c>: reconciliation is asynchronous.
+    /// with a hard 8 KiB cap and handed to the handler as bytes, because the five member shapes are the handler's.
+    /// The read happens <b>before</b> <c>mediator.Send</c>, so up to 8 KiB is buffered for any resolved principal —
+    /// the C2 pipeline's permission, scope and idempotency stages answer later, inside the send — and only a caller
+    /// with no principal at all is refused before a byte is read. The handler answers bodiless <c>202</c>:
+    /// reconciliation is asynchronous.
     /// <para>
     /// The credential gate mirrors the events route exactly: a caller with no principal is <c>401 unauthenticated</c>
     /// here, before a byte of the body is read, and a resolved principal (a member session included) goes on to the
     /// pipeline, whose <c>event:write</c> permission is what refuses it (403 — the same answer the events route gives a
     /// viewer). The handler's own credential check stays as the fail-closed backstop for a principal that somehow
     /// reaches it without a token identity: the slot binding <b>is</b> that identity (05.3.2 §5, T9).
+    /// </para>
+    /// <para>
+    /// The caller's identity (<c>CredentialId</c> and the CI run reference) travels with the command so the
+    /// idempotency record is bound to it: another credential replaying this key with the same body is 409
+    /// <c>idempotency_conflict</c>, never the stored <c>202</c> (see <see cref="FinalizeShardCommand.BodyHash"/>).
     /// </para>
     /// </summary>
     private static async Task<Result> FinalizeShardAsync(
@@ -263,7 +270,7 @@ public static class OrchestratorEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (principals.Current is null)
+        if (principals.Current is not { } principal)
         {
             return Result.Failure(UnauthenticatedProducer);
         }
@@ -274,7 +281,14 @@ public static class OrchestratorEndpoints
             return Result.Failure(tooLarge);
         }
 
-        return await mediator.Send(new FinalizeShardCommand(r, bytes, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
+        return await mediator.Send(
+            new FinalizeShardCommand(
+                r,
+                bytes,
+                IdempotencyKey(context),
+                principal.CredentialId,
+                principal.CiRun?.ToBindingReference()),
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

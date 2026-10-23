@@ -199,23 +199,41 @@ internal static class OrchestratorSql
     // ------------------------------------------------------------------ 05.3.2 finalize
 
     /// <summary>
-    /// The run a finalize addresses, locked <c>FOR NO KEY UPDATE OF r</c> up front (05.3.2-T1): one statement answers
-    /// existence, the run's state, its project and that project's lifecycle state, and the hash of the manifest the
-    /// run was created from. RLS makes another tenant's run invisible, so an unknown and a foreign id are the same
-    /// null; the caller compares the project with its credential's scope, so a run of another project of the same org
-    /// is refused too.
+    /// The run a finalize addresses, in one statement: existence, the run's state, its project and that project's
+    /// lifecycle state, and the hash of the manifest the run was created from. RLS makes another tenant's run
+    /// invisible, so an unknown and a foreign id are the same null; the caller compares the project with its
+    /// credential's scope, so a run of another project of the same org is refused too.
     /// <para>
-    /// The lock is taken here, before anything else the handler does, for two reasons. A finalize may drive
-    /// <c>queued → running → collecting</c> through 05.3.1's <c>IRunStateTransition</c>, which loads the same row
-    /// <c>FOR NO KEY UPDATE</c>; a caller that first shared-locked the row and then upgraded would deadlock (40P01,
-    /// the lock-order rule on <c>TransitionRunStateCommand</c> and <c>IngestEventBatch</c>). And the registry's own
-    /// lock order is run before slot (<c>ProducerRegistry.BindOrCheckAsync</c>'s remark), which the close below
-    /// inherits. <c>FOR NO KEY UPDATE</c> conflicts with another transition or finalize, so two racing finalizes
-    /// serialise, but not with the <c>FOR KEY SHARE</c> an FK check takes; it needs the <c>update</c> privilege 0034
-    /// grants on <c>run (updated_at)</c>, the same grant <c>RunEventScopeReader</c>'s <c>FOR SHARE</c> uses.
+    /// Three variants differ only in their lock clause (05.3.2-T1 review P1/S3):
     /// </para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// <see cref="ReadRunForFinalize"/> takes no lock. The handler runs it first, the events handler's own pattern
+    /// (<c>IngestEventBatch</c>), so existence, the credential's project scope and the project's lifecycle state are
+    /// decided before any row lock is held and a refused finalize costs event ingest nothing.
+    /// </description></item>
+    /// <item><description>
+    /// <see cref="LockRunForFinalize"/> takes <c>FOR NO KEY UPDATE OF r</c> and is used only when the observed state
+    /// is <c>queued</c> or <c>running</c>: a finalize may drive <c>queued → running → collecting</c> through
+    /// 05.3.1's <c>IRunStateTransition</c>, which loads the same row <c>FOR NO KEY UPDATE</c>, and a caller that
+    /// first shared-locked the row and then upgraded would deadlock (40P01, the lock-order rule on
+    /// <c>TransitionRunStateCommand</c> and <c>IngestEventBatch</c>). The registry's own lock order is run before
+    /// slot (<c>ProducerRegistry.BindOrCheckAsync</c>'s remark), which the close below inherits.
+    /// <c>FOR NO KEY UPDATE</c> conflicts with another transition or finalize, so two racing finalizes serialise,
+    /// but not with the <c>FOR KEY SHARE</c> an FK check takes; it needs the <c>update</c> privilege 0034 grants on
+    /// <c>run (updated_at)</c>, the same grant <c>RunEventScopeReader</c>'s <c>FOR SHARE</c> uses.
+    /// </description></item>
+    /// <item><description>
+    /// <see cref="ShareLockRunForFinalize"/> takes <c>FOR SHARE OF r</c> and is used in every other state —
+    /// <c>collecting</c>, <c>complete</c>, <c>incomplete</c>, <c>canceled</c>. None of them returns to
+    /// <c>queued</c> or <c>running</c> (00 §8.1), so no transition can be needed and no exclusive lock is
+    /// justified: the shared lock still pins the row for the rest of the transaction, does not conflict with an
+    /// event batch's own <c>FOR SHARE</c> (the ingest hot path) and lets finalizes of different shards of one run
+    /// proceed together instead of forming a chain of up to 256 transactions.
+    /// </description></item>
+    /// </list>
     /// </summary>
-    internal const string LockRunForFinalize = """
+    internal const string ReadRunForFinalize = """
         select r.project_id as project_id,
                p.status as project_state,
                r.state as run_state,
@@ -224,6 +242,11 @@ internal static class OrchestratorSql
           join public.project p on p.org_id = r.org_id and p.id = r.project_id
           join public.manifest m on m.org_id = r.org_id and m.id = r.manifest_id
          where r.org_id = @org_id and r.id = @run_id
-         for no key update of r
         """;
+
+    /// <summary><see cref="ReadRunForFinalize"/> under <c>FOR NO KEY UPDATE</c>: the run may still transition.</summary>
+    internal const string LockRunForFinalize = ReadRunForFinalize + "\n for no key update of r";
+
+    /// <summary><see cref="ReadRunForFinalize"/> under <c>FOR SHARE</c>: the run cannot transition any more.</summary>
+    internal const string ShareLockRunForFinalize = ReadRunForFinalize + "\n for share of r";
 }

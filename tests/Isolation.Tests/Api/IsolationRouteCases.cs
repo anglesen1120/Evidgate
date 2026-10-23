@@ -235,12 +235,23 @@ public static class IsolationRouteCases
                 Fixed(bp.WaiverIds), aAdmin, $"/v1/projects/{ap.Id}/waivers?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/quarantine"), $"org B project {bp.Slug} quarantine entries", bAdmin, $"/v1/projects/{bp.Id}/quarantine?limit=1", "id",
                 Fixed(bp.QuarantineIds), aAdmin, $"/v1/projects/{ap.Id}/quarantine?limit=1"));
-            // The run-create case below proves that org B's own `POST /v1/projects/{p}/runs` is accepted, so org B's
-            // first project holds one run more than the seed made: this walk's expectation is the database's own row
-            // set for the project (owner connection, filtered by `project_id`), exactly as the audit walk above
-            // derives its ids. A page carrying another project's or another org's run still fails the set equality.
+            // The run-create case below is a positive control: it proves that org B's own
+            // `POST /v1/projects/{p}/runs` is accepted, so org B's first project can hold one run more than the
+            // seed recorded, and whether it does depends on which test of the suite runs first (nothing resets
+            // between them — see ApiIsolationFixture's remarks; the side effect is 05.2.1-T1's, not finalize's).
+            // The expectation is therefore the seed's ids UNION the database's own row set for the project (owner
+            // connection, filtered by `project_id`), exactly as the audit walk above derives its ids. The union is
+            // the database set whenever the seed's rows are there, so a paged run from another project or another
+            // org, a dropped row, or a seeded run missing from the database each still fail the set equality.
             walks.Add(new(Get("/v1/projects/{p}/runs"), $"org B project {bp.Slug} runs", bAdmin, $"/v1/projects/{bp.Id}/runs?limit=1", "run_id",
-                runner => runner.OwnerIdsAsync("select id::text from public.run where project_id = @org", bp.Id),
+                async runner =>
+                {
+                    var expected = new HashSet<string>(
+                        await runner.OwnerIdsAsync("select id::text from public.run where project_id = @org", bp.Id),
+                        StringComparer.OrdinalIgnoreCase);
+                    expected.UnionWith(bp.RunIds.Select(id => id.ToString("D")));
+                    return expected;
+                },
                 aAdmin, $"/v1/projects/{ap.Id}/runs?limit=1"));
             for (var c = 0; c < bp.CaseIds.Count; c++)
             {

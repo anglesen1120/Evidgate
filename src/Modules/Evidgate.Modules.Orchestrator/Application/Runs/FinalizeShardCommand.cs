@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
@@ -32,12 +33,14 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// </para>
 /// <para>
 /// An <see cref="IIdempotentCommand"/> as 00 §9.1 / <c>contracts/README.md</c> require of every mutation that is not
-/// on the exemption list: the <c>Idempotency-Key</c> the contract declares is claimed by the C2 idempotency stage in
-/// the same tenant transaction, so a retry of the same request replays the stored <c>202</c> and a reused key with a
-/// different run or body is 409 <c>idempotency_conflict</c> (<see cref="BodyHash"/> covers the body, which is
-/// <see cref="JsonIgnoreAttribute"/>-ed out of the serialized command). The key is <b>not</b> the arbiter of a
-/// duplicate finalize, though: <c>producer_slot.closed_at</c> is (D3), set once by
-/// <see cref="IProducerRegistry.CloseSlotAsync"/>, so a repeat without a key — or a fresh key — is still a no-op.
+/// on the exemption list: the <c>Idempotency-Key</c> the contract declares is <b>required</b> and is claimed by the C2
+/// idempotency stage in the same tenant transaction, so a missing, blank or over-128-character key is 400
+/// <c>request_invalid</c> there, before the body is parsed. A retry of the same request replays the stored <c>202</c>,
+/// and a reused key with a different run, body or caller identity is 409 <c>idempotency_conflict</c>
+/// (<see cref="BodyHash"/> covers the body and the caller's identity, both <see cref="JsonIgnoreAttribute"/>-ed out of
+/// the serialized command). The key is <b>not</b> the arbiter of a duplicate finalize, though:
+/// <c>producer_slot.closed_at</c> is (D3), set once by <see cref="IProducerRegistry.CloseSlotAsync"/>, so a repeat
+/// with a <b>fresh</b> key is the same no-op <c>202</c>.
 /// </para>
 /// </summary>
 /// <param name="RunId">The run of the route's <c>{r}</c> segment.</param>
@@ -46,10 +49,21 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// <c>manifest_hash</c>), at most the route's transport cap.
 /// </param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1, at most 128 characters).</param>
+/// <param name="CredentialId">
+/// The caller's credential id (<c>jti</c>), folded into <see cref="BodyHash"/> and never serialized: the replay is
+/// bound to the credential that made the first request (T9).
+/// </param>
+/// <param name="CiRunBinding">
+/// The caller's CI run reference in the <see cref="CiRunReference.ToBindingReference"/> form (T88), or null when the
+/// token carries none. Folded into <see cref="BodyHash"/> beside the credential, so the same key and body from
+/// another CI run attempt conflicts instead of replaying (the <see cref="CreateRunCommand"/> precedent).
+/// </param>
 internal sealed record FinalizeShardCommand(
     Guid RunId,
     [property: JsonIgnore] ReadOnlyMemory<byte> Body,
-    string IdempotencyKey) : ICommand<Result>, IIdempotentCommand
+    string IdempotencyKey,
+    [property: JsonIgnore] string? CredentialId = null,
+    [property: JsonIgnore] string? CiRunBinding = null) : ICommand<Result>, IIdempotentCommand
 {
     /// <summary>The 00 §7 operation the key is claimed for: stable across a rename.</summary>
     string IIdempotentCommand.Operation => "run:finalize";
@@ -60,9 +74,31 @@ internal sealed record FinalizeShardCommand(
     /// <see cref="ReadOnlyMemory{T}"/>), so without this member two different declarations under one key would
     /// replay each other instead of conflicting. Raw bytes on purpose — a byte-identical retry from the same client
     /// is the case that must replay, and no canonical form is needed for that.
+    /// <para>
+    /// The caller's identity is folded in beside it, exactly as <see cref="CreateRunCommand"/> folds its
+    /// <c>CiRunBinding</c>: the same key and body replayed by a different credential, or by the same credential under
+    /// another CI run attempt, is 409 <c>idempotency_conflict</c> instead of taking the stored <c>202</c> — a replay
+    /// must never stand in for the T9 slot-identity check of another caller. Both halves are hashed before they enter
+    /// the hashed document, so neither the credential id nor the CI run reference is ever stored or logged.
+    /// </para>
     /// </summary>
-    public string BodyHash => "raw-sha256:" + Convert.ToHexStringLower(
-        System.Security.Cryptography.SHA256.HashData(Body.Span));
+    public string BodyHash => Combine(
+        "raw-sha256:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Body.Span)),
+        CredentialId,
+        CiRunBinding);
+
+    /// <summary>
+    /// The digest of one request that carries a caller identity: the RFC 8785 digest of a three-member document
+    /// holding the body's own digest and the digests of the credential id and the CI run reference, so every half is
+    /// covered by a single canonical hash and no raw identity value is ever part of a stored record.
+    /// </summary>
+    private static string Combine(string bodyHash, string? credentialId, string? ciRunBinding) =>
+        CanonicalHash.Compute(
+            $$"""{"body_hash":{{JsonSerializer.Serialize(bodyHash)}},"credential_sha256":{{JsonSerializer.Serialize(Digest(credentialId))}},"ci_run_ref_sha256":{{JsonSerializer.Serialize(Digest(ciRunBinding))}}}""");
+
+    /// <summary>The SHA-256 of an identity value, so only a digest of it reaches the hashed document.</summary>
+    private static string Digest(string? value) => Convert.ToHexStringLower(
+        System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value ?? string.Empty)));
 }
 
 /// <summary>
@@ -71,10 +107,12 @@ internal sealed record FinalizeShardCommand(
 /// open, the run's state unchanged and no outbox row.
 /// <para>
 /// <b>Order of decisions.</b> The caller's credential is checked first (401, exactly like the events route), then the
-/// body is validated against the contract (422 <c>request_invalid</c>, before any statement). The run row is then
-/// taken <c>FOR NO KEY UPDATE</c> (see <see cref="OrchestratorSql.LockRunForFinalize"/>: a finalize may transition
-/// and the registry locks run before slot), which answers existence (404), the credential's project scope (403
-/// <c>project_scope_mismatch</c>) and the project's lifecycle state (409 <c>project_deleting</c>, 403
+/// body is validated against the contract (422 <c>request_invalid</c>, before any statement). The run is read
+/// unlocked and then locked: <c>FOR NO KEY UPDATE</c> while it is <c>queued</c> or <c>running</c>, because a finalize
+/// may transition such a run (see <see cref="OrchestratorSql.LockRunForFinalize"/>: the registry locks run before
+/// slot), and <c>FOR SHARE</c> in every other state, which never transitions again
+/// (<see cref="OrchestratorSql.ShareLockRunForFinalize"/>). Both answer existence (404), the credential's project
+/// scope (403 <c>project_scope_mismatch</c>) and the project's lifecycle state (409 <c>project_deleting</c>, 403
 /// <c>org_suspended</c>) — the same codes the events handler answers. The shard's identity is settled next, through
 /// <see cref="IProducerRegistry.BindOrCheckAsync"/>: only the identity bound to that slot may finalize it (T9), which
 /// is why a foreign caller is 403 <c>producer_slot_taken</c> and an unregistered producer 422 <c>unknown_producer</c>
@@ -147,35 +185,47 @@ internal sealed partial class FinalizeShardCommandHandler(
         var orgId = scopes.Require().OrgId;
         var ciRunRef = principal.CiRun?.ToBindingReference();
 
-        // (1) the run, locked FOR NO KEY UPDATE up front (lock order: run before slot, and no shared lock is ever
-        // upgraded — see OrchestratorSql.LockRunForFinalize). RLS makes another tenant's run invisible.
+        // (1) The run. An unlocked, RLS-scoped read first, the events handler's own pattern (IngestEventBatch):
+        // it answers existence (404) and the credential's project scope (403) and the project's lifecycle state
+        // (409/403) without taking a row lock, so a refused finalize costs event ingest nothing.
+        var observed = await db.QuerySingleOrDefaultAsync<FinalizeRunRow>(
+            OrchestratorSql.ReadRunForFinalize,
+            new { org_id = orgId, run_id = command.RunId },
+            cancellationToken).ConfigureAwait(false);
+
+        if (observed is null)
+        {
+            return Result.Failure(NoSuchRun);
+        }
+
+        if (ProjectRefusal(observed, principal) is { } refused)
+        {
+            return Result.Failure(refused);
+        }
+
+        // The lock is taken only for what this handler may do with it (lock order: run before slot, and no shared
+        // lock is ever upgraded). A run that is queued or running can still transition, so it is taken
+        // FOR NO KEY UPDATE; collecting, complete, incomplete and canceled never return to queued or running, so
+        // they are taken FOR SHARE, which does not conflict with an event batch's own FOR SHARE or with another
+        // shard's finalize (OrchestratorSql.LockRunForFinalize / ShareLockRunForFinalize). RLS makes another
+        // tenant's run invisible either way.
         var run = await db.QuerySingleOrDefaultAsync<FinalizeRunRow>(
-            OrchestratorSql.LockRunForFinalize,
+            MayTransition(observed.RunState)
+                ? OrchestratorSql.LockRunForFinalize
+                : OrchestratorSql.ShareLockRunForFinalize,
             new { org_id = orgId, run_id = command.RunId },
             cancellationToken).ConfigureAwait(false);
 
         if (run is null)
         {
-            return Result.Failure(Error.NotFound("no run with that id is visible to this tenant"));
+            return Result.Failure(NoSuchRun);
         }
 
-        // The credential's project is the boundary of a ci_producer identity (FR-02-7, 00 §9.1); the project's own
-        // lifecycle state mirrors the events handler's decision (suspended refuses writes, deleted is the conflict).
-        if (principal.ProjectScope is { } tokenProject && tokenProject != run.ProjectId)
+        // The locked row is authoritative: the state only moves forward, so it is still one this handler may
+        // serve, and the two gates are re-decided against what is locked rather than what was observed.
+        if (ProjectRefusal(run, principal) is { } lockedRefusal)
         {
-            return Result.Failure(Error.Denied(
-                ApiErrorCode.ProjectScopeMismatch,
-                "the run belongs to a project outside the credential's scope"));
-        }
-
-        if (string.Equals(run.ProjectState, "deleted", StringComparison.Ordinal))
-        {
-            return Result.Failure(Error.Conflict(ApiErrorCode.ProjectDeleting, "the project is being deleted"));
-        }
-
-        if (string.Equals(run.ProjectState, "suspended", StringComparison.Ordinal))
-        {
-            return Result.Failure(Error.Denied(ApiErrorCode.OrgSuspended, "the project is suspended"));
+            return Result.Failure(lockedRefusal);
         }
 
         // (2) the shard's identity (T9/T88): the slot binds to this token on a first write, and only the identity it
@@ -297,6 +347,44 @@ internal sealed partial class FinalizeShardCommandHandler(
         "no authenticated producer could be resolved",
         StatusCodes.Status401Unauthorized);
 
+    /// <summary>404 for an unknown, another tenant's or another project's run: RLS answers all three the same way.</summary>
+    private static Error NoSuchRun => Error.NotFound("no run with that id is visible to this tenant");
+
+    /// <summary>
+    /// True when the run may still transition: only <c>queued</c> and <c>running</c> can reach <c>collecting</c>, and
+    /// no state returns to either of them (00 §8.1), so every other state needs no exclusive lock.
+    /// </summary>
+    private static bool MayTransition(string runState) =>
+        string.Equals(runState, RunStates.Queued, StringComparison.Ordinal)
+        || string.Equals(runState, RunStates.Running, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The credential and project gates a finalize answers next: the token's project is the boundary of a
+    /// <c>ci_producer</c> identity (FR-02-7, 00 §9.1), and the project's own lifecycle state mirrors the events
+    /// handler's decision (suspended refuses writes, deleted is the conflict). Null when the run may go on.
+    /// </summary>
+    private static Error? ProjectRefusal(FinalizeRunRow run, IRequestPrincipal principal)
+    {
+        if (principal.ProjectScope is { } tokenProject && tokenProject != run.ProjectId)
+        {
+            return Error.Denied(
+                ApiErrorCode.ProjectScopeMismatch,
+                "the run belongs to a project outside the credential's scope");
+        }
+
+        if (string.Equals(run.ProjectState, "deleted", StringComparison.Ordinal))
+        {
+            return Error.Conflict(ApiErrorCode.ProjectDeleting, "the project is being deleted");
+        }
+
+        if (string.Equals(run.ProjectState, "suspended", StringComparison.Ordinal))
+        {
+            return Error.Denied(ApiErrorCode.OrgSuspended, "the project is suspended");
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// The registry's failure, counted when it is the T9 abuse signal (a slot bound to another identity) and returned
     /// unchanged otherwise. The close repeats the same identity check, so both calls feed the one counter.
@@ -330,12 +418,26 @@ internal sealed partial class FinalizeShardCommandHandler(
         {
             return BodyInvalid("the request body is not JSON or repeats a member name", [new ErrorDetail(string.Empty, ApiErrorCode.RequestInvalid)]);
         }
+        catch (InvalidOperationException)
+        {
+            // The duplicate check reads member names to compare them, and transcoding a lone-surrogate escape throws
+            // instead of returning a JsonException. The body is unreadable either way, so it is the same 422.
+            return BodyInvalid("the request body carries text that cannot be stored", [new ErrorDetail(string.Empty, InvalidValue)]);
+        }
 
         using var parsed = document;
         var root = parsed.RootElement;
         if (root.ValueKind != JsonValueKind.Object)
         {
             return BodyInvalid("the request body must be a JSON object", [new ErrorDetail(string.Empty, ApiErrorCode.RequestInvalid)]);
+        }
+
+        // Before a single member is named: reading member.Name on a lone-surrogate name throws (JsonBody's own
+        // remark), so the body is refused 422 here rather than escaping as a 500 (the ActivatePolicy precedent).
+        if (JsonBody.HasUnstorableText(root))
+        {
+            // A lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.
+            return BodyInvalid("the request body carries text that cannot be stored", [new ErrorDetail(string.Empty, InvalidValue)]);
         }
 
         foreach (var member in root.EnumerateObject())
@@ -346,18 +448,12 @@ internal sealed partial class FinalizeShardCommandHandler(
             }
         }
 
-        if (JsonBody.HasUnstorableText(root))
-        {
-            // A lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.
-            return BodyInvalid("the request body carries text that cannot be stored", [new ErrorDetail(string.Empty, InvalidValue)]);
-        }
-
         if (!root.TryGetProperty("producer_id", out var producerElement))
         {
             return Required("producer_id");
         }
 
-        if (producerElement.ValueKind != JsonValueKind.String || !ProducerIdShape().IsMatch(producerElement.GetString()!))
+        if (producerElement.ValueKind != JsonValueKind.String || !ProducerIdShape.IsMatch(producerElement.GetString()!))
         {
             return BodyInvalid(
                 $"producer_id must match {ProducerSlotLimits.ProducerIdPattern}",
@@ -369,11 +465,14 @@ internal sealed partial class FinalizeShardCommandHandler(
             return Required("shard");
         }
 
+        // The contract's bound is enforced here, not left to the slot comparison (a shard above 256 names a slot no
+        // run can plan): 422 /shard either way, but with the shape the contract declares.
         if (shardElement.ValueKind != JsonValueKind.Number
             || !shardElement.TryGetInt32(out var shard)
-            || shard < 1)
+            || shard < 1
+            || shard > MaxShard)
         {
-            return BodyInvalid("shard must be an integer of at least 1", [new ErrorDetail("/shard", InvalidValue)]);
+            return BodyInvalid($"shard must be an integer between 1 and {MaxShard}", [new ErrorDetail("/shard", InvalidValue)]);
         }
 
         if (!root.TryGetProperty("last_sequence", out var sequenceElement))
@@ -450,9 +549,19 @@ internal sealed partial class FinalizeShardCommandHandler(
         long lastSequence,
         int count);
 
-    /// <summary>The 00 §7 producer-id shape the slot table's CHECK mirrors (04.1.2's <c>ProducerSlotLimits</c>).</summary>
-    [GeneratedRegex(ProducerSlotLimits.ProducerIdPattern, RegexOptions.CultureInvariant)]
-    private static partial Regex ProducerIdShape();
+    /// <summary>The contract's <c>shard</c> maximum (05.3.2 §5, 256 planned executions per run at most).</summary>
+    private const int MaxShard = 256;
+
+    /// <summary>
+    /// The 00 §7 producer-id shape the slot table's CHECK mirrors (04.1.2's <c>ProducerSlotLimits</c>): the shared
+    /// constant with its trailing <c>$</c> replaced by <c>\z</c>, because .NET's <c>$</c> also matches before a
+    /// trailing newline while PostgreSQL's <c>~</c> does not (<c>ProducerSlotArguments</c>' own construction). Built at
+    /// runtime for that reason, so the shared constant stays the one source of the charset.
+    /// </summary>
+    private static readonly Regex ProducerIdShape = new(
+        ProducerSlotLimits.ProducerIdPattern[..^1] + @"\z",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
 
     /// <summary>The contract's <c>manifest_hash</c> pattern (00 §9.3, 05.3.2 §5): <c>sha256:</c> + 64 lower-case hex.</summary>
     [GeneratedRegex("\\Asha256:[0-9a-f]{64}\\z", RegexOptions.CultureInvariant)]
@@ -471,7 +580,10 @@ internal sealed partial class FinalizeShardCommandHandler(
         int Count,
         string ManifestHash);
 
-    /// <summary>The run row <see cref="OrchestratorSql.LockRunForFinalize"/> returns (Dapper maps the snake_case columns).</summary>
+    /// <summary>
+    /// The run row <see cref="OrchestratorSql.ReadRunForFinalize"/> and its two lock variants return (Dapper maps the
+    /// snake_case columns).
+    /// </summary>
     private sealed class FinalizeRunRow
     {
         public Guid ProjectId { get; set; }

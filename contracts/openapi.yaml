@@ -465,9 +465,13 @@ paths:
         a repeat declares different values. A project being deleted is 409
         `project_deleting`, a suspended project 403 `org_suspended`. The request
         body is capped at 8 KiB and is refused with 413 `payload_too_large`
-        before it is parsed. `Idempotency-Key` is accepted as 00 §9.1 requires,
-        but the arbiter of a duplicate is the slot's own closed marker, never
-        the key.
+        before it is parsed. `Idempotency-Key` is REQUIRED (00 §9.1): a
+        missing, blank or longer-than-128-character key is 400
+        `request_invalid` before the body is parsed. A retry replays the stored
+        202 only for the same caller identity and the same body; the same key
+        with a different run, body or credential is 409 `idempotency_conflict`.
+        The slot's own closed marker, never the key, arbitrates a duplicate
+        finalize, so a repeat with a FRESH key is the same no-op 202.
       x-permission: event:write
       x-version: v1
       parameters:
@@ -497,7 +501,9 @@ paths:
                   maximum: 256
                   description: >-
                     The 1-based manifest shard index; it must equal the bound
-                    slot's own index (422 `request_invalid` otherwise).
+                    slot's own index (422 `request_invalid` otherwise), and a
+                    value outside 1..256 is 422 `request_invalid` on
+                    `/shard`.
                 last_sequence:
                   type: integer
                   format: int64
