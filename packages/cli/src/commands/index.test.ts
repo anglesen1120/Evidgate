@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { resolveConfig } from '../config.js';
 import { ExitCode } from '../exitCodes.js';
 
 import {
@@ -129,5 +130,31 @@ describe('command registry', () => {
   it('lists both spool commands in the help text', () => {
     expect(usageText).toContain('events send');
     expect(usageText).toContain('runs finalize');
+  });
+
+  // CR8 (S54): the spool surface is lazy, so only the two spool commands force it in their
+  // `validateConfig` pre-flight. A malformed `EVIDGATE_SPOOL_MAX_BYTES` is therefore their
+  // `invalid_config` — and never a `runs create` / `auth login` failure.
+  it('forces the lazy spool settings only in the spool commands', () => {
+    const config = resolveConfig({
+      env: {
+        EVIDGATE_API_URL: 'https://api.evidgate.test',
+        EVIDGATE_PROJECT: 'proj-1',
+        EVIDGATE_DEV_TOKEN: 'dev-token-value',
+        EVIDGATE_SPOOL_DIR: '/var/tmp/evidgate-spool',
+        EVIDGATE_SPOOL_MAX_BYTES: 'lots',
+      },
+    });
+    // `resolveConfig` itself is unaffected by the malformed value.
+    expect(config.project).toBe('proj-1');
+    for (const name of ['events send', 'runs finalize']) {
+      const validate = commandRegistry[name]?.validateConfig;
+      expect(validate).toBeDefined();
+      expect(() => validate?.(config)).toThrowError(
+        expect.objectContaining({ code: 'invalid_config' }),
+      );
+    }
+    expect(commandRegistry['runs create']?.validateConfig).toBeUndefined();
+    expect(commandRegistry['auth login']?.validateConfig).toBeUndefined();
   });
 });

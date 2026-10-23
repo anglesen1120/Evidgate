@@ -368,6 +368,58 @@ describe('retry_paths', () => {
     expect(h.sleeps).toEqual([4_000]);
   });
 
+  it('still backs off when Retry-After says zero (P3-6)', async () => {
+    let attempts = 0;
+    const h = harness(
+      (call) => {
+        attempts += 1;
+        return attempts <= 2
+          ? refusal(429, 'rate_limited', { retryable: true, retryAfter: '0' })
+          : acked(call.body);
+      },
+      () => 1,
+    );
+
+    await sendBatches(
+      batchStream([makeBatch(['z1'], 'retry-zero')]),
+      sendOptions(),
+      h.deps,
+      ignoreAck,
+    );
+
+    // The jittered backoff is the floor under `Retry-After`, so a zero never becomes a
+    // tight retry loop: 500 ms then 1 s with a full sample.
+    expect(h.sleeps).toEqual([500, 1_000]);
+    expect(h.calls).toHaveLength(3);
+  });
+
+  it('still backs off when Retry-After names an HTTP-date already past (P3-6)', async () => {
+    let attempts = 0;
+    const h: Harness = harness(
+      (call) => {
+        attempts += 1;
+        if (attempts > 1) {
+          return acked(call.body);
+        }
+        return refusal(429, 'rate_limited', {
+          retryable: true,
+          retryAfter: new Date(h.clock.now - 5_000).toUTCString(),
+        });
+      },
+      () => 0.5,
+    );
+
+    await sendBatches(
+      batchStream([makeBatch(['z2'], 'retry-past-date')]),
+      sendOptions(),
+      h.deps,
+      ignoreAck,
+    );
+
+    // A past date is 0 ms, so the floor decides: random 0.5 of a 500 ms ceiling.
+    expect(h.sleeps).toEqual([250]);
+  });
+
   it('retries a mid-batch 500 with the same bytes, key and event ids', async () => {
     let attempts = 0;
     const h = harness((call) => {
@@ -450,6 +502,93 @@ describe('retry_paths', () => {
     expect(result.batches).toBe(1);
     expect(h.calls).toHaveLength(2);
     expect(h.sleeps).toEqual([250]);
+  });
+
+  it('stops a sibling batch retrying once another batch failed fatally (P3-4)', async () => {
+    const fatal = makeBatch(['f1'], 'fatal');
+    const retrying = makeBatch(['r1', 'r2'], 'retrying');
+    // The 422 is answered at once and the 503 only a few turns later, so the fatal error
+    // exists while the retrying batch is about to back off.
+    const h = harness(async (call) => {
+      if (call.key === 'batch:fatal') {
+        return refusal(422, 'event_invalid', { requestId: 'req-fatal' });
+      }
+      await macrotaskTurn();
+      await macrotaskTurn();
+      return refusal(503, 'unavailable', { retryable: true, retryAfter: '5' });
+    });
+
+    const error = await rejection(
+      sendBatches(
+        batchStream([fatal, retrying]),
+        sendOptions({ maxInFlight: 2 }),
+        h.deps,
+        ignoreAck,
+      ),
+    );
+
+    // The first fatal error is the one reported, and the sibling neither slept nor made a
+    // second attempt: the send does not wait for its 5 s backoff (or the deadline).
+    expect(error.code).toBe('event_invalid');
+    expect(error.requestId).toBe('req-fatal');
+    expect(h.sleeps).toEqual([]);
+    expect(h.calls.map((call) => call.key)).toEqual(['batch:fatal', 'batch:retrying']);
+  });
+});
+
+/** A batch source whose iterator records how often `return` closed it. */
+function trackedStream(batches: readonly Batch[], state: { closed: number }): AsyncIterable<Batch> {
+  return {
+    [Symbol.asyncIterator]: (): AsyncIterator<Batch> => {
+      let index = 0;
+      return {
+        next: (): Promise<IteratorResult<Batch>> => {
+          const batch = batches[index];
+          index += 1;
+          return Promise.resolve(
+            batch === undefined ? { done: true, value: undefined } : { done: false, value: batch },
+          );
+        },
+        return: (): Promise<IteratorResult<Batch>> => {
+          state.closed += 1;
+          return Promise.resolve({ done: true, value: undefined });
+        },
+      };
+    },
+  };
+}
+
+describe('iterator lifecycle', () => {
+  it('closes the batch iterator when the send completes (P3-10)', async () => {
+    const state = { closed: 0 };
+    const h = harness((call) => acked(call.body));
+
+    const result = await sendBatches(
+      trackedStream([makeBatch(['e1'], 'closes')], state),
+      sendOptions(),
+      h.deps,
+      ignoreAck,
+    );
+
+    expect(result.batches).toBe(1);
+    expect(state.closed).toBe(1);
+  });
+
+  it('closes the batch iterator when the send fails (P3-10)', async () => {
+    const state = { closed: 0 };
+    const h = harness(() => refusal(422, 'event_invalid', { requestId: 'req-close' }));
+
+    const error = await rejection(
+      sendBatches(
+        trackedStream([makeBatch(['e2'], 'closes-fatal')], state),
+        sendOptions(),
+        h.deps,
+        ignoreAck,
+      ),
+    );
+
+    expect(error.code).toBe('event_invalid');
+    expect(state.closed).toBe(1);
   });
 });
 

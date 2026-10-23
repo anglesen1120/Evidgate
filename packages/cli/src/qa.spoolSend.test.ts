@@ -40,7 +40,7 @@ function eventIdFor(sequence: number): string {
 }
 
 /** One compact 00 §9.4 envelope; `pad` grows an `ext` member so the line hits a size. */
-function envelopeText(sequence: number, pad = 0): string {
+function envelopeText(sequence: number, pad = 0, padText?: string): string {
   const envelope: Record<string, unknown> = {
     schema_version: 1,
     event_id: eventIdFor(sequence),
@@ -52,7 +52,7 @@ function envelopeText(sequence: number, pad = 0): string {
     occurred_at: '2026-01-01T00:00:00Z',
   };
   if (pad > 0) {
-    envelope['ext'] = { schema: 'x', pad: 'y'.repeat(pad) };
+    envelope['ext'] = { schema: 'x', pad: padText ?? 'y'.repeat(pad) };
   }
   return JSON.stringify(envelope);
 }
@@ -65,8 +65,8 @@ function exactBytes(lines: readonly string[]): number {
   return lines.reduce((sum, line) => sum + Buffer.byteLength(line, 'utf8') + 1, 0);
 }
 
-function synth(sequence: number, pad: number): SpoolEvent {
-  const line = envelopeText(sequence, pad);
+function synth(sequence: number, pad: number, padText?: string): SpoolEvent {
+  const line = envelopeText(sequence, pad, padText);
   return {
     sequence,
     eventId: eventIdFor(sequence),
@@ -75,6 +75,17 @@ function synth(sequence: number, pad: number): SpoolEvent {
     chunk: '000001.jsonl',
     lineNumber: sequence,
   };
+}
+
+function moderatelyCompressiblePad(): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let seed = 12345;
+  let noise = '';
+  for (let i = 0; i < 30_000; i++) {
+    seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
+    noise += alphabet.charAt((seed >>> 16) & 63);
+  }
+  return 'abcdefgh;'.repeat(10_000) + noise;
 }
 
 async function* eventsOf<T>(list: readonly T[]): AsyncGenerator<T> {
@@ -413,16 +424,32 @@ describe('batcher: boundaries (04.2.3 AC4, contracts/cli.md §11)', () => {
     expect(seen).toEqual([[1, 2]]);
   });
 
-  it('gzips a compressible body and the payload decodes back to the exact body', async () => {
-    const events = [synth(1, 200_000)];
+  it('gzips a moderately compressible body (about 5:1) and the payload decodes back to the exact body', async () => {
+    const pad = moderatelyCompressiblePad();
     const [batch] = await collect(
-      packBatches(eventsOf(events), { runId, producerId: producer, validate: noValidate }),
+      packBatches(eventsOf([synth(1, pad.length, pad)]), {
+        runId,
+        producerId: producer,
+        validate: noValidate,
+      }),
     );
     expect(batch?.gzipBody).toBeDefined();
     expect(batch?.gzipBody?.length).toBeLessThan(batch?.body.length ?? 0);
     expect(
       gunzipSync(batch?.gzipBody ?? Buffer.alloc(0)).equals(batch?.body ?? Buffer.alloc(1)),
     ).toBe(true);
+  });
+
+  it('drops gzip when it would expand more than 20:1 (server MaxExpansionRatio)', async () => {
+    const [batch] = await collect(
+      packBatches(eventsOf([synth(1, 200_000)]), {
+        runId,
+        producerId: producer,
+        validate: noValidate,
+      }),
+    );
+    expect(batch?.body.length).toBeGreaterThan(200_000);
+    expect(batch?.gzipBody).toBeUndefined();
   });
 
   it('does not gzip a small body: the saving is under the 1 KiB floor', async () => {
@@ -515,7 +542,8 @@ describe('sender: retry edges (04.2.3 AC1, AC5)', () => {
       return ackFor(await bodyEvents(input, init));
     };
     const small = await batchesOf([synth(1, 0)]);
-    const big = await batchesOf([synth(2, 200_000)]);
+    const pad = moderatelyCompressiblePad();
+    const big = await batchesOf([synth(2, pad.length, pad)]);
     const c = clock();
     await sendBatches(
       eventsOf(small),

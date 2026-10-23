@@ -8,17 +8,19 @@
 //   batch's own `Idempotency-Key`; a retry resends the SAME bytes, the SAME key and
 //   therefore the SAME `event_id`s, so a lost ACK can never create a second identity;
 // - only 408/429/5xx and transport failures are retried, with full-jitter exponential
-//   backoff (500 ms x2, cap 30 s) and `Retry-After` (delta-seconds or HTTP-date) honoured;
-//   an envelope `retryable: false` stops the retry even on a 5xx;
+//   backoff (500 ms x2, cap 30 s); `Retry-After` (delta-seconds or HTTP-date) is honoured
+//   as a floor over that backoff, so `Retry-After: 0` still backs off. An envelope
+//   `retryable: false` stops the retry even on a 5xx;
 // - 401 and every other 4xx fail fast: the server's `error.code` and `request_id` reach
 //   the caller verbatim (T9) and the batch is never silently retried;
 // - every ack is verified (one ack per event, same `event_id`/position, status
 //   `accepted`/`duplicate`); anything else is `ack_mismatch` and nothing advances
 //   ("never advance on doubt", D7/§6);
 // - `duplicate` acks count as delivered (a resend after a lost ACK is expected);
-// - on the first fatal error the sender stops pulling, lets the in-flight batches settle
-//   (their acks still reach `onBatchAcked`, so the cursor moves over them), then throws
-//   that first fatal error;
+// - on the first fatal error the sender stops pulling, starts no further retry attempt or
+//   backoff wait on any other batch, lets the in-flight batches settle (their acks still
+//   reach `onBatchAcked`, so the cursor moves over them), then throws that first fatal
+//   error; the batch iterator is closed on every exit, so its spool chunk is never leaked;
 // - the bearer token is never part of a message: refusals reuse `serverErrorFromResponse`
 //   (which redacts every registered secret), transport failures use the fixed
 //   `transportError` text, and a deadline message names only code/status/request id.
@@ -49,6 +51,12 @@ const maxRequestIdLength = 200;
 const transportFailedCode = 'transport_failed';
 const ackMismatchCode = 'ack_mismatch';
 const deadlineExceededCode = 'deadline_exceeded';
+/**
+ * A batch that stops because another batch (or the iterator) already failed. It never
+ * reaches the caller: `sendBatches` throws the first fatal error, and the batch that took
+ * this exit is only ever the second one.
+ */
+const sendStoppedCode = 'send_stopped';
 
 /** The effects the send needs, all injected so a spec is deterministic (no real I/O). */
 export interface SendDeps {
@@ -169,6 +177,11 @@ export async function sendBatches(
   let accepted = 0;
   let duplicates = 0;
 
+  // P3-4/PF4: one fatal error has to end every other batch's retry loop at once. Without
+  // it a sibling already backing off a 503/429 would keep sleeping until the deadline
+  // (30 min by default) before the first error was reported.
+  const stopRequested = (): boolean => fatal !== undefined;
+
   // The command writes the cursor on every ack, so the calls are chained: two acks
   // resolving at the same time must not interleave two cursor writes.
   let ackQueue: Promise<void> = Promise.resolve();
@@ -184,7 +197,7 @@ export async function sendBatches(
   };
 
   const deliver = async (batch: Batch): Promise<void> => {
-    const summary = await sendBatch(client, options, batch, deadlineAt, deps);
+    const summary = await sendBatch(client, options, batch, deadlineAt, deps, stopRequested);
     await enqueueAck(batch, summary);
     delivered += 1;
     accepted += summary.accepted;
@@ -208,45 +221,65 @@ export async function sendBatches(
     pending.add(job);
   };
 
-  for (;;) {
-    for (const job of pending) {
-      if (job.settled) {
-        pending.delete(job);
-      }
-    }
-    // Pull lazily and only up to the concurrency limit. Once something failed nothing
-    // more is pulled; the already-dispatched batches keep going.
-    while (fatal === undefined && !exhausted && pending.size < limit) {
-      let next: IteratorResult<Batch>;
-      try {
-        next = await iterator.next();
-      } catch (error) {
-        if (fatal === undefined) {
-          fatal = error;
+  try {
+    for (;;) {
+      for (const job of pending) {
+        if (job.settled) {
+          pending.delete(job);
         }
+      }
+      // Pull lazily and only up to the concurrency limit. Once something failed nothing
+      // more is pulled; the already-dispatched batches keep going.
+      while (fatal === undefined && !exhausted && pending.size < limit) {
+        let next: IteratorResult<Batch>;
+        try {
+          next = await iterator.next();
+        } catch (error) {
+          if (fatal === undefined) {
+            fatal = error;
+          }
+          break;
+        }
+        if (next.done === true) {
+          exhausted = true;
+          break;
+        }
+        if (fatal !== undefined) {
+          // A dispatched batch failed while we were pulling. This pulled batch is dropped
+          // unacked, so the cursor cannot advance past it.
+          break;
+        }
+        dispatch(next.value);
+      }
+      if (pending.size === 0) {
         break;
       }
-      if (next.done === true) {
-        exhausted = true;
-        break;
-      }
-      if (fatal !== undefined) {
-        // A dispatched batch failed while we were pulling. This pulled batch is dropped
-        // unacked, so the cursor cannot advance past it.
-        break;
-      }
-      dispatch(next.value);
+      await Promise.race(Array.from(pending, (job) => job.promise));
     }
-    if (pending.size === 0) {
-      break;
-    }
-    await Promise.race(Array.from(pending, (job) => job.promise));
+  } finally {
+    // P3-10: the iterator owns the spool chunk it is reading, so an abandoned one keeps
+    // that descriptor open until the process exits. Close it on every exit.
+    await closeIterator(iterator, fatal);
   }
 
   if (fatal !== undefined) {
     throw fatal instanceof Error ? fatal : new Error('the send failed', { cause: fatal });
   }
   return { batches: delivered, accepted, duplicates };
+}
+
+/**
+ * Closes the batch iterator. A close failure never hides the outcome the send already has:
+ * an earlier fatal error wins, while a clean send reports its own close failure.
+ */
+async function closeIterator(iterator: AsyncIterator<Batch>, fatal: unknown): Promise<void> {
+  try {
+    await iterator.return?.(undefined);
+  } catch (error) {
+    if (fatal === undefined) {
+      throw error;
+    }
+  }
 }
 
 /** The effective concurrency: a caller may lower it, never raise it past `maxInFlight`. */
@@ -260,6 +293,11 @@ function concurrencyLimit(requested: number | undefined): number {
 /**
  * One batch, retried until it is acked or the deadline/failure ends it. The bytes, the
  * `Idempotency-Key` and the event ids are the batch's own on every attempt (AC5).
+ *
+ * `stopRequested` is the send's own fatal flag: once a sibling batch (or the iterator)
+ * has failed nothing else can win, so this batch starts no further attempt and takes no
+ * further backoff wait (P3-4). A request already in flight is left to finish, so its ack
+ * still reaches `onBatchAcked`.
  */
 async function sendBatch(
   client: Client,
@@ -267,11 +305,15 @@ async function sendBatch(
   batch: Batch,
   deadlineAt: number,
   deps: SendDeps,
+  stopRequested: () => boolean,
 ): Promise<BatchAckSummary> {
   let lastFailure: SendFailedError | undefined;
   let attempts = 0;
 
   for (;;) {
+    if (stopRequested()) {
+      throw stoppedElsewhere(batch);
+    }
     if (deadlineAt - deps.now() <= 0) {
       throw deadlineExceeded(batch, lastFailure);
     }
@@ -289,15 +331,37 @@ async function sendBatch(
     if (remaining <= 0) {
       throw deadlineExceeded(batch, lastFailure);
     }
-    const requested = outcome.retryAfterMs ?? backoffDelay(attempts, deps.random());
-    // `Retry-After`/backoff is honoured as given and bounded by the deadline: a wait that
-    // would reach the deadline is a deadline failure, not a shorter retry.
-    const waitMs = Math.max(requested, 0);
+    // The wait is the later of `Retry-After` and this attempt's jittered backoff, so a
+    // `Retry-After: 0` (or an HTTP date already past) still backs off instead of spinning
+    // on repeated 429s. A wait that would reach the deadline is a deadline failure, not a
+    // shorter retry.
+    const waitMs = Math.max(outcome.retryAfterMs ?? 0, backoffDelay(attempts, deps.random()));
     if (waitMs >= remaining) {
       throw deadlineExceeded(batch, lastFailure);
     }
+    if (stopRequested()) {
+      // The failure landed while this attempt was in flight: do not hold the send open
+      // with a backoff that can no longer deliver anything.
+      throw stoppedElsewhere(batch);
+    }
     await deps.sleep(waitMs);
   }
+}
+
+/**
+ * The batch that stops because the send already failed elsewhere. `sendBatches` reports
+ * the first fatal error, so this one is never the error the caller sees; it exists so a
+ * stopped batch is never mistaken for a delivered one.
+ */
+function stoppedElsewhere(batch: Batch): SendFailedError {
+  return failure(batch, {
+    code: sendStoppedCode,
+    message:
+      `the send stopped before batch ${batch.firstSequence}-${batch.lastSequence} ` +
+      'was acknowledged',
+    requestId: undefined,
+    status: undefined,
+  });
 }
 
 /** The identity body serializer: the batcher already produced the exact wire bytes. */
@@ -408,6 +472,8 @@ function isRetryable(status: number, error: unknown): boolean {
 /**
  * `Retry-After` as delta-seconds or an HTTP-date (00 §9.1). An absent or unparsable value
  * is `undefined` (the caller falls back to jittered backoff); a date in the past is 0.
+ * The caller treats this value as a floor under the jittered backoff, so a 0 never means
+ * "retry at once".
  */
 function retryAfter(response: Response, now: number): number | undefined {
   const raw = response.headers.get('retry-after');

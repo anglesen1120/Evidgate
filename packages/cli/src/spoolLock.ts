@@ -2,19 +2,27 @@
 //
 // D2 of the 04.2.3 contract: `events send` and `runs finalize` are the only CLI writers of
 // a producer directory, and they must never interleave with a second CLI process (the
-// merged reporter takes no lock). The lock is an `O_CREAT|O_EXCL` file, `spool.lock`,
-// mode 0600, whose whole content is `{ pid, started_at }` — no token, no argv, nothing a
-// support bundle could leak. The holder is stale only when its pid is dead on this host
-// (pid reuse is accepted as a risk: a lock naming a live pid is never taken over).
+// merged reporter takes no lock). The lock is `spool.lock`, mode 0600, whose whole content
+// is `{ pid, started_at }` — no token, no argv, nothing a support bundle could leak.
+//
+// Creation is atomic with the content: the record is written to a unique 0600 temp file in
+// the same directory, fsynced, and hard-linked to `spool.lock`. `link` is the winner
+// decision (EEXIST = held), so `spool.lock` is never observable empty or torn; that is what
+// lets a lock which does not parse be treated as foreign instead of as a writer mid-create.
+//
+// Takeover of a dead holder never unlinks the path: the lock is renamed aside, the moved
+// file is re-read, and it is deleted only when it still names the dead holder observed
+// before the rename. Anything else is a live successor's lock and is put back with
+// link-if-absent semantics. A lock naming a live pid is never taken over (pid reuse is
+// accepted as a risk).
 //
 // The lock is advisory within this package: it guards a directory, not an fd, so every
 // reader/writer of the spool goes through `withSpoolLock`.
+import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { open, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { link, lstat, open, readdir, rename, unlink } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-
-import type { FileHandle } from 'node:fs/promises';
 
 import { CliError } from './errors.js';
 
@@ -28,15 +36,19 @@ export const spoolLockFileMode = 0o600;
  * (the same degrade the merged writer uses).
  */
 const O_NOFOLLOW: number = process.platform === 'win32' ? 0 : fsConstants.O_NOFOLLOW;
+/** Without `O_NONBLOCK` an `open` of a planted FIFO blocks the thread pool forever. */
+const O_NONBLOCK: number = process.platform === 'win32' ? 0 : fsConstants.O_NONBLOCK;
 
 /**
- * A holder that has created the lock file but not yet written its content is
- * indistinguishable from a crashed one; re-read once after this pause before deciding it
- * is stale.
+ * A lock file written by an older writer (or by anything else) may still be empty for a
+ * moment; re-read once after this pause before deciding that an unparseable lock is stale.
+ * A lock we create is never observable empty, so this only covers a foreign writer.
  */
 const staleProbeDelayMs = 10;
 /** Bounded takeover attempts, so two processes racing over a dead lock cannot loop. */
 const defaultTakeoverAttempts = 3;
+/** No lock record is longer than a few dozen bytes; anything larger is not a lock. */
+const maxLockFileBytes = 1024;
 
 /** The lock file's whole content (task file §4 / D2). Nothing else is ever written. */
 export interface SpoolLockFile {
@@ -114,13 +126,38 @@ interface HeldSpoolLock {
   readonly path: string;
   readonly pid: number;
   readonly startedAt: string;
+  /** `(dev, ino)` of the lock inode, so release can find it after a takeover renamed it. */
+  readonly dev: number;
+  readonly ino: number;
 }
 
+/** Identity of the inode the lock record lives in. */
+interface LockClaim {
+  readonly dev: number;
+  readonly ino: number;
+}
+
+/** A lock record read from the path that beat us, or a file that is not a lock at all. */
+type ObservedLock =
+  | { readonly kind: 'lock'; readonly pid: number; readonly startedAt: string }
+  | { readonly kind: 'unreadable' };
+
+/** What one loser learned about the holder that beat it. */
+type Observation =
+  | { readonly kind: 'held'; readonly pid?: number }
+  | { readonly kind: 'stale'; readonly observed: ObservedLock };
+
+/** What a verified takeover attempt did. */
+type TakeoverOutcome =
+  | { readonly kind: 'taken' }
+  | { readonly kind: 'retry' }
+  | { readonly kind: 'held'; readonly pid?: number };
+
 /**
- * Creates the lock file with `O_CREAT|O_EXCL`, so exactly one process wins. A loser reads
- * the holder: a live pid is `spool_locked`; a dead pid (or an unreadable lock after a
- * short re-read) is stale, and the loser unlinks it and tries again a bounded number of
- * times.
+ * Claims the lock by hard-linking a fully written temp file to `spool.lock`, so exactly one
+ * process wins and the path never shows a partial record. A loser observes the holder: a
+ * live pid is `spool_locked`; a dead pid (or a foreign file) is broken by a verified
+ * takeover and the link is retried a bounded number of times.
  */
 async function acquireSpoolLock(
   directory: string,
@@ -133,48 +170,150 @@ async function acquireSpoolLock(
   const attempts = options.maxTakeoverAttempts ?? defaultTakeoverAttempts;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const startedAt = now().toISOString();
-    const handle = await createExclusive(path);
-    if (handle !== null) {
-      try {
-        // `{ pid, started_at }` and nothing else: the lock must never carry credential
-        // material, so `readSpoolLock` and the spec can assert the exact field set.
-        await handle.writeFile(`${JSON.stringify({ pid, started_at: startedAt })}\n`, 'utf8');
-        await handle.sync();
-      } catch (error) {
-        await handle.close().catch(() => undefined);
-        await unlink(path).catch(() => undefined);
-        throw error;
-      }
-      await handle.close();
-      return { path, pid, startedAt };
-    }
-    let holder = await readSpoolLock(directory);
-    if (holder === null) {
-      // The holder may be between `open` and `writeFile`; one short re-read separates a
-      // create/write race from a lock left by a crash.
-      await delay(staleProbeDelayMs);
-      holder = await readSpoolLock(directory);
-    }
-    if (holder !== null && alive(holder.pid)) {
-      throw new SpoolLockedError(path, holder.pid);
-    }
-    await unlink(path).catch((error: unknown) => {
-      const code = (error as NodeJS.ErrnoException).code;
-      // ENOENT: another loser already removed the stale lock.
-      if (code !== 'ENOENT') throw error;
-    });
+    const claim = await createLockAtomically(directory, path, pid, startedAt);
+    if (claim !== null) return { path, pid, startedAt, ...claim };
+    const observation = await observeHeldLock(directory, alive);
+    if (observation.kind === 'held') throw new SpoolLockedError(path, observation.pid);
+    const outcome = await takeOverObservedLock(directory, path, observation.observed, alive);
+    if (outcome.kind === 'held') throw new SpoolLockedError(path, outcome.pid);
+    // 'taken' and 'retry' both leave the slot to the next attempt, which links again.
   }
   throw new SpoolLockedError(path);
 }
 
-/** `open(path, 'wx')` = `O_CREAT|O_EXCL|O_WRONLY`; `null` when another process holds it. */
-async function createExclusive(path: string): Promise<FileHandle | null> {
+/** The whole lock record: `{ pid, started_at }` and nothing else. */
+function lockRecord(pid: number, startedAt: string): string {
+  return `${JSON.stringify({ pid, started_at: startedAt })}\n`;
+}
+
+/**
+ * Creates `spool.lock` atomically *with* its content. The record goes to a unique temp file
+ * in the same directory (`O_CREAT|O_EXCL`, mode 0600), is fsynced, and is then hard-linked
+ * to `path`: `link` is the single atomic step that decides the winner, and it never exposes
+ * a partially written lock. Returns the claimed inode, or `null` when another process
+ * already holds the lock.
+ */
+async function createLockAtomically(
+  directory: string,
+  path: string,
+  pid: number,
+  startedAt: string,
+): Promise<LockClaim | null> {
+  const tempPath = join(directory, `${spoolLockFileName}.${pid}.${randomUUID()}.tmp`);
+  const handle = await open(tempPath, 'wx', spoolLockFileMode);
+  let claim: LockClaim;
   try {
-    return await open(path, 'wx', spoolLockFileMode);
+    await handle.writeFile(lockRecord(pid, startedAt), 'utf8');
+    await handle.sync();
+    const { dev, ino } = await handle.stat();
+    claim = { dev, ino };
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    await removeIfPresent(tempPath);
+    throw error;
+  }
+  await handle.close();
+  try {
+    await link(tempPath, path);
+    return claim;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') return null;
     throw error;
+  } finally {
+    // The lock keeps its inode through the link; the temp name is only a staging entry.
+    await removeIfPresent(tempPath);
   }
+}
+
+/**
+ * Reads the lock that beat us and decides whether its holder is alive. A record naming a
+ * live pid is final; a dead pid is stale at once. An unparseable file (torn, empty, foreign,
+ * a FIFO or a symlink) is re-read once after {@link staleProbeDelayMs} so that a foreign
+ * writer caught mid-create is not mistaken for a crashed one.
+ */
+async function observeHeldLock(
+  directory: string,
+  alive: (pid: number) => boolean,
+): Promise<Observation> {
+  for (let probe = 0; probe < 2; probe += 1) {
+    if (probe > 0) await delay(staleProbeDelayMs);
+    const holder = await readSpoolLock(directory);
+    if (holder === null) continue;
+    if (alive(holder.pid)) return { kind: 'held', pid: holder.pid };
+    return {
+      kind: 'stale',
+      observed: { kind: 'lock', pid: holder.pid, startedAt: holder.startedAt },
+    };
+  }
+  return { kind: 'stale', observed: { kind: 'unreadable' } };
+}
+
+/**
+ * Breaks a stale lock without ever destroying a successor's lock.
+ *
+ * `rename` is the only path operation that removes an entry atomically: whatever sits at
+ * `spool.lock` at that instant moves aside, so a lock created after our read can never be
+ * unlinked by us. The quarantined file is re-read and deleted only when it is still the lock
+ * we observed as stale — same `(pid, started_at)`, pid still dead, or still unparseable.
+ * Anything else means we moved a lock we had not observed: it is put back with
+ * link-if-absent (`link` fails rather than overwrite, so a lock created in the meantime
+ * wins) and reported as held.
+ *
+ * Residual window: a third process that links its own lock in the instant between our
+ * `rename` and the restore makes the restore fail with EEXIST. It then holds the path
+ * legitimately, and the lock we moved cannot be put back — POSIX path operations cannot
+ * close that window. It needs a stale lock plus three racing CLIs, and release is content
+ * checked, so the displaced holder still never deletes its successor's lock.
+ */
+async function takeOverObservedLock(
+  directory: string,
+  path: string,
+  observed: ObservedLock,
+  alive: (pid: number) => boolean,
+): Promise<TakeoverOutcome> {
+  const quarantined = join(directory, `${spoolLockFileName}.${process.pid}.${randomUUID()}.stale`);
+  try {
+    await rename(path, quarantined);
+  } catch (error) {
+    // ENOENT: another loser moved the stale lock first; the caller retries the link.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'retry' };
+    throw error;
+  }
+  const moved = await readSpoolLockPath(quarantined);
+  const stillTheObservedStaleLock =
+    matchesObserved(observed, moved) && (moved === null || !alive(moved.pid));
+  if (!stillTheObservedStaleLock) {
+    await restoreQuarantinedLock(quarantined, path);
+    const current = await readSpoolLock(directory);
+    return current === null ? { kind: 'retry' } : { kind: 'held', pid: current.pid };
+  }
+  await removeIfPresent(quarantined);
+  return { kind: 'taken' };
+}
+
+/** Whether a quarantined lock is byte-for-byte the state we observed before the rename. */
+function matchesObserved(observed: ObservedLock, moved: SpoolLockFile | null): boolean {
+  if (observed.kind === 'unreadable') return moved === null;
+  return moved !== null && moved.pid === observed.pid && moved.startedAt === observed.startedAt;
+}
+
+/** Puts a quarantined lock back at `path` unless a newer lock already took the slot. */
+async function restoreQuarantinedLock(quarantined: string, path: string): Promise<void> {
+  try {
+    await link(quarantined, path);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    // EEXIST: a newer lock owns the path. ENOENT: the quarantined file is already gone.
+    if (code !== 'EEXIST' && code !== 'ENOENT') throw error;
+  } finally {
+    await removeIfPresent(quarantined);
+  }
+}
+
+async function removeIfPresent(path: string): Promise<void> {
+  await unlink(path).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  });
 }
 
 /**
@@ -189,22 +328,58 @@ export function readSpoolLock(directory: string): Promise<SpoolLockFile | null> 
 /**
  * Removes the lock only when it is still ours: a lock taken over by another process (or
  * rewritten by it) is left untouched, so a slow holder can never delete its successor's
- * lock.
+ * lock. When the path no longer carries a lock at all, a concurrent verified takeover may
+ * have our record quarantined (renamed aside) at the moment we released; that copy is
+ * removed by inode, so no phantom `spool.lock` naming live pid can survive.
  */
 async function releaseSpoolLock(held: HeldSpoolLock): Promise<void> {
   const holder = await readSpoolLockPath(held.path);
-  if (holder === null) return;
+  if (holder === null) {
+    await scavengeQuarantinedLock(held);
+    return;
+  }
   if (holder.pid !== held.pid || holder.startedAt !== held.startedAt) return;
-  await unlink(held.path).catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-  });
+  await removeIfPresent(held.path);
 }
 
+/**
+ * Deletes a quarantined copy of our own lock. A takeover renames the lock aside before it
+ * decides whether to break it; if this holder releases inside that window, its unlink finds
+ * no path and the taker's restore finds no quarantined file either, so the record would
+ * survive as a lock naming a live pid that no longer holds anything. `(dev, ino)` still
+ * identifies the inode under whatever name the taker chose; only that exact inode is removed.
+ */
+async function scavengeQuarantinedLock(held: HeldSpoolLock): Promise<void> {
+  const directory = dirname(held.path);
+  let names: string[];
+  try {
+    names = await readdir(directory);
+  } catch {
+    return;
+  }
+  const prefix = `${spoolLockFileName}.`;
+  for (const name of names) {
+    if (!name.startsWith(prefix) || !name.endsWith('.stale')) continue;
+    const candidate = join(directory, name);
+    const stats = await lstat(candidate).catch(() => null);
+    if (stats === null || stats.dev !== held.dev || stats.ino !== held.ino) continue;
+    await removeIfPresent(candidate);
+  }
+}
+
+/**
+ * Reads one lock record. The open is `O_NOFOLLOW|O_NONBLOCK` and the descriptor must name a
+ * regular file of a plausible size, so a symlink, FIFO or device planted at the lock path
+ * (by another user of a shared spool, or by a hostile reporter) can neither be followed nor
+ * block the CLI.
+ */
 async function readSpoolLockPath(path: string): Promise<SpoolLockFile | null> {
   let text: string;
   try {
-    const handle = await open(path, fsConstants.O_RDONLY | O_NOFOLLOW);
+    const handle = await open(path, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
     try {
+      const stats = await handle.stat();
+      if (!stats.isFile() || stats.size > maxLockFileBytes) return null;
       text = await handle.readFile('utf8');
     } finally {
       await handle.close();

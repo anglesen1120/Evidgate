@@ -6,8 +6,10 @@
 // flags (D7, 2026-10-23): `last_sequence` is `cursor.json`'s `last_acked_sequence` and
 // `count` its `acked_count`. A spool that still holds unacked events is refused with
 // `unsent_events` (exit 3) naming the run and the unsent range, so a finalize can never
-// declare a sequence the server has not acknowledged. A missing producer directory is
-// `spool_missing` (exit 3) — finalize never creates a spool.
+// declare a sequence the server has not acknowledged. A cursor whose `acked_count`
+// exceeds `last_acked_sequence` is `spool_corrupt` (exit 3) rather than a declaration
+// nobody could have produced (S54 SC9). A missing producer directory is `spool_missing`
+// (exit 3) — finalize never creates a spool.
 //
 // Every flag is validated BEFORE `getToken()`, so a bad flag makes no request at all and
 // not even the token exchange (the `runs create` rule, 04.2.2 §8/§9). Each option is
@@ -36,7 +38,7 @@ import { resolveSpoolDir, spoolDirMissingError } from '../config.js';
 import { CliError } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
 import { serverErrorFromResponse, transportError } from '../serverError.js';
-import { ProducerSpool } from '../spool.js';
+import { ProducerSpool, SpoolCorruptError, spoolCursorFileName } from '../spool.js';
 
 import type { CommandDefinition, ParsedValues } from './index.js';
 
@@ -116,9 +118,11 @@ export const runsFinalizeCommand: CommandDefinition = {
   requireToken: true,
   // The spool root is required by the spool commands (D5). Refusing it here — before the
   // `--verbose` config dump and before any token work — is the `quickstart` project-guard
-  // pattern (contracts/cli.md §1/§10).
+  // pattern (contracts/cli.md §1/§10). Forcing the lazy `spoolSettings()` (CR8) is what
+  // makes a malformed `EVIDGATE_SPOOL_MAX_BYTES` this command's `invalid_config` and never
+  // `runs create`'s or `auth login`'s.
   validateConfig: (config) => {
-    if (config.spoolDir === undefined) {
+    if (config.spoolSettings().spoolDir === undefined) {
       throw spoolDirMissingError();
     }
   },
@@ -152,17 +156,19 @@ export const runsFinalizeCommand: CommandDefinition = {
     const keepSpool = flagSwitch(values, 'keep-spool');
 
     // Configuration before the token too: a missing spool directory is `missing_config`
-    // (refused already in `validateConfig`) and costs no token exchange. `resolveSpoolDir`
-    // makes a relative value absolute, so the spool path never depends on a later `chdir`
-    // (D5) — the fallback only narrows the type here.
-    const spoolDir = config.spoolDir ?? resolveSpoolDir(env);
+    // (refused already in `validateConfig`) and costs no token exchange. The settings are
+    // memoised by that pre-flight (CR8), and `resolveSpoolDir` makes a relative value
+    // absolute, so the spool path never depends on a later `chdir` (D5) — the fallback
+    // only narrows the type here.
+    const settings = config.spoolSettings();
+    const spoolDir = settings.spoolDir ?? resolveSpoolDir(env);
     const spool = await ProducerSpool.open({
       spoolDir,
       runId,
       producerId,
-      // The run-directory cap is resolved once in `resolveConfig`; finalize never
-      // appends, but `ProducerSpool` validates the value it is opened with (D4).
-      maxBytes: config.spoolMaxBytes,
+      // The run-directory cap is resolved by `validateConfig`; finalize never appends,
+      // but `ProducerSpool` validates the value it is opened with (D4).
+      maxBytes: settings.spoolMaxBytes,
     });
 
     return spool.withLock(async () => {
@@ -180,6 +186,18 @@ export const runsFinalizeCommand: CommandDefinition = {
       }
       const lastSequence = cursor.lastAckedSequence;
       const count = cursor.ackedCount;
+      // SC9: `cursor.json` is the only source of both declared values, and a count larger
+      // than the sequence it claims to cover cannot be a real ack prefix — it is
+      // corruption, not a value worth sending. `cursor()` already checked the shape and
+      // `last_acked_sequence === next_unacked_sequence - 1`; this is the remaining
+      // cross-field invariant (0 <= count <= last_sequence).
+      if (count > lastSequence) {
+        throw new SpoolCorruptError({
+          chunk: spoolCursorFileName,
+          lineNumber: 1,
+          reason: `acked_count (${count}) must not exceed last_acked_sequence (${lastSequence})`,
+        });
+      }
       const idempotencyKey = deriveFinalizeIdempotencyKey({
         runId,
         producerId,

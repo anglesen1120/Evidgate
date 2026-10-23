@@ -10,6 +10,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { ExchangeDeps } from '../auth/exchange.js';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 import { ProducerSpool } from '../spool.js';
@@ -20,6 +21,21 @@ const devToken = ['dev', 'token', '0123456789'].join('-');
 const apiUrl = 'http://127.0.0.1:8080';
 const maxBytes = 268_435_456;
 const manifestHash = `sha256:${'a'.repeat(64)}`;
+
+/** The seams `main` forwards plus the send's own clock and jitter. */
+interface TestDeps extends ExchangeDeps {
+  readonly now?: () => number;
+  readonly random?: () => number;
+}
+
+function invoke(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>,
+  io: Io,
+  deps: TestDeps,
+): Promise<number> {
+  return main(argv, env, io, deps);
+}
 
 interface Captured {
   readonly io: Io;
@@ -156,7 +172,7 @@ describe('QA S54: live spool.lock and dropped ack at command level', () => {
     const out = capture();
     const clock = virtualClock();
 
-    const code = await main(['events', 'send', '--run', runId], baseEnv(spoolDir), out.io, {
+    const code = await invoke(['events', 'send', '--run', runId], baseEnv(spoolDir), out.io, {
       fetch: stub.fetchImpl,
       now: clock.now,
       sleep: clock.sleep,
@@ -220,7 +236,7 @@ describe('QA S54: live spool.lock and dropped ack at command level', () => {
     const out = capture();
     const clock = virtualClock();
 
-    const code = await main(['events', 'send', '--run', runId], baseEnv(spoolDir), out.io, {
+    const code = await invoke(['events', 'send', '--run', runId], baseEnv(spoolDir), out.io, {
       fetch: stub.fetchImpl,
       now: clock.now,
       sleep: clock.sleep,

@@ -7,7 +7,7 @@
 // (04.2.3 §2, §5, §8, §9, §10; contracts/cli.md §5/§7/§11).
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { chmod, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -531,6 +531,52 @@ describe('runs finalize', () => {
     expect(out.stderr.join('')).toContain('evidgate: error missing_config: ');
     expect(out.stderr.join('')).toContain('EVIDGATE_SPOOL_DIR');
     expect(stub.calls).toHaveLength(0);
+  });
+
+  // CR8: the spool surface is lazy and forced here, so a malformed cap is this command's
+  // `invalid_config` and costs no request (it never reached `runs create` or `auth login`).
+  it('malformed_spool_cap_is_config_error', async () => {
+    const { spoolDir } = await writeSpool({ spooled: 1, acked: 1 });
+    const env = await devEnv(spoolDir, { EVIDGATE_SPOOL_MAX_BYTES: '1MiB' });
+    const stub = stubFetch(() => accepted());
+    const out = capture();
+
+    await expect(invoke(finalizeWith(), env, out, stub.fetchImpl)).resolves.toBe(3);
+
+    const text = out.stderr.join('');
+    expect(text).toContain('evidgate: error invalid_config: ');
+    expect(text).toContain('EVIDGATE_SPOOL_MAX_BYTES');
+    expect(text).not.toContain('1MiB');
+    expect(stub.calls).toHaveLength(0);
+  });
+
+  // SC9: `cursor.json` is the only source of the declared values, so a count larger than
+  // the sequence it claims to cover is corruption — no request, exit 3, spool kept.
+  it('corrupt_cursor_count_refuses', async () => {
+    const { spoolDir, producerDir } = await writeSpool({ spooled: 2, acked: 2 });
+    await writeFile(
+      join(producerDir, 'cursor.json'),
+      `${JSON.stringify({
+        producer_id: producerId,
+        next_unacked_sequence: 3,
+        last_acked_sequence: 2,
+        acked_count: 9,
+      })}\n`,
+      { mode: 0o600 },
+    );
+    const env = await devEnv(spoolDir);
+    const stub = stubFetch(() => accepted());
+    const out = capture();
+
+    await expect(invoke(finalizeWith(), env, out, stub.fetchImpl)).resolves.toBe(3);
+
+    const text = out.stderr.join('');
+    expect(text).toContain('evidgate: error spool_corrupt: ');
+    expect(text).toContain('acked_count');
+    expect(text).toContain('last_acked_sequence');
+    expect(out.stdout.join('')).toBe('');
+    expect(stub.calls).toHaveLength(0);
+    expect(existsSync(producerDir)).toBe(true);
   });
 
   // AC6 / contracts/cli.md §7: a 401 purges the cached CI token; the server error surfaces.

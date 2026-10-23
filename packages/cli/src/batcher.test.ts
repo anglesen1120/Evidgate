@@ -4,7 +4,7 @@
 // *schema registry* lives in parity.test.ts / schemaRegistry.test.ts; the
 // batcher-level parity (validator verdicts against every single-event vector in
 // fixtures/contracts/vectors/event-envelope.v1) lives in schemaParity.test.ts.
-import { gunzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,6 +39,10 @@ interface EnvelopeOverrides {
   readonly eventId?: string;
   readonly type?: string;
   readonly pad?: number;
+  /** Overrides the required `producer_id`, to model a line planted in another producer's directory. */
+  readonly producerId?: string;
+  /** Adds a `run_id` member (not in the schema), to model a line that binds itself to another run. */
+  readonly runId?: string;
 }
 
 /** One compact 00 §9.4 envelope: a single line, no newline (the reporter writes these). */
@@ -46,7 +50,7 @@ function envelopeText(sequence: number, o: EnvelopeOverrides = {}): string {
   const envelope: Record<string, unknown> = {
     schema_version: 1,
     event_id: o.eventId ?? eventIdFor(sequence),
-    producer_id: 'pw-shard-0',
+    producer_id: o.producerId ?? 'pw-shard-0',
     sequence,
     execution_key: '0'.repeat(64),
     attempt_no: 1,
@@ -55,6 +59,9 @@ function envelopeText(sequence: number, o: EnvelopeOverrides = {}): string {
   };
   if (o.pad !== undefined) {
     envelope['ext'] = { schema: 'x'.repeat(o.pad) };
+  }
+  if (o.runId !== undefined) {
+    envelope['run_id'] = o.runId;
   }
   return JSON.stringify(envelope);
 }
@@ -93,6 +100,26 @@ function envelopeOfBytes(sequence: number, bytes: number): string {
 
 /** `validate` stand-in for the size tests: the line is not under test there. */
 const noopValidate = (): void => {};
+
+/** One envelope line whose `ext.schema` carries `payload` verbatim (the schema landing spot for padding). */
+function paddedLine(sequence: number, payload: string): string {
+  return `${envelopeText(sequence).slice(0, -1)},"ext":{"schema":${JSON.stringify(payload)}}` + '}';
+}
+
+/**
+ * A payload gzip shrinks by roughly 4:1 — enough for the 1 KiB saving floor while staying
+ * well under the server's 20:1 expansion cap. Deterministic: a repeated phrase plus the
+ * fixed-PRNG bytes; no `Math.random`.
+ */
+function moderatelyCompressibleText(): string {
+  return `${'abcdefgh;'.repeat(10_000)}${pseudoRandomBytes(30_000).toString('base64')}`;
+}
+
+/** One envelope line plus a hostile extra member `name` (an `additional_properties` rejection). */
+function withExtraMember(sequence: number, name: string): string {
+  const envelope = JSON.parse(envelopeText(sequence)) as Record<string, unknown>;
+  return JSON.stringify({ ...envelope, [name]: 1 });
+}
 
 /**
  * An `AsyncIterable` over a hand-rolled iterator. Deliberately NOT an async
@@ -300,12 +327,14 @@ describe('packing_limits (AC4)', () => {
   });
 
   it('applies gzip only when it saves more than 1 KiB', async () => {
-    const compressible = spoolEvent(1, { pad: 20_000 });
+    const compressible = spoolEvent(1, { line: paddedLine(1, moderatelyCompressibleText()) });
     const [big] = await collect(packBatches(sourceOf([compressible]), options()));
 
     expect(big!.gzipBody).toBeDefined();
     expect(big!.gzipBody!.byteLength).toBeLessThanOrEqual(big!.body.byteLength * 0.9);
     expect(big!.body.byteLength - big!.gzipBody!.byteLength).toBeGreaterThan(1024);
+    // …and the kept body stays inside the server's expansion cap (20:1 by default).
+    expect(big!.body.byteLength).toBeLessThanOrEqual(big!.gzipBody!.byteLength * 19);
     expect(gunzipSync(big!.gzipBody!).equals(big!.body)).toBe(true);
 
     // The same compressible text in a body small enough that the saving is under
@@ -315,6 +344,40 @@ describe('packing_limits (AC4)', () => {
 
     expect(tiny!.body.byteLength).toBeLessThan(1024);
     expect(tiny!.gzipBody).toBeUndefined();
+  });
+
+  it('sends the raw body when gzip would exceed the server expansion cap', async () => {
+    // 500 near-identical ~1.7 KiB events: one full batch that gzip squashes far past
+    // the server's 20:1 decompression-bomb cap, which would be a non-retryable 413
+    // `batch_too_large` — while the raw 1 MiB body is always accepted.
+    const events = Array.from({ length: maxBatchEvents }, (_, index) =>
+      spoolEvent(index + 1, { pad: 1500 }),
+    );
+    const batches = await collect(packBatches(sourceOf(events), options()));
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.events).toHaveLength(maxBatchEvents);
+    expect(batch.body.byteLength).toBeGreaterThan(800_000);
+    expect(batch.body.byteLength).toBeLessThanOrEqual(maxBatchBytes);
+
+    // Fixture guard: this body really does compress past the server cap, i.e. the
+    // gzip decision that used to ship it would have been refused.
+    const naive = gzipSync(batch.body, { level: 6 });
+    expect(naive.byteLength * 20).toBeLessThan(batch.body.byteLength);
+
+    expect(batch.gzipBody).toBeUndefined();
+  });
+
+  it('keeps gzip for a body whose ratio stays under the cap', async () => {
+    const line = paddedLine(1, moderatelyCompressibleText());
+    const [batch] = await collect(packBatches(sourceOf([spoolEvent(1, { line })]), options()));
+
+    expect(batch!.gzipBody).toBeDefined();
+    const ratio = batch!.body.byteLength / batch!.gzipBody!.byteLength;
+    expect(ratio).toBeGreaterThan(1);
+    expect(ratio).toBeLessThanOrEqual(19);
+    expect(gunzipSync(batch!.gzipBody!).equals(batch!.body)).toBe(true);
   });
 
   it('still compresses a high-entropy body and round-trips it exactly', async () => {
@@ -375,6 +438,60 @@ describe('packing_limits (AC4)', () => {
 
     expect(await failure(collect(tooFewEvents))).toBeInstanceOf(RangeError);
     expect(await failure(collect(tooFewBytes))).toBeInstanceOf(RangeError);
+  });
+});
+
+describe('spool line identity (SC5)', () => {
+  const validate = createEnvelopeValidator(contractsDirectory);
+
+  it('rejects a line whose producer_id is not the directory it sits in', async () => {
+    const events = [spoolEvent(1, { pad: 8 }), spoolEvent(2, { producerId: 'pw-shard-9' })];
+    const error = await failure(collect(packBatches(sourceOf(events), options({ validate }))));
+
+    expect(error).toBeInstanceOf(EnvelopeInvalidError);
+    const thrown = error as EnvelopeInvalidError;
+    expect(thrown.sequence).toBe(2);
+    expect(thrown.eventId).toBe(eventIdFor(2));
+    expect(thrown.details).toEqual([{ path: '/producer_id', reason: 'producer_mismatch' }]);
+    // The message names the sequence and the trusted expectation — never the line's own value.
+    expect(thrown.message).toContain('sequence 2');
+    expect(thrown.message).toContain('the line is spooled under producer "pw-shard-0"');
+    expect(thrown.message).not.toContain('pw-shard-9');
+  });
+
+  it('rejects a line that binds itself to another run', async () => {
+    const line = envelopeText(3, { runId: '0197c9a4-0000-7000-8000-000000000000' });
+    const error = await failure(
+      collect(packBatches(sourceOf([spoolEvent(3, { line })]), options({ validate }))),
+    );
+
+    expect(error).toBeInstanceOf(EnvelopeInvalidError);
+    const thrown = error as EnvelopeInvalidError;
+    expect(thrown.sequence).toBe(3);
+    expect(thrown.details).toEqual([{ path: '/run_id', reason: 'run_mismatch' }]);
+    expect(thrown.message).toContain(options().runId);
+    expect(thrown.message).not.toContain('0197c9a4-0000-7000-8000-000000000000');
+  });
+
+  it('reports the identity mismatch before the schema verdict', async () => {
+    // Malformed in two ways: the line also carries a bad `type`. The identity row is
+    // the actionable one, so it is the row the operator sees.
+    const line = envelopeText(4, { producerId: 'pw-shard-9', type: 'Not-A-Type' });
+    const error = await failure(
+      collect(packBatches(sourceOf([spoolEvent(4, { line })]), options({ validate }))),
+    );
+
+    expect((error as EnvelopeInvalidError).details).toEqual([
+      { path: '/producer_id', reason: 'producer_mismatch' },
+    ]);
+  });
+
+  it('accepts a line that names its own producer directory and the run being sent', async () => {
+    const line = envelopeText(5, { runId: options().runId });
+    const batches = await collect(packBatches(sourceOf([spoolEvent(5, { line })]), options()));
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]!.body.toString('utf8')).toBe(expectedBody([spoolEvent(5, { line })]));
   });
 });
 
@@ -484,6 +601,29 @@ describe('createEnvelopeValidator', () => {
     expect(thrown.sequence).toBe(5);
     expect(thrown.details).toEqual([{ path: '', reason: 'invalid_json' }]);
     expect(thrown.eventId).toBeUndefined();
+  });
+
+  it('caps an echoed member name at 200 code points and escapes control characters', () => {
+    const hostileName = `secret_${'a'.repeat(5_000)}`;
+    const hostilePath = `/${hostileName}`;
+    const thrown = rejection(withExtraMember(7, hostileName), 7);
+
+    // The `details[]` row keeps the exact pointer (machine-readable)…
+    expect(thrown.details).toEqual([{ path: hostilePath, reason: 'additional_properties' }]);
+    // …while the message echoes at most the first 200 code points of it, then an ellipsis.
+    expect(thrown.message).toContain(`${hostilePath.slice(0, 200)}…`);
+    expect(thrown.message).not.toContain(hostileName);
+    expect(thrown.message.length).toBeLessThan(1_000);
+
+    // A member name carrying a control character is escaped, never emitted raw.
+    const controlName = 'bad\u0007name';
+    const controlThrown = rejection(withExtraMember(8, controlName), 8);
+
+    expect(controlThrown.details).toEqual([
+      { path: `/${controlName}`, reason: 'additional_properties' },
+    ]);
+    expect(controlThrown.message).not.toContain('\u0007');
+    expect(controlThrown.message).toContain('\\u0007');
   });
 
   it('locates the contracts tree without an explicit directory', () => {

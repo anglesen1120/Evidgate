@@ -20,12 +20,19 @@
 // instead of travelling to the server and coming back as a 422. The mapped
 // `details[]` rows are the 00 §9.2 `path` + `reason` pair only — never an event
 // value, which may be sensitive local test data (task §8 S3 analogue).
+//
+// Before the schema verdict, each line is also checked against the directory it was
+// read from (task §8 SC5): its `producer_id` must be that producer directory, and a
+// `run_id` it declares must be the run being sent. A spool is a made-to-be-tampered
+// input (any local process may write it), so a planted line stops the run instead of
+// being sent under another producer's batch key.
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
+import { escapeControlCharacters } from './errors.js';
 import { invalidJsonReason, loadContractSchemas, type ContractSchemaSet } from './validate.js';
 
 import type { SpoolEvent } from './spool.js';
@@ -48,6 +55,16 @@ const overheadBytes = Buffer.byteLength(batchOpen, 'utf8') + Buffer.byteLength(b
 const gzipMinRatio = 0.9;
 /** …and save more than this many bytes, or the `Content-Encoding` hop is not worth it. */
 const gzipMinSavingBytes = 1024;
+/**
+ * The lowest `EVIDGATE__INGESTION__MAXEXPANSIONRATIO` this client can count on. The
+ * server refuses a `gzip` body once its decoded size passes `ratio × compressed.Length`
+ * (`IngestionLimits.MaxExpansionRatio`, default 20; `EventBodyDecoder.cs` `next > ratioCap`),
+ * as a non-retryable 413 `batch_too_large`. A batch that compresses better than that cap
+ * must therefore travel raw, which it always can: the raw body is at most 1 MiB.
+ */
+const gzipMinServerExpansionRatio = 20;
+/** One ratio point of margin, so the decoded size stays *under* the server's comparison. */
+const gzipExpansionHeadroom = 1;
 
 /** Version tag of the idempotency-key pre-image; changing the recipe changes the tag. */
 const batchKeyVersion = 'evidgate.batch-key.v1';
@@ -86,7 +103,11 @@ export interface Batch {
   readonly lastSequence: number;
   /** The exact UTF-8 body bytes: `{"events":[` + the event lines + `]}`. */
   readonly body: Buffer;
-  /** The gzip-compressed body, present only when it is materially smaller than {@link body}. */
+  /**
+   * The gzip-compressed body, present only when it is materially smaller than
+   * {@link body} *and* its expansion ratio stays under the server's decompression-bomb
+   * cap (see `decideGzip`); otherwise the raw body travels.
+   */
   readonly gzipBody?: Buffer;
   /** `batch:` + sha256 hex of the versioned pre-image (see {@link deriveBatchIdempotencyKey}). */
   readonly idempotencyKey: string;
@@ -130,16 +151,32 @@ export class EnvelopeInvalidError extends Error {
   readonly sequence: number;
   /** The mapped 00 §9.2 rows, deduplicated and capped by the shared validator. */
   readonly details: readonly EnvelopeDetail[];
+  /**
+   * Optional explanation appended after the rows, for a rejection the schema cannot
+   * express (a line whose `producer_id`/`run_id` is not the directory/run it was read
+   * from). Only trusted values — the run id and the producer directory, never the
+   * line's own text — may appear in it.
+   */
+  readonly note?: string;
 
-  constructor(o: { sequence: number; eventId?: string; details: readonly EnvelopeDetail[] }) {
+  constructor(o: {
+    sequence: number;
+    eventId?: string;
+    details: readonly EnvelopeDetail[];
+    note?: string;
+  }) {
     super(
       `event at sequence ${o.sequence}${o.eventId === undefined ? '' : ` (${o.eventId})`} ` +
-        `is not a valid event envelope: ${summariseDetails(o.details)}`,
+        `is not a valid event envelope: ${summariseDetails(o.details)}` +
+        (o.note === undefined ? '' : ` (${o.note})`),
     );
     this.name = 'EnvelopeInvalidError';
     this.sequence = o.sequence;
     if (o.eventId !== undefined) {
       this.eventId = o.eventId;
+    }
+    if (o.note !== undefined) {
+      this.note = o.note;
     }
     this.details = o.details;
   }
@@ -147,6 +184,27 @@ export class EnvelopeInvalidError extends Error {
 
 /** At most this many `details[]` rows are echoed in the message; the rest is counted. */
 const maxSummaryRows = 5;
+/**
+ * Longest `details[].path` echoed in the message, in Unicode code points. Ajv paths
+ * carry member names straight from the spool line, so a hostile 1 MiB member name (or
+ * a secret-shaped one) must not flood stderr: the same 200-code-point cap
+ * `serverError.ts` applies to server-supplied text (SEC4 analogue).
+ */
+const maxEchoedPathLength = 200;
+
+/**
+ * Caps one echoed detail path to {@link maxEchoedPathLength} code points, with an
+ * ellipsis when cut, then control-char escapes it — the order `serverError.ts` uses,
+ * so a `\uXXXX` escape is never cut in half and a surrogate pair is never split.
+ */
+function capEchoedPath(path: string): string {
+  const points = Array.from(path);
+  const capped =
+    points.length <= maxEchoedPathLength
+      ? path
+      : `${points.slice(0, maxEchoedPathLength).join('')}…`;
+  return escapeControlCharacters(capped);
+}
 
 /** `path=reason` for the first rows, then `(+N more)` — paths are member names, never values. */
 function summariseDetails(details: readonly EnvelopeDetail[]): string {
@@ -156,7 +214,9 @@ function summariseDetails(details: readonly EnvelopeDetail[]): string {
 
   const rows = details
     .slice(0, maxSummaryRows)
-    .map((detail) => `${detail.path === '' ? '<event>' : detail.path} ${detail.reason}`);
+    .map(
+      (detail) => `${detail.path === '' ? '<event>' : capEchoedPath(detail.path)} ${detail.reason}`,
+    );
   if (details.length > maxSummaryRows) {
     rows.push(`(+${details.length - maxSummaryRows} more)`);
   }
@@ -210,6 +270,58 @@ export interface PackBatchesOptions {
   readonly maxBytes?: number;
 }
 
+/** The 00 §9.4 member naming the producer a line belongs to (required by the schema). */
+const producerIdMember = 'producer_id';
+/** The member that ties a line to one run; the schema does not require it (yet). */
+const runIdMember = 'run_id';
+
+/**
+ * The identity rejection of one spool line, when the line contradicts the directory it
+ * was read from (security review SC5, 04.2.3 §8): `producer_id` must be the producer
+ * directory the line sits in, and a line that *declares* a `run_id` must declare the run
+ * being sent. A line planted in `<run>/A/` that claims producer B would otherwise travel
+ * under the batch key derived from A (and be stored under the wrong producer once the
+ * server trusted the local framing), so the run stops here instead.
+ *
+ * Members that are absent (or not strings) are left to the schema: `producer_id` is
+ * `required`, and any `run_id` at all is an `additionalProperties` rejection — this check
+ * only adds the mismatch the schema cannot see, and it never echoes the line's own value.
+ */
+function identityMismatchOf(
+  line: string,
+  runId: string,
+  producerId: string,
+): { readonly detail: EnvelopeDetail; readonly note: string } | undefined {
+  let document: unknown;
+  try {
+    document = JSON.parse(line);
+  } catch {
+    // Not JSON at all: `validate` owns that verdict (`invalid_json`), not this check.
+    return undefined;
+  }
+  if (typeof document !== 'object' || document === null || Array.isArray(document)) {
+    return undefined;
+  }
+  const members = document as Record<string, unknown>;
+
+  const declaredProducer = members[producerIdMember];
+  if (typeof declaredProducer === 'string' && declaredProducer !== producerId) {
+    return {
+      detail: { path: `/${producerIdMember}`, reason: 'producer_mismatch' },
+      note: `the line is spooled under producer "${producerId}", so its producer_id must match`,
+    };
+  }
+
+  const declaredRun = members[runIdMember];
+  if (typeof declaredRun === 'string' && declaredRun !== runId) {
+    return {
+      detail: { path: `/${runIdMember}`, reason: 'run_mismatch' },
+      note: `the line declares a run_id but not the run being sent ("${runId}")`,
+    };
+  }
+  return undefined;
+}
+
 /**
  * Packs spool events into batches (AC4): at most `maxEvents` events and at most
  * `maxBytes` body bytes pre-compression, counting the opener, one separator per
@@ -219,9 +331,11 @@ export interface PackBatchesOptions {
  * in memory — and calls `o.validate` per line before the line joins a batch.
  *
  * Order of the per-event checks: the transport cap first (an event that cannot
- * travel fails with its `event_id` even when it is also malformed), then schema
- * validation. A later batch is never produced once a line throws: the run stops
- * at that sequence (task §6 failure path).
+ * travel fails with its `event_id` even when it is also malformed), then the
+ * line↔directory identity (see {@link identityMismatchOf}, which needs one
+ * `JSON.parse` per line — the same parse `validate` does, on the same text), then
+ * schema validation. A later batch is never produced once a line throws: the run
+ * stops at that sequence (task §6 failure path).
  */
 export async function* packBatches(
   events: AsyncIterable<SpoolEvent>,
@@ -244,6 +358,17 @@ export async function* packBatches(
     const singleBodyBytes = overheadBytes + lineBytes;
     if (singleBodyBytes > maxBytes) {
       throw new OversizedEventError(event.eventId, event.sequence, singleBodyBytes, maxBytes);
+    }
+
+    const identity = identityMismatchOf(event.line, o.runId, o.producerId);
+    if (identity !== undefined) {
+      const eventId = eventIdOf(event.line);
+      throw new EnvelopeInvalidError({
+        sequence: event.sequence,
+        ...(eventId === undefined ? {} : { eventId }),
+        details: [identity.detail],
+        note: identity.note,
+      });
     }
 
     o.validate(event.line, event.sequence);
@@ -331,11 +456,25 @@ function buildBody(events: readonly SpoolEvent[], bodyBytes: number): Buffer {
  * `Content-Encoding` hop and the extra buffering are not worth it. The level is
  * fixed (and Node's gzip carries no timestamp), so the same body always gzips to
  * the same bytes.
+ *
+ * A gzip body is also dropped when it would compress *too well*: the server refuses
+ * a decoded body larger than `MaxExpansionRatio × compressed.Length` with a
+ * non-retryable 413 `batch_too_large` (a decompression-bomb guard), so a batch of
+ * highly repetitive events that reaches, say, 800:1 must go out as the raw body,
+ * which is at most 1 MiB and always accepted. The cap is the default server ratio
+ * minus one point of margin; the comparison mirrors the server's `>` boundary, so an
+ * exactly-at-the-cap ratio still travels compressed.
  */
 function decideGzip(body: Buffer): Buffer | undefined {
   const compressed = gzipSync(body, { level: 6 });
   const saving = body.length - compressed.length;
   if (compressed.length > body.length * gzipMinRatio || saving <= gzipMinSavingBytes) {
+    return undefined;
+  }
+  const maxExpandedBytes =
+    compressed.length * (gzipMinServerExpansionRatio - gzipExpansionHeadroom);
+  if (body.length > maxExpandedBytes) {
+    // Compressing this batch would be refused as an expansion bomb; the raw body fits.
     return undefined;
   }
   return compressed;

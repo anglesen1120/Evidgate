@@ -3,10 +3,12 @@
 // value counts as unset and a token value is never accepted from a flag (argv is
 // visible in `ps`, 04.2.1 §5). Every secret read here is registered for redaction.
 // 04.2.1-T1.1: adds `cacheDir` (the token-cache location, §5 `auth/token-cache.ts`).
-// 04.2.3-T1.4: adds the spool surface — `spoolDir` (`EVIDGATE_SPOOL_DIR`, D5, optional
-// here because only the spool commands need it and they raise `missing_config`
-// themselves), `spoolMaxBytes` (`EVIDGATE_SPOOL_MAX_BYTES`, D4) and `sendDeadlineMs`
-// (`EVIDGATE_SEND_DEADLINE`, D5). All three are env-only: no flag can carry them.
+// 04.2.3-T1.4: adds the spool surface — `EVIDGATE_SPOOL_DIR` (D5, optional here because
+// only the spool commands need it and they raise `missing_config` themselves),
+// `EVIDGATE_SPOOL_MAX_BYTES` (D4) and `EVIDGATE_SEND_DEADLINE` (D5). All three are
+// env-only: no flag can carry them. They are resolved LAZILY ({@link SpoolSettings},
+// S54 CR8): a malformed spool value must never break `runs create`, `auth login` or any
+// other command that does not touch the spool.
 import { homedir as osHomedir } from 'node:os';
 import { posix, resolve, win32 } from 'node:path';
 
@@ -40,6 +42,20 @@ export interface ResolveConfigInput {
 /** Where the bearer token comes from, in §5 precedence order. */
 export type TokenSource = 'oidc' | 'actions-id-token' | 'ingest' | 'dev';
 
+/**
+ * The spool surface (04.2.3 D4/D5): the root (still optional — only the spool commands
+ * decide it is required), the run-directory byte cap and the one send deadline. Resolved
+ * together by {@link resolveSpoolSettings}; never by `resolveConfig` itself (S54 CR8).
+ */
+export interface SpoolSettings {
+  /** Absolute spool root (`EVIDGATE_SPOOL_DIR`), or `undefined` when it is unset. */
+  readonly spoolDir: string | undefined;
+  /** The run-directory byte cap (`EVIDGATE_SPOOL_MAX_BYTES`, D4). */
+  readonly spoolMaxBytes: number;
+  /** The one send deadline in milliseconds (`EVIDGATE_SEND_DEADLINE`, D5). */
+  readonly sendDeadlineMs: number;
+}
+
 export interface ResolvedConfig {
   readonly apiUrl: string;
   readonly project: string;
@@ -53,16 +69,15 @@ export interface ResolvedConfig {
   readonly devToken: string | undefined;
   readonly bindingChallenge: string | undefined;
   /**
-   * Absolute spool root (`EVIDGATE_SPOOL_DIR`, 04.2.3 D5), or `undefined` when the
-   * variable is unset. Optional on purpose: only `events send` / `runs finalize` need it,
-   * and each raises its own `missing_config` (via {@link resolveSpoolDir}), so a command
-   * that never touches the spool is unaffected.
+   * The spool surface, resolved on first call and memoised (S54 CR8). `events send` and
+   * `runs finalize` force it in their `validateConfig` pre-flight — before the
+   * `--verbose` dump and before any token work — and nothing else calls it, so a
+   * malformed `EVIDGATE_SPOOL_MAX_BYTES` / `EVIDGATE_SEND_DEADLINE` cannot break a
+   * command that never touches the spool. Throws the same `invalid_config` errors as a
+   * direct {@link resolveSpoolSettings} call; only the spool commands decide that an
+   * unset `spoolDir` is `missing_config` ({@link resolveSpoolDir}).
    */
-  readonly spoolDir: string | undefined;
-  /** The run-directory byte cap (`EVIDGATE_SPOOL_MAX_BYTES`, 04.2.3 D4). */
-  readonly spoolMaxBytes: number;
-  /** The one send deadline in milliseconds (`EVIDGATE_SEND_DEADLINE`, 04.2.3 D5). */
-  readonly sendDeadlineMs: number;
+  readonly spoolSettings: () => SpoolSettings;
   readonly verbose: boolean;
   readonly json: boolean;
 }
@@ -210,6 +225,15 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
     input.homedir ?? osHomedir(),
   );
 
+  // CR8: the spool surface stays unresolved here. The first `spoolSettings()` call
+  // resolves all three values and memoises them; a throwing resolution is not cached, so
+  // every later call reports exactly the same error.
+  let spool: SpoolSettings | undefined;
+  const spoolSettings = (): SpoolSettings => {
+    spool ??= resolveSpoolSettings(env);
+    return spool;
+  };
+
   return Object.freeze({
     apiUrl: validateApiUrl(apiUrlRaw),
     project: validateProject(projectRaw),
@@ -221,12 +245,27 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
     ingestToken,
     devToken,
     bindingChallenge,
-    spoolDir: resolveOptionalSpoolDir(env),
-    spoolMaxBytes: resolveSpoolMaxBytes(env),
-    sendDeadlineMs: resolveSendDeadlineMs(env),
+    spoolSettings,
     verbose: flags.verbose === true,
     json: flags.json === true,
   });
+}
+
+/**
+ * The spool surface `events send` and `runs finalize` need (04.2.3 D4/D5), resolved in
+ * the same order the eager fields used to be: root, cap, deadline. The errors are
+ * unchanged (`invalid_config` naming the variable, never echoing the value), so a
+ * malformed value reads the same to the operator as before — it is simply reported only
+ * by the commands that would use it (S54 CR8).
+ */
+export function resolveSpoolSettings(
+  env: Readonly<Record<string, string | undefined>>,
+): SpoolSettings {
+  return {
+    spoolDir: resolveOptionalSpoolDir(env),
+    spoolMaxBytes: resolveSpoolMaxBytes(env),
+    sendDeadlineMs: resolveSendDeadlineMs(env),
+  };
 }
 
 /** The fields `resolveTokenSource` reads; `ResolvedConfig` satisfies it structurally. */
@@ -275,13 +314,33 @@ export function formatConfigForVerbose(config: ResolvedConfig): string {
     `  binding_challenge=${maskSecret(config.bindingChallenge)}`,
     // Paths and counts are not secrets (04.2.3 T78 scope): the operator needs to see
     // which spool and cap a send will use.
-    `  spool_dir=${config.spoolDir ?? 'unset'}`,
-    `  spool_max_bytes=${String(config.spoolMaxBytes)}`,
-    `  send_deadline_ms=${String(config.sendDeadlineMs)}`,
+    ...spoolDumpLines(config),
     `  token_source=${resolveTokenSource(config) ?? 'none'}`,
     `  verbose=${String(config.verbose)}`,
     `  json=${String(config.json)}`,
   ].join('\n');
+}
+
+/**
+ * The spool lines of the `--verbose` dump. The surface is lazy (CR8) and this dump runs
+ * for commands that never touch the spool, so an invalid value is reported as
+ * `spool_settings=invalid (<code>)` instead of failing the command — the spool commands
+ * themselves already refused with that exact error in `validateConfig`, which `main`
+ * runs BEFORE this dump.
+ */
+function spoolDumpLines(config: ResolvedConfig): string[] {
+  let settings: SpoolSettings;
+  try {
+    settings = config.spoolSettings();
+  } catch (error) {
+    const code = error instanceof CliError ? error.code : 'invalid_config';
+    return [`  spool_settings=invalid (${code})`];
+  }
+  return [
+    `  spool_dir=${settings.spoolDir ?? 'unset'}`,
+    `  spool_max_bytes=${String(settings.spoolMaxBytes)}`,
+    `  send_deadline_ms=${String(settings.sendDeadlineMs)}`,
+  ];
 }
 
 function maskSecret(value: string | undefined): string {

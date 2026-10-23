@@ -4,6 +4,7 @@
 //
 // Everything runs against a real temporary directory: the spool's contract IS its
 // on-disk layout, so a mocked filesystem would prove nothing. No network, no timers.
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import {
   appendFile,
@@ -11,9 +12,11 @@ import {
   mkdtemp,
   readdir,
   readFile,
+  rename,
   rm,
   stat,
   symlink,
+  unlink,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -30,6 +33,7 @@ import {
   assertValidSpoolId,
   defaultSpoolMaxBytes,
   listProducers,
+  maxSpoolLineBytes,
   runDirBytes,
   spoolChunkMaxLines,
   spoolCursorFileName,
@@ -97,6 +101,12 @@ async function chunkNames(directory: string): Promise<string[]> {
 
 async function linesOf(path: string): Promise<string[]> {
   return (await readFile(path, 'utf8')).split('\n').filter((line) => line.length > 0);
+}
+
+/** Writes `count` contiguous envelope lines, starting at `first`, into one chunk file. */
+async function seedChunk(path: string, first: number, count: number): Promise<void> {
+  const lines = makeEvents(range(first, first + count - 1)).map((event) => event.line);
+  await writeFile(path, `${lines.join('\n')}\n`, { mode: spoolFileMode });
 }
 
 async function modeOf(path: string): Promise<number> {
@@ -538,5 +548,134 @@ describe('ProducerSpool', () => {
       code: 'invalid_spool_line',
     });
     expect(await chunkNames(spool.directory)).toEqual([]);
+  });
+
+  // Review P2 "ack fsyncs every chunk on every call": the cursor's durability must not cost
+  // O(chunks) syncs per ack. Below the highest chunk nothing is ever written again
+  // (rotation always moves to `highest + 1`), so those chunks are synced at most once per
+  // process. Pinned with a dangling symlink: re-opening an already-synced chunk would fail
+  // with `spool_unsafe_path`, so the ack only passing proves it did not touch the chunk.
+  it('ack syncs a lower chunk once and never re-opens it', async () => {
+    if (process.platform === 'win32') return; // the swap below is POSIX-only
+    const spool = await open();
+    const firstChunk = join(spool.directory, '000001.jsonl');
+    await seedChunk(firstChunk, 1, 2);
+    await seedChunk(join(spool.directory, '000002.jsonl'), 3, 2);
+
+    // First ack: 000001 is below the highest chunk and not yet synced by this process, so
+    // it is opened and fsynced once.
+    await spool.ack(4, 4);
+
+    // Swap it for a dangling symlink: any later open would be refused.
+    await unlink(firstChunk);
+    await symlink(join(root, 'gone.jsonl'), firstChunk);
+
+    await spool.append(makeEvents([5, 6]).map((event) => event.line));
+    await spool.ack(6, 2);
+    expect(await spool.cursor()).toMatchObject({ lastAckedSequence: 6, ackedCount: 6 });
+  });
+
+  it('ack still syncs a lower chunk it has not made durable itself', async () => {
+    if (process.platform === 'win32') return; // the swap below is POSIX-only
+    // A fresh process (fresh in-memory record) must not trust chunks it never fsynced: the
+    // swapped chunk is opened, so the ack fails loudly instead of advancing past it.
+    const spool = await open();
+    await seedChunk(join(spool.directory, '000002.jsonl'), 1, 2);
+    await symlink(join(root, 'gone.jsonl'), join(spool.directory, '000001.jsonl'));
+
+    expect(await failureOf(spool.ack(2, 2))).toMatchObject({ code: 'spool_unsafe_path' });
+    expect(await spool.cursor()).toMatchObject({ lastAckedSequence: 0, ackedCount: 0 });
+  });
+
+  // The piece list must survive a block boundary: a leftover fragment is COPIED, because
+  // the next read reuses the same 64 KiB buffer. A line of a few hundred KiB round-trips
+  // byte-exactly only if that copy (and the single-write segment join) is right.
+  it('round-trips a legal line that straddles several read blocks byte-exactly', async () => {
+    const spool = await open();
+    const padded = JSON.stringify({
+      schema_version: 1,
+      event_id: randomUUID(),
+      producer_id: producerId,
+      sequence: 1,
+      type: 'run.log',
+      payload: 'p'.repeat(3 * 64 * 1024),
+    });
+    await spool.append([padded]);
+
+    const [event] = await collect(spool.readUnacked());
+    expect(event?.line).toBe(padded);
+    expect(event?.lineBytes).toBe(Buffer.byteLength(padded, 'utf8') + 1);
+    expect(await readFile(join(spool.directory, '000001.jsonl'), 'utf8')).toBe(`${padded}\n`);
+  });
+
+  // Review P2 "readChunkLines has no line cap": one line is bounded by the intake's own
+  // per-line guard; past it the line cannot be legal, so the scan is `spool_corrupt`
+  // instead of buffering without limit.
+  it('spool_corrupt for a line past the per-line cap, naming chunk + line', async () => {
+    const spool = await open();
+    const chunkPath = join(spool.directory, '000001.jsonl');
+    await writeFile(chunkPath, `${makeLine(1)}\n`, { mode: spoolFileMode });
+    // Exactly one byte over the cap, appended in two calls so the spec holds no copy of it.
+    await appendFile(chunkPath, Buffer.alloc(maxSpoolLineBytes + 1, 0x78));
+    await appendFile(chunkPath, '\n');
+
+    const read = expectError(await failureOf(collect(spool.readUnacked())), SpoolCorruptError);
+    expect(read.code).toBe('spool_corrupt');
+    expect(read.chunk).toBe('000001.jsonl');
+    expect(read.lineNumber).toBe(2);
+    expect(read.message).toContain(String(maxSpoolLineBytes));
+
+    // The appender scans the highest chunk the same way, so it refuses to write behind it.
+    const scanning = expectError(await failureOf(spool.append([makeLine(2)])), SpoolCorruptError);
+    expect(scanning.chunk).toBe('000001.jsonl');
+    expect(scanning.lineNumber).toBe(2);
+  });
+
+  // Review P3 "a FIFO at a spool path hangs the CLI": the open is O_NONBLOCK, so a
+  // non-regular file is rejected by the descriptor check instead of blocking the process.
+  it('refuses a FIFO planted at a spool file instead of blocking on it', async () => {
+    if (process.platform === 'win32') return; // mkfifo/O_NONBLOCK are POSIX-only
+    const spool = await open();
+    const fifo = join(spool.directory, '000001.jsonl');
+    execFileSync('mkfifo', [fifo]);
+
+    const chunkFailure = await failureOf(collect(spool.readUnacked()));
+    expect(chunkFailure).toMatchObject({ code: 'spool_unsafe_path' });
+
+    // The CLI-owned cursor is opened the same way.
+    await unlink(fifo);
+    execFileSync('mkfifo', [join(spool.directory, spoolCursorFileName)]);
+    expect(await failureOf(spool.cursor())).toMatchObject({ code: 'spool_unsafe_path' });
+  });
+
+  // Review P3 "directory checks are path-based (TOCTOU)": purge re-checks both directories
+  // right before `rm -r`, so a directory swapped for a symlink is never deleted through.
+  it('purge refuses a run or producer directory swapped for a symlink', async () => {
+    if (process.platform === 'win32') return; // symlinks need privileges on Windows
+    const spool = await open();
+    await spool.append(makeEvents([1]).map((event) => event.line));
+    const victim = join(root, 'victim');
+    await mkdir(victim);
+    await writeFile(join(victim, 'keep.txt'), 'keep', { mode: spoolFileMode });
+
+    // The producer directory becomes a symlink to the victim tree.
+    const stashedProducer = join(root, 'stashed-producer');
+    await rename(spool.directory, stashedProducer);
+    await symlink(victim, spool.directory);
+    expect(await failureOf(spool.purge())).toMatchObject({ code: 'spool_unsafe_path' });
+    expect(await readFile(join(victim, 'keep.txt'), 'utf8')).toBe('keep');
+
+    // Restore, then the run directory becomes the symlink: still refused, still nothing
+    // deleted from the target.
+    await unlink(spool.directory);
+    await rename(stashedProducer, spool.directory);
+    await writeFile(join(victim, 'run.txt'), 'run-keep', { mode: spoolFileMode });
+    const stashedRun = join(root, 'stashed-run');
+    await rename(spool.runDirectory, stashedRun);
+    await symlink(victim, spool.runDirectory);
+    expect(await failureOf(spool.purge())).toMatchObject({ code: 'spool_unsafe_path' });
+    expect(await readFile(join(victim, 'run.txt'), 'utf8')).toBe('run-keep');
+    expect(await readFile(join(victim, 'keep.txt'), 'utf8')).toBe('keep');
+    expect((await stat(stashedRun)).isDirectory()).toBe(true);
   });
 });

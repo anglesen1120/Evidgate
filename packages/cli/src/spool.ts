@@ -9,16 +9,18 @@
 //   <spool_dir>/<run_id>/<producer_id>/spool.lock       single-writer lock (spoolLock.ts)
 //
 // Durability: appended lines are written, fsynced and the directory fsynced before this
-// module reports success; `ack` fsyncs every chunk and the directory BEFORE advancing the
-// cursor, which is itself written tmp + fsync + rename + directory fsync, so a crash can
-// only ever repeat an ack, never lose one.
+// module reports success; `ack` makes every chunk it has not already made durable (plus
+// the highest chunk, the only one a writer may still be appending to) and the directory
+// durable BEFORE advancing the cursor, which is itself written tmp + fsync + rename +
+// directory fsync, so a crash can only ever repeat an ack, never lose one.
 //
 // Reads are streaming (bounded blocks, one line at a time): a chunk is never loaded whole
-// and neither is a run. A final line without `\n` is a torn write from a crashed writer
-// and is ignored by the reader (D3); any other unparseable line, a non-contiguous
-// sequence, or a torn line in a non-final chunk is `spool_corrupt` naming chunk + line
-// (never skipped). The appender repairs a torn tail it finds in the highest chunk before
-// its first write, so appending can never concatenate JSON onto a fragment.
+// and neither is a run. One line is bounded by {@link maxSpoolLineBytes}; a longer line is
+// `spool_corrupt`, never an unbounded buffer. A final line without `\n` is a torn write
+// from a crashed writer and is ignored by the reader (D3); any other unparseable line, a
+// non-contiguous sequence, or a torn line in a non-final chunk is `spool_corrupt` naming
+// chunk + line (never skipped). The appender repairs a torn tail it finds in the highest
+// chunk before its first write, so appending can never concatenate JSON onto a fragment.
 //
 // Cap (D4): `EVIDGATE_SPOOL_MAX_BYTES` bounds the sum of the run directory's file sizes.
 // The check runs BEFORE a single byte is written, so `SpoolCapExceededError` always means
@@ -26,7 +28,7 @@
 // unsent sequence range.
 import { closeSync, constants as fsConstants, fsyncSync, openSync } from 'node:fs';
 import { chmod, lstat, mkdir, open, readdir, rename, rm, unlink } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 
 import { CliError } from './errors.js';
 import { withSpoolLock } from './spoolLock.js';
@@ -59,15 +61,34 @@ const spoolIdPattern = /^[A-Za-z0-9._-]+$/;
 const controlCharPattern = /[\u0000-\u001f\u007f]/;
 /** Block size for streaming scans; bounds memory to one block plus one line. */
 const readBlockBytes = 64 * 1024;
-/** Shared zero-length buffer: block/line boundaries are tracked, never copied into it. */
-const emptyBuffer = Buffer.alloc(0);
-/** Longest tail line {@link lastTerminatedSequence} is willing to read before giving up. */
+/**
+ * Longest tail line {@link lastTerminatedSequence} is willing to read before giving up
+ * (it returns `null`, and the caller falls back to the streaming scan, whose hard bound is
+ * {@link maxSpoolLineBytes}). Deliberately smaller than that bound: the tail fast path must
+ * stay cheap, and a longer last line is still read correctly, just by the full scan.
+ */
 const maxTailLineBytes = 1_048_576;
+/**
+ * Largest legal line in a chunk, in bytes: the intake's own per-line guard
+ * (`maxInputLineBytes` in `commands/eventsSend.ts`, 32 MiB, kept in sync there because a
+ * legal envelope must survive append → read back). A chunk is rotated at
+ * {@link spoolChunkMaxBytes}, but one line is always written whole, so this — not the
+ * rotation size — is the hard bound a scanner must enforce. A longer line cannot have
+ * come from this CLI or from a writer following the same contract, so it is
+ * `spool_corrupt` instead of a reason to grow the heap without limit.
+ */
+export const maxSpoolLineBytes = 32 * 1_048_576;
 /**
  * `O_NOFOLLOW` is undefined on Windows; the POSIX symlink hardening degrades to a plain
  * open there (writer parity).
  */
 const O_NOFOLLOW: number = process.platform === 'win32' ? 0 : fsConstants.O_NOFOLLOW;
+/**
+ * `O_NONBLOCK` is a POSIX-only flag (undefined on Windows). Opening a FIFO or a device
+ * with it makes the open return instead of parking the whole CLI in the thread pool; the
+ * descriptor is then rejected by the regular-file check in {@link openVerifiedFile}.
+ */
+const O_NONBLOCK: number = process.platform === 'win32' ? 0 : fsConstants.O_NONBLOCK;
 
 /** One event read back from a chunk. */
 export interface SpoolEvent {
@@ -77,7 +98,12 @@ export interface SpoolEvent {
   readonly eventId: string;
   /** The exact JSON text of the line, without the trailing `\n`. */
   readonly line: string;
-  /** UTF-8 bytes of the line including its `\n`, for batch byte accounting. */
+  /**
+   * UTF-8 bytes of `line` including its `\n`, measured when the line was read. Nothing on
+   * the send path reads it: the batcher sizes a batch from `line` itself (`batcher.ts`
+   * body accounting) and the sender builds the body from `line`. It is kept because the
+   * spool specs assert the measured length is exactly the on-disk byte count.
+   */
   readonly lineBytes: number;
   /** The chunk file it came from, e.g. `000003.jsonl` (for error messages). */
   readonly chunk: string;
@@ -310,6 +336,11 @@ export class ProducerSpool {
   private chunkIndex: number | undefined;
   private chunkBytes: number | undefined;
   private chunkLines: number | undefined;
+  /**
+   * Chunks this process has already fsynced and that are now immutable (the writer only
+   * ever appends to the highest chunk), so `ack` never has to sync them again.
+   */
+  private readonly syncedChunks = new Set<string>();
 
   private constructor(o: OpenProducerSpoolOptions) {
     assertValidSpoolId('run_id', o.runId);
@@ -382,6 +413,11 @@ export class ProducerSpool {
    * are written in order, the chunk rotated at 1000 lines / 1 MiB, and the chunk plus the
    * directory fsynced before returning. A torn tail in the highest chunk is truncated
    * back to the last newline before the first write.
+   *
+   * The lines of one chunk segment are concatenated into one buffer and written with a
+   * single `write`, so a 1000-line chunk costs one syscall instead of 1000: the segment is
+   * at most one chunk (plus the single line that rotates it), which keeps the buffer
+   * bounded while leaving the rollback, cap and rotation rules untouched.
    */
   async append(lines: readonly string[]): Promise<void> {
     if (lines.length === 0) return;
@@ -429,9 +465,18 @@ export class ProducerSpool {
     let bytes = state.bytes;
     let linesInChunk = state.lines;
     let handle: FileHandle | null = null;
+    /** Envelope texts of the current chunk segment, joined and written once on flush. */
+    let segment: string[] = [];
+    const flushSegment = async (): Promise<void> => {
+      if (segment.length === 0 || handle === null) return;
+      const buffer = Buffer.from(`${segment.join('\n')}\n`, 'utf8');
+      segment = [];
+      await writeAll(handle, buffer);
+    };
     try {
       for (const item of parsed) {
         if (bytes >= spoolChunkMaxBytes || linesInChunk >= spoolChunkMaxLines) {
+          await flushSegment();
           if (handle !== null) {
             await handle.sync();
             await handle.close();
@@ -442,11 +487,11 @@ export class ProducerSpool {
           linesInChunk = 0;
         }
         if (handle === null) handle = await this.openChunkForAppend(index);
-        const buffer = Buffer.from(`${item.text}\n`, 'utf8');
-        await writeAll(handle, buffer);
-        bytes += buffer.byteLength;
+        segment.push(item.text);
+        bytes += item.lineBytes;
         linesInChunk += 1;
       }
+      await flushSegment();
       if (handle !== null) {
         await handle.sync();
         await handle.close();
@@ -616,7 +661,8 @@ export class ProducerSpool {
   /**
    * Advances the ack cursor to `upToSequence`, adding `addedCount` acked events. Only a
    * contiguous prefix can be acked: going backwards, or past the last sequence on disk,
-   * is refused. Every chunk plus the directory is fsynced before the cursor is replaced.
+   * is refused. Every chunk the cursor claims — and the directory — is durable before the
+   * cursor is replaced (see {@link fsyncChunks} for why that is O(1), not O(chunks)).
    */
   async ack(upToSequence: number, addedCount: number): Promise<void> {
     if (!Number.isSafeInteger(upToSequence) || upToSequence < 0) {
@@ -655,12 +701,26 @@ export class ProducerSpool {
     return { first: cursor.nextUnackedSequence, last };
   }
 
-  /** Removes the producer directory and everything in it (only after a successful finalize). */
+  /**
+   * Removes the producer directory and everything in it (only after a successful
+   * finalize). The run and producer directories are re-checked immediately before the
+   * recursive `rm`: `rm` would otherwise follow a directory swapped for a symlink since
+   * the spool was opened and delete the link's target instead.
+   */
   async purge(): Promise<void> {
+    for (const directory of [this.runDirectory, this.directory]) {
+      try {
+        await assertRealOwnedDirectory(directory);
+      } catch (error) {
+        // An already-removed directory is not an error for `rm --force` parity.
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
     await rm(this.directory, { recursive: true, force: true });
     this.chunkIndex = undefined;
     this.chunkBytes = undefined;
     this.chunkLines = undefined;
+    this.syncedChunks.clear();
   }
 
   private chunkPath(index: number): string {
@@ -757,15 +817,39 @@ export class ProducerSpool {
     return value;
   }
 
-  /** fsyncs every chunk and then the directory, BEFORE the cursor may advance. */
+  /**
+   * Makes everything the cursor is about to claim durable, then the directory. Runs BEFORE
+   * the cursor may advance.
+   *
+   * Cost is O(1) syscalls per call, not O(chunks): the writer only ever appends to the
+   * highest chunk (rotation always moves to `highest + 1`, D2), so every lower chunk is
+   * immutable and was already fsynced — by `append` when this process rotated it, or by
+   * this method once, after which its name is remembered in {@link syncedChunks}. Only the
+   * highest chunk can have grown since the last ack (a writer appending without the lock,
+   * D2), so it is synced on every call. That keeps a send at O(chunks) syncs in total
+   * instead of the O(batches × chunks) the previous every-chunk sweep cost.
+   *
+   * Restart safety rests on absence, never on presence: {@link syncedChunks} is empty in a
+   * fresh process and a name enters it only after this process opened and fsynced that
+   * chunk, so "not in the set" always means "not yet made durable by this process" and the
+   * first ack of a new process syncs every chunk on disk. Nothing here assumes a chunk was
+   * durable because `append` wrote it: the reporter appends without the CLI lock (D2), so
+   * a chunk below the highest is trusted only after this process synced it itself.
+   */
   private async fsyncChunks(): Promise<void> {
-    for (const chunk of await this.listChunks()) {
+    const chunks = await this.listChunks();
+    for (let i = 0; i < chunks.length; i += 1) {
+      const chunk = chunks[i];
+      if (chunk === undefined) continue;
+      const isHighest = i === chunks.length - 1;
+      if (!isHighest && this.syncedChunks.has(chunk.name)) continue;
       const handle = await openVerifiedFile(chunk.path, fsConstants.O_RDONLY | O_NOFOLLOW);
       try {
         await handle.sync();
       } finally {
         await handle.close();
       }
+      if (!isHighest) this.syncedChunks.add(chunk.name);
     }
     fsyncDirectorySync(this.directory);
   }
@@ -863,10 +947,12 @@ async function mkdirOwned(directory: string): Promise<void> {
 }
 
 /**
- * A directory the CLI creates or reuses under `spool_dir` must be a real directory owned
- * by this process (a planted symlink could redirect every write) and is forced to 0700.
+ * Requires `path` to be a real directory (never a symlink) owned by this process. Shared
+ * by {@link hardenDirectory} and `ProducerSpool.purge`, which re-checks the run and
+ * producer directories immediately before its recursive `rm` (a path checked at open time
+ * can be swapped for a symlink before the removal: TOCTOU).
  */
-async function hardenDirectory(path: string): Promise<void> {
+async function assertRealOwnedDirectory(path: string): Promise<void> {
   const stats = await lstat(path);
   if (stats.isSymbolicLink()) {
     throw unsafePath(`refusing to use symlinked spool directory ${path}`);
@@ -879,17 +965,39 @@ async function hardenDirectory(path: string): Promise<void> {
   if (uid !== undefined && stats.uid !== uid) {
     throw unsafePath(`spool directory ${path} is owned by uid ${stats.uid}, not ${uid}`);
   }
+}
+
+/**
+ * A directory the CLI creates or reuses under `spool_dir` must be a real directory owned
+ * by this process (a planted symlink could redirect every write) and is forced to 0700.
+ */
+async function hardenDirectory(path: string): Promise<void> {
+  await assertRealOwnedDirectory(path);
+  if (process.platform === 'win32') return;
   await chmod(path, spoolDirMode);
 }
 
-/** Opens a spool file, verifying it is a regular file of ours and forcing its mode. */
+/**
+ * Opens a spool file, verifying it is a regular file of ours and forcing its mode.
+ *
+ * `O_NOFOLLOW` and `O_NONBLOCK` are always OR-ed in: the first refuses a planted symlink
+ * at the final path component, and the second makes an `open` of a FIFO or a device return
+ * instead of parking the CLI in the thread pool forever, so the regular-file check below
+ * can reject it with `spool_unsafe_path`.
+ */
 async function openVerifiedFile(path: string, flags: number, mode?: number): Promise<FileHandle> {
   let handle: FileHandle;
   try {
-    handle = await open(path, flags, mode);
+    handle = await open(path, flags | O_NOFOLLOW | O_NONBLOCK, mode);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ELOOP') {
       throw unsafePath(`refusing to follow symlinked spool path ${path}`);
+    }
+    // A FIFO opened for writing with O_NONBLOCK and no reader: a path swapped for a FIFO
+    // between the existence check and this open, never a regular spool file.
+    if (code === 'ENXIO') {
+      throw unsafePath(`refusing to open non-regular spool file ${path}`);
     }
     throw error;
   }
@@ -996,22 +1104,51 @@ async function findLastNewlineOffset(handle: FileHandle, size: number): Promise<
   return null;
 }
 
-/** Counts complete lines of a chunk, streaming (a torn tail was truncated before this). */
+/**
+ * Counts complete lines of a chunk, streaming (a torn tail was truncated before this).
+ * One line is bounded by {@link maxSpoolLineBytes}, so a chunk carrying a longer one is
+ * `spool_corrupt` here too, before the appender can decide to write behind it.
+ */
 async function countChunkLines(path: string): Promise<number> {
+  const chunk = basename(path);
   const handle = await openVerifiedFile(path, fsConstants.O_RDONLY | O_NOFOLLOW);
   try {
     const block = Buffer.allocUnsafe(readBlockBytes);
     let position = 0;
     let count = 0;
+    /** Bytes of the current, not yet newline-terminated line seen in earlier blocks. */
+    let partial = 0;
     for (;;) {
       const { bytesRead } = await handle.read(block, 0, readBlockBytes, position);
       if (bytesRead === 0) return count;
       position += bytesRead;
-      for (let i = 0; i < bytesRead; i += 1) if (block[i] === 0x0a) count += 1;
+      let start = 0;
+      for (let i = 0; i < bytesRead; i += 1) {
+        if (block[i] !== 0x0a) continue;
+        if (partial + (i - start) > maxSpoolLineBytes) {
+          throw lineTooLong(chunk, count + 1);
+        }
+        count += 1;
+        partial = 0;
+        start = i + 1;
+      }
+      partial += bytesRead - start;
+      if (partial > maxSpoolLineBytes) throw lineTooLong(chunk, count + 1);
     }
   } finally {
     await handle.close();
   }
+}
+
+/** `spool_corrupt` for a line that cannot be a legal envelope: it is past every size cap. */
+function lineTooLong(chunk: string, lineNumber: number): SpoolCorruptError {
+  return new SpoolCorruptError({
+    chunk,
+    lineNumber,
+    reason:
+      `line is longer than the ${maxSpoolLineBytes}-byte limit for one envelope ` +
+      '(no legal writer produces one, so this is not a torn write)',
+  });
 }
 
 interface RawLine {
@@ -1023,15 +1160,22 @@ interface RawLine {
 
 /**
  * Streams a chunk one line at a time from bounded blocks, so neither the chunk nor the run
- * is ever loaded whole. Bytes of an incomplete line are carried to the next block.
+ * is ever loaded whole. Bytes of a line straddling a block boundary are kept as a list of
+ * pieces (never re-concatenated per block, which made the scan quadratic) and joined once,
+ * when the line is complete; a line past {@link maxSpoolLineBytes} is `spool_corrupt`
+ * naming chunk + line as soon as the limit is crossed, so a chunk with no newline can no
+ * longer grow the heap without bound.
  */
 async function* readChunkLines(path: string): AsyncGenerator<RawLine> {
+  const chunk = basename(path);
   const handle = await openVerifiedFile(path, fsConstants.O_RDONLY | O_NOFOLLOW);
   try {
     const block = Buffer.allocUnsafe(readBlockBytes);
     let position = 0;
     let lineNumber = 0;
-    let carry: Buffer = emptyBuffer;
+    /** Pieces of the line being assembled across blocks (empty for a line inside one block). */
+    let pieces: Buffer[] = [];
+    let piecesBytes = 0;
     for (;;) {
       const { bytesRead } = await handle.read(block, 0, readBlockBytes, position);
       if (bytesRead === 0) break;
@@ -1041,25 +1185,43 @@ async function* readChunkLines(path: string): AsyncGenerator<RawLine> {
       for (;;) {
         const newline = view.indexOf(0x0a, start);
         if (newline === -1) break;
-        // Only a line straddling a block boundary is concatenated: the common case is a
+        // Only a line straddling a block boundary is assembled: the common case is a
         // decode straight out of the block, with no intermediate copy.
-        const text =
-          carry.length === 0
-            ? view.toString('utf8', start, newline)
-            : Buffer.concat([carry, view.subarray(start, newline)]).toString('utf8');
-        carry = emptyBuffer;
+        let text: string;
+        if (piecesBytes === 0) {
+          text = view.toString('utf8', start, newline);
+        } else {
+          const segment = view.subarray(start, newline);
+          if (piecesBytes + segment.length > maxSpoolLineBytes) {
+            throw lineTooLong(chunk, lineNumber + 1);
+          }
+          pieces.push(segment);
+          text = Buffer.concat(pieces).toString('utf8');
+          pieces = [];
+          piecesBytes = 0;
+        }
         lineNumber += 1;
         yield { text, terminated: true, lineNumber };
         start = newline + 1;
       }
       if (start < view.length) {
         const rest = view.subarray(start);
-        carry = carry.length === 0 ? Buffer.from(rest) : Buffer.concat([carry, rest]);
+        if (piecesBytes + rest.length > maxSpoolLineBytes) {
+          throw lineTooLong(chunk, lineNumber + 1);
+        }
+        // Copied: the next block read overwrites the buffer this subarray points into.
+        pieces.push(Buffer.from(rest));
+        piecesBytes += rest.length;
       }
     }
-    if (carry.length > 0) {
+    if (piecesBytes > 0) {
+      const only = pieces[0];
+      const text =
+        pieces.length === 1 && only !== undefined
+          ? only.toString('utf8')
+          : Buffer.concat(pieces).toString('utf8');
       lineNumber += 1;
-      yield { text: carry.toString('utf8'), terminated: false, lineNumber };
+      yield { text, terminated: false, lineNumber };
     }
   } finally {
     await handle.close();
@@ -1068,7 +1230,9 @@ async function* readChunkLines(path: string): AsyncGenerator<RawLine> {
 
 /**
  * The sequence of a chunk's last newline-terminated line, read from the file tail only, or
- * `null` when that line is missing/unparseable (the caller then falls back to a full scan).
+ * `null` when that line is missing/unparseable — or longer than {@link maxTailLineBytes},
+ * which keeps this fast path cheap; the caller then falls back to the full streaming scan,
+ * whose bound is {@link maxSpoolLineBytes}.
  */
 async function lastTerminatedSequence(path: string): Promise<number | null> {
   const handle = await openVerifiedFile(path, fsConstants.O_RDONLY | O_NOFOLLOW);

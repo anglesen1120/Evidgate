@@ -131,6 +131,11 @@ https:)`. The value is never echoed. The normalised value is
   integer number of seconds or `<n>s`, `<n>m`, `<n>h`; default `1800000`
   (30 minutes), ceiling `86400000` (24 hours). Zero, a fraction, `1d` and a
   longer deadline are exit 3 `invalid_config` naming the variable.
+- All three spool values are resolved lazily, by `events send` and `runs
+finalize` only (`resolveSpoolSettings`, memoised on first use): a malformed
+  `EVIDGATE_SPOOL_MAX_BYTES` or `EVIDGATE_SEND_DEADLINE` is `invalid_config` for
+  those two commands and never breaks `runs create`, `auth login` or any other
+  command that does not touch the spool.
 - `ACTIONS_ID_TOKEN_REQUEST_URL` is a secret: it carries a signed query, so it is
   registered with the redactor and shown as `[REDACTED]` (or `unset`) in
   `--verbose` (§6).
@@ -221,36 +226,39 @@ escaping. That no submitted value is echoed, and that a parameter is named by
 position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 `createManifest`), not a CLI guarantee.
 
-| Code                      | Exit | Meaning                                                                                                                                                                             |
-| ------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `usage`                   | 3    | unknown command or flag, or a missing flag value; a one-line help pointer follows                                                                                                   |
-| `write_failed`            | 3    | `quickstart --write` could not create or write the file (permissions, read-only filesystem, full disk, I/O); the message is fixed and never names the path                          |
-| `missing_config`          | 3    | a required field or token source is unset; the message lists every missing name at once                                                                                             |
-| `invalid_config`          | 3    | a value fails validation; the message names the variable and does not echo the value                                                                                                |
-| `dev_token_refused`       | 3    | `EVIDGATE_DEV_TOKEN` set while `EVIDGATE_ENV` is not exactly `dev`, or the API URL host is not loopback                                                                             |
-| `transport`               | 3    | the exchange request failed at the network layer, timed out (30 s) or was refused a redirect                                                                                        |
-| `exchange_failed`         | 3    | a non-2xx reply without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                      |
-| `oidc_request_failed`     | 3    | the `ACTIONS_ID_TOKEN_REQUEST_URL` fetch failed (non-2xx, or a body without `value`)                                                                                                |
-| `token_cache_error`       | 3    | the token cache could not be written or deleted; the message names the operation, never a token value                                                                               |
-| `manifest_unreadable`     | 3    | the manifest file could not be read (missing, unreadable, not a regular file or empty); the message names the errno code, never the path or the content                             |
-| `manifest_too_large`      | 3    | the manifest file is larger than the server's 256 KiB transport cap; refused locally, before any request                                                                            |
-| `request_failed`          | 3    | a non-2xx reply from a project-scoped command (`manifests upload`, `runs create`) without a usable error envelope, or a 2xx body that fails validation; the body is never echoed    |
-| `binding_pending`         | 3    | 403: the repository has not presented the binding challenge yet; hint: set the repository variable `EVIDGATE_BINDING_CHALLENGE` to the challenge shown when the binding was created |
-| `binding_conflict`        | 3    | 409: this repository is already bound to another organization; hint: its admin must disable that binding first                                                                      |
-| `invalid_spool_line`      | 3    | a line handed to the CLI intake is not one JSON envelope with an advancing integer `sequence`                                                                                       |
-| `invalid_spool_id`        | 3    | a run or producer id is not a safe spool path segment, or resolves outside the spool root                                                                                           |
-| `invalid_spool_max_bytes` | 3    | a spool cap that is not a positive integer (`EVIDGATE_SPOOL_MAX_BYTES` parsing is `invalid_config`)                                                                                 |
-| `invalid_spool_input`     | 3    | `events send --from` input is unreadable or malformed (blank line, invalid UTF-8, bad `sequence`/`producer_id`); see §11                                                            |
-| `envelope_invalid`        | 3    | a line fails the Ajv envelope schema; the message names the line and adds one `detail:` per schema path                                                                             |
-| `event_too_large`         | 3    | one event cannot fit a 1 MiB batch on its own; the message names its `event_id` and `sequence`                                                                                      |
-| `spool_cap_exceeded`      | 3    | the run directory would cross `EVIDGATE_SPOOL_MAX_BYTES`; nothing was written; names the run and the unsent range                                                                   |
-| `spool_corrupt`           | 3    | a spool line or `cursor.json` that is neither a torn tail nor valid; the message names the chunk and line                                                                           |
-| `spool_missing`           | 3    | no spool exists for that run and producer (never written, or purged)                                                                                                                |
-| `spool_locked`            | 3    | a live process holds `spool.lock` for that producer directory; the message names its pid                                                                                            |
-| `spool_unsafe_path`       | 3    | a spool path is not a real, owned object — a symlink, another user's directory, or a non-file where a file belongs; hint: an owned, symlink-free spool                              |
-| `invalid_ack`             | 3    | a cursor advance that is not a contiguous prefix already durable in the spool (internal guard)                                                                                      |
-| `unsent_events`           | 3    | `runs finalize` refused: the spool still holds unacked events; the message names the run and the unsent range                                                                       |
-| `internal_error`          | 3    | an unexpected exception; the message is redacted, and the stack is printed only under `--verbose` (also redacted)                                                                   |
+| Code                      | Exit | Meaning                                                                                                                                                                                                                                                            |
+| ------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `usage`                   | 3    | unknown command or flag, or a missing flag value; a one-line help pointer follows                                                                                                                                                                                  |
+| `write_failed`            | 3    | `quickstart --write` could not create or write the file (permissions, read-only filesystem, full disk, I/O); the message is fixed and never names the path                                                                                                         |
+| `missing_config`          | 3    | a required field or token source is unset; the message lists every missing name at once                                                                                                                                                                            |
+| `invalid_config`          | 3    | a value fails validation; the message names the variable and does not echo the value                                                                                                                                                                               |
+| `dev_token_refused`       | 3    | `EVIDGATE_DEV_TOKEN` set while `EVIDGATE_ENV` is not exactly `dev`, or the API URL host is not loopback                                                                                                                                                            |
+| `transport`               | 3    | the exchange request failed at the network layer, timed out (30 s) or was refused a redirect                                                                                                                                                                       |
+| `exchange_failed`         | 3    | a non-2xx reply without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                                                                     |
+| `oidc_request_failed`     | 3    | the `ACTIONS_ID_TOKEN_REQUEST_URL` fetch failed (non-2xx, or a body without `value`)                                                                                                                                                                               |
+| `token_cache_error`       | 3    | the token cache could not be written or deleted; the message names the operation, never a token value                                                                                                                                                              |
+| `manifest_unreadable`     | 3    | the manifest file could not be read (missing, unreadable, not a regular file or empty); the message names the errno code, never the path or the content                                                                                                            |
+| `manifest_too_large`      | 3    | the manifest file is larger than the server's 256 KiB transport cap; refused locally, before any request                                                                                                                                                           |
+| `request_failed`          | 3    | a non-2xx reply from a project-scoped command (`manifests upload`, `runs create`) without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                   |
+| `binding_pending`         | 3    | 403: the repository has not presented the binding challenge yet; hint: set the repository variable `EVIDGATE_BINDING_CHALLENGE` to the challenge shown when the binding was created                                                                                |
+| `binding_conflict`        | 3    | 409: this repository is already bound to another organization; hint: its admin must disable that binding first                                                                                                                                                     |
+| `transport_failed`        | 3    | an `events send` request failed at the network layer or before a reply (connection refused, the 30 s per-request timeout aborting it, a refused redirect); retried while the send deadline allows and reported only when the retries or the deadline are exhausted |
+| `deadline_exceeded`       | 3    | `events send` would have to sleep past `EVIDGATE_SEND_DEADLINE`; nothing further is dispatched, and the message names the batch range plus the last error's code, status and `request_id`                                                                          |
+| `ack_mismatch`            | 3    | an events 200 whose acks are not one per event, in request order, for the same `event_id` and `accepted`/`duplicate`, or whose counts disagree, or whose body is not an object; nothing advances                                                                   |
+| `invalid_spool_line`      | 3    | a line handed to the CLI intake is not one JSON envelope with an advancing integer `sequence`                                                                                                                                                                      |
+| `invalid_spool_id`        | 3    | a run or producer id is not a safe spool path segment, or resolves outside the spool root                                                                                                                                                                          |
+| `invalid_spool_max_bytes` | 3    | a spool cap that is not a positive integer (`EVIDGATE_SPOOL_MAX_BYTES` parsing is `invalid_config`)                                                                                                                                                                |
+| `invalid_spool_input`     | 3    | `events send --from` input is unreadable or malformed (blank line, invalid UTF-8, bad `sequence`/`producer_id`); see §11                                                                                                                                           |
+| `envelope_invalid`        | 3    | a line fails the Ajv envelope schema; the message names the line and adds one `detail:` per schema path                                                                                                                                                            |
+| `event_too_large`         | 3    | one event cannot fit a 1 MiB batch on its own; the message names its `event_id` and `sequence`                                                                                                                                                                     |
+| `spool_cap_exceeded`      | 3    | the run directory would cross `EVIDGATE_SPOOL_MAX_BYTES`; nothing was written; names the run and the unsent range                                                                                                                                                  |
+| `spool_corrupt`           | 3    | a spool line or `cursor.json` that is neither a torn tail nor valid (an `acked_count` above `last_acked_sequence` included), or a line longer than the 32 MiB per-line guard; the message names the chunk and line                                                 |
+| `spool_missing`           | 3    | no spool exists for that run and producer (never written, or purged)                                                                                                                                                                                               |
+| `spool_locked`            | 3    | a live process holds `spool.lock` for that producer directory; the message names its pid                                                                                                                                                                           |
+| `spool_unsafe_path`       | 3    | a spool path is not a real, owned object — a symlink, another user's directory, or a non-file where a file belongs; hint: an owned, symlink-free spool                                                                                                             |
+| `invalid_ack`             | 3    | a cursor advance that is not a contiguous prefix already durable in the spool (internal guard)                                                                                                                                                                     |
+| `unsent_events`           | 3    | `runs finalize` refused: the spool still holds unacked events; the message names the run and the unsent range                                                                                                                                                      |
+| `internal_error`          | 3    | an unexpected exception; the message is redacted, and the stack is printed only under `--verbose` (also redacted)                                                                                                                                                  |
 
 An uncaught exception, an unhandled rejection or a stdout/stderr `'error'`
 (EPIPE) exits 3 `internal_error` — never 1. `bin.ts` routes its backstop through
@@ -285,11 +293,16 @@ server subcode changes the exit code.
   a token. `spool.lock` and `cursor.json` hold no credential. `spool_locked`,
   `spool_missing` and `unsent_events` carry a hint (wait for the running process,
   run the reporter or `events send` first); none of them retries anything.
+- `transport_failed`, `deadline_exceeded` and `ack_mismatch` come from the send
+  path (§11.6), not from the spool: the first after the retry loop or the send
+  deadline is exhausted, the second when the next wait would reach the deadline,
+  the third when a 200's acks cannot be trusted. None of them advances the cursor,
+  and none is a server `error.code`.
 - A server reply to `events send` or `runs finalize` keeps the §5 rule above: the
-  `error.code` and `request_id` are printed verbatim and the command exits 3
-  without retrying (`producer_slot_taken`, `unknown_producer`,
-  `manifest_invalid`, `idempotency_conflict`, …). The delivery retry loop covers
-  only 429, 408, 5xx and transport failures (§11).
+  `error.code` and `request_id` are printed verbatim (`producer_slot_taken`,
+  `unknown_producer`, `manifest_invalid`, `idempotency_conflict`, …). Finalize
+  never retries; `events send` retries only 429, 408, 5xx and transport failures
+  (§11.6) and then exits 3.
 
 ## 6. Output and redaction
 
@@ -724,8 +737,12 @@ $EVIDGATE_SPOOL_DIR/<run_id>/<producer_id>/
 "last_acked_sequence", "acked_count", "updated_at" }` with
   `last_acked_sequence = next_unacked_sequence - 1`; a missing file means
   "nothing acked yet" (`1`/`0`/`0`). It is replaced atomically — tmp file, fsync,
-  rename, directory fsync — and every chunk is fsynced before the cursor may
-  advance, so a crash can lose an ack but never acknowledge an undurable line.
+  rename, directory fsync — and every chunk the cursor claims is durable before
+  it may advance: each chunk is fsynced once by this process (a fresh process
+  syncs every chunk on its first ack) and the highest chunk — the only one a
+  writer may still append to — on every ack, then the directory, so a send costs
+  O(chunks) syncs in total rather than O(batches × chunks) and a crash can lose
+  an ack but never acknowledge an undurable line.
 
 ### 11.2 Chunk retention and the single-writer lock
 
@@ -736,10 +753,14 @@ finalize (§11.7). Rotation always moves to `highest + 1`.
 
 The reporter takes no lock (it is a library inside the test process), so the CLI
 serialises itself: `events send` and `runs finalize` hold
-`<producer_dir>/spool.lock` — `O_CREAT|O_EXCL`, mode `0600`, content
-`{ pid, started_at }` and nothing else — while they read, ack or purge. A second
-CLI process gets exit 3 `spool_locked` naming the live pid; a lock whose pid is
-dead on this host is taken over after a re-read. [DECISION] (D-S54-Q2) Decided A
+`<producer_dir>/spool.lock` — a `0600` record `{ pid, started_at }` created
+atomically by hard-linking a fully written temp file (the `link` is the winner
+decision, so the path is never observable empty or torn), containing those two
+fields and nothing else — while they read, ack or purge. A second
+CLI process gets exit 3 `spool_locked` naming the live pid. A lock whose pid is
+dead on this host is taken over only after a content re-read confirms the moved
+file is still the same lock, so a takeover can never discard or duplicate a live
+successor's lock. [DECISION] (D-S54-Q2) Decided A
 by the coordinator (owner rule 2026-10-23, recommended option); recorded for
 owner phase review as D-S54-Q2, non-blocking.
 
@@ -751,7 +772,11 @@ server checks with (T42), and (4) carries the next contiguous `sequence`. A
 final line without its newline is a torn write: the reader ignores it, and only
 the CLI truncates it away — when the CLI itself is the appender. A bad line
 anywhere else is exit 3 `spool_corrupt` naming the chunk file and line number,
-never silently skipped. [DECISION] (D-S54-Q3) Decided A by the coordinator
+never silently skipped. One size rule rides on the same check: a single line
+longer than the 32 MiB per-line guard (`maxSpoolLineBytes`, the same bound the
+`--from` intake enforces) cannot be a line this CLI or a writer following this
+contract produced, so it is exit 3 `spool_corrupt` naming the chunk and line
+rather than buffered whole — the reader never grows its buffer past that bound. [DECISION] (D-S54-Q3) Decided A by the coordinator
 (owner rule 2026-10-23, recommended option); recorded for owner phase review as
 D-S54-Q3, non-blocking.
 
@@ -760,11 +785,18 @@ D-S54-Q3, non-blocking.
 `EVIDGATE_SPOOL_MAX_BYTES` (default `268435456`, 256 MiB) caps one run directory
 — the summed size of every file under `<spool_dir>/<run_id>`, all producers
 included. It is enforced before an `events send --from` intake writes anything
-(all-or-nothing per call, so a refused append leaves the spool byte-identical)
 and reported when `events send` finds the run already above the cap before
 sending: exit 3 `spool_cap_exceeded` naming the run, the unsent sequence range
 and the cap — never a silent drop (AC3). Raising the variable is the documented
 remedy.
+
+The intake is capped on the input side too: the reader stops as soon as the
+running byte total would cross what is left (`cap` minus the run directory's
+current bytes) and raises `spool_cap_exceeded`, so neither a multi-GB `--from`
+file nor an endless stdin stream is ever held in memory. The cap is checked
+against **every** producer's lines before the first append, so one intake call is
+all-or-nothing across producers: a refused call leaves the spool byte-identical,
+and re-running the same file cannot collide with a half-applied prefix.
 
 ### 11.5 Environment
 
@@ -775,7 +807,9 @@ remedy.
 | `EVIDGATE_SEND_DEADLINE`   | 1800000 ms | one deadline for a whole send (§11.6)                   |
 
 The parsing rules are in §3; each refuses a bad value with `invalid_config`
-naming the variable and never echoing it.
+naming the variable and never echoing it, and only `events send` and `runs
+finalize` resolve them (lazily, §3), so a malformed value cannot break a command
+that does not use the spool.
 
 ### 11.6 `evidgate events send`
 
@@ -789,9 +823,12 @@ naming the variable and never echoing it.
   object per line, `-` is stdin) — the only CLI intake, and the only place the
   size cap refuses a write.
 - Batching: at most **500 events** and **1 MiB** of raw `{"events":[…]}` body per
-  request (AC4). `Content-Encoding: gzip` is applied when compression makes the
-  body smaller. One event that cannot fit a 1 MiB batch on its own fails the
-  file with exit 3 `event_too_large` naming its `event_id` and `sequence`.
+  request (AC4). `Content-Encoding: gzip` is applied only when compression saves
+  more than 1 KiB **and** the raw body is at most 19× the compressed size, so a
+  body the server's 20:1 expansion cap would refuse as `batch_too_large` is sent
+  raw instead; otherwise the raw body is sent. One event that cannot fit a 1 MiB
+  batch on its own fails the file with exit 3 `event_too_large` naming its
+  `event_id` and `sequence`.
 - `Idempotency-Key` per batch: `batch:` + lowercase SHA-256 hex of the UTF-8
   JSON array `[version, run_id, producer_id, [[sequence, event_id], …]]`, so the
   key is stable across process restarts and a different batch never reuses it; a
@@ -799,18 +836,33 @@ naming the variable and never echoing it.
   server's `event_id` dedupe). Well inside the 128-character cap.
 - Concurrency: at most **4 batches in flight** per run.
 - Retry: only 429, 408, 5xx and transport failures, with exponential backoff
-  (base 500 ms, doubling, capped at 30 s) and full jitter; `Retry-After` is
-  honoured (delta-seconds or HTTP-date, capped by the deadline left) and one
-  deadline (`EVIDGATE_SEND_DEADLINE`) bounds the whole send. An envelope that
-  says `retryable: false` is not retried.
+  (base 500 ms, doubling, capped at 30 s) and full jitter. A server
+  `Retry-After` (delta-seconds or HTTP-date) is honoured but never shorter than
+  that attempt's jittered backoff — the longer of the two is the wait, so
+  `Retry-After: 0` or a past date cannot spin. One deadline
+  (`EVIDGATE_SEND_DEADLINE`) bounds the whole send: a wait that would reach the
+  deadline fails `deadline_exceeded` instead of sleeping, and a transport failure
+  that outlives the retries carries `transport_failed`. An envelope that says
+  `retryable: false` is not retried.
 - Fail fast, never retried: 401 (the cached CI token is purged, §7), 403
-  `producer_slot_taken`, 409, 413 `payload_too_large`, 422 `unknown_producer` /
+  `producer_slot_taken`, 409, 413 `batch_too_large`, 422 `unknown_producer` /
   `unknown_execution_key` / `sequence_reused` and every other 4xx — exit 3 with
-  the server's `error.code` and `request_id` verbatim (T9). On the first failure
-  no new batch is dispatched and the ones in flight are awaited, so the cursor
-  only advances over acknowledged batches.
+  the server's `error.code` and `request_id` verbatim (T9). On the first fatal
+  failure no new batch is dispatched and the ones in flight are awaited, so the
+  cursor only advances over acknowledged batches; a batch that has not started
+  retries nothing once a sibling failed (it stops instead of waiting out a
+  backoff that can no longer deliver). The message names the run, the producer
+  and the **full** unsent range as it stands after the send settled
+  (`unsentRange()` — from the first unacked sequence to the last durable one),
+  not just the failing batch's range. The cursor is not rolled back:
+  nothing is marked `failed` on disk, and a later explicit rerun re-sends from
+  the first unacked sequence (D-S54-Q4).
 - A `duplicate` ack counts as delivered; `accepted` and `duplicate` are summed
-  per batch and reported. A crash or a lost ACK resumes from
+  per batch and reported. Every 200 is verified before anything advances: one
+  ack per event, in request order, naming the same `event_id` (case-insensitive
+  GUID) with status `accepted` or `duplicate`, and body counts that match the
+  acks — anything else is exit 3 `ack_mismatch` and the cursor stays put. A
+  crash or a lost ACK resumes from
   `cursor.json`'s `next_unacked_sequence` — no event is skipped, and a resend
   keeps its identity (AC2). The command **never deletes spool data**; it only
   advances the cursor.
@@ -843,8 +895,10 @@ producer slot done at `POST /v1/runs/{r}/finalize` (openapi `finalizeRun`,
   `cursor.json`'s `last_acked_sequence` and `acked_count`, under `spool.lock`
   (D-S54-Q2). Finalize never declares a sequence the server has not
   acknowledged: a spool that still holds unacked events is exit 3
-  `unsent_events` naming the run and the unsent range (D7), and a missing
-  producer directory is exit 3 `spool_missing` — the command never creates one.
+  `unsent_events` naming the run and the unsent range (D7), a missing
+  producer directory is exit 3 `spool_missing` — the command never creates one —
+  and a cursor whose `acked_count` exceeds `last_acked_sequence` is exit 3
+  `spool_corrupt` naming the file, never a declaration sent to the server.
 - The request body is exactly `{producer_id, shard, last_sequence, count,
 manifest_hash}` (`additionalProperties: false`), one POST with a 30 s
   timeout. `Idempotency-Key` is the lowercase SHA-256 hex of the UTF-8 JSON
@@ -859,13 +913,16 @@ last_sequence=<L> count=<C>; reconcile accepted (asynchronous)`, or under
   in that key order. Reconciliation is asynchronous server-side.
 - After a 202 the producer directory is purged whole unless `--keep-spool` is
   given (a runner keeps nothing, a local investigation can keep the evidence).
-  A purge that fails **after** the 202 is a stderr warning — `evidgate: warning:
-… (errno …)` naming no path — and still exits 0: the run is finalized, the
-  leftover spool is only local disk.
+  Immediately before the recursive removal the run and producer directories are
+  re-checked as real, owned, non-symlink directories, so a directory swapped for
+  a symlink is refused with `spool_unsafe_path` and the link's target is never
+  deleted. Any purge failure after the 202 — that refusal included — is a stderr
+  warning (`evidgate: warning: … (errno …)`, naming no path) and still exits 0:
+  the run is finalized, the leftover spool is only local disk.
 - A 403 `producer_slot_taken`, a 422 `unknown_producer` or `manifest_invalid`, a
-  409 (`project_deleting`, `idempotency_conflict`) and a 413 exit 3 with the
-  server `error.code` + `request_id` verbatim and **no retry**: exactly one
-  request is made. The hint says the command is idempotent — the server
+  409 (`project_deleting`, `idempotency_conflict`) and a 413 `payload_too_large`
+  exit 3 with the server `error.code` + `request_id` verbatim and **no retry**:
+  exactly one request is made. The hint says the command is idempotent — the server
   arbitrates on the slot's closed marker, not on the key, so a repeat with a
   fresh key is the same no-op 202 — and re-running after fixing the cause is
   safe. A 401 purges the cached CI token (§7); a 403/422 keeps it.
