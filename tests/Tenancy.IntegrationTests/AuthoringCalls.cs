@@ -25,6 +25,14 @@ internal static class AuthoringCalls
         /// <summary>The <c>details[].reason</c> values of an error envelope.</summary>
         public IReadOnlyList<string> Reasons() =>
             [.. Body!.Value.GetProperty("error").GetProperty("details").EnumerateArray().Select(detail => detail.GetProperty("reason").GetString()!)];
+
+        /// <summary>
+        /// The <c>details[].path</c> values of an error envelope: the member an answer blames. A route whose member is a
+        /// body field must name it as the client sent it (<c>/position</c>), never the writer's batch envelope
+        /// (<c>/changes/0/content/position</c>).
+        /// </summary>
+        public IReadOnlyList<string?> Paths() =>
+            [.. Body!.Value.GetProperty("error").GetProperty("details").EnumerateArray().Select(detail => detail.GetProperty("path").GetString())];
     }
 
     /// <summary>One request, authorized by the caller's header action.</summary>

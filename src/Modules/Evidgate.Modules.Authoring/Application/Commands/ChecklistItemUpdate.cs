@@ -137,7 +137,10 @@ internal sealed class UpdateChecklistItemCommandHandler(
 
         if (!appended.IsSuccess || appended.Value is not { } outcome)
         {
-            return Result.Failure<AuthoringChangeResponse>(appended.Error!);
+            // Route 9's members are the body's; the writer's `/changes/0/content/` prefix is its own batch envelope.
+            return Result.Failure<AuthoringChangeResponse>(appended.Error is { } refusal
+                ? AuthoringErrors.RequestFacing(refusal, ChecklistItemFields.RequestMemberNames)
+                : appended.Error!);
         }
 
         if (outcome.UnchangedEntityIds.Contains(item.ItemId) || outcome.Versions.Count == 0)

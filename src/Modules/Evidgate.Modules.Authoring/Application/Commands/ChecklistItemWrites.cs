@@ -43,6 +43,14 @@ internal static class ChecklistItemFields
     /// </summary>
     internal static readonly string[] UpdateMembers = ["title", "description", "priority", "position", "state", "reason"];
 
+    /// <summary>
+    /// The writer's <c>content</c> member names as these routes spell them: the column is <c>feature_node_id</c> while
+    /// the body member of route 8 is <c>node_id</c>, so a placement refusal reaches the client against the member it sent
+    /// (<see cref="AuthoringErrors.RequestFacing"/>).
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> RequestMemberNames =
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["feature_node_id"] = "node_id" };
+
     /// <summary>Reads and validates the create body, naming every offending member at once.</summary>
     /// <param name="body">The parsed, member-checked request body.</param>
     /// <returns>The draft, or the 422 carrying one detail per problem.</returns>

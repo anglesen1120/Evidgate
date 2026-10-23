@@ -29,7 +29,8 @@ internal sealed record CreateChecklistItemCommand(Guid ProjectId, JsonElement Bo
     : ICommand<Result<CreateChecklistItemResponse>>, IIdempotentCommand;
 
 /// <summary>
-/// Handler of <see cref="CreateChecklistItemCommand"/>: the project gate, the request shape, then one
+/// Handler of <see cref="CreateChecklistItemCommand"/>: the project scope gate, the project's liveness (404 before the
+/// body is read, like the node and manual-case creates), the request shape, then one
 /// <see cref="AuthoringVersionWriter.AppendAsync"/> call carrying one <c>create</c> change (AC5). The node's kind, its
 /// project and its liveness are the writer's own locked decision (AC3's <c>parent_kind_invalid</c>,
 /// <c>parent_not_found</c>, <c>parent_deleted</c>), so nothing here repeats it.
@@ -61,13 +62,25 @@ internal sealed class CreateChecklistItemCommandHandler(
             return Result.Failure<CreateChecklistItemResponse>(scopeError);
         }
 
+        var orgId = scopes.Require().OrgId;
+
+        // AC10 / 00 §9.3: a project the tenant cannot see is 404 before any write, like the node and manual-case creates
+        // (NodeCommands.cs:99-105, ManualCaseCommands.cs:77). Without it the writer's parent probe answers 422
+        // parent_not_found and the route would report an unknown project as a placement problem.
+        if (await db.ScalarAsync<int?>(
+                AuthoringNodeReadSql.ProjectExists,
+                new { org_id = orgId, project_id = command.ProjectId },
+                cancellationToken).ConfigureAwait(false) is null)
+        {
+            return Result.Failure<CreateChecklistItemResponse>(AuthoringRules.ProjectNotFound);
+        }
+
         var (draft, shapeError) = ChecklistItemFields.ReadCreate(command.Body);
         if (shapeError is not null || draft is null)
         {
             return Result.Failure<CreateChecklistItemResponse>(shapeError!);
         }
 
-        var orgId = scopes.Require().OrgId;
         var actor = await AuthoringRequestScope
             .ActorMembershipAsync(db, orgId, principals, cancellationToken)
             .ConfigureAwait(false);
@@ -97,7 +110,15 @@ internal sealed class CreateChecklistItemCommandHandler(
             null,
             cancellationToken).ConfigureAwait(false);
 
-        if (!appended.IsSuccess || appended.Value is not { } outcome)
+        if (!appended.IsSuccess)
+        {
+            // Route 8's members are the body's (`/node_id`, `/title`, …); the writer's `/changes/0/content/` prefix is its
+            // own batch envelope and `feature_node_id` is the stored column, not a member the caller sent.
+            return Result.Failure<CreateChecklistItemResponse>(
+                AuthoringErrors.RequestFacing(appended.Error!, ChecklistItemFields.RequestMemberNames));
+        }
+
+        if (appended.Value is not { } outcome)
         {
             return Result.Failure<CreateChecklistItemResponse>(appended.Error!);
         }

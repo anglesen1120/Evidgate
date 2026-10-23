@@ -38,24 +38,34 @@ internal sealed record CreateNodeCommand(
 internal sealed class CreateNodeCommandValidator : AbstractValidator<CreateNodeCommand>
 {
     /// <summary>Builds the rules.</summary>
+    /// <remarks>
+    /// Every rule renames its property to the request member it answers (<c>/kind</c>, <c>/title</c>, <c>/position</c>,
+    /// <c>/parent_id</c>): <c>ValidationBehaviour</c> copies FluentValidation's <c>PropertyName</c> verbatim into
+    /// <c>details[].path</c>, and the C# property spelling would put a member the client never sent in the answer
+    /// (route 2 promises <c>/position</c>; <c>CreateRole.cs:57</c> is the precedent for the override).
+    /// </remarks>
     public CreateNodeCommandValidator()
     {
         RuleFor(command => command.Kind)
             .Must(FeatureNodeKinds.IsValid)
-            .WithErrorCode("value_invalid");
+            .WithErrorCode("value_invalid")
+            .OverridePropertyName("/kind");
 
         RuleFor(command => command.Title)
             .Must(title => !string.IsNullOrWhiteSpace(title) && title.Length <= AuthoringContent.MaximumNodeTitleLength)
-            .WithErrorCode("invalid_length");
+            .WithErrorCode("invalid_length")
+            .OverridePropertyName("/title");
 
         RuleFor(command => command.Position)
             .GreaterThanOrEqualTo(0)
             .WithErrorCode("invalid_value")
+            .OverridePropertyName("/position")
             .When(command => command.Position is not null);
 
         RuleFor(command => command.ParentId)
             .NotEqual(Guid.Empty)
             .WithErrorCode("invalid_value")
+            .OverridePropertyName("/parent_id")
             .When(command => command.ParentId is not null);
     }
 }
@@ -135,7 +145,9 @@ internal sealed class CreateNodeCommandHandler(
 
         if (!written.IsSuccess)
         {
-            return Result.Failure<CreateNodeResponse>(written.Error!);
+            // §5 route 2 names `/position` (AC2) and AC1 names `/parent_id`: the writer reports one change's members under
+            // its batch envelope, so the single-change prefix is dropped at this edge.
+            return Result.Failure<CreateNodeResponse>(AuthoringErrors.RequestFacing(written.Error!));
         }
 
         var version = written.Value.Versions.Count > 0 ? written.Value.Versions[0].VersionNo : 1;
@@ -169,30 +181,35 @@ internal sealed record UpdateNodeCommand(
 /// <summary>Shape validation of <see cref="UpdateNodeCommand"/>.</summary>
 internal sealed class UpdateNodeCommandValidator : AbstractValidator<UpdateNodeCommand>
 {
-    /// <summary>Builds the rules.</summary>
+    /// <summary>Builds the rules; each is renamed to the member it answers (see <see cref="CreateNodeCommandValidator"/>).</summary>
     public UpdateNodeCommandValidator()
     {
         RuleFor(command => command.NodeId)
             .NotEqual(Guid.Empty)
-            .WithErrorCode("required");
+            .WithErrorCode("required")
+            .OverridePropertyName("/node_id");
 
         RuleFor(command => command.ExpectedVersion)
             .GreaterThan(0)
-            .WithErrorCode("required");
+            .WithErrorCode("required")
+            .OverridePropertyName("/If-Match");
 
         RuleFor(command => command.Title)
             .Must(title => !string.IsNullOrWhiteSpace(title) && title.Length <= AuthoringContent.MaximumNodeTitleLength)
             .WithErrorCode("invalid_length")
+            .OverridePropertyName("/title")
             .When(command => command.Title is not null);
 
         RuleFor(command => command.Position)
             .GreaterThanOrEqualTo(0)
             .WithErrorCode("invalid_value")
+            .OverridePropertyName("/position")
             .When(command => command.Position is not null);
 
         RuleFor(command => command.ParentId)
             .NotEqual(Guid.Empty)
             .WithErrorCode("invalid_value")
+            .OverridePropertyName("/parent_id")
             .When(command => command.ParentId is not null);
     }
 }
@@ -299,7 +316,9 @@ internal sealed class UpdateNodeCommandHandler(
 
         if (!outcome.IsSuccess)
         {
-            return Result.Failure<AuthoringChangeResponse>(outcome.Error!);
+            // Route 3's members are `/title`, `/parent_id` and `/position`; the writer's `/changes/0/content/` prefix is
+            // its batch envelope, not this route's request.
+            return Result.Failure<AuthoringChangeResponse>(AuthoringErrors.RequestFacing(outcome.Error!));
         }
 
         var changed = outcome.Value.Versions.Count > 0;
@@ -333,20 +352,23 @@ internal sealed class ReorderNodesCommandValidator : AbstractValidator<ReorderNo
     /// <summary>The cap of one reorder list: a group is a sibling set, not a whole project.</summary>
     internal const int MaxOrderedIds = 1000;
 
-    /// <summary>Builds the rules.</summary>
+    /// <summary>Builds the rules; each is renamed to the member it answers (see <see cref="CreateNodeCommandValidator"/>).</summary>
     public ReorderNodesCommandValidator()
     {
         RuleFor(command => command.NodeId)
             .NotEqual(Guid.Empty)
-            .WithErrorCode("required");
+            .WithErrorCode("required")
+            .OverridePropertyName("/node_id");
 
         RuleFor(command => command.OrderedIds)
             .NotEmpty()
-            .WithErrorCode("required");
+            .WithErrorCode("required")
+            .OverridePropertyName("/ordered_ids");
 
         RuleFor(command => command.OrderedIds)
             .Must(ids => ids.Count <= MaxOrderedIds)
             .WithErrorCode("too_many")
+            .OverridePropertyName("/ordered_ids")
             .When(command => command.OrderedIds is not null);
     }
 }
@@ -439,20 +461,23 @@ internal sealed class DeleteNodeCommandValidator : AbstractValidator<DeleteNodeC
     /// <summary>The reason bound of §5 (<c>≤500</c>), the same the writer enforces.</summary>
     internal const int MaxReasonLength = 500;
 
-    /// <summary>Builds the rules.</summary>
+    /// <summary>Builds the rules; each is renamed to the member it answers (see <see cref="CreateNodeCommandValidator"/>).</summary>
     public DeleteNodeCommandValidator()
     {
         RuleFor(command => command.NodeId)
             .NotEqual(Guid.Empty)
-            .WithErrorCode("required");
+            .WithErrorCode("required")
+            .OverridePropertyName("/node_id");
 
         RuleFor(command => command.ExpectedVersion)
             .GreaterThan(0)
-            .WithErrorCode("required");
+            .WithErrorCode("required")
+            .OverridePropertyName("/If-Match");
 
         RuleFor(command => command.Reason)
             .Must(reason => !string.IsNullOrWhiteSpace(reason) && reason.Length <= MaxReasonLength)
             .WithErrorCode("invalid_length")
+            .OverridePropertyName("/reason")
             .When(command => command.Reason is not null);
     }
 }

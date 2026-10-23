@@ -69,15 +69,18 @@ public sealed class AuthoringTreeTests
         // A feature under a module is the one accepted step of the ladder.
         var feature = CreatedId(await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, module, "feature", "Payment"));
 
-        // A module under a module: the ladder only places `feature` there (AC1).
+        // A module under a module: the ladder only places `feature` there (AC1). The refusal names the member the caller
+        // sent — `/parent_id`, not the writer's batch envelope (`/changes/0/content/parent_id`).
         var wrongKind = await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, module, "module", "Nested module");
         wrongKind.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         wrongKind.Reasons().ShouldContain("parent_kind_invalid");
+        wrongKind.Paths().ShouldContain("/parent_id");
 
         // A parent no route ever returned is the same refusal with the not-found reason, never a 404.
         var unknownParent = await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, Guid.CreateVersion7(), "feature", "Orphan");
         unknownParent.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         unknownParent.Reasons().ShouldContain("parent_not_found");
+        unknownParent.Paths().ShouldContain("/parent_id");
 
         // Deleted parent: the root is soft-deleted first, then a child is asked for under it.
         var doomed = CreatedId(await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, null, "module", "Doomed"));
@@ -94,6 +97,7 @@ public sealed class AuthoringTreeTests
         var deletedParent = await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, doomed, "feature", "After delete");
         deletedParent.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         deletedParent.Reasons().ShouldContain("parent_deleted");
+        deletedParent.Paths().ShouldContain("/parent_id");
 
         // The fifth level: category -> sub_category is the deepest pair the ladder allows.
         var category = CreatedId(await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, feature, "category", "Card"));
@@ -101,6 +105,7 @@ public sealed class AuthoringTreeTests
         var fifth = await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, sub, "sub_category", "Too deep");
         fifth.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         fifth.Reasons().ShouldContain("depth_exceeded");
+        fifth.Paths().ShouldContain("/parent_id");
     }
 
     [Fact]
@@ -151,6 +156,16 @@ public sealed class AuthoringTreeTests
         taken.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         taken.Body!.Value.GetProperty("error").GetProperty("code").GetString().ShouldBe("request_invalid");
         taken.Reasons().ShouldContain("position_taken");
+
+        // §5 route 2 promises `details[].path = /position`; the writer's `/changes/0/content/position` is its own batch
+        // envelope and must not reach the client.
+        taken.Paths().ShouldContain("/position");
+
+        // The command validator answers a negative position against the same member (its rule is renamed from the C#
+        // property `Position`), so the two guards of this bound speak one spelling.
+        var negative = await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, null, "module", "C", position: -1);
+        negative.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        negative.Paths().ShouldContain("/position");
     }
 
     [Fact]

@@ -33,7 +33,8 @@ internal sealed record ListChecklistItemsQuery(
     : IQuery<Result<ChecklistItemListResponse>>;
 
 /// <summary>
-/// Handler of <see cref="ListChecklistItemsQuery"/>: one statement per page (P3) over
+/// Handler of <see cref="ListChecklistItemsQuery"/>: one liveness probe for the addressed project (AC10: an unknown
+/// project is 404, not an empty page) and then one statement per page (P3) over
 /// <c>checklist_item_list_idx</c> (P4), one row more than asked to decide whether a next page exists, so no count
 /// runs. A filter outside the stored vocabulary is a 422 naming the query member instead of an empty page.
 /// </summary>
@@ -55,6 +56,18 @@ internal sealed class ListChecklistItemsQueryHandler(
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure<ChecklistItemListResponse>(scopeError);
+        }
+
+        var orgId = scopes.Require().OrgId;
+
+        // AC10: a project the tenant cannot see is 404, not an empty page — an empty page would tell a caller that the
+        // project exists and holds no items (the tree and manual-case lists answer the same way).
+        if (await db.ScalarAsync<int?>(
+                AuthoringNodeReadSql.ProjectExists,
+                new { org_id = orgId, project_id = query.ProjectId },
+                cancellationToken).ConfigureAwait(false) is null)
+        {
+            return Result.Failure<ChecklistItemListResponse>(AuthoringRules.ProjectNotFound);
         }
 
         if (query.State is { } state && !ChecklistItemStateMachine.States.Contains(state, StringComparer.Ordinal))
@@ -88,7 +101,7 @@ internal sealed class ListChecklistItemsQueryHandler(
             AuthoringChecklistReadSql.List,
             new
             {
-                org_id = scopes.Require().OrgId,
+                org_id = orgId,
                 project_id = query.ProjectId,
                 node_id = query.NodeId,
                 state = query.State,

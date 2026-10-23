@@ -32,9 +32,14 @@ internal static class AuthoringChecklistEndpoints
             .Produces<ChecklistItemListResponse>(StatusCodes.Status200OK)
             .WithSummary("Cursor page of a project's checklist items, ordered (position, id) (13.1.1)");
 
+        // ASP.NET derives a response for the default status (200) from the delegate's return type whenever the declared
+        // success status is not 200, and that type is the C8 `Result<T>` wrapper — never the wire shape. The bodiless
+        // `.Produces(200)` replaces that inferred response so the wrapper never reaches the served OpenAPI document
+        // (`ServedDocumentTests` diffs the served schema names against `contracts/openapi.yaml`).
         authoring.MapPost("/checklist-items", CreateAsync)
             .Accepts<CreateChecklistItemRequest>("application/json")
             .Produces<CreateChecklistItemResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
             .WithSummary("Create a checklist item under a category or sub-category node (13.1.1)");
 
         authoring.MapPatch("/checklist-items/{i}", UpdateAsync)
@@ -44,6 +49,7 @@ internal static class AuthoringChecklistEndpoints
 
         authoring.MapDelete("/checklist-items/{i}", DeleteAsync)
             .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status200OK)
             .WithSummary("Soft-delete a checklist item under If-Match (13.1.1)");
     }
 

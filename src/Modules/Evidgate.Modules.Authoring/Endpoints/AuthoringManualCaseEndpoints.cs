@@ -43,9 +43,14 @@ internal static class AuthoringManualCaseEndpoints
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .WithSummary("Keyset page of a project's manual test cases, order (code, id) (13.1.1 §5 route 12)");
 
+        // ASP.NET derives a response for the default status (200) from the delegate's return type whenever the declared
+        // success status is not 200, and that type is the C8 `Result<T>` wrapper — never the wire shape. The bodiless
+        // `.Produces(200)` replaces that inferred response so the wrapper never reaches the served OpenAPI document
+        // (`ServedDocumentTests` diffs the served schema names against `contracts/openapi.yaml`).
         authoring.MapPost("/manual-cases", CreateAsync)
             .Accepts<CreateManualCaseRequest>("application/json")
             .Produces<CreateManualCaseResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .Produces(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Create a manual test case; the code is allocated per 13.1.1 §4 (route 13)");
@@ -65,6 +70,7 @@ internal static class AuthoringManualCaseEndpoints
         authoring.MapDelete("/manual-cases/{m}", DeleteAsync)
             .Accepts<DeleteAuthoringRequest>("application/json")
             .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status412PreconditionFailed)
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .Produces(StatusCodes.Status409Conflict)

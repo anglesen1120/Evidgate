@@ -746,7 +746,9 @@ internal static class RouteRequests
         Add("PATCH", "/v1/projects/{p}/authoring/nodes/{n}", ctx => new(HttpMethod.Patch, $"/v1/projects/{ctx.ProjectId}/authoring/nodes/{ctx.NodeId}",
             new JsonObject { ["title"] = "probe node" }, IfMatch: "\"1\"", IdempotencyKey: Key()));
         Add("POST", "/v1/projects/{p}/authoring/nodes/{n}/reorder", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/nodes/{ctx.NodeId}/reorder",
-            new JsonObject { ["ordered_ids"] = new JsonArray() },
+            // A non-empty, syntactically valid sibling list: `[]` is refused by the validator (`required`) before the
+            // permission pipeline could be observed, so a denied probe would answer 422 instead of the 403 it asserts.
+            new JsonObject { ["ordered_ids"] = new JsonArray(ctx.NodeId.ToString()) },
             IfMatch: "\"order:sha256:" + new string('0', 64) + "\"", IdempotencyKey: Key()));
         Add("DELETE", "/v1/projects/{p}/authoring/nodes/{n}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/authoring/nodes/{ctx.NodeId}",
             IfMatch: "\"1\"", IdempotencyKey: Key()));

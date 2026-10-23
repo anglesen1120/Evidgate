@@ -50,9 +50,16 @@ internal static class AuthoringNodeEndpoints
             .Produces<AuthoringTreeResponse>(StatusCodes.Status200OK)
             .WithSummary("One sibling page of the feature tree, or one node with its path and children (13.1.1)");
 
+        // ASP.NET derives a response for the default status (200) from the delegate's return type whenever the declared
+        // success status is not 200 — and that type is the C8 `Result<T>` wrapper, which is never the wire shape (the
+        // host's `ResultEndpointFilter` renders it). The bodiless `.Produces(200)` below replaces that inferred response,
+        // so `ResultOfCreateNodeResponse`/`Result`/`Error`/`ErrorDetail` never reach the served OpenAPI document
+        // (`ServedDocumentTests` diffs the served schema names against `contracts/openapi.yaml`; the Identity endpoints
+        // carry the same declaration for the same reason).
         authoring.MapPost("/nodes", CreateNodeAsync)
             .Accepts<CreateNodeRequest>("application/json")
             .Produces<CreateNodeResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
             .WithSummary("Create a feature node under the AC1 kind ladder (13.1.1)");
 
         authoring.MapPatch("/nodes/{n}", UpdateNodeAsync)
@@ -67,6 +74,7 @@ internal static class AuthoringNodeEndpoints
 
         authoring.MapDelete("/nodes/{n}", DeleteNodeAsync)
             .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status200OK)
             .WithSummary("Soft-delete a leaf node under If-Match (13.1.1)");
     }
 

@@ -303,6 +303,53 @@ public sealed class AuthoringChecklistTests
         gone.Status.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    /// <summary>
+    /// AC10 / 00 §9.3: a project the tenant cannot see answers 404 on <b>every</b> checklist route. The list is a 404
+    /// rather than an empty page (an empty page would confirm the project exists), and a create is the project's 404
+    /// rather than the writer's 422 <c>parent_not_found</c> for the seeded node.
+    /// </summary>
+    [Fact]
+    public async Task UnknownProject_IsNotFoundOnEveryChecklistRoute()
+    {
+        await using var world = await StartAsync();
+        var stranger = $"/v1/projects/{Guid.CreateVersion7()}/authoring/checklist-items";
+
+        var list = await world.Client.SendAsync(HttpMethod.Get, stranger, world.Admin);
+        list.Status.ShouldBe(HttpStatusCode.NotFound);
+        list.ErrorCode.ShouldBe("not_found");
+
+        var create = await world.Client.SendAsync(
+            HttpMethod.Post,
+            stranger,
+            world.Admin,
+            new { node_id = world.Category, title = "Pay online", priority = "high" },
+            NewKey());
+        create.Status.ShouldBe(HttpStatusCode.NotFound);
+        create.ErrorCode.ShouldBe("not_found");
+
+        // The item exists in the caller's own project: addressing it under an unknown one is absent, never found.
+        var item = await CreateItemAsync(world, "Pay online");
+
+        var patch = await world.Client.SendAsync(
+            HttpMethod.Patch,
+            $"{stranger}/{item}",
+            world.Admin,
+            new { title = "Pay by card" },
+            NewKey(),
+            "\"1\"");
+        patch.Status.ShouldBe(HttpStatusCode.NotFound);
+        patch.ErrorCode.ShouldBe("not_found");
+
+        var delete = await world.Client.SendAsync(
+            HttpMethod.Delete,
+            $"{stranger}/{item}",
+            world.Admin,
+            idempotencyKey: NewKey(),
+            ifMatch: "\"1\"");
+        delete.Status.ShouldBe(HttpStatusCode.NotFound);
+        delete.ErrorCode.ShouldBe("not_found");
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static IReadOnlyList<(string Path, string Reason)> Details(ApiAnswer answer) =>
