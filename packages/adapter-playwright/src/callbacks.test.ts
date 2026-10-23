@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { EventEnvelope } from './envelope.js';
 import { EvidgateReporter, type EvidgateReporterOptions } from './reporter.js';
-import { CHECKPOINT_TMP_FILE } from './spool.js';
+import { SHARDS_TMP_FILE } from './spool.js';
 
 const isWindows = process.platform === 'win32';
 const tempDirs: string[] = [];
@@ -220,9 +220,9 @@ describe('callback → envelope fidelity', () => {
     const { reporter, spool } = makeReporter();
     reporter.onBegin();
     // Inject the failure without permissions (a root user ignores mode bits): the
-    // checkpoint tmp path is a directory, so the atomic checkpoint write cannot open it.
-    // This still fails after the unlink + O_EXCL hardening (unlinking a directory throws).
-    mkdirSync(join(spool, 'run-1', 'pw-0', CHECKPOINT_TMP_FILE));
+    // shards.json tmp path is a directory, so the atomic record write at close cannot open
+    // it. This still fails after the unlink + O_EXCL hardening (unlinking a directory throws).
+    mkdirSync(join(spool, 'run-1', 'pw-0', SHARDS_TMP_FILE));
     expect(() => reporter.onTestEnd(fakeTest(), fakeResult())).not.toThrow();
     expect(() => reporter.onEnd(fullResult('passed'))).toThrow();
   });

@@ -22,6 +22,17 @@
 // (AC5); the envelope `status` is the raw Playwright status and `ext.normalized` (plus
 // `skip_reason`/`xfail`/`error_summary` when they apply) carries the 00 §8.3 mapping
 // (AC6). An unknown raw status maps to `error` and emits one `unknown_status` warning.
+//
+// 04.3.3-T1: the producer identity is derived from Playwright's shard config (T54,
+// `resolveProducerId`: `shard-<current>`, `shard-1` unsharded), so `producer_id` is no
+// longer a required option; an explicit option still wins but must equal the derived id
+// when Playwright selected a shard, or the run is refused before any envelope (two shards
+// sharing one producer would interleave one sequence). Because the config is only known
+// at `onBegin`, the spool writer is opened there — a spool initialisation failure is
+// therefore buffered from `onBegin` and re-thrown from `onEnd` like every other callback
+// failure, instead of at construction. In a `merge-reports` replay the reporter emits
+// nothing: each event already reached the spool under its own shard's producer id and
+// sequence, and the replay exposes no per-event shard identity (AC3).
 import type {
   FullConfig,
   FullResult,
@@ -53,8 +64,11 @@ import {
   type WarningPayload,
 } from './identity.js';
 import { loadSidecarIndex, type SidecarFs } from './sidecar.js';
+import { isMergeReplay, isProducerId, resolveProducerId } from './shard.js';
+import type { ResolvedProducerId } from './shard.js';
 import { attemptOf, mapStatus, printable, type StatusMapping } from './status.js';
 import { SpoolWriter } from './spool.js';
+import type { SpoolShard, SpoolWriterOptions } from './spool.js';
 import { assertSupportedEngine, readInstalledPlaywrightVersion } from './versionGuard.js';
 
 /**
@@ -70,10 +84,14 @@ export interface EvidgateReporterOptions {
   /** Run id; falls back to `EVIDGATE_RUN_ID`. */
   run_id?: string;
   /**
-   * Producer id. Required: no env fallback exists — `EVIDGATE_PRODUCER_ID` is only
-   * floated in `plans/open-items/02-catalog-ingest-runs-evidence.md` (OI-04-02, for
-   * 04.3.3) and is not defined in `contracts/` or the plans, so the reporter does not
-   * read it.
+   * Producer id override. Optional since 04.3.3-T1: without it the id is derived from
+   * Playwright's shard config at `onBegin` (`shard-<current>`, `shard-1` unsharded, T54).
+   * An explicit value must match `^[A-Za-z0-9._-]{1,128}$` (one spool path segment) and,
+   * when Playwright selected a shard, must equal the derived id — otherwise `onBegin`
+   * refuses (see `resolveProducerId` and `contracts/adapter/playwright-mapping.md`).
+   * There is still no env fallback: `EVIDGATE_PRODUCER_ID` is only floated in
+   * `plans/open-items/02-catalog-ingest-runs-evidence.md` (OI-04-02) and is not defined in
+   * `contracts/` or the plans, so the reporter does not read it.
    */
   producer_id?: string;
   /** Emit `test.step` envelopes for `result.steps`. Default true (AC6). */
@@ -86,6 +104,17 @@ export interface EvidgateReporterOptions {
   sidecarFs?: SidecarFs;
   /** Test-only seam: overrides the detected @playwright/test version for the guard. */
   engineVersion?: string;
+  /**
+   * Test-only seam: the CLI arguments used to recognise a `merge-reports` replay
+   * (`process.argv.slice(2)` by default, 04.3.3-T1).
+   */
+  argv?: readonly string[];
+  /**
+   * Test-only seam: the spool writer's single-writer lock (04.3.3-T1). The restart test
+   * needs a writer whose recorded holder pid reads as dead, so a second reporter can take
+   * over the stale lock without killing a real process.
+   */
+  lock?: SpoolWriterOptions['lock'];
 }
 
 interface EnvelopeDraft {
@@ -98,13 +127,27 @@ interface EnvelopeDraft {
 }
 
 export class EvidgateReporter implements Reporter {
-  private readonly producerId: string;
+  /** The explicit option, kept for the `onBegin` consistency check (04.3.3-T1). */
+  private readonly explicitProducerId: string | undefined;
+  /** Resolved at `onBegin`: the explicit option or the derived `shard-<index>` (T54). */
+  private producerId: string | undefined;
+  private readonly spoolDir: string;
+  private readonly runId: string;
+  private readonly writerLock: SpoolWriterOptions['lock'];
+  /**
+   * Opened at `onBegin`, because the shard — and therefore the producer id — is only known
+   * from the resolved config there (04.3.3-T1). Undefined means "this reporter emits
+   * nothing": a `merge-reports` replay, or an `onBegin` that was refused.
+   */
+  private writer: SpoolWriter | undefined;
+  /** True in a `merge-reports` replay: every event was already ingested per shard (AC3). */
+  private readonly mergeReplay: boolean;
+  private mergeNoticeWritten = false;
   private readonly stepsEnabled: boolean;
   private readonly mode: 'full' | 'ingest_only';
   private readonly identity: IdentityResolver | undefined;
   private readonly sidecarFs: SidecarFs | undefined;
   private readonly engineVersion: string;
-  private readonly writer: SpoolWriter;
   /** `EVIDGATE_TARGET_ENV`, validated once in the ctor (no env read outside it). */
   private readonly targetEnv: string | undefined;
   private readonly targetEnvWarning: WarningPayload | undefined;
@@ -139,10 +182,12 @@ export class EvidgateReporter implements Reporter {
         '@evidgate/playwright-reporter: the run_id option or EVIDGATE_RUN_ID is required',
       );
     }
-    if (producerId === undefined || producerId.length === 0) {
+    // 04.3.3-T1: the explicit override is validated here so a bad id fails at construction,
+    // exactly as before; the id itself is resolved at onBegin (the shard is in the config).
+    if (producerId !== undefined && producerId.length > 0 && !isProducerId(producerId)) {
       throw new Error(
-        '@evidgate/playwright-reporter: the producer_id option is required (no env fallback: ' +
-          'EVIDGATE_PRODUCER_ID is not defined in contracts/ or the plans)',
+        `@evidgate/playwright-reporter: invalid producer_id ${JSON.stringify(producerId)}: ` +
+          'must match ^[A-Za-z0-9._-]{1,128}$ (one safe spool path segment)',
       );
     }
     const engineVersion = options.engineVersion ?? readInstalledPlaywrightVersion();
@@ -150,7 +195,14 @@ export class EvidgateReporter implements Reporter {
     // leaves no partial emit behind.
     assertSupportedEngine(engineVersion);
     this.engineVersion = engineVersion;
-    this.producerId = producerId;
+    this.explicitProducerId =
+      producerId !== undefined && producerId.length > 0 ? producerId : undefined;
+    this.spoolDir = spoolDir;
+    this.runId = runId;
+    this.writerLock = options.lock;
+    // AC3: a `merge-reports` replay is recognised from the CLI arguments, the only signal
+    // available before any callback (shard.ts).
+    this.mergeReplay = isMergeReplay(options.argv ?? process.argv.slice(2));
     this.stepsEnabled = options.steps ?? true;
     this.mode = options.mode ?? 'full';
     this.identity = options.identity;
@@ -170,8 +222,6 @@ export class EvidgateReporter implements Reporter {
           }
         : undefined;
     this.allowUnmapped = process.env.EVIDGATE_ALLOW_UNMAPPED === '1';
-
-    this.writer = new SpoolWriter({ spoolDir, runId, producerId });
   }
 
   /** How many secret-looking `ext` keys were dropped (04 §6, S3). */
@@ -192,14 +242,37 @@ export class EvidgateReporter implements Reporter {
 
   /**
    * Sequence 1 is the capability document, sequence 2 the `run_begin` marker (AC3).
-   * The sidecar index is built once here from the suite's test files (04.3.2 §4); its
+   * The sidecar index is built once here from the suite's test files (04.3.2 §4), pinned
+   * to `config.rootDir` so every shard reads the same manifests (04.3.3-T1, #32); its
    * warnings and a pending `invalid_target_env` are emitted after the two markers.
+   *
+   * 04.3.3-T1 owns two more things here: the shard's producer identity (T54, with the
+   * explicit-override consistency rule) and the opening of the spool writer, which needs
+   * that identity. In a `merge-reports` replay nothing is emitted at all (AC3).
    */
   onBegin(config?: FullConfig, suite?: Suite): void {
     this.guard(() => {
+      if (this.mergeReplay) {
+        this.noteMergeReplay();
+        return;
+      }
+      const producer = this.resolveProducer(config);
+      this.producerId = producer.producer_id;
+      this.writer = new SpoolWriter({
+        spoolDir: this.spoolDir,
+        runId: this.runId,
+        producerId: producer.producer_id,
+        ...(producer.shard === undefined ? {} : { shard: producer.shard }),
+        ...(this.writerLock === undefined ? {} : { lock: this.writerLock }),
+      });
+
       const testFiles = new Set<string>();
       for (const test of suite?.allTests() ?? []) testFiles.add(test.location.file);
-      const index = loadSidecarIndex(testFiles, this.sidecarFs);
+      const index = loadSidecarIndex(
+        testFiles,
+        this.sidecarFs,
+        config?.rootDir === undefined ? {} : { rootDir: config.rootDir },
+      );
       // P3: warnings the sidecar loader discarded past its own cap still count as
       // suppressed, so `warnings_truncated` reports the full loss.
       this.suppressedWarnings += index.droppedWarnings;
@@ -245,9 +318,11 @@ export class EvidgateReporter implements Reporter {
 
   onTestBegin(test: TestCase, result: TestResult): void {
     this.guard(() => {
+      const writer = this.activeWriter();
+      if (writer === undefined) return;
       const identity = this.identityOf(test);
       this.noteIdentity(test, identity);
-      this.writer.append(
+      writer.append(
         this.draft({
           type: 'test.started',
           attempt_no: attemptOf(result),
@@ -260,6 +335,8 @@ export class EvidgateReporter implements Reporter {
 
   onTestEnd(test: TestCase, result: TestResult): void {
     this.guard(() => {
+      const writer = this.activeWriter();
+      if (writer === undefined) return;
       const attemptNo = attemptOf(result);
       const identity = this.identityOf(test);
       this.noteIdentity(test, identity);
@@ -269,7 +346,7 @@ export class EvidgateReporter implements Reporter {
         annotations: [...(test.annotations ?? []), ...(result.annotations ?? [])],
         errors: result.errors,
       });
-      this.writer.append(
+      writer.append(
         this.draft({
           type: 'test.finished',
           attempt_no: attemptNo,
@@ -297,7 +374,7 @@ export class EvidgateReporter implements Reporter {
         // PS6: walk the step tree lazily, appending per step, so the working set stays
         // at the flush threshold instead of materialising a step array and a draft array.
         for (const step of walkSteps(result.steps)) {
-          this.writer.append(
+          writer.append(
             this.draft({
               type: 'test.step',
               attempt_no: attemptNo,
@@ -309,7 +386,7 @@ export class EvidgateReporter implements Reporter {
         }
       }
       // CR2: one durable batch per test.
-      this.writer.flush();
+      writer.flush();
     });
   }
 
@@ -331,35 +408,38 @@ export class EvidgateReporter implements Reporter {
    * comes back (`node_modules/playwright/lib/runner/index.js`).
    */
   onEnd(result: FullResult): void {
-    this.guard(() => {
-      if (this.unidentifiedCount > 0) {
-        // C4/P3: the summary bypasses the 100-envelope cap, so the counts that explain the
-        // failure survive even when the run already emitted MAX_WARNING_ENVELOPES warnings.
-        this.emitWarning({
-          code: 'unmapped',
-          message:
-            `${this.unidentifiedCount} test(s) without a complete identity ` +
-            `(${this.identityCauses()})`,
-          count: this.unidentifiedCount,
-        });
-      }
-      if (this.suppressedWarnings > 0) {
-        this.emitWarning({
-          code: 'warnings_truncated',
-          message: `${this.suppressedWarnings} warning(s) suppressed by the reporter's warning caps`,
-          count: this.suppressedWarnings,
-        });
-      }
-      this.writer.append(
-        this.draft({
-          type: 'run.log',
-          attempt_no: 1,
-          execution_key: PLACEHOLDER_EXECUTION_KEY,
-          status: result.status,
-          ext: { schema: EXT_SCHEMA, marker: 'run_end' },
-        }),
-      );
-    });
+    const writer = this.writer;
+    if (writer !== undefined) {
+      this.guard(() => {
+        if (this.unidentifiedCount > 0) {
+          // C4/P3: the summary bypasses the 100-envelope cap, so the counts that explain the
+          // failure survive even when the run already emitted MAX_WARNING_ENVELOPES warnings.
+          this.emitWarning({
+            code: 'unmapped',
+            message:
+              `${this.unidentifiedCount} test(s) without a complete identity ` +
+              `(${this.identityCauses()})`,
+            count: this.unidentifiedCount,
+          });
+        }
+        if (this.suppressedWarnings > 0) {
+          this.emitWarning({
+            code: 'warnings_truncated',
+            message: `${this.suppressedWarnings} warning(s) suppressed by the reporter's warning caps`,
+            count: this.suppressedWarnings,
+          });
+        }
+        writer.append(
+          this.draft({
+            type: 'run.log',
+            attempt_no: 1,
+            execution_key: PLACEHOLDER_EXECUTION_KEY,
+            status: result.status,
+            ext: { schema: EXT_SCHEMA, marker: 'run_end' },
+          }),
+        );
+      });
+    }
     const gateTripped = !this.allowUnmapped && this.unidentifiedCount > 0;
     if (gateTripped) {
       // C3: one line, so a run that fails on identity says why in the CI log.
@@ -369,10 +449,12 @@ export class EvidgateReporter implements Reporter {
       );
     }
     let closeError: Error | null = null;
-    try {
-      this.writer.close();
-    } catch (error) {
-      closeError = toError(error);
+    if (writer !== undefined) {
+      try {
+        writer.close();
+      } catch (error) {
+        closeError = toError(error);
+      }
     }
     const failure = this.bufferedError ?? closeError;
     if (failure !== null) throw failure;
@@ -382,8 +464,73 @@ export class EvidgateReporter implements Reporter {
     return undefined;
   }
 
+  /**
+   * The writer to emit into, or undefined when this reporter emits nothing: a
+   * `merge-reports` replay (AC3), or a run whose `onBegin` was refused before the writer
+   * existed (the refusal is re-thrown from `onEnd`).
+   */
+  private activeWriter(): SpoolWriter | undefined {
+    if (this.mergeReplay) return undefined;
+    return this.writer;
+  }
+
+  /**
+   * The producer identity this run writes under (T54/AC1/AC2).
+   *
+   * Precedence: an explicit `producer_id` option wins over the derivation, but only when it
+   * agrees with Playwright's shard. With a shard config the two must match: two shards
+   * writing under one producer would interleave one sequence, and a wrong id is a server
+   * 422 `unknown_producer` anyway, so the run is refused before any envelope instead of
+   * failing later per batch. Without a shard config there is nothing to compare against:
+   * an explicit id is honoured as before (04.3.1-T1 configs), and the writer records no
+   * shard slot; omitting the option derives `shard-1` (T54) and records slot 1.
+   */
+  private resolveProducer(config?: FullConfig): { producer_id: string; shard?: SpoolShard } {
+    const derived = resolveProducerId(config);
+    const producerId = this.explicitProducerId ?? derived.producer_id;
+    if (
+      config?.shard !== undefined &&
+      config.shard !== null &&
+      producerId !== derived.producer_id
+    ) {
+      throw new Error(
+        `@evidgate/playwright-reporter: the producer_id option ` +
+          `${JSON.stringify(this.explicitProducerId)} conflicts with the shard Playwright ` +
+          `selected (${String(config.shard.current)}/${String(config.shard.total)}): this ` +
+          `shard's manifest slot is ${JSON.stringify(derived.producer_id)} (T54). Drop the ` +
+          'option to derive it, or pass that id; another id would be rejected by the server ' +
+          '(422 unknown_producer).',
+      );
+    }
+    // The slot is asserted only when the producer *is* the derived slot: a custom id on an
+    // unsharded run claims no slot (the manifest owns the shard count, §4).
+    return producerId === derived.producer_id
+      ? { producer_id: producerId, shard: shardOption(derived) }
+      : { producer_id: producerId };
+  }
+
+  /**
+   * AC3: a `merge-reports` replay re-emits nothing. Each event already reached the spool
+   * under its own shard's `producer_id` and contiguous sequence, and the replay exposes no
+   * per-event shard identity to a custom reporter, so any id here would be a guess and any
+   * renumbering would corrupt order. One stderr line says so, once per process.
+   */
+  private noteMergeReplay(): void {
+    if (this.mergeNoticeWritten) return;
+    this.mergeNoticeWritten = true;
+    process.stderr.write(
+      '[evidgate] merge-reports replay: not emitting envelopes. Every shard already ' +
+        'ingested its own events under producer shard-<index>; remove the evidgate reporter ' +
+        'from the merge config to silence this line.\n',
+    );
+  }
+
   private draft(input: EnvelopeDraft): UnsignedEnvelope {
-    return buildEnvelope({ producer_id: this.producerId, ...input });
+    const producerId = this.producerId;
+    if (producerId === undefined) {
+      throw new Error('@evidgate/playwright-reporter: envelope built before the producer id');
+    }
+    return buildEnvelope({ producer_id: producerId, ...input });
   }
 
   /** The resolved identity: the injected resolver wins, else the built-in mapping. */
@@ -444,7 +591,9 @@ export class EvidgateReporter implements Reporter {
   }
 
   private emitWarning(warning: WarningPayload): void {
-    this.writer.append(
+    const writer = this.activeWriter();
+    if (writer === undefined) return;
+    writer.append(
       this.draft({
         type: 'run.log',
         attempt_no: 1,
@@ -512,6 +661,17 @@ export class EvidgateReporter implements Reporter {
       this.bufferedError ??= toError(error);
     }
   }
+}
+
+/**
+ * The writer's `shard` option (04.3.3-T1): the resolved manifest slot, with `total` only
+ * when Playwright declared one. An unsharded run passes `{ index: 1 }` — the record then
+ * carries the slot but no total, because the manifest owns the shard count.
+ */
+function shardOption(resolved: ResolvedProducerId): SpoolShard {
+  return resolved.shard_total === undefined
+    ? { index: resolved.shard_index }
+    : { index: resolved.shard_index, total: resolved.shard_total };
 }
 
 /**

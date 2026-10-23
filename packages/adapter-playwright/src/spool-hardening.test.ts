@@ -20,12 +20,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildEnvelope, EXT_SCHEMA, type UnsignedEnvelope } from './envelope.js';
-import {
-  CHECKPOINT_FILE,
-  CHECKPOINT_TMP_FILE,
-  EvidgateInvalidSpoolIdError,
-  SpoolWriter,
-} from './spool.js';
+import { EvidgateInvalidSpoolIdError, SHARDS_FILE, SHARDS_TMP_FILE, SpoolWriter } from './spool.js';
 
 // PS4: a controllable short write. `vi.mock` is hoisted, so the flag lives in `vi.hoisted`.
 const fsControl = vi.hoisted(() => ({ failNextWrite: false }));
@@ -97,24 +92,24 @@ function openFdCount(): number | null {
 }
 
 describe('spool symlink and mode hardening', () => {
-  it('does not follow a planted checkpoint.json.tmp symlink', () => {
+  it('does not follow a planted shards.json.tmp symlink', () => {
     if (isWindows) return;
     const spool = tempSpool();
     const dir = producerDir(spool);
     mkdirSync(dir, { recursive: true });
     const victim = join(spool, 'victim.txt');
     writeFileSync(victim, 'do not touch');
-    symlinkSync(victim, join(dir, CHECKPOINT_TMP_FILE));
+    symlinkSync(victim, join(dir, SHARDS_TMP_FILE));
 
     const writer = new SpoolWriter({ spoolDir: spool, runId: 'run-1', producerId: 'pw-0' });
     writer.append(envelope('pw-0'));
     writer.close();
 
     expect(readFileSync(victim, 'utf8')).toBe('do not touch');
-    expect(existsSync(join(dir, CHECKPOINT_TMP_FILE))).toBe(false);
-    expect(JSON.parse(readFileSync(join(dir, CHECKPOINT_FILE), 'utf8'))).toMatchObject({
+    expect(existsSync(join(dir, SHARDS_TMP_FILE))).toBe(false);
+    expect(JSON.parse(readFileSync(join(dir, SHARDS_FILE), 'utf8'))).toMatchObject({
       producer_id: 'pw-0',
-      next_sequence: 2,
+      sequence_next: 2,
     });
   });
 
@@ -169,8 +164,9 @@ describe('spool write-failure hardening', () => {
     const before = openFdCount();
     const writer = new SpoolWriter({ spoolDir: spool, runId: 'run-1', producerId: 'pw-0' });
     writer.append(envelope('pw-0'));
-    // A directory at the tmp path makes the checkpoint write fail (unlink and O_EXCL open).
-    mkdirSync(join(producerDir(spool), CHECKPOINT_TMP_FILE));
+    // A directory at the tmp path makes the close-time record write fail (unlink and
+    // O_EXCL open).
+    mkdirSync(join(producerDir(spool), SHARDS_TMP_FILE));
 
     expect(() => writer.close()).toThrow();
     if (before !== null) expect(openFdCount()).toBe(before);
@@ -247,15 +243,15 @@ describe('spool id and checkpoint hardening', () => {
     expect(readdirSync(spool)).toEqual([]);
   });
 
-  it('ignores an unsafe checkpoint next_sequence', () => {
+  it('ignores an unsafe shards.json sequence_next', () => {
     for (const unsafe of [1e300, 2 ** 53]) {
       const spool = tempSpool();
       const dir = producerDir(spool);
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, '000001.jsonl'), chunkLine('pw-0', 1));
       writeFileSync(
-        join(dir, CHECKPOINT_FILE),
-        `${JSON.stringify({ producer_id: 'pw-0', next_sequence: unsafe })}\n`,
+        join(dir, SHARDS_FILE),
+        `${JSON.stringify({ producer_id: 'pw-0', shard_index: 1, sequence_next: unsafe })}\n`,
       );
 
       const writer = new SpoolWriter({ spoolDir: spool, runId: 'run-1', producerId: 'pw-0' });

@@ -59,7 +59,7 @@ Construction throws (before any callback runs) for:
 - a missing `spool_dir`, `run_id` or `producer_id` option;
 - an invalid `run_id`/`producer_id` (`EvidgateInvalidSpoolIdError`);
 - an unsupported `@playwright/test` version (`EvidgateUnsupportedEngineError`, AC5);
-- **spool initialisation**: `mkdir` or opening the chunk/checkpoint under `spool_dir`
+- **spool initialisation**: `mkdir` or opening the chunk or `shards.json` under `spool_dir`
   fails (unwritable, read-only or unmountable `spool_dir`, `EACCES`, `ENOSPC`). The
   reporter fails the Playwright startup rather than running with no spool.
 
@@ -89,7 +89,8 @@ Every variable is read **once in the constructor**; no callback reads `process.e
 
 ```
 <spool_dir>/<run_id>/<producer_id>/000001.jsonl   # 6-digit zero-padded chunks
-<spool_dir>/<run_id>/<producer_id>/checkpoint.json # { producer_id, next_sequence }
+<spool_dir>/<run_id>/<producer_id>/shards.json     # { producer_id, sequence_next, ... }, a floor
+<spool_dir>/<run_id>/<producer_id>/writer.lock     # single-writer lock, removed on close
 ```
 
 - `run_id` and `producer_id` are joined into the path, so each must be a single path
@@ -101,20 +102,24 @@ Every variable is read **once in the constructor**; no callback reads `process.e
   are `lstat`ed: a symlink or a foreign-owned directory is rejected, and an owned one is
   `chmod`ed to `0700`. `spool_dir` itself is left as given (a symlinked spool root is
   allowed and keeps its own mode).
-- **Symlink- and mode-hardened files.** The checkpoint temp file is unlinked if present
+- **Symlink- and mode-hardened files.** The `shards.json` temp file is unlinked if present
   and re-created with `O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW` `0600`; chunks open with
   `O_WRONLY|O_APPEND|O_CREAT|O_NOFOLLOW`; torn-tail truncation opens with `O_NOFOLLOW`.
   After every open the writer `fstat`s the descriptor and rejects non-regular files or
   files not owned by the current uid, then `fchmod`s it to `0600` — a pre-existing `0644`
   chunk becomes `0600`, and a planted symlink is refused instead of followed.
 - Envelopes are appended per callback (O(1), no whole-suite buffering). A flush writes
-  the pending batch, fsyncs the chunk, then rewrites the checkpoint atomically
-  (`checkpoint.json.tmp` → fsync → rename → directory fsync).
+  the pending batch and fsyncs the chunk. `shards.json` is rewritten atomically
+  (temp file → fsync → rename → directory fsync) only at chunk rotation, at close and
+  when a restart is detected, never per flush; a `checkpoint.json` left by an older
+  writer is read as a fallback. Restart resumes at the larger of the
+  `shards.json` `sequence_next` and the last chunk sequence plus one. `EVIDGATE_SPOOL_MAX_BYTES` caps the run directory at
+  write time. Contract: `contracts/adapter/playwright-mapping.md` "## shards".
 - **One durable flush per callback batch.** `onBegin` and `onTestEnd` each flush at the
   end of their batch, so a killed run loses at most the current callback's envelopes
   instead of the whole suite; `onEnd` flushes the final `run_end` marker and closes. The
   64-envelope `flushThreshold` remains an upper bound on how many envelopes a single
-  flush carries. On restart the writer reconciles `next_sequence` against the highest
+  flush carries. On restart the writer reconciles `sequence_next` against the highest
   sequence already on disk — the last complete parseable line of the highest chunk,
   scanning backwards, then lower chunks — so a sequence is never reused (T84). A torn
   tail (a crash mid-write leaves a partial line with no trailing newline) is truncated
@@ -127,7 +132,7 @@ Every variable is read **once in the constructor**; no callback reads `process.e
 - **`close()` always releases the descriptor.** The final flush runs inside `try/finally`,
   so the chunk fd is closed and the writer marked closed even when the flush throws — the
   error still propagates.
-- A checkpoint `next_sequence` is only honoured when it is a safe integer ≥ 1; the highest
+- A `shards.json` `sequence_next` (or a legacy checkpoint `next_sequence`) is only honoured as a floor when it is a safe integer ≥ 1; the highest
   chunk is read once on restart and the buffer is shared by torn-tail truncation,
   sequence recovery and chunk open.
 - **Chunk rotation:** a chunk rotates when it reaches 1 MiB (`chunkMaxBytes`) or 1000
@@ -146,7 +151,7 @@ types; it never invents another.
 | `onBegin`     | `run.log` capability carrier (sequence 1) + `run.log` `run_begin`; flushes the batch                                |
 | `onTestBegin` | `test.started` (no `status`)                                                                                        |
 | `onTestEnd`   | `test.finished` (`status` = raw `result.status`) + one `test.step` per step when `steps` is true; flushes the batch |
-| `onEnd`       | `run.log` `run_end` (`status` = run status) + flush + checkpoint                                                    |
+| `onEnd`       | `run.log` `run_end` (`status` = run status) + flush + `shards.json`                                                 |
 
 `attempt_no = result.retry + 1`, one `test.finished` per attempt (never a merged status).
 Callbacks never throw: a spool write failure is buffered

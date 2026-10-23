@@ -83,9 +83,19 @@ describe('reporter option and env boundaries', () => {
     const spool = tempSpool();
     process.env.EVIDGATE_PRODUCER_ID = 'from-env';
 
-    expect(
-      () => new EvidgateReporter({ spool_dir: spool, run_id: 'run-1', engineVersion: '1.63.0' }),
-    ).toThrow(/producer_id/);
+    // 04.3.3-T1 made `producer_id` optional (T54: it is derived from the shard at onBegin), so
+    // the constructor no longer throws without it. The intent of this probe stands: the env
+    // variable must never supply the id — the unsharded run derives `shard-1`, never `from-env`.
+    const reporter = new EvidgateReporter({
+      spool_dir: spool,
+      run_id: 'run-1',
+      engineVersion: '1.63.0',
+    });
+    reporter.onBegin();
+    reporter.onEnd(fullResult);
+
+    expect(existsSync(join(spool, 'run-1', 'shard-1', '000001.jsonl'))).toBe(true);
+    expect(existsSync(join(spool, 'run-1', 'from-env'))).toBe(false);
   });
 
   it('treats an empty-string option as missing instead of falling back to the env', () => {

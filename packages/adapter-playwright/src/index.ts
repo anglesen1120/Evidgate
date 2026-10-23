@@ -55,8 +55,20 @@ export {
   SIDECAR_FILE_NAME,
   type SidecarFs,
   type SidecarIndex,
+  type SidecarLoadOptions,
   type SidecarWarning,
 } from './sidecar.js';
+export {
+  isMergeReplay,
+  isProducerId,
+  MAX_SHARD_INDEX,
+  MERGE_REPORTS_COMMAND,
+  PRODUCER_ID_PATTERN,
+  resolveProducerId,
+  type PlaywrightShard,
+  type ProducerShardConfig,
+  type ResolvedProducerId,
+} from './shard.js';
 export { normalizeVariant, type VariantProblem, type VariantResult } from './variant.js';
 export {
   attemptOf,

@@ -4,9 +4,13 @@
 // spooled by `@evidgate/playwright-reporter` is readable here):
 //
 //   <spool_dir>/<run_id>/<producer_id>/NNNNNN.jsonl   6-digit chunks, one envelope per line
-//   <spool_dir>/<run_id>/<producer_id>/checkpoint.json  writer-owned, never written here
+//   <spool_dir>/<run_id>/<producer_id>/shards.json      writer-owned (never written here):
+//                                                      shard identity + sequence_next floor;
+//                                                      legacy checkpoint.json read as fallback
+//   <spool_dir>/<run_id>/<producer_id>/writer.lock      reporter-held writer lock (D-S56-Q8)
+//   <spool_dir>/<run_id>/<producer_id>/uploads/         CLI-owned upload journal (04.2.4)
 //   <spool_dir>/<run_id>/<producer_id>/cursor.json      CLI-owned ack cursor (0600)
-//   <spool_dir>/<run_id>/<producer_id>/spool.lock       single-writer lock (spoolLock.ts)
+//   <spool_dir>/<run_id>/<producer_id>/spool.lock       CLI single-writer lock (spoolLock.ts)
 //
 // Durability: appended lines are written, fsynced and the directory fsynced before this
 // module reports success; `ack` makes every chunk it has not already made durable (plus
@@ -31,8 +35,9 @@ import { chmod, lstat, mkdir, open, readdir, rename, rm, unlink } from 'node:fs/
 import { basename, join, resolve, sep } from 'node:path';
 
 import { CliError } from './errors.js';
-import { withSpoolLock } from './spoolLock.js';
+import { assertNoLiveWriter, withSpoolLock } from './spoolLock.js';
 
+import type { ProducerLockOptions } from './spoolLock.js';
 import type { Dirent } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 
@@ -82,13 +87,13 @@ export const maxSpoolLineBytes = 32 * 1_048_576;
  * `O_NOFOLLOW` is undefined on Windows; the POSIX symlink hardening degrades to a plain
  * open there (writer parity).
  */
-const O_NOFOLLOW: number = process.platform === 'win32' ? 0 : fsConstants.O_NOFOLLOW;
+export const O_NOFOLLOW: number = process.platform === 'win32' ? 0 : fsConstants.O_NOFOLLOW;
 /**
  * `O_NONBLOCK` is a POSIX-only flag (undefined on Windows). Opening a FIFO or a device
  * with it makes the open return instead of parking the whole CLI in the thread pool; the
  * descriptor is then rejected by the regular-file check in {@link openVerifiedFile}.
  */
-const O_NONBLOCK: number = process.platform === 'win32' ? 0 : fsConstants.O_NONBLOCK;
+export const O_NONBLOCK: number = process.platform === 'win32' ? 0 : fsConstants.O_NONBLOCK;
 
 /** One event read back from a chunk. */
 export interface SpoolEvent {
@@ -402,9 +407,20 @@ export class ProducerSpool {
     }
   }
 
-  /** Runs `fn` holding the exclusive producer lock; a live holder is `spool_locked`. */
-  withLock<T>(fn: () => Promise<T>): Promise<T> {
-    return withSpoolLock(this.directory, fn);
+  /**
+   * Runs `fn` holding the exclusive producer lock; a live holder is `spool_locked`.
+   *
+   * `options.requireNoLiveWriter` adds the D-S56-Q8 guard: the reporter's `writer.lock` is
+   * inspected after `spool.lock` is taken, and a live reporter refuses the command with
+   * `spool_locked` (exit 3) before `fn` runs. Only the chunk readers/purgers (events send,
+   * runs finalize) pass it; the upload journal keeps the plain lock, so a running test can
+   * never block an artifact upload.
+   */
+  withLock<T>(fn: () => Promise<T>, options: ProducerLockOptions = {}): Promise<T> {
+    return withSpoolLock(this.directory, async () => {
+      if (options.requireNoLiveWriter === true) await assertNoLiveWriter(this.directory, options);
+      return await fn();
+    });
   }
 
   /**
@@ -938,7 +954,7 @@ async function directoryBytes(root: string): Promise<number> {
 }
 
 /** `mkdir -p` that tolerates "something is already there" (`hardenDirectory` names it). */
-async function mkdirOwned(directory: string): Promise<void> {
+export async function mkdirOwned(directory: string): Promise<void> {
   await mkdir(directory, { recursive: true, mode: spoolDirMode }).catch((error: unknown) => {
     const code = (error as NodeJS.ErrnoException).code;
     // EEXIST/ENOENT: a file, a directory or a dangling symlink is already at the path.
@@ -952,7 +968,7 @@ async function mkdirOwned(directory: string): Promise<void> {
  * producer directories immediately before its recursive `rm` (a path checked at open time
  * can be swapped for a symlink before the removal: TOCTOU).
  */
-async function assertRealOwnedDirectory(path: string): Promise<void> {
+export async function assertRealOwnedDirectory(path: string): Promise<void> {
   const stats = await lstat(path);
   if (stats.isSymbolicLink()) {
     throw unsafePath(`refusing to use symlinked spool directory ${path}`);
@@ -971,7 +987,7 @@ async function assertRealOwnedDirectory(path: string): Promise<void> {
  * A directory the CLI creates or reuses under `spool_dir` must be a real directory owned
  * by this process (a planted symlink could redirect every write) and is forced to 0700.
  */
-async function hardenDirectory(path: string): Promise<void> {
+export async function hardenDirectory(path: string): Promise<void> {
   await assertRealOwnedDirectory(path);
   if (process.platform === 'win32') return;
   await chmod(path, spoolDirMode);
@@ -985,7 +1001,11 @@ async function hardenDirectory(path: string): Promise<void> {
  * instead of parking the CLI in the thread pool forever, so the regular-file check below
  * can reject it with `spool_unsafe_path`.
  */
-async function openVerifiedFile(path: string, flags: number, mode?: number): Promise<FileHandle> {
+export async function openVerifiedFile(
+  path: string,
+  flags: number,
+  mode?: number,
+): Promise<FileHandle> {
   let handle: FileHandle;
   try {
     handle = await open(path, flags | O_NOFOLLOW | O_NONBLOCK, mode);
@@ -1021,7 +1041,7 @@ async function openVerifiedFile(path: string, flags: number, mode?: number): Pro
 }
 
 /** Reads a spool file through an O_NOFOLLOW, ownership-checked descriptor. */
-async function readVerifiedText(path: string): Promise<string> {
+export async function readVerifiedText(path: string): Promise<string> {
   const handle = await openVerifiedFile(path, fsConstants.O_RDONLY | O_NOFOLLOW);
   try {
     return await handle.readFile('utf8');
@@ -1041,7 +1061,7 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 /** `write()` may write fewer bytes than asked (ENOSPC, EINTR, quota); loop until done. */
-async function writeAll(handle: FileHandle, buffer: Buffer): Promise<void> {
+export async function writeAll(handle: FileHandle, buffer: Buffer): Promise<void> {
   let written = 0;
   while (written < buffer.byteLength) {
     const { bytesWritten } = await handle.write(buffer, written, buffer.byteLength - written);
@@ -1051,7 +1071,7 @@ async function writeAll(handle: FileHandle, buffer: Buffer): Promise<void> {
 }
 
 /** Directory fsync is a durability nicety; a filesystem that refuses it must not fail the run. */
-function fsyncDirectorySync(directory: string): void {
+export function fsyncDirectorySync(directory: string): void {
   if (process.platform === 'win32') return;
   try {
     const fd = openSync(directory, 'r');

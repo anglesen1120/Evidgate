@@ -447,7 +447,7 @@ function requestHeaders(batch: Batch, gzip: boolean): Record<string, string> {
  * The per-request timeout, additionally bounded by what is left of the send deadline, so
  * a hung connection can never outlive the deadline. Node unrefs both timers.
  */
-function attemptSignal(deadlineAt: number, now: number): AbortSignal {
+export function attemptSignal(deadlineAt: number, now: number): AbortSignal {
   const timeout = AbortSignal.timeout(perRequestTimeoutMs);
   const remaining = deadlineAt - now;
   if (!Number.isFinite(remaining) || remaining <= 0) {
@@ -461,7 +461,7 @@ function attemptSignal(deadlineAt: number, now: number): AbortSignal {
  * `retryable: false` (a permanent 5xx must not be retried). Every other status — 401,
  * 403, 404, 409, 413, 422 — is permanent.
  */
-function isRetryable(status: number, error: unknown): boolean {
+export function isRetryable(status: number, error: unknown): boolean {
   const retryable = status === 408 || status === 429 || status >= 500;
   if (!retryable) {
     return false;
@@ -475,7 +475,7 @@ function isRetryable(status: number, error: unknown): boolean {
  * The caller treats this value as a floor under the jittered backoff, so a 0 never means
  * "retry at once".
  */
-function retryAfter(response: Response, now: number): number | undefined {
+export function retryAfter(response: Response, now: number): number | undefined {
   const raw = response.headers.get('retry-after');
   if (raw === null) {
     return undefined;
@@ -495,7 +495,7 @@ function retryAfter(response: Response, now: number): number | undefined {
 }
 
 /** Full-jitter backoff: `random() * min(500 ms x 2^(attempt-1), 30 s)` (00 §9.1). */
-function backoffDelay(attempts: number, sample: number): number {
+export function backoffDelay(attempts: number, sample: number): number {
   const ceiling = Math.min(retryBaseMs * 2 ** (attempts - 1), retryCapMs);
   const bounded = Math.min(Math.max(sample, 0), 1);
   return Math.min(Math.floor(bounded * ceiling), retryCapMs);

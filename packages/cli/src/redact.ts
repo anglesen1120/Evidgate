@@ -23,6 +23,14 @@ let secretsByLength: readonly string[] = [];
 const authorizationHeader = /(authorization\s*:\s*)[^\r\n]*/gi;
 
 /**
+ * 04.2.4-T1.4: an absolute http(s) URL. The character class stops at whitespace, quotes,
+ * angle brackets and the usual closing punctuation, so wrapping text is preserved.
+ */
+const absoluteUrl = /\bhttps?:\/\/[^\s"'<>`)\]}]+/gi;
+/** `scheme://userinfo@host` — userinfo is a credential pair, never printed. */
+const urlUserInfo = /^(https?:\/\/)[^/?#@]+@/i;
+
+/**
  * Registers a secret value and the forms it can take in an error message: the value
  * itself, its trimmed form, its percent-encoded form, its JSON-escaped form and its
  * control-character-escaped form. Empty forms are skipped; a value shorter than four
@@ -61,13 +69,29 @@ export function resetSecrets(): void {
   secretsByLength = [];
 }
 
-/** Replaces every registered secret and any `Authorization` header value. */
+/**
+ * Replaces every registered secret and any `Authorization` header value, then strips the
+ * credential out of any URL:
+ *
+ * - a URL with userinfo before the host loses that userinfo;
+ * - every http(s) URL with a query string loses the whole query. A presigned URL IS a
+ *   bearer credential (04 §6, T18) and its signature travels in the query
+ *   (`X-Amz-Signature`, `X-Amz-Credential`, `x-amz-security-token`, `sig`, …); naming the
+ *   parameters that must be stripped would leak the ones a future provider names
+ *   differently, so the rule is the positional one: a URL with a query is never echoed
+ *   (04.2.4 contract, contracts/cli.md §12).
+ */
 export function redact(text: string): string {
   let output = text;
   for (const secret of secretsByLength) {
     output = output.split(secret).join(redacted);
   }
-  return output.replace(authorizationHeader, `$1${redacted}`);
+  output = output.replace(authorizationHeader, `$1${redacted}`);
+  return output.replace(absoluteUrl, (raw) => {
+    const withoutUserInfo = raw.replace(urlUserInfo, '$1');
+    const query = withoutUserInfo.indexOf('?');
+    return query === -1 ? withoutUserInfo : `${withoutUserInfo.slice(0, query)}?${redacted}`;
+  });
 }
 
 /** Wraps an `Io` so every write is redacted. */
