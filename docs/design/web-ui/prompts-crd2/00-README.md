@@ -110,9 +110,9 @@ Format: [`TEMPLATE.md`](TEMPLATE.md). Each prompt is ≤ 60 lines and names one 
 | B4 | [B4-08](B4-08-failure-inbox.md) · [B4-09](B4-09-failure-detail.md) · [B4-10](B4-10-history-artifact-decision.md) · [B4-12](B4-12-repair-queue.md) · [B4-13](B4-13-repair-detail.md) · [B4-14](B4-14-approval-lineage-fixtures.md) · [B4-47](B4-47-ui-change-proposal.md) |
 | B5 | [B5-01](B5-01-retire-studio.md) · [B5-02](B5-02-locale-review.md) |
 
-## 4. Open questions for the owner `[OPEN]`
+## 4. Owner questions (answered 2026-10-23)
 
 1. `[DECISION]` 2026-10-23, owner: the authoring group label is "Test design / Thiết kế kiểm thử".
-2. `[OPEN]` What is the credit price per action (plan 13 Q2 `[OPEN]`)? Fixtures show credit counts only, with no money amounts.
-3. `[OPEN]` Should the G1 workspace show CI health at all? The prompts hide it until G2.
-4. `[DECISION]` 2026-10-23, owner: change the login footer tagline to the CR-D-2 lead. Working text (owner may reword): "Evidgate · From requirements to tests that repair themselves, under review / Evidgate · Từ yêu cầu đến kiểm thử tự sửa, luôn có người duyệt". Prompt B1-01 carries it.
+2. `[DECISION]` 2026-10-23, owner: credits are priced at no less than 3× the cost per action measured in the G1 free trial, reviewed monthly (CR-D-2 §6.2). The amounts stay `[OPEN]` until the G2 offer (plan 13 Q2). The mockups show credit counts only, never money.
+3. `[DECISION]` 2026-10-23, owner: no CI health in G1. The CI regions of page 24 are hidden entirely until G2, with no empty placeholder.
+4. `[DECISION]` 2026-10-23, owner: change the login footer tagline to the CR-D-2 lead; the proposed text is accepted: "Evidgate · From requirements to tests that repair themselves, under review / Evidgate · Từ yêu cầu đến kiểm thử tự sửa, luôn có người duyệt". Prompt B1-01 carries it.

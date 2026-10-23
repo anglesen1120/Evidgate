@@ -237,7 +237,7 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 | 08.5.4-T1 | Healer run in the sandbox + output mapping + `skip`/`fixme` rejection | M | V2 | G4 | 08.4.3-T2, 08.4.1-T2 |
 | 08.5.4-T2 | Agent-definition regeneration on Playwright bumps + compatibility gate | M | V2 | G4 | 08.5.4-T1 |
 
-#### Story 08.5.5 AI credits and spend control — acceptance: a tenant can call the model only while it has credit and has opted in; every call consumes credit exactly once under an idempotent key; the provider key is held only by Evidgate and never reaches a tenant, log or artifact; a per-tenant cap, a global daily cap and the kill switch each stop model calls within one request. [CR from owner decision O4, 2026-10-02]
+#### Story 08.5.5 AI credits and spend control — acceptance: a tenant can call the model only while it has credit and has opted in; every call consumes credit exactly once under an idempotent key; the provider key is held only by Evidgate and never reaches a tenant, log or artifact; a per-tenant cap, a global daily cap and the kill switch each stop model calls within one request; the model cost of every AI action is recorded from G1 and readable by the operator, so credit amounts can be set at no less than 3× the measured cost (owner decision 2026-10-23, CR-D-2 §6.2, reviewed monthly; amounts `[OPEN]` until the G2 offer). [CR from owner decision O4, 2026-10-02]
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 08.5.5-T1 | `ai_credit_account` (org_id, balance, period cap) + append-only `ai_credit_entry` (grant, consume, refund, expire) with RLS, composite FKs and audit; each entry also writes a usage-ledger row, metric `ai_credit` (12.3.1) | M | V2 | G1 | 08.5.1-T1, 12.3.1-T1 |

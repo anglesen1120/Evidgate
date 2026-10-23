@@ -97,7 +97,7 @@ Plus: a **per-project shadow window** of 2–4 weeks (proposals labelled, measur
 - Batch review actions into one update; cache by hash of (requirement, project settings).
 - Two model sizes: small for classification and checklists, large for test case and script generation.
 - Credits per AI action and a hard per-tenant / per-project budget through the gateway (08.5.1, 08.5.5); record the real cost per action.
-- `[INFERENCE]` Price credits at no less than 3× the measured model cost; review monthly.
+- `[DECISION]` (owner, 2026-10-23) Price credits at no less than 3× the measured model cost; review monthly. G1 is a free trial (operator-granted credits) that measures the real cost per action; the credit amounts are set before the G2 offer (plan 12 §Price test, 12.4.1-T4).
 
 ### 6.3 Generated scripts are unstable
 

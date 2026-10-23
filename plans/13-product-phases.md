@@ -219,10 +219,10 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 **Epic 13.8 total: 7.0**
 
 ### Epic 13.9 Phase gates
-#### Story 13.9.1 Gate metrics — acceptance: each §4.3 gate metric is computed from stored data and readable by the operator.
+#### Story 13.9.1 Gate metrics — acceptance: each §4.3 gate metric is computed from stored data and readable by the operator; the G1 free trial also reports the measured model cost per AI action.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 13.9.1-T1 | G1 usage metrics: active teams, weekly return, exports | S | V1 | G1 | 13.1.1-T5 |
+| 13.9.1-T1 | G1 usage metrics: active teams, weekly return, exports, measured model cost per AI action | S | V1 | G1 | 13.1.1-T5, 08.5.5-T1 |
 | 13.9.1-T2 | G2 script stability metric: share passing 3 of 3 without manual edits | S | V1 | G2 | 13.5.1-T4 |
 | 13.9.1-T3 | G3 false-repair adjudication report | S | V1 | G3 | 13.8.1-T4, 08.8.1-T3 |
 **Epic 13.9 total: 1.5**
@@ -235,8 +235,8 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 
 | # | Question | Owner | Needed by |
 |---|---|---|---|
-| Q1 | Default model pair (small / large) and its price per action `[OPEN]` | Owner | before 13.3.1-T2 |
-| Q2 | Credit price per AI action (CR-D-2 §6.2: at least 3× measured cost) `[OPEN]` | Owner | before the G1 pilot |
+| Q1 | Default model pair (small / large) and its cost per action `[OPEN]` | Owner | before 13.3.1-T2 |
+| Q2 | Credit amounts per AI action. Rule `[DECISION]` (owner, 2026-10-23, CR-D-2 §6.2): at least 3× the cost per action measured in the G1 free trial, reviewed monthly; the amounts stay `[OPEN]` | Owner | before the G2 offer (12.4.1-T4) |
 | Q3 | Who supplies the seed test when the customer has none | Owner + pilot QA lead | before 13.5.1-T1 |
 
 ## 12. Estimate summary
