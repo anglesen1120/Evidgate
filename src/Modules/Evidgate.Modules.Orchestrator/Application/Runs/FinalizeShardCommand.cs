@@ -311,6 +311,9 @@ internal sealed partial class FinalizeShardCommandHandler(
         return Result.Failure(error);
     }
 
+    // A repeated member name would make a declared value ambiguous, so it is refused with the rest of the invalid shapes.
+    private static readonly JsonDocumentOptions DuplicateFreeOptions = new() { AllowDuplicateProperties = false };
+
     /// <summary>
     /// The body's member set and the five shapes, in the order the contract lists them (00 §9.3, 05.3.2 §5). A
     /// member outside <see cref="Members"/> is 422 <c>additional_properties</c>, a missing or mistyped one 422
@@ -321,11 +324,11 @@ internal sealed partial class FinalizeShardCommandHandler(
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(body);
+            document = JsonDocument.Parse(body, DuplicateFreeOptions);
         }
         catch (JsonException)
         {
-            return BodyInvalid("the request body is not JSON", [new ErrorDetail(string.Empty, ApiErrorCode.RequestInvalid)]);
+            return BodyInvalid("the request body is not JSON or repeats a member name", [new ErrorDetail(string.Empty, ApiErrorCode.RequestInvalid)]);
         }
 
         using var parsed = document;
