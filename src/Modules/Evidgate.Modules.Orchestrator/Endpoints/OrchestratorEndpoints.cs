@@ -33,6 +33,13 @@ public static class OrchestratorEndpoints
     /// <summary>The run-create transport cap (05.2.1 §5): the body is a manifest id, an optional release and components.</summary>
     internal const int MaxRunBytes = 64 * 1024;
 
+    /// <summary>
+    /// The finalize transport cap (05.3.2 §5): the body is five scalars (<c>producer_id</c>, <c>shard</c>,
+    /// <c>last_sequence</c>, <c>count</c>, <c>manifest_hash</c>), so 8 KiB is generous and still refuses an oversized
+    /// body before it is buffered whole — the same bound-the-edge rule <see cref="MaxRunBytes"/> follows.
+    /// </summary>
+    internal const int MaxFinalizeBytes = 8 * 1024;
+
     /// <summary>Default page size of the run list (00 §9.1, as every other cursor list).</summary>
     internal const int DefaultLimit = 50;
 
@@ -70,6 +77,17 @@ public static class OrchestratorEndpoints
         group.MapGet("/runs/{r}", GetRunAsync)
             .Produces<RunStateDto>(StatusCodes.Status200OK)
             .WithSummary("One run's state, current evidence revision, version and purpose (05.3.1)");
+
+        group.MapPost("/runs/{r}/finalize", FinalizeShardAsync)
+            .Accepts<object>("application/json")
+            .Produces(StatusCodes.Status202Accepted)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .Produces(StatusCodes.Status413PayloadTooLarge)
+            .Produces(StatusCodes.Status422UnprocessableEntity)
+            .WithSummary("Finalize a producer shard: bound identity, slot close and one reconcile trigger (05.3.2)");
 
         group.MapGet("/projects/{p}/runs", ListRunsAsync)
             .Produces<RunPage>(StatusCodes.Status200OK)
@@ -170,6 +188,16 @@ public static class OrchestratorEndpoints
 
     private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
 
+    /// <summary>
+    /// 401 for a caller with no token identity: a finalize's slot binding <b>is</b> the caller's credential (05.3.2 §5,
+    /// T9), so a member session cannot perform one. The same code and wording the events route (<c>POST /v1/events</c>)
+    /// answers, so both producer write routes refuse the same callers identically.
+    /// </summary>
+    private static Error UnauthenticatedProducer => new(
+        ApiErrorCode.Unauthenticated,
+        "no authenticated producer could be resolved",
+        StatusCodes.Status401Unauthorized);
+
     private static string Sha256(ReadOnlyMemory<byte> bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes.Span));
 
     private static async Task<Result> GetEnvironmentRevisionAsync(
@@ -208,6 +236,38 @@ public static class OrchestratorEndpoints
         IMediator mediator,
         CancellationToken cancellationToken) =>
         await mediator.Send(new GetRunQuery(r), cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// <c>POST /v1/runs/{r}/finalize</c> (05.3.2 §5): a CI shard declares it has sent everything; the body is read
+    /// with a hard 8 KiB cap and handed to the handler as bytes, because the five member shapes are the handler's
+    /// (nothing is parsed for a caller who is nobody, and the C2 pipeline has already authorized the request). The
+    /// handler answers bodiless <c>202</c>: reconciliation is asynchronous.
+    /// <para>
+    /// The credential check mirrors the events route exactly: a finalize is a producer's write, so a caller with no
+    /// token identity (a member session) is <c>401 unauthenticated</c> here, before a byte of the body is read.
+    /// </para>
+    /// </summary>
+    private static async Task<Result> FinalizeShardAsync(
+        Guid r,
+        HttpContext context,
+        IRequestPrincipalAccessor principals,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var principal = principals.Current;
+        if (principal is null || string.IsNullOrEmpty(principal.CredentialId))
+        {
+            return Result.Failure(UnauthenticatedProducer);
+        }
+
+        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxFinalizeBytes, cancellationToken).ConfigureAwait(false);
+        if (tooLarge is not null)
+        {
+            return Result.Failure(tooLarge);
+        }
+
+        return await mediator.Send(new FinalizeShardCommand(r, bytes, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// <c>GET /v1/projects/{p}/runs</c> (05.2.2 §5, AC6): the project's runs in <c>(created_at, id)</c> order,

@@ -665,6 +665,19 @@ internal static class RouteRequests
             new(HttpMethod.Get, $"/v1/environment-revisions/{ctx.EnvironmentRevisionId}"));
         Add("GET", "/v1/runs/{r}", ctx => new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}"));
 
+        // 05.3.2-T1: a finalize is a producer's write — a member session is refused 401 before the body is read (the
+        // events route's answer), so the recipe uses a fresh run id and a shape-valid body, which is a 404 for the
+        // caller that does reach the scoped lookup instead of an oracle over an existing run.
+        Add("POST", "/v1/runs/{r}/finalize", _ => new(HttpMethod.Post, $"/v1/runs/{Guid.CreateVersion7()}/finalize",
+            new JsonObject
+            {
+                ["producer_id"] = "shard-1",
+                ["shard"] = 1,
+                ["last_sequence"] = 0,
+                ["count"] = 0,
+                ["manifest_hash"] = "sha256:" + new string('a', 64),
+            }));
+
         // ---- Policy ------------------------------------------------------------------------------------------
         Add("POST", "/v1/projects/{p}/policies", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/policies",
             new JsonObject { ["flaky_budget"] = 0 }, IdempotencyKey: Key()));

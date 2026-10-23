@@ -195,4 +195,35 @@ internal static class OrchestratorSql
           join public.project p on p.org_id = r.org_id and p.id = r.project_id
          where r.id = @run_id
         """;
+
+    // ------------------------------------------------------------------ 05.3.2 finalize
+
+    /// <summary>
+    /// The run a finalize addresses, locked <c>FOR NO KEY UPDATE OF r</c> up front (05.3.2-T1): one statement answers
+    /// existence, the run's state, its project and that project's lifecycle state, and the hash of the manifest the
+    /// run was created from. RLS makes another tenant's run invisible, so an unknown and a foreign id are the same
+    /// null; the caller compares the project with its credential's scope, so a run of another project of the same org
+    /// is refused too.
+    /// <para>
+    /// The lock is taken here, before anything else the handler does, for two reasons. A finalize may drive
+    /// <c>queued → running → collecting</c> through 05.3.1's <c>IRunStateTransition</c>, which loads the same row
+    /// <c>FOR NO KEY UPDATE</c>; a caller that first shared-locked the row and then upgraded would deadlock (40P01,
+    /// the lock-order rule on <c>TransitionRunStateCommand</c> and <c>IngestEventBatch</c>). And the registry's own
+    /// lock order is run before slot (<c>ProducerRegistry.BindOrCheckAsync</c>'s remark), which the close below
+    /// inherits. <c>FOR NO KEY UPDATE</c> conflicts with another transition or finalize, so two racing finalizes
+    /// serialise, but not with the <c>FOR KEY SHARE</c> an FK check takes; it needs the <c>update</c> privilege 0034
+    /// grants on <c>run (updated_at)</c>, the same grant <c>RunEventScopeReader</c>'s <c>FOR SHARE</c> uses.
+    /// </para>
+    /// </summary>
+    internal const string LockRunForFinalize = """
+        select r.project_id as project_id,
+               p.status as project_state,
+               r.state as run_state,
+               m.manifest_hash as manifest_hash
+          from public.run r
+          join public.project p on p.org_id = r.org_id and p.id = r.project_id
+          join public.manifest m on m.org_id = r.org_id and m.id = r.manifest_id
+         where r.org_id = @org_id and r.id = @run_id
+         for no key update of r
+        """;
 }

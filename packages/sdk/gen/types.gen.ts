@@ -1842,10 +1842,25 @@ export type PostRunEventsResponse = PostRunEventsResponses[keyof PostRunEventsRe
 
 export type FinalizeRunData = {
     body: {
+        /**
+         * The shard's deterministic producer id (T54) - it must name a slot the run planned.
+         */
         producer_id: string;
+        /**
+         * The 1-based manifest shard index; it must equal the bound slot's own index (422 `request_invalid` otherwise).
+         */
         shard: number;
+        /**
+         * The highest producer sequence the shard declares it sent.
+         */
         last_sequence: number;
+        /**
+         * How many events the shard declares it sent.
+         */
         count: number;
+        /**
+         * The hash of the run's own manifest; a mismatch is 422 `manifest_invalid` and closes nothing.
+         */
         manifest_hash: string;
     };
     headers: {
@@ -1882,6 +1897,10 @@ export type FinalizeRunErrors = {
      * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
      */
     409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
     /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
      */
