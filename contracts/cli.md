@@ -1310,9 +1310,10 @@ length-prefixed upload identity — every value the `upload-url` body is built f
   token (`[A-Za-z0-9_.-]{1,64}`); any other value — an escape sequence, a newline
   that would forge a line, an over-long string — is replaced by the stable marker
   `invalid_failure_code`, so stderr and any `--json` copy of the message carry no
-  server-controlled control characters. A signed header is named only through a
-  token filter (a name that is not a short plain token is reported as `same`),
-  and its value is never echoed (§12.2).
+  server-controlled control characters. A signed header whose name is not an HTTP
+  token is refused with a fixed message that does not echo it; a valid token
+  longer than 64 characters is reported as `same`; a header value is never
+  echoed (§12.2).
 
 [DECISION] (D-S56-Q2) Decided A by the coordinator (owner rule 2026-10-23,
 recommended option); recorded for owner phase review as D-S56-Q2, non-blocking:
