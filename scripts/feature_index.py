@@ -6,7 +6,7 @@
   --index           markdown for README §7 (one row per story)
   --critical        task-level critical chain per milestone (README §5.2)
 """
-import glob, json, re, subprocess, sys
+import glob, json, os, re, subprocess, sys
 from collections import defaultdict
 g = json.loads(subprocess.check_output([sys.executable, "scripts/plan_graph.py", "--json"]))
 S, T = g["stories"], g["tasks"]
@@ -97,7 +97,7 @@ if "--bundles" in sys.argv:
 if "--critical" in sys.argv:
     # Task-level longest dependency chain (size-weighted) from project start to the end of each milestone.
     print("| Up to | Work in this milestone (raw d) | Longest dependency chain from start (d) | Chain |\n|---|---|---|---|")
-    for M in range(0, 6):
+    for M in range(1, 5):
         ok = {t for t, d in T.items() if int(d["ms"][1]) <= M}
         memo = {}
         def lp(t):
@@ -107,10 +107,12 @@ if "--critical" in sys.argv:
             return memo[t]
         top = max(ok, key=lambda t: lp(t)[0]); d, path = lp(top)
         work = sum(SIZE[T[t]["size"]] for t in ok if int(T[t]["ms"][1]) == M)
-        print(f"| M{M} | {work:g} | {d:g} | " + " → ".join(path) + " |")
+        print(f"| G{M} | {work:g} | {d:g} | " + " → ".join(path) + " |")
     sys.exit()
 if "--index" in sys.argv:
     print("| Story | Title | Milestone | Wave | Bundle | Raw days | Depends on | Blocks |\n|---|---|---|---|---|---|---|---|")
     for r in rows:
         rel = r["path"].replace("plans/features/", "")
-        print(f"| [{r['id']}]({rel}) | {r['title']} | {r['ms']} | {r['wave']} | {'yes' if r['bundle'] else '—'} | {r['size']:g} | {', '.join(r['deps']) or '—'} | {', '.join(r['blocks']) or '—'} |")
+        # Stories whose feature plan is not written yet (DoR pending) are listed without a link.
+        sid = f"[{r['id']}]({rel})" if os.path.exists(r["path"]) else f"{r['id']} (feature plan pending)"
+        print(f"| {sid} | {r['title']} | {r['ms']} | {r['wave']} | {'yes' if r['bundle'] else '—'} | {r['size']:g} | {', '.join(r['deps']) or '—'} | {', '.join(r['blocks']) or '—'} |")

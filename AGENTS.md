@@ -13,14 +13,14 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 | `DECISIONS.md` | Name, locked architecture (A1–A10), stack + versions (§4), safe-healing rules (§5), verified facts (§6), open owner decisions (§8), review deltas vs the source (§9) |
 | `RECOMMENDATIONS.md` | Working recommendations for open decisions (O1–O10) and plan §11 questions; not decisions |
 | `plans/00-overview.md` | Shared contracts: glossary, milestones, architecture, IDs, state machines, API, NFRs, feature-plan process, estimate roll-up |
-| `plans/01`–`12` | High-level area plans (epics → stories → tasks with sizes); 592 tasks, 628.25 raw / 753.9 buffered person-days (00 §14, after CR-D-1 and the 2026-10-02 review additions) |
+| `plans/01`–`13` | High-level area plans (epics → stories → tasks with sizes); 645 tasks, 691.25 raw / 829.5 buffered person-days (00 §14). `13-product-phases.md` is the CR-D-2 master plan (authoring, script generation, element memory, drift classification); the Milestone column in every plan holds the CR-D-2 phase G1–G4 (13 §4.4) |
 | `plans/open-items/` | Register of every `[OPEN]`/⚠️ with a recommended default, the information needed and the task it must precede |
 | `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T101), findings register (`REVIEW-2026-09-25.md`), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
 | `docs/source/` | Original Vietnamese system design (working name "ReleaseHub") and its .docx |
 
 ## Authority and editing rules
 
-- Precedence: `DECISIONS.md` (why, facts) and `plans/00-overview.md` (contracts) win over `plans/01`–`12`; a feature plan refines, never silently contradicts, its area plan.
+- Precedence: `DECISIONS.md` (why, facts) and `plans/00-overview.md` (contracts) win over `plans/01`–`13`; a feature plan refines, never silently contradicts, its area plan.
 - A contract change goes to 00 first and is logged in 00 §15; then affected plans are updated.
 - Plan files are **English**. The owner often writes Vietnamese in chat.
 - Legend in every file: ✅ verified with a link · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`. Never state an external fact (version, price, law, API behaviour) without a source or a ⚠️.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse task rows of plans/01-12 and report sums, dangling ids, cycles and story waves."""
+"""Parse task rows of plans/01-13 and report sums, dangling ids, cycles and story waves."""
 import re, glob, sys, json
 from collections import defaultdict
 SIZE = {"XS": .25, "S": .5, "M": 1, "L": 2, "XL": 3}
@@ -70,7 +70,7 @@ def w(s, seen=()):
     wave[s] = 1 + max([w(x, seen + (s,)) for x in sdeps[s]] or [0]); return wave[s]
 for s in sms: w(s)
 if "--json" in sys.argv:
-    json.dump(dict(stories={s: dict(stories.get(s, {}), ms=f"M{sms[s]}", wave=wave[s], deps=sorted(sdeps[s]),
+    json.dump(dict(stories={s: dict(stories.get(s, {}), ms=f"G{sms[s]}", wave=wave[s], deps=sorted(sdeps[s]),
         size=sum(SIZE[d['size']] for d in tasks.values() if d['story'] == s),
         tasks=sorted([t for t in tasks if tasks[t]['story'] == s], key=lambda x: int(x.split('-T')[1])))
         for s in sms}, tasks=tasks), sys.stdout, indent=1); sys.exit(0)

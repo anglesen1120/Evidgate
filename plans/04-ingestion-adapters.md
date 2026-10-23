@@ -1,9 +1,10 @@
-# 04 - Ingestion and Adapters (M1-M4)
+# 04 - Ingestion and Adapters (G1–G4)
 
 > Contracts: `00-overview.md` §7 (ids/hashes), §8.3-§8.4 (attempt status, artifact), §9.3-§9.4 (endpoints, event envelope), §10 (adapter protocol), §11 (NFR).
 > Facts: `../DECISIONS.md` §3 (A9, A10), §4 (stack, engines, licence rule), §5 (healing is out of this plan), §6 F9 (JUnit XML has no single standard), §9 (R10 dogfooding, capacity arithmetic).
 > Source: design §4 (runner and adapter contract, capability, isolation), §5 (run lifecycle sequence), §6 (API event/artifact, envelope), §7 (consistency and recovery: spool, order, finalize, reprocess vs rerun).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 11.5 · G2 25 · G3 8.5 · G4 7 person-days.
 
 ## 1. Purpose and scope
 
@@ -13,7 +14,9 @@
 
 **Out of scope:** evidence completeness verdicts and the evidence freeze result (06) — `evidence_revision` rows are persisted by 05 — policy evaluation and decisions (07), the artifact object lifecycle (06), agent execution (05), healing (08), pricing (12).
 
-**Version split.** V1 = event API, CLI, Playwright reporter, JUnit mapper, fixtures, protocol v1, in `ingest_only` and CI mode. V1/M2 = reprocess of a stored raw report, usage events per accepted result. V2 = Appium/mobile mapping (Android conditional, 00 §1.3). V3 = nothing owned here (iOS/hosted runners are 05).
+**CR-D-2 boundary (script generation and local runs).** Playwright **script generation** from an approved test case — `evidgate generate`, live-page element binding, the locator policy, the 3-of-3 stability check, PR delivery — and **local execution** of generated tests on a developer machine (`evidgate run`) live in [13 §4.2 and epic 13.5](13-product-phases.md), phase G2. This plan keeps the report path those commands reuse: `manifests upload`, `run create`, the spool / send / `finalize` loop, artifact upload, the reporters and the mappers. The two command families stay distinct: `evidgate run create` opens a run here, `evidgate run` executes already-generated tests there and ingests their results through this plan.
+
+**Version split.** V1 = event API, CLI, Playwright reporter, JUnit mapper, fixtures, protocol v1, in `ingest_only` and CI mode. V1/M2 = reprocess of a stored raw report, usage events per accepted result. V2 = Appium/mobile mapping (Android conditional, 00 §1.3). V3 = nothing owned here (iOS/hosted runners are 05). CR-D-2 additionally places the mobile producer `adapter-mobile` (mobilewright / mobile-mcp) at **G4**, after the `13.7.1` go / no-go memo; the memo's spike runs in G2 and commits to no adapter.
 
 ## 2. Requirements
 
@@ -143,132 +146,134 @@
 #### Story 04.1.1 Atomic batch ingest with per-event ack — acceptance: a valid batch commits fully and acks every event; one invalid event rejects the whole batch with its index and commits nothing.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.1.1-T1 | Envelope v1 JSON Schema + canonicalisation (RFC 8785) + atomic commit path as an `IngestEventBatch` command/handler (Corvus.Json.Validator for schema checks; writes `event` rows and, through 05's attempt interface 05.3.3-T2, the `case_attempt` row in the same transaction) | L | V1 | M1 | 01.3.1, 05.3.3-T2 |
-| 04.1.1-T2 | `event_id` dedupe as a single-statement `unnest` insert `ON CONFLICT (org_id, run_id, event_id) DO NOTHING RETURNING event_id` + one select to compare payload hashes (same hash → `duplicate`; different hash → 409 `duplicate_different_payload` with index); `sequence` conflict → 422 `sequence_reused` (T50, P2) | M | V1 | M1 | 04.1.1-T1 |
-| 04.1.1-T3 | Limits: 500 events / 1 MiB pre-decompression, gzip + bomb guard (413) | M | V1 | M1 | 04.1.1-T1 |
-| 04.1.1-T4 | Producer/sequence rules: uniqueness, restart via new producer or checkpoint, ordering by `(producer, sequence)` | M | V1 | M1 | 04.1.1-T1 |
+| 04.1.1-T1 | Envelope v1 JSON Schema + canonicalisation (RFC 8785) + atomic commit path as an `IngestEventBatch` command/handler (Corvus.Json.Validator for schema checks; writes `event` rows and, through 05's attempt interface 05.3.3-T2, the `case_attempt` row in the same transaction) | L | V1 | G1 | 01.3.1, 05.3.3-T2 |
+| 04.1.1-T2 | `event_id` dedupe as a single-statement `unnest` insert `ON CONFLICT (org_id, run_id, event_id) DO NOTHING RETURNING event_id` + one select to compare payload hashes (same hash → `duplicate`; different hash → 409 `duplicate_different_payload` with index); `sequence` conflict → 422 `sequence_reused` (T50, P2) | M | V1 | G1 | 04.1.1-T1 |
+| 04.1.1-T3 | Limits: 500 events / 1 MiB pre-decompression, gzip + bomb guard (413) | M | V1 | G1 | 04.1.1-T1 |
+| 04.1.1-T4 | Producer/sequence rules: uniqueness, restart via new producer or checkpoint, ordering by `(producer, sequence)` | M | V1 | G2 | 04.1.1-T1 |
 #### Story 04.1.2 Quota, epochs and observability — acceptance: a burst above quota gets 429 + `Retry-After`; a foreign-epoch event is stored as stale evidence and never completes a job.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.1.2-T1 | Per-project rate limit/quota with `Retry-After`; counters and OTel spans per batch | S | V1 | M1 | 04.1.1-T3 |
-| 04.1.2-T2 | Stale/foreign-epoch event handling (epoch semantics for CI shards in V1; agent epochs validated with 05.7.2-T1 in V2) | S | V1 | M2 | 04.1.1-T4 |
-| 04.1.2-T3 | OpenAPI + integration tests (xUnit v3 + Testcontainers.PostgreSQL, RLS on) for both stories | M | V1 | M1 | 04.1.1-T4 |
-| 04.1.2-T4 | `producer_slot` table (DbUp migration) + `IProducerRegistry.RegisterSlotsAsync` contract + implementation; called by 05's run-create command in the same tenant transaction, one slot per manifest shard (T9) | M | V1 | M1 | 01.4.1-T1 |
-| 04.1.2-T5 | Producer-slot binding enforcement: first write binds `bound_token_jti`/`bound_ci_run_ref`, foreign identity → 403 `producer_slot_taken`, unknown producer → 422 `unknown_producer`; the check lives in this module — 05's finalize handler (05.3.2-T1) enforces it by calling the `IProducerRegistry` contract, so only the bound identity may `finalize` (T9); 422 `unknown_execution_key` batch reject with indices (T10); accept-and-mark `after_cancel` after cancel (T12) | M | V1 | M1 | 04.1.1-T1, 04.1.2-T4 |
+| 04.1.2-T1 | Per-project rate limit/quota with `Retry-After`; counters and OTel spans per batch | S | V1 | G1 | 04.1.1-T3 |
+| 04.1.2-T2 | Stale/foreign-epoch event handling (epoch semantics for CI shards in V1; agent epochs validated with 05.7.2-T1 in V2) | S | V1 | G2 | 04.1.1-T4 |
+| 04.1.2-T3 | OpenAPI + integration tests (xUnit v3 + Testcontainers.PostgreSQL, RLS on) for both stories | M | V1 | G2 | 04.1.1-T4 |
+| 04.1.2-T4 | `producer_slot` table (DbUp migration) + `IProducerRegistry.RegisterSlotsAsync` contract + implementation; called by 05's run-create command in the same tenant transaction, one slot per manifest shard (T9) | M | V1 | G1 | 01.4.1-T1 |
+| 04.1.2-T5 | Producer-slot binding enforcement: first write binds `bound_token_jti`/`bound_ci_run_ref`, foreign identity → 403 `producer_slot_taken`, unknown producer → 422 `unknown_producer`; the check lives in this module — 05's finalize handler (05.3.2-T1) enforces it by calling the `IProducerRegistry` contract, so only the bound identity may `finalize` (T9); 422 `unknown_execution_key` batch reject with indices (T10); accept-and-mark `after_cancel` after cancel (T12) | M | V1 | G2 | 04.1.1-T1, 04.1.2-T4 |
 
 #### Story 04.1.3 Large-report caps and streaming — acceptance: a 100 000-test report is accepted or refused with a documented cap, parsing and reconciliation use bounded memory, and run detail and comparison are paged.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.1.3-T1 | Manifest and report caps (cases, variants, bytes) with `413`/`422` codes in OpenAPI; run-detail and comparison list endpoints return a cursor page shape (00 §9) | S | V1 | M2 | 04.1.1-T3 |
-| 04.1.3-T2 | Reconciler and parsers stream: page through acked events by `(producer, sequence)` cursor instead of one pass; no whole-report XML/JSON in memory | M | V1 | M2 | 05.3.2-T2, 04.1.1-T4 |
-| 04.1.3-T3 | 100 000-test fixture in `fixtures/` and a memory/time budget test on it; feeds 10.6.1-T1 | M | V1 | M2 | 04.1.3-T2, 01.6.1-T3 |
+| 04.1.3-T1 | Manifest and report caps (cases, variants, bytes) with `413`/`422` codes in OpenAPI; run-detail and comparison list endpoints return a cursor page shape (00 §9) | S | V1 | G2 | 04.1.1-T3 |
+| 04.1.3-T2 | Reconciler and parsers stream: page through acked events by `(producer, sequence)` cursor instead of one pass; no whole-report XML/JSON in memory | M | V1 | G2 | 05.3.2-T2, 04.1.1-T4 |
+| 04.1.3-T3 | 100 000-test fixture in `fixtures/` and a memory/time budget test on it; feeds 10.6.1-T1 | M | V1 | G2 | 04.1.3-T2, 01.6.1-T3 |
 
 **Story 04.1.3 total: 2.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 
 ### Epic 04.2 `evidgate` CLI
+> **CR-D-2 note:** `evidgate generate` (`13.5.1`) and `evidgate run` for local execution (`13.5.2`) are built in plan 13 on top of this epic; the commands here remain the report path (`manifests upload`, `run create`, spool / send / `finalize`, artifacts).
 #### Story 04.2.1 Authenticate from CI — acceptance: the CLI exchanges an OIDC JWT or ingest token for a scoped `ci_producer` token, caches it, refreshes before expiry and fails loudly on 403.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.2.1-T1 | OIDC/ingest-token exchange, token cache + refresh on top of the CLI skeleton (04.2.1-T2) | S | V1 | M2 | 02.4.1, 02.4.2, 04.2.1-T2 |
-| 04.2.1-T2 | CLI skeleton, `EVIDGATE_*` config, exit codes and a dev auth path: `EVIDGATE_DEV_TOKEN` carries an ingest token minted by `seed-dev` (01.8.1-T4), no OIDC; the M1 commands 04.2.2/04.2.3 build on it; OIDC exchange is 04.2.1-T1 | S | V1 | M1 | 01.1.1-T3 |
+| 04.2.1-T1 | OIDC/ingest-token exchange, token cache + refresh on top of the CLI skeleton (04.2.1-T2) | S | V1 | G2 | 02.4.1, 02.4.2, 04.2.1-T2 |
+| 04.2.1-T2 | CLI skeleton, `EVIDGATE_*` config, exit codes and a dev auth path: `EVIDGATE_DEV_TOKEN` carries an ingest token minted by `seed-dev` (01.8.1-T4), no OIDC; the M1 commands 04.2.2/04.2.3 build on it; OIDC exchange is 04.2.1-T1 | S | V1 | G2 | 01.1.1-T3 |
 #### Story 04.2.2 Manifest and run — acceptance: `evidgate run create` is idempotent for the same key and payload, prints the run id, and returns 409 on a different payload.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.2.2-T1 | `manifests upload` (upload, verify, print `manifest_hash`) | S | V1 | M1 | 05.1.1-T4, 04.2.1-T2 |
-| 04.2.2-T2 | `runs create` with `Idempotency-Key`, `--json`, policy/suite/env flags | S | V1 | M1 | 05.2.1-T1, 04.2.1-T2 |
+| 04.2.2-T1 | `manifests upload` (upload, verify, print `manifest_hash`) | S | V1 | G2 | 05.1.1-T4, 04.2.1-T2 |
+| 04.2.2-T2 | `runs create` with `Idempotency-Key`, `--json`, policy/suite/env flags | S | V1 | G2 | 05.2.1-T1, 04.2.1-T2 |
 #### Story 04.2.3 Spool, send and finalize — acceptance: with the API down for 10 minutes the CLI spools within its size cap, then delivers every event with `duplicate` acks ignored, and never re-runs tests.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.2.3-T1 | Disk spool with size cap, batching, deadline-bounded retry with jitter, resume after process restart | L | V1 | M1 | 04.1.1-T2, 04.2.1-T2 |
-| 04.2.3-T2 | `finalize` command (producer, shard, `last_sequence`, `count`, `manifest_hash`); surfaces 403 `producer_slot_taken` / 422 `unknown_producer` (T9) | S | V1 | M1 | 05.3.2-T1, 04.2.1-T2 |
+| 04.2.3-T1 | Disk spool with size cap, batching, deadline-bounded retry with jitter, resume after process restart | L | V1 | G2 | 04.1.1-T2, 04.2.1-T2 |
+| 04.2.3-T2 | `finalize` command (producer, shard, `last_sequence`, `count`, `manifest_hash`); surfaces 403 `producer_slot_taken` / 422 `unknown_producer` (T9) | S | V1 | G2 | 05.3.2-T1, 04.2.1-T2 |
 #### Story 04.2.4 Artifacts and quickstart — acceptance: a trace and a screenshot upload through presigned URLs and reach `ready`; `evidgate quickstart` produces a working CI recipe.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.2.4-T1 | `artifacts upload` (upload-url → PUT → complete), retry and checksum verification | M | V1 | M2 | 06.1.1, 06.1.2 |
-| 04.2.4-T2 | `quickstart`, docs, GitHub Actions example workflow (OIDC, no long-lived secret) | S | V1 | M2 | 04.2.1-T1 |
-| 04.2.4-T3 | CLI end-to-end test against the local stack from the fixture run | M | V1 | M2 | 04.2.3-T1, 04.6.1-T2 |
+| 04.2.4-T1 | `artifacts upload` (upload-url → PUT → complete), retry and checksum verification | M | V1 | G2 | 06.1.1, 06.1.2 |
+| 04.2.4-T2 | `quickstart`, docs, GitHub Actions example workflow (OIDC, no long-lived secret) | S | V1 | G2 | 04.2.1-T1 |
+| 04.2.4-T3 | CLI end-to-end test against the local stack from the fixture run | M | V1 | G2 | 04.2.3-T1, 04.6.1-T2 |
 
 ### Epic 04.3 Playwright reporter adapter
 #### Story 04.3.1 Custom reporter bound to the documented API — acceptance: the adapter implements the documented reporter callbacks and emits one envelope per test result, with the capability document registered at first send.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.3.1-T1 | `@evidgate/playwright-reporter` skeleton (`onBegin`/`onTestBegin`/`onTestEnd`/`onEnd`), capability document, version guard | M | V1 | M1 | 04.7.1-T1 |
+| 04.3.1-T1 | `@evidgate/playwright-reporter` skeleton (`onBegin`/`onTestBegin`/`onTestEnd`/`onEnd`), capability document, version guard | M | V1 | G2 | 04.7.1-T1 |
 #### Story 04.3.2 Identity, retries and skips — acceptance: `evidgate.id` drives `case_id`; retries become `attempt_no` 1..n; `fixme`/`skip` are distinguishable and never map to `passed`.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.3.2-T1 | Case/variant identity mapping (annotation, project + normalised params → `variant_hash`) | L | V1 | M1 | 03.1.1, 03.1.3 |
-| 04.3.2-T2 | Status mapping incl. retries, `timedOut`, interrupted, and skip vs `fixme` | M | V1 | M1 | 04.3.2-T1 |
+| 04.3.2-T1 | Case/variant identity mapping (annotation, project + normalised params → `variant_hash`) | L | V1 | G1 | 03.1.1, 03.1.3 |
+| 04.3.2-T2 | Status mapping incl. retries, `timedOut`, interrupted, and skip vs `fixme` | M | V1 | G2 | 04.3.2-T1 |
 #### Story 04.3.3 Shards and attachments — acceptance: each shard is its own producer with its own sequence; attachments map to artifacts by MIME/size policy.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.3.3-T1 | Shard → producer mapping (blob/merge aware), sequence per shard, restart rule | M | V1 | M1 | 04.1.1-T4 |
-| 04.3.3-T2 | Attachment → artifact upload (trace, video, screenshot), size caps, allow-listed directories | M | V1 | M2 | 04.2.4-T1 |
+| 04.3.3-T1 | Shard → producer mapping (blob/merge aware), sequence per shard, restart rule | M | V1 | G2 | 04.1.1-T4 |
+| 04.3.3-T2 | Attachment → artifact upload (trace, video, screenshot), size caps, allow-listed directories | M | V1 | G2 | 04.2.4-T1 |
 
 ### Epic 04.4 JUnit XML mapper
 #### Story 04.4.1 pytest `junitxml` mapping — acceptance: a pytest report maps to events whose counts equal the declared counts, raw statuses are preserved and the parser version is recorded; a stored report can be read back against its parsed events per case, and every discrepancy carries a reason (declared vs observed count, unmapped case, status mismatch, malformed).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.4.1-T1 | Per-producer mapping registry + pytest mapping (`testcase`, `failure`, `error`, `skipped`, `time`) | L | V1 | M1 | 04.7.1-T1 |
-| 04.4.1-T2 | Hardened XML parsing: XXE/DTD off, expansion + depth caps, encoding/BOM, control characters | M | V1 | M1 | 04.4.1-T1 |
-| 04.4.1-T3 | Malformed/truncated handling → raw stored, `unknown` status, `missing[]` reason | M | V1 | M1 | 04.4.1-T1 |
-| 04.4.1-T4 | Raw report persistence + `raw_report`/`report_parser` rows with `parser_id`/`parser_version` | S | V1 | M2 | 06.1.2, 06.3.1 |
-| 04.4.1-T5 | Mapping document per producer + declared-vs-observed count check | M | V1 | M2 | 04.4.1-T1 |
-| 04.4.1-T6 | Report-comparison read API: parsed events per case vs the stored raw report's declared counts/ids with discrepancy reasons (declared vs observed count, unmapped case, status mismatch, malformed) — `GET /v1/runs/{r}/reports/{report_id}/comparison`, permission `run:read`; raw bytes are never inlined, the response carries the `raw_report` artifact id for `download-url` (`artifact:read` + sensitivity gate, 06.2.1-T1) | M | V1 | M3 | 04.4.1-T4, 04.4.1-T5 |
+| 04.4.1-T1 | Per-producer mapping registry + pytest mapping (`testcase`, `failure`, `error`, `skipped`, `time`) | L | V1 | G1 | 04.7.1-T1 |
+| 04.4.1-T2 | Hardened XML parsing: XXE/DTD off, expansion + depth caps, encoding/BOM, control characters | M | V1 | G4 | 04.4.1-T1 |
+| 04.4.1-T3 | Malformed/truncated handling → raw stored, `unknown` status, `missing[]` reason | M | V1 | G4 | 04.4.1-T1 |
+| 04.4.1-T4 | Raw report persistence + `raw_report`/`report_parser` rows with `parser_id`/`parser_version` | S | V1 | G2 | 06.1.2, 06.3.1 |
+| 04.4.1-T5 | Mapping document per producer + declared-vs-observed count check | M | V1 | G2 | 04.4.1-T1 |
+| 04.4.1-T6 | Report-comparison read API: parsed events per case vs the stored raw report's declared counts/ids with discrepancy reasons (declared vs observed count, unmapped case, status mismatch, malformed) — `GET /v1/runs/{r}/reports/{report_id}/comparison`, permission `run:read`; raw bytes are never inlined, the response carries the `raw_report` artifact id for `download-url` (`artifact:read` + sensitivity gate, 06.2.1-T1) | M | V1 | G2 | 04.4.1-T4, 04.4.1-T5 |
 #### Story 04.4.2 Reprocess a stored raw report — acceptance: reprocessing with a new parser version creates a new evidence revision and never mutates the previous one or the original report.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.4.2-T1 | Reprocess flow (new producer + sequences, new parser version, `evidence_revision` persisted by 05 from 06's freeze result, labelled in UI/API) | M | V1 | M2 | 04.4.1-T4, 06.5.1, 05.3.2-T5 |
+| 04.4.2-T1 | Reprocess flow (new producer + sequences, new parser version, `evidence_revision` persisted by 05 from 06's freeze result, labelled in UI/API) | M | V1 | G3 | 04.4.1-T4, 06.5.1, 05.3.2-T5 |
 
 ### Epic 04.5 Appium and mobile mapping (V2)
+> **CR-D-2 note (2026-10-23):** the mobile producer is `adapter-mobile` (mobilewright / mobile-mcp), **G4**, after the `13.7.1` go / no-go memo; the `13.7.1` spike (mobile-mcp driving a model, then a mobilewright replay) runs in G2 and commits to no adapter. `adapter-mobile` **replaces** the Appium-specific producer rather than sitting beside it — there is one mobile producer, and the memo decides which driver it binds to. The rows below keep their ids, sizes and dependencies and describe the mapping work; `04.5.1-T1` is G4 with the rest of story 04.5 ([13 §4.4](13-product-phases.md), Q6 in §11 resolved).
 #### Story 04.5.1 Appium adapter — acceptance: a UiAutomator2 run maps to events with device identity in the variant; the adapter refuses XCUITest on non-macOS hosts and declares it as unsupported.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.5.1-T1 | Appium adapter skeleton + capability document (`engine.family`, driver, platform, `supports.cancel`) | L | V2 | M4 | 04.7.1-T1 |
-| 04.5.1-T2 | Mobile identity mapping (platform capability + fixture, never web locators) and app checksum in the variant | M | V2 | M4 | 03.2.1 |
-| 04.5.1-T3 | Device exclusive-lease client (05.8.1-T1) + reset-by-policy enforcement before start | M | V2 | M4 | 05.8.1-T1 |
-| 04.5.1-T4 | Appium golden fixtures (UiAutomator2; XCUITest macOS-only fixtures marked ⚠️ until a macOS host exists) | M | V2 | M4 | 04.6.1-T1 |
+| 04.5.1-T1 | Appium adapter skeleton + capability document (`engine.family`, driver, platform, `supports.cancel`) | L | V2 | G4 | 04.7.1-T1 |
+| 04.5.1-T2 | Mobile identity mapping (platform capability + fixture, never web locators) and app checksum in the variant | M | V2 | G4 | 03.2.1 |
+| 04.5.1-T3 | Device exclusive-lease client (05.8.1-T1) + reset-by-policy enforcement before start | M | V2 | G4 | 05.8.1-T1 |
+| 04.5.1-T4 | Appium golden fixtures (UiAutomator2; XCUITest macOS-only fixtures marked ⚠️ until a macOS host exists) | M | V2 | G4 | 04.6.1-T1 |
 
 ### Epic 04.6 Golden fixtures and conformance harness
 #### Story 04.6.1 Per-producer golden set — acceptance: the harness diffs normalised output against the original report and fails the build on any unexplained difference.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.6.1-T1 | Fixture layout `fixtures/<producer>/<case>/` + diff harness (expected events vs produced) | L | V1 | M1 | 04.1.1-T1 |
-| 04.6.1-T2 | Dogfood fixture: Evidgate's own CI results ingested (R10 ✅) incl. one malformed file and one shard-merged set | M | V1 | M2 | 04.6.1-T1, 01.7.1 |
-| 04.6.1-T3 | CI job running the conformance suite per adapter (fixtures only, no network) | S | V1 | M1 | 04.6.1-T1, 01.7.1-T1 |
+| 04.6.1-T1 | Fixture layout `fixtures/<producer>/<case>/` + diff harness (expected events vs produced) | L | V1 | G2 | 04.1.1-T1 |
+| 04.6.1-T2 | Dogfood fixture: Evidgate's own CI results ingested (R10 ✅) incl. one malformed file and one shard-merged set | M | V1 | G2 | 04.6.1-T1, 01.7.1 |
+| 04.6.1-T3 | CI job running the conformance suite per adapter (fixtures only, no network) | S | V1 | G2 | 04.6.1-T1, 01.7.1-T1 |
 
 ### Epic 04.7 Capability document and protocol versioning
 #### Story 04.7.1 Protocol v1 contract — acceptance: an adapter with an incompatible major is rejected at registration/claim with a clear error; `ingest_only` results are viewable but never gate-eligible.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.7.1-T1 | `contracts/adapter/` JSON Schemas: capability document + protocol operations (`discover`, `prepare`, `execute`, `collect`, `cleanup`) | M | V1 | M1 | 01.3.1 |
-| 04.7.1-T2 | Server-side capability validation, major rejection, minor compatibility rules, `ingest_only` semantics | M | V1 | M1 | 04.7.1-T1 |
-| 04.7.1-T3 | Compatibility matrix test (major/minor negotiation, unknown capability fields ignored) | S | V1 | M2 | 04.7.1-T2 |
+| 04.7.1-T1 | `contracts/adapter/` JSON Schemas: capability document + protocol operations (`discover`, `prepare`, `execute`, `collect`, `cleanup`) | M | V1 | G1 | 01.3.1 |
+| 04.7.1-T2 | Server-side capability validation, major rejection, minor compatibility rules, `ingest_only` semantics | M | V1 | G2 | 04.7.1-T1 |
+| 04.7.1-T3 | Compatibility matrix test (major/minor negotiation, unknown capability fields ignored) | S | V1 | G2 | 04.7.1-T2 |
 
 ### Epic 04.8 Usage events for accepted results
 #### Story 04.8.1 Idempotent billing key — acceptance: a redelivered batch and a reprocess of the same acceptance produce exactly one `usage_ledger_entry` row per metric per batch.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.8.1-T1 | Emit `usage_ledger_entry` rows per batch per metric (quantity = event count) via an outbox task, `billing_key = batch:<event_batch_id>:<metric>` (T43, T50) | M | V1 | M2 | 04.1.1-T2, 12.3.1-T1 |
-| 04.8.1-T2 | No-double-count integration test (resend, reprocess, retry-fail-pass) + handoff notes to the usage roll-up | S | V1 | M2 | 04.8.1-T1 |
+| 04.8.1-T1 | Emit `usage_ledger_entry` rows per batch per metric (quantity = event count) via an outbox task, `billing_key = batch:<event_batch_id>:<metric>` (T43, T50) | M | V1 | G1 | 04.1.1-T2, 12.3.1-T1 |
+| 04.8.1-T2 | No-double-count integration test (resend, reprocess, retry-fail-pass) + handoff notes to the usage roll-up | S | V1 | G2 | 04.8.1-T1 |
 
 ### Epic 04.9 Customer-side replay step, release and docs [PROPOSAL review 2026-10-02]
 #### Story 04.9.1 Customer-side replay step (O10 option a) — acceptance: a shadow replay runs in the customer's own CI job through the CLI against a server-issued replay grant, never executes server-side, never carries the customer's secrets to Evidgate, and reports its result as a `purpose = replay` run that cannot affect a release decision.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.9.1-T1 | `evidgate replay` CLI command: fetch the replay job spec by `replay_grant_id` (08.4.3-T1), check out the candidate patch, run the pinned Playwright version, send results as a `replay` run | L | V1 | M3 | 04.2.3-T1, 05.2.1-T5 |
-| 04.9.1-T2 | CI workflow template and quickstart for the replay job (OIDC, no long-lived secret), with the isolation requirements of 11.2.1-T6 stated for the customer | M | V1 | M3 | 04.9.1-T1, 11.2.1-T6 |
-| 04.9.1-T3 | Conformance tests: replay refused without a valid grant, replay run excluded from regression/release/incident creation, pinned-version mismatch reported | M | V1 | M3 | 04.9.1-T1 |
-| 04.9.1-T4 | Failure paths: grant expiry mid-run, customer CI timeout, partial result upload; documented exit codes | S | V1 | M3 | 04.9.1-T1 |
+| 04.9.1-T1 | `evidgate replay` CLI command: fetch the replay job spec by `replay_grant_id` (08.4.3-T1), check out the candidate patch, run the pinned Playwright version, send results as a `replay` run | L | V1 | G3 | 04.2.3-T1, 05.2.1-T5 |
+| 04.9.1-T2 | CI workflow template and quickstart for the replay job (OIDC, no long-lived secret), with the isolation requirements of 11.2.1-T6 stated for the customer | M | V1 | G3 | 04.9.1-T1, 11.2.1-T6 |
+| 04.9.1-T3 | Conformance tests: replay refused without a valid grant, replay run excluded from regression/release/incident creation, pinned-version mismatch reported | M | V1 | G3 | 04.9.1-T1 |
+| 04.9.1-T4 | Failure paths: grant expiry mid-run, customer CI timeout, partial result upload; documented exit codes | S | V1 | G3 | 04.9.1-T1 |
 
 **Story 04.9.1 total: 4.5** — `[INFERENCE]` size; DECISIONS §8 O10 estimated 12–20 days for the whole replay path including 08 work, so 08.4.3 must be re-sized at its DoR.
 
 #### Story 04.9.2 CLI/SDK release, compatibility and customer docs — acceptance: a tagged release publishes the CLI and adapters with provenance and a changelog, a client older than the supported window gets an actionable error from the server, and a customer can reach a first accepted run from the docs alone.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.9.2-T1 | Publish pipeline for `@evidgate/*` packages (semver, npm provenance, changelog, signed tag) and the written N-1 server/client compatibility window | M | V1 | M3 | 04.2.4-T2, 01.7.1-T1 |
-| 04.9.2-T2 | Docs site skeleton: quickstart per CI, API reference generated from `contracts/openapi.yaml`, glossary from 00 §3, error-code catalogue | M | V1 | M3 | 04.2.4-T2 |
-| 04.9.2-T3 | `security.txt`, vulnerability-disclosure page and a status-page choice recorded as a decision | S | V1 | M3 | 04.9.2-T2 |
-| 04.9.2-T4 | Version-skew check: client sends `X-Evidgate-Client`; an unsupported version receives 426 with an upgrade message and the supported range | S | V1 | M3 | 04.9.2-T1 |
+| 04.9.2-T1 | Publish pipeline for `@evidgate/*` packages (semver, npm provenance, changelog, signed tag) and the written N-1 server/client compatibility window | M | V1 | G3 | 04.2.4-T2, 01.7.1-T1 |
+| 04.9.2-T2 | Docs site skeleton: quickstart per CI, API reference generated from `contracts/openapi.yaml`, glossary from 00 §3, error-code catalogue | M | V1 | G3 | 04.2.4-T2 |
+| 04.9.2-T3 | `security.txt`, vulnerability-disclosure page and a status-page choice recorded as a decision | S | V1 | G3 | 04.9.2-T2 |
+| 04.9.2-T4 | Version-skew check: client sends `X-Evidgate-Client`; an unsupported version receives 426 with an upgrade message and the supported range | S | V1 | G3 | 04.9.2-T1 |
 
 **Story 04.9.2 total: 3.0**
 
@@ -298,6 +303,7 @@
 | Q3 | Exact gzip expanded-size/ratio cap value (needs the 10 load test) — **decided: DECISIONS §8.1 D-A8** (≤ 8 MiB expanded, ≤ 20:1) | Tech Lead | M2 |
 | Q4 | Are raw reports retained as artifacts of the run for the whole retention window? (cost vs reprocess) | Tech Lead | M2 |
 | Q5 | Does the pilot need `ingest_only` at all, or is CI mode always full? | Product owner | M2 |
+| Q6 | `04.5.1-T1` (mobile adapter skeleton) carries phase G2 while 13 §4.4 targets story 04.5 at G4, and `adapter-mobile` is G4 after the `13.7.1` memo: does the skeleton move to G4, or stay in G2 as spike scaffolding? — **resolved 2026-10-23:** G4, with the mobile kinds `06.3.5-T1` (13 §4.4); the `13.7.1` spike needs no Evidgate adapter | Tech Lead | before G2 planning |
 
 ## 12. Estimate summary
 
@@ -327,3 +333,5 @@
 | CR-3 | Add `GET /v1/runs/{r}/reports/{report_id}/comparison` (permission `run:read`) to 00 §9.3 — Applied 2026-09-25 by integrator | A stored raw report must be readable against its parsed events per case with discrepancy reasons, so a declared-vs-observed count mismatch or an unmapped case is explainable without re-parsing; no endpoint existed | 00 §9.3, 09 (report comparison view) |
 
 2026-09-25 CR-D-1 + TL review: server module migrated to .NET 10 + CQRS (`src/Modules/Evidgate.Modules.Ingestion` + `.Contracts`; Corvus.Json.Validator on the server, Ajv 8 kept in the TS CLI with a shared `fixtures/contracts/` parity corpus, T42; xUnit v3 + Testcontainers.PostgreSQL; `ITenantScope`/`set_config`); `producer` replaced by `producer_slot` with token-identity binding on writes and `finalize` (T9); `event_id` declared as its own dedupe column (F-04-2); unknown `execution_key` rejects the batch 422 `unknown_execution_key` (T10); different-payload duplicate → 409 (T50); post-cancel events accepted with `after_cancel = true` (T12); hot path inserts via one `unnest` statement and usage is metered once per batch per metric `batch:<event_batch_id>:<metric>` (T50, T43); new tasks 04.1.2-T4/T5 (+2 tasks, +2.0 PD → raw 42.0 / buffered 50.4; 00 §14 roll-up needs recompute).
+
+2026-10-23 CR-D-2: Playwright script generation and local runs (`evidgate generate`, `evidgate run`) scoped to [13 §4.2 and epic 13.5](13-product-phases.md); the mobile producer is `adapter-mobile` (mobilewright / mobile-mcp) at G4, after the `13.7.1` go / no-go memo. Boundary notes only — no task ids, sizes, dependencies or phases changed.

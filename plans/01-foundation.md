@@ -1,8 +1,10 @@
-# 01 - Foundation: repo, contracts, database, CI and dogfooding (M0-M1)
+# 01 - Foundation: repo, contracts, database, CI and dogfooding (G1–G2)
 
 > Contracts: `00-overview.md` §5.1-§5.7 (incl. §5.5 .NET/CQRS rules C1–C9, §5.7 performance/security P/S rules), §6-§9, §11, §12. Facts: `../DECISIONS.md` §4 (stack, versions, licence rule; CR-D-1), §5.9, §7, §9 R2/R7/R8/R9/R10, F3, F5, F6, O3. Rulings: `features/README.md` §3 T11, T18, T40, T42, T47, T48, T49. Source: design §4 (technology), §6 (data/roles), §9 (deploy, capacity), §12 (two-sprint backlog).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/01-foundation/` (00 §12) before build.
 > Compatibility evidence (2026-09-25, NuGet nuspec + npm registry; full table in DECISIONS §4.1–§4.3): .NET 10.0.12 LTS (EOL 2028-11-14) ✅; `Mediator.Abstractions`/`Mediator.SourceGenerator` 3.0.2 MIT ✅; `Microsoft.EntityFrameworkCore` 10.0.12 MIT ✅; `Npgsql` / `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 PostgreSQL licence ✅; Dapper 2.1.89 Apache-2.0 ✅; `dbup-postgresql` 7.0.1 MIT ✅; `Corvus.Json.Validator` 5.6.1 Apache-2.0 ✅; FluentValidation 12.1.1 Apache-2.0 ✅; Cronos 0.13.0 MIT ✅; `AWSSDK.S3` 4.0.103.4 Apache-2.0 ✅; xunit.v3 4.0.1 Apache-2.0 ✅; Shouldly 4.3.0 BSD-3-Clause ✅; Testcontainers.PostgreSQL 4.15.0 MIT ✅; Respawn 7.0.0 Apache-2.0 ✅; `@angular/build` 22.2.0 peer `typescript >=6.0 <6.1` ✅; `typescript-eslint` 8.70.1 peer `typescript >=4.8.4 <6.1.0` ✅; `vitest` 5.0.1 MIT ✅. Rejected on licence: MediatR 14.2.0 (RPL-1.5), JsonSchema.Net 9.4.0 (maintenance-fee EULA), FluentAssertions 8.11.0 (non-commercial) ✅.
+
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 53.75 · G2 3.5 person-days.
 
 ## 1. Purpose and scope
 
@@ -132,125 +134,125 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 #### Story 01.1.1 Toolchain and workspace — acceptance: `dotnet restore --locked-mode && npm ci` from a clean clone builds every project; the matrix ADR names each NuGet/npm package with its licence and compatibility evidence
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.1.1-T1 | Compatibility + licence matrix for every planned NuGet package (Mediator, EF Core/Npgsql, Dapper, DbUp, Corvus, FluentValidation, Cronos, AWSSDK.S3, OpenTelemetry, xUnit v3, Shouldly, NSubstitute, Testcontainers.PostgreSQL, Respawn) on .NET 10 and every npm package of `apps/web`/`packages/*` on Node 26 + TS 6.0.x → ADR-0002 (register for future packages) | S | V1 | M0 | — |
-| 01.1.1-T2 | Pin toolchain: `global.json` (SDK 10.0.x, `rollForward: latestFeature` + `allowPrerelease: false`, ADR-0002), `Directory.Build.props` (nullable, `TreatWarningsAsErrors`, `AnalysisLevel`, `InvariantGlobalization` for Api/Worker), `Directory.Packages.props` (Central Package Management, exact versions), `RestorePackagesWithLockFile` + committed `packages.lock.json`; `.nvmrc`, `engines`, `typescript@6.0.x`, root npm workspaces `package.json`, committed `package-lock.json` | M | V1 | M0 | 01.1.1-T1 |
-| 01.1.1-T3 | Skeleton exactly per 00 §5.2: `Evidgate.slnx`, `src/Evidgate.Api`, `src/Evidgate.Worker`, `src/Evidgate.Migrator`, `src/BuildingBlocks/*`, `src/Modules/*` + `.Contracts` pairs, `tests/*`, `apps/web`, `packages/*`, `contracts/`, `migrations/`, `fixtures/`, `docs/`, `scripts/`, `infra/` | M | V1 | M0 | 01.1.1-T2 |
-| 01.1.1-T4 | .NET 12 LTS upgrade once GA and TypeScript 7.x once `@angular/build` (today peer `>=6.0 <6.1`) and `typescript-eslint` (today `<6.1.0`) accept it | XS | V3 | M5 | 01.1.1-T2 |
+| 01.1.1-T1 | Compatibility + licence matrix for every planned NuGet package (Mediator, EF Core/Npgsql, Dapper, DbUp, Corvus, FluentValidation, Cronos, AWSSDK.S3, OpenTelemetry, xUnit v3, Shouldly, NSubstitute, Testcontainers.PostgreSQL, Respawn) on .NET 10 and every npm package of `apps/web`/`packages/*` on Node 26 + TS 6.0.x → ADR-0002 (register for future packages) | S | V1 | G1 | — |
+| 01.1.1-T2 | Pin toolchain: `global.json` (SDK 10.0.x, `rollForward: latestFeature` + `allowPrerelease: false`, ADR-0002), `Directory.Build.props` (nullable, `TreatWarningsAsErrors`, `AnalysisLevel`, `InvariantGlobalization` for Api/Worker), `Directory.Packages.props` (Central Package Management, exact versions), `RestorePackagesWithLockFile` + committed `packages.lock.json`; `.nvmrc`, `engines`, `typescript@6.0.x`, root npm workspaces `package.json`, committed `package-lock.json` | M | V1 | G1 | 01.1.1-T1 |
+| 01.1.1-T3 | Skeleton exactly per 00 §5.2: `Evidgate.slnx`, `src/Evidgate.Api`, `src/Evidgate.Worker`, `src/Evidgate.Migrator`, `src/BuildingBlocks/*`, `src/Modules/*` + `.Contracts` pairs, `tests/*`, `apps/web`, `packages/*`, `contracts/`, `migrations/`, `fixtures/`, `docs/`, `scripts/`, `infra/` | M | V1 | G1 | 01.1.1-T2 |
+| 01.1.1-T4 | .NET 12 LTS upgrade once GA and TypeScript 7.x once `@angular/build` (today peer `>=6.0 <6.1`) and `typescript-eslint` (today `<6.1.0`) accept it | XS | V3 | G1 | 01.1.1-T2 |
 
 #### Story 01.1.2 Two-process skeleton — acceptance: Api and Worker start from one solution; a handler change is visible in both; `/internal/health/ready` is green only with database + migrations head
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.1.2-T1 | `Evidgate.Api` + `Evidgate.Worker` hosts from the same module projects: options binding with `ValidateOnStart` for `EVIDGATE__*`, ASP.NET Core health checks (Npgsql + journal head), graceful shutdown, logging with redaction, OpenTelemetry wiring | L | V1 | M1 | 01.1.1-T3 |
-| 01.1.2-T2 | Module scaffolding: the eleven module project pairs of 00 §5.1 (`Evidgate.Modules.<Name>` + `.Contracts`), each `.Contracts` exporting one service interface; reference rules asserted in 01.2.1-T1 | S | V1 | M1 | 01.1.1-T3 |
-| 01.1.2-T3 | Sprint-1 skeleton slice (source §12): manifest → run → planned execution → event batch → completeness stub → decision stub as Mediator commands/queries through real module boundaries, fakes only, no business rules | L | V1 | M1 | 01.1.2-T2 |
+| 01.1.2-T1 | `Evidgate.Api` + `Evidgate.Worker` hosts from the same module projects: options binding with `ValidateOnStart` for `EVIDGATE__*`, ASP.NET Core health checks (Npgsql + journal head), graceful shutdown, logging with redaction, OpenTelemetry wiring | L | V1 | G1 | 01.1.1-T3 |
+| 01.1.2-T2 | Module scaffolding: the eleven module project pairs of 00 §5.1 (`Evidgate.Modules.<Name>` + `.Contracts`), each `.Contracts` exporting one service interface; reference rules asserted in 01.2.1-T1 | S | V1 | G1 | 01.1.1-T3 |
+| 01.1.2-T3 | Sprint-1 skeleton slice (source §12): manifest → run → planned execution → event batch → completeness stub → decision stub as Mediator commands/queries through real module boundaries, fakes only, no business rules | L | V1 | G1 | 01.1.2-T2 |
 
 ### Epic 01.2 Quality gates (M0-M1)
 
 #### Story 01.2.1 Analyzers, format, types and architecture — acceptance: `scripts/verify.sh` fails on a module-boundary violation, an unformatted file, an un-awaited task, a nullable warning and a TS type error under `strict`
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.2.1-T1 | .NET analyzers (`latest-recommended`, security rules, `CA2007`/`VSTHRD`-style async rules ⚠️ package licence checked in 01.1.1-T1) + `Architecture.Tests` (xUnit): module refs only via `.Contracts`, `Domain` ↛ `Infrastructure`, no `public` types outside `.Contracts`/`Endpoints`, every handler declares a permission (T47); ESLint 10 flat config + typescript-eslint 8 for `apps/web`/`packages/*` with `no-floating-promises`, `--max-warnings 0` | M | V1 | M1 | 01.1.1-T3 |
-| 01.2.1-T2 | `dotnet format --verify-no-changes` + Prettier 3 + `.editorconfig` + `format:check` in CI | S | V1 | M0 | 01.1.1-T3 |
-| 01.2.1-T3 | Strict types: nullable reference types as errors across the solution; `tsc -b` across TS project references with `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` | M | V1 | M1 | 01.1.1-T3 |
-| 01.2.1-T4 | Pre-commit hooks: husky 9 + lint-staged 17 on staged files (Prettier/ESLint; `dotnet format` on staged `.cs`) | XS | V1 | M1 | 01.2.1-T1 |
-| 01.2.1-T5 | Commit/PR conventions: Conventional Commits, PR template, CODEOWNERS draft | XS | V1 | M1 | — |
+| 01.2.1-T1 | .NET analyzers (`latest-recommended`, security rules, `CA2007`/`VSTHRD`-style async rules ⚠️ package licence checked in 01.1.1-T1) + `Architecture.Tests` (xUnit): module refs only via `.Contracts`, `Domain` ↛ `Infrastructure`, no `public` types outside `.Contracts`/`Endpoints`, every handler declares a permission (T47); ESLint 10 flat config + typescript-eslint 8 for `apps/web`/`packages/*` with `no-floating-promises`, `--max-warnings 0` | M | V1 | G1 | 01.1.1-T3 |
+| 01.2.1-T2 | `dotnet format --verify-no-changes` + Prettier 3 + `.editorconfig` + `format:check` in CI | S | V1 | G1 | 01.1.1-T3 |
+| 01.2.1-T3 | Strict types: nullable reference types as errors across the solution; `tsc -b` across TS project references with `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` | M | V1 | G1 | 01.1.1-T3 |
+| 01.2.1-T4 | Pre-commit hooks: husky 9 + lint-staged 17 on staged files (Prettier/ESLint; `dotnet format` on staged `.cs`) | XS | V1 | G1 | 01.2.1-T1 |
+| 01.2.1-T5 | Commit/PR conventions: Conventional Commits, PR template, CODEOWNERS draft | XS | V1 | G1 | — |
 
 ### Epic 01.3 Contract-first pipeline (M0-M1)
 
 #### Story 01.3.1 Spec and schemas — acceptance: `contracts/openapi.yaml` lints clean at warn severity and carries every convention of 00 §9.1/§9.2
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.3.1-T1 | `contracts/openapi.yaml` (OpenAPI 3.1) skeleton: `/v1` prefix, error envelope, cursor pagination, `request_id`, `Idempotency-Key`, `ETag`/`If-Match`, XSRF header (T38), the V1 endpoints of 00 §9.3 as documented stubs; spectral (Apache-2.0) lint gate | L | V1 | M0 | 01.1.1-T3 |
-| 01.3.1-T2 | JSON Schemas: event envelope v1 (00 §9.4) + adapter protocol v1 (00 §10), versioned files with major/minor rules | M | V1 | M1 | 01.3.1-T1 |
-| 01.3.1-T3 | Contract versioning + deprecation policy (breaking = major; incompatible adapter major rejected per 00 §10) + `contracts/README` | S | V1 | M1 | 01.3.1-T1 |
+| 01.3.1-T1 | `contracts/openapi.yaml` (OpenAPI 3.1) skeleton: `/v1` prefix, error envelope, cursor pagination, `request_id`, `Idempotency-Key`, `ETag`/`If-Match`, XSRF header (T38), the V1 endpoints of 00 §9.3 as documented stubs; spectral (Apache-2.0) lint gate | L | V1 | G1 | 01.1.1-T3 |
+| 01.3.1-T2 | JSON Schemas: event envelope v1 (00 §9.4) + adapter protocol v1 (00 §10), versioned files with major/minor rules | M | V1 | G1 | 01.3.1-T1 |
+| 01.3.1-T3 | Contract versioning + deprecation policy (breaking = major; incompatible adapter major rejected per 00 §10) + `contracts/README` | S | V1 | G1 | 01.3.1-T1 |
 
 #### Story 01.3.2 Generated SDK, validators and contract tests — acceptance: hand-editing a generated file, a served-document drift or a validator disagreement fails CI
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.3.2-T1 | Generate the typed TS client + types into `packages/sdk` with `@hey-api/openapi-ts` (used by the CLI and `apps/web`), committed, deterministic; `npm run codegen` + `git diff --exit-code` drift gate | L | V1 | M1 | 01.3.1-T1 |
-| 01.3.2-T2 | Validation in both runtimes: `Evidgate.Contracts.Validation` loads `contracts/` schemas once at boot with Corvus.Json.Validator (server; per-event indices, 00 §9.4); Ajv 8 (2020-12) + `ajv-formats` in the CLI; parity corpus `fixtures/contracts/` (accept/reject vectors) run by both suites, any disagreement fails both builds (T42) | L | V1 | M1 | 01.3.1-T2 |
-| 01.3.2-T3 | Contract tests: implemented responses validated against the spec; the document served by `Microsoft.AspNetCore.OpenApi` diffed against `contracts/openapi.yaml` (normalised; ⚠️ confirm 3.1 output, fallback = response validation only); error-envelope and pagination fixtures; drift fails CI | M | V1 | M1 | 01.3.2-T1 |
-| 01.3.2-T4 | Canonical JSON hashing: `Evidgate.Canonicalization` (RFC 8785, `sha256:<hex>` per 00 §7) + `canonicalize` 5.1 in the CLI, both running the RFC 8785 reference vectors (vector licence checked ⚠️) and golden vectors for manifest/policy/candidate/evidence | M | V1 | M1 | 01.1.1-T3 |
+| 01.3.2-T1 | Generate the typed TS client + types into `packages/sdk` with `@hey-api/openapi-ts` (used by the CLI and `apps/web`), committed, deterministic; `npm run codegen` + `git diff --exit-code` drift gate | L | V1 | G1 | 01.3.1-T1 |
+| 01.3.2-T2 | Validation in both runtimes: `Evidgate.Contracts.Validation` loads `contracts/` schemas once at boot with Corvus.Json.Validator (server; per-event indices, 00 §9.4); Ajv 8 (2020-12) + `ajv-formats` in the CLI; parity corpus `fixtures/contracts/` (accept/reject vectors) run by both suites, any disagreement fails both builds (T42) | L | V1 | G1 | 01.3.1-T2 |
+| 01.3.2-T3 | Contract tests: implemented responses validated against the spec; the document served by `Microsoft.AspNetCore.OpenApi` diffed against `contracts/openapi.yaml` (normalised; ⚠️ confirm 3.1 output, fallback = response validation only); error-envelope and pagination fixtures; drift fails CI | M | V1 | G1 | 01.3.2-T1 |
+| 01.3.2-T4 | Canonical JSON hashing: `Evidgate.Canonicalization` (RFC 8785, `sha256:<hex>` per 00 §7) + `canonicalize` 5.1 in the CLI, both running the RFC 8785 reference vectors (vector licence checked ⚠️) and golden vectors for manifest/policy/candidate/evidence | M | V1 | G1 | 01.1.1-T3 |
 
 ### Epic 01.4 Database foundation and CQRS pipeline (M1)
 
 #### Story 01.4.1 Migrations, roles and RLS — acceptance: migrations apply as owner, the app role cannot bypass RLS, an edited applied migration stops the Migrator
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.4.1-T1 | `Evidgate.Migrator` on DbUp 7: ordered plain-SQL files from `migrations/`, one transaction per file, forward-only, custom checksum `IJournal` on `schema_migration`, `--status`/`--dry-run`, checksum-mismatch refusal, exit codes for the deploy gate (10.2.2-T1) | M | V1 | M1 | 01.1.1-T3 |
-| 01.4.1-T2 | Roles: owner (DDL), app (not owner, no `BYPASSRLS`), operator (audited), plus the local bootstrap script | L | V1 | M1 | 01.4.1-T1 |
-| 01.4.1-T3 | RLS baseline: NULL-safe `evidgate.current_org_id()`/`current_project_id()` (`current_setting(…, true)` + `NULLIF`, T2), `FORCE ROW LEVEL SECURITY` template for every business table, empty `evidgate_resolve` schema with `EXECUTE`-only grants pattern (T1), bypass/isolation test | L | V1 | M1 | 01.4.1-T2 |
-| 01.4.1-T4 | Expand/contract playbook + a fixture migration pair proving a zero-downtime column rename against the Migrator | M | V1 | M1 | 01.4.1-T1 |
+| 01.4.1-T1 | `Evidgate.Migrator` on DbUp 7: ordered plain-SQL files from `migrations/`, one transaction per file, forward-only, custom checksum `IJournal` on `schema_migration`, `--status`/`--dry-run`, checksum-mismatch refusal, exit codes for the deploy gate (10.2.2-T1) | M | V1 | G1 | 01.1.1-T3 |
+| 01.4.1-T2 | Roles: owner (DDL), app (not owner, no `BYPASSRLS`), operator (audited), plus the local bootstrap script | L | V1 | G1 | 01.4.1-T1 |
+| 01.4.1-T3 | RLS baseline: NULL-safe `evidgate.current_org_id()`/`current_project_id()` (`current_setting(…, true)` + `NULLIF`, T2), `FORCE ROW LEVEL SECURITY` template for every business table, empty `evidgate_resolve` schema with `EXECUTE`-only grants pattern (T1), bypass/isolation test | L | V1 | G1 | 01.4.1-T2 |
+| 01.4.1-T4 | Expand/contract playbook + a fixture migration pair proving a zero-downtime column rename against the Migrator | M | V1 | G1 | 01.4.1-T1 |
 
 #### Story 01.4.2 Tenant scope, data access and pipeline — acceptance: a command outside `ITenantScope` throws; a business FK without `org_id` or a table without `unique (org_id, id)` is rejected by the convention test; pipeline order C2 is asserted
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.4.2-T1 | Tenant scope: app-role `NpgsqlDataSource`, `ITenantScope.BeginAsync(orgId, projectId?)` opening one connection + `BEGIN` + parameterised `set_config(…, true)` (00 §5.4.2, §5.7 S1); per-module EF Core 10 `DbContext` bound to that connection/transaction (`UseTransaction`, snake_case naming, no lazy loading, `version` concurrency token); Dapper on the same connection; `DbCommandInterceptor` that throws without the tenant setting (C3) | XL | V1 | M1 | 01.4.1-T2 |
-| 01.4.2-T2 | Concurrency helpers: `FOR UPDATE SKIP LOCKED` claim helper over Dapper (F6) + composite `(org_id, <id>)` FK and `unique (org_id, id)` conventions with a schema test that rejects violations (00 §5.4.1, §5.4.6, T3) | M | V1 | M1 | 01.4.2-T1 |
-| 01.4.2-T3 | Column conventions: app-generated UUIDv7 ids (`Guid.CreateVersion7()` ⚠️ RFC 9562 ordering confirmed by test), `created_at`/`updated_at` (`timestamptz` UTC), `version` optimistic concurrency, `duration_ms` from runner clocks; helper + test | S | V1 | M1 | 01.4.2-T1 |
-| 01.4.2-T4 | Mediator 3 pipeline behaviours in the 00 §5.5 C2 order (telemetry → validation via FluentValidation → tenant transaction → authorization through 02's permission interface → idempotency via 01.5.1-T6 → handler → outbox flush → commit); `Result` → 00 §9.2 envelope endpoint filter (C8); read-only transaction for queries (C1); architecture test for the order (T49) | L | V1 | M1 | 01.4.2-T1, 01.5.1-T2, 01.5.1-T6 |
+| 01.4.2-T1 | Tenant scope: app-role `NpgsqlDataSource`, `ITenantScope.BeginAsync(orgId, projectId?)` opening one connection + `BEGIN` + parameterised `set_config(…, true)` (00 §5.4.2, §5.7 S1); per-module EF Core 10 `DbContext` bound to that connection/transaction (`UseTransaction`, snake_case naming, no lazy loading, `version` concurrency token); Dapper on the same connection; `DbCommandInterceptor` that throws without the tenant setting (C3) | XL | V1 | G1 | 01.4.1-T2 |
+| 01.4.2-T2 | Concurrency helpers: `FOR UPDATE SKIP LOCKED` claim helper over Dapper (F6) + composite `(org_id, <id>)` FK and `unique (org_id, id)` conventions with a schema test that rejects violations (00 §5.4.1, §5.4.6, T3) | M | V1 | G1 | 01.4.2-T1 |
+| 01.4.2-T3 | Column conventions: app-generated UUIDv7 ids (`Guid.CreateVersion7()` ⚠️ RFC 9562 ordering confirmed by test), `created_at`/`updated_at` (`timestamptz` UTC), `version` optimistic concurrency, `duration_ms` from runner clocks; helper + test | S | V1 | G1 | 01.4.2-T1 |
+| 01.4.2-T4 | Mediator 3 pipeline behaviours in the 00 §5.5 C2 order (telemetry → validation via FluentValidation → tenant transaction → authorization through 02's permission interface → idempotency via 01.5.1-T6 → handler → outbox flush → commit); `Result` → 00 §9.2 envelope endpoint filter (C8); read-only transaction for queries (C1); architecture test for the order (T49) | L | V1 | G1 | 01.4.2-T1, 01.5.1-T2, 01.5.1-T6 |
 
 ### Epic 01.5 Outbox and task queue (M1)
 
 #### Story 01.5.1 Durable internal tasks — acceptance: commit-then-crash loses no task; double dispatch yields one side effect; two schedule fires yield one task; retry cap lands in `dead_letter`
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.5.1-T1 | `task` queue table + `Evidgate.Worker` consumer host: batch claim with `FOR UPDATE SKIP LOCKED`, `available_at` exponential backoff with jitter, `locked_until` visibility timeout, per-queue concurrency limits, graceful shutdown; Cronos schedule runner that inserts fires with unique `(schedule_name, fire_at)` + `ON CONFLICT DO NOTHING` (00 §5.3; no leader) | L | V1 | M1 | 01.4.2-T1 |
-| 01.5.1-T2 | `outbox` table + write helper that joins the tenant transaction (00 §5.3) with `idempotency_key` unique per `(org_id, idempotency_key)` | M | V1 | M1 | 01.4.2-T1 |
-| 01.5.1-T3 | Dispatcher: claims undispatched outbox rows with `FOR UPDATE SKIP LOCKED` and inserts the matching `task` rows in the same transaction (natural idempotency key), marks dispatched; concurrency-safe | M | V1 | M1 | 01.5.1-T1, 01.5.1-T2 |
-| 01.5.1-T4 | Handler contract (`ITaskHandler<T>`) + retry cap + `dead_letter` state + operator routes `/internal/operator/tasks/dead-letter` list/replay (00 §9.1) + alert hook for 10.3.1-T5 | M | V1 | M1 | 01.5.1-T3 |
-| 01.5.1-T5 | Integration tests on Testcontainers.PostgreSQL: crash between commit and dispatch, duplicate dispatch, concurrent schedule fires, retry-cap → dead-letter, replay | M | V1 | M1 | 01.5.1-T4 |
-| 01.5.1-T6 | `idempotency_record` table + store: canonical request hash (01.3.2-T4), stored status/body, ≥ 24 h `expires_at`, replay vs 409 `idempotency_conflict`, purge schedule (T11) | M | V1 | M1 | 01.4.2-T1, 01.3.2-T4 |
+| 01.5.1-T1 | `task` queue table + `Evidgate.Worker` consumer host: batch claim with `FOR UPDATE SKIP LOCKED`, `available_at` exponential backoff with jitter, `locked_until` visibility timeout, per-queue concurrency limits, graceful shutdown; Cronos schedule runner that inserts fires with unique `(schedule_name, fire_at)` + `ON CONFLICT DO NOTHING` (00 §5.3; no leader) | L | V1 | G1 | 01.4.2-T1 |
+| 01.5.1-T2 | `outbox` table + write helper that joins the tenant transaction (00 §5.3) with `idempotency_key` unique per `(org_id, idempotency_key)` | M | V1 | G1 | 01.4.2-T1 |
+| 01.5.1-T3 | Dispatcher: claims undispatched outbox rows with `FOR UPDATE SKIP LOCKED` and inserts the matching `task` rows in the same transaction (natural idempotency key), marks dispatched; concurrency-safe | M | V1 | G1 | 01.5.1-T1, 01.5.1-T2 |
+| 01.5.1-T4 | Handler contract (`ITaskHandler<T>`) + retry cap + `dead_letter` state + operator routes `/internal/operator/tasks/dead-letter` list/replay (00 §9.1) + alert hook for 10.3.1-T5 | M | V1 | G1 | 01.5.1-T3 |
+| 01.5.1-T5 | Integration tests on Testcontainers.PostgreSQL: crash between commit and dispatch, duplicate dispatch, concurrent schedule fires, retry-cap → dead-letter, replay | M | V1 | G1 | 01.5.1-T4 |
+| 01.5.1-T6 | `idempotency_record` table + store: canonical request hash (01.3.2-T4), stored status/body, ≥ 24 h `expires_at`, replay vs 409 `idempotency_conflict`, purge schedule (T11) | M | V1 | G1 | 01.4.2-T1, 01.3.2-T4 |
 
 ### Epic 01.6 Test harness (M1)
 
 #### Story 01.6.1 Integration harness and fixtures — acceptance: `dotnet test` on the integration projects boots PostgreSQL 18 in a container, applies migrations once, and fails on any cross-tenant access
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.6.1-T1 | Test conventions: xUnit v3 + Shouldly + NSubstitute projects (`<Project>.UnitTests`, `<Module>.IntegrationTests`), deterministic order, no network by default, coverage ⚠️ tool licence checked in 01.1.1-T1; Vitest 5 configuration for `apps/web`/`packages/*` | S | V1 | M1 | 01.1.1-T3 |
-| 01.6.1-T2 | Testcontainers.PostgreSQL harness for PostgreSQL 18 (image pinned by digest) as an assembly fixture: Migrator applied once, Respawn reset between tests, app-role connection with RLS on, `TenantTestScope` helper | L | V1 | M1 | 01.4.1-T2 |
-| 01.6.1-T3 | `fixtures/` layout + loaders for .NET and TS + golden-file assertion helper (raw producer report → expected normalised output), ready for 04's fixtures | M | V1 | M1 | 01.6.1-T2 |
-| 01.6.1-T4 | Tenant-isolation suite: cross-tenant read, write and id-guessing attempts over API, EF Core write and Dapper read paths must fail (00 §11) as a required check | M | V1 | M1 | 01.6.1-T2 |
-| 01.6.1-T5 | Playwright 1.63 workspace for `apps/web` E2E: config, one smoke test, CI job wiring (screens are 09) | S | V1 | M1 | 01.1.1-T3 |
+| 01.6.1-T1 | Test conventions: xUnit v3 + Shouldly + NSubstitute projects (`<Project>.UnitTests`, `<Module>.IntegrationTests`), deterministic order, no network by default, coverage ⚠️ tool licence checked in 01.1.1-T1; Vitest 5 configuration for `apps/web`/`packages/*` | S | V1 | G1 | 01.1.1-T3 |
+| 01.6.1-T2 | Testcontainers.PostgreSQL harness for PostgreSQL 18 (image pinned by digest) as an assembly fixture: Migrator applied once, Respawn reset between tests, app-role connection with RLS on, `TenantTestScope` helper | L | V1 | G1 | 01.4.1-T2 |
+| 01.6.1-T3 | `fixtures/` layout + loaders for .NET and TS + golden-file assertion helper (raw producer report → expected normalised output), ready for 04's fixtures | M | V1 | G1 | 01.6.1-T2 |
+| 01.6.1-T4 | Tenant-isolation suite: cross-tenant read, write and id-guessing attempts over API, EF Core write and Dapper read paths must fail (00 §11) as a required check | M | V1 | G1 | 01.6.1-T2 |
+| 01.6.1-T5 | Playwright 1.63 workspace for `apps/web` E2E: config, one smoke test, CI job wiring (screens are 09) | S | V1 | G1 | 01.1.1-T3 |
 
 ### Epic 01.7 CI and licence gate (M1)
 
 #### Story 01.7.1 Evidgate's own pipeline — acceptance: a PR with a compile error, a drifted contract, an AGPL/RPL dependency (NuGet or npm) or an unformatted file is blocked by required checks
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.7.1-T1 | GitHub Actions pipeline: .NET 10 SDK + Node 26 setup, `dotnet restore --locked-mode`, `npm ci`, build, analyzers, unit, integration (Docker on the runner ✅ verified via `docker-tests.yml`, [run 36205176754](https://github.com/anglesen1120/Evidgate/actions/runs/36205176754), §11), architecture, contract drift, web build; NuGet/npm caching, concurrency cancel; folds the interim `docker-tests.yml` fixes listed in §11 and deletes that file when `ci.yml` lands | L | V1 | M1 | 01.6.1-T1, 01.6.1-T2 |
-| 01.7.1-T2 | Dependency licence gate for both ecosystems: npm `license-checker` + a NuGet licence scanner (tool choice and its own licence ⚠️ in this task) over one `scripts/licence-policy.json` allow/deny (AGPL/SSPL/BUSL/RPL/non-commercial/paid-maintenance EULA denied per DECISIONS §4); runs on every PR and lock-file change; exception = ADR row (T40) | M | V1 | M1 | 01.7.1-T1 |
-| 01.7.1-T3 | Branch protection on `main`/`develop`: required checks, CODEOWNERS, PR template enforcement | S | V1 | M1 | 01.7.1-T1 |
-| 01.7.1-T4 | Supply chain: Actions pinned by commit SHA, Dependabot for NuGet + npm, `dotnet list package --vulnerable --include-transitive` and `npm audit --omit=dev` gates with a documented exception list, CycloneDX SBOM for both ecosystems ⚠️ tool licence (T40) | M | V1 | M1 | 01.7.1-T1 |
+| 01.7.1-T1 | GitHub Actions pipeline: .NET 10 SDK + Node 26 setup, `dotnet restore --locked-mode`, `npm ci`, build, analyzers, unit, integration (Docker on the runner ✅ verified via `docker-tests.yml`, [run 36205176754](https://github.com/anglesen1120/Evidgate/actions/runs/36205176754), §11), architecture, contract drift, web build; NuGet/npm caching, concurrency cancel; folds the interim `docker-tests.yml` fixes listed in §11 and deletes that file when `ci.yml` lands | L | V1 | G1 | 01.6.1-T1, 01.6.1-T2 |
+| 01.7.1-T2 | Dependency licence gate for both ecosystems: npm `license-checker` + a NuGet licence scanner (tool choice and its own licence ⚠️ in this task) over one `scripts/licence-policy.json` allow/deny (AGPL/SSPL/BUSL/RPL/non-commercial/paid-maintenance EULA denied per DECISIONS §4); runs on every PR and lock-file change; exception = ADR row (T40) | M | V1 | G1 | 01.7.1-T1 |
+| 01.7.1-T3 | Branch protection on `main`/`develop`: required checks, CODEOWNERS, PR template enforcement | S | V1 | G1 | 01.7.1-T1 |
+| 01.7.1-T4 | Supply chain: Actions pinned by commit SHA, Dependabot for NuGet + npm, `dotnet list package --vulnerable --include-transitive` and `npm audit --omit=dev` gates with a documented exception list, CycloneDX SBOM for both ecosystems ⚠️ tool licence (T40) | M | V1 | G1 | 01.7.1-T1 |
 
 ### Epic 01.8 Local dev stack (M1)
 
 #### Story 01.8.1 One-command local stack — acceptance: `scripts/dev/up.sh` on a clean machine starts Api, Worker, web, PostgreSQL 18 and the S3 emulator, and a presigned PUT/GET round-trip succeeds
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.8.1-T1 | S3 emulator licence check and decision: SeaweedFS (Apache-2.0 ✅) chosen; MinIO rejected (AGPL-3.0 ✅); Scality CloudServer (Apache-2.0 ✅) fallback, LocalStack rejected (archived; free tier non-commercial); acceptance = presigned PUT/GET via `AWSSDK.S3` with SigV4, checksum header **and signed `Content-Length`** (oversize PUT rejected, T18) matching the provider path 06 uses; ADR-0004 | S | V1 | M1 | — |
-| 01.8.1-T2 | Compose dev stack: PostgreSQL 18 (digest-pinned) + emulator; Api/Worker via `dotnet watch`, web via `ng serve`; healthchecks, named volumes | M | V1 | M1 | 01.8.1-T1 |
-| 01.8.1-T3 | Dev seed as `Evidgate.Migrator seed-dev` (refuses non-dev environments, idempotent): one org, one project, a dev user with `tenant_admin` + `release_approver` memberships from the 02 roles catalogue, one CI binding for the dev repository; `scripts/dev/up.sh` + `docs/dev-setup.md` quickstart. This is the Stage A bootstrap: no login is needed to reach a first run | M | V1 | M1 | 01.8.1-T2, 02.1.2-T1, 02.4.1-T2 |
-| 01.8.1-T4 | Seed part 2: mint one dev ingest token (printed once; the CLI dev path of 04.2.1-T2 reads it from `EVIDGATE_DEV_TOKEN`) and one sample policy revision | S | V1 | M2 | 01.8.1-T3, 02.4.2-T1, 07.1.1-T1 |
+| 01.8.1-T1 | S3 emulator licence check and decision: SeaweedFS (Apache-2.0 ✅) chosen; MinIO rejected (AGPL-3.0 ✅); Scality CloudServer (Apache-2.0 ✅) fallback, LocalStack rejected (archived; free tier non-commercial); acceptance = presigned PUT/GET via `AWSSDK.S3` with SigV4, checksum header **and signed `Content-Length`** (oversize PUT rejected, T18) matching the provider path 06 uses; ADR-0004 | S | V1 | G1 | — |
+| 01.8.1-T2 | Compose dev stack: PostgreSQL 18 (digest-pinned) + emulator; Api/Worker via `dotnet watch`, web via `ng serve`; healthchecks, named volumes | M | V1 | G1 | 01.8.1-T1 |
+| 01.8.1-T3 | Dev seed as `Evidgate.Migrator seed-dev` (refuses non-dev environments, idempotent): one org, one project, a dev user with `tenant_admin` + `release_approver` memberships from the 02 roles catalogue, one CI binding for the dev repository; `scripts/dev/up.sh` + `docs/dev-setup.md` quickstart. This is the Stage A bootstrap: no login is needed to reach a first run | M | V1 | G1 | 01.8.1-T2, 02.1.2-T1, 02.4.1-T2 |
+| 01.8.1-T4 | Seed part 2: mint one dev ingest token (printed once; the CLI dev path of 04.2.1-T2 reads it from `EVIDGATE_DEV_TOKEN`) and one sample policy revision | S | V1 | G1 | 01.8.1-T3, 02.4.2-T1, 07.1.1-T1 |
 
 ### Epic 01.9 ADRs and engineering docs (M0-M1)
 
 #### Story 01.9.1 Decision records — acceptance: every choice in §3 has an ADR with alternatives and a dated status, referenceable by id
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.9.1-T1 | `docs/adr/` template + index + rule (one ADR per irreversible choice, reviewed before merge) | S | V1 | M0 | — |
-| 01.9.1-T2 | ADRs 0001-0006: modular monolith + two processes (A1), compatibility/licence matrix + upgrade trigger, Migrator + role split, S3 emulator, licence allow/deny policy (NuGet + npm), CQRS pipeline + data access (Mediator vs MediatR, EF Core + Dapper, own task queue vs pg-boss/Hangfire) | M | V1 | M1 | 01.9.1-T1 |
-| 01.9.1-T3 | Docs conventions: where runbooks (10), module READMEs, `contracts/README` and feature plans live; link check in CI | S | V1 | M1 | 01.9.1-T1 |
+| 01.9.1-T1 | `docs/adr/` template + index + rule (one ADR per irreversible choice, reviewed before merge) | S | V1 | G1 | — |
+| 01.9.1-T2 | ADRs 0001-0006: modular monolith + two processes (A1), compatibility/licence matrix + upgrade trigger, Migrator + role split, S3 emulator, licence allow/deny policy (NuGet + npm), CQRS pipeline + data access (Mediator vs MediatR, EF Core + Dapper, own task queue vs pg-boss/Hangfire) | M | V1 | G1 | 01.9.1-T1 |
+| 01.9.1-T3 | Docs conventions: where runbooks (10), module READMEs, `contracts/README` and feature plans live; link check in CI | S | V1 | G1 | 01.9.1-T1 |
 
 ### Epic 01.10 Dogfooding (M2-M3)
 
 #### Story 01.10.1 Evidgate gates Evidgate — acceptance: a real `main` build and a PR run appear in Evidgate with the same fixtures a customer would use, and a FAIL blocks the PR once 03/07 land
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 01.10.1-T1 | Emit our own CI results in the ingest format: xUnit v3 JUnit XML report (⚠️ format checked here), Vitest and Playwright JUnit → artifact set produced by the same adapter code as customers (04, T48) | M | V1 | M2 | 01.7.1-T1 |
-| 01.10.1-T2 | Ingest our own runs: CI exchanges the GitHub OIDC credential (F3) for a short-lived ingest token and pushes runs for `main` and PRs | M | V1 | M2 | 01.10.1-T1 |
-| 01.10.1-T3 | Gate our own pull requests on the Evidgate decision (required check; "missing evidence never yields PASS" is exercised weekly) | M | V1 | M3 | 01.10.1-T2 |
-| 01.10.1-T4 | Fixture promotion loop: parser errors/warnings and mapping gaps found by dogfooding become `fixtures/` cases and 04 issues | S | V2 | M4 | 01.10.1-T3 |
+| 01.10.1-T1 | Emit our own CI results in the ingest format: xUnit v3 JUnit XML report (⚠️ format checked here), Vitest and Playwright JUnit → artifact set produced by the same adapter code as customers (04, T48) | M | V1 | G2 | 01.7.1-T1 |
+| 01.10.1-T2 | Ingest our own runs: CI exchanges the GitHub OIDC credential (F3) for a short-lived ingest token and pushes runs for `main` and PRs | M | V1 | G2 | 01.10.1-T1 |
+| 01.10.1-T3 | Gate our own pull requests on the Evidgate decision (required check; "missing evidence never yields PASS" is exercised weekly) | M | V1 | G2 | 01.10.1-T2 |
+| 01.10.1-T4 | Fixture promotion loop: parser errors/warnings and mapping gaps found by dogfooding become `fixtures/` cases and 04 issues | S | V2 | G2 | 01.10.1-T3 |
 
 ## 10. Dependencies
 

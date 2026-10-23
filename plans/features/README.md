@@ -1,6 +1,6 @@
 # Feature plans — Tech Lead review, rulings, execution order and index
 
-> Authority: `DECISIONS.md` and `plans/00-overview.md` win; this file's §3 rulings (T-rows) were written into 00 on 2026-09-25 (00 §15) and **override older text in `plans/01`–`12` and in any feature plan**. A feature plan refines its area plan and never silently contradicts it.
+> Authority: `DECISIONS.md` and `plans/00-overview.md` win; this file's §3 rulings (T-rows) were written into 00 on 2026-09-25 (00 §15) and **override older text in `plans/01`–`13` and in any feature plan**. A feature plan refines its area plan and never silently contradicts it.
 > Legend: ✅ verified · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`.
 > Review evidence (all findings with file:line quotes and the ruling applied): `REVIEW-2026-09-25.md` in this folder.
 
@@ -191,95 +191,91 @@ Numbered T-rows; the text below is the contract. "→ 00" means the rule is also
 
 Generated from the task dependency graph by `scripts/feature_index.py` (`--order`, `--critical`); regenerate after any change to a `Depends on` cell. Principles [DECISION]:
 
-1. **Milestone gates first** (00 §4): a milestone ends when its exit gate passes; work of milestone M*n*+1 may start early only if it does not delay an M*n* gate task.
+1. **Phase gates first** (00 §4, CR-D-2): a phase ends when its exit gate passes; work of phase G*n*+1 may start early only if it does not delay a G*n* gate task.
 2. **Inside a milestone, dependency waves**: a story starts when every task it depends on is done (not the whole predecessor story). Wave = depth in the story graph.
 3. **Bundles** (story-level cycles, §5.3) are planned as one unit and sequenced by task, never story by story.
 4. **Contract-first**: `contracts/` changes (01.3.x) and the 00 §5.5 pipeline (01.4.2-T4) precede every endpoint story; a story whose contract is not in `contracts/` fails its DoR.
 5. **Security before exposure**: tenancy/RLS (01.4.1, 02.6.x, 02.9.1), producer binding (04.1.2-T5) and the kill switch (08.6.3) precede the features that rely on them — already encoded as dependencies (T9, T29).
-6. **Dogfood early**: 01.10.1 (M2) lands before the pilot so Evidgate's own CI exercises ingest → evidence → decision weekly.
+6. **Dogfood early**: 01.10.1 (G2) lands before the run pilot so Evidgate's own CI exercises ingest → evidence → decision weekly.
 
 ### 5.1 Waves per milestone
 
 | Milestone | Wave | Stories (placed at their earliest task milestone; bundles in brackets) | Story raw days (all milestones) |
 |---|---|---|---|
-| M0 | 1 | 01.1.1, 01.9.1, 12.1.1 | 9.75 |
-| M0 | 2 | 01.2.1, 01.3.1 | 6.5 |
-| M1 | 1 | 10.8.1, 12.6.1 | 6.5 |
-| M1 | 2 | 01.1.2, 01.4.1 | 10.5 |
-| M1 | 3 | 01.3.2, 01.6.1, [02.1.1 + 02.2.1], 04.7.1, 10.1.1, 10.2.1 | 27 |
-| M1 | 4 | [01.4.2 + 01.5.1], 01.7.1, [02.1.2 + 02.3.1 + 02.3.2], 02.6.1, 03.1.1, 04.3.1 | 32 |
-| M1 | 5 | 02.4.1, 02.6.2, 02.7.1, 03.1.3 | 9 |
-| M1 | 6 | 02.9.1, 03.2.1, 04.3.2, 11.1.1 | 14 |
-| M1 | 7 | 03.1.4, 04.2.1, 05.1.1, 11.8.1 | 17.5 |
-| M1 | 8 | 05.1.2 | 1.5 |
-| M1 | 9 | [04.1.1 + 04.1.2 + 05.2.1 + 05.3.3] | 16 |
-| M1 | 10 | 04.2.2, 04.6.1, 05.2.2, 05.3.1, 06.4.6 | 11.5 |
-| M1 | 11 | 01.8.1, 04.4.1 | 9.5 |
-| M1 | 12 | 03.1.2, [05.3.2 — bundle 05.3.2 + 06.5.1 + 07.2.1 + 07.2.2 + 07.5.1] | 8 |
-| M1 | 13 | 04.2.3 | 2.5 |
-| M1 | 15 | 04.3.3, 05.5.2 | 5.5 |
-| M1 | 16 | [10.3.1 + 10.3.2 + 11.2.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 16.5 |
-| M1 | 17 | 10.1.2, 10.2.2, 11.6.1 | 12 |
-| M1 | 19 | 12.2.1 | 5.5 |
-| M2 | 4 | 10.5.1 | 5 |
-| M2 | 5 | 01.10.1, 06.1.1, 09.1.1 | 13.5 |
-| M2 | 6 | 02.4.2, 02.4.3, 02.8.1, 06.2.2, 06.3.1, 06.4.1 | 8.5 |
-| M2 | 7 | 03.4.1, 06.3.2, 06.3.3, 06.3.6, 06.4.2, 11.5.1 | 16.5 |
-| M2 | 8 | 06.2.1, 06.3.4, 06.4.3 | 4.5 |
-| M2 | 9 | 06.4.5 | 0.5 |
-| M2 | 10 | 06.1.2, 07.1.1, 10.11.1 | 7.5 |
-| M2 | 11 | 05.4.1, 06.1.3, 06.2.3, 07.3.1 | 6 |
-| M2 | 12 | 03.5.1, [06.5.1 + 07.2.1 + 07.2.2 + 07.5.1 — bundle 05.3.2 + 06.5.1 + 07.2.1 + 07.2.2 + 07.5.1] | 12.25 |
-| M2 | 13 | 04.1.3, 04.4.2, 05.6.1, 07.3.2, 07.4.1, 07.5.2 | 10.5 |
-| M2 | 14 | 04.2.4, 05.5.1, 07.4.2 | 5.5 |
-| M2 | 15 | 07.7.1 | 1 |
-| M2 | 16 | [03.3.1 + 04.8.1 + 06.4.4 + 06.5.2 + 10.4.1 + 10.7.1 + 11.3.1 + 12.3.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 30 |
-| M2 | 17 | 02.10.1, 05.10.1, 09.3.1, 10.6.1, 10.7.2, 10.9.1, 10.10.1, 11.5.2 | 33 |
-| M2 | 18 | 07.6.2, 07.7.2, 09.2.1, 11.7.1 | 19 |
-| M2 | 20 | 09.7.1 | 10 |
-| M3 | 5 | 10.5.2 | 2.5 |
-| M3 | 6 | 09.8.1 | 6 |
-| M3 | 7 | 02.4.4 | 2.5 |
-| M3 | 13 | 03.9.1, 08.1.1 | 5 |
-| M3 | 14 | 03.9.2, 07.5.3, 07.6.1, 08.1.2, 08.2.2 | 15.5 |
-| M3 | 15 | 04.9.2, 08.2.1 | 5.5 |
-| M3 | 16 | [04.9.1 + 08.3.1 + 08.3.2 + 08.4.3 + 08.6.3 + 11.9.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 22.5 |
-| M3 | 17 | 08.4.1 | 7 |
-| M3 | 18 | 08.4.2, 09.4.1, 11.9.2, 12.4.1 | 19 |
-| M3 | 19 | 07.6.3, 07.8.1, 08.2.3, 08.8.1, 09.5.1 | 16 |
-| M3 | 20 | 12.5.1 | 4.5 |
-| M3 | 21 | 08.3.3, 09.7.2 | 5.5 |
-| M4 | 4 | 05.7.1 | 2 |
-| M4 | 5 | 05.7.2 | 3 |
-| M4 | 9 | 05.7.3 | 5 |
-| M4 | 10 | 05.8.1 | 3 |
-| M4 | 11 | 04.5.1 | 5 |
-| M4 | 14 | 09.9.1 | 2.5 |
-| M4 | 15 | 07.5.4 | 0.5 |
-| M4 | 16 | [02.5.1 + 03.4.2 + 03.6.1 + 05.7.4 + 08.5.1 + 08.6.1 + 08.6.2 + 08.7.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 29.25 |
-| M4 | 17 | 05.7.5, 05.7.6, 06.3.5, 08.5.2, 08.5.3, 08.7.2 | 13.5 |
-| M4 | 18 | 02.10.2, 08.5.4, 09.5.2, 11.4.1 | 14 |
-| M4 | 19 | 03.7.1 | 3.5 |
-| M4 | 20 | 03.8.1, 08.5.5, 08.8.2, 09.6.1 | 19.5 |
-| M4 | 21 | 08.8.3 | 1.5 |
-| M5 | 5 | 02.3.3 | 3 |
-| M5 | 11 | 05.9.1 | 1 |
-| M5 | 17 | 05.9.2 | 1 |
-| M5 | 22 | 08.9.1 | 3 |
-| M5 | 23 | 08.9.2 | 2 |
+| G1 | 1 | 01.1.1, 01.9.1, 10.8.1, 12.6.1 | 11.25 |
+| G1 | 2 | 01.1.2, 01.2.1, 01.3.1, 01.4.1 | 17 |
+| G1 | 3 | 01.3.2, 01.6.1, [02.1.1 + 02.2.1], 04.7.1, 10.1.1, 10.2.1 | 27 |
+| G1 | 4 | [01.4.2 + 01.5.1], 01.7.1, [02.1.2 + 02.3.1 + 02.3.2], 02.6.1, 03.1.1, 10.5.1 | 36.5 |
+| G1 | 5 | 02.4.1, 02.6.2, 02.7.1, 03.1.3, 06.1.1, 09.1.1 | 21.5 |
+| G1 | 6 | 02.4.2, 02.9.1, 03.2.1, 04.3.2, 06.2.2, 06.4.1, 11.1.1, 13.1.1 | 23 |
+| G1 | 7 | 03.1.4, 03.4.1, 05.1.1, 06.4.2, 11.5.1, 11.8.1, 13.1.2 | 27.5 |
+| G1 | 8 | 05.1.2, 06.4.3 | 2.5 |
+| G1 | 9 | [04.1.1 + 04.1.2 + 05.2.1 + 05.3.3], 06.4.5 | 16.5 |
+| G1 | 10 | 06.1.2, 07.1.1, 10.11.1 | 7.5 |
+| G1 | 11 | 01.8.1, 04.4.1, 06.2.3 | 10.5 |
+| G1 | 12 | 03.1.2 | 2 |
+| G1 | 16 | [04.8.1 + 06.4.4 + 06.5.2 + 08.5.1 + 08.6.3 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 56.5 |
+| G1 | 17 | 08.5.2, 08.5.3, 10.1.2, 10.2.2, 11.5.2, 11.6.1, 13.2.1 | 24 |
+| G1 | 18 | 09.2.1, 11.4.1, 11.9.2 | 18.5 |
+| G1 | 19 | 12.2.1 | 5.5 |
+| G1 | 20 | 08.5.5, 09.7.1 | 17 |
+| G1 | 21 | 13.3.1 | 7 |
+| G1 | 22 | 13.4.1, 13.9.1 | 10.5 |
+| G2 | 1 | 13.7.1 | 2 |
+| G2 | 4 | 04.3.1, 05.7.1 | 3 |
+| G2 | 5 | 01.10.1, 05.7.2, 10.5.2 | 9 |
+| G2 | 6 | 02.4.3, 02.8.1, 06.3.1 | 6 |
+| G2 | 7 | 02.4.4, 04.2.1, 06.3.2, 06.3.3, 06.3.6 | 10.5 |
+| G2 | 8 | 06.2.1, 06.3.4, 13.5.2 | 6 |
+| G2 | 10 | 04.2.2, 04.6.1, 05.2.2, 05.3.1, 06.4.6 | 11.5 |
+| G2 | 11 | 05.4.1, 06.1.3 | 3 |
+| G2 | 12 | [05.3.2 + 06.5.1 + 07.2.1 + 07.2.2 + 07.5.1] | 14.75 |
+| G2 | 13 | 04.1.3, 04.2.3, 05.6.1, 07.4.1, 08.1.1 | 12.5 |
+| G2 | 14 | 04.2.4, 05.5.1, 08.1.2 | 11 |
+| G2 | 15 | 04.3.3, 05.5.2, 08.2.1, 13.6.1 | 13 |
+| G2 | 16 | [03.3.1 + 03.4.2 + 03.6.1 + 08.3.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 11.5 |
+| G2 | 17 | 02.10.1, 05.10.1, 08.4.1, 09.3.1, 10.6.1, 10.7.2, 10.9.1 | 37 |
+| G2 | 18 | 12.4.1 | 4.5 |
+| G2 | 19 | 03.7.1 | 3.5 |
+| G2 | 21 | 13.5.1 | 8.5 |
+| G3 | 6 | 09.8.1 | 6 |
+| G3 | 13 | 03.9.1, 04.4.2, 07.5.2 | 4 |
+| G3 | 14 | 03.9.2, 08.2.2 | 6.5 |
+| G3 | 15 | 04.9.2 | 3 |
+| G3 | 16 | [04.9.1 + 08.3.2 + 08.4.3 + 08.6.1 + 08.6.2 + 08.7.1 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 23.25 |
+| G3 | 17 | 08.7.2 | 2 |
+| G3 | 18 | 08.4.2, 09.4.1, 09.5.2 | 17.5 |
+| G3 | 19 | 08.2.3, 08.8.1, 09.5.1 | 9 |
+| G3 | 20 | 08.8.2, 12.5.1, 13.7.2, 13.8.1 | 15.5 |
+| G3 | 21 | 08.3.3, 08.8.3, 13.8.2 | 7 |
+| G4 | 1 | 12.1.1 | 5 |
+| G4 | 5 | 02.3.3 | 3 |
+| G4 | 9 | 05.7.3 | 5 |
+| G4 | 10 | 05.8.1 | 3 |
+| G4 | 11 | 04.5.1, 05.9.1, 07.3.1 | 8 |
+| G4 | 12 | 03.5.1 | 3.5 |
+| G4 | 13 | 07.3.2 | 1.5 |
+| G4 | 14 | 07.4.2, 07.5.3, 07.6.1, 09.9.1 | 7 |
+| G4 | 15 | 07.5.4, 07.7.1 | 1.5 |
+| G4 | 16 | [02.5.1 + 05.7.4 — bundle 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1] | 7 |
+| G4 | 17 | 05.7.5, 05.7.6, 05.9.2, 06.3.5, 10.10.1 | 6 |
+| G4 | 18 | 02.10.2, 07.6.2, 07.7.2, 08.5.4, 11.7.1 | 13 |
+| G4 | 19 | 07.6.3, 07.8.1 | 7 |
+| G4 | 20 | 03.8.1, 09.6.1 | 11 |
+| G4 | 21 | 09.7.2 | 2 |
+| G4 | 22 | 08.9.1 | 3 |
+| G4 | 23 | 08.9.2 | 2 |
 
 ### 5.2 Critical chain (task level)
 
 | Up to | Work in this milestone (raw d) | Longest dependency chain from start (d) | Chain |
 |---|---|---|---|
-| M0 | 10.5 | 4.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.3.1-T1 |
-| M1 | 147.5 | 26 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.3-T1 → 05.3.3-T2 → 04.1.1-T1 → 04.1.1-T2 → 04.2.3-T1 |
-| M2 | 175.75 | 29 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 06.1.2-T1 → 06.1.2-T2 → 06.5.1-T1 → 06.5.1-T2 → 05.3.2-T2 → 05.3.2-T3 → 07.5.1-T1 → 07.5.1-T2 → 06.5.1-T3 → 04.4.2-T1 |
-| M3 | 160.5 | 40.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.4.1-T1 → 08.4.2-T1 → 08.4.2-T2 |
-| M4 | 120.75 | 51.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 |
-| M5 | 13.25 | 57.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 → 08.8.3-T2 → 08.9.1-T1 → 08.9.1-T2 → 08.9.2-T1 → 08.9.2-T2 |
+| G1 | 271.75 | 28 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.3-T1 → 05.3.3-T2 → 04.1.1-T1 → 04.1.1-T2 → 04.8.1-T1 → 12.3.1-T2 → 12.2.1-T5 |
+| G2 | 193.5 | 38.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.4.1-T1 → 08.4.1-T2 → 13.5.1-T2 |
+| G3 | 106.75 | 52.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 → 08.8.3-T2 |
+| G4 | 119.25 | 57.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 → 08.8.3-T2 → 08.9.1-T1 → 08.9.1-T2 → 08.9.2-T1 → 08.9.2-T2 |
 
-Reading [INFERENCE] (arithmetic over the graph): the longest dependency chain to the end of M3 is ≈ 40.5 raw days while M0–M3 hold ≈ 433 raw days of work, so the schedule is **capacity-bound, not dependency-bound**: adding engineers shortens the calendar almost linearly up to roughly 8–10 parallel lanes. The chain runs through tenancy (01.4.1 → 02.1.1) → catalog (03.1–03.2) → manifest/run (05.1–05.2) → ingest/attempts bundle → evidence freeze → healing (08.1–08.4): these tasks get the most senior owner and are never blocked on review.
+Reading [INFERENCE] (arithmetic over the graph): the longest dependency chain to the end of G1 is 28 raw days while G1 holds 271.75 raw days of work (G2: 38.5 against 193.5; both totals include work already merged), so the schedule is **capacity-bound, not dependency-bound**: adding engineers shortens the calendar almost linearly up to roughly 8–10 parallel lanes. The G3 chain runs through tenancy (01.4.1 → 02.1.1) → catalog (03.1–03.2) → manifest/run (05.1–05.2) → ingest/attempts bundle → evidence freeze → healing (08.1–08.4): these tasks get the most senior owner and are never blocked on review.
 
 ### 5.3 Bundles (build together, ordered by task)
 
@@ -287,8 +283,8 @@ Reading [INFERENCE] (arithmetic over the graph): the longest dependency chain to
 |---|---|---|
 | 01.4.2 + 01.5.1 | 13.5 | 01.4.2-T1 → 01.4.2-T2, 01.4.2-T3, 01.5.1-T1, 01.5.1-T2, 01.5.1-T6 → 01.4.2-T4, 01.5.1-T3 → 01.5.1-T4 → 01.5.1-T5 |
 | 02.1.1 + 02.2.1 | 5.5 | 02.1.1-T1 → 02.1.1-T3, 02.2.1-T1 → 02.2.1-T2 → 02.1.1-T2, 02.2.1-T3 |
-| 02.1.2 + 02.3.1 + 02.3.2 | 7 | 02.1.2-T1 → 02.3.1-T1 → 02.3.1-T2, 02.3.2-T1 → 02.1.2-T2, 02.3.2-T2 → 02.1.2-T3 |
-| 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1 | 98.25 | 02.5.1-T1, 03.3.1-T1, 03.6.1-T1, 04.9.1-T1, 06.4.4-T1, 08.6.3-T1, 10.3.1-T1, 10.7.1-T1, 10.7.1-T3, 10.7.1-T4, 11.2.1-T1, 11.2.1-T2, 11.2.1-T3, 11.2.1-T7, 11.3.1-T1, 11.3.1-T3, 11.3.1-T5, 11.9.1-T2, 11.9.1-T4, 12.3.1-T1 → 02.5.1-T2, 02.5.1-T3, 03.3.1-T2, 03.3.1-T3, 03.4.2-T1, 04.8.1-T1, 04.9.1-T3, 04.9.1-T4, 06.4.4-T3, 08.3.1-T1, 10.3.2-T1, 10.7.1-T6, 11.3.1-T2, 11.3.1-T4, 11.9.1-T1, 11.9.1-T3, 12.3.1-T3, 12.3.1-T5 → 04.8.1-T2, 05.7.4-T1, 08.3.2-T1, 10.3.1-T2, 11.9.1-T5, 12.3.1-T6 → 05.7.4-T2, 08.3.2-T2, 08.3.2-T3, 08.4.3-T1, 10.3.1-T3, 10.3.2-T3 → 03.6.1-T2, 05.7.4-T3, 06.5.2-T1, 10.3.1-T4, 10.3.1-T5, 10.4.1-T1, 10.7.1-T2, 11.2.1-T6 → 03.6.1-T3, 04.9.1-T2, 06.5.2-T2, 08.4.3-T2, 10.3.2-T2, 10.4.1-T2, 10.7.1-T5, 11.2.1-T4 → 03.6.1-T4, 08.4.3-T3, 11.2.1-T5, 12.3.1-T2 → 08.5.1-T1, 08.6.1-T1, 12.3.1-T4 → 08.5.1-T3, 08.6.1-T2, 08.6.1-T3, 08.6.3-T2 → 08.6.2-T1, 08.6.3-T3, 08.7.1-T1 → 06.4.4-T2, 08.6.2-T2, 08.7.1-T3 → 08.7.1-T2 |
+| 02.1.2 + 02.3.1 + 02.3.2 | 7.5 | 02.1.2-T1 → 02.3.1-T1 → 02.3.1-T2, 02.3.1-T3, 02.3.2-T1 → 02.1.2-T2, 02.3.2-T2 → 02.1.2-T3 |
+| 02.5.1 + 03.3.1 + 03.4.2 + 03.6.1 + 04.8.1 + 04.9.1 + 05.7.4 + 06.4.4 + 06.5.2 + 08.3.1 + 08.3.2 + 08.4.3 + 08.5.1 + 08.6.1 + 08.6.2 + 08.6.3 + 08.7.1 + 10.3.1 + 10.3.2 + 10.4.1 + 10.7.1 + 11.2.1 + 11.3.1 + 11.9.1 + 12.3.1 | 98.25 | 02.5.1-T1, 03.3.1-T1, 03.6.1-T1, 04.9.1-T1, 06.4.4-T1, 08.6.3-T1, 10.3.1-T1, 10.7.1-T1, 10.7.1-T3, 10.7.1-T4, 11.2.1-T1, 11.2.1-T2, 11.2.1-T3, 11.2.1-T7, 11.3.1-T1, 11.3.1-T3, 11.3.1-T5, 11.9.1-T2, 11.9.1-T4, 12.3.1-T1 → 02.5.1-T2, 02.5.1-T3, 03.3.1-T2, 03.3.1-T3, 03.4.2-T1, 04.8.1-T1, 04.9.1-T3, 04.9.1-T4, 06.4.4-T3, 08.3.1-T1, 08.5.1-T1, 10.3.2-T1, 10.7.1-T6, 11.3.1-T2, 11.3.1-T4, 11.9.1-T1, 11.9.1-T3, 12.3.1-T3, 12.3.1-T5 → 04.8.1-T2, 05.7.4-T1, 08.3.2-T1, 08.5.1-T3, 08.6.3-T2, 10.3.1-T2, 11.9.1-T5, 12.3.1-T6 → 05.7.4-T2, 08.3.2-T2, 08.3.2-T3, 08.4.3-T1, 10.3.1-T3, 10.3.2-T3 → 03.6.1-T2, 05.7.4-T3, 06.5.2-T1, 10.3.1-T4, 10.3.1-T5, 10.4.1-T1, 10.7.1-T2, 11.2.1-T6 → 03.6.1-T3, 04.9.1-T2, 06.5.2-T2, 08.4.3-T2, 10.3.2-T2, 10.4.1-T2, 10.7.1-T5, 11.2.1-T4 → 03.6.1-T4, 08.4.3-T3, 08.6.3-T3, 11.2.1-T5, 12.3.1-T2 → 08.6.1-T1, 12.3.1-T4 → 08.6.1-T2, 08.6.1-T3 → 08.6.2-T1, 08.7.1-T1 → 06.4.4-T2, 08.6.2-T2, 08.7.1-T3 → 08.7.1-T2 |
 | 04.1.1 + 04.1.2 + 05.2.1 + 05.3.3 | 16 | 04.1.2-T4 → 05.2.1-T1 → 05.2.1-T2, 05.2.1-T3, 05.2.1-T4, 05.2.1-T5, 05.3.3-T1 → 05.3.3-T2 → 04.1.1-T1 → 04.1.1-T2, 04.1.1-T3, 04.1.1-T4, 04.1.2-T5 → 04.1.2-T1, 04.1.2-T2, 04.1.2-T3 |
 | 05.3.2 + 06.5.1 + 07.2.1 + 07.2.2 + 07.5.1 | 14.75 | 05.3.2-T1 → 05.3.2-T5 → 06.5.1-T1 → 06.5.1-T2, 07.2.1-T1 → 05.3.2-T2, 07.2.1-T2 → 05.3.2-T3, 05.3.2-T4, 07.2.2-T1, 07.2.2-T2 → 07.2.2-T3, 07.2.2-T4, 07.5.1-T1 → 07.5.1-T2 → 06.5.1-T3 |
 
@@ -361,194 +357,207 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 
 | Story | Title | Milestone | Wave | Bundle | Raw days | Depends on | Blocks |
 |---|---|---|---|---|---|---|---|
-| [01.1.1](01-foundation/01.1.1-toolchain-and-workspace.md) | Toolchain and workspace | M0 | 1 | — | 2.75 | — | 01.1.2, 01.2.1, 01.3.1, 01.3.2, 01.4.1, 01.6.1, 04.2.1, 09.1.1, 11.6.1 |
-| [01.1.2](01-foundation/01.1.2-two-process-skeleton.md) | Two-process skeleton | M1 | 2 | — | 4.5 | 01.1.1 | 02.3.1, 10.1.1, 10.2.1 |
-| [01.2.1](01-foundation/01.2.1-analyzers-format-types-and-architecture.md) | Analyzers, format, types and architecture | M0 | 2 | — | 3 | 01.1.1 | — |
-| [01.3.1](01-foundation/01.3.1-spec-and-schemas.md) | Spec and schemas | M0 | 2 | — | 3.5 | 01.1.1 | 01.3.2, 04.1.1, 04.7.1, 05.1.1, 07.5.2 |
-| [01.3.2](01-foundation/01.3.2-generated-sdk-validators-and-contract-tests.md) | Generated SDK, validators and contract tests | M1 | 3 | — | 6 | 01.1.1, 01.3.1 | 01.5.1, 09.1.1 |
-| [01.4.1](01-foundation/01.4.1-migrations-roles-and-rls.md) | Migrations, roles and RLS | M1 | 2 | — | 6 | 01.1.1 | 01.4.2, 01.6.1, 02.1.1, 03.1.1, 04.1.2, 06.1.1, 07.1.1, 10.2.2 |
-| [01.4.2](01-foundation/01.4.2-tenant-scope-data-access-and-pipeline.md) | Tenant scope, data access and pipeline | M1 | 4 | yes | 6.5 | 01.4.1, 01.5.1 | 01.5.1, 02.6.2, 05.1.2 |
-| [01.5.1](01-foundation/01.5.1-durable-internal-tasks.md) | Durable internal tasks | M1 | 4 | yes | 7 | 01.3.2, 01.4.2 | 01.4.2, 02.10.1, 03.3.1, 05.2.1, 06.2.3, 06.3.6, 06.4.2, 06.5.2, 07.2.2, 07.6.2, 10.7.1 |
-| [01.6.1](01-foundation/01.6.1-integration-harness-and-fixtures.md) | Integration harness and fixtures | M1 | 3 | — | 5 | 01.1.1, 01.4.1 | 01.7.1, 04.1.3, 11.7.1 |
-| [01.7.1](01-foundation/01.7.1-evidgate-s-own-pipeline.md) | Evidgate's own pipeline | M1 | 4 | — | 4.5 | 01.6.1 | 01.10.1, 04.6.1, 04.9.2, 10.1.2, 11.6.1, 11.7.1 |
-| [01.8.1](01-foundation/01.8.1-one-command-local-stack.md) | One-command local stack | M1 | 11 | — | 3 | 02.1.2, 02.4.1, 02.4.2, 07.1.1 | — |
-| [01.9.1](01-foundation/01.9.1-decision-records.md) | Decision records | M0 | 1 | — | 2 | — | — |
-| [01.10.1](01-foundation/01.10.1-evidgate-gates-evidgate.md) | Evidgate gates Evidgate | M2 | 5 | — | 3.5 | 01.7.1 | — |
-| [02.1.1](02-identity-tenancy/02.1.1-org-and-project-registry.md) | Org and project registry | M1 | 3 | yes | 2.5 | 01.4.1, 02.2.1 | 02.1.2, 02.2.1, 02.4.1, 02.4.3, 02.6.1, 02.9.1, 03.1.1, 03.4.1, 07.8.1, 09.7.1, 11.1.1, 12.3.1 |
-| [02.1.2](02-identity-tenancy/02.1.2-membership-and-invites.md) | Membership and invites | M1 | 4 | yes | 2.5 | 02.1.1, 02.3.1, 02.3.2 | 01.8.1, 02.3.1, 02.3.3, 02.8.1, 02.10.1, 09.7.1 |
-| [02.2.1](02-identity-tenancy/02.2.1-permission-catalogue-and-enforcement.md) | Permission catalogue and enforcement | M1 | 3 | yes | 3 | 02.1.1 | 02.1.1, 02.4.1, 02.4.4, 02.5.1, 02.7.1, 02.9.1, 03.7.1, 06.2.1, 06.4.1, 07.3.1, 07.5.2, 07.6.3, 09.7.1 |
-| [02.3.1](02-identity-tenancy/02.3.1-federated-login.md) | Federated login | M1 | 4 | yes | 3 | 01.1.2, 02.1.2 | 02.1.2, 02.3.2, 09.1.1 |
-| [02.3.2](02-identity-tenancy/02.3.2-sessions-and-revocation.md) | Sessions and revocation | M1 | 4 | yes | 1.5 | 02.3.1 | 02.1.2, 02.3.3 |
-| [02.3.3](02-identity-tenancy/02.3.3-enterprise-saml.md) | Enterprise SAML | M5 | 5 | — | 3 | 02.1.2, 02.3.2 | — |
-| [02.4.1](02-identity-tenancy/02.4.1-github-oidc-exchange.md) | GitHub OIDC exchange | M1 | 5 | — | 5 | 02.1.1, 02.2.1, 02.6.1 | 01.8.1, 02.4.2, 02.4.3, 02.5.1, 04.2.1, 05.2.2, 07.6.1, 09.2.1, 11.2.1 |
-| [02.4.2](02-identity-tenancy/02.4.2-non-github-ci-ingest-tokens.md) | Non-GitHub CI ingest tokens | M2 | 6 | — | 1 | 02.4.1 | 01.8.1, 02.4.4, 04.2.1, 09.2.1, 09.7.1, 11.2.1, 11.3.1 |
-| [02.4.3](02-identity-tenancy/02.4.3-github-app-installation.md) | GitHub App installation | M2 | 6 | — | 2 | 02.1.1, 02.4.1 | 05.5.2, 07.6.1 |
-| [02.4.4](02-identity-tenancy/02.4.4-api-tokens-for-automation.md) | API tokens for automation | M3 | 7 | — | 2.5 | 02.2.1, 02.4.2, 02.7.1 | 09.7.2 |
-| [02.5.1](02-identity-tenancy/02.5.1-agent-identity-per-tenant-and-pool.md) | Agent identity per tenant and pool | M4 | 16 | yes | 2 | 02.2.1, 02.4.1, 05.7.3, 10.7.1 | 05.7.4 |
-| [02.6.1](02-identity-tenancy/02.6.1-database-enforced-isolation.md) | Database-enforced isolation | M1 | 4 | — | 3.5 | 02.1.1 | 02.4.1, 02.6.2, 02.7.1, 02.9.1, 06.1.1, 07.1.1, 11.1.1, 11.2.1 |
-| [02.6.2](02-identity-tenancy/02.6.2-tenant-context.md) | Tenant context | M1 | 5 | — | 0.5 | 01.4.2, 02.6.1 | 02.8.1, 02.9.1 |
-| [02.7.1](02-identity-tenancy/02.7.1-audit-trail.md) | Audit trail | M1 | 5 | — | 2.5 | 02.2.1, 02.6.1 | 02.4.4, 02.8.1, 03.6.1, 05.3.1, 07.6.3, 07.8.1, 09.7.1, 11.1.1, 11.5.1 |
-| [02.8.1](02-identity-tenancy/02.8.1-time-boxed-operator-access.md) | Time-boxed operator access | M2 | 6 | — | 2 | 02.1.2, 02.6.2, 02.7.1 | 02.10.1, 06.4.4, 11.5.1 |
-| [02.9.1](02-identity-tenancy/02.9.1-isolation-suite.md) | Isolation suite | M1 | 6 | — | 3 | 02.1.1, 02.2.1, 02.6.1, 02.6.2 | 11.7.1 |
-| [02.10.1](02-identity-tenancy/02.10.1-one-outbound-email-channel.md) | One outbound email channel | M2 | 17 | — | 4.5 | 01.5.1, 02.1.2, 02.8.1, 12.3.1 | 02.10.2 |
-| [02.10.2](02-identity-tenancy/02.10.2-chat-notifications-slack-teams.md) | Chat notifications (Slack, Teams) | M4 | 18 | — | 1.5 | 02.10.1, 11.3.1 | — |
-| [03.1.1](03-catalog-authoring/03.1.1-stable-case-identity.md) | Stable case identity | M1 | 4 | — | 2.5 | 01.4.1, 02.1.1 | 03.1.2, 03.1.3, 03.1.4, 03.4.1, 03.5.1, 04.3.2, 09.2.1 |
-| [03.1.2](03-catalog-authoring/03.1.2-imported-identity-and-mapping.md) | Imported identity and mapping | M1 | 12 | — | 2 | 03.1.1, 04.3.2, 04.4.1 | 09.2.1 |
-| [03.1.3](03-catalog-authoring/03.1.3-immutable-test-revisions.md) | Immutable test revisions | M1 | 5 | — | 1 | 03.1.1 | 03.2.1, 03.7.1, 04.3.2, 05.1.1 |
-| [03.1.4](03-catalog-authoring/03.1.4-requirement-link-taxonomy-and-coverage-definition.md) | Requirement link, taxonomy and execution-coverage definition | M1 | 7 | — | 1.5 | 03.1.1, 03.2.1 | — |
-| [03.2.1](03-catalog-authoring/03.2.1-versioned-suites.md) | Versioned suites | M1 | 6 | — | 4 | 03.1.3 | 03.1.4, 03.3.1, 03.4.1, 03.6.1, 04.5.1, 05.1.1, 09.6.1 |
-| [03.3.1](03-catalog-authoring/03.3.1-fixtures-and-per-run-data.md) | Fixtures and per-run data | M2 | 16 | yes | 2.5 | 01.5.1, 03.2.1, 11.3.1 | 03.6.1 |
-| [03.4.1](03-catalog-authoring/03.4.1-commit-registration-and-catalog-sync.md) | Commit registration and catalog sync | M2 | 7 | — | 4 | 02.1.1, 03.1.1, 03.2.1 | 03.4.2, 03.6.1, 11.2.1 |
-| [03.4.2](03-catalog-authoring/03.4.2-pull-request-plumbing-v2.md) | Pull-request plumbing (V2) | M4 | 16 | yes | 1 | 03.4.1, 03.6.1 | 03.6.1, 08.6.1 |
-| [03.5.1](03-catalog-authoring/03.5.1-template-library-and-git-flow.md) | Template library and Git flow | M2 | 12 | — | 3.5 | 03.1.1, 04.3.1, 04.4.1, 05.7.3 | 09.6.1 |
-| [03.6.1](03-catalog-authoring/03.6.1-draft-dry-run-pr.md) | Draft → dry run → PR | M4 | 16 | yes | 5 | 02.7.1, 03.2.1, 03.3.1, 03.4.1, 03.4.2, 05.7.3, 05.7.4 | 03.4.2, 03.7.1, 09.6.1 |
-| [03.7.1](03-catalog-authoring/03.7.1-ai-assisted-drafts.md) | AI-assisted drafts | M4 | 19 | — | 3.5 | 02.2.1, 03.1.3, 03.6.1, 11.4.1 | 03.8.1, 09.6.1 |
-| [03.8.1](03-catalog-authoring/03.8.1-regression-candidates-from-confirmed-bugs.md) | Regression candidates from confirmed bugs | M4 | 20 | — | 3 | 03.7.1, 06.1.2, 07.2.1, 08.2.2 | — |
-| [03.9.1](03-catalog-authoring/03.9.1-case-result-history-and-baseline.md) | Case result history and baseline read model | M3 | 13 | — | 2.5 | 05.3.2, 06.4.6 | 03.9.2, 09.9.1 |
-| [03.9.2](03-catalog-authoring/03.9.2-historical-import-to-seed-baseline.md) | Historical import to seed a baseline | M3 | 14 | — | 2 | 03.9.1, 04.2.3, 04.4.2 | — |
-| [04.1.1](04-ingestion-adapters/04.1.1-atomic-batch-ingest-with-per-event.md) | Atomic batch ingest with per-event ack | M1 | 9 | yes | 5 | 01.3.1, 05.3.3 | 04.1.2, 04.1.3, 04.2.3, 04.3.3, 04.6.1, 04.8.1, 06.4.6, 11.3.1 |
-| [04.1.2](04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md) | Quota, epochs and observability | M1 | 9 | yes | 4 | 01.4.1, 04.1.1 | 05.2.1, 05.5.2, 06.1.2, 10.11.1 |
-| [04.1.3](04-ingestion-adapters/04.1.3-large-report-caps-and-streaming.md) | Large-report caps and streaming | M2 | 13 | — | 2.5 | 01.6.1, 04.1.1, 05.3.2 | — |
-| [04.2.1](04-ingestion-adapters/04.2.1-authenticate-from-ci.md) | Authenticate from CI | M1 | 7 | — | 1 | 01.1.1, 02.4.1, 02.4.2 | 04.2.2, 04.2.3, 04.2.4, 07.6.1 |
-| [04.2.2](04-ingestion-adapters/04.2.2-manifest-and-run.md) | Manifest and run | M1 | 10 | — | 1 | 04.2.1, 05.1.1, 05.2.1 | — |
-| [04.2.3](04-ingestion-adapters/04.2.3-spool-send-and-finalize.md) | Spool, send and finalize | M1 | 13 | — | 2.5 | 04.1.1, 04.2.1, 05.3.2 | 03.9.2, 04.2.4, 04.9.1, 05.5.2 |
-| [04.2.4](04-ingestion-adapters/04.2.4-artifacts-and-quickstart.md) | Artifacts and quickstart | M2 | 14 | — | 2.5 | 04.2.1, 04.2.3, 04.6.1, 06.1.1, 06.1.2 | 04.3.3, 04.9.2 |
-| [04.3.1](04-ingestion-adapters/04.3.1-custom-reporter-bound-to-the-documented.md) | Custom reporter bound to the documented API | M1 | 4 | — | 1 | 04.7.1 | 03.5.1, 05.7.6 |
-| [04.3.2](04-ingestion-adapters/04.3.2-identity-retries-and-skips.md) | Identity, retries and skips | M1 | 6 | — | 3 | 03.1.1, 03.1.3 | 03.1.2 |
-| [04.3.3](04-ingestion-adapters/04.3.3-shards-and-attachments.md) | Shards and attachments | M1 | 15 | — | 2 | 04.1.1, 04.2.4 | — |
-| [04.4.1](04-ingestion-adapters/04.4.1-pytest-junitxml-mapping.md) | pytest `junitxml` mapping | M1 | 11 | — | 6.5 | 04.7.1, 06.1.2, 06.3.1 | 03.1.2, 03.5.1, 04.4.2, 09.2.1 |
-| [04.4.2](04-ingestion-adapters/04.4.2-reprocess-a-stored-raw-report.md) | Reprocess a stored raw report | M2 | 13 | — | 1 | 04.4.1, 05.3.2, 06.5.1 | 03.9.2 |
-| [04.5.1](04-ingestion-adapters/04.5.1-appium-adapter.md) | Appium adapter | M4 | 11 | — | 5 | 03.2.1, 04.6.1, 04.7.1, 05.8.1 | 06.3.5, 07.5.4, 08.9.2 |
-| [04.6.1](04-ingestion-adapters/04.6.1-per-producer-golden-set.md) | Per-producer golden set | M1 | 10 | — | 3.5 | 01.7.1, 04.1.1 | 04.2.4, 04.5.1 |
-| [04.7.1](04-ingestion-adapters/04.7.1-protocol-v1-contract.md) | Protocol v1 contract | M1 | 3 | — | 2.5 | 01.3.1 | 04.3.1, 04.4.1, 04.5.1, 05.7.1, 05.7.3, 06.2.2 |
-| [04.8.1](04-ingestion-adapters/04.8.1-idempotent-billing-key.md) | Idempotent billing key | M2 | 16 | yes | 1.5 | 04.1.1, 12.3.1 | 12.3.1 |
-| [04.9.1](04-ingestion-adapters/04.9.1-customer-side-replay-step.md) | Customer-side replay step (O10 option a) | M3 | 16 | yes | 4.5 | 04.2.3, 05.2.1, 11.2.1 | 08.4.3 |
-| [04.9.2](04-ingestion-adapters/04.9.2-cli-sdk-release-compatibility-and-docs.md) | CLI/SDK release, compatibility and customer docs | M3 | 15 | — | 3 | 01.7.1, 04.2.4 | — |
-| [05.1.1](05-runs-orchestration/05.1.1-verified-manifest.md) | Verified manifest | M1 | 7 | — | 6 | 01.3.1, 03.1.3, 03.2.1 | 04.2.2, 05.1.2, 05.2.1 |
-| [05.1.2](05-runs-orchestration/05.1.2-environment-revisions.md) | Environment revisions | M1 | 8 | — | 1.5 | 01.4.2, 05.1.1 | 05.2.1, 05.7.3 |
-| [05.2.1](05-runs-orchestration/05.2.1-one-transaction-run-creation.md) | One-transaction run creation | M1 | 9 | yes | 5 | 01.5.1, 04.1.2, 05.1.1, 05.1.2 | 04.2.2, 04.9.1, 05.2.2, 05.3.1, 05.3.2, 05.3.3, 05.5.2, 05.6.1, 06.1.2, 07.1.1, 07.2.2, 08.1.1, 08.4.3, 09.3.1 |
-| [05.2.2](05-runs-orchestration/05.2.2-branch-pr-and-commit-identity-of-a-run.md) | Branch, PR and commit identity of a run | M1 | 10 | — | 2.5 | 02.4.1, 05.2.1 | — |
-| [05.3.1](05-runs-orchestration/05.3.1-run-state-machine.md) | Run state machine | M1 | 10 | — | 2 | 02.7.1, 05.2.1 | 05.4.1, 09.3.1 |
-| [05.3.2](05-runs-orchestration/05.3.2-finalize-and-reconciliation.md) | Finalize and reconciliation | M1 | 12 | yes | 6 | 05.2.1, 06.5.1, 07.1.1 | 03.9.1, 04.1.3, 04.2.3, 04.4.2, 05.5.1, 05.10.1, 06.5.1, 07.2.1, 07.5.1, 08.1.1, 09.3.1 |
-| [05.3.3](05-runs-orchestration/05.3.3-case-attempts.md) | Case attempts | M1 | 9 | yes | 2 | 05.2.1 | 04.1.1, 06.5.1, 07.4.1, 07.4.2 |
-| [05.4.1](05-runs-orchestration/05.4.1-durable-cancel.md) | Durable cancel | M2 | 11 | — | 2.5 | 05.3.1 | 09.3.1 |
-| [05.5.1](05-runs-orchestration/05.5.1-rerun-with-parent-and-scope.md) | Rerun with parent and scope | M2 | 14 | — | 2 | 05.3.2, 07.4.1 | 05.5.2, 09.3.1 |
-| [05.5.2](05-runs-orchestration/05.5.2-ci-rerun-semantics-and-trigger.md) | CI re-run semantics and trigger | M1 | 15 | — | 3.5 | 02.4.3, 04.1.2, 04.2.3, 05.2.1, 05.5.1 | — |
-| [05.6.1](05-runs-orchestration/05.6.1-digest-bound-release.md) | Digest-bound release | M2 | 13 | — | 3 | 05.2.1, 07.2.1 | 07.5.3 |
-| [05.7.1](05-runs-orchestration/05.7.1-immutable-jobspec.md) | Immutable JobSpec | M4 | 4 | — | 2 | 04.7.1 | 05.7.2 |
-| [05.7.2](05-runs-orchestration/05.7.2-leasing-with-epoch-fencing.md) | Leasing with epoch fencing | M4 | 5 | — | 3 | 05.7.1 | 05.7.4, 05.10.1 |
-| [05.7.3](05-runs-orchestration/05.7.3-scheduling-capability-pools-fairness-timeouts.md) | Scheduling: capability, pools, fairness, timeouts | M4 | 9 | — | 5 | 04.7.1, 05.1.2 | 02.5.1, 03.5.1, 03.6.1, 05.8.1, 09.7.1 |
-| [05.7.4](05-runs-orchestration/05.7.4-evidgate-agent-executor.md) | `evidgate-agent` executor | M4 | 16 | yes | 5 | 02.5.1, 05.7.2, 06.1.1, 06.1.3 | 03.6.1, 05.7.5, 05.7.6, 06.3.5, 11.2.1 |
-| [05.7.5](05-runs-orchestration/05.7.5-cleanup-and-re-run-safety.md) | Cleanup and re-run safety | M4 | 17 | — | 2 | 05.7.4 | — |
-| [05.7.6](05-runs-orchestration/05.7.6-agent-end-to-end.md) | Agent end-to-end | M4 | 17 | — | 1 | 04.3.1, 05.7.4 | — |
-| [05.8.1](05-runs-orchestration/05.8.1-exclusive-device-lease.md) | Exclusive device lease | M4 | 10 | — | 3 | 05.7.3 | 04.5.1, 05.9.1 |
-| [05.9.1](05-runs-orchestration/05.9.1-macos-ios-pool-spike.md) | macOS/iOS pool spike | M5 | 11 | — | 1 | 05.8.1 | — |
-| [05.9.2](05-runs-orchestration/05.9.2-hosted-runner-spike.md) | Hosted runner spike | M5 | 17 | — | 1 | 11.2.1 | — |
-| [05.10.1](05-runs-orchestration/05.10.1-detect-and-repair-drift.md) | Detect and repair drift | M2 | 17 | — | 2.5 | 05.3.2, 05.7.2, 06.4.3, 12.3.1 | — |
-| [06.1.1](06-evidence-artifacts/06.1.1-artifact-record-and-server-chosen-keys.md) | Artifact record and server-chosen keys | M2 | 5 | — | 1.5 | 01.4.1, 02.6.1 | 04.2.4, 05.7.4, 06.1.2, 06.2.1, 06.2.2, 06.3.1, 06.4.1, 08.1.2 |
-| [06.1.2](06-evidence-artifacts/06.1.2-presigned-upload-and-completion.md) | Presigned upload and completion | M2 | 10 | — | 2.5 | 04.1.2, 05.2.1, 06.1.1 | 03.8.1, 04.2.4, 04.4.1, 06.1.3, 06.2.3, 06.5.1, 09.2.1 |
-| [06.1.3](06-evidence-artifacts/06.1.3-state-machine-guards.md) | State-machine guards | M2 | 11 | — | 0.5 | 06.1.2 | 05.7.4 |
-| [06.2.1](06-evidence-artifacts/06.2.1-sensitivity-classification-and-access-control.md) | Sensitivity classification and access control | M2 | 8 | — | 1.5 | 02.2.1, 06.1.1, 06.3.3 | 09.4.1 |
-| [06.2.2](06-evidence-artifacts/06.2.2-redaction-and-capture-control-at-source.md) | Redaction and capture control at source | M2 | 6 | — | 1 | 04.7.1, 06.1.1 | 11.3.1 |
-| [06.2.3](06-evidence-artifacts/06.2.3-secret-masking.md) | Secret masking | M2 | 11 | — | 1 | 01.5.1, 06.1.2 | 11.3.1 |
-| [06.3.1](06-evidence-artifacts/06.3.1-parser-hardening.md) | Parser hardening | M2 | 6 | — | 2 | 06.1.1 | 04.4.1, 06.3.2, 06.3.4, 06.3.6 |
-| [06.3.2](06-evidence-artifacts/06.3.2-hostile-input-fixtures.md) | Hostile-input fixtures | M2 | 7 | — | 1.5 | 06.3.1 | — |
-| [06.3.3](06-evidence-artifacts/06.3.3-isolated-viewer-origin.md) | Isolated viewer origin | M2 | 7 | — | 2 | 10.1.1, 11.1.1 | 06.2.1, 06.3.4, 09.4.1, 11.7.1 |
-| [06.3.4](06-evidence-artifacts/06.3.4-rendering-reports-and-traces.md) | Rendering reports and traces | M2 | 8 | — | 2 | 06.3.1, 06.3.3 | — |
-| [06.3.5](06-evidence-artifacts/06.3.5-mobile-artifact-kinds.md) | Mobile artifact kinds | M4 | 17 | — | 0.5 | 04.5.1, 05.7.4 | — |
-| [06.3.6](06-evidence-artifacts/06.3.6-parsers-run-in-a-resource-limited-child.md) | Parsers run in a resource-limited child with per-tenant concurrency | M2 | 7 | — | 3.5 | 01.5.1, 06.3.1 | — |
-| [06.4.1](06-evidence-artifacts/06.4.1-retention-policy.md) | Retention policy | M2 | 6 | — | 0.5 | 02.2.1, 06.1.1 | 06.4.2, 11.8.1 |
-| [06.4.2](06-evidence-artifacts/06.4.2-retention-deletion-job.md) | Retention deletion job | M2 | 7 | — | 1 | 01.5.1, 06.4.1 | 06.4.3, 06.4.4, 06.4.5, 06.4.6 |
-| [06.4.3](06-evidence-artifacts/06.4.3-orphan-sweeper.md) | Orphan sweeper | M2 | 8 | — | 1 | 06.4.2 | 05.10.1, 06.4.5 |
-| [06.4.4](06-evidence-artifacts/06.4.4-tenant-deletion.md) | Tenant deletion | M2 | 16 | yes | 2.5 | 02.8.1, 06.4.2, 08.7.1, 10.5.1 | 11.9.1 |
-| [06.4.5](06-evidence-artifacts/06.4.5-deletion-verification.md) | Deletion verification | M2 | 9 | — | 0.5 | 06.4.2, 06.4.3 | 11.9.1 |
-| [06.4.6](06-evidence-artifacts/06.4.6-retention-and-partitioning-for-high-volume-tables.md) | Retention and partitioning for high-volume tables | M1 | 10 | — | 2.5 | 04.1.1, 06.4.2 | 03.9.1 |
-| [06.5.1](06-evidence-artifacts/06.5.1-freeze-interface-with-05.md) | Freeze interface with 05 | M2 | 12 | yes | 2.5 | 05.3.2, 05.3.3, 06.1.2, 07.5.1 | 04.4.2, 05.3.2, 07.2.1, 09.3.1 |
-| [06.5.2](06-evidence-artifacts/06.5.2-storage-usage-metrics.md) | Storage usage metrics | M2 | 16 | yes | 1.5 | 01.5.1, 10.3.1, 12.3.1 | 09.7.1, 12.3.1 |
-| [07.1.1](07-policy-decisions/07.1.1-revision-record-hash-activation-and-pinning.md) | Revision record, hash, activation and pinning | M2 | 10 | — | 3 | 01.4.1, 02.6.1, 05.2.1 | 01.8.1, 05.3.2, 07.3.1, 07.8.1, 09.2.1, 09.7.1 |
-| [07.2.1](07-policy-decisions/07.2.1-pure-evaluation-completeness-outcome-decision.md) | Pure evaluation: completeness, outcome, decision | M2 | 12 | yes | 2 | 05.3.2, 06.5.1 | 03.8.1, 05.6.1, 07.2.2, 07.3.2, 07.4.1 |
-| [07.2.2](07-policy-decisions/07.2.2-persistence-idempotency-and-the-decision-matrix.md) | Persistence, idempotency and the decision matrix | M2 | 12 | yes | 2.75 | 01.5.1, 05.2.1, 07.2.1, 07.3.1 | 07.5.1, 07.5.2, 07.5.3, 07.6.1, 07.6.2, 07.7.1, 07.7.2, 08.3.3 |
-| [07.3.1](07-policy-decisions/07.3.1-waiver-and-quarantine-lifecycles.md) | Waiver and quarantine lifecycles | M2 | 11 | — | 2 | 02.2.1, 07.1.1 | 07.2.2, 07.3.2, 09.3.1 |
-| [07.3.2](07-policy-decisions/07.3.2-evaluator-effects-expiry-and-audit.md) | Evaluator effects, expiry and audit | M2 | 13 | — | 1.5 | 07.2.1, 07.3.1 | 09.3.1 |
-| [07.4.1](07-policy-decisions/07.4.1-in-run-flaky-detection-and-budget.md) | In-run flaky detection and budget | M2 | 13 | — | 2 | 05.3.3, 07.2.1 | 05.5.1, 07.4.2, 09.3.1 |
-| [07.4.2](07-policy-decisions/07.4.2-flaky-surface-and-cross-run-trend.md) | Flaky surface and cross-run trend | M2 | 14 | — | 1 | 05.3.3, 07.4.1 | — |
-| [07.5.1](07-policy-decisions/07.5.1-late-evidence-and-immutability.md) | Late evidence and immutability | M2 | 12 | yes | 1.5 | 05.3.2, 07.2.2 | 06.5.1 |
-| [07.5.2](07-policy-decisions/07.5.2-run-decision-api.md) | Run decision API | M2 | 13 | — | 0.5 | 01.3.1, 02.2.1, 07.2.2 | 07.6.1, 07.6.3, 09.3.1, 09.9.1 |
-| [07.5.3](07-policy-decisions/07.5.3-release-aggregation-and-decision-endpoint.md) | Release aggregation and decision endpoint | M3 | 14 | — | 1.5 | 05.6.1, 07.2.2 | 07.5.4, 07.8.1, 09.3.1 |
-| [07.5.4](07-policy-decisions/07.5.4-multi-component-releases-with-mobile-digests.md) | Multi-component releases with mobile digests | M4 | 15 | — | 0.5 | 04.5.1, 07.5.3 | — |
-| [07.6.1](07-policy-decisions/07.6.1-ci-delivery-github-and-the-cli.md) | CI delivery: GitHub and the CLI gate | M3 | 14 | — | 2 | 02.4.1, 02.4.3, 04.2.1, 07.2.2, 07.5.2 | 07.7.1, 07.8.1 |
-| [07.6.2](07-policy-decisions/07.6.2-outbound-webhooks-and-delivery-operations.md) | Outbound webhooks and delivery operations | M2 | 18 | — | 2 | 01.5.1, 07.2.2, 10.3.1, 10.6.1 | 07.6.3, 07.8.1, 09.7.1 |
-| [07.6.3](07-policy-decisions/07.6.3-webhook-endpoint-management-and-status-badge.md) | Webhook endpoint management and status badge | M3 | 19 | — | 2.5 | 02.2.1, 02.7.1, 07.5.2, 07.6.2 | 09.7.1 |
-| [07.7.1](07-policy-decisions/07.7.1-advisory-and-enforcing-modes.md) | Advisory and enforcing modes | M2 | 15 | — | 1 | 07.2.2, 07.6.1 | 07.7.2 |
-| [07.7.2](07-policy-decisions/07.7.2-shadow-evaluation-divergence-and-rollback.md) | Shadow evaluation, divergence and rollback | M2 | 18 | — | 1.5 | 07.2.2, 07.7.1, 10.2.2 | — |
-| [07.8.1](07-policy-decisions/07.8.1-promotion-gate-release-to-environment.md) | Promotion gate: release to environment | M3 | 19 | — | 4.5 | 02.1.1, 02.7.1, 07.1.1, 07.5.3, 07.6.1, 07.6.2 | 09.7.2 |
-| [08.1.1](08-healing-learning/08.1.1-incident-record-from-verified-failures.md) | Incident record from verified failures | M3 | 13 | — | 2.5 | 05.2.1, 05.3.2 | 08.1.2, 08.2.2, 08.3.1, 09.4.1 |
-| [08.1.2](08-healing-learning/08.1.2-filtered-context-capture-and-versioned-fingerprint.md) | Filtered context capture and versioned fingerprint | M3 | 14 | — | 6.5 | 06.1.1, 08.1.1 | 08.2.1, 08.4.2, 09.4.1 |
-| [08.2.1](08-healing-learning/08.2.1-tenant-scoped-retrieval-and-ranker.md) | Tenant-scoped retrieval and ranker | M3 | 15 | — | 2.5 | 08.1.2 | 08.3.1, 08.5.2, 08.7.1 |
-| [08.2.2](08-healing-learning/08.2.2-triage-labels-with-provenance.md) | Triage labels with provenance | M3 | 14 | — | 3.5 | 08.1.1 | 03.8.1, 08.2.3, 08.5.1, 09.4.1, 12.5.1 |
-| [08.2.3](08-healing-learning/08.2.3-external-issue-reference-on-an-incident.md) | External issue reference on an incident | M3 | 19 | — | 1 | 08.2.2, 09.4.1 | — |
-| [08.3.1](08-healing-learning/08.3.1-candidate-model-and-rule-based-generation.md) | Candidate model and rule-based generation | M3 | 16 | yes | 3 | 08.1.1, 08.2.1, 08.6.3 | 08.3.2, 08.3.3, 08.4.1, 09.3.1, 09.5.1 |
-| [08.3.2](08-healing-learning/08.3.2-bounded-validation-loop.md) | Bounded validation loop | M3 | 16 | yes | 3 | 08.3.1 | 08.4.3 |
-| [08.3.3](08-healing-learning/08.3.3-shadow-only-operation-and-measurement.md) | Shadow-only operation and measurement | M3 | 21 | — | 3.5 | 07.2.2, 08.3.1, 08.6.3, 12.5.1 | — |
-| [08.4.1](08-healing-learning/08.4.1-ast-allowlist-validator-for-playwright-ts.md) | AST allowlist validator for Playwright TS | M3 | 17 | — | 7 | 08.3.1 | 08.4.2, 08.5.4, 09.5.1 |
-| [08.4.2](08-healing-learning/08.4.2-assertion-hash-semantic-checks-and-negative.md) | Assertion hash, semantic checks and negative control | M3 | 18 | — | 5 | 08.1.2, 08.4.1 | 08.8.1, 09.5.1 |
-| [08.4.3](08-healing-learning/08.4.3-sandbox-replay.md) | Sandbox replay | M3 | 16 | yes | 3.5 | 04.9.1, 05.2.1, 08.3.2, 11.2.1 | 08.5.1, 08.5.4, 08.6.1, 08.8.1, 11.2.1 |
-| [08.5.1](08-healing-learning/08.5.1-llm-gateway.md) | LLM gateway | M4 | 16 | yes | 4 | 08.2.2, 08.4.3, 12.3.1 | 08.5.2, 08.5.3, 08.5.5, 08.6.3, 08.7.2, 11.4.1 |
-| [08.5.2](08-healing-learning/08.5.2-untrusted-context-injection-containment-and-tenant.md) | Untrusted context, injection containment and tenant filter | M4 | 17 | — | 3 | 08.2.1, 08.5.1 | 11.4.1 |
-| [08.5.3](08-healing-learning/08.5.3-redaction-and-per-tenant-opt-in.md) | Redaction and per-tenant opt-in | M4 | 17 | — | 5 | 08.5.1 | 11.4.1 |
-| [08.5.4](08-healing-learning/08.5.4-playwright-healer-as-one-sandboxed-generator.md) | Playwright healer as one sandboxed generator | M4 | 18 | — | 2 | 08.4.1, 08.4.3 | — |
-| [08.5.5](08-healing-learning/08.5.5-ai-credits-and-spend-control.md) | AI credits and spend control | M4 | 20 | — | 5.5 | 08.5.1, 08.6.3, 08.8.1, 10.7.1, 12.3.1 | — |
-| [08.6.1](08-healing-learning/08.6.1-validation-pr-and-approval-binding.md) | Validation PR and approval binding | M4 | 16 | yes | 6 | 03.4.2, 08.4.3, 08.6.3 | 08.6.2, 08.7.1, 09.5.2 |
-| [08.6.2](08-healing-learning/08.6.2-post-merge-canary-and-rollback.md) | Post-merge canary and rollback | M4 | 16 | yes | 3 | 08.6.1 | 08.7.1, 08.8.3 |
-| [08.6.3](08-healing-learning/08.6.3-kill-switches-and-degradation.md) | Kill switches and degradation | M3 | 16 | yes | 3 | 08.5.1, 10.7.1 | 08.3.1, 08.3.3, 08.5.5, 08.6.1, 09.5.2, 10.7.1 |
-| [08.7.1](08-healing-learning/08.7.1-knowledge-records-ranking-and-feedback.md) | Knowledge records, ranking and feedback | M4 | 16 | yes | 3.25 | 08.2.1, 08.6.1, 08.6.2 | 06.4.4, 08.7.2, 08.8.2 |
-| [08.7.2](08-healing-learning/08.7.2-lineage-and-revocation-cascade.md) | Lineage and revocation cascade | M4 | 17 | — | 2 | 08.5.1, 08.7.1 | 09.5.2 |
-| [08.8.1](08-healing-learning/08.8.1-evaluation-set-and-holdout.md) | Evaluation set and holdout | M3 | 19 | — | 4 | 08.4.2, 08.4.3 | 08.5.5, 08.8.2 |
-| [08.8.2](08-healing-learning/08.8.2-metrics-and-reporting.md) | Metrics and reporting | M4 | 20 | — | 3 | 08.7.1, 08.8.1 | 08.8.3 |
-| [08.8.3](08-healing-learning/08.8.3-phase-gates.md) | Phase gates | M4 | 21 | — | 1.5 | 08.6.2, 08.8.2 | 08.9.1 |
-| [08.9.1](08-healing-learning/08.9.1-narrow-context-reuse-of-approved-mappings.md) | Narrow-context reuse of approved mappings | M5 | 22 | — | 3 | 08.8.3 | 08.9.2 |
-| [08.9.2](08-healing-learning/08.9.2-mobile-locator-healing.md) | Mobile locator healing | M5 | 23 | — | 2 | 04.5.1, 08.9.1 | — |
-| [09.1.1](09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md) | App scaffold and build - acceptance: `npm ci && npm run build -w apps/web` runs `ng build` and produces a production bundle inside the W7 budgets; Vitest and Playwright configs run in CI (F-09-1). | M2 | 5 | — | 8.5 | 01.1.1, 01.3.2, 02.3.1 | 09.2.1, 09.3.1, 09.8.1, 09.9.1, 11.5.1 |
-| [09.2.1](09-web-ui/09.2.1-onboarding-wizard-acceptance-a-new-tenant.md) | Onboarding wizard - acceptance: a new tenant reaches an enabled collecting project through the five steps, resumable, each step showing the run/evidence it produced. | M2 | 18 | — | 9.5 | 02.4.1, 02.4.2, 03.1.1, 03.1.2, 04.4.1, 06.1.2, 07.1.1, 09.1.1, 09.3.1 | 12.2.1 |
-| [09.3.1](09-web-ui/09.3.1-run-detail-is-the-truth-surface.md) | Run detail is the truth surface - acceptance: for any run the page shows manifest, build digests, per-producer finalize state, every attempt and the stored evaluation without computing anything client-side. | M2 | 17 | — | 14 | 05.2.1, 05.3.1, 05.3.2, 05.4.1, 05.5.1, 06.5.1, 07.3.1, 07.3.2, 07.4.1, 07.5.2, 07.5.3, 08.3.1, 09.1.1 | 09.2.1, 09.4.1, 09.5.1, 09.5.2 |
-| [09.4.1](09-web-ui/09.4.1-triage-without-losing-the-original-failure.md) | Triage without losing the original failure - acceptance: from the inbox a failure can be labelled, assigned, investigated and either fixed or (V2) sent to healing, with the original evidence intact. | M3 | 18 | — | 7.5 | 06.2.1, 06.3.3, 08.1.1, 08.1.2, 08.2.2, 09.3.1 | 08.2.3 |
-| [09.5.1](09-web-ui/09.5.1-shadow-review-v1-acceptance-candidates-are.md) | Shadow review (V1) - acceptance: candidates are inspectable with validation and lineage, and no control can apply a patch in V1. | M3 | 19 | — | 4 | 08.3.1, 08.4.1, 08.4.2, 09.3.1 | — |
-| [09.5.2](09-web-ui/09.5.2-approval-v2-acceptance-approve-reject-binds.md) | Approval (V2) - acceptance: approve/reject binds to `candidate_hash` + base commit, is re-permissioned, and a stale hash is rejected with a visible conflict. | M4 | 18 | — | 4.5 | 08.6.1, 08.6.3, 08.7.2, 09.3.1 | — |
-| [09.6.1](09-web-ui/09.6.1-draft-to-review-to-merge-acceptance.md) | Draft to review to merge - acceptance: a draft created from a template can be edited, reviewed as a diff with its assertion hash, dry-run and then approved by another person. | M4 | 20 | — | 8 | 03.2.1, 03.5.1, 03.6.1, 03.7.1 | — |
-| [09.7.1](09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md) | Administer without seeing secrets - acceptance: an admin manages members, integrations, policy, quota, retention and audit; no screen can render a secret value. | M2 | 20 | — | 10 | 02.1.1, 02.1.2, 02.2.1, 02.4.2, 02.7.1, 05.7.3, 06.5.2, 07.1.1, 07.6.2, 07.6.3, 11.5.1, 12.3.1 | 09.7.2 |
-| [09.7.2](09-web-ui/09.7.2-api-tokens-and-deploy-targets-screens.md) | API tokens and deploy targets screens | M3 | 21 | — | 2 | 02.4.4, 07.8.1, 09.7.1 | — |
-| [09.8.1](09-web-ui/09.8.1-core-flows-are-usable-and-proven.md) | Core flows are usable and proven end to end - acceptance: axe-clean core flows, keyboard-only completion, and an E2E suite green in Evidgate's CI whose results are ingested into Evidgate. | M3 | 6 | — | 6 | 09.1.1 | — |
-| [09.9.1](09-web-ui/09.9.1-quality-overview-for-managers.md) | Quality overview for managers | M4 | 14 | — | 2.5 | 03.9.1, 07.5.2, 09.1.1 | — |
-| [10.1.1](10-operations/10.1.1-three-environments.md) | Three environments | M1 | 3 | — | 5 | 01.1.2 | 06.3.3, 10.1.2, 10.3.1, 10.5.1, 10.7.1, 11.3.1, 11.7.1 |
-| [10.1.2](10-operations/10.1.2-secrets-inventory-scanning-and-break-glass.md) | Secrets inventory, scanning and break-glass | M1 | 17 | — | 2.75 | 01.7.1, 10.1.1, 10.2.1, 10.7.1 | — |
-| [10.2.1](10-operations/10.2.1-images-and-provenance.md) | Images and provenance | M1 | 3 | — | 3 | 01.1.2 | 10.1.2, 10.2.2, 11.6.1 |
-| [10.2.2](10-operations/10.2.2-deploy-with-expand-contract-and-canary.md) | Deploy with expand/contract and canary | M1 | 17 | — | 7 | 01.4.1, 10.2.1, 10.3.1 | 07.7.2, 11.7.1 |
-| [10.3.1](10-operations/10.3.1-telemetry-and-alerting.md) | Telemetry and alerting | M1 | 16 | yes | 7 | 10.1.1, 10.3.2 | 06.5.2, 07.6.2, 10.2.2, 10.3.2, 10.4.1, 10.6.1, 10.7.1, 10.7.2, 10.9.1, 10.10.1, 11.5.2, 12.4.1 |
-| [10.3.2](10-operations/10.3.2-observability-backend-and-external-probe.md) | Observability backend and external probe | M1 | 16 | yes | 2 | 10.3.1, 10.4.1, 11.9.1 | 10.3.1 |
-| [10.4.1](10-operations/10.4.1-measured-service-targets.md) | Measured service targets | M2 | 16 | yes | 2 | 10.3.1 | 10.3.2 |
-| [10.5.1](10-operations/10.5.1-recoverability.md) | Recoverability | M2 | 4 | — | 5 | 10.1.1 | 06.4.4, 10.5.2, 10.6.1, 10.7.1, 11.3.1 |
-| [10.5.2](10-operations/10.5.2-object-storage-delete-protection-and-restore.md) | Object storage delete protection and restore | M3 | 5 | — | 2.5 | 10.5.1 | — |
-| [10.6.1](10-operations/10.6.1-proving-the-pilot-load.md) | Proving the pilot load | M2 | 17 | — | 5 | 10.3.1, 10.5.1 | 07.6.2, 12.4.1 |
-| [10.7.1](10-operations/10.7.1-operable-by-a-second-person.md) | Operable by a second person | M2 | 16 | yes | 5.5 | 01.5.1, 08.6.3, 10.1.1, 10.3.1, 10.5.1 | 02.5.1, 08.5.5, 08.6.3, 10.1.2, 11.3.1 |
-| [10.7.2](10-operations/10.7.2-paging-and-on-call-at-the-first-alert.md) | Paging and on-call at the first alert | M2 | 17 | — | 1.5 | 10.3.1, 11.9.1 | — |
-| [10.8.1](10-operations/10.8.1-decision-memo-no-vendor-chosen.md) | Decision memo, no vendor chosen | M1 | 1 | — | 3 | — | 10.11.1, 11.8.1 |
-| [10.9.1](10-operations/10.9.1-unit-economics.md) | Unit economics | M2 | 17 | — | 1.5 | 10.3.1 | — |
-| [10.10.1](10-operations/10.10.1-trigger-and-spike.md) | Trigger and spike | M2 | 17 | — | 1.5 | 10.3.1 | — |
-| [10.11.1](10-operations/10.11.1-ingress-and-abuse-limits.md) | Ingress and abuse limits | M2 | 10 | — | 2 | 04.1.2, 10.8.1 | — |
-| [11.1.1](11-security-compliance/11.1.1-a-living-threat-model-acceptance-v1.md) | A living threat model - acceptance: v1 covers every module and boundary, each threat maps to a control or a written acceptance, and it is re-reviewed at each milestone exit. | M1 | 6 | — | 4 | 02.1.1, 02.6.1, 02.7.1 | 06.3.3, 11.5.1, 11.7.1 |
-| [11.2.1](11-security-compliance/11.2.1-a-fork-pull-request-cannot-reach.md) | A fork pull request cannot reach our credentials - acceptance: the published recipe and the fork-PR test prove no Evidgate credential is reachable from an untrusted workflow context. | M1 | 16 | yes | 7.5 | 02.4.1, 02.4.2, 02.6.1, 03.4.1, 05.7.4, 08.4.3 | 04.9.1, 05.9.2, 08.4.3, 11.6.1 |
-| [11.3.1](11-security-compliance/11.3.1-secrets-never-leave-a-reference-acceptance.md) | Secrets never leave a reference - acceptance: no secret value is stored in the database, logged, or visible in an error envelope; leak response is rehearsed. | M2 | 16 | yes | 6 | 02.4.2, 04.1.1, 06.2.2, 06.2.3, 10.1.1, 10.5.1, 10.7.1 | 02.10.2, 03.3.1, 11.4.1 |
-| [11.4.1](11-security-compliance/11.4.1-a-model-cannot-change-the-product.md) | A model cannot change the product's mind - acceptance: the injection corpus produces zero policy/approval/permission/decision effects, and every outbound request is opt-in, redacted and audited. | M4 | 18 | — | 6 | 08.5.1, 08.5.2, 08.5.3, 11.3.1, 11.8.1 | 03.7.1 |
-| [11.5.1](11-security-compliance/11.5.1-who-saw-what-provably-acceptance-audit.md) | Who saw what, provably - acceptance: audit rows are append-only with before/after hashes, and any operator access is scoped, expiring, tenant-visible and audited. | M2 | 7 | — | 4.5 | 02.7.1, 02.8.1, 09.1.1, 11.1.1 | 09.7.1, 11.5.2, 11.9.1 |
-| [11.5.2](11-security-compliance/11.5.2-audit-chain-integrity-outside-its-own-database.md) | Audit chain integrity outside its own database | M2 | 17 | — | 2.5 | 10.3.1, 11.5.1 | 11.9.2 |
-| [11.6.1](11-security-compliance/11.6.1-every-dependency-is-a-decision-acceptance.md) | Every dependency is a decision - acceptance: licence allowlist and lockfile enforced in CI, actions pinned, SBOM produced per release. | M1 | 17 | — | 2.25 | 01.1.1, 01.7.1, 10.2.1, 11.2.1 | — |
-| [11.7.1](11-security-compliance/11.7.1-proved-against-isolation-not-asserted-acceptance.md) | Proved against isolation, not asserted - acceptance: the tenant-isolation red-team suite is green in CI, and an external pen test report exists with criticals/highs closed before pilot exit. | M2 | 18 | — | 6 | 01.6.1, 01.7.1, 02.9.1, 06.3.3, 10.1.1, 10.2.2, 11.1.1 | — |
-| [11.8.1](11-security-compliance/11.8.1-the-paperwork-exists-before-the-data.md) | The paperwork exists before the data does - acceptance: DPA, privacy notice, data map, dossiers and sub-processor list are versioned, counsel-reviewed and available before the first pilot upload. | M1 | 7 | — | 9 | 06.4.1, 10.8.1 | 11.4.1, 11.9.1, 12.2.1 |
-| [11.9.1](11-security-compliance/11.9.1-deletion-and-breach-are-runnable-procedures.md) | Deletion and breach are runnable procedures - acceptance: a deletion request produces a verifiable report, and a breach rehearsal completes the processor→controller notice inside the runbook's target. | M3 | 16 | yes | 5.5 | 06.4.4, 06.4.5, 11.5.1, 11.8.1 | 10.3.2, 10.7.2, 11.9.2 |
-| [11.9.2](11-security-compliance/11.9.2-data-subject-requests-pdpl.md) | Data-subject requests (PDPL) | M3 | 18 | — | 2 | 11.5.2, 11.9.1 | — |
-| [12.1.1](12-pilot-commercial/12.1.1-real-problems-real-reports-acceptance-5.md) | Real problems, real reports - acceptance: 5+ interviews recorded, real reports and failure samples collected with permission, and the CI/engine choice (O1) signed off by named teams. | M0 | 1 | — | 5 | — | — |
-| [12.2.1](12-pilot-commercial/12.2.1-a-pilot-that-can-be-measured.md) | A pilot that can be measured and paid for - acceptance: agreement + DPA signed before any upload, baseline captured for two sprints, weekly reviews held, support hours metered. | M1 | 19 | — | 5.5 | 09.2.1, 11.8.1, 12.3.1 | 12.5.1 |
-| [12.3.1](12-pilot-commercial/12.3.1-every-billed-unit-is-a-row.md) | Every billed unit is a row - acceptance: each metered metric produces exactly one ledger row per source with the applied price, and quota enforcement warns then blocks without losing data. | M2 | 16 | yes | 8.5 | 02.1.1, 04.8.1, 06.5.2 | 02.10.1, 04.8.1, 05.10.1, 06.5.2, 08.5.1, 08.5.5, 09.7.1, 12.2.1, 12.4.1, 12.5.1 |
-| [12.4.1](12-pilot-commercial/12.4.1-cost-is-known-before-price-is.md) | Cost is known before price is set - acceptance: measured cost per tenant, a pricing hypothesis pack, and manual invoices that reconcile to the ledger. | M3 | 18 | — | 4.5 | 10.3.1, 10.6.1, 12.3.1 | — |
-| [12.5.1](12-pilot-commercial/12.5.1-prove-the-value-or-stop-acceptance.md) | Prove the value or stop - acceptance: the M3 exit review reports every metric with its method, and a go/no-go for V2 with named conditions. | M3 | 20 | — | 4.5 | 08.2.2, 12.2.1, 12.3.1 | 08.3.3 |
-| [12.6.1](12-pilot-commercial/12.6.1-evidgate-is-ours-to-use-acceptance.md) | "Evidgate" is ours to use - acceptance: a search is done in classes 9/42, a VN application is filed before public launch, and the international decision is recorded. | M1 | 1 | — | 3.5 | — | — |
+| [01.1.1](01-foundation/01.1.1-toolchain-and-workspace.md) | Toolchain and workspace | G1 | 1 | — | 2.75 | — | 01.1.2, 01.2.1, 01.3.1, 01.3.2, 01.4.1, 01.6.1, 04.2.1, 09.1.1, 11.6.1 |
+| [01.1.2](01-foundation/01.1.2-two-process-skeleton.md) | Two-process skeleton | G1 | 2 | — | 4.5 | 01.1.1 | 02.3.1, 10.1.1, 10.2.1 |
+| [01.2.1](01-foundation/01.2.1-analyzers-format-types-and-architecture.md) | Analyzers, format, types and architecture | G1 | 2 | — | 3 | 01.1.1 | — |
+| [01.3.1](01-foundation/01.3.1-spec-and-schemas.md) | Spec and schemas | G1 | 2 | — | 3.5 | 01.1.1 | 01.3.2, 04.1.1, 04.7.1, 05.1.1, 07.5.2 |
+| [01.3.2](01-foundation/01.3.2-generated-sdk-validators-and-contract-tests.md) | Generated SDK, validators and contract tests | G1 | 3 | — | 6 | 01.1.1, 01.3.1 | 01.5.1, 09.1.1 |
+| [01.4.1](01-foundation/01.4.1-migrations-roles-and-rls.md) | Migrations, roles and RLS | G1 | 2 | — | 6 | 01.1.1 | 01.4.2, 01.6.1, 02.1.1, 03.1.1, 04.1.2, 06.1.1, 07.1.1, 10.2.2, 13.1.1 |
+| [01.4.2](01-foundation/01.4.2-tenant-scope-data-access-and-pipeline.md) | Tenant scope, data access and pipeline | G1 | 4 | yes | 6.5 | 01.4.1, 01.5.1 | 01.5.1, 02.6.2, 05.1.2 |
+| [01.5.1](01-foundation/01.5.1-durable-internal-tasks.md) | Durable internal tasks | G1 | 4 | yes | 7 | 01.3.2, 01.4.2 | 01.4.2, 02.10.1, 03.3.1, 05.2.1, 06.2.3, 06.3.6, 06.4.2, 06.5.2, 07.2.2, 07.6.2, 10.7.1 |
+| [01.6.1](01-foundation/01.6.1-integration-harness-and-fixtures.md) | Integration harness and fixtures | G1 | 3 | — | 5 | 01.1.1, 01.4.1 | 01.7.1, 04.1.3, 09.1.1, 11.7.1 |
+| [01.7.1](01-foundation/01.7.1-evidgate-s-own-pipeline.md) | Evidgate's own pipeline | G1 | 4 | — | 4.5 | 01.6.1 | 01.10.1, 04.6.1, 04.9.2, 10.1.2, 11.6.1, 11.7.1 |
+| [01.8.1](01-foundation/01.8.1-one-command-local-stack.md) | One-command local stack | G1 | 11 | — | 3 | 02.1.2, 02.4.1, 02.4.2, 07.1.1 | — |
+| [01.9.1](01-foundation/01.9.1-decision-records.md) | Decision records | G1 | 1 | — | 2 | — | — |
+| [01.10.1](01-foundation/01.10.1-evidgate-gates-evidgate.md) | Evidgate gates Evidgate | G2 | 5 | — | 3.5 | 01.7.1 | — |
+| [02.1.1](02-identity-tenancy/02.1.1-org-and-project-registry.md) | Org and project registry | G1 | 3 | yes | 2.5 | 01.4.1, 02.2.1 | 02.1.2, 02.2.1, 02.4.1, 02.4.3, 02.6.1, 02.9.1, 03.1.1, 03.4.1, 07.8.1, 09.7.1, 11.1.1, 12.3.1, 13.1.1 |
+| [02.1.2](02-identity-tenancy/02.1.2-membership-and-invites.md) | Membership and invites | G1 | 4 | yes | 2.5 | 02.1.1, 02.3.1, 02.3.2 | 01.8.1, 02.3.1, 02.3.3, 02.8.1, 02.10.1, 09.7.1 |
+| [02.2.1](02-identity-tenancy/02.2.1-permission-catalogue-and-enforcement.md) | Permission catalogue and enforcement | G1 | 3 | yes | 3 | 02.1.1 | 02.1.1, 02.4.1, 02.4.4, 02.5.1, 02.7.1, 02.9.1, 03.7.1, 06.2.1, 06.4.1, 07.3.1, 07.5.2, 07.6.3, 09.7.1, 13.1.1 |
+| [02.3.1](02-identity-tenancy/02.3.1-federated-login.md) | Federated login | G1 | 4 | yes | 3.5 | 01.1.2, 02.1.2 | 02.1.2, 02.3.2, 09.1.1 |
+| [02.3.2](02-identity-tenancy/02.3.2-sessions-and-revocation.md) | Sessions and revocation | G1 | 4 | yes | 1.5 | 02.3.1 | 02.1.2, 02.3.3 |
+| [02.3.3](02-identity-tenancy/02.3.3-enterprise-saml.md) | Enterprise SAML | G4 | 5 | — | 3 | 02.1.2, 02.3.2 | — |
+| [02.4.1](02-identity-tenancy/02.4.1-github-oidc-exchange.md) | GitHub OIDC exchange | G1 | 5 | — | 5 | 02.1.1, 02.2.1, 02.6.1 | 01.8.1, 02.4.2, 02.4.3, 02.5.1, 04.2.1, 05.2.2, 07.6.1, 09.2.1, 11.2.1 |
+| [02.4.2](02-identity-tenancy/02.4.2-non-github-ci-ingest-tokens.md) | Non-GitHub CI ingest tokens | G1 | 6 | — | 1 | 02.4.1 | 01.8.1, 02.4.4, 04.2.1, 09.2.1, 09.7.1, 11.2.1, 11.3.1 |
+| [02.4.3](02-identity-tenancy/02.4.3-github-app-installation.md) | GitHub App installation | G2 | 6 | — | 2 | 02.1.1, 02.4.1 | 05.5.2, 07.6.1 |
+| [02.4.4](02-identity-tenancy/02.4.4-api-tokens-for-automation.md) | API tokens for automation | G2 | 7 | — | 2.5 | 02.2.1, 02.4.2, 02.7.1 | 09.7.2 |
+| [02.5.1](02-identity-tenancy/02.5.1-agent-identity-per-tenant-and-pool.md) | Agent identity per tenant and pool | G4 | 16 | yes | 2 | 02.2.1, 02.4.1, 05.7.3, 10.7.1 | 05.7.4 |
+| [02.6.1](02-identity-tenancy/02.6.1-database-enforced-isolation.md) | Database-enforced isolation | G1 | 4 | — | 3.5 | 02.1.1 | 02.4.1, 02.6.2, 02.7.1, 02.9.1, 06.1.1, 07.1.1, 11.1.1, 11.2.1 |
+| [02.6.2](02-identity-tenancy/02.6.2-tenant-context.md) | Tenant context | G1 | 5 | — | 0.5 | 01.4.2, 02.6.1 | 02.8.1, 02.9.1 |
+| [02.7.1](02-identity-tenancy/02.7.1-audit-trail.md) | Audit trail | G1 | 5 | — | 2.5 | 02.2.1, 02.6.1 | 02.4.4, 02.8.1, 03.6.1, 05.3.1, 07.6.3, 07.8.1, 09.7.1, 11.1.1, 11.5.1, 13.1.1 |
+| [02.8.1](02-identity-tenancy/02.8.1-time-boxed-operator-access.md) | Time-boxed operator access | G2 | 6 | — | 2 | 02.1.2, 02.6.2, 02.7.1 | 02.10.1, 06.4.4, 09.7.1, 11.5.1 |
+| [02.9.1](02-identity-tenancy/02.9.1-isolation-suite.md) | Isolation suite | G1 | 6 | — | 3 | 02.1.1, 02.2.1, 02.6.1, 02.6.2 | 11.7.1 |
+| [02.10.1](02-identity-tenancy/02.10.1-one-outbound-email-channel.md) | One outbound email channel | G2 | 17 | — | 4.5 | 01.5.1, 02.1.2, 02.8.1, 12.3.1 | 02.10.2 |
+| [02.10.2](02-identity-tenancy/02.10.2-chat-notifications-slack-teams.md) | Chat notifications (Slack, Teams) | G4 | 18 | — | 1.5 | 02.10.1, 11.3.1 | — |
+| [03.1.1](03-catalog-authoring/03.1.1-stable-case-identity.md) | Stable case identity | G1 | 4 | — | 2.5 | 01.4.1, 02.1.1 | 03.1.2, 03.1.3, 03.1.4, 03.4.1, 03.5.1, 04.3.2, 09.2.1, 13.1.1 |
+| [03.1.2](03-catalog-authoring/03.1.2-imported-identity-and-mapping.md) | Imported identity and mapping | G1 | 12 | — | 2 | 03.1.1, 04.3.2, 04.4.1 | 09.2.1 |
+| [03.1.3](03-catalog-authoring/03.1.3-immutable-test-revisions.md) | Immutable test revisions | G1 | 5 | — | 1 | 03.1.1 | 03.2.1, 03.7.1, 04.3.2, 05.1.1, 13.1.1 |
+| [03.1.4](03-catalog-authoring/03.1.4-requirement-link-taxonomy-and-coverage-definition.md) | Requirement link, taxonomy and execution-coverage definition | G1 | 7 | — | 1.5 | 03.1.1, 03.2.1 | — |
+| [03.2.1](03-catalog-authoring/03.2.1-versioned-suites.md) | Versioned suites | G1 | 6 | — | 4 | 03.1.3 | 03.1.4, 03.3.1, 03.4.1, 03.6.1, 04.5.1, 05.1.1, 09.6.1 |
+| [03.3.1](03-catalog-authoring/03.3.1-fixtures-and-per-run-data.md) | Fixtures and per-run data | G2 | 16 | yes | 2.5 | 01.5.1, 03.2.1, 11.3.1 | 03.6.1 |
+| [03.4.1](03-catalog-authoring/03.4.1-commit-registration-and-catalog-sync.md) | Commit registration and catalog sync | G1 | 7 | — | 4 | 02.1.1, 03.1.1, 03.2.1 | 03.4.2, 03.6.1, 11.2.1 |
+| [03.4.2](03-catalog-authoring/03.4.2-pull-request-plumbing-v2.md) | Pull-request plumbing (V2) | G2 | 16 | yes | 1 | 03.4.1, 03.6.1 | 03.6.1, 08.6.1, 13.5.1 |
+| [03.5.1](03-catalog-authoring/03.5.1-template-library-and-git-flow.md) | Template library and Git flow | G4 | 12 | — | 3.5 | 03.1.1, 04.3.1, 04.4.1, 05.7.3 | 09.6.1 |
+| [03.6.1](03-catalog-authoring/03.6.1-draft-dry-run-pr.md) | Draft → dry run → PR | G2 | 16 | yes | 5 | 02.7.1, 03.2.1, 03.3.1, 03.4.1, 03.4.2, 05.7.3, 05.7.4 | 03.4.2, 03.7.1, 09.6.1 |
+| [03.7.1](03-catalog-authoring/03.7.1-ai-assisted-drafts.md) | AI-assisted drafts | G2 | 19 | — | 3.5 | 02.2.1, 03.1.3, 03.6.1, 11.4.1 | 03.8.1, 09.6.1, 13.5.1 |
+| [03.8.1](03-catalog-authoring/03.8.1-regression-candidates-from-confirmed-bugs.md) | Regression candidates from confirmed bugs | G4 | 20 | — | 3 | 03.7.1, 06.1.2, 07.2.1, 08.2.2 | — |
+| [03.9.1](03-catalog-authoring/03.9.1-case-result-history-and-baseline.md) | Case result history and baseline read model | G3 | 13 | — | 2.5 | 05.3.2, 06.4.6 | 03.9.2, 09.9.1 |
+| [03.9.2](03-catalog-authoring/03.9.2-historical-import-to-seed-baseline.md) | Historical import to seed a baseline | G3 | 14 | — | 2 | 03.9.1, 04.2.3, 04.4.2 | — |
+| [04.1.1](04-ingestion-adapters/04.1.1-atomic-batch-ingest-with-per-event.md) | Atomic batch ingest with per-event ack | G1 | 9 | yes | 5 | 01.3.1, 05.3.3 | 04.1.2, 04.1.3, 04.2.3, 04.3.3, 04.6.1, 04.8.1, 06.4.6, 11.3.1 |
+| [04.1.2](04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md) | Quota, epochs and observability | G1 | 9 | yes | 4 | 01.4.1, 04.1.1 | 05.2.1, 05.5.2, 06.1.2, 10.11.1 |
+| [04.1.3](04-ingestion-adapters/04.1.3-large-report-caps-and-streaming.md) | Large-report caps and streaming | G2 | 13 | — | 2.5 | 01.6.1, 04.1.1, 05.3.2 | — |
+| [04.2.1](04-ingestion-adapters/04.2.1-authenticate-from-ci.md) | Authenticate from CI | G2 | 7 | — | 1 | 01.1.1, 02.4.1, 02.4.2 | 04.2.2, 04.2.3, 04.2.4, 07.6.1, 13.5.1, 13.5.2 |
+| [04.2.2](04-ingestion-adapters/04.2.2-manifest-and-run.md) | Manifest and run | G2 | 10 | — | 1 | 04.2.1, 05.1.1, 05.2.1 | — |
+| [04.2.3](04-ingestion-adapters/04.2.3-spool-send-and-finalize.md) | Spool, send and finalize | G2 | 13 | — | 2.5 | 04.1.1, 04.2.1, 05.3.2 | 03.9.2, 04.2.4, 04.9.1, 05.5.2 |
+| [04.2.4](04-ingestion-adapters/04.2.4-artifacts-and-quickstart.md) | Artifacts and quickstart | G2 | 14 | — | 2.5 | 04.2.1, 04.2.3, 04.6.1, 06.1.1, 06.1.2 | 04.3.3, 04.9.2 |
+| [04.3.1](04-ingestion-adapters/04.3.1-custom-reporter-bound-to-the-documented.md) | Custom reporter bound to the documented API | G2 | 4 | — | 1 | 04.7.1 | 03.5.1, 05.7.6, 13.5.1, 13.5.2, 13.6.1 |
+| [04.3.2](04-ingestion-adapters/04.3.2-identity-retries-and-skips.md) | Identity, retries and skips | G1 | 6 | — | 3 | 03.1.1, 03.1.3 | 03.1.2 |
+| [04.3.3](04-ingestion-adapters/04.3.3-shards-and-attachments.md) | Shards and attachments | G2 | 15 | — | 2 | 04.1.1, 04.2.4 | — |
+| [04.4.1](04-ingestion-adapters/04.4.1-pytest-junitxml-mapping.md) | pytest `junitxml` mapping | G1 | 11 | — | 6.5 | 04.7.1, 06.1.2, 06.3.1 | 03.1.2, 03.5.1, 04.4.2, 09.2.1 |
+| [04.4.2](04-ingestion-adapters/04.4.2-reprocess-a-stored-raw-report.md) | Reprocess a stored raw report | G3 | 13 | — | 1 | 04.4.1, 05.3.2, 06.5.1 | 03.9.2 |
+| [04.5.1](04-ingestion-adapters/04.5.1-appium-adapter.md) | Appium adapter | G4 | 11 | — | 5 | 03.2.1, 04.6.1, 04.7.1, 05.8.1 | 06.3.5, 07.5.4, 08.9.2 |
+| [04.6.1](04-ingestion-adapters/04.6.1-per-producer-golden-set.md) | Per-producer golden set | G2 | 10 | — | 3.5 | 01.7.1, 04.1.1 | 04.2.4, 04.5.1 |
+| [04.7.1](04-ingestion-adapters/04.7.1-protocol-v1-contract.md) | Protocol v1 contract | G1 | 3 | — | 2.5 | 01.3.1 | 04.3.1, 04.4.1, 04.5.1, 05.7.1, 05.7.3, 06.2.2 |
+| [04.8.1](04-ingestion-adapters/04.8.1-idempotent-billing-key.md) | Idempotent billing key | G1 | 16 | yes | 1.5 | 04.1.1, 12.3.1 | 12.3.1 |
+| [04.9.1](04-ingestion-adapters/04.9.1-customer-side-replay-step.md) | Customer-side replay step (O10 option a) | G3 | 16 | yes | 4.5 | 04.2.3, 05.2.1, 11.2.1 | 08.4.3 |
+| [04.9.2](04-ingestion-adapters/04.9.2-cli-sdk-release-compatibility-and-docs.md) | CLI/SDK release, compatibility and customer docs | G3 | 15 | — | 3 | 01.7.1, 04.2.4 | — |
+| [05.1.1](05-runs-orchestration/05.1.1-verified-manifest.md) | Verified manifest | G1 | 7 | — | 6 | 01.3.1, 03.1.3, 03.2.1 | 04.2.2, 05.1.2, 05.2.1 |
+| [05.1.2](05-runs-orchestration/05.1.2-environment-revisions.md) | Environment revisions | G1 | 8 | — | 1.5 | 01.4.2, 05.1.1 | 05.2.1, 05.7.3 |
+| [05.2.1](05-runs-orchestration/05.2.1-one-transaction-run-creation.md) | One-transaction run creation | G1 | 9 | yes | 5 | 01.5.1, 04.1.2, 05.1.1, 05.1.2 | 04.2.2, 04.9.1, 05.2.2, 05.3.1, 05.3.2, 05.3.3, 05.5.2, 05.6.1, 06.1.2, 07.1.1, 07.2.2, 08.1.1, 08.4.3, 09.3.1 |
+| [05.2.2](05-runs-orchestration/05.2.2-branch-pr-and-commit-identity-of-a-run.md) | Branch, PR and commit identity of a run | G2 | 10 | — | 2.5 | 02.4.1, 05.2.1 | — |
+| [05.3.1](05-runs-orchestration/05.3.1-run-state-machine.md) | Run state machine | G2 | 10 | — | 2 | 02.7.1, 05.2.1 | 05.4.1, 09.3.1 |
+| [05.3.2](05-runs-orchestration/05.3.2-finalize-and-reconciliation.md) | Finalize and reconciliation | G2 | 12 | yes | 6 | 05.2.1, 06.5.1, 07.1.1 | 03.9.1, 04.1.3, 04.2.3, 04.4.2, 05.5.1, 05.10.1, 06.5.1, 07.2.1, 07.5.1, 08.1.1, 09.3.1 |
+| [05.3.3](05-runs-orchestration/05.3.3-case-attempts.md) | Case attempts | G1 | 9 | yes | 2 | 05.2.1 | 04.1.1, 06.5.1, 07.4.1, 07.4.2 |
+| [05.4.1](05-runs-orchestration/05.4.1-durable-cancel.md) | Durable cancel | G2 | 11 | — | 2.5 | 05.3.1 | 09.3.1 |
+| [05.5.1](05-runs-orchestration/05.5.1-rerun-with-parent-and-scope.md) | Rerun with parent and scope | G2 | 14 | — | 2 | 05.3.2, 07.4.1 | 05.5.2, 09.3.1 |
+| [05.5.2](05-runs-orchestration/05.5.2-ci-rerun-semantics-and-trigger.md) | CI re-run semantics and trigger | G2 | 15 | — | 3.5 | 02.4.3, 04.1.2, 04.2.3, 05.2.1, 05.5.1 | — |
+| [05.6.1](05-runs-orchestration/05.6.1-digest-bound-release.md) | Digest-bound release | G2 | 13 | — | 3 | 05.2.1, 07.2.1 | 07.5.3 |
+| [05.7.1](05-runs-orchestration/05.7.1-immutable-jobspec.md) | Immutable JobSpec | G2 | 4 | — | 2 | 04.7.1 | 05.7.2 |
+| [05.7.2](05-runs-orchestration/05.7.2-leasing-with-epoch-fencing.md) | Leasing with epoch fencing | G2 | 5 | — | 3 | 05.7.1 | 05.7.4, 05.10.1 |
+| [05.7.3](05-runs-orchestration/05.7.3-scheduling-capability-pools-fairness-timeouts.md) | Scheduling: capability, pools, fairness, timeouts | G4 | 9 | — | 5 | 04.7.1, 05.1.2 | 02.5.1, 03.5.1, 03.6.1, 05.8.1, 09.7.1 |
+| [05.7.4](05-runs-orchestration/05.7.4-evidgate-agent-executor.md) | `evidgate-agent` executor | G4 | 16 | yes | 5 | 02.5.1, 05.7.2, 06.1.1, 06.1.3 | 03.6.1, 05.7.5, 05.7.6, 06.3.5, 11.2.1 |
+| [05.7.5](05-runs-orchestration/05.7.5-cleanup-and-re-run-safety.md) | Cleanup and re-run safety | G4 | 17 | — | 2 | 05.7.4 | — |
+| [05.7.6](05-runs-orchestration/05.7.6-agent-end-to-end.md) | Agent end-to-end | G4 | 17 | — | 1 | 04.3.1, 05.7.4 | — |
+| [05.8.1](05-runs-orchestration/05.8.1-exclusive-device-lease.md) | Exclusive device lease | G4 | 10 | — | 3 | 05.7.3 | 04.5.1, 05.9.1 |
+| [05.9.1](05-runs-orchestration/05.9.1-macos-ios-pool-spike.md) | macOS/iOS pool spike | G4 | 11 | — | 1 | 05.8.1 | — |
+| [05.9.2](05-runs-orchestration/05.9.2-hosted-runner-spike.md) | Hosted runner spike | G4 | 17 | — | 1 | 11.2.1 | — |
+| [05.10.1](05-runs-orchestration/05.10.1-detect-and-repair-drift.md) | Detect and repair drift | G2 | 17 | — | 2.5 | 05.3.2, 05.7.2, 06.4.3, 12.3.1 | — |
+| [06.1.1](06-evidence-artifacts/06.1.1-artifact-record-and-server-chosen-keys.md) | Artifact record and server-chosen keys | G1 | 5 | — | 1.5 | 01.4.1, 02.6.1 | 04.2.4, 05.7.4, 06.1.2, 06.2.1, 06.2.2, 06.3.1, 06.4.1, 08.1.2 |
+| [06.1.2](06-evidence-artifacts/06.1.2-presigned-upload-and-completion.md) | Presigned upload and completion | G1 | 10 | — | 2.5 | 04.1.2, 05.2.1, 06.1.1 | 03.8.1, 04.2.4, 04.4.1, 06.1.3, 06.2.3, 06.5.1, 09.2.1, 13.3.1, 13.6.1 |
+| [06.1.3](06-evidence-artifacts/06.1.3-state-machine-guards.md) | State-machine guards | G2 | 11 | — | 0.5 | 06.1.2 | 05.7.4 |
+| [06.2.1](06-evidence-artifacts/06.2.1-sensitivity-classification-and-access-control.md) | Sensitivity classification and access control | G2 | 8 | — | 1.5 | 02.2.1, 06.1.1, 06.3.3 | 09.4.1 |
+| [06.2.2](06-evidence-artifacts/06.2.2-redaction-and-capture-control-at-source.md) | Redaction and capture control at source | G1 | 6 | — | 1 | 04.7.1, 06.1.1 | 11.3.1 |
+| [06.2.3](06-evidence-artifacts/06.2.3-secret-masking.md) | Secret masking | G1 | 11 | — | 1 | 01.5.1, 06.1.2 | 11.3.1 |
+| [06.3.1](06-evidence-artifacts/06.3.1-parser-hardening.md) | Parser hardening | G2 | 6 | — | 2 | 06.1.1 | 04.4.1, 06.3.2, 06.3.4, 06.3.6 |
+| [06.3.2](06-evidence-artifacts/06.3.2-hostile-input-fixtures.md) | Hostile-input fixtures | G2 | 7 | — | 1.5 | 06.3.1 | — |
+| [06.3.3](06-evidence-artifacts/06.3.3-isolated-viewer-origin.md) | Isolated viewer origin | G2 | 7 | — | 2 | 10.1.1, 11.1.1 | 06.2.1, 06.3.4, 09.4.1, 11.7.1 |
+| [06.3.4](06-evidence-artifacts/06.3.4-rendering-reports-and-traces.md) | Rendering reports and traces | G2 | 8 | — | 2 | 06.3.1, 06.3.3 | — |
+| [06.3.5](06-evidence-artifacts/06.3.5-mobile-artifact-kinds.md) | Mobile artifact kinds | G4 | 17 | — | 0.5 | 04.5.1, 05.7.4 | — |
+| [06.3.6](06-evidence-artifacts/06.3.6-parsers-run-in-a-resource-limited-child.md) | Parsers run in a resource-limited child with per-tenant concurrency | G2 | 7 | — | 3.5 | 01.5.1, 06.3.1 | — |
+| [06.4.1](06-evidence-artifacts/06.4.1-retention-policy.md) | Retention policy | G1 | 6 | — | 0.5 | 02.2.1, 06.1.1 | 06.4.2, 11.8.1 |
+| [06.4.2](06-evidence-artifacts/06.4.2-retention-deletion-job.md) | Retention deletion job | G1 | 7 | — | 1 | 01.5.1, 06.4.1 | 06.4.3, 06.4.4, 06.4.5, 06.4.6 |
+| [06.4.3](06-evidence-artifacts/06.4.3-orphan-sweeper.md) | Orphan sweeper | G1 | 8 | — | 1 | 06.4.2 | 05.10.1, 06.4.5 |
+| [06.4.4](06-evidence-artifacts/06.4.4-tenant-deletion.md) | Tenant deletion | G1 | 16 | yes | 2.5 | 02.8.1, 06.4.2, 08.7.1, 10.5.1 | 11.9.1 |
+| [06.4.5](06-evidence-artifacts/06.4.5-deletion-verification.md) | Deletion verification | G1 | 9 | — | 0.5 | 06.4.2, 06.4.3 | 11.9.1 |
+| [06.4.6](06-evidence-artifacts/06.4.6-retention-and-partitioning-for-high-volume-tables.md) | Retention and partitioning for high-volume tables | G2 | 10 | — | 2.5 | 04.1.1, 06.4.2 | 03.9.1 |
+| [06.5.1](06-evidence-artifacts/06.5.1-freeze-interface-with-05.md) | Freeze interface with 05 | G2 | 12 | yes | 2.5 | 05.3.2, 05.3.3, 06.1.2, 07.5.1 | 04.4.2, 05.3.2, 07.2.1, 09.3.1 |
+| [06.5.2](06-evidence-artifacts/06.5.2-storage-usage-metrics.md) | Storage usage metrics | G1 | 16 | yes | 1.5 | 01.5.1, 10.3.1, 12.3.1 | 09.7.1, 12.3.1 |
+| [07.1.1](07-policy-decisions/07.1.1-revision-record-hash-activation-and-pinning.md) | Revision record, hash, activation and pinning | G1 | 10 | — | 3 | 01.4.1, 02.6.1, 05.2.1 | 01.8.1, 05.3.2, 07.3.1, 07.8.1, 09.2.1, 09.7.1 |
+| [07.2.1](07-policy-decisions/07.2.1-pure-evaluation-completeness-outcome-decision.md) | Pure evaluation: completeness, outcome, decision | G2 | 12 | yes | 2 | 05.3.2, 06.5.1 | 03.8.1, 05.6.1, 07.2.2, 07.3.2, 07.4.1 |
+| [07.2.2](07-policy-decisions/07.2.2-persistence-idempotency-and-the-decision-matrix.md) | Persistence, idempotency and the decision matrix | G2 | 12 | yes | 2.75 | 01.5.1, 05.2.1, 07.2.1, 07.3.1 | 07.5.1, 07.5.2, 07.5.3, 07.6.1, 07.6.2, 07.7.1, 07.7.2, 08.3.3 |
+| [07.3.1](07-policy-decisions/07.3.1-waiver-and-quarantine-lifecycles.md) | Waiver and quarantine lifecycles | G4 | 11 | — | 2 | 02.2.1, 07.1.1 | 07.2.2, 07.3.2, 09.3.1 |
+| [07.3.2](07-policy-decisions/07.3.2-evaluator-effects-expiry-and-audit.md) | Evaluator effects, expiry and audit | G4 | 13 | — | 1.5 | 07.2.1, 07.3.1 | 09.3.1 |
+| [07.4.1](07-policy-decisions/07.4.1-in-run-flaky-detection-and-budget.md) | In-run flaky detection and budget | G2 | 13 | — | 2 | 05.3.3, 07.2.1 | 05.5.1, 07.4.2, 09.3.1 |
+| [07.4.2](07-policy-decisions/07.4.2-flaky-surface-and-cross-run-trend.md) | Flaky surface and cross-run trend | G4 | 14 | — | 1 | 05.3.3, 07.4.1 | — |
+| [07.5.1](07-policy-decisions/07.5.1-late-evidence-and-immutability.md) | Late evidence and immutability | G2 | 12 | yes | 1.5 | 05.3.2, 07.2.2 | 06.5.1 |
+| [07.5.2](07-policy-decisions/07.5.2-run-decision-api.md) | Run decision API | G3 | 13 | — | 0.5 | 01.3.1, 02.2.1, 07.2.2 | 07.6.1, 07.6.3, 09.3.1, 09.9.1 |
+| [07.5.3](07-policy-decisions/07.5.3-release-aggregation-and-decision-endpoint.md) | Release aggregation and decision endpoint | G4 | 14 | — | 1.5 | 05.6.1, 07.2.2 | 07.5.4, 07.8.1, 09.3.1 |
+| [07.5.4](07-policy-decisions/07.5.4-multi-component-releases-with-mobile-digests.md) | Multi-component releases with mobile digests | G4 | 15 | — | 0.5 | 04.5.1, 07.5.3 | — |
+| [07.6.1](07-policy-decisions/07.6.1-ci-delivery-github-and-the-cli.md) | CI delivery: GitHub and the CLI gate | G4 | 14 | — | 2 | 02.4.1, 02.4.3, 04.2.1, 07.2.2, 07.5.2 | 07.7.1, 07.8.1 |
+| [07.6.2](07-policy-decisions/07.6.2-outbound-webhooks-and-delivery-operations.md) | Outbound webhooks and delivery operations | G4 | 18 | — | 2 | 01.5.1, 07.2.2, 10.3.1, 10.6.1 | 07.6.3, 07.8.1, 09.7.1 |
+| [07.6.3](07-policy-decisions/07.6.3-webhook-endpoint-management-and-status-badge.md) | Webhook endpoint management and status badge | G4 | 19 | — | 2.5 | 02.2.1, 02.7.1, 07.5.2, 07.6.2 | 09.7.1 |
+| [07.7.1](07-policy-decisions/07.7.1-advisory-and-enforcing-modes.md) | Advisory and enforcing modes | G4 | 15 | — | 1 | 07.2.2, 07.6.1 | 07.7.2 |
+| [07.7.2](07-policy-decisions/07.7.2-shadow-evaluation-divergence-and-rollback.md) | Shadow evaluation, divergence and rollback | G4 | 18 | — | 1.5 | 07.2.2, 07.7.1, 10.2.2 | — |
+| [07.8.1](07-policy-decisions/07.8.1-promotion-gate-release-to-environment.md) | Promotion gate: release to environment | G4 | 19 | — | 4.5 | 02.1.1, 02.7.1, 07.1.1, 07.5.3, 07.6.1, 07.6.2 | 09.7.2 |
+| [08.1.1](08-healing-learning/08.1.1-incident-record-from-verified-failures.md) | Incident record from verified failures | G2 | 13 | — | 2.5 | 05.2.1, 05.3.2 | 08.1.2, 08.2.2, 08.3.1, 09.4.1 |
+| [08.1.2](08-healing-learning/08.1.2-filtered-context-capture-and-versioned-fingerprint.md) | Filtered context capture and versioned fingerprint | G2 | 14 | — | 6.5 | 06.1.1, 08.1.1 | 08.2.1, 08.4.2, 09.4.1, 13.6.1 |
+| [08.2.1](08-healing-learning/08.2.1-tenant-scoped-retrieval-and-ranker.md) | Tenant-scoped retrieval and ranker | G2 | 15 | — | 2.5 | 08.1.2 | 08.3.1, 08.5.2, 08.7.1 |
+| [08.2.2](08-healing-learning/08.2.2-triage-labels-with-provenance.md) | Triage labels with provenance | G3 | 14 | — | 4.5 | 08.1.1 | 03.8.1, 08.2.3, 08.5.1, 09.4.1, 12.5.1, 13.8.1 |
+| [08.2.3](08-healing-learning/08.2.3-external-issue-reference-on-an-incident.md) | External issue reference on an incident | G3 | 19 | — | 1 | 08.2.2, 09.4.1 | — |
+| [08.3.1](08-healing-learning/08.3.1-candidate-model-and-rule-based-generation.md) | Candidate model and rule-based generation | G2 | 16 | yes | 3 | 08.1.1, 08.2.1, 08.6.3 | 08.3.2, 08.3.3, 08.4.1, 09.3.1, 09.5.1, 13.8.1 |
+| [08.3.2](08-healing-learning/08.3.2-bounded-validation-loop.md) | Bounded validation loop | G3 | 16 | yes | 3 | 08.3.1 | 08.4.3 |
+| [08.3.3](08-healing-learning/08.3.3-shadow-only-operation-and-measurement.md) | Shadow-only operation and measurement | G3 | 21 | — | 3.5 | 07.2.2, 08.3.1, 08.6.3, 12.5.1 | — |
+| [08.4.1](08-healing-learning/08.4.1-ast-allowlist-validator-for-playwright-ts.md) | AST allowlist validator for Playwright TS | G2 | 17 | — | 7 | 08.3.1 | 08.4.2, 08.5.4, 09.5.1, 13.5.1 |
+| [08.4.2](08-healing-learning/08.4.2-assertion-hash-semantic-checks-and-negative.md) | Assertion hash, semantic checks and negative control | G3 | 18 | — | 5 | 08.1.2, 08.4.1 | 08.8.1, 09.5.1 |
+| [08.4.3](08-healing-learning/08.4.3-sandbox-replay.md) | Sandbox replay | G3 | 16 | yes | 3.5 | 04.9.1, 05.2.1, 08.3.2, 11.2.1 | 08.5.4, 08.6.1, 08.8.1, 11.2.1 |
+| [08.5.1](08-healing-learning/08.5.1-llm-gateway.md) | LLM gateway | G1 | 16 | yes | 4 | 08.2.2, 12.3.1 | 08.5.2, 08.5.3, 08.5.5, 08.6.3, 08.7.2, 11.4.1, 13.2.1, 13.3.1, 13.5.1, 13.7.2 |
+| [08.5.2](08-healing-learning/08.5.2-untrusted-context-injection-containment-and-tenant.md) | Untrusted context, injection containment and tenant filter | G1 | 17 | — | 3 | 08.2.1, 08.5.1 | 11.4.1 |
+| [08.5.3](08-healing-learning/08.5.3-redaction-and-per-tenant-opt-in.md) | Redaction and per-tenant opt-in | G1 | 17 | — | 5 | 08.5.1 | 11.4.1 |
+| [08.5.4](08-healing-learning/08.5.4-playwright-healer-as-one-sandboxed-generator.md) | Playwright healer as one sandboxed generator | G4 | 18 | — | 2 | 08.4.1, 08.4.3 | — |
+| [08.5.5](08-healing-learning/08.5.5-ai-credits-and-spend-control.md) | AI credits and spend control | G1 | 20 | — | 5.5 | 08.5.1, 08.6.3, 08.8.1, 10.7.1, 12.3.1 | 13.3.1, 13.5.1 |
+| [08.6.1](08-healing-learning/08.6.1-validation-pr-and-approval-binding.md) | Validation PR and approval binding | G3 | 16 | yes | 6 | 03.4.2, 08.4.3, 08.6.3 | 08.6.2, 08.7.1, 09.5.2, 13.8.2 |
+| [08.6.2](08-healing-learning/08.6.2-post-merge-canary-and-rollback.md) | Post-merge canary and rollback | G3 | 16 | yes | 3 | 08.6.1 | 08.7.1, 08.8.3 |
+| [08.6.3](08-healing-learning/08.6.3-kill-switches-and-degradation.md) | Kill switches and degradation | G1 | 16 | yes | 3 | 08.5.1, 10.7.1 | 08.3.1, 08.3.3, 08.5.5, 08.6.1, 09.5.2, 10.7.1 |
+| [08.7.1](08-healing-learning/08.7.1-knowledge-records-ranking-and-feedback.md) | Knowledge records, ranking and feedback | G3 | 16 | yes | 3.25 | 08.2.1, 08.6.1, 08.6.2 | 06.4.4, 08.7.2, 08.8.2 |
+| [08.7.2](08-healing-learning/08.7.2-lineage-and-revocation-cascade.md) | Lineage and revocation cascade | G3 | 17 | — | 2 | 08.5.1, 08.7.1 | 09.5.2 |
+| [08.8.1](08-healing-learning/08.8.1-evaluation-set-and-holdout.md) | Evaluation set and holdout | G3 | 19 | — | 4 | 08.4.2, 08.4.3 | 08.5.5, 08.8.2, 13.7.2, 13.8.1, 13.9.1 |
+| [08.8.2](08-healing-learning/08.8.2-metrics-and-reporting.md) | Metrics and reporting | G3 | 20 | — | 3 | 08.7.1, 08.8.1 | 08.8.3 |
+| [08.8.3](08-healing-learning/08.8.3-phase-gates.md) | Phase gates | G3 | 21 | — | 1.5 | 08.6.2, 08.8.2 | 08.9.1 |
+| [08.9.1](08-healing-learning/08.9.1-narrow-context-reuse-of-approved-mappings.md) | Narrow-context reuse of approved mappings | G4 | 22 | — | 3 | 08.8.3 | 08.9.2 |
+| [08.9.2](08-healing-learning/08.9.2-mobile-locator-healing.md) | Mobile locator healing | G4 | 23 | — | 2 | 04.5.1, 08.9.1 | — |
+| [09.1.1](09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md) | App scaffold and build - acceptance: `npm ci && npm run build -w apps/web` runs `ng build` and produces a production bundle inside the W7 budgets; Vitest and Playwright configs run in CI (F-09-1). | G1 | 5 | — | 11 | 01.1.1, 01.3.2, 01.6.1, 02.3.1 | 09.2.1, 09.3.1, 09.8.1, 09.9.1, 11.5.1, 13.4.1 |
+| [09.2.1](09-web-ui/09.2.1-onboarding-wizard-acceptance-a-new-tenant.md) | Onboarding wizard - acceptance: a new tenant reaches an enabled collecting project through the five steps, resumable, each step showing the run/evidence it produced. | G1 | 18 | — | 10.5 | 02.4.1, 02.4.2, 03.1.1, 03.1.2, 04.4.1, 06.1.2, 07.1.1, 09.1.1, 09.3.1 | 12.2.1 |
+| [09.3.1](09-web-ui/09.3.1-run-detail-is-the-truth-surface.md) | Run detail is the truth surface - acceptance: for any run the page shows manifest, build digests, per-producer finalize state, every attempt and the stored evaluation without computing anything client-side. | G2 | 17 | — | 15 | 05.2.1, 05.3.1, 05.3.2, 05.4.1, 05.5.1, 06.5.1, 07.3.1, 07.3.2, 07.4.1, 07.5.2, 07.5.3, 08.3.1, 09.1.1 | 09.2.1, 09.4.1, 09.5.1, 09.5.2 |
+| [09.4.1](09-web-ui/09.4.1-triage-without-losing-the-original-failure.md) | Triage without losing the original failure - acceptance: from the inbox a failure can be labelled, assigned, investigated and either fixed or (V2) sent to healing, with the original evidence intact. | G3 | 18 | — | 8 | 06.2.1, 06.3.3, 08.1.1, 08.1.2, 08.2.2, 09.3.1 | 08.2.3 |
+| [09.5.1](09-web-ui/09.5.1-shadow-review-v1-acceptance-candidates-are.md) | Shadow review (V1) - acceptance: candidates are inspectable with validation and lineage, and no control can apply a patch in V1. | G3 | 19 | — | 4 | 08.3.1, 08.4.1, 08.4.2, 09.3.1 | 13.8.2 |
+| [09.5.2](09-web-ui/09.5.2-approval-v2-acceptance-approve-reject-binds.md) | Approval (V2) - acceptance: approve/reject binds to `candidate_hash` + base commit, is re-permissioned, and a stale hash is rejected with a visible conflict. | G3 | 18 | — | 4.5 | 08.6.1, 08.6.3, 08.7.2, 09.3.1 | — |
+| [09.6.1](09-web-ui/09.6.1-draft-to-review-to-merge-acceptance.md) | Draft to review to merge - acceptance: a draft created from a template can be edited, reviewed as a diff with its assertion hash, dry-run and then approved by another person. | G4 | 20 | — | 8 | 03.2.1, 03.5.1, 03.6.1, 03.7.1 | — |
+| [09.7.1](09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md) | Administer without seeing secrets - acceptance: an admin manages members, integrations, policy, quota, retention and audit; no screen can render a secret value. | G1 | 20 | — | 11.5 | 02.1.1, 02.1.2, 02.2.1, 02.4.2, 02.7.1, 02.8.1, 05.7.3, 06.5.2, 07.1.1, 07.6.2, 07.6.3, 11.5.1, 12.3.1 | 09.7.2 |
+| [09.7.2](09-web-ui/09.7.2-api-tokens-and-deploy-targets-screens.md) | API tokens and deploy targets screens | G4 | 21 | — | 2 | 02.4.4, 07.8.1, 09.7.1 | — |
+| [09.8.1](09-web-ui/09.8.1-core-flows-are-usable-and-proven.md) | Core flows are usable and proven end to end - acceptance: axe-clean core flows, keyboard-only completion, and an E2E suite green in Evidgate's CI whose results are ingested into Evidgate. | G3 | 6 | — | 6 | 09.1.1 | — |
+| [09.9.1](09-web-ui/09.9.1-quality-overview-for-managers.md) | Quality overview for managers | G4 | 14 | — | 2.5 | 03.9.1, 07.5.2, 09.1.1 | — |
+| [10.1.1](10-operations/10.1.1-three-environments.md) | Three environments | G1 | 3 | — | 5 | 01.1.2 | 06.3.3, 10.1.2, 10.3.1, 10.5.1, 10.7.1, 11.3.1, 11.7.1 |
+| [10.1.2](10-operations/10.1.2-secrets-inventory-scanning-and-break-glass.md) | Secrets inventory, scanning and break-glass | G1 | 17 | — | 2.75 | 01.7.1, 10.1.1, 10.2.1, 10.7.1 | — |
+| [10.2.1](10-operations/10.2.1-images-and-provenance.md) | Images and provenance | G1 | 3 | — | 3 | 01.1.2 | 10.1.2, 10.2.2, 11.6.1 |
+| [10.2.2](10-operations/10.2.2-deploy-with-expand-contract-and-canary.md) | Deploy with expand/contract and canary | G1 | 17 | — | 7 | 01.4.1, 10.2.1, 10.3.1 | 07.7.2, 11.7.1 |
+| [10.3.1](10-operations/10.3.1-telemetry-and-alerting.md) | Telemetry and alerting | G1 | 16 | yes | 7 | 10.1.1, 10.3.2 | 06.5.2, 07.6.2, 10.2.2, 10.3.2, 10.4.1, 10.6.1, 10.7.1, 10.7.2, 10.9.1, 10.10.1, 11.5.2, 12.4.1 |
+| [10.3.2](10-operations/10.3.2-observability-backend-and-external-probe.md) | Observability backend and external probe | G1 | 16 | yes | 2 | 10.3.1, 10.4.1, 11.9.1 | 10.3.1 |
+| [10.4.1](10-operations/10.4.1-measured-service-targets.md) | Measured service targets | G1 | 16 | yes | 2 | 10.3.1 | 10.3.2 |
+| [10.5.1](10-operations/10.5.1-recoverability.md) | Recoverability | G1 | 4 | — | 5 | 10.1.1 | 06.4.4, 10.5.2, 10.6.1, 10.7.1, 11.3.1 |
+| [10.5.2](10-operations/10.5.2-object-storage-delete-protection-and-restore.md) | Object storage delete protection and restore | G2 | 5 | — | 2.5 | 10.5.1 | — |
+| [10.6.1](10-operations/10.6.1-proving-the-pilot-load.md) | Proving the pilot load | G2 | 17 | — | 5 | 10.3.1, 10.5.1 | 07.6.2, 12.4.1 |
+| [10.7.1](10-operations/10.7.1-operable-by-a-second-person.md) | Operable by a second person | G1 | 16 | yes | 5.5 | 01.5.1, 08.6.3, 10.1.1, 10.3.1, 10.5.1 | 02.5.1, 08.5.5, 08.6.3, 10.1.2, 11.3.1 |
+| [10.7.2](10-operations/10.7.2-paging-and-on-call-at-the-first-alert.md) | Paging and on-call at the first alert | G2 | 17 | — | 1.5 | 10.3.1, 11.9.1 | — |
+| [10.8.1](10-operations/10.8.1-decision-memo-no-vendor-chosen.md) | Decision memo, no vendor chosen | G1 | 1 | — | 3 | — | 10.11.1, 11.8.1 |
+| [10.9.1](10-operations/10.9.1-unit-economics.md) | Unit economics | G2 | 17 | — | 1.5 | 10.3.1 | — |
+| [10.10.1](10-operations/10.10.1-trigger-and-spike.md) | Trigger and spike | G4 | 17 | — | 1.5 | 10.3.1 | — |
+| [10.11.1](10-operations/10.11.1-ingress-and-abuse-limits.md) | Ingress and abuse limits | G1 | 10 | — | 2 | 04.1.2, 10.8.1 | — |
+| [11.1.1](11-security-compliance/11.1.1-a-living-threat-model-acceptance-v1.md) | A living threat model - acceptance: v1 covers every module and boundary, each threat maps to a control or a written acceptance, and it is re-reviewed at each milestone exit. | G1 | 6 | — | 4 | 02.1.1, 02.6.1, 02.7.1 | 06.3.3, 11.5.1, 11.7.1 |
+| [11.2.1](11-security-compliance/11.2.1-a-fork-pull-request-cannot-reach.md) | A fork pull request cannot reach our credentials - acceptance: the published recipe and the fork-PR test prove no Evidgate credential is reachable from an untrusted workflow context. | G1 | 16 | yes | 7.5 | 02.4.1, 02.4.2, 02.6.1, 03.4.1, 05.7.4, 08.4.3 | 04.9.1, 05.9.2, 08.4.3, 11.6.1 |
+| [11.3.1](11-security-compliance/11.3.1-secrets-never-leave-a-reference-acceptance.md) | Secrets never leave a reference - acceptance: no secret value is stored in the database, logged, or visible in an error envelope; leak response is rehearsed. | G1 | 16 | yes | 6 | 02.4.2, 04.1.1, 06.2.2, 06.2.3, 10.1.1, 10.5.1, 10.7.1 | 02.10.2, 03.3.1, 11.4.1 |
+| [11.4.1](11-security-compliance/11.4.1-a-model-cannot-change-the-product.md) | A model cannot change the product's mind - acceptance: the injection corpus produces zero policy/approval/permission/decision effects, and every outbound request is opt-in, redacted and audited. | G1 | 18 | — | 6 | 08.5.1, 08.5.2, 08.5.3, 11.3.1, 11.8.1 | 03.7.1, 13.3.1 |
+| [11.5.1](11-security-compliance/11.5.1-who-saw-what-provably-acceptance-audit.md) | Who saw what, provably - acceptance: audit rows are append-only with before/after hashes, and any operator access is scoped, expiring, tenant-visible and audited. | G1 | 7 | — | 4.5 | 02.7.1, 02.8.1, 09.1.1, 11.1.1 | 09.7.1, 11.5.2, 11.9.1 |
+| [11.5.2](11-security-compliance/11.5.2-audit-chain-integrity-outside-its-own-database.md) | Audit chain integrity outside its own database | G1 | 17 | — | 2.5 | 10.3.1, 11.5.1 | 11.9.2 |
+| [11.6.1](11-security-compliance/11.6.1-every-dependency-is-a-decision-acceptance.md) | Every dependency is a decision - acceptance: licence allowlist and lockfile enforced in CI, actions pinned, SBOM produced per release. | G1 | 17 | — | 2.25 | 01.1.1, 01.7.1, 10.2.1, 11.2.1 | — |
+| [11.7.1](11-security-compliance/11.7.1-proved-against-isolation-not-asserted-acceptance.md) | Proved against isolation, not asserted - acceptance: the tenant-isolation red-team suite is green in CI, and an external pen test report exists with criticals/highs closed before pilot exit. | G4 | 18 | — | 6 | 01.6.1, 01.7.1, 02.9.1, 06.3.3, 10.1.1, 10.2.2, 11.1.1 | — |
+| [11.8.1](11-security-compliance/11.8.1-the-paperwork-exists-before-the-data.md) | The paperwork exists before the data does - acceptance: DPA, privacy notice, data map, dossiers and sub-processor list are versioned, counsel-reviewed and available before the first pilot upload. | G1 | 7 | — | 9 | 06.4.1, 10.8.1 | 11.4.1, 11.9.1, 12.2.1 |
+| [11.9.1](11-security-compliance/11.9.1-deletion-and-breach-are-runnable-procedures.md) | Deletion and breach are runnable procedures - acceptance: a deletion request produces a verifiable report, and a breach rehearsal completes the processor→controller notice inside the runbook's target. | G1 | 16 | yes | 5.5 | 06.4.4, 06.4.5, 11.5.1, 11.8.1 | 10.3.2, 10.7.2, 11.9.2 |
+| [11.9.2](11-security-compliance/11.9.2-data-subject-requests-pdpl.md) | Data-subject requests (PDPL) | G1 | 18 | — | 2 | 11.5.2, 11.9.1 | — |
+| [12.1.1](12-pilot-commercial/12.1.1-real-problems-real-reports-acceptance-5.md) | Real problems, real reports - acceptance: 5+ interviews recorded, real reports and failure samples collected with permission, and the CI/engine choice (O1) signed off by named teams. | G4 | 1 | — | 5 | — | — |
+| [12.2.1](12-pilot-commercial/12.2.1-a-pilot-that-can-be-measured.md) | A pilot that can be measured and paid for - acceptance: agreement + DPA signed before any upload, baseline captured for two sprints, weekly reviews held, support hours metered. | G1 | 19 | — | 5.5 | 09.2.1, 11.8.1, 12.3.1 | 12.5.1 |
+| [12.3.1](12-pilot-commercial/12.3.1-every-billed-unit-is-a-row.md) | Every billed unit is a row - acceptance: each metered metric produces exactly one ledger row per source with the applied price, and quota enforcement warns then blocks without losing data. | G1 | 16 | yes | 8.5 | 02.1.1, 04.8.1, 06.5.2 | 02.10.1, 04.8.1, 05.10.1, 06.5.2, 08.5.1, 08.5.5, 09.7.1, 12.2.1, 12.4.1, 12.5.1 |
+| [12.4.1](12-pilot-commercial/12.4.1-cost-is-known-before-price-is.md) | Cost is known before price is set - acceptance: measured cost per tenant, a pricing hypothesis pack, and manual invoices that reconcile to the ledger. | G2 | 18 | — | 4.5 | 10.3.1, 10.6.1, 12.3.1 | — |
+| [12.5.1](12-pilot-commercial/12.5.1-prove-the-value-or-stop-acceptance.md) | Prove the value or stop - acceptance: the M3 exit review reports every metric with its method, and a go/no-go for V2 with named conditions. | G3 | 20 | — | 4.5 | 08.2.2, 12.2.1, 12.3.1 | 08.3.3 |
+| [12.6.1](12-pilot-commercial/12.6.1-evidgate-is-ours-to-use-acceptance.md) | "Evidgate" is ours to use - acceptance: a search is done in classes 9/42, a VN application is filed before public launch, and the international decision is recorded. | G1 | 1 | — | 3.5 | — | — |
+| 13.1.1 (feature plan pending) | Feature tree and manual test cases | G1 | 6 | — | 6.5 | 01.4.1, 02.1.1, 02.2.1, 02.7.1, 03.1.1, 03.1.3 | 13.1.2, 13.2.1, 13.3.1, 13.4.1, 13.5.1, 13.9.1 |
+| 13.1.2 (feature plan pending) | Batched review | G1 | 7 | — | 1.5 | 13.1.1 | 13.4.1, 13.8.1 |
+| 13.2.1 (feature plan pending) | Versioned project AI settings | G1 | 17 | — | 1.5 | 08.5.1, 13.1.1 | 13.3.1, 13.4.1 |
+| 13.3.1 (feature plan pending) | Generation pipeline | G1 | 21 | — | 7 | 06.1.2, 08.5.1, 08.5.5, 11.4.1, 13.1.1, 13.2.1 | 13.4.1 |
+| 13.4.1 (feature plan pending) | Authoring UI | G1 | 22 | — | 9 | 09.1.1, 13.1.1, 13.1.2, 13.2.1, 13.3.1 | — |
+| 13.5.1 (feature plan pending) | Test case → bound Playwright script | G2 | 21 | — | 8.5 | 03.4.2, 03.7.1, 04.2.1, 04.3.1, 08.4.1, 08.5.1, 08.5.5, 13.1.1 | 13.9.1 |
+| 13.5.2 (feature plan pending) | Local runs | G2 | 8 | — | 2.5 | 04.2.1, 04.3.1 | — |
+| 13.6.1 (feature plan pending) | Element profiles | G2 | 15 | — | 5 | 04.3.1, 06.1.2, 08.1.2 | 13.7.2, 13.8.1 |
+| 13.7.1 (feature plan pending) | Mobile spike (mobile-mcp / mobilewright) | G2 | 1 | — | 2 | — | — |
+| 13.7.2 (feature plan pending) | Multimodal locate fallback | G3 | 20 | — | 3 | 08.5.1, 08.8.1, 13.6.1 | — |
+| 13.8.1 (feature plan pending) | Locator drift vs UI change | G3 | 20 | — | 5 | 08.2.2, 08.3.1, 08.8.1, 13.1.2, 13.6.1 | 13.8.2, 13.9.1 |
+| 13.8.2 (feature plan pending) | Review evidence | G3 | 21 | — | 2 | 08.6.1, 09.5.1, 13.8.1 | — |
+| 13.9.1 (feature plan pending) | Gate metrics | G1 | 22 | — | 1.5 | 08.8.1, 13.1.1, 13.5.1, 13.8.1 | — |

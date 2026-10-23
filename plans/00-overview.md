@@ -20,7 +20,7 @@
 
 ### 1.2 Gaps found and how this plan set closes them
 
-| # | Gap in the source | Impact | Closed by |
+| Gap # (not a CR-D-2 phase) | Gap in the source | Impact | Closed by |
 |---|---|---|---|
 | G1 | Working name collides with an existing QA-adjacent company | Trademark and search confusion | DECISIONS §2 (Evidgate) |
 | G2 | No versions, libraries or package manager; "Node.js LTS" while Node 24 leaves Active LTS on 2026-10-20 | Inconsistent setups, early upgrade | DECISIONS §4 |
@@ -36,10 +36,10 @@
 
 ### 1.3 Scope decisions
 
-- [DECISION] Delivery order follows the source milestones (§4). One developer keeps V1 ingest/reporting and shadow healing before any editor or multi-platform agent (source §12).
+- [DECISION] Delivery order follows the source milestones (§4); CR-D-2 keeps the source's priority order and re-maps it onto the phases of §4, authoring first (2026-10-23). One developer keeps V1 ingest/reporting and shadow healing before any editor or multi-platform agent (source §12).
 - [DECISION] V1 supports **GitHub Actions** + **Playwright TypeScript** + **one JUnit XML producer** (pytest `junitxml` assumed; confirmed in M0, O1). Playwright as the UI engine is an owner decision (2026-09-26), not a pilot input; a customer's CI and extra producers are configured per project.
 - [DECISION] Web and API tests in agent mode are V2; Android agent mode is V2 *conditional* on a paying need; iOS and hosted runners are V3 (M5).
-- [DECISION] Test Studio in V1 = templates + Git flow only; the draft editor and AI drafts are V2.
+- [DECISION] Test Studio in V1 = templates + Git flow only; the draft editor and AI drafts are V2 (the authoring tree, batched review and requirement → checklist → test case generation are G1 under CR-D-2, 13.1–13.4).
 - [DECISION] Missing-features review 2026-10-02: V1 CI integration stays GitHub Actions; GitLab, Jenkins and Azure DevOps are per-project configuration only (the CLI is CI-neutral) and not promised. Manual test results, Evidgate-scheduled runs (customers use their own cron) and a Jira/Linear connector are not planned before V3; V1 carries only a manual external issue link (08.2.3). Slack/Teams is V2 (02.10.2).
 - Out of scope for V1-V2: hosted runners, device farm, own browser/API engine, fine-tuned models, n8n/Temporal/Kafka/Kubernetes, SAML, on-premise.
 
@@ -57,7 +57,7 @@
 | `platform_operator` (Evidgate staff) | Support access with scope + expiry, audited | No tenant data by default |
 | `billing_operator` (Evidgate staff) | Read usage ledger and invoice data across tenants (`billing:read`) | No artifact or test data access; every read audited (12) |
 
-Permissions are strings `resource:action` (for example `run:create`, `job:claim`, `healing:approve`); roles are sets of permissions defined in 02. `contracts/permissions.json` is the single source of permission strings; built-in roles are seeded from it (02 D2). A member can hold several roles; the permission check is per project. Healing uses four strings: `healing:triage` (`qa_engineer`), `healing:approve` / `healing:revoke` (`test_maintainer`), `healing:configure` (`tenant_admin`, kill switch). `project:read` (every member role) and `project:write` (`tenant_admin`) read/change project settings such as retention (06, TL T21). Further strings (TL T59): `policy:read` (every member role), `policy:write` (`release_approver` only), `quarantine:write` (`test_maintainer`; 07.3.1 — a code of its own so quarantine writes never carry waiver or policy-revision power), `case:write` and `draft:write` (`qa_engineer`, `test_maintainer`), `ingest_token:read`, `service_identity:read`, `service_identity:write`, `support:read`, `membership:read` (`tenant_admin`), `sso:read`, `sso:write` (`tenant_admin`, V3); `agent_pool:read` (`tenant_admin`, `test_maintainer`), `agent_pool:write` (`tenant_admin`), `job:cleanup` (`qa_engineer`, `test_maintainer`) (V2); `webhook:read`, `webhook:write` (`tenant_admin`, 07.6.2); `billing:write` (`billing_operator`, operator routes only, two-person for adjustments and statements; 12, T69); `project:create` (`tenant_admin`) creates projects in an org. `environment:write` (`tenant_admin`, `test_maintainer`) creates environment revisions (05.1.2-T1); `security_event:read` is `tenant_admin` only (11.5.1-T5). `billing:read` (`billing_operator` only) reads usage ledger and invoice data across tenants, every read audited (12). Catalog strings (`case:*`, `suite:*`, `fixture:write`, `draft:*`, `ai_draft:request`) and their default role mapping are owned by 03 §4.5 (03 §13 CR-5).
+Permissions are strings `resource:action` (for example `run:create`, `job:claim`, `healing:approve`); roles are sets of permissions defined in 02. `contracts/permissions.json` is the single source of permission strings; built-in roles are seeded from it (02 D2). A member can hold several roles; the permission check is per project. Healing uses four strings: `healing:triage` (`qa_engineer`), `healing:approve` / `healing:revoke` (`test_maintainer`), `healing:configure` (`tenant_admin`, kill switch). `project:read` (every member role) and `project:write` (`tenant_admin`) read/change project settings such as retention (06, TL T21). Further strings (TL T59): `policy:read` (every member role), `policy:write` (`release_approver` only), `quarantine:write` (`test_maintainer`; 07.3.1 — a code of its own so quarantine writes never carry waiver or policy-revision power), `case:write` and `draft:write` (`qa_engineer`, `test_maintainer`), `ingest_token:read`, `service_identity:read`, `service_identity:write`, `support:read`, `membership:read` (`tenant_admin`), `sso:read`, `sso:write` (`tenant_admin`, V3); `agent_pool:read` (`tenant_admin`, `test_maintainer`), `agent_pool:write` (`tenant_admin`), `job:cleanup` (`qa_engineer`, `test_maintainer`) (V2); `webhook:read`, `webhook:write` (`tenant_admin`, 07.6.2); `billing:write` (`billing_operator`, operator routes only, two-person for adjustments and statements; 12, T69); `project:create` (`tenant_admin`) creates projects in an org. `environment:write` (`tenant_admin`, `test_maintainer`) creates environment revisions (05.1.2-T1); `security_event:read` is `tenant_admin` only (11.5.1-T5). `billing:read` (`billing_operator` only) reads usage ledger and invoice data across tenants, every read audited (12). Catalog strings (`case:*`, `suite:*`, `fixture:write`, `draft:*`, `ai_draft:request`) and their default role mapping are owned by 03 §4.5 (03 §13 CR-5). Authoring strings (CR-D-2, [13 §13](13-product-phases.md) CR-2; seeded by 13.1.1-T2, role mapping `[INFERENCE]` mirroring 03 §4.5): `authoring:read` — every member role (`viewer`, `qa_engineer`, `test_maintainer`, `release_approver`, `tenant_admin`); `authoring:write` and `authoring:generate` — `qa_engineer`, `test_maintainer`, `tenant_admin` (generation spends AI credits, 08.5.5); `script:generate` — `test_maintainer`, `tenant_admin` (writes only to a customer repository as a pull request, 13.5.1). `release_approver` writes nothing here, matching its read-only cells in 03 §4.5.
 
 ## 3. Glossary (canonical names; code, API and UI use these)
 
@@ -96,25 +96,35 @@ Permissions are strings `resource:action` (for example `run:create`, `job:claim`
 | dry run | Sandbox execution of a draft to prove syntax, discovery and a first pass before review. |
 | catalog sync | Webhook-driven import of the merged commit into case and suite revisions. |
 | case import identity | Provisional identity for an imported result without `evidgate.id`, keyed by producer + suite + name. |
+| feature node | One node of a project's authoring tree: module → feature → category → sub-category, holding checklist items (13.1.1). |
+| checklist item | A prioritised, reviewable requirement statement under a feature node; changed only through a batched pending change that applies as one version (13.1.1, 13.1.2). |
+| manual test case | Human-authored test case (precondition, steps with action / expected / data, priority) under a checklist item; may link to a `test_case` identity (13.1.1). |
+| authoring version | Immutable snapshot of a project's authoring tree, checklist and manual test cases after a batched change; part of the provenance of everything generated from it (13.1.1). |
+| element profile | Content-free fingerprint of one bound element — its accessibility subtree and structural attributes — recorded per generated-script step on a green run; the input to drift classification, never a locator on its own (13.6.1). |
+| generated script | Playwright TypeScript script generated from an approved manual test case against the live application, every step bound to a real element; reaches the customer repository only as a pull request and follows §8.11 (13.5.1). |
+| locator drift | A bound element still exists with the same role and accessible name but its markup or position moved: a candidate locator plus a matching test case edit is proposed (13.8.1). |
+| UI change | The element or its meaning changed on purpose (role, name or flow): the drift yields a test case review proposal and no script repair (13.8.1). |
 
-## 4. Versions and milestones
+## 4. Versions and phases (CR-D-2)
 
-| Milestone | Weeks | Reviewable output | Exit gate |
-|---|---|---|---|
-| M0 | 1-2 | Interviews, real reports and failures, CI/engine chosen, contracts drafted (`contracts/`) | A team commits to provide data and trial paying (12.1) |
-| M1 | 3-5 | Schema, identity, manifest, CLI, first adapter | Mapping fixtures, dedupe and tenant isolation tests pass |
-| M2 | 6-8 | Reports, artifacts, advisory policy, audit | A run with missing evidence never yields PASS; a restore drill passes |
-| M3 | 9-12 | **V1 pilot**; incident labels; shadow healing | Customer uses it repeatedly; cost and quality measured |
-| M4 | 13-18 | **V2**: agent web/API, draft workflow, healing PR | Validation and approval bound to hash; rollback drill passes |
-| M5 | after V2 review | Deeper Android; iOS/hosted runners or V3 on demand | Paying demand and safety evidence (08 gate) |
+Phases are the plan sequence. They are sequence plus exit gates, not dates (DECISIONS O8, decided 2026-09-25), and a phase does not start before the previous gate passes. [`13-product-phases.md`](13-product-phases.md) is the master plan: [13 §4.3](13-product-phases.md) states these gates, [13 §4.4](13-product-phases.md) assigns every story of plans 01–12 to a phase, and 13.9.1 computes each gate metric from stored data.
 
-The Weeks column is the source's sequence, not a date commitment (DECISIONS O8, decided 2026-09-25). It does **not** fit the scope: M1 alone is 142 raw person-days (§14). For an arithmetic re-baseline (buffer, focus factor, critical path) see `plans/REVIEW-2026-10-02.md` §4 `[INFERENCE]`.
+| Phase | Go when | Stop / pivot signal |
+|---|---|---|
+| G1 Author | At least 5 external teams use authoring for at least 3 weeks and export or use the test cases | Fewer than 3 teams return after week 1 |
+| G2 Run | At least 70 % of generated scripts pass 3 of 3 runs on one build without manual edits; at least 3 teams agree to pay | Most scripts need manual repair |
+| G3 Learn and repair | 0 adjudicated false repairs on the 08.8.1 corpus over at least 300 proposals, with the rule-of-three caveat (08.8.2-T2); acceptance rate reported, not gated; threshold stays O6 `[OPEN]` | Any false repair whose cause is not understood and fixed |
+| G4 Expand | Paying demand per item | — |
 
-**M4 entry gate `[INFERENCE]`, review 2026-10-02:** V2 work starts only when (1) at least one external team has sent real CI results for 4 consecutive weeks (`docs/decisions/O1-pilot-profile.md`), (2) the shadow-healing corpus (08.8.1) has at least 30 adjudicated candidates from real or pilot failures and a measured false-accept rate of 0 on the named rejection tests, (3) the restore drill (10.5.1-T3) and object restore test (10.5.2-T2) passed in the last 30 days, (4) the kill-switch drill (10.7.1-T5) passed, and (5) hosting (O3) is decided. Numeric M3/M5 gate targets live in the O1 acceptance sheet; thresholds are `[INFERENCE]` until the pilot sets them.
+`[DECISION]` CR-D-2 (owner, 2026-10-23): G1–G2 replace the V1 build order, G3 takes the place of the V2 healing milestone (M4), G4 covers the remaining V2 and V3 scope (`[INFERENCE]` mapping, `docs/decisions/CR-D-2-direction-a.md` §4). Versions and phases therefore do not nest: V1 tasks sit in all four phases (raw G1 252.0 · G2 184.0 · G3 72.5 · G4 48.75, §14), and V2/V3 tasks are pulled into G1 where the authoring gate needs them (13 §4.4) — the phase gate itself demands nothing beyond its row. Mobile is G4 only (`adapter-mobile`, mobilewright / mobile-mcp), after the 13.7.1 go / no-go memo; hosted runners stay behind A5 and a paid need.
 
-Version tags on every task: `V1` (needed for M3), `V2` (M4), `V3` (M5+). Each task also names its milestone.
+**G3 entry gate `[INFERENCE]`, review 2026-10-02 (written when it was the M4 gate):** repair proposals are offered only when (1) at least one external team has sent real CI results for 4 consecutive weeks (`docs/decisions/O1-pilot-profile.md`), (2) the shadow-healing corpus (08.8.1) has at least 30 adjudicated candidates from real or pilot failures and a measured false-accept rate of 0 on the named rejection tests, (3) the restore drill (10.5.1-T3) and object restore test (10.5.2-T2) passed in the last 30 days, (4) the kill-switch drill (10.7.1-T5) passed, and (5) hosting (O3) is decided. Numeric phase-gate targets live in the O1 acceptance sheet; thresholds are `[INFERENCE]` until the pilot sets them.
 
-Stop rule: a milestone ends only when its exit gate passes. The schedule never replaces a quality condition (source §12).
+Version tags on every task: `V1` (first paid scope), `V2`, `V3` (later). Each task also names its phase in the Milestone column; the phase is the sequence, the version is not.
+
+Stop rule: a phase ends only when its exit gate passes. The schedule never replaces a quality condition (source §12).
+
+> **Pre-CR-D-2 sequence (historical).** M0–M5 was the plan sequence before CR-D-2 and is retired as such; older prose in plans 01–12 and `plans/features/`, `docs/security/threat-model-v1.md`, `STATUS.md` history and §15 rows still use the labels, so their gate wording is kept here: M0 "A team commits to provide data and trial paying (12.1)"; M1 "Mapping fixtures, dedupe and tenant isolation tests pass"; M2 "A run with missing evidence never yields PASS; a restore drill passes"; M3 "Customer uses it repeatedly; cost and quality measured"; M4 "Validation and approval bound to hash; rollback drill passes"; M5 "Paying demand and safety evidence (08 gate)". Its weeks column was the source's sequence, not a date commitment, and never fitted the scope (M1 alone was 142 raw person-days); the arithmetic re-baseline is in `plans/REVIEW-2026-10-02.md` §4. Mapping `[INFERENCE]`: M0–M1 → G1, M2–M3 → G2, M4 → G3, M5 → G4. Record: [`docs/decisions/CR-D-2-direction-a.md`](../docs/decisions/CR-D-2-direction-a.md).
 
 ## 5. Architecture contract
 
@@ -298,6 +308,10 @@ Ingest token: `active → rotated → revoked`, `active → expired`. Session: `
 
 Draft: `draft → dry_running → dry_passed | dry_failed → pr_open → merged | closed`; `dry_failed → dry_running` (re-run) and `pr_open → draft` (PR withdrawn) are allowed (03.6.1). Case import identity: `unmapped → mapped | conflicted`. Catalog sync: `queued → running → done | failed`. Data namespace: `active → cleaned | cleanup_failed`. Suite revision: `draft → published` (immutable once published). Fixture revision: immutable on create (TL T46).
 
+### 8.11 Authoring and generated scripts (13, CR-3)
+
+`authoring_change` (a batched pending change on an authoring tree): `pending → applied | discarded`; `applied` writes exactly one immutable authoring version under `If-Match`, and a stale apply changes nothing (13.1.2). `generated_script`: `draft → active | flaky → retired` — `draft` is the PR candidate, `active` needs 3 of 3 green runs on one build after merge, `flaky` is set or cleared by the run policy, `retired` is terminal and the script is never run again (13.5.1). Element profile revisions are immutable and per green run; the latest green profile per step is the comparison base (13.6.1). A repair proposal is an 08.7 candidate: it never changes a script state by itself.
+
 ## 9. API contract (conventions)
 
 ### 9.1 General
@@ -440,24 +454,25 @@ Sub-tasks [DECISION] (CR-D-1): in §10 of a feature plan, every area-plan task `
 
 ## 13. Plan index
 
-| File | Scope | Main milestones |
+| File | Scope | Main phases (CR-D-2, §4) |
 |---|---|---|
-| `01-foundation.md` | Repo, toolchain, contracts pipeline, CI, local stack, licence check, dogfooding | M0-M1 |
-| `02-identity-tenancy.md` | Orgs, projects, membership, roles, OIDC login, CI token exchange, RLS, audit core | M1-M2 |
-| `03-catalog-authoring.md` | Stable case ids, revisions, suites, variants, templates, draft workflow, AI drafts | M1, M4 |
-| `04-ingestion-adapters.md` | Event API, CLI, Playwright reporter, JUnit mapper, Appium mapper, fixtures | M1-M3, M4 |
-| `05-runs-orchestration.md` | Manifest, run lifecycle, finalize/reconcile, cancel/rerun, agent + leasing | M1-M2, M4 |
-| `06-evidence-artifacts.md` | Upload/complete, retention, isolated viewer, redaction, safe parsing | M2 |
-| `07-policy-decisions.md` | Policy revisions, evaluator, waivers, quarantine, late evidence, webhooks | M2-M3 |
-| `08-healing-learning.md` | Incidents, labels, shadow healing, candidates, validator, PR flow, eval set, kill switch | M3-M5 |
-| `09-web-ui.md` | Screens and UX rules | M2-M4 |
-| `10-operations.md` | Environments, deploy, observability, backup/restore, load tests, capacity | M1-M3 |
-| `11-security-compliance.md` | Threat model, untrusted CI, secrets, PDPL/DPA, pen test | M1-M4 |
-| `12-pilot-commercial.md` | M0 discovery, pilot, usage ledger, pricing, value measurement, trademark | M0-M4 |
+| `01-foundation.md` | Repo, toolchain, contracts pipeline, CI, local stack, licence check, dogfooding | G1-G2 |
+| `02-identity-tenancy.md` | Orgs, projects, membership, roles, OIDC login, CI token exchange, RLS, audit core | G1-G2, G4 |
+| `03-catalog-authoring.md` | Stable case ids, revisions, suites, variants, templates, draft workflow, AI drafts (authoring model and generation move to 13) | G1-G4 |
+| `04-ingestion-adapters.md` | Event API, CLI, Playwright reporter, JUnit mapper, Appium mapper, fixtures (script generation and `evidgate run` move to 13.5) | G1-G4 |
+| `05-runs-orchestration.md` | Manifest, run lifecycle, finalize/reconcile, cancel/rerun, agent + leasing | G1-G2, G4 |
+| `06-evidence-artifacts.md` | Upload/complete, retention, isolated viewer, redaction, safe parsing | G1-G2 |
+| `07-policy-decisions.md` | Policy revisions, evaluator, waivers, quarantine, late evidence, webhooks | G1-G2, G4 |
+| `08-healing-learning.md` | Incidents, labels, shadow healing, candidates, validator, PR flow, eval set, kill switch | G1-G4 |
+| `09-web-ui.md` | Screens and UX rules (authoring and repair review screens, 13.4) | G1-G4 |
+| `10-operations.md` | Environments, deploy, observability, backup/restore, load tests, capacity | G1-G2, G4 |
+| `11-security-compliance.md` | Threat model, untrusted CI, secrets, PDPL/DPA, pen test | G1-G2, G4 |
+| `12-pilot-commercial.md` | Pilot cohort, usage ledger, pricing, value measurement, trademark | G1-G4 |
+| `13-product-phases.md` | Master plan for CR-D-2: authoring model, AI settings, requirement → checklist → test case, authoring screens (G1); script generation, local/CI runs, element profiles, mobile spike (G2); multimodal fallback, drift classification, repair proposals (G3); phase gates | G1-G3 |
 
 ## 14. Estimate roll-up
 
-Recomputed by `scripts/plan_graph.py` from every task row of 01-12 (sizes per §6; person-days, one senior full-stack .NET + Angular developer, CR-D-1). Each plan's §12 table matches these sums.
+Recomputed by `scripts/plan_graph.py` from every task row of 01-13 (sizes per §6; person-days, one senior full-stack .NET + Angular developer, CR-D-1). Each plan's §12 table matches these sums.
 
 | Plan | Tasks | V1 | V2 | V3 | Total raw | Total buffered |
 |---|---|---|---|---|---|---|
@@ -473,12 +488,13 @@ Recomputed by `scripts/plan_graph.py` from every task row of 01-12 (sizes per §
 | `10-operations.md` | 54 | 53.25 | 2 | 1 | 56.25 | 67.5 |
 | `11-security-compliance.md` | 51 | 45.25 | 9 | 1 | 55.25 | 66.3 |
 | `12-pilot-commercial.md` | 30 | 29.5 | 2 | 0 | 31.5 | 37.8 |
-| **Total** | **601** | **502.25** | **120.75** | **13.25** | **636.25** | **763.5** |
-| Buffered (× 1.2) | | 602.7 | 144.9 | 15.9 | | |
+| `13-product-phases.md` | 44 | 55 | 0 | 0 | 55 | 66.0 |
+| **Total** | **645** | **557.25** | **120.75** | **13.25** | **691.25** | **829.5** |
+| Buffered (× 1.2) | | 668.7 | 144.9 | 15.9 | | |
 
-By milestone (raw): M0 10.5 · M1 147.5 · M2 178.75 · M3 165.5 · M4 120.75 · M5 13.25. Every V1 task sits in M0-M3, every V2 task in M4, every V3 task in M5; no task depends on a task in a later milestone and the task dependency graph has no cycles (`scripts/plan_graph.py`, 2026-09-25, after CR-D-1 and the TL review rulings; re-checked 2026-10-07).
+By milestone (raw): G1 271.75 · G2 193.5 · G3 106.75 · G4 119.25. Every V1 task is placed by phase rather than by version: V1 work spans all four phases (raw G1 252.0 · G2 184.0 · G3 72.5 · G4 48.75), V2 spans G1–G4 and V3 sits in G1, G3 and G4; no task depends on a task in a later phase and the task dependency graph has no cycles (`scripts/plan_graph.py`, 2026-10-23, after CR-D-2: 645 tasks, 691.25 raw / 829.5 buffered).
 
-**Calendar check [INFERENCE] (arithmetic, not a forecast):** buffered V1 is 602.7 person-days (499.8 before CR-D-1 and the TL review). At 5 working days per week and full parallelism, that is ≈ 60.3 weeks for 2 engineers and ≈ 40.2 weeks for 3, against the source's M0-M3 = 12 weeks (§4). V2 buffered (144.9 d) is ≈ 14.5 / 9.7 weeks against M4 = 6 weeks. **The source calendar does not fit this scope with 2-3 engineers.** Options for the owner (O8): (a) cut V1 to the M3 pilot's critical path (ingest → evidence → decision for one engine; UI screens, cost model and ASVS mapping trimmed), (b) keep scope and treat §4 weeks as sequence only (source §1 already says milestones are priority order, not a commitment), or (c) add engineers. **O8 decided 2026-09-25: option (b)** — scope is kept and milestones are ordering and exit gates, not dates; the §4 weeks column is the source's sequence. Calendar dates are set after O2 (team size). A V1 cut was simulated and does not reach 12 weeks (DECISIONS O8).
+**Calendar check [INFERENCE] (arithmetic, not a forecast):** buffered V1 is 668.7 person-days (499.8 before CR-D-1 and the TL review). At 5 working days per week and full parallelism, that is ≈ 66.9 weeks for 2 engineers and ≈ 44.6 weeks for 3, against the source's 12 weeks to the M3 pilot (§4, pre-CR-D-2 sequence). V2 buffered (144.9 d) is ≈ 14.5 / 9.7 weeks against the source's 6 weeks for M4 (§4, pre-CR-D-2; now G3). **The source calendar does not fit this scope with 2-3 engineers.** Options for the owner (O8): (a) cut V1 to the M3 pilot's critical path (ingest → evidence → decision for one engine; UI screens, cost model and ASVS mapping trimmed), (b) keep scope and treat the source's weeks as sequence only (source §1 already says milestones are priority order, not a commitment), or (c) add engineers. **O8 decided 2026-09-25: option (b)** — scope is kept and milestones are ordering and exit gates, not dates; the source's weeks are sequence only (kept in the historical note of §4). Calendar dates are set after O2 (team size). A V1 cut was simulated and does not reach 12 weeks (DECISIONS O8).
 
 **Not in these numbers:** hiring, device farm, legal counsel for the DPA/transfer dossiers, pen-test vendor fees, trademark fees, platform/vendor waiting time.
 
@@ -540,3 +556,4 @@ By milestone (raw): M0 10.5 · M1 147.5 · M2 178.75 · M3 165.5 · M4 120.75 ·
 | 2026-10-14 | **Parser profile error code (06.3.1-T1):** §9.2 gains the additive 422 code `artifact_invalid` (`retryable: false`), the parse-profile failure of the new public `IParsing` surface on `Evidgate.Modules.Evidence.Contracts` (`ParseXmlReport`, `ParseJson`, `SniffMediaType`); `contracts/openapi.yaml` registers the code in the `POST /v1/artifacts/{a}/complete` description. It is returned by in-process parser callers only — no HTTP route returns it at T1 (the `complete` route turns a sniff mismatch into a committed 200 with `state: rejected` + `media_type_mismatch` and never parses the object). `IObjectStorage` gains `ReadPrefixAsync(string objectKey, int maxBytes, CancellationToken)` (a ranged `bytes=0-(maxBytes-1)` GET, `maxBytes` 1..65536, null when the object is absent) so the sniffer reads the staging object's prefix before the copy and the final object's prefix after it, outside the tenant transaction. No endpoint, schema or permission change. | Tech Lead (06.3.1-T1) |
 | 2026-10-14 | **Run list filters (05.2.2-T2, S48):** `GET /v1/projects/{p}/runs` moves from a declared-but-unserved route to the documented shape — optional, AND-combined, exact-match filters `ref_name`, `pr_number`, `head_sha`, `trigger_event`, `is_fork` (AC6 gains `head_sha` as an additive amendment of the AC), the 00 §9.1 keyset cursor and `limit`, order `(created_at, id)` ascending, and the item projection `run_id`, `state`, `created_at`, `ref` (all seven members, `null` where unknown) and `unverified_ref`; an ill-typed, blank or out-of-range filter value, a garbled cursor or `limit` is 422 `request_invalid` with `details[].path` naming the parameter — no new error code. `RunSummary` therefore gains `created_at`, `ref` and `unverified_ref`, while its `decision`, `rerun_label`, `reprocess_label` and `parent_run_id` members stay absent until 07 / 05.5.2-T2 / 04 / 05.5.1-T2 fill them. §9.3's runs row documents filters and projection. Migration `0038` adds `run_project_ref_idx (project_id, ref_name, created_at, id)` (plain `create index` in the runner's one transaction per file, since `create index concurrently` cannot run there, migrations/README.md; `org_id` is deliberately not a key column) and serves only the `ref_name` keyset path: a `trigger_event`-only filter is cheap and the unfiltered ascending list reads ~52 rows/page through 0031's descending `run_project_created_idx (org_id, project_id, created_at desc, id)` (backward scan + Incremental Sort, so it needs no index), while `pr_number` or `head_sha` without `ref_name` scans the whole project (~100 000 rows, 24–176 ms at 100 000 runs/project on a Postgres 17 scratch instance `[INFERENCE]`) — handed over (09.3.1-T1.1, plan Notes). `packages/sdk/gen` regenerated. No permission change. | Tech Lead (05.2.2-T2) |
 | 2026-10-14 | **Artifact kind defaults and upload-url body cap (06.1.2-T3): no endpoint shape change, no new error code:** the static per-kind defaults behind the `artifact_kind_policy` fallback are fixed in code and mirrored in the new `contracts/evidence/artifact-kind-defaults.v1.json` — `trace` 100 MiB / `application/zip`, `video` 200 MiB / `video/mp4`, `screenshot` 10 MiB / `image/png` + `image/jpeg`, `raw_report` 256 MiB / XML family + JSON family + `text/html` + zip (DECISIONS §8.1 D-A9 / OI-06-03 / 06-O3, ratified D-S46-Q1); media types are limited to what `MediaSniffer.HasSignature` accepts (06.3.1-T2). A kind with no default (`dom_snapshot`, `a11y_snapshot`, `patch`, `ui_hierarchy`) and no project row stays 422 `kind_disabled` (an open owner decision, receiving 06.3.5-T1.1 + 06.2.1-T1); D-A9's `log` has no kind in the §7 closed list and `html_report` folds into `raw_report`. A project row always wins for `media_types`/`capture_enabled` and can only LOWER `max_bytes` (`effective = min(row, default)`). `POST /v1/artifacts/upload-url` gains an 8 KiB request-body cap, refused as 413 `payload_too_large` (00 §9.2) before deserialisation. | Tech Lead (06.1.2-T3) |
+| 2026-10-23 | **CR-D-2 (owner): direction (a) — authoring and self-learning repair.** `plans/13-product-phases.md` added as the master plan; phases G1 Author / G2 Run / G3 Learn and repair / G4 Expand replace milestones M0-M5 as the Milestone value in every plan (§4 rewritten from 13 §4.3; the M sequence survives as a historical note because older prose and this log cite its gates). §3 gains `feature node`, `checklist item`, `manual test case`, `authoring version`, `element profile`, `generated script`, `locator drift`, `UI change` (CR-1); §2 gains `authoring:read`, `authoring:write`, `authoring:generate` and `script:generate` with their default roles (CR-2); new §8.11 holds the `authoring_change` and `generated_script` states (CR-3); §13 index gains the 13 row with phases; §14 recomputed by `scripts/regen_docs.py` — 645 tasks, 691.25 raw / 829.5 buffered. 03.7.1-T1/T2 are superseded by 13.3.1; 08.5.1-T1 now depends on 12.3.1-T1 only; the mobile spike 13.7.1 (mobile-mcp / mobilewright) runs in G2 with `adapter-mobile` at G4 after its go / no-go memo, and the multimodal locate fallback 13.7.2 is G3. Record: `docs/decisions/CR-D-2-direction-a.md`. | Owner (via Tech Lead) |

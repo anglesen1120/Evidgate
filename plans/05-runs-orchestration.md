@@ -1,9 +1,11 @@
-# 05 - Runs and Orchestration (M1-M4)
+# 05 - Runs and Orchestration (G1–G2, G4)
 
 > Contracts: `00-overview.md` §5.3 (outbox + `task` queue table vs lease tables), §5.5 (CQRS), §7 (hashes, idempotency), §8.1-§8.2 (run and job states), §8.5 (evidence completeness), §9.3 (endpoints), §9.4 (producer-slot binding), §10 (adapter protocol), §11 (NFR).
 > Facts: `../DECISIONS.md` §3 (A5, A8, A9, A10), §4 (stack: .NET 10 + CQRS, EF Core 10 writes / Dapper reads, own task queue, engines), §6 F6 (`FOR UPDATE SKIP LOCKED`), §9 (capacity arithmetic).
 > Source: design §4 (job/adapter contract, JobSpec, isolation, agent disconnect), §5 (run lifecycle, cancel/rerun, release components), §6 (run creation, data model), §7 (consistency and recovery: outbox, scheduler, deadlines, consistency jobs).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
+
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 10 · G2 30.5 · G4 21 person-days.
 
 ## 1. Purpose and scope
 
@@ -46,10 +48,10 @@
 | D3 | Reconciler is a separate, idempotent component keyed by `(run_id, producer_id)` | Finalize order is not guaranteed; at-least-once delivery (A10) | Reconcile inside the finalize request |
 | D4 | Completeness lives in the evidence revision (persisted by 05 from 06's freeze result), not on the run | Run state and evidence completeness must not be collapsed into one field (A8) | A `complete` boolean on `run` |
 | D5 | Runner job leasing is our own `job`/`job_lease` tables, not the internal `task` queue | Epoch fencing and capability matching are product rules (00 §5.3, R9); the `task` queue is for internal handlers only | The `task` queue (outbox-dispatched internal tasks) as the runner-job queue |
-| D6 | Engine (Playwright/Appium) version is pinned in the JobSpec, whose engine image carries the exact version; the capability document declares it and a mismatch is not schedulable | Reproducibility: the same JobSpec must mean the same engine. Consistent with DECISIONS §4 ("Evidgate never pins *latest* inside runners"): we pin an exact version + digest, never a floating tag | Resolve the engine at run time (`latest`/semver range) — an unchanged manifest would produce different evidence |
+| D6 | Engine (Playwright, and mobilewright for `adapter-mobile`) version is pinned in the JobSpec, whose engine image carries the exact version; the capability document declares it and a mismatch is not schedulable | Reproducibility: the same JobSpec must mean the same engine. Consistent with DECISIONS §4 ("Evidgate never pins *latest* inside runners"): we pin an exact version + digest, never a floating tag | Resolve the engine at run time (`latest`/semver range) — an unchanged manifest would produce different evidence |
 | D7 | Soft stop then kill, with a durable cancel request row | Agents and CI shards cannot be trusted to stop instantly (source §5) | Mark the run canceled and drop the workers |
 | D8 | Releases are bound by digest match, never by recency | The source explicitly forbids joining the "latest" run (source §5) | Pick the newest run per component |
-| D9 | Android device lease is exclusive, V2 and **conditional** on a paying need | Device reset/port limits are not isolatable otherwise (source §4); 00 §1.3 keeps it out of V1 | Shared devices with app reset only |
+| D9 | Android device lease is exclusive, V2 and **conditional** on a paying need | Device reset/port limits are not isolatable otherwise (source §4); 00 §1.3 keeps it out of V1; the mobile producer (`adapter-mobile`, mobilewright / mobile-mcp) ships at G4 only after the 13.7.1 go / no-go memo | Shared devices with app reset only |
 | D10 | iOS and hosted runners stay a placeholder with rough sizes | No macOS pool or hosted infrastructure decision yet (A5) | Design them now |
 
 ## 4. Design
@@ -161,33 +163,33 @@
 #### Story 05.1.1 Verified manifest — acceptance: a manifest that does not cover the matrix, names an unknown case revision, or leaks a secret in variant params is rejected with 422 and indices; a valid one is immutable with a stable `manifest_hash`.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.1.1-T1 | Manifest JSON Schema (planned executions, matrix, shard plan, env needs) in `contracts/` | L | V1 | M1 | 01.3.1 |
-| 05.1.1-T2 | Verification pipeline: schema + semantic checks (case revisions exist, variants normalised secret-free, shard plan covers matrix) → 422 with indices | L | V1 | M1 | 05.1.1-T1, 03.1.3, 03.2.1-T1, 03.2.1-T2 |
-| 05.1.1-T3 | `manifest_hash` (RFC 8785) + immutability + `ETag`/`If-Match` | M | V1 | M1 | 05.1.1-T1 |
-| 05.1.1-T4 | `POST /v1/projects/{p}/manifests` + OpenAPI + integration test | M | V1 | M1 | 05.1.1-T2 |
+| 05.1.1-T1 | Manifest JSON Schema (planned executions, matrix, shard plan, env needs) in `contracts/` | L | V1 | G1 | 01.3.1 |
+| 05.1.1-T2 | Verification pipeline: schema + semantic checks (case revisions exist, variants normalised secret-free, shard plan covers matrix) → 422 with indices | L | V1 | G1 | 05.1.1-T1, 03.1.3, 03.2.1-T1, 03.2.1-T2 |
+| 05.1.1-T3 | `manifest_hash` (RFC 8785) + immutability + `ETag`/`If-Match` | M | V1 | G2 | 05.1.1-T1 |
+| 05.1.1-T4 | `POST /v1/projects/{p}/manifests` + OpenAPI + integration test | M | V1 | G1 | 05.1.1-T2 |
 
 #### Story 05.1.2 Environment revisions — acceptance: a revision is created with a stable `revision_hash` and no secret value (references only); a revision that a run/manifest has locked can never be edited (409) and a new revision is appended instead; a run naming an unknown revision is rejected 422.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.1.2-T1 | `environment` + `environment_revision` tables (base URLs, dependency versions, `secret_refs`, `revision_hash` — no local isolation flag; the lock reads the suite's declaration, 03 §4) + `POST /v1/projects/{p}/environments/{e}/revisions` and `GET /v1/environment-revisions/{id}` (permissions `environment:write` / `run:read`, 00 §9.3) + the migration that adds 02's `project.default_environment_id` composite FK `(org_id, default_environment_id)` → `environment` + OpenAPI | M | V1 | M1 | 05.1.1-T4, 01.4.2-T2 |
-| 05.1.2-T2 | Secret-free validation + referenced-revision immutability (409) + `revision_hash` (RFC 8785) tests | S | V1 | M1 | 05.1.2-T1 |
+| 05.1.2-T1 | `environment` + `environment_revision` tables (base URLs, dependency versions, `secret_refs`, `revision_hash` — no local isolation flag; the lock reads the suite's declaration, 03 §4) + `POST /v1/projects/{p}/environments/{e}/revisions` and `GET /v1/environment-revisions/{id}` (permissions `environment:write` / `run:read`, 00 §9.3) + the migration that adds 02's `project.default_environment_id` composite FK `(org_id, default_environment_id)` → `environment` + OpenAPI | M | V1 | G1 | 05.1.1-T4, 01.4.2-T2 |
+| 05.1.2-T2 | Secret-free validation + referenced-revision immutability (409) + `revision_hash` (RFC 8785) tests | S | V1 | G2 | 05.1.2-T1 |
 
 ### Epic 05.2 Run creation
 #### Story 05.2.1 One-transaction run creation — acceptance: run, planned executions and the outbox row are all present or all absent; the same idempotency key returns the original run; a different payload returns 409.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.2.1-T1 | `POST /v1/projects/{p}/runs` command handler: lock manifest/suite/env revisions and the policy revision when one is active (the run-pinning handshake is 07.1.1-T4, M2), validate components, register one `producer_slot` per manifest shard via `Evidgate.Modules.Ingestion.Contracts.IProducerRegistry.RegisterSlotsAsync` (T9, 04.1.2-T4), single transaction writing run + planned executions + slots + outbox; bind `release_run` rows when the request names a release (T15) | L | V1 | M1 | 05.1.1-T4, 05.1.2-T1, 01.5.1, 04.1.2-T4 |
-| 05.2.1-T2 | Idempotency behaviour via 01's `idempotency_record` (`operation` = `run:create`, canonical request hash, ≥ 24 h) with 409 `idempotency_conflict` (T11) | S | V1 | M1 | 05.2.1-T1, 01.5.1-T6 |
-| 05.2.1-T3 | Server-side `execution_key = sha256(case_id ‖ variant_hash ‖ target_env)` + uniqueness | M | V1 | M1 | 05.2.1-T1 |
-| 05.2.1-T4 | CI-mode shard expectations derived from the shard plan (one `producer_slot` per shard committed in T1) + the `created → queued` transition at slot commit (T13) | M | V1 | M1 | 05.2.1-T1 |
-| 05.2.1-T5 | `run.purpose ∈ {regular, replay}` (default `regular`, immutable): `replay` is accepted only with a server-issued `replay_grant_id` from 08.4.3 (bound to project, candidate and expiry; otherwise 422 `replay_grant_invalid`); replay runs are never bound to a release, never counted as regression and are exposed on the run read model (T67) | S | V1 | M1 | 05.2.1-T1 |
+| 05.2.1-T1 | `POST /v1/projects/{p}/runs` command handler: lock manifest/suite/env revisions and the policy revision when one is active (the run-pinning handshake is 07.1.1-T4, M2), validate components, register one `producer_slot` per manifest shard via `Evidgate.Modules.Ingestion.Contracts.IProducerRegistry.RegisterSlotsAsync` (T9, 04.1.2-T4), single transaction writing run + planned executions + slots + outbox; bind `release_run` rows when the request names a release (T15) | L | V1 | G1 | 05.1.1-T4, 05.1.2-T1, 01.5.1, 04.1.2-T4 |
+| 05.2.1-T2 | Idempotency behaviour via 01's `idempotency_record` (`operation` = `run:create`, canonical request hash, ≥ 24 h) with 409 `idempotency_conflict` (T11) | S | V1 | G2 | 05.2.1-T1, 01.5.1-T6 |
+| 05.2.1-T3 | Server-side `execution_key = sha256(case_id ‖ variant_hash ‖ target_env)` + uniqueness | M | V1 | G2 | 05.2.1-T1 |
+| 05.2.1-T4 | CI-mode shard expectations derived from the shard plan (one `producer_slot` per shard committed in T1) + the `created → queued` transition at slot commit (T13) | M | V1 | G2 | 05.2.1-T1 |
+| 05.2.1-T5 | `run.purpose ∈ {regular, replay}` (default `regular`, immutable): `replay` is accepted only with a server-issued `replay_grant_id` from 08.4.3 (bound to project, candidate and expiry; otherwise 422 `replay_grant_invalid`); replay runs are never bound to a release, never counted as regression and are exposed on the run read model (T67) | S | V1 | G2 | 05.2.1-T1 |
 
 #### Story 05.2.2 Branch, PR and commit identity of a run — acceptance: a run records the branch or PR, head and base commit, trigger event and fork flag it was created for; the run list filters by them; a fork run is labelled, advisory-only and never bound to a release; none of these fields can change after creation. [PROPOSAL review 2026-10-02 D1]
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.2.2-T1 | `run` columns `ref_kind` (`branch`/`tag`/`pull_request`), `ref_name`, `pr_number`, `head_sha`, `base_sha`, `trigger_event` (`push`/`pull_request`/`schedule`/`manual`/`dispatch`), `is_fork`; taken from the verified GitHub OIDC claims when present, otherwise from CLI-supplied values labelled `unverified_ref`; immutable after run creation; OpenAPI + 00 §7 change first | M | V1 | M1 | 05.2.1-T1 |
-| 05.2.2-T2 | Run list and read model: filter by `ref_name`, `pr_number`, `trigger_event`, `is_fork`; keyset index `(project_id, ref_name, created_at, id)` | S | V1 | M2 | 05.2.2-T1 |
-| 05.2.2-T3 | Fork-PR behaviour: `is_fork = true` runs are labelled, advisory-only, never bound to a release (05.6.1) and never satisfy a gating policy; the token path for forks is documented as unsupported or advisory-only (02.4.1, 02.4.2) | M | V1 | M2 | 05.2.2-T1, 02.4.1-T2 |
+| 05.2.2-T1 | `run` columns `ref_kind` (`branch`/`tag`/`pull_request`), `ref_name`, `pr_number`, `head_sha`, `base_sha`, `trigger_event` (`push`/`pull_request`/`schedule`/`manual`/`dispatch`), `is_fork`; taken from the verified GitHub OIDC claims when present, otherwise from CLI-supplied values labelled `unverified_ref`; immutable after run creation; OpenAPI + 00 §7 change first | M | V1 | G2 | 05.2.1-T1 |
+| 05.2.2-T2 | Run list and read model: filter by `ref_name`, `pr_number`, `trigger_event`, `is_fork`; keyset index `(project_id, ref_name, created_at, id)` | S | V1 | G2 | 05.2.2-T1 |
+| 05.2.2-T3 | Fork-PR behaviour: `is_fork = true` runs are labelled, advisory-only, never bound to a release (05.6.1) and never satisfy a gating policy; the token path for forks is documented as unsupported or advisory-only (02.4.1, 02.4.2) | M | V1 | G2 | 05.2.2-T1, 02.4.1-T2 |
 
 **Story 05.2.2 total: 2.5** — branch-scoped policy mode decided (DECISIONS §8.1 D-A10, D-A11: `gating_refs`; unverified and fork runs advisory); 07 implements it, this story supplies the inputs.
 
@@ -195,44 +197,44 @@
 #### Story 05.3.1 Run state machine — acceptance: only the transitions of 00 §8.1 are accepted, each writes audit + outbox, and a stale `version` write fails 412.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.3.1-T1 | State machine with guarded transitions, audit and outbox emission; `GET /v1/runs/{r}` | L | V1 | M1 | 05.2.1-T1, 02.7.1-T2 |
+| 05.3.1-T1 | State machine with guarded transitions, audit and outbox emission; `GET /v1/runs/{r}` | L | V1 | G2 | 05.2.1-T1, 02.7.1-T2 |
 #### Story 05.3.2 Finalize and reconciliation — acceptance: a fully-reported run becomes `complete` with `missing[] = []`; any missing shard, count mismatch, unknown status or missing required artifact yields `incomplete` with reasons.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.3.2-T1 | `finalize` handling: bound-identity check against the producer slot (`403 producer_slot_taken`, `422 unknown_producer` — T9), producer/shard close, `manifest_hash` check, 202 | M | V1 | M1 | 05.2.1-T1 |
-| 05.3.2-T2 | Reconciler: wait for acked events, compare declared vs observed count/ids, check required artifacts, persist the revision through 05's `evidence_revision` (05.3.2-T5) from 06's freeze result with `completeness` + `missing[]` | L | V1 | M2 | 05.3.2-T1, 05.3.2-T5, 06.5.1-T1, 06.5.1-T2 |
-| 05.3.2-T3 | Collection deadline + late window (receive timestamp kept; late evidence → new revision under policy) | M | V1 | M2 | 05.3.2-T2, 07.1.1-T1 |
-| 05.3.2-T4 | Reconciliation idempotency: duplicate finalize, out-of-order finalize, late producer, retry-safe runs | M | V1 | M2 | 05.3.2-T2 |
-| 05.3.2-T5 | `evidence_revision` table owned by 05: append-only, `revision_no`, `completeness`, `missing[]` (00 §8.5 codes incl. `setup_error` — T14), `artifact_set_hash` from 06's freeze result, event watermark; unique `(org_id, run_id, revision_no)` + unique `(org_id, id)` | M | V1 | M1 | 05.3.2-T1 |
+| 05.3.2-T1 | `finalize` handling: bound-identity check against the producer slot (`403 producer_slot_taken`, `422 unknown_producer` — T9), producer/shard close, `manifest_hash` check, 202 | M | V1 | G2 | 05.2.1-T1 |
+| 05.3.2-T2 | Reconciler: wait for acked events, compare declared vs observed count/ids, check required artifacts, persist the revision through 05's `evidence_revision` (05.3.2-T5) from 06's freeze result with `completeness` + `missing[]` | L | V1 | G2 | 05.3.2-T1, 05.3.2-T5, 06.5.1-T1, 06.5.1-T2 |
+| 05.3.2-T3 | Collection deadline + late window (receive timestamp kept; late evidence → new revision under policy) | M | V1 | G2 | 05.3.2-T2, 07.1.1-T1 |
+| 05.3.2-T4 | Reconciliation idempotency: duplicate finalize, out-of-order finalize, late producer, retry-safe runs | M | V1 | G2 | 05.3.2-T2 |
+| 05.3.2-T5 | `evidence_revision` table owned by 05: append-only, `revision_no`, `completeness`, `missing[]` (00 §8.5 codes incl. `setup_error` — T14), `artifact_set_hash` from 06's freeze result, event watermark; unique `(org_id, run_id, revision_no)` + unique `(org_id, id)` | M | V1 | G2 | 05.3.2-T1 |
 
 #### Story 05.3.3 Case attempts — acceptance: every executed attempt exists exactly once per `(run, execution_key, attempt_no)` with raw status as sent plus normalised status; an attempt row becomes visible only when 04's event batch commits; a failed setup marks dependant attempts `blocked`, never `passed`.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.3.3-T1 | `case_attempt` table (source key `UNIQUE org_id, run_id, execution_key, attempt_no`; indexes `(run_id, normalized_status)`, `(case_id, started_at)`) with raw + normalised status per 00 §8.3 | M | V1 | M1 | 05.2.1-T1 |
-| 05.3.3-T2 | Attempt write interface used by 04's event commit in the **same** transaction + `blocked` propagation to dependants of a failed setup (suite DAG) | M | V1 | M1 | 05.3.3-T1 |
+| 05.3.3-T1 | `case_attempt` table (source key `UNIQUE org_id, run_id, execution_key, attempt_no`; indexes `(run_id, normalized_status)`, `(case_id, started_at)`) with raw + normalised status per 00 §8.3 | M | V1 | G1 | 05.2.1-T1 |
+| 05.3.3-T2 | Attempt write interface used by 04's event commit in the **same** transaction + `blocked` propagation to dependants of a failed setup (suite DAG) | M | V1 | G1 | 05.3.3-T1 |
 
 ### Epic 05.4 Cancel
 #### Story 05.4.1 Durable cancel — acceptance: cancel returns 202, the request is durable across restarts, execution stops softly then is killed, and a canceled run never becomes complete.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.4.1-T1 | Cancel request row + `POST /v1/runs/{r}/cancel` + permission `run:cancel` | S | V1 | M2 | 05.3.1-T1 |
-| 05.4.1-T2 | Soft stop then kill: cancel token for agents, kill at `kill_at`; CI-mode events after cancel are accepted and stored `after_cancel = true`, never refused (T12) | M | V1 | M2 | 05.4.1-T1 |
-| 05.4.1-T3 | Race rules: accept already-produced evidence, block completion after cancel, mark post-cancel evidence `after_cancel = true` (T12) | M | V1 | M2 | 05.4.1-T2 |
+| 05.4.1-T1 | Cancel request row + `POST /v1/runs/{r}/cancel` + permission `run:cancel` | S | V1 | G2 | 05.3.1-T1 |
+| 05.4.1-T2 | Soft stop then kill: cancel token for agents, kill at `kill_at`; CI-mode events after cancel are accepted and stored `after_cancel = true`, never refused (T12) | M | V1 | G2 | 05.4.1-T1 |
+| 05.4.1-T3 | Race rules: accept already-produced evidence, block completion after cancel, mark post-cancel evidence `after_cancel = true` (T12) | M | V1 | G2 | 05.4.1-T2 |
 
 ### Epic 05.5 Rerun
 #### Story 05.5.1 Rerun with parent and scope — acceptance: a rerun creates a new run with `parent_run_id`; a `failed_subset` rerun is labelled and is never accepted as full-regression evidence.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.5.1-T1 | Rerun flow: selection (failed subset from the current revision) → new run + `parent_run_id` + `rerun_scope` | M | V1 | M2 | 05.3.2-T2 |
-| 05.5.1-T2 | Subset labelling: exposure in API/UI/report and the policy input that blocks subset runs from satisfying a full-regression policy | M | V1 | M2 | 05.5.1-T1, 07.4.1 |
+| 05.5.1-T1 | Rerun flow: selection (failed subset from the current revision) → new run + `parent_run_id` + `rerun_scope` | M | V1 | G2 | 05.3.2-T2 |
+| 05.5.1-T2 | Subset labelling: exposure in API/UI/report and the policy input that blocks subset runs from satisfying a full-regression policy | M | V1 | G2 | 05.5.1-T1, 07.4.1 |
 
 #### Story 05.5.2 CI re-run semantics and trigger — acceptance: a GitHub "Re-run jobs" (same `run_id`, higher `run_attempt`) never collides with the producer-slot binding and is recorded as a new run with `parent_run_id`; a re-run can be triggered from Evidgate through the GitHub App when installed; a cancelled run stops the customer's shards within one poll interval; a shard exceeding its max duration is reported, not left to the collection deadline. [PROPOSAL review 2026-10-02 D2/D8]
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.5.2-T1 | Decision + 00 §9.4 CR: the bound CI identity is `(repository_id, run_id, run_attempt)`; a higher `run_attempt` creates a new Evidgate run with `parent_run_id` and `rerun_scope = ci_attempt`; evidence of the earlier attempt stays immutable | S | V1 | M1 | 05.2.1-T4 |
-| 05.5.2-T2 | Producer-slot binding and `finalize` accept the attempt in `bound_ci_run_ref`; tests for re-run, partial re-run of one shard and a stale attempt writing late (`producer_slot_taken` vs accept-and-mark) | M | V1 | M2 | 05.5.2-T1, 04.1.2-T4 |
-| 05.5.2-T3 | Evidgate-initiated re-run via `workflow_dispatch`/re-run API through the GitHub App installation (02.4.3): optional, per-project flag, audited, idempotent per parent run | M | V1 | M3 | 05.5.2-T1, 02.4.3-T2, 05.5.1-T1 |
-| 05.5.2-T4 | CLI cancel poll (`GET /v1/runs/{r}` state, interval with jitter) and per-shard maximum duration with a reported `shard_timeout` reason; server side stores `shard_max_duration` in the manifest | M | V1 | M2 | 05.5.2-T1, 04.2.3-T1 |
+| 05.5.2-T1 | Decision + 00 §9.4 CR: the bound CI identity is `(repository_id, run_id, run_attempt)`; a higher `run_attempt` creates a new Evidgate run with `parent_run_id` and `rerun_scope = ci_attempt`; evidence of the earlier attempt stays immutable | S | V1 | G2 | 05.2.1-T4 |
+| 05.5.2-T2 | Producer-slot binding and `finalize` accept the attempt in `bound_ci_run_ref`; tests for re-run, partial re-run of one shard and a stale attempt writing late (`producer_slot_taken` vs accept-and-mark) | M | V1 | G2 | 05.5.2-T1, 04.1.2-T4 |
+| 05.5.2-T3 | Evidgate-initiated re-run via `workflow_dispatch`/re-run API through the GitHub App installation (02.4.3): optional, per-project flag, audited, idempotent per parent run | M | V1 | G2 | 05.5.2-T1, 02.4.3-T2, 05.5.1-T1 |
+| 05.5.2-T4 | CLI cancel poll (`GET /v1/runs/{r}` state, interval with jitter) and per-shard maximum duration with a reported `shard_timeout` reason; server side stores `shard_max_duration` in the manifest | M | V1 | G2 | 05.5.2-T1, 04.2.3-T1 |
 
 **Story 05.5.2 total: 3.5**
 
@@ -240,66 +242,66 @@
 #### Story 05.6.1 Digest-bound release — acceptance: a release lists components with digests; only runs whose manifest components match are bound; no run is ever bound by recency.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.6.1-T1 | `release`/`release_component` tables + create API (components → digests, environment revision) | M | V1 | M2 | 05.2.1-T1 |
-| 05.6.1-T2 | Binding by digest match (`release_run`): write-bind at run create when the request names a release, explicit `POST /v1/releases/{id}/runs` bind refused once a live evaluation exists (T15, CR-4), refusal of time-based joining, mismatch surfaced to 07 as a build-mismatch reason (07.2.1-T2 catalogue; aggregated by 07.5.3-T1 at M3) | L | V1 | M2 | 05.6.1-T1, 07.2.1-T2 |
+| 05.6.1-T1 | `release`/`release_component` tables + create API (components → digests, environment revision) | M | V1 | G2 | 05.2.1-T1 |
+| 05.6.1-T2 | Binding by digest match (`release_run`): write-bind at run create when the request names a release, explicit `POST /v1/releases/{id}/runs` bind refused once a live evaluation exists (T15, CR-4), refusal of time-based joining, mismatch surfaced to 07 as a build-mismatch reason (07.2.1-T2 catalogue; aggregated by 07.5.3-T1 at M3) | L | V1 | G4 | 05.6.1-T1, 07.2.1-T2 |
 
 ### Epic 05.7 Agent mode (V2)
 #### Story 05.7.1 Immutable JobSpec — acceptance: a JobSpec is written once with hash; changing repo/commit, suite revision, app digest, env revision, engine version/image, timeouts, limits, secret refs or artifact policy produces a different hash and is never edited in place; no field accepts a free-form command.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.7.1-T1 | JobSpec schema + immutability + `job_spec_hash`; exact engine version pinned (D6) alongside the image digest; schema rejects free-form commands | L | V2 | M4 | 04.7.1-T1 |
+| 05.7.1-T1 | JobSpec schema + immutability + `job_spec_hash`; exact engine version pinned (D6) alongside the image digest; schema rejects free-form commands | L | V2 | G2 | 04.7.1-T1 |
 #### Story 05.7.2 Leasing with epoch fencing — acceptance: simultaneous claims never double-lease; an expired lease re-queues the job under a new epoch; old-epoch events are stale evidence.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.7.2-T1 | `job`/`job_lease` tables; short `FOR UPDATE SKIP LOCKED` claim; 90 s lease, 15 s heartbeat + jitter; epoch bump; heartbeat/claim endpoints | L | V2 | M4 | 05.7.1-T1 |
-| 05.7.2-T2 | Heartbeat extension rules (current epoch only), late-heartbeat 409, lease history per epoch | M | V2 | M4 | 05.7.2-T1 |
+| 05.7.2-T1 | `job`/`job_lease` tables; short `FOR UPDATE SKIP LOCKED` claim; 90 s lease, 15 s heartbeat + jitter; epoch bump; heartbeat/claim endpoints | L | V2 | G2 | 05.7.1-T1 |
+| 05.7.2-T2 | Heartbeat extension rules (current epoch only), late-heartbeat 409, lease history per epoch | M | V2 | G4 | 05.7.2-T1 |
 #### Story 05.7.3 Scheduling: capability, pools, fairness, timeouts — acceptance: a job is claimed only by a capability-matching pool, fairness rotates across tenants, caps are respected, queue and execution timeouts are distinct, and an unmatchable job is reported `unschedulable`; a suite declaring `data_isolation = shared` (03.2.1-T4) is serialised against its environment by an exclusive lock held for the job lease and, in CI mode, the run records that the lock is not enforced.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.7.3-T1 | Capability matching (protocol major, platform, engine family/version, `supports.cancel`) + pool model | M | V2 | M4 | 04.7.1-T2 |
-| 05.7.3-T2 | Fair scheduler per tenant/pool: weighted round-robin, concurrency caps, oldest-first within a tenant | L | V2 | M4 | 05.7.3-T1 |
-| 05.7.3-T3 | Queue timeout vs execution timeout, `unschedulable` outcome with the unmet requirement | M | V2 | M4 | 05.7.3-T2 |
-| 05.7.3-T4 | Environment lock for suites whose `environment_requirements.data_isolation` is `shared` (03.2.1-T4): exclusive claim per environment held for the job lease, fenced by `epoch`, released on terminal state/lease expiry, waiting jobs hold no slot, queue timeout applies; CI mode records "lock not enforced" | M | V2 | M4 | 05.7.3-T2, 05.1.2-T1 |
+| 05.7.3-T1 | Capability matching (protocol major, platform, engine family/version, `supports.cancel`) + pool model | M | V2 | G4 | 04.7.1-T2 |
+| 05.7.3-T2 | Fair scheduler per tenant/pool: weighted round-robin, concurrency caps, oldest-first within a tenant | L | V2 | G4 | 05.7.3-T1 |
+| 05.7.3-T3 | Queue timeout vs execution timeout, `unschedulable` outcome with the unmet requirement | M | V2 | G4 | 05.7.3-T2 |
+| 05.7.3-T4 | Environment lock for suites whose `environment_requirements.data_isolation` is `shared` (03.2.1-T4): exclusive claim per environment held for the job lease, fenced by `epoch`, released on terminal state/lease expiry, waiting jobs hold no slot, queue timeout applies; CI mode records "lock not enforced" | M | V2 | G4 | 05.7.3-T2, 05.1.2-T1 |
 #### Story 05.7.4 `evidgate-agent` executor — acceptance: the agent executes exactly the JobSpec in a disposable workspace under an unprivileged user, collects only allow-listed artifacts, and reports setup failure separately.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.7.4-T1 | Agent identity per tenant + pool, secret reference resolution (values never logged/returned), pull loop with backoff | M | V2 | M4 | 05.7.2-T1, 02.5.1 |
-| 05.7.4-T2 | Executor: disposable workspace, unprivileged user, resource limits, `prepare`/`execute`/`collect` only from the JobSpec, no ambient credentials | XL | V2 | M4 | 05.7.4-T1 |
-| 05.7.4-T3 | Artifact policy enforcement (allow-listed paths, size caps, sensitivity) + `collect` boundary test | M | V2 | M4 | 05.7.4-T2, 06.1.1, 06.1.3 |
+| 05.7.4-T1 | Agent identity per tenant + pool, secret reference resolution (values never logged/returned), pull loop with backoff | M | V2 | G4 | 05.7.2-T1, 02.5.1 |
+| 05.7.4-T2 | Executor: disposable workspace, unprivileged user, resource limits, `prepare`/`execute`/`collect` only from the JobSpec, no ambient credentials | XL | V2 | G4 | 05.7.4-T1 |
+| 05.7.4-T3 | Artifact policy enforcement (allow-listed paths, size caps, sensitivity) + `collect` boundary test | M | V2 | G4 | 05.7.4-T2, 06.1.1, 06.1.3 |
 #### Story 05.7.5 Cleanup and re-run safety — acceptance: a job with side effects cannot be re-run until a cleanup/isolation confirmation is recorded; cleanup is idempotent and its failure is reported separately.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.7.5-T1 | `cleanup` operation per run namespace, idempotent, separate failure state | M | V2 | M4 | 05.7.4-T2 |
-| 05.7.5-T2 | Re-run gate: block/require confirmation, record actor + evidence of isolation for side-effecting jobs | M | V2 | M4 | 05.7.5-T1 |
+| 05.7.5-T1 | `cleanup` operation per run namespace, idempotent, separate failure state | M | V2 | G4 | 05.7.4-T2 |
+| 05.7.5-T2 | Re-run gate: block/require confirmation, record actor + evidence of isolation for side-effecting jobs | M | V2 | G4 | 05.7.5-T1 |
 #### Story 05.7.6 Agent end-to-end — acceptance: a web/API suite claimed, executed and finalized by the agent produces the same evidence shape as CI mode.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.7.6-T1 | End-to-end agent test with the Playwright engine image, claim storm + lease-expiry scenarios | M | V2 | M4 | 05.7.4-T3, 04.3.1-T1 |
+| 05.7.6-T1 | End-to-end agent test with the Playwright engine image, claim storm + lease-expiry scenarios | M | V2 | G4 | 05.7.4-T3, 04.3.1-T1 |
 
 ### Epic 05.8 Android device lease (V2, conditional)
 #### Story 05.8.1 Exclusive device lease — acceptance: one device has at most one active lease, app and data are reset per policy before a job starts, and the app checksum is recorded with the run.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.8.1-T1 | `device_lease` table + exclusivity + reset policy + app checksum + Appium port limits | L | V2 | M4 | 05.7.3-T2 |
-| 05.8.1-T2 | Device pool scheduling: device waits never consume web slots; separate deadline and `unschedulable` when all devices are leased | M | V2 | M4 | 05.8.1-T1 |
+| 05.8.1-T1 | `device_lease` table + exclusivity + reset policy + app checksum + `adapter-mobile` port limits | L | V2 | G4 | 05.7.3-T2 |
+| 05.8.1-T2 | Device pool scheduling: device waits never consume web slots; separate deadline and `unschedulable` when all devices are leased | M | V2 | G4 | 05.8.1-T1 |
 
 ### Epic 05.9 iOS and hosted runners (V3 placeholder — sizes rough)
 #### Story 05.9.1 macOS/iOS pool spike — acceptance: a written findings note covering signing, pool sizing and cost, with a go/no-go recommendation. (rough)
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.9.1-T1 | Spike: macOS runner pool, XCUITest signing, device procurement note (rough) | M | V3 | M5 | 05.8.1-T1 |
+| 05.9.1-T1 | Spike: macOS runner pool, XCUITest signing, device procurement note (rough) | M | V3 | G4 | 05.8.1-T1 |
 #### Story 05.9.2 Hosted runner spike — acceptance: a written options note (isolation, inbound networking, cost) with a decision proposal. (rough)
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.9.2-T1 | Spike: hosted-runner options and the security implications of inbound execution (rough) | M | V3 | M5 | 11.2.1 |
+| 05.9.2-T1 | Spike: hosted-runner options and the security implications of inbound execution (rough) | M | V3 | G4 | 11.2.1 |
 
 ### Epic 05.10 Periodic consistency jobs
 #### Story 05.10.1 Detect and repair drift — each sweeper is a Cronos schedule with a unique `(schedule_name, fire_at)` fire key in the `task` table (00 §5.3); acceptance: a stuck run and an expired lease are each detected within one sweep interval, repaired idempotently, and audited; no business logic is re-run by a repair.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.10.1-T1 | Stuck-run detector (no transition before deadline) → single reconcile retry, then alert | M | V1 | M2 | 05.3.2-T2 |
-| 05.10.1-T2 | Expired-lease sweeper → re-queue as a new lease with epoch bump, stale evidence preserved (leases exist in agent mode, so this is V2) | M | V2 | M4 | 05.7.2-T1 |
-| 05.10.1-T3 | Hook interface for orphan artifacts / missing usage sweeps (implemented in 06 and 12) + operator runbook note | S | V1 | M2 | 06.4.3, 12.3.1-T1 |
+| 05.10.1-T1 | Stuck-run detector (no transition before deadline) → single reconcile retry, then alert | M | V1 | G2 | 05.3.2-T2 |
+| 05.10.1-T2 | Expired-lease sweeper → re-queue as a new lease with epoch bump, stale evidence preserved (leases exist in agent mode, so this is V2) | M | V2 | G2 | 05.7.2-T1 |
+| 05.10.1-T3 | Hook interface for orphan artifacts / missing usage sweeps (implemented in 06 and 12) + operator runbook note | S | V1 | G2 | 06.4.3, 12.3.1-T1 |
 
 ## 10. Dependencies
 

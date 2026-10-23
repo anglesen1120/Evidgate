@@ -1,6 +1,6 @@
 # CR-D-2 — Direction (a): requirements → test cases → scripts → self-learning repair
 
-> Status: **owner decision, 2026-10-23 (chat).** The owner chose direction (a) and accepted the risk plan in §6. The owner accepted the recommendation to keep A5 (customer-operated execution) for phases G1–G3 when asking for this note. This file records the decision and the plan; the edits it implies to `DECISIONS.md` §1/§3/§4.3/§5 and to `plans/00`, `03`, `04`, `08`, `09`, `11`, `12` are listed in §8 and are made by follow-up docs PRs. Until those land, this file wins over the old text where they conflict (`DECISIONS.md` §10 row 2026-10-23).
+> Status: **owner decision, 2026-10-23 (chat).** The owner chose direction (a) and accepted the risk plan in §6. The owner accepted the recommendation to keep A5 (customer-operated execution) for phases G1–G3 when asking for this note. On the same day the owner asked for a separate master plan ([`plans/13-product-phases.md`](../../plans/13-product-phases.md)) plus the rewiring of the existing plans, and for a mobile spike in G2 with adoption of its techniques on web; the owner then chose mobile-mcp / mobilewright over Google ARTEMIS for iOS + Android coverage (§7). The edits listed in §8 are made in the same pull request as this file, except row 9.
 > Legend: ✅ verified with a link · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`. Every threshold below is a starting value for the owner to tune, not a measured fact.
 
 ## 1. Decision
@@ -63,7 +63,7 @@ The evidence store, tenancy, identity and policy work already built stay as the 
 | A2 | Git holds approved test code | Unchanged |
 | §5 rules 1–6, 8, 9 | Mechanics only, forbidden patterns, original failure kept, semantic checks, sensitive cases reviewed, hash-bound approval, rule of three, kill switches | Unchanged |
 
-Mapping `[INFERENCE]`: G1–G2 replace the V1 build order, G3 takes the place of the V2 healing milestone (M4), G4 covers the remaining V2 and V3 scope. Follow-up edit 2 (§8) writes the exact mapping into 00 §4.
+Mapping `[INFERENCE]`: G1–G2 replace the V1 build order, G3 takes the place of the V2 healing milestone (M4), G4 covers the remaining V2 and V3 scope. Edit 2 (§8) wrote the exact mapping into 00 §4.
 
 ## 5. Phases and exit gates
 
@@ -72,8 +72,8 @@ Phases are sequence plus exit gates, not dates (same rule as O8). A phase does n
 | Phase | Scope | Exit gate (go) | Stop / pivot signal |
 |---|---|---|---|
 | G1 Author | Project + AI settings, requirement → checklist → test cases, batched updates, versions, timeline, export (csv / xlsx / json), vi + en; model gateway, credits and redaction (§6.2, §6.6) | At least 5 external teams use it for at least 3 weeks and export or use the test cases | Fewer than 3 teams return after week 1 |
-| G2 Run | Test case → Playwright script bound to live elements; CI / local run; ingest results and redacted snapshots; element profiles | At least 70 % of generated scripts pass 3 of 3 runs on the same build without manual edits; at least 3 teams agree to pay | Most scripts need manual repair |
-| G3 Learn and repair | Failure classification, locator proposals, validation, review screen, pull requests, per-project feedback ranking | Shadow window: **0 adjudicated false repairs** on the 08.8.1 corpus over at least 300 proposals, reported with the rule-of-three caveat (08.8.2-T2: true rate may still be up to ~1 %); the acceptance rate is reported but is not the gate; the severity-weighted threshold stays O6 `[OPEN]` | Any false repair whose cause is not understood and fixed |
+| G2 Run | Test case → Playwright script bound to live elements with a pre-action target check (§7); CI / local run; ingest results and redacted snapshots; element profiles; mobile spike with mobile-mcp / mobilewright (13.7.1, §7) | At least 70 % of generated scripts pass 3 of 3 runs on the same build without manual edits; at least 3 teams agree to pay | Most scripts need manual repair |
+| G3 Learn and repair | Failure classification, locator proposals with an accessibility + OCR + visual locate fallback (13.7.2, §7), validation, review screen, pull requests, per-project feedback ranking | Shadow window: **0 adjudicated false repairs** on the 08.8.1 corpus over at least 300 proposals, reported with the rule-of-three caveat (08.8.2-T2: true rate may still be up to ~1 %); the acceptance rate is reported but is not the gate; the severity-weighted threshold stays O6 `[OPEN]` | Any false repair whose cause is not understood and fixed |
 | G4 Expand | Requirement-change impact analysis, policy / gate, team review, mobile (§7), hosted runner if paid for | Paying demand per item | — |
 
 ## 6. Risk register
@@ -132,38 +132,56 @@ Plus: a **per-project shadow window** of 2–4 weeks (proposals labelled, measur
 - End of G1: 5–10 teams on a free trial; measure features created, test cases exported, weekly return.
 - End of G2: a real price offer; at least 3 teams agree to pay before G3 starts.
 
-## 7. Mobile: Google ARTEMIS (assessment, 2026-10-23)
+## 7. Mobile: tool assessment (2026-10-23)
+
+Owner decision `[DECISION]` (2026-10-23): the mobile candidate is **mobile-mcp with mobilewright** (Mobile Next), not Google ARTEMIS, because it covers both iOS and Android. A G2 spike tests it; the web techniques below are adopted now.
+
+### 7.1 mobile-mcp and mobilewright
 
 | Fact | Source |
 |---|---|
-| Natural-language Android automation; MCP server, CLI, Python SDK (`artemis-client`), web console; Flash profile ~3–5 s per step, Pro ~15–40 s per step | ✅ [github.com/google/artemis](https://github.com/google/artemis) README |
-| Android only; iOS is an unchecked roadmap item | ✅ same README, "Roadmap" |
-| Apache-2.0; Python 3.12+ with `uv`; needs ADB with a device or emulator on the host; installs an accessibility helper app on the device; uses cloud multimodal models (Gemini, Claude, GPT-4o, Qwen-VL) | ✅ same README |
-| Created 2026-08-13, no tagged release yet (install from git, pin by commit), 13.8k stars | ✅ GitHub API, read 2026-10-23 |
-| 99 %+ on AndroidWorld | ⚠️ self-reported in the README |
-| Exports a deterministic, replayable script from a run | ⚠️ not documented; "replay" in the README is video replay |
+| MCP server for iOS and Android: simulators, emulators and real devices; one tool set for both platforms (list elements, tap by element ref or coordinates, type, swipe, screenshots, app install / launch, device logs, crash reports) | ✅ [github.com/mobile-next/mobile-mcp](https://github.com/mobile-next/mobile-mcp) README |
+| Accessibility-first: drives apps from the native accessibility tree without a vision model and falls back to screenshot + coordinates only when needed | ✅ same README, "Main Features" |
+| Needs Xcode command line tools (iOS), Android platform tools (`adb`), Node.js 20+; an optional paid device cloud (Mobile Next Cloud) exists | ✅ same README, "Prerequisites", "Platform Support" |
+| Apache-2.0, TypeScript, npm `@mobilenext/mobile-mcp` 1.0.12 (released 2026-10-18), created 2025-03-28, 9.9k stars | ✅ GitHub API and npm registry, read 2026-10-23 |
+| Depends on `mobilewright` 0.0.67, "a mobile device automation framework inspired by Playwright" (Apache-2.0, TypeScript, created 2026-03-24, pre-1.0) | ✅ npm registry `mobilewright`; [github.com/mobile-next/mobilewright](https://github.com/mobile-next/mobilewright) |
+| `mobilewright`'s driver `@mobilewright/driver-mobilecli` depends on `mobilecli` 1.0.21, licensed **FSL-1.1-ALv2** (Functional Source License; converts to Apache-2.0 later; restricts competing use) | ✅ npm registry `mobilecli@1.0.21`; [github.com/mobile-next/mobilecli](https://github.com/mobile-next/mobilecli) LICENSE |
+| A model-driven run can be saved as a deterministic mobilewright script | ⚠️ not documented; the spike checks it |
 
 Fit `[INFERENCE]`:
 
-- **Usable, at G4 only.** Mobile stays deferred (§3); G1–G3 are web.
-- **Role: explorer, not the regression runner.** A model call per step makes runs slow, costly and non-deterministic, which conflicts with immutable evidence and §6.3 stability. Use it to explore an app and draft mobile test cases (loop step 2), and as a fallback locator when a deterministic mobile script fails.
-- **Integration shape:** an `adapter-artemis` producer that runs on the customer's device host (A5 holds), calls the Python SDK, and uploads steps, screenshots and the accessibility hierarchy as evidence; element profiles reuse the same model as web.
+- **Better fit than ARTEMIS:** TypeScript and npm match the customer-side stack (`DECISIONS.md` §4.3) and ADR-0002 / ADR-0005, so no language exception or new package ecosystem is needed; one API covers iOS and Android; the accessibility-first approach matches element profiles (13.6); mobilewright gives a Playwright-style script that can be the deterministic regression runner, the same split as web (model explores, script runs).
+- **Mobile product use: G4 only.** Mobile stays deferred (§3); G1–G3 are web.
+- **Integration shape at G4:** an `adapter-mobile` producer on the customer's device host (A5 holds) that runs mobilewright scripts and uploads results, screenshots and the accessibility hierarchy as evidence; mobile-mcp drives a model only to explore an app and draft test cases (loop step 2).
 - **Constraints before adoption:**
-  - screenshots go to a cloud model, so `DECISIONS.md` §7 applies;
-  - a Python producer needs an exception to `DECISIONS.md` §4.3 (customer side is Node + TypeScript);
-  - ADR-0002 and ADR-0005 cover only NuGet and npm, so a git / PyPI dependency needs an ADR extending them;
-  - a spike runs 10 real tasks twice and measures pass rate, time and model cost, and checks whether a trajectory can become a deterministic Appium / UIAutomator script.
+  - `mobilecli` is FSL-1.1-ALv2, which `scripts/licence-policy.json` does not allow; shipping it needs an ADR exception after a licence review of "competing use", or a driver without it (`@mobilewright/driver-mobilenext` is Apache-2.0 but targets the paid device cloud ⚠️);
+  - screenshots sent to a cloud model fall under `DECISIONS.md` §7;
+  - iOS needs a macOS host with Xcode; real iOS devices need signing on the customer side ⚠️;
+  - mobilewright is pre-1.0, so pin exact versions.
 
-## 8. Follow-up edits (separate docs PRs)
+### 7.2 Google ARTEMIS (assessed first, replaced)
+
+Android-only natural-language agent (iOS is a roadmap item), Python 3.12+ with `uv`, Apache-2.0, created 2026-08-13 with no tagged release, a model call per step (~3–5 s Flash, ~15–40 s Pro), and no documented export to a deterministic script ✅ [github.com/google/artemis](https://github.com/google/artemis) README, GitHub API read 2026-10-23. It would also have needed a §4.3 language exception and an ADR for a git / PyPI dependency. Replaced by §7.1 for platform coverage and stack fit.
+
+### 7.3 Spike and techniques
+
+- **Spike in G2 (13.7.1, 2.0 d raw):** pin versions; on one Android emulator and one iOS simulator, run 10 real tasks twice through mobile-mcp with a model, then replay them as mobilewright scripts without a model; record pass rate, time, model cost and repeatability; write a go / no-go memo covering `adapter-mobile` shape, the `mobilecli` licence and data transfer. The spike uses our own sample apps with no customer data and commits nothing to G4.
+- **Techniques adopted for web now** (our own code, no mobile dependency):
+  - **pre-action target check** in `evidgate generate` (13.5.1-T1, G2): before each bound action, check that the element exists, is unique, visible and actionable, and record that; otherwise the step stays unbound and the script stays `draft`;
+  - **accessibility-first locating with an OCR / visual fallback** (13.7.2, G3): used only when element-profile similarity is ambiguous. It may propose a candidate, which must still pass all 08.4 validation; it never decides the drift class. Calls go through the gateway with a per-incident budget, and screenshots stay opt-in (§6.6).
+
+## 8. Follow-up edits (made in the same pull request, except row 9)
+
+Plan 13 holds the new epics; rows 3–8 are wired to it.
 
 | # | File | Edit |
 |---|---|---|
 | 1 | `DECISIONS.md` §1, §3 A4, §5.7 | Rewrite per §1 and §4 of this file; remove the §1 "Direction change (CR-D-2)" pointer |
 | 2 | `plans/00-overview.md` §4, §14 | Replace M0–M5 with G1–G4, their gates and the V/M mapping; recompute the roll-up with `scripts/plan_graph.py`; log in §15 |
-| 3 | `plans/03-catalog-authoring.md` | New epics: feature / category / checklist / manual test case with versions and timeline; project AI settings with templates; export; requirement → checklist → test case (grows 03.7) |
-| 4 | `plans/08-healing-learning.md` | Element profiles; locator-drift vs UI-change rules inside 08.2.2 `test_drift`; move 08.5.1, 08.5.3 and 08.5.5 to G1 (authoring needs them): re-parent 08.5.1-T1 off 08.4.3-T3 and 08.5.5-T4 off 08.8.1-T1, and pull 08.6.3-T1 (kill switch), 10.7.1-T4 and the 12.3.1 usage ledger into G1 so no task depends on a later phase (00 §14); move 08.2–08.4 and the rest of 08.6 to G3; per-project shadow window; screenshots and DOM diff in the 08.6.1 review; G3 gate on the 08.8.1 corpus |
+| 3 | `plans/03-catalog-authoring.md` | 03.7.1-T1/T2 superseded by 13.3.1; authoring epics live in plan 13 (13.1 model, 13.2 AI settings, 13.3 generation, 13.4 screens) |
+| 4 | `plans/08-healing-learning.md` | Element profiles (13.6); locator-drift vs UI-change rules inside 08.2.2 `test_drift` (13.8); 08.5.1, 08.5.2, 08.5.3 and 08.5.5 move to G1 (authoring needs them) with 08.5.1-T3, 08.5.2-T2 and 08.5.5-T4 left in G3; 08.5.1-T1 re-parented to 12.3.1-T1 only (was 08.4.3-T3, 12.3.1-T2); every other dependency is pulled into the earliest phase that needs it (13 §4.4), so no task depends on a later phase; 08.2–08.4, 08.6–08.8 at G3; per-project shadow window; screenshots and DOM diff in the 08.6.1 review; G3 gate on the 08.8.1 corpus |
 | 5 | `plans/09-web-ui.md` | Authoring screens (tree, table, batched changes, timeline, versions) and the repair review screen; design via `design-ui` |
 | 6 | `plans/11-security-compliance.md` and 08.1.2-T2 | CLI-side redaction, accessibility tree by default, screenshots opt-in, transfer assessment before G1 (§6.6) |
 | 7 | `plans/12-pilot-commercial.md` | G1 / G2 cohort, price test, credit pricing rule |
-| 8 | `plans/04-ingestion-adapters.md` | Script generation and `evidgate run`; `adapter-artemis` row at G4 |
-| 9 | `docs/adr/` and `DECISIONS.md` §4.3 | When G4 starts: ADR extending ADR-0002 / ADR-0005 beyond NuGet and npm, plus a §4.3 language exception for a Python producer |
+| 8 | `plans/04-ingestion-adapters.md` | Script generation and `evidgate run` live in 13.5; `adapter-mobile` (mobilewright / mobile-mcp) at G4 after the 13.7.1 go / no-go memo |
+| 9 | `docs/adr/` and `scripts/licence-policy.json` | When G4 starts and the 13.7.1 memo says go: ADR on the `mobilecli` FSL-1.1-ALv2 licence (exception or alternative driver) before any mobile producer ships |
