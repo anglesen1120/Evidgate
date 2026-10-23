@@ -251,9 +251,14 @@ public sealed partial class AuthoringUnitTests
         AuthoringCode.TryParse("SHOP_001", out _).ShouldBeFalse();
         AuthoringCode.TryParse(null, out _).ShouldBeFalse();
 
-        // The grammar of OI-13-101, shared with the column CHECK.
-        AuthoringCode.PrefixPattern.ShouldBe("^[A-Z][A-Z0-9]{1,7}$");
-        AuthoringCode.FormatPattern.ShouldBe("^[A-Z][A-Z0-9]{1,7}-[0-9]{3,10}$");
+        // A trailing newline is refused: the patterns are anchored with \z, not $, which .NET matches before a final
+        // newline. A code is an identifier that reaches URLs and the wire unchanged.
+        AuthoringCode.TryParse("SHOP-007\n", out _).ShouldBeFalse("a trailing newline is not part of a code");
+        AuthoringCode.IsValidPrefix("SHOP\n").ShouldBeFalse("a trailing newline is not part of a prefix");
+
+        // The grammar of OI-13-101, shared with the column CHECK, anchored so no trailing newline slips through.
+        AuthoringCode.PrefixPattern.ShouldBe(@"\A[A-Z][A-Z0-9]{1,7}\z");
+        AuthoringCode.FormatPattern.ShouldBe(@"\A[A-Z][A-Z0-9]{1,7}-[0-9]{3,10}\z");
         AuthoringCode.IsValidPrefix("A1").ShouldBeTrue();
         AuthoringCode.IsValidPrefix("A").ShouldBeFalse();
         AuthoringCode.MaximumNumber.ShouldBe(1_000_000_000);

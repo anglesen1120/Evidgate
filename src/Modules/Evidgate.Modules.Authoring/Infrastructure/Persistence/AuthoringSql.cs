@@ -12,90 +12,88 @@ internal static class AuthoringSql
     /// <summary>
     /// The row lock of a mutation: the entity row <c>for update</c> — the lock that serialises two writers of one
     /// entity, so <c>version_no</c> never collides and the unique key of <c>authoring_version</c> never surfaces as a
-    /// 23505 — plus the last version's number and hash (the no-op rule of AC5 and the out-of-step guard).
+    /// 23505.
+    /// </summary>
+    /// <remarks>
+    /// The last version's number and hash are read by <see cref="ReadLastVersion"/> in a separate statement
+    /// <em>after</em> this lock, never through a lateral join here: a lateral is evaluated in the statement's own
+    /// snapshot, so a writer that waited on another writer's lock would re-check the row under READ COMMITTED against
+    /// the new row version while the lateral still answered the pre-wait <c>last_version_no</c>, and the out-of-step
+    /// guard would refuse a perfectly serialised write.
+    /// </remarks>
+    /// <param name="kind">The entity kind.</param>
+    /// <param name="shared">
+    /// True for a parent-only probe: <c>for share</c> still blocks a concurrent soft delete of the parent, which is the
+    /// whole purpose of the probe, without serialising every unrelated child of that parent behind one update lock.
+    /// </param>
+    internal static string LockEntity(AuthoringEntityKind kind, bool shared = false) =>
+        EntitySelect(kind, LockClause(kind, shared ? "share" : "update"));
+
+    /// <summary>
+    /// The same row read without any lock: the peek a restore needs to learn its parent id before it takes the
+    /// parent lock, in the writer-wide lock order (parent before child).
     /// </summary>
     /// <param name="kind">The entity kind.</param>
-    internal static string LockEntity(AuthoringEntityKind kind) => kind switch
+    internal static string PeekEntity(AuthoringEntityKind kind) => EntitySelect(kind, null);
+
+    /// <summary>
+    /// The last version row of one entity (the no-op rule of AC5 and the out-of-step guard). Always a statement of its
+    /// own, after the entity lock, so it sees everything the lock holder committed.
+    /// </summary>
+    internal const string ReadLastVersion = """
+        select version_no, content_hash
+          from public.authoring_version
+         where org_id = @org_id
+           and project_id = @project_id
+           and entity_kind = @entity_kind
+           and entity_id = @id
+         order by version_no desc
+         limit 1
+        """;
+
+    /// <summary>The lock clause of <see cref="LockEntity"/>: the alias of the locked table is the row's own.</summary>
+    /// <param name="kind">The entity kind.</param>
+    /// <param name="strength"><c>update</c> or <c>share</c>.</param>
+    private static string LockClause(AuthoringEntityKind kind, string strength) => kind switch
     {
-        AuthoringEntityKind.FeatureNode => """
-            select n.id,
-                   n.parent_id,
-                   n.kind,
-                   n.title,
-                   n.position,
-                   n.deleted_at,
-                   n.version,
-                   coalesce(l.version_no, 0) as last_version_no,
-                   coalesce(l.content_hash, '') as last_content_hash
-              from public.feature_node n
-              left join lateral (
-                    select v.version_no, v.content_hash
-                      from public.authoring_version v
-                     where v.org_id = n.org_id
-                       and v.project_id = n.project_id
-                       and v.entity_kind = 'feature_node'
-                       and v.entity_id = n.id
-                     order by v.version_no desc
-                     limit 1) l on true
-             where n.org_id = @org_id and n.project_id = @project_id and n.id = @id
-               for update of n
-            """,
-        AuthoringEntityKind.ChecklistItem => """
-            select i.id,
-                   i.feature_node_id,
-                   i.title,
-                   i.description,
-                   i.priority,
-                   i.state,
-                   i.source,
-                   i.position,
-                   i.deleted_at,
-                   i.version,
-                   coalesce(l.version_no, 0) as last_version_no,
-                   coalesce(l.content_hash, '') as last_content_hash
-              from public.checklist_item i
-              left join lateral (
-                    select v.version_no, v.content_hash
-                      from public.authoring_version v
-                     where v.org_id = i.org_id
-                       and v.project_id = i.project_id
-                       and v.entity_kind = 'checklist_item'
-                       and v.entity_id = i.id
-                     order by v.version_no desc
-                     limit 1) l on true
-             where i.org_id = @org_id and i.project_id = @project_id and i.id = @id
-               for update of i
-            """,
-        AuthoringEntityKind.ManualTestCase => """
-            select m.id,
-                   m.checklist_item_id,
-                   m.code,
-                   m.title,
-                   m.description,
-                   m.precondition,
-                   m.steps::text as steps,
-                   m.priority,
-                   m.state,
-                   m.source,
-                   m.deleted_at,
-                   m.version,
-                   coalesce(l.version_no, 0) as last_version_no,
-                   coalesce(l.content_hash, '') as last_content_hash
-              from public.manual_test_case m
-              left join lateral (
-                    select v.version_no, v.content_hash
-                      from public.authoring_version v
-                     where v.org_id = m.org_id
-                       and v.project_id = m.project_id
-                       and v.entity_kind = 'manual_test_case'
-                       and v.entity_id = m.id
-                     order by v.version_no desc
-                     limit 1) l on true
-             where m.org_id = @org_id and m.project_id = @project_id and m.id = @id
-               for update of m
-            """,
+        AuthoringEntityKind.FeatureNode => "for " + strength + " of n",
+        AuthoringEntityKind.ChecklistItem => "for " + strength + " of i",
+        AuthoringEntityKind.ManualTestCase => "for " + strength + " of m",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown authoring entity kind"),
     };
+
+    /// <summary>One entity row's read, with an optional lock clause appended after the <c>where</c>.</summary>
+    /// <param name="kind">The entity kind.</param>
+    /// <param name="lockClause">The lock clause, or null for an unlocked read.</param>
+    private static string EntitySelect(AuthoringEntityKind kind, string? lockClause)
+    {
+        var suffix = lockClause is null ? string.Empty : "\n   " + lockClause;
+
+        return kind switch
+        {
+            AuthoringEntityKind.FeatureNode => $"""
+            select n.id, n.parent_id, n.kind, n.title, n.position, n.deleted_at, n.version
+              from public.feature_node n
+             where n.org_id = @org_id and n.project_id = @project_id and n.id = @id
+            {suffix}
+            """,
+            AuthoringEntityKind.ChecklistItem => $"""
+            select i.id, i.feature_node_id, i.title, i.description, i.priority, i.state, i.source, i.position,
+                   i.deleted_at, i.version
+              from public.checklist_item i
+             where i.org_id = @org_id and i.project_id = @project_id and i.id = @id
+            {suffix}
+            """,
+            AuthoringEntityKind.ManualTestCase => $"""
+            select m.id, m.checklist_item_id, m.code, m.title, m.description, m.precondition, m.steps::text as steps,
+                   m.priority, m.state, m.source, m.deleted_at, m.version
+              from public.manual_test_case m
+             where m.org_id = @org_id and m.project_id = @project_id and m.id = @id
+            {suffix}
+            """,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown authoring entity kind"),
+        };
+    }
 
     /// <summary>The insert of a created entity; returns the row's <c>version</c> (1, by the column default).</summary>
     /// <param name="kind">The entity kind.</param>

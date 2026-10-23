@@ -406,7 +406,7 @@ public sealed class AuthoringVersionTests
             world,
             Guid.CreateVersion7(),
             [
-                EntityChange.Create(AuthoringEntityKind.FeatureNode, category, NodeContent(FeatureNodeKinds.Category, "Payment", 1, module)),
+                EntityChange.Create(AuthoringEntityKind.FeatureNode, category, NodeContent(FeatureNodeKinds.Category, "Payment", 0, second)),
                 EntityChange.Create(AuthoringEntityKind.ChecklistItem, item, ItemContent(category, "Pay", 0)),
                 EntityChange.Create(AuthoringEntityKind.ManualTestCase, manualCase, CaseContent(item, "SHOP-002", "Pay")),
             ]);
@@ -537,7 +537,7 @@ public sealed class AuthoringVersionTests
     // ------------------------------------------------------------------ §4 / AC4: the allocator
 
     [Fact]
-    public async Task Allocator_NeverSharesANumber_AndRollbackBurnsOne()
+    public async Task Allocator_CommitsOnItsOwnConnection_SoARolledBackCallerBurnsTheNumber()
     {
         await using var world = await StartAsync();
 
@@ -556,8 +556,15 @@ public sealed class AuthoringVersionTests
         burned.Value!.Number.ShouldBe(3);
         fourth.Value!.Number.ShouldBe(4, "a rolled-back allocation is burned, never handed out twice");
 
-        first.Value.Value.ShouldBe("CHK-001");
-        fourth.Value.Value.ShouldBe("CHK-004");
+        // The prefix is the migration's own derivation, not the allocator's: the seed inserted the project with only a
+        // slug ("checkout"), so the 0039 BEFORE INSERT trigger filled case_prefix from evidgate.case_prefix_stem —
+        // first four alphanumerics, upper-cased → CHEC. Hard-coded, so the derivation itself is under test.
+        first.Value.Value.ShouldBe("CHEC-001");
+        fourth.Value.Value.ShouldBe("CHEC-004");
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            "select case_prefix from public.project where id = '" + world.Project.ToString("D") + "'"))
+            .ShouldBe("CHEC", "the trigger derived the prefix from the slug");
         (await _fixture.ScalarAsync<long>(
             world.Database,
             "select next_value from public.authoring_code_counter")).ShouldBe(5);
@@ -579,6 +586,147 @@ public sealed class AuthoringVersionTests
         results.Select(result => result.Value!.Number).ShouldBe([5L, 6L], ignoreOrder: true);
     }
 
+    // ------------------------------------------------------------------ §6: the restore state rule
+
+    [Fact]
+    public async Task Restore_ItemRecordsActiveState_AndAcceptsTheNextEdit()
+    {
+        await using var world = await StartAsync();
+        var module = Guid.CreateVersion7();
+        var feature = Guid.CreateVersion7();
+        var category = Guid.CreateVersion7();
+        var item = Guid.CreateVersion7();
+
+        (await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Create(AuthoringEntityKind.FeatureNode, module, NodeContent(FeatureNodeKinds.Module, "Shop", 0, null)),
+            EntityChange.Create(AuthoringEntityKind.FeatureNode, feature, NodeContent(FeatureNodeKinds.Feature, "Checkout", 0, module)),
+            EntityChange.Create(AuthoringEntityKind.FeatureNode, category, NodeContent(FeatureNodeKinds.Category, "Payment", 0, feature)),
+            EntityChange.Create(AuthoringEntityKind.ChecklistItem, item, ItemContent(category, "Pay", 0)),
+        ])).IsSuccess.ShouldBeTrue();
+
+        // Retired, then soft-deleted: the state a restore must not bring back.
+        (await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Update(AuthoringEntityKind.ChecklistItem, item, ItemContent(category, "Pay", 0, ChecklistItemStateMachine.Retired)) with { Reason = "cleanup" },
+        ])).IsSuccess.ShouldBeTrue();
+        (await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.SoftDelete(AuthoringEntityKind.ChecklistItem, item, "cleanup"),
+        ])).IsSuccess.ShouldBeTrue();
+
+        var restored = await RestoreAsync(world, AuthoringEntityKind.ChecklistItem, item);
+        restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
+
+        var id = item.ToString("D");
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            "select state from public.checklist_item where id = '" + id + "'"))
+            .ShouldBe(ChecklistItemStateMachine.Active, "§6: a restored item is active, not the retired state it was deleted in");
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            "select content->>'state' from public.authoring_version where entity_id = '" + id + "' order by version_no desc limit 1"))
+            .ShouldBe(ChecklistItemStateMachine.Active, "the version snapshot records the state the row gets");
+
+        // The row really is active: an ordinary edit is accepted, where a retired item refuses every edit.
+        var edited = await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Update(AuthoringEntityKind.ChecklistItem, item, ItemContent(category, "Pay with a card", 0)),
+        ]);
+        edited.IsSuccess.ShouldBeTrue(edited.Error?.Message);
+        (await _fixture.ScalarAsync<int>(
+            world.Database,
+            "select version from public.checklist_item where id = '" + id + "'"))
+            .ShouldBeGreaterThan(4);
+    }
+
+    // ------------------------------------------------------------------ AC13/AC14: the steps document
+
+    [Fact]
+    public async Task Steps_AreValidatedAgainstAuthoringStepsV1_ForEveryCaller()
+    {
+        await using var world = await StartAsync();
+        var (_, _, _, item) = await SeedLadderAsync(world);
+
+        // Zero steps and 101 steps are the schema's own bounds, reported under /content/steps.
+        var empty = await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Create(AuthoringEntityKind.ManualTestCase, Guid.CreateVersion7(), CaseWithSteps(item, "SHOP-101", "Empty", "{\"steps\":[]}")),
+        ]);
+        empty.IsSuccess.ShouldBeFalse();
+        empty.Error!.Code.ShouldBe(Evidgate.BuildingBlocks.SharedKernel.Api.ApiErrorCode.RequestInvalid);
+        empty.Error.Details!.ShouldContain(detail => detail.Path == "/changes/0/content/steps");
+
+        var tooMany = string.Join(",", Enumerable.Range(1, 101).Select(no =>
+            "{\"no\":" + no.ToString(System.Globalization.CultureInfo.InvariantCulture) + ",\"action\":\"a\",\"expected\":\"b\"}"));
+        var many = await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Create(AuthoringEntityKind.ManualTestCase, Guid.CreateVersion7(), CaseWithSteps(item, "SHOP-102", "Many", "{\"steps\":[" + tooMany + "]}")),
+        ]);
+        many.IsSuccess.ShouldBeFalse();
+        many.Error!.Code.ShouldBe(Evidgate.BuildingBlocks.SharedKernel.Api.ApiErrorCode.RequestInvalid);
+        many.Error.Details!.ShouldContain(detail => detail.Path == "/changes/0/content/steps");
+
+        // An unknown member inside a step is refused too (additionalProperties: false).
+        var unknown = await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Create(AuthoringEntityKind.ManualTestCase, Guid.CreateVersion7(), CaseWithSteps(item, "SHOP-103", "Unknown", "{\"steps\":[{\"no\":1,\"action\":\"a\",\"expected\":\"b\",\"bogus\":1}]}")),
+        ]);
+        unknown.IsSuccess.ShouldBeFalse();
+        unknown.Error!.Code.ShouldBe(Evidgate.BuildingBlocks.SharedKernel.Api.ApiErrorCode.RequestInvalid);
+        unknown.Error.Details!.ShouldContain(detail => detail.Path.StartsWith("/changes/0/content/steps/0", StringComparison.Ordinal));
+
+        // A valid document passes and is stored.
+        var valid = await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Create(AuthoringEntityKind.ManualTestCase, Guid.CreateVersion7(), CaseContent(item, "SHOP-104", "Valid")),
+        ]);
+        valid.IsSuccess.ShouldBeTrue(valid.Error?.Message);
+
+        // The update path validates as well: a valid case may not be edited into an invalid document.
+        var manualCase = valid.Value!.Versions.Single().EntityId;
+        var broken = await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Update(AuthoringEntityKind.ManualTestCase, manualCase, CaseWithSteps(item, "SHOP-104", "Valid", "{\"steps\":[]}")),
+        ]);
+        broken.IsSuccess.ShouldBeFalse();
+        broken.Error!.Code.ShouldBe(Evidgate.BuildingBlocks.SharedKernel.Api.ApiErrorCode.RequestInvalid);
+        broken.Error.Details!.ShouldContain(detail => detail.Path == "/changes/0/content/steps");
+    }
+
+    [Fact]
+    public async Task Steps_Leaves_AreStoredNfcComposed()
+    {
+        await using var world = await StartAsync();
+        var (_, _, _, item) = await SeedLadderAsync(world);
+
+        // The action carries "café" decomposed: e + U+0301. AC14 stores the composed spelling.
+        var manualCase = Guid.CreateVersion7();
+        var created = await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Create(
+                AuthoringEntityKind.ManualTestCase,
+                manualCase,
+                CaseWithSteps(item, "SHOP-105", "NFC", "{\"steps\":[{\"no\":1,\"action\":\"Tap caf\u0065\u0301\",\"expected\":\"ok\"}]}")),
+        ]);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+
+        var stored = await _fixture.ScalarAsync<string>(
+            world.Database,
+            "select steps::text from public.manual_test_case where id = '" + manualCase.ToString("D") + "'");
+        stored.ShouldNotBeNull();
+        stored!.Contains("caf\u00e9", StringComparison.Ordinal).ShouldBeTrue("the composed spelling is stored");
+        stored.Contains('\u0301').ShouldBeFalse("no combining mark survives the write");
+    }
+
+    /// <summary>The module → feature → category → item ladder every case test needs, created in one batch.</summary>
+    private static async Task<(Guid Module, Guid Feature, Guid Category, Guid Item)> SeedLadderAsync(World world)
+    {
+        var module = Guid.CreateVersion7();
+        var feature = Guid.CreateVersion7();
+        var category = Guid.CreateVersion7();
+        var item = Guid.CreateVersion7();
+
+        (await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Create(AuthoringEntityKind.FeatureNode, module, NodeContent(FeatureNodeKinds.Module, "Shop", 0, null)),
+            EntityChange.Create(AuthoringEntityKind.FeatureNode, feature, NodeContent(FeatureNodeKinds.Feature, "Checkout", 0, module)),
+            EntityChange.Create(AuthoringEntityKind.FeatureNode, category, NodeContent(FeatureNodeKinds.Category, "Payment", 0, feature)),
+            EntityChange.Create(AuthoringEntityKind.ChecklistItem, item, ItemContent(category, "Pay", 0)),
+        ])).IsSuccess.ShouldBeTrue();
+
+        return (module, feature, category, item);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement.Clone();
@@ -597,6 +745,11 @@ public sealed class AuthoringVersionTests
         + "\",\"description\":null,\"precondition\":null,"
         + "\"steps\":{\"steps\":[{\"no\":1,\"action\":\"Open the cart\",\"expected\":\"The cart is shown\"}]},"
         + "\"priority\":\"high\",\"state\":\"" + state + "\"}");
+
+    private static JsonElement CaseWithSteps(Guid itemId, string code, string title, string stepsDocument) => Json(
+        "{\"checklist_item_id\":\"" + itemId.ToString("D") + "\",\"code\":\"" + code + "\",\"title\":\"" + title
+        + "\",\"description\":null,\"precondition\":null,\"steps\":" + stepsDocument
+        + ",\"priority\":\"high\",\"state\":\"" + ManualTestCaseStateMachine.Draft + "\"}");
 
     private static async Task<Result<AuthoringAppendOutcome>> AppendAsync(
         World world,

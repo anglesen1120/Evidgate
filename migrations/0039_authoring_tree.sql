@@ -11,12 +11,15 @@
 -- `contracts/rls-exceptions.txt`: none of the three exception kinds applies.
 --
 -- Lock levels and why they are safe here (plan §11 "Migration order"):
---   * `alter table public.project add column` — ACCESS EXCLUSIVE, metadata only.
---   * `create unique index project_org_case_prefix_uq` — SHARE: it blocks writes to `project`
---     for the duration of the build and nothing is built concurrently inside the Migrator's
---     one transaction (`migrations/README.md`, "Known limits"). It is created **before** the
---     backfill, on the still-nullable column (NULLs are distinct, so the empty state passes),
---     so any duplicate the loop would ever assign aborts the migration with 23505 here.
+--   * `alter table public.project add column` — ACCESS EXCLUSIVE, and it is held until commit, so
+--     **every read of `project` blocks for the whole migration**, the backfill included. That is why
+--     the backfill needs no advisory lock: no other transaction can insert a `project` row while the
+--     lock is held.
+--   * `create unique index project_org_case_prefix_uq` — SHARE, taken under the ACCESS EXCLUSIVE
+--     above; nothing is built concurrently inside the Migrator's one transaction
+--     (`migrations/README.md`, "Known limits"). It is created **before** the backfill, on the
+--     still-nullable column (NULLs are distinct, so the empty state passes), so any duplicate the
+--     loop would ever assign aborts the migration with 23505 here.
 --   * the dedupe backfill — one `update` per project row that still has a NULL prefix. A
 --     one-shot while `project` is small (one row per project); above ~10^5 projects it becomes
 --     a lock-heavy rewrite and must be split into add-nullable -> backfill -> set-not-null,
@@ -33,11 +36,11 @@
 --
 -- [DECISION] deviations from the plan's DDL, each forced by a repository rule:
 --   * `authoring_code_counter.id uuid` + `unique (org_id, id)`: `scripts/check-rls.py` (rule
---     `missing_unique_key`) and `tests/Persistence.IntegrationTests/SchemaConventionScan` require
---     every non-exempt business table to carry `unique (org_id, id)` (TL T3, 00 §5.4.6). The plan's
---     key `primary key (org_id, project_id)` is kept as the row's identity (it is what the
---     allocation UPSERT targets) and the surrogate `id` satisfies the convention — the 0033
---     `policy_activation` precedent, not an exception-list entry.
+--     `missing_unique_key`, which has no exemption form) requires `unique (org_id, id)` on every
+--     non-exempt business table, and `SchemaConventionScan` demands the same key (TL T3, 00 §5.4.6).
+--     The plan's `primary key (org_id, project_id)` stays the row's identity (the allocation UPSERT
+--     target); the surrogate `id` satisfies both checks — the 0033 `policy_activation` precedent —
+--     so the allow-list keeps `AuditColumns | VersionTrigger` and adds no `rls-exceptions.txt` entry.
 --   * `content_hash` is checked with `^sha256:[0-9a-f]{64}$` rather than the plan's
 --     `like 'sha256:%'`: the value is the RFC 8785 canonical hash, and every other hash column in
 --     the schema (0020/0021/0023) pins the full form.
@@ -87,14 +90,21 @@ create unique index if not exists project_org_case_prefix_uq
 -- candidates are finite (n <= 9 999 999) and an org that exhausts them raises instead of writing
 -- a duplicate.
 --
--- The per-org transaction-scoped advisory lock serialises two concurrent project creates in the
--- same org (PANEL-CHOICE Q1): the loser waits at the lock, then its `exists` probe — a statement of
--- this VOLATILE function, so it takes a fresh snapshot per statement under READ COMMITTED — sees
--- the winner's committed row and advances to the next candidate. With a *repeated* lock key per
--- org, two orgs never wait for each other. The function is SECURITY INVOKER on purpose: the probe
--- then runs under the caller's RLS, so it can only ever see the caller's own org — which is the
--- scope the uniqueness rule is defined over.
-create or replace function evidgate.next_case_prefix(org uuid, slug text) returns text
+-- Two functions, one derivation: the unlocked core is what the migration's backfill calls (it runs
+-- under the ACCESS EXCLUSIVE lock on `project`, so no concurrent create can interleave), and the
+-- locking wrapper is what the BEFORE INSERT trigger and the runtime create path call.
+--
+-- Why the wrapper takes a lock at all (PANEL-CHOICE Q1): the runner's transaction takes an ACCESS
+-- EXCLUSIVE lock and releases it at commit, and later creates take none, so two concurrent creates
+-- in the same org could otherwise read the same "first free candidate" and collide on
+-- `project_org_case_prefix_uq`. The loser waits at the lock, then its `exists` probe — a statement
+-- of this VOLATILE function, so it takes a fresh snapshot per statement under READ COMMITTED — sees
+-- the winner's committed row and advances to the next candidate. The lock is per org (a repeated
+-- key pair), so two orgs never wait for each other, and it is transaction-scoped: a create holds it
+-- for its own transaction only. Both functions are SECURITY INVOKER on purpose: the probe then runs
+-- under the caller's RLS, so it can only ever see the caller's own org — which is the scope the
+-- uniqueness rule is defined over.
+create or replace function evidgate.next_case_prefix_unlocked(org uuid, slug text) returns text
   language plpgsql
   as $$
   declare
@@ -102,8 +112,6 @@ create or replace function evidgate.next_case_prefix(org uuid, slug text) return
     cand text;
     n integer := 1;
   begin
-    perform pg_advisory_xact_lock(hashtext('evidgate.case_prefix'), hashtext(org::text));
-
     stem := evidgate.case_prefix_stem(slug);
 
     loop
@@ -122,13 +130,29 @@ create or replace function evidgate.next_case_prefix(org uuid, slug text) return
   end
   $$;
 
+revoke all on function evidgate.next_case_prefix_unlocked(uuid, text) from public;
+grant execute on function evidgate.next_case_prefix_unlocked(uuid, text) to evidgate_app;
+
+create or replace function evidgate.next_case_prefix(org uuid, slug text) returns text
+  language plpgsql
+  as $$
+  begin
+    perform pg_advisory_xact_lock(hashtext('evidgate.case_prefix'), hashtext(org::text));
+
+    return evidgate.next_case_prefix_unlocked(org, slug);
+  end
+  $$;
+
 revoke all on function evidgate.next_case_prefix(uuid, text) from public;
 grant execute on function evidgate.next_case_prefix(uuid, text) to evidgate_app;
 
 -- Deterministic assignment order, in one pass: each row takes the first candidate still free in
 -- its org, so the result depends only on `(org_id, created_at, id)` and a rerun resumes on the rows
 -- that are still NULL. A duplicate can only come from a bug in the candidate rule — and then the
--- unique index created above aborts the migration instead of sharing a prefix.
+-- unique index created above aborts the migration instead of sharing a prefix. The loop calls the
+-- **unlocked** core: the ACCESS EXCLUSIVE lock on `project` held by this migration's own ALTER
+-- already excludes every concurrent create, and taking one advisory lock per org for the whole
+-- transaction would only burn lock-table slots on an install with many orgs.
 do $$
 declare
   r record;
@@ -139,7 +163,7 @@ begin
             order by p.org_id, p.created_at, p.id
   loop
     update public.project
-       set case_prefix = evidgate.next_case_prefix(r.org_id, r.slug)
+       set case_prefix = evidgate.next_case_prefix_unlocked(r.org_id, r.slug)
      where id = r.id;
   end loop;
 end
@@ -500,29 +524,47 @@ create policy authoring_version_owner_backfill on public.authoring_version
 -- Part 10: grants. 0001's default privileges give `evidgate_app` full DML on every table
 -- `evidgate_owner` creates in `public`, so every block below revokes what the app must not do
 -- *before* it grants the minimum (0027/0028/0031/0032 precedent). The three entity tables are
--- soft-deleted, never physically deleted by the app: `update` is granted (edits, the soft-delete
--- stamp and the restore), `delete` is not. `authoring_code_counter` is the one row set updated in
--- place. `authoring_version` is insert-only for the app — its UPDATE/DELETE are refused here and
--- by the trigger above, for every role.
+-- soft-deleted, never physically deleted by the app, and the app may only write the columns its
+-- statements actually set: `update` is **column-scoped** (0027:159, 0033:94/110), so `id`,
+-- `org_id`, `project_id` and `created_at` are writable by no role but the owner, and a re-key is a
+-- 42501 instead of a silent row move. The lists come from
+-- `Infrastructure/Persistence/AuthoringSql.cs` (`UpdateEntity`, `SoftDeleteEntity`,
+-- `RestoreEntity`, `AllocateCode`): the `set_` triggers own `updated_at`/`version`, and a trigger's
+-- assignment to `NEW` needs no column privilege, so neither column is granted.
+--   * `manual_test_case.code` **is** in the update statement (`UpdateEntity` writes the whole row —
+--     the snapshot fields and the code — back on a move/restore, `AuthoringSql.cs:142`), so the column
+--     must be grantable. `code` is part of the `content` snapshot (13.1.1 §4:207,
+--     `AuthoringContent.cs:78`), so its immutability is not a grant question: the allocator assigns it
+--     once, the move (AC22) re-writes the same value, and a real change would move `content_hash` and
+--     is refused by the route guard (AC4) before any write.
+-- `authoring_code_counter` is the one row set updated in place (`next_value` only).
+-- `authoring_version` is insert-only for the app — its UPDATE/DELETE are refused here and by the
+-- trigger above, for every role.
 -- ---------------------------------------------------------------------------------------------------
 
-revoke delete on public.feature_node from evidgate_app;
-grant select, insert, update on public.feature_node to evidgate_app;
+revoke update, delete on public.feature_node from evidgate_app;
+grant update (parent_id, kind, title, position, deleted_at) on public.feature_node to evidgate_app;
+grant select, insert on public.feature_node to evidgate_app;
 grant select on public.feature_node to evidgate_operator;
 revoke all on public.feature_node from evidgate_worker_sched;
 
-revoke delete on public.checklist_item from evidgate_app;
-grant select, insert, update on public.checklist_item to evidgate_app;
+revoke update, delete on public.checklist_item from evidgate_app;
+grant update (feature_node_id, title, description, priority, state, position, deleted_at)
+  on public.checklist_item to evidgate_app;
+grant select, insert on public.checklist_item to evidgate_app;
 grant select on public.checklist_item to evidgate_operator;
 revoke all on public.checklist_item from evidgate_worker_sched;
 
-revoke delete on public.manual_test_case from evidgate_app;
-grant select, insert, update on public.manual_test_case to evidgate_app;
+revoke update, delete on public.manual_test_case from evidgate_app;
+grant update (checklist_item_id, code, title, description, precondition, steps, priority, state, deleted_at)
+  on public.manual_test_case to evidgate_app;
+grant select, insert on public.manual_test_case to evidgate_app;
 grant select on public.manual_test_case to evidgate_operator;
 revoke all on public.manual_test_case from evidgate_worker_sched;
 
-revoke delete on public.authoring_code_counter from evidgate_app;
-grant select, insert, update on public.authoring_code_counter to evidgate_app;
+revoke update, delete on public.authoring_code_counter from evidgate_app;
+grant update (next_value) on public.authoring_code_counter to evidgate_app;
+grant select, insert on public.authoring_code_counter to evidgate_app;
 grant select on public.authoring_code_counter to evidgate_operator;
 revoke all on public.authoring_code_counter from evidgate_worker_sched;
 

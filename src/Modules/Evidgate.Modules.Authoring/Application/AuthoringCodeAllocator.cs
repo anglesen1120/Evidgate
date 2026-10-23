@@ -24,10 +24,24 @@ namespace Evidgate.Modules.Authoring.Application;
 /// <para>
 /// The organization must still equal the open scope's: an allocation outside a request's tenant flow is a bug.
 /// </para>
+/// <para>
+/// <b>Invariant: this call needs a second pooled connection.</b> The caller's scope holds one for the whole request, so
+/// the data source's pool must be able to hand out one more than the caller's concurrency (the Api/Worker
+/// <c>Maximum Pool Size</c> does). Both the pool acquire and the counter's row lock are bounded by 5 s, and either
+/// bound expiring is the retryable <c>503 unavailable</c>, never a hang.
+/// </para>
 /// </remarks>
 internal sealed class AuthoringCodeAllocator(NpgsqlDataSource dataSource, ITenantScopeAccessor scopes)
 {
     private const string SetTenantSql = "select set_config('evidgate.org_id', @org_id, true)";
+
+    /// <summary>
+    /// The bound on the pool acquire, the same 5 s as the row lock: the allocator needs a <b>second</b> pooled connection
+    /// while the caller still holds its own on the ambient scope, so the data source's pool must be able to hand out one
+    /// more than the caller's concurrency (the Api/Worker <c>Maximum Pool Size</c> covers it). A pool of one would block
+    /// on itself, and this bound turns that into the retryable <c>503 unavailable</c> instead of a hang.
+    /// </summary>
+    private static readonly TimeSpan AcquireTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>Allocates the project's next code.</summary>
     /// <param name="orgId">The tenant; must equal the open scope's organization.</param>
@@ -51,7 +65,21 @@ internal sealed class AuthoringCodeAllocator(NpgsqlDataSource dataSource, ITenan
                 "the project is required"));
         }
 
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        NpgsqlConnection connection;
+        try
+        {
+            // The pool acquire is bounded like the row lock below: a pool with no free connection answers the same
+            // retryable 503 instead of hanging the request for the data source's own timeout.
+            using var acquire = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            acquire.CancelAfter(AcquireTimeout);
+            connection = await dataSource.OpenConnectionAsync(acquire.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return AuthoringErrors.Fail<AuthoringCode>(AuthoringErrors.Unavailable());
+        }
+
+        await using var connectionScope = connection;
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         await connection.ExecuteAsync(new CommandDefinition(

@@ -381,7 +381,49 @@ internal static class AuthoringContent
             return null;
         }
 
-        return steps.GetRawText();
+        // Every string leaf is NFC-normalised before the document is stored, so the composed and the decomposed spelling
+        // of one step are one stored document, one content_hash and one version (AC14). Rebuilding the node tree keeps
+        // member order, so the serialised text is stable.
+        return JsonNode.Parse(steps.GetRawText()) is { } node
+            ? NormaliseLeaves(node).ToJsonString()
+            : steps.GetRawText();
+    }
+
+    /// <summary>NFC-normalises every string leaf of a JSON document in place; non-string leaves are left alone.</summary>
+    /// <param name="node">The document or subtree.</param>
+    /// <returns>The same node, normalised.</returns>
+    private static JsonNode NormaliseLeaves(JsonNode node)
+    {
+        switch (node)
+        {
+            case JsonObject jsonObject:
+                foreach (var property in jsonObject.ToList())
+                {
+                    if (property.Value is { } child)
+                    {
+                        jsonObject[property.Key] = NormaliseLeaves(child);
+                    }
+                }
+
+                return jsonObject;
+
+            case JsonArray jsonArray:
+                for (var index = 0; index < jsonArray.Count; index++)
+                {
+                    if (jsonArray[index] is { } child)
+                    {
+                        jsonArray[index] = NormaliseLeaves(child);
+                    }
+                }
+
+                return jsonArray;
+
+            case JsonValue value when value.TryGetValue<string>(out var text):
+                return JsonValue.Create(AuthoringText.Normalize(text)!);
+
+            default:
+                return node;
+        }
     }
 
     private static void Length(string? text, string path, int maximum, List<(string Path, string Reason)> problems)

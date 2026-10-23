@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Contracts;
+using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -21,6 +22,11 @@ internal static class AuthoringModule
     public static IServiceCollection AddAuthoringModule(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        // 00 §5.7 P7: the Api and Worker hosts run with InvariantGlobalization=true, where string.Normalize(FormC) is a
+        // silent no-op — every authoring text column would then store whatever spelling the caller sent, and AC14's
+        // composed-equals-decomposed rule would silently stop holding. Fail at composition, not at the first write.
+        AuthoringText.EnsureNfcSupported();
 
         // 13.1.1-T1.3: the EF Core 10 write model of the five tables of migration 0039 (00 §5.5 C4).
         services.AddEvidgateDbContext<AuthoringDbContext>(typeof(AuthoringDbContext).Assembly);

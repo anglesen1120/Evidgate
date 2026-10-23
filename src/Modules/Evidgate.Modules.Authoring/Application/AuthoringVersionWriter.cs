@@ -33,8 +33,20 @@ namespace Evidgate.Modules.Authoring.Application;
 /// lock and the unique key <c>(org, project, entity_kind, entity_id, version_no)</c> never surfaces as a 23505. If the
 /// stored history is out of step with the row it refuses with <c>409 invalid_transition</c> instead.
 /// </para>
+/// <para>
+/// <b>Lock order, one order for every path:</b> <c>feature_node</c> → <c>checklist_item</c> → <c>manual_test_case</c>,
+/// parent before child. A batch takes the locks of the entities it mutates in that order (rank, then id) before its
+/// first change; a move locks the target item before the case; a restore peeks its parent without a lock, takes the
+/// parent's <c>for share</c> lock, then locks the entity. A parent probe is always a share lock — it exists to block a
+/// concurrent soft delete of the parent, never to serialise siblings. Every lock of a call is bounded by one 5 s
+/// <c>lock_timeout</c>, and a lock timeout (55P03) or a deadlock (40P01) answers the retryable
+/// <c>503 unavailable</c> of §5 rather than a 500.
+/// </para>
 /// </remarks>
-internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor scopes)
+internal sealed class AuthoringVersionWriter(
+    ITenantDb db,
+    ITenantScopeAccessor scopes,
+    ManualCaseStepsValidator steps)
 {
     private const int MaximumReasonLength = 500;
 
@@ -72,6 +84,25 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         AuthoringAppendContext? context = null,
         CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await AppendCoreAsync(orgId, projectId, batchId, actorMembershipId, changes, context, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (IsContention(exception))
+        {
+            return AuthoringErrors.Fail<AuthoringAppendOutcome>(AuthoringErrors.Unavailable());
+        }
+    }
+
+    private async ValueTask<Result<AuthoringAppendOutcome>> AppendCoreAsync(
+        Guid orgId,
+        Guid projectId,
+        Guid batchId,
+        Guid? actorMembershipId,
+        IReadOnlyList<EntityChange> changes,
+        AuthoringAppendContext? context = null,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(changes);
         if (changes.Count == 0)
         {
@@ -96,6 +127,10 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         {
             return AuthoringErrors.Fail<AuthoringAppendOutcome>(contextFailure);
         }
+
+        // One bound for every lock this call takes (the allocator's 5 s design, SuiteCommands.cs:161): a holder that
+        // never commits answers the retryable 503 instead of piling writers up.
+        await db.ExecuteAsync(AuthoringSql.SetLockTimeout, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // Everything that only reads a caller's own values is decided before the first statement, so a malformed batch
         // writes nothing at all even before the transaction aborts.
@@ -150,6 +185,19 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
             }
 
             parsed.Add((change, snapshot));
+        }
+
+        // Lock order, writer-wide: feature_node -> checklist_item -> manual_test_case, parent before child. A batch may
+        // name several existing entities, so their locks are taken in that global order (rank, then id) before the first
+        // change is applied; a parent probe inside CreateAsync then only ever asks for a share lock on a row of a lower
+        // rank, which cannot form a cycle with this order.
+        foreach (var entry in parsed
+            .Where(entry => entry.Change.ChangeKind != AuthoringChangeKind.Create)
+            .OrderBy(entry => LockRank(entry.Change.EntityKind))
+            .ThenBy(entry => entry.Change.EntityId))
+        {
+            // A missing row is not reported here: the change itself answers not_found with its own /changes/{i} path.
+            await LockAsync(orgId, projectId, entry.Change.EntityId, entry.Change.EntityKind, cancellationToken).ConfigureAwait(false);
         }
 
         var appended = new List<PendingVersion>(parsed.Count);
@@ -228,6 +276,27 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         AuthoringAppendContext? context = null,
         CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await MoveManualTestCaseCoreAsync(orgId, projectId, batchId, actorMembershipId, caseId, toItemId, reason, context, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (IsContention(exception))
+        {
+            return AuthoringErrors.Fail<AuthoringMoveOutcome>(AuthoringErrors.Unavailable());
+        }
+    }
+
+    private async ValueTask<Result<AuthoringMoveOutcome>> MoveManualTestCaseCoreAsync(
+        Guid orgId,
+        Guid projectId,
+        Guid batchId,
+        Guid? actorMembershipId,
+        Guid caseId,
+        Guid toItemId,
+        string? reason = null,
+        AuthoringAppendContext? context = null,
+        CancellationToken cancellationToken = default)
+    {
         EnsureScope(orgId);
 
         var settings = context ?? new AuthoringAppendContext();
@@ -249,6 +318,8 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         {
             return AuthoringErrors.Fail<AuthoringMoveOutcome>(contextFailure);
         }
+
+        await db.ExecuteAsync(AuthoringSql.SetLockTimeout, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var effectiveReason = reason ?? settings.Reason;
         if (effectiveReason is not null && !IsReasonLengthValid(effectiveReason))
@@ -366,6 +437,28 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         AuthoringAppendContext? context = null,
         CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await RestoreCoreAsync(orgId, projectId, batchId, actorMembershipId, entityKind, entityId, reason, fromVersionId, context, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (IsContention(exception))
+        {
+            return AuthoringErrors.Fail<AuthoringVersionRef>(AuthoringErrors.Unavailable());
+        }
+    }
+
+    private async ValueTask<Result<AuthoringVersionRef>> RestoreCoreAsync(
+        Guid orgId,
+        Guid projectId,
+        Guid batchId,
+        Guid? actorMembershipId,
+        AuthoringEntityKind entityKind,
+        Guid entityId,
+        string? reason = null,
+        Guid? fromVersionId = null,
+        AuthoringAppendContext? context = null,
+        CancellationToken cancellationToken = default)
+    {
         EnsureScope(orgId);
 
         var settings = context ?? new AuthoringAppendContext();
@@ -395,36 +488,28 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
             return AuthoringErrors.Fail<AuthoringVersionRef>(contextFailure);
         }
 
+        await db.ExecuteAsync(AuthoringSql.SetLockTimeout, cancellationToken: cancellationToken).ConfigureAwait(false);
+
         var effectiveReason = reason ?? settings.Reason;
         if (effectiveReason is not null && !IsReasonLengthValid(effectiveReason))
         {
             return AuthoringErrors.Fail<AuthoringVersionRef>(AuthoringErrors.Invalid("/reason", "length_invalid", "a reason is 1..500 characters"));
         }
 
-        var stored = await LockAsync(orgId, projectId, entityId, entityKind, cancellationToken).ConfigureAwait(false);
-
-        AuthoringSnapshot snapshot;
-        int lastVersionNo;
-        int previousVersion;
-
-        if (stored is null)
+        // Lock order, writer-wide: parent before child (feature_node -> checklist_item -> manual_test_case). A restore
+        // therefore peeks the entity without a lock to learn its parent, takes the parent's share lock, and only then
+        // locks the entity for update. The snapshot written back is always taken from the *locked* row (or from the
+        // named version), never from the peek: a concurrent restore between the peek and the lock would otherwise
+        // re-append a stale position and state under a version number that still lines up.
+        var peeked = await PeekAsync(orgId, projectId, entityId, entityKind, cancellationToken).ConfigureAwait(false);
+        if (peeked is null)
         {
             return AuthoringErrors.Fail<AuthoringVersionRef>(AuthoringErrors.EntityNotFound(entityKind));
         }
 
-        (snapshot, lastVersionNo, previousVersion) = stored switch
-        {
-            NodeRow node => ((AuthoringSnapshot)SnapshotOf(node), node.LastVersionNo, node.Version),
-            ItemRow item => (SnapshotOf(item), item.LastVersionNo, item.Version),
-            CaseRow manualCase => (SnapshotOf(manualCase), manualCase.LastVersionNo, manualCase.Version),
-            _ => throw new InvalidOperationException("the locked row is not an authoring entity"),
-        };
+        AuthoringSnapshot? fromVersion = null;
 
-        if (IsDeleted(stored) && fromVersionId is null)
-        {
-            // The entity's own state is the snapshot to re-append.
-        }
-        else if (fromVersionId is { } versionId)
+        if (fromVersionId is { } versionId)
         {
             var version = await db.QuerySingleOrDefaultAsync<StoredVersion>(
                 AuthoringSql.ReadVersion,
@@ -448,13 +533,60 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
                     + string.Join(", ", details.Select(detail => detail.Path + " " + detail.Reason)));
             }
 
-            snapshot = parsed!;
+            fromVersion = parsed!;
+
+            if (entityKind == AuthoringEntityKind.ManualTestCase
+                && CheckSteps((ManualTestCaseSnapshot)fromVersion, "/content/") is { } stepsFailure)
+            {
+                return AuthoringErrors.Fail<AuthoringVersionRef>(stepsFailure);
+            }
         }
-        else
+        else if (!IsDeleted(peeked))
         {
             return AuthoringErrors.Fail<AuthoringVersionRef>(AuthoringErrors.InvalidTransition(
                 "the entity is not soft-deleted; restore names the version it re-applies"));
         }
+
+        // The parent to lock comes from the row (or from the named version) as peeked; the entity lock follows it.
+        var peekedSnapshot = fromVersion ?? SnapshotOf(peeked);
+        await LockRestoreParentAsync(orgId, projectId, peekedSnapshot, cancellationToken).ConfigureAwait(false);
+
+        var stored = await LockAsync(orgId, projectId, entityId, entityKind, cancellationToken).ConfigureAwait(false);
+        if (stored is null)
+        {
+            return AuthoringErrors.Fail<AuthoringVersionRef>(AuthoringErrors.EntityNotFound(entityKind));
+        }
+
+        AuthoringSnapshot snapshot;
+        if (fromVersion is not null)
+        {
+            snapshot = fromVersion;
+        }
+        else
+        {
+            if (!IsDeleted(stored))
+            {
+                // Another writer restored the row between the peek and this lock. Nothing has been written, so the
+                // caller's retry is safe.
+                return AuthoringErrors.Fail<AuthoringVersionRef>(AuthoringErrors.Unavailable());
+            }
+
+            snapshot = SnapshotOf(stored);
+
+            if (ParentOf(snapshot) != ParentOf(peekedSnapshot))
+            {
+                // The row moved to another parent between the peek and the lock: take that parent's share lock too, so
+                // the placement check below never passes under a parent nobody locked.
+                await LockRestoreParentAsync(orgId, projectId, snapshot, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        // §6: a restored item is active and a restored case is a draft again, whatever it was before. Applied before
+        // the position resolution and the write, so the entity row and the version snapshot record the same state.
+        snapshot = RestoredSnapshot(snapshot);
+
+        var lastVersionNo = LastVersionNoOf(stored);
+        var previousVersion = VersionOf(stored);
 
         var parentFailure = await CheckRestoreParentAsync(orgId, projectId, snapshot, cancellationToken).ConfigureAwait(false);
         if (parentFailure is not null)
@@ -569,6 +701,13 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
                             path + "state",
                             "value_invalid",
                             "a new manual test case is a draft until it is reviewed"));
+                    }
+
+                    // Every caller's steps document is validated after the NFC normalisation AuthoringContent applies,
+                    // so no path can store a document outside authoring-steps.v1 (AC13/AC14).
+                    if (CheckSteps(manualCase, path) is { } stepsFailure)
+                    {
+                        return AuthoringErrors.Fail<PendingVersion?>(stepsFailure);
                     }
 
                     if (await CheckCaseParentAsync(orgId, projectId, manualCase.ChecklistItemId, path + "checklist_item_id", cancellationToken).ConfigureAwait(false) is { } caseParent)
@@ -768,6 +907,12 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
                         return AuthoringErrors.Fail<PendingVersion?>(transition);
                     }
 
+                    // Same rule as create: the edited steps document must be an authoring-steps.v1 document.
+                    if (CheckSteps(edited, path) is { } stepsFailure)
+                    {
+                        return AuthoringErrors.Fail<PendingVersion?>(stepsFailure);
+                    }
+
                     lastVersionNo = existing.LastVersionNo;
                     previousVersion = existing.Version;
                     break;
@@ -945,7 +1090,83 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
 
     // ------------------------------------------------------------------ shared pieces
 
+    /// <summary>
+    /// Locks one entity row and reads its last version: <c>for update</c> for the entity the call mutates,
+    /// <c>for share</c> when <paramref name="shared"/> is true, i.e. for a parent-only probe. The probe's purpose is to
+    /// block a concurrent soft delete of the parent; an update lock there would serialise every unrelated child of one
+    /// parent behind the same lock.
+    /// </summary>
+    /// <param name="orgId">The tenant.</param>
+    /// <param name="projectId">The project.</param>
+    /// <param name="entityId">The entity.</param>
+    /// <param name="kind">The entity kind.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <param name="shared">True for a parent-only probe.</param>
+    /// <returns>The row with its last version, or null when no such row is visible in this project.</returns>
     private async ValueTask<object?> LockAsync(
+        Guid orgId,
+        Guid projectId,
+        Guid entityId,
+        AuthoringEntityKind kind,
+        CancellationToken cancellationToken,
+        bool shared = false)
+    {
+        var row = await ReadRowAsync(
+            AuthoringSql.LockEntity(kind, shared), orgId, projectId, entityId, kind, cancellationToken).ConfigureAwait(false);
+
+        if (row is null)
+        {
+            return null;
+        }
+
+        // A statement of its own, after the lock: a lateral join inside the locking select would answer from the
+        // statement's original snapshot and hide the version the lock holder just committed (AuthoringSql.LockEntity).
+        var last = await db.QuerySingleOrDefaultAsync<LastVersionRow>(
+            AuthoringSql.ReadLastVersion,
+            new
+            {
+                org_id = orgId,
+                project_id = projectId,
+                entity_kind = AuthoringWireValues.EntityKindName(kind),
+                id = entityId,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        var versionNo = last?.VersionNo ?? 0;
+        var contentHash = last?.ContentHash ?? string.Empty;
+
+        return row switch
+        {
+            NodeRow node => node with { LastVersionNo = versionNo, LastContentHash = contentHash },
+            ItemRow item => item with { LastVersionNo = versionNo, LastContentHash = contentHash },
+            CaseRow manualCase => manualCase with { LastVersionNo = versionNo, LastContentHash = contentHash },
+            _ => throw new InvalidOperationException("the locked row is not an authoring entity"),
+        };
+    }
+
+    /// <summary>
+    /// The unlocked read a restore takes before any lock, to learn its parent id: the writer-wide lock order is parent
+    /// before child (<c>feature_node</c> → <c>checklist_item</c> → <c>manual_test_case</c>), so the child row must not be
+    /// locked first. The caller re-verifies the parent id once the entity lock is held.
+    /// </summary>
+    /// <param name="orgId">The tenant.</param>
+    /// <param name="projectId">The project.</param>
+    /// <param name="entityId">The entity.</param>
+    /// <param name="kind">The entity kind.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <returns>The row as stored, without its last version, or null when no such row is visible.</returns>
+    private async ValueTask<object?> PeekAsync(
+        Guid orgId,
+        Guid projectId,
+        Guid entityId,
+        AuthoringEntityKind kind,
+        CancellationToken cancellationToken) =>
+        await ReadRowAsync(
+            AuthoringSql.PeekEntity(kind), orgId, projectId, entityId, kind, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Runs one entity-row read of <paramref name="kind"/> and materialises it as that kind's row record.</summary>
+    private async ValueTask<object?> ReadRowAsync(
+        string sql,
         Guid orgId,
         Guid projectId,
         Guid entityId,
@@ -957,11 +1178,11 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         return kind switch
         {
             AuthoringEntityKind.FeatureNode => await db.QuerySingleOrDefaultAsync<NodeRow>(
-                AuthoringSql.LockEntity(kind), parameters, cancellationToken).ConfigureAwait(false),
+                sql, parameters, cancellationToken).ConfigureAwait(false),
             AuthoringEntityKind.ChecklistItem => await db.QuerySingleOrDefaultAsync<ItemRow>(
-                AuthoringSql.LockEntity(kind), parameters, cancellationToken).ConfigureAwait(false),
+                sql, parameters, cancellationToken).ConfigureAwait(false),
             AuthoringEntityKind.ManualTestCase => await db.QuerySingleOrDefaultAsync<CaseRow>(
-                AuthoringSql.LockEntity(kind), parameters, cancellationToken).ConfigureAwait(false),
+                sql, parameters, cancellationToken).ConfigureAwait(false),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown authoring entity kind"),
         };
     }
@@ -1017,9 +1238,9 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         FeatureNodeParent? parent = null;
         if (node.ParentId is { } parentId)
         {
-            // The parent is locked for update: a concurrent soft delete of it cannot commit between this check and the
-            // write, so a child never lands under a deleted parent.
-            parent = await LockAsync(orgId, projectId, parentId, AuthoringEntityKind.FeatureNode, cancellationToken).ConfigureAwait(false) is NodeRow row
+            // The parent is share-locked: a concurrent soft delete of it cannot commit between this check and the
+            // write, so a child never lands under a deleted parent, while two children of one parent do not serialise.
+            parent = await LockAsync(orgId, projectId, parentId, AuthoringEntityKind.FeatureNode, cancellationToken, shared: true).ConfigureAwait(false) is NodeRow row
                 ? new FeatureNodeParent(row.Id, row.Kind, row.DeletedAt is not null, SameProject: true)
                 : null;
         }
@@ -1056,7 +1277,7 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         string path,
         CancellationToken cancellationToken)
     {
-        var node = await LockAsync(orgId, projectId, featureNodeId, AuthoringEntityKind.FeatureNode, cancellationToken).ConfigureAwait(false) as NodeRow;
+        var node = await LockAsync(orgId, projectId, featureNodeId, AuthoringEntityKind.FeatureNode, cancellationToken, shared: true).ConfigureAwait(false) as NodeRow;
 
         if (node is null)
         {
@@ -1080,7 +1301,7 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         string path,
         CancellationToken cancellationToken)
     {
-        var item = await LockAsync(orgId, projectId, checklistItemId, AuthoringEntityKind.ChecklistItem, cancellationToken).ConfigureAwait(false) as ItemRow;
+        var item = await LockAsync(orgId, projectId, checklistItemId, AuthoringEntityKind.ChecklistItem, cancellationToken, shared: true).ConfigureAwait(false) as ItemRow;
 
         if (item is null)
         {
@@ -1149,7 +1370,7 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
                 }
 
             case ManualTestCaseSnapshot manualCase:
-                return manualCase with { State = ManualTestCaseStateMachine.RestoreState };
+                return manualCase;
 
             default:
                 throw new InvalidOperationException("unknown snapshot");
@@ -1264,6 +1485,90 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
         _ => throw new InvalidOperationException("the row is not an authoring entity"),
     };
 
+    /// <summary>
+    /// §6's restore rule, applied to every restore: an item comes back <c>active</c> and a case <c>draft</c>, whatever
+    /// the stored state was — a retired item or an approved case never returns retired/approved.
+    /// </summary>
+    /// <param name="snapshot">The snapshot being re-appended.</param>
+    /// <returns>The snapshot with its restored state.</returns>
+    private static AuthoringSnapshot RestoredSnapshot(AuthoringSnapshot snapshot) => snapshot switch
+    {
+        ChecklistItemSnapshot item => item with { State = ChecklistItemStateMachine.RestoreState },
+        ManualTestCaseSnapshot manualCase => manualCase with { State = ManualTestCaseStateMachine.RestoreState },
+        _ => snapshot,
+    };
+
+    /// <summary>
+    /// Takes the parent's share lock before the entity's own lock (the writer-wide order parent before child): a
+    /// concurrent soft delete of the parent cannot commit between this call and the write, and a missing parent is left
+    /// to <see cref="CheckRestoreParentAsync"/> so it reports its own <c>details[].reason</c>.
+    /// </summary>
+    /// <param name="orgId">The tenant.</param>
+    /// <param name="projectId">The project.</param>
+    /// <param name="snapshot">The snapshot being restored.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async ValueTask LockRestoreParentAsync(
+        Guid orgId,
+        Guid projectId,
+        AuthoringSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        switch (snapshot)
+        {
+            case FeatureNodeSnapshot { ParentId: { } parentId }:
+                await LockAsync(orgId, projectId, parentId, AuthoringEntityKind.FeatureNode, cancellationToken, shared: true).ConfigureAwait(false);
+                return;
+            case ChecklistItemSnapshot item:
+                await LockAsync(orgId, projectId, item.FeatureNodeId, AuthoringEntityKind.FeatureNode, cancellationToken, shared: true).ConfigureAwait(false);
+                return;
+            case ManualTestCaseSnapshot manualCase:
+                await LockAsync(orgId, projectId, manualCase.ChecklistItemId, AuthoringEntityKind.ChecklistItem, cancellationToken, shared: true).ConfigureAwait(false);
+                return;
+            default:
+                return;
+        }
+    }
+
+    /// <summary>The snapshot of a locked row, whichever of the three entity kinds it is.</summary>
+    /// <param name="row">The row.</param>
+    private static AuthoringSnapshot SnapshotOf(object row) => row switch
+    {
+        NodeRow node => SnapshotOf(node),
+        ItemRow item => SnapshotOf(item),
+        CaseRow manualCase => SnapshotOf(manualCase),
+        _ => throw new InvalidOperationException("the row is not an authoring entity"),
+    };
+
+    /// <summary>The parent id a snapshot names: <c>parent_id</c>, <c>feature_node_id</c> or <c>checklist_item_id</c>.</summary>
+    /// <param name="snapshot">The snapshot.</param>
+    private static Guid? ParentOf(AuthoringSnapshot snapshot) => snapshot switch
+    {
+        FeatureNodeSnapshot node => node.ParentId,
+        ChecklistItemSnapshot item => item.FeatureNodeId,
+        ManualTestCaseSnapshot manualCase => manualCase.ChecklistItemId,
+        _ => null,
+    };
+
+    /// <summary>The last version number of a locked row (0 for a row with no version yet).</summary>
+    /// <param name="row">The row.</param>
+    private static int LastVersionNoOf(object row) => row switch
+    {
+        NodeRow node => node.LastVersionNo,
+        ItemRow item => item.LastVersionNo,
+        CaseRow manualCase => manualCase.LastVersionNo,
+        _ => throw new InvalidOperationException("the row is not an authoring entity"),
+    };
+
+    /// <summary>The entity's own <c>version</c> column of a locked row.</summary>
+    /// <param name="row">The row.</param>
+    private static int VersionOf(object row) => row switch
+    {
+        NodeRow node => node.Version,
+        ItemRow item => item.Version,
+        CaseRow manualCase => manualCase.Version,
+        _ => throw new InvalidOperationException("the row is not an authoring entity"),
+    };
+
     private static FeatureNodeSnapshot SnapshotOf(NodeRow row) => new(row.Kind, row.Title, row.Position, row.ParentId);
 
     private static ChecklistItemSnapshot SnapshotOf(ItemRow row) =>
@@ -1321,6 +1626,52 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
 
     private static bool IsReasonLengthValid(string reason) => reason.Length is > 0 and <= MaximumReasonLength;
 
+    /// <summary>
+    /// True for the two contention SQLSTATEs that mean "another writer holds what this call needs", so §5 answers them
+    /// with the retryable <c>503 unavailable</c> instead of a 500: a lock timeout (<c>55P03</c>, the writer's own 5 s
+    /// <c>lock_timeout</c>) and a deadlock (<c>40P01</c>).
+    /// </summary>
+    /// <param name="exception">The database refusal.</param>
+    private static bool IsContention(PostgresException exception) =>
+        exception.SqlState is PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected;
+
+    /// <summary>The writer-wide lock rank: <c>feature_node</c> → <c>checklist_item</c> → <c>manual_test_case</c>.</summary>
+    /// <param name="kind">The entity kind.</param>
+    private static int LockRank(AuthoringEntityKind kind) => kind switch
+    {
+        AuthoringEntityKind.FeatureNode => 0,
+        AuthoringEntityKind.ChecklistItem => 1,
+        AuthoringEntityKind.ManualTestCase => 2,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown authoring entity kind"),
+    };
+
+    /// <summary>
+    /// Validates a case's <c>steps</c> document against <c>authoring-steps.v1</c> on every write path: a document the
+    /// schema refuses is a <c>422 request_invalid</c> with one detail row per violation, rebased under
+    /// <c>/content/steps</c>, never a stored document the read model or the ETag would have to guess at. The snapshot's
+    /// steps text is already NFC-normalised (<see cref="AuthoringContent"/> normalises every string leaf), so the bytes
+    /// validated here are the bytes stored.
+    /// </summary>
+    /// <param name="manualCase">The snapshot to check.</param>
+    /// <param name="path">The change's <c>/changes/{i}/content/</c> prefix (or <c>/content/</c> for a restore).</param>
+    /// <returns>The refusal, or null when the document is valid.</returns>
+    private Error? CheckSteps(ManualTestCaseSnapshot manualCase, string path)
+    {
+        using var document = JsonDocument.Parse(manualCase.Steps);
+        var verdict = steps.ValidateDocument(document.RootElement);
+
+        return verdict.Errors.Count == 0
+            ? null
+            : AuthoringErrors.InvalidMany(
+                "the steps document is not a valid authoring-steps.v1 document",
+                [.. verdict.Errors.Select(error => new ErrorDetail(path + "steps" + StepsSuffix(error.Path), error.Reason))]);
+    }
+
+    /// <summary>The part of a schema pointer below the stored document's own <c>/steps</c> member.</summary>
+    /// <param name="pointer">The pointer the schema reported.</param>
+    private static string StepsSuffix(string pointer) =>
+        pointer.StartsWith("/steps", StringComparison.Ordinal) ? pointer["/steps".Length..] : pointer;
+
     private void EnsureScope(Guid orgId)
     {
         if (scopes.Require().OrgId != orgId)
@@ -1377,6 +1728,9 @@ internal sealed class AuthoringVersionWriter(ITenantDb db, ITenantScopeAccessor 
 
     /// <summary>The <c>version</c> a write returned.</summary>
     internal sealed record VersionRow(int Version);
+
+    /// <summary>The last <c>authoring_version</c> row of one entity, read after its lock.</summary>
+    internal sealed record LastVersionRow(int VersionNo, string ContentHash);
 
     /// <summary>The two answers of the AC7 guard.</summary>
     internal sealed record NodeContentsRow(bool HasChildren, bool HasItems);

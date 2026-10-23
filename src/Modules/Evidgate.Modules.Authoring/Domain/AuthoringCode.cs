@@ -12,11 +12,15 @@ namespace Evidgate.Modules.Authoring.Domain;
 /// </summary>
 internal sealed partial record AuthoringCode
 {
-    /// <summary>The format check of <c>manual_test_case.code</c> (§4: <c>^[A-Z][A-Z0-9]{1,7}-[0-9]{3,10}$</c>).</summary>
-    public const string FormatPattern = "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,10}$";
+    /// <summary>
+    /// The format check of <c>manual_test_case.code</c> (§4's grammar). Anchored with <c>\A</c>/<c>\z</c> rather than
+    /// <c>^</c>/<c>$</c>: .NET's <c>$</c> matches before a trailing newline, so <c>"SHOP-007\n"</c> would pass the plan's
+    /// written form — and a code is an identifier that reaches URLs and the wire unchanged.
+    /// </summary>
+    public const string FormatPattern = @"\A[A-Z][A-Z0-9]{1,7}-[0-9]{3,10}\z";
 
-    /// <summary>The grammar of <c>project.case_prefix</c> (OI-13-101, approved 2026-10-23).</summary>
-    public const string PrefixPattern = "^[A-Z][A-Z0-9]{1,7}$";
+    /// <summary>The grammar of <c>project.case_prefix</c> (OI-13-101, approved 2026-10-23), anchored the same way.</summary>
+    public const string PrefixPattern = @"\A[A-Z][A-Z0-9]{1,7}\z";
 
     /// <summary>One project can allocate at most this many codes; beyond it the allocator answers <c>409 quota_exceeded</c> (§4).</summary>
     public const long MaximumNumber = 1_000_000_000;

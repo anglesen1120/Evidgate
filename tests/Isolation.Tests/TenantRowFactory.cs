@@ -119,6 +119,11 @@ internal sealed class TenantRowFactory
 
     private static int _authoringCode;
 
+    // A fresh case-code prefix per generated project: 0039 makes `case_prefix` NOT NULL with the
+    // grammar ^[A-Z][A-Z0-9]{1,7}$ and a per-org unique index, and each generated project row is a
+    // different one, so a constant is either invalid or a duplicate ("P0001", "P0002", …).
+    private static int _casePrefix;
+
     // A fresh sequence per generated event row: event's unique key is
     // (org_id, run_id, producer_id, sequence), and the corrupt row reuses the valid row's run_id and
     // producer_id (both the manifest-derived "shard-1"), so a constant would collide on that key before
@@ -414,6 +419,8 @@ internal sealed class TenantRowFactory
             ("public.authoring_version", "entity_kind") => "feature_node",
             ("public.authoring_version", "change_kind") => "create",
             ("public.authoring_version", "content_hash") => "sha256:" + new string('c', 64),
+            ("public.project", "case_prefix") =>
+                "P" + Interlocked.Increment(ref _casePrefix).ToString("D4", CultureInfo.InvariantCulture),
             ("public.producer_slot", "producer_id") => "shard-1",
             // planned_execution's execution_key is the 00 §7 sha256 hex and its unique key is
             // (org_id, run_id, execution_key), so a constant would collide with the valid row the

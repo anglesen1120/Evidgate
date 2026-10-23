@@ -1,6 +1,10 @@
 using System.Globalization;
 using System.IO;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Migrator;
+using Evidgate.Modules.Tenancy.Domain;
+using Evidgate.Modules.Tenancy.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -124,14 +128,19 @@ public sealed class AuthoringSchemaTests
                 && entry.Contains("<= 1000000001", StringComparison.Ordinal));
     }
 
-    /// <summary>Every index of plan §4 exists with the shape the plan declares (P4)..</summary>
+    /// <summary>
+    /// The indexes that decide behaviour exist with the shape plan §4 declares (P4): the partial
+    /// sibling index that makes `position` unique per live parent (`nulls not distinct`), the two
+    /// keyset orders and the per-org prefix index. <c>pg_get_indexdef</c> quotes the keyword
+    /// <c>"position"</c>, so the comparison runs on the definition with quotes removed.
+    /// </summary>
     [Fact]
     public async Task DeclaredIndexes_Exist()
     {
         var database = await _fixture.CreateDatabaseAsync();
 
         // Live siblings only, `nulls not distinct` so two NULL-parented roots compare equal.
-        var nodeIndexes = await _fixture.IndexesAsync(database, "feature_node");
+        var nodeIndexes = (await _fixture.IndexesAsync(database, "feature_node")).Select(Unquoted).ToList();
         nodeIndexes.ShouldContain(entry => entry.StartsWith("feature_node_sibling_position_uq:", StringComparison.Ordinal)
             && entry.Contains("org_id, project_id, parent_id, position", StringComparison.Ordinal)
             && entry.Contains("NULLS NOT DISTINCT", StringComparison.OrdinalIgnoreCase)
@@ -139,15 +148,15 @@ public sealed class AuthoringSchemaTests
         nodeIndexes.ShouldContain(entry => entry.StartsWith("feature_node_tree_idx:", StringComparison.Ordinal)
             && entry.Contains("org_id, project_id, parent_id, position, id", StringComparison.Ordinal));
 
-        (await _fixture.IndexesAsync(database, "checklist_item"))
+        (await _fixture.IndexesAsync(database, "checklist_item")).Select(Unquoted)
             .ShouldContain(entry => entry.StartsWith("checklist_item_list_idx:", StringComparison.Ordinal)
                 && entry.Contains("org_id, project_id, feature_node_id, state, position, id", StringComparison.Ordinal));
 
-        (await _fixture.IndexesAsync(database, "manual_test_case"))
+        (await _fixture.IndexesAsync(database, "manual_test_case")).Select(Unquoted)
             .ShouldContain(entry => entry.StartsWith("manual_test_case_list_idx:", StringComparison.Ordinal)
                 && entry.Contains("org_id, project_id, checklist_item_id, state, code", StringComparison.Ordinal));
 
-        var versionIndexes = await _fixture.IndexesAsync(database, "authoring_version");
+        var versionIndexes = (await _fixture.IndexesAsync(database, "authoring_version")).Select(Unquoted).ToList();
         versionIndexes.ShouldContain(entry => entry.StartsWith("authoring_version_timeline_idx:", StringComparison.Ordinal)
             && entry.Contains("created_at DESC", StringComparison.OrdinalIgnoreCase)
             && entry.Contains("id DESC", StringComparison.OrdinalIgnoreCase));
@@ -155,40 +164,58 @@ public sealed class AuthoringSchemaTests
             && entry.Contains("org_id, project_id, batch_id", StringComparison.Ordinal));
 
         // The project side: the per-org prefix index the backfill is checked by.
-        (await _fixture.IndexesAsync(database, "project"))
+        (await _fixture.IndexesAsync(database, "project")).Select(Unquoted)
             .ShouldContain(entry => entry.StartsWith("project_org_case_prefix_uq:", StringComparison.Ordinal)
                 && entry.Contains("org_id, case_prefix", StringComparison.Ordinal));
     }
 
-    /// <summary>The five tables and <c>project.case_prefix</c> exist with the columns plan §4 names.</summary>
+    /// <summary>
+    /// The entity tables grant UPDATE per column (0027:159, 0033:94 precedent): the app sets the
+    /// mutable columns its statements name, while a statement that names an identity column is
+    /// refused at the ACL with 42501 — before RLS and before any trigger sees the row.
+    /// </summary>
     [Fact]
-    public async Task Tables_And_Columns_Exist()
+    public async Task ImmutableColumns_Update_RefusedForApp()
     {
         var database = await _fixture.CreateDatabaseAsync();
+        var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
+        var node = Guid.CreateVersion7();
 
-        foreach (var table in Tables)
+        await using (var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
-            (await _fixture.TableExistsAsync(database, table)).ShouldBeTrue($"{table} is created by 0039");
+            await seed.ExecuteAsync(InsertNode(node, org, project, null, "module", "Shop", 0));
+            await seed.CommitAsync();
         }
 
-        (await _fixture.ColumnsAsync(database, "project"))
-            .ShouldContain(entry => entry.StartsWith("case_prefix:text:text:NO:-", StringComparison.Ordinal));
-        (await _fixture.ColumnsAsync(database, "manual_test_case"))
-            .ShouldContain(entry => entry.StartsWith("steps:jsonb:jsonb:NO:-", StringComparison.Ordinal));
-        (await _fixture.ColumnsAsync(database, "authoring_version"))
-            .ShouldContain(entry => entry.StartsWith("created_at:timestamp with time zone:timestamptz:NO:clock_timestamp()", StringComparison.Ordinal));
-        (await _fixture.ColumnsAsync(database, "authoring_code_counter"))
-            .ShouldContain(entry => entry.StartsWith("next_value:bigint:int8:NO:1", StringComparison.Ordinal));
+        // One scope per statement: the error aborts the whole transaction, which would answer 25P02
+        // (current transaction is aborted) instead of telling the ACL refusal from the next one.
+        await AssertRefusedAsync("update public.feature_node set org_id = @value where id = @id", ("value", Guid.CreateVersion7()));
+        await AssertRefusedAsync("update public.feature_node set project_id = @value where id = @id", ("value", Guid.CreateVersion7()));
+        await AssertRefusedAsync("update public.feature_node set id = @value where id = @id", ("value", Guid.CreateVersion7()));
+        await AssertRefusedAsync("update public.feature_node set created_at = clock_timestamp() where id = @id");
 
-        // The three mutable entity tables carry the 00 §7 audit columns.
-        foreach (var table in new[] { "feature_node", "checklist_item", "manual_test_case" })
+        // … while the mutable columns go through, which is what makes the refusals above the column
+        // grant and not a broken statement shape.
+        await using (var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org))
         {
-            var columns = await _fixture.ColumnsAsync(database, table);
-            columns.ShouldContain(entry => entry.StartsWith("created_at:timestamp with time zone:", StringComparison.Ordinal));
-            columns.ShouldContain(entry => entry.StartsWith("updated_at:timestamp with time zone:timestamptz:NO:", StringComparison.Ordinal));
-            columns.ShouldContain(entry => entry.StartsWith("version:integer:int4:NO:1", StringComparison.Ordinal));
+            (await app.ExecuteAsync(
+                "update public.feature_node set title = @title, position = 1 where id = @id",
+                ("title", "Shop, renamed"),
+                ("id", node))).ShouldBe(1, "the mutable columns are granted");
+            await app.CommitAsync();
+        }
+
+        async Task AssertRefusedAsync(string sql, params (string Name, object Value)[] parameters)
+        {
+            await using var attempt = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org);
+            (await attempt.CaptureErrorAsync(sql, [.. parameters, ("id", node)])).SqlState
+                .ShouldBe("42501", $"an identity column is not grantable: {sql}");
         }
     }
+
+    // The five tables and `project.case_prefix` are pinned where they are *decided*: the column
+    // shape by `OrgProjectSchemaTests.ProjectShape` and `AuthoringSchemaTests.TenancyKeys_…`, the
+    // audit columns by `SchemaConventionTests.Migrated_Schema_Satisfies_Conventions`.
 
     // ------------------------------------------------------------------ RLS
 
@@ -306,9 +333,10 @@ public sealed class AuthoringSchemaTests
             await seed.CommitAsync();
         }
 
-        // The deploy path: only 0039 is pending.
-        using var migration = TempMigrationDirectory.CreateFrom(PostgresTenancyFixture.RepoMigrationsPath, "0039");
-        var applied = _fixture.ApplyMigrations(database, migration.Path);
+        // The deploy path: the journal already holds 0001-0038, so pointing the Migrator at the
+        // repository's own directory applies exactly the one pending file (and the runner's
+        // contiguous-run rule holds). A directory holding only 0039 is refused as a gap.
+        var applied = _fixture.ApplyMigrations(database);
         applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
         applied.Result.AppliedNow.ShouldBe([MigrationFile]);
 
@@ -378,9 +406,11 @@ public sealed class AuthoringSchemaTests
             await seed.CommitAsync();
         }
 
-        using var migration = TempMigrationDirectory.CreateFrom(PostgresTenancyFixture.RepoMigrationsPath, "0039");
-        var applied = _fixture.ApplyMigrations(database, migration.Path);
+        // Same deploy path as above: 0001-0038 are journaled, so the repository directory has
+        // exactly one pending file.
+        var applied = _fixture.ApplyMigrations(database);
         applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
+        applied.Result.AppliedNow.ShouldBe([MigrationFile]);
 
         (await _fixture.ColumnAsync<string>(
             database,
@@ -432,6 +462,58 @@ public sealed class AuthoringSchemaTests
             database,
             $"select count(*) from public.project where case_prefix is null or case_prefix !~ '{PrefixFormat}'"))
             .ShouldBe(0);
+    }
+
+    /// <summary>
+    /// The write model maps <c>case_prefix</c> store-generated (0039 / OI-13-101), so the project
+    /// create path needs no change: EF omits the column, the BEFORE INSERT trigger fills it, and EF
+    /// reads the value back through RETURNING inside the same tenant scope
+    /// (<c>WriteModelMappingTests.ModelMatchesSchema</c> pins the mapping itself, this test pins the
+    /// behaviour a wrong mapping would break — a required, non-generated shadow property would make
+    /// every insert fail with a NULL violation).
+    /// </summary>
+    [Fact]
+    public async Task CasePrefix_EfProjectInsert_ReadsTriggerValue()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        var (org, _) = await SeedTenantAsync(database, "acme", "checkout");
+
+        await using var source = NpgsqlDataSource.Create(_fixture.AppConnectionString(database));
+        var scopes = new NpgsqlTenantScopeFactory(source);
+        await using var scope = await scopes.BeginAsync(org);
+
+        var options = new DbContextOptionsBuilder<TenancyWriteModelContext>()
+            .UseNpgsql(scope.Connection)
+            .AddInterceptors(new TenantCommandInterceptor(scopes))
+            .UseTenantModel(typeof(OrganizationConfiguration).Assembly)
+            .Options;
+
+        var at = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var project = new Project
+        {
+            Id = Guid.CreateVersion7(),
+            OrgId = org,
+            Name = "EF project",
+            Slug = "ef-project",
+            CreatedAt = at,
+            UpdatedAt = at,
+        };
+
+        await using (var context = new TenancyWriteModelContext(options))
+        {
+            await context.Database.UseTransactionAsync(scope.Transaction);
+            context.Set<Project>().Add(project);
+            await context.SaveChangesAsync();
+        }
+
+        await scope.CommitAsync();
+
+        // "ef-project" -> "EFPR": the trigger filled the column EF omitted, and the seeded project in
+        // this org already holds "CHEC", so nothing collides.
+        (await _fixture.ColumnAsync<string>(
+            database,
+            $"select case_prefix from public.project where id = '{project.Id}'"))
+            .ShouldBe(["EFPR"]);
     }
 
     /// <summary>
@@ -600,6 +682,13 @@ public sealed class AuthoringSchemaTests
 
         return database;
     }
+
+    /// <summary>
+    /// An index definition with the double quotes removed: <c>pg_get_indexdef</c> quotes reserved
+    /// words such as <c>"position"</c>, and the assertions below compare columns, not quoting style.
+    /// </summary>
+    private static string Unquoted(string indexDefinition) =>
+        indexDefinition.Replace("\"", string.Empty, StringComparison.Ordinal);
 
     /// <summary>An INSERT of a feature node; the caller supplies the position and the parent.</summary>
     private static string InsertNode(Guid id, Guid org, Guid project, Guid? parent, string kind, string title, int position) =>

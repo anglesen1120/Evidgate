@@ -12,8 +12,10 @@ namespace Tenancy.IntegrationTests;
 /// 11.2.1 erasure sweep and 06.4.4-T1.2's purge must be able to remove a version row through an
 /// owner-owned SECURITY DEFINER function.
 /// <para>
-/// It also pins the grant reading of the three entity tables: `update` (edits, the soft-delete
-/// stamp, restores) but no `delete` — a physical delete is an owner-path operation only.
+/// It also pins the grant reading of the three entity tables: `update` is **column-scoped** (the
+/// mutable columns — edits, the soft-delete stamp, restores) and `delete` is not granted at all, so a
+/// physical delete is an owner-path operation only. `has_table_privilege(…, 'UPDATE')` is therefore
+/// FALSE and `has_column_privilege(…, 'deleted_at', 'UPDATE')` is TRUE (0027:159, 0033:94).
 /// </para>
 /// </summary>
 [Collection(TenancySuite.Name)]
@@ -103,7 +105,9 @@ public sealed class AuthoringVersionImmutabilityTests
             $"select count(*) from public.authoring_version where id = '{versionId}'"))
             .ShouldBe(0);
 
-        // The grants behind the two layers, read from the catalogue.
+        // The grants behind the two layers, read from the catalogue. The entity tables grant UPDATE
+        // per column (0027:159, 0033:94 precedent), so `has_table_privilege(…, 'UPDATE')` is FALSE
+        // and the mutable columns carry the privilege on their own.
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "authoring_version", "INSERT")).ShouldBeTrue();
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "authoring_version", "UPDATE")).ShouldBeFalse();
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "authoring_version", "DELETE")).ShouldBeFalse();
@@ -113,16 +117,32 @@ public sealed class AuthoringVersionImmutabilityTests
         foreach (var table in EntityTables)
         {
             (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", table, "UPDATE"))
-                .ShouldBeTrue($"{table}: the app edits and soft-deletes in place");
+                .ShouldBeFalse($"{table}: UPDATE is column-scoped, never table-wide");
+            (await ColumnPrivilegeAsync(database, table, "deleted_at"))
+                .ShouldBeTrue($"{table}: the app soft-deletes in place");
             (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", table, "DELETE"))
                 .ShouldBeFalse($"{table}: a physical delete is an owner-path operation only");
+
+            foreach (var immutable in new[] { "id", "org_id", "project_id", "created_at" })
+            {
+                (await ColumnPrivilegeAsync(database, table, immutable))
+                    .ShouldBeFalse($"{table}.{immutable} is written by the owner path only");
+            }
         }
 
-        (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "authoring_code_counter", "UPDATE"))
+        (await ColumnPrivilegeAsync(database, "authoring_code_counter", "next_value"))
             .ShouldBeTrue("the allocator updates the counter row in place");
+        (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "authoring_code_counter", "UPDATE"))
+            .ShouldBeFalse("the counter grants only next_value");
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "authoring_code_counter", "DELETE"))
             .ShouldBeFalse();
     }
+
+    /// <summary>One column's UPDATE privilege for the application role (0027/0033's column-scoped grants).</summary>
+    private Task<bool> ColumnPrivilegeAsync(string database, string table, string column) =>
+        _fixture.ScalarAsync<bool>(
+            database,
+            $"select has_column_privilege('evidgate_app', 'public.{table}', '{column}', 'UPDATE')");
 
     // ------------------------------------------------------------------ helpers
 
