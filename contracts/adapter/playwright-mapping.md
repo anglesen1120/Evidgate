@@ -361,7 +361,7 @@ as before.
 
 Each Playwright shard is its own producer with its own contiguous sequence (T54, T84).
 The identity is derived, never generated: a restarted shard reuses the same id.
-Index base and slot naming are **D-S56-Q10** (1-based, so slot `i` of the manifest is
+Index base and slot naming are [DECISION] **D-S56-Q10** (1-based, so slot `i` of the manifest is
 producer `shard-i`; an unsharded run is `shard-1`).
 
 ### Verified Playwright 1.63.0 surface
@@ -402,7 +402,7 @@ blob filename carries the same one-based index the config does. This adapter rea
   `onBegin`, thrown from `onEnd`, zero envelopes written): the server would answer 422
   `unknown_producer`, or two shards would interleave one sequence. Without a shard config
   an explicit id is honoured as before, and no shard slot is claimed for it.
-  (D-S56-Q12; the negative case is `packages/adapter-playwright/src/shard.test.ts:272`.)
+  ([DECISION] D-S56-Q12; the negative case is `packages/adapter-playwright/src/shard.test.ts:272`.)
 - No suffix, generation counter or host name is ever appended (T84).
 
 ### Restart (T84)
@@ -430,7 +430,7 @@ manifest); the reporter never invents an id outside `shard-<index>`.
 merged config whose `shard` is `null`, and gives the custom reporter no per-event shard
 identity (the per-blob config reaches only built-in reporters, see the table above).
 Re-emitting there would have to guess an id and would duplicate or renumber sequences, so
-the reporter **emits nothing** in a merge replay and says so once on stderr (D-S56-Q11).
+the reporter **emits nothing** in a merge replay and says so once on stderr ([DECISION] D-S56-Q11).
 Each shard's originals are already correct, which is exactly "keep each event's original
 shard identity".
 

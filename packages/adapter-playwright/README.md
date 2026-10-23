@@ -89,7 +89,8 @@ Every variable is read **once in the constructor**; no callback reads `process.e
 
 ```
 <spool_dir>/<run_id>/<producer_id>/000001.jsonl   # 6-digit zero-padded chunks
-<spool_dir>/<run_id>/<producer_id>/checkpoint.json # { producer_id, next_sequence }
+<spool_dir>/<run_id>/<producer_id>/shards.json     # { producer_id, sequence_next, ... }, a floor
+<spool_dir>/<run_id>/<producer_id>/writer.lock     # single-writer lock, removed on close
 ```
 
 - `run_id` and `producer_id` are joined into the path, so each must be a single path
@@ -108,8 +109,12 @@ Every variable is read **once in the constructor**; no callback reads `process.e
   files not owned by the current uid, then `fchmod`s it to `0600` — a pre-existing `0644`
   chunk becomes `0600`, and a planted symlink is refused instead of followed.
 - Envelopes are appended per callback (O(1), no whole-suite buffering). A flush writes
-  the pending batch, fsyncs the chunk, then rewrites the checkpoint atomically
-  (`checkpoint.json.tmp` → fsync → rename → directory fsync).
+  the pending batch and fsyncs the chunk. `shards.json` is rewritten atomically
+  (temp file → fsync → rename → directory fsync) only at chunk rotation, at close and
+  when a restart is detected, never per flush; a `checkpoint.json` left by an older
+  writer is read as a fallback. Restart resumes at `max(shards.json.sequence_next,
+last chunk sequence + 1)`. `EVIDGATE_SPOOL_MAX_BYTES` caps the run directory at
+  write time. Contract: `contracts/adapter/playwright-mapping.md` "## shards".
 - **One durable flush per callback batch.** `onBegin` and `onTestEnd` each flush at the
   end of their batch, so a killed run loses at most the current callback's envelopes
   instead of the whole suite; `onEnd` flushes the final `run_end` marker and closes. The
