@@ -112,8 +112,8 @@ Every variable is read **once in the constructor**; no callback reads `process.e
   the pending batch and fsyncs the chunk. `shards.json` is rewritten atomically
   (temp file → fsync → rename → directory fsync) only at chunk rotation, at close and
   when a restart is detected, never per flush; a `checkpoint.json` left by an older
-  writer is read as a fallback. Restart resumes at `max(shards.json.sequence_next,
-  last chunk sequence + 1)`. `EVIDGATE_SPOOL_MAX_BYTES` caps the run directory at
+  writer is read as a fallback. Restart resumes at the larger of the
+  `shards.json` `sequence_next` and the last chunk sequence plus one. `EVIDGATE_SPOOL_MAX_BYTES` caps the run directory at
   write time. Contract: `contracts/adapter/playwright-mapping.md` "## shards".
 - **One durable flush per callback batch.** `onBegin` and `onTestEnd` each flush at the
   end of their batch, so a killed run loses at most the current callback's envelopes
