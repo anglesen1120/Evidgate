@@ -77,7 +77,7 @@ The Milestone column of every task row in plans 01–12 holds its phase. Target 
 
 Task-level exceptions to the story targets: 09.2.1-T2…T8 → G2; 09.7.1-T3, T5, T9, T10, T11 → G2 and T4, T7, T8 → G4; 09.7.2 → G4; 09.3.1-T5, T9, T10, T11 (decision, waiver and release views) → G4 and 09.3.1-T8 (healed labels) → G3; 05.6.1-T2 (release binding by decision) → G4; 04.5.1-T1 and 06.3.5-T1 (mobile) → G4; 06.4.4-T2 (deleting healing knowledge) → G3; 11.5 → G2; 11.2.1-T4, T5 → G4 and T6 → G3; 11.3.1-T3 → G2; 12.3.1-T2…T6 → G2; 08.5.1-T3, 08.5.2-T2, 08.5.5-T4 → G3; 03.7.1-T1, T2 → G4 (superseded by 13.3.1, §3). Dependency changes: 08.5.1-T1 now depends on 12.3.1-T1 only (was 08.4.3-T3 and 12.3.1-T2), so the gateway can ship in G1 for authoring; 03.7.1-T3 now depends on 03.1.3-T1 only (was also 03.6.1-T2, the G4 dry-run sandbox), because generated scripts run locally or in customer CI (A5). The dependency pull-in still places a few listed tasks earlier than their exception, and the cell wins: 09.3.1-T5 is G3, 11.5.1-T1 and 11.5.2-T1 are G1, 12.3.1-T2 is G1.
 
-Result after the pull-in, all plans 01–13 (raw person-days, including work already merged): G1 271.75 · G2 193.5 · G3 106.75 · G4 119.25. Stories with tasks in two phases keep both. The Milestone cell of each feature-plan header in `plans/features/` still shows the old M value; `scripts/sync_feature_headers.py` refreshes it when that feature plan is next edited, because any edit brings the plan into `check-dor-security` scope (README §6). The phase in the area plan's task row is authoritative. A story's index phase is the earliest phase of its tasks, so `13.9.1` (one gate-metrics task per phase) shows as G1 in the README index while its T2 and T3 are G2 and G3.
+Result after the pull-in, all plans 01–13 (raw person-days, including work already merged): G1 272.75 · G2 194.5 · G3 106.75 · G4 119.25. Stories with tasks in two phases keep both. The Milestone cell of each feature-plan header in `plans/features/` still shows the old M value; `scripts/sync_feature_headers.py` refreshes it when that feature plan is next edited, because any edit brings the plan into `check-dor-security` scope (README §6). The phase in the area plan's task row is authoritative. A story's index phase is the earliest phase of its tasks, so `13.9.1` (one gate-metrics task per phase) shows as G1 in the README index while its T2 and T3 are G2 and G3.
 
 ## 5. Failure modes and edge cases
 
@@ -154,13 +154,14 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 #### Story 13.4.1 Authoring UI — acceptance: an approved design (`design-ui` agent) precedes build; tree, table with filters, test case editor, batched changes panel, generation flow, timeline, settings and export work in vi + en and meet WCAG 2.2 AA.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 13.4.1-T1 | UI design via the `design-ui` agent: wireframes and all states for the authoring flows | L | V1 | G1 | 09.1.1-T11 |
+| 13.4.1-T1 | UI design via the `design-ui` agent: wireframes and all states for the authoring flows, the phase-gated navigation and the CR-D-2 deltas to existing pages (`docs/design/web-ui/prompts-crd2/`) | L | V1 | G1 | 09.1.1-T11 |
 | 13.4.1-T2 | Feature tree and table view with filters | L | V1 | G1 | 13.4.1-T1, 09.1.1-T4, 13.1.1-T2 |
 | 13.4.1-T3 | Test case editor, checklist review and batched changes panel | L | V1 | G1 | 13.4.1-T2, 13.1.2-T1 |
 | 13.4.1-T4 | Generation flow screens (input, progress, credit cost shown before the call) | M | V1 | G1 | 13.4.1-T3, 13.3.1-T3 |
 | 13.4.1-T5 | Timeline / versions, AI settings and export screens | M | V1 | G1 | 13.4.1-T2, 13.1.1-T3, 13.1.1-T5, 13.2.1-T1 |
 | 13.4.1-T6 | E2E Playwright flows for authoring in vi + en | M | V1 | G1 | 13.4.1-T4, 13.4.1-T5 |
-**Epic 13.4 total: 9.0**
+| 13.4.1-T7 | Navigation regrouped by phase (items of a later phase hidden, not disabled) and the AI credit balance and usage by action on the usage page | M | V1 | G1 | 13.4.1-T1, 09.1.1-T4, 08.5.5-T2 |
+**Epic 13.4 total: 10.0**
 
 ### Epic 13.5 Script generation and local runs (G2)
 #### Story 13.5.1 Test case → bound Playwright script — acceptance: an approved test case with an environment URL and a seed test yields a TypeScript Playwright script whose every step is bound to an element found on the live page; the locator policy holds; forbidden patterns are never emitted; the script reaches the repository only as a PR and becomes `active` after 3 of 3 green runs on one build.
@@ -172,12 +173,13 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | 13.5.1-T4 | Stability check 3 of 3 on one build; `generated_script` states draft / active / flaky | M | V1 | G2 | 13.5.1-T1, 04.3.1-T1 |
 | 13.5.1-T5 | PR delivery through 03.4.2 with the `evidgate.id` annotation linking test case, script and `test_case` | M | V1 | G2 | 13.5.1-T4, 03.4.2-T1 |
 | 13.5.1-T6 | Testability score per project | S | V1 | G2 | 13.5.1-T1 |
+| 13.5.1-T7 | Generated scripts screen: status, 3-of-3 stability, unbound steps, lint results, PR state and testability score (design via `design-ui` first) | M | V1 | G2 | 13.5.1-T4, 13.5.1-T6 |
 #### Story 13.5.2 Local runs — acceptance: `evidgate run` executes selected generated tests on a developer machine and ingests results and redacted snapshots exactly like CI.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 13.5.2-T1 | `evidgate run` command wrapping the Playwright reporter and the ingest path | L | V1 | G2 | 04.2.1-T1, 04.3.1-T1 |
 | 13.5.2-T2 | Quickstart and troubleshooting docs (vi + en) | S | V1 | G2 | 13.5.2-T1 |
-**Epic 13.5 total: 11.0**
+**Epic 13.5 total: 12.0**
 
 ### Epic 13.6 Element memory (G2)
 #### Story 13.6.1 Element profiles — acceptance: each green run records a profile per bound step, keyed to the case revision and step; profiles hold structure, not content; the latest green profile per step is queryable; similarity is a versioned function with stability tests.
@@ -213,7 +215,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 13.8.2-T1 | Capture and diff data for before / after | M | V1 | G3 | 13.8.1-T2, 08.6.1-T1 |
-| 13.8.2-T2 | Review screen additions (design via `design-ui` first) | M | V1 | G3 | 13.8.2-T1, 09.5.1-T2 |
+| 13.8.2-T2 | Review screen additions, plus the failure label and drift class on the failure inbox and detail (design via `design-ui` first) | M | V1 | G3 | 13.8.2-T1, 09.5.1-T2 |
 **Epic 13.8 total: 7.0**
 
 ### Epic 13.9 Phase gates
@@ -244,15 +246,15 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | 13.1 Authoring model | 8.0 | 0 | 0 | 8.0 |
 | 13.2 Project AI settings | 1.5 | 0 | 0 | 1.5 |
 | 13.3 Requirement → checklist → test case | 7.0 | 0 | 0 | 7.0 |
-| 13.4 Authoring screens | 9.0 | 0 | 0 | 9.0 |
-| 13.5 Script generation and local runs | 11.0 | 0 | 0 | 11.0 |
+| 13.4 Authoring screens | 10.0 | 0 | 0 | 10.0 |
+| 13.5 Script generation and local runs | 12.0 | 0 | 0 | 12.0 |
 | 13.6 Element memory | 5.0 | 0 | 0 | 5.0 |
 | 13.7 Mobile spike and multimodal locate fallback | 5.0 | 0 | 0 | 5.0 |
 | 13.8 Drift classification and repair proposals | 7.0 | 0 | 0 | 7.0 |
 | 13.9 Phase gates | 1.5 | 0 | 0 | 1.5 |
-| **Total** | **55.0** | **0** | **0** | **55.0** |
+| **Total** | **57.0** | **0** | **0** | **57.0** |
 
-→ with 20 % buffer **66.0** person-days. By phase (raw): G1 26.0 · G2 18.5 · G3 10.5.
+→ with 20 % buffer **68.4** person-days. By phase (raw): G1 27.0 · G2 19.5 · G3 10.5.
 
 ## 13. Contract change requests
 
