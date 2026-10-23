@@ -235,8 +235,13 @@ public static class IsolationRouteCases
                 Fixed(bp.WaiverIds), aAdmin, $"/v1/projects/{ap.Id}/waivers?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/quarantine"), $"org B project {bp.Slug} quarantine entries", bAdmin, $"/v1/projects/{bp.Id}/quarantine?limit=1", "id",
                 Fixed(bp.QuarantineIds), aAdmin, $"/v1/projects/{ap.Id}/quarantine?limit=1"));
+            // The run-create case below proves that org B's own `POST /v1/projects/{p}/runs` is accepted, so org B's
+            // first project holds one run more than the seed made: this walk's expectation is the database's own row
+            // set for the project (owner connection, filtered by `project_id`), exactly as the audit walk above
+            // derives its ids. A page carrying another project's or another org's run still fails the set equality.
             walks.Add(new(Get("/v1/projects/{p}/runs"), $"org B project {bp.Slug} runs", bAdmin, $"/v1/projects/{bp.Id}/runs?limit=1", "run_id",
-                Fixed(bp.RunIds), aAdmin, $"/v1/projects/{ap.Id}/runs?limit=1"));
+                runner => runner.OwnerIdsAsync("select id::text from public.run where project_id = @org", bp.Id),
+                aAdmin, $"/v1/projects/{ap.Id}/runs?limit=1"));
             for (var c = 0; c < bp.CaseIds.Count; c++)
             {
                 walks.Add(new(Get("/v1/cases/{c}/revisions"), $"org B case {bp.Slug}#{c} revisions", bAdmin, $"/v1/cases/{bp.CaseIds[c]}/revisions?limit=1", "id",
@@ -890,8 +895,8 @@ public static class IsolationRouteCases
     /// by org B is the 404 <c>not_found</c> the isolation rule names (never a 403), exactly as the events probe does.
     /// The body is shape-valid, because a malformed one is 422 before the run lookup; the hash is a well-formed but
     /// unrelated <c>sha256:</c> value, so a leak of the expected one would show up as a different answer.
-    /// Org B's header-scoped <c>tenant_admin</c> holds no token identity — a finalize binds the slot to the caller's
-    /// credential (T9) — so it is refused 401 before the body is even read.
+    /// Org B's header-scoped <c>tenant_admin</c> holds no token identity and no <c>event:write</c>, so the C2 pipeline
+    /// refuses it 403 before the handler runs — the events route's own answer to the same caller (05.3.2-T1).
     /// </summary>
     private static RouteCase FinalizeShardCase()
     {

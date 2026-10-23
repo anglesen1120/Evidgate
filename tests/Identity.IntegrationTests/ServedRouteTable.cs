@@ -665,9 +665,9 @@ internal static class RouteRequests
             new(HttpMethod.Get, $"/v1/environment-revisions/{ctx.EnvironmentRevisionId}"));
         Add("GET", "/v1/runs/{r}", ctx => new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}"));
 
-        // 05.3.2-T1: a finalize is a producer's write — a member session is refused 401 before the body is read (the
-        // events route's answer), so the recipe uses a fresh run id and a shape-valid body, which is a 404 for the
-        // caller that does reach the scoped lookup instead of an oracle over an existing run.
+        // 05.3.2-T1: the finalize route is the events route's twin — a resolved member session reaches the C2 pipeline's
+        // `event:write` gate, which answers the matrix's 403, so the recipe uses a fresh run id and a shape-valid body:
+        // nothing is created for a random id, and the recipe never becomes an oracle over an existing run.
         Add("POST", "/v1/runs/{r}/finalize", _ => new(HttpMethod.Post, $"/v1/runs/{Guid.CreateVersion7()}/finalize",
             new JsonObject
             {

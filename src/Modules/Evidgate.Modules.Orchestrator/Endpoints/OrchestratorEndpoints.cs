@@ -78,9 +78,14 @@ public static class OrchestratorEndpoints
             .Produces<RunStateDto>(StatusCodes.Status200OK)
             .WithSummary("One run's state, current evidence revision, version and purpose (05.3.1)");
 
+        // The route answers 202 only, but the framework infers a 200 from the bodiless Result the delegate returns
+        // (the shared-kernel type, whose Error/SuccessValue members would then appear as contract schemas the spec does
+        // not declare — ServedDocumentTests' invariant). Declaring the status with no type pins that slot to "no body",
+        // the same way CiAdminEndpoints/MembershipEndpoints declare the bodiless Result routes they serve.
         group.MapPost("/runs/{r}/finalize", FinalizeShardAsync)
             .Accepts<object>("application/json")
             .Produces(StatusCodes.Status202Accepted)
+            .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound)
@@ -189,9 +194,10 @@ public static class OrchestratorEndpoints
     private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
 
     /// <summary>
-    /// 401 for a caller with no token identity: a finalize's slot binding <b>is</b> the caller's credential (05.3.2 §5,
-    /// T9), so a member session cannot perform one. The same code and wording the events route (<c>POST /v1/events</c>)
-    /// answers, so both producer write routes refuse the same callers identically.
+    /// 401 for a caller with no principal at all — no token and no session. The same code and wording the events route
+    /// (<c>POST /v1/runs/{r}/events</c>) answers, so both producer write routes refuse the same callers identically: a
+    /// resolved member session is <b>not</b> refused here, because the C2 pipeline's <c>event:write</c> check is what
+    /// answers it (403, 00 §9.2) and an endpoint must not pre-empt the permission gate with a different status.
     /// </summary>
     private static Error UnauthenticatedProducer => new(
         ApiErrorCode.Unauthenticated,
@@ -243,8 +249,11 @@ public static class OrchestratorEndpoints
     /// (nothing is parsed for a caller who is nobody, and the C2 pipeline has already authorized the request). The
     /// handler answers bodiless <c>202</c>: reconciliation is asynchronous.
     /// <para>
-    /// The credential check mirrors the events route exactly: a finalize is a producer's write, so a caller with no
-    /// token identity (a member session) is <c>401 unauthenticated</c> here, before a byte of the body is read.
+    /// The credential gate mirrors the events route exactly: a caller with no principal is <c>401 unauthenticated</c>
+    /// here, before a byte of the body is read, and a resolved principal (a member session included) goes on to the
+    /// pipeline, whose <c>event:write</c> permission is what refuses it (403 — the same answer the events route gives a
+    /// viewer). The handler's own credential check stays as the fail-closed backstop for a principal that somehow
+    /// reaches it without a token identity: the slot binding <b>is</b> that identity (05.3.2 §5, T9).
     /// </para>
     /// </summary>
     private static async Task<Result> FinalizeShardAsync(
@@ -254,8 +263,7 @@ public static class OrchestratorEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var principal = principals.Current;
-        if (principal is null || string.IsNullOrEmpty(principal.CredentialId))
+        if (principals.Current is null)
         {
             return Result.Failure(UnauthenticatedProducer);
         }
