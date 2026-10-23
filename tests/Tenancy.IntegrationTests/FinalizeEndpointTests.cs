@@ -416,8 +416,9 @@ public sealed class FinalizeEndpointTests
         var runVersion = await RunVersionAsync(world);
         var slotVersion = await SlotVersionAsync(world);
 
-        // Q1=A (provisional): a differing repeat is STILL 202 — the first declaration wins and stays authoritative
-        // for 05.3.2-T2. A 409 with a new wire code would be a contract change, so there is none.
+        // Q1=A (decided by the coordinator, owner rule 2026-10-23): a differing repeat is STILL 202 — the first
+        // declaration wins and stays authoritative for 05.3.2-T2. A 409 with a new wire code would be a contract
+        // change, so there is none.
         var repeat = await FinalizeAsync(
             world.Client, world.RunId, await BodyAsync(world, lastSequence: 9, count: 9), NewKey());
 
