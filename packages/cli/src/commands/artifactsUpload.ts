@@ -22,7 +22,7 @@ import { CliError, escapeControlCharacters } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
 import { ProducerSpool } from '../spool.js';
 import { UploadFailedError, hashUploadFile, uploadFile, type UploadDeps } from '../upload.js';
-import { journalFor, type UploadJournal } from '../uploadJournal.js';
+import { journalFor, type UploadJournal, type UploadJournalLockOptions } from '../uploadJournal.js';
 import {
   artifactKinds,
   closeUploadFile,
@@ -106,61 +106,65 @@ async function runArtifactsUpload(context: CommandContext): Promise<ExitCode> {
   const dirs = dirValues(values);
   // A malformed deadline refuses before the token exchange (`invalid_config`, §3).
   const deadlineMs = resolveUploadDeadlineMs(env);
+  const uploadSeams = uploadDeps(seams);
 
-  // 2. The file guard and the hash pass: a refused file makes no request at all.
+  // 2. The file guard and the hash pass: a refused file makes no request at all. The
+  // descriptor stays open until the last PUT has finished — it pins the inode the guard
+  // accepted, so the PUT pass can prove the path still resolves to those same bytes.
   const opened = await openUploadFile({ file, kind, dirs, cwd: process.cwd() });
-  let sha256: string;
   try {
-    sha256 = await hashUploadFile(opened);
-  } catch (error) {
+    const sha256 = await hashUploadFile(opened);
+
+    try {
+      // 3. Token, journal, upload.
+      const { token } = await getToken(config, deps);
+      const journal = await openJournal(config, runId, producerId, {
+        deadlineAt: uploadSeams.now() + deadlineMs,
+        now: uploadSeams.now,
+        sleep: uploadSeams.sleep,
+      });
+      const result = await uploadFile({
+        config,
+        token,
+        runId,
+        producerId,
+        executionKey,
+        attemptNo,
+        kind,
+        mediaType,
+        file: opened,
+        sha256,
+        journal,
+        deadlineMs,
+        deps: uploadSeams,
+      });
+
+      const name = escapeControlCharacters(opened.path.split(/[\\/]/).pop() ?? opened.path);
+      if (config.json) {
+        io.stdout(
+          `${JSON.stringify({
+            file: name,
+            artifact_id: result.artifactId,
+            state: result.state,
+            bytes: result.bytes,
+            scan_state: result.scanState,
+          })}\n`,
+        );
+      } else {
+        io.stdout(
+          `artifact_id=${result.artifactId} state=${result.state} bytes=${String(result.bytes)} file=${name}\n`,
+        );
+      }
+      return ExitCode.Ok;
+    } catch (error) {
+      if (error instanceof UploadFailedError && error.status === 401) {
+        // Best effort: the server's error is the one that must surface (04.2.1 §6).
+        await deleteCachedToken(config).catch(() => undefined);
+      }
+      throw error;
+    }
+  } finally {
     await closeUploadFile(opened);
-    throw error;
-  }
-  await closeUploadFile(opened);
-
-  try {
-    // 3. Token, journal, upload.
-    const { token } = await getToken(config, deps);
-    const journal = await openJournal(config, runId, producerId);
-    const result = await uploadFile({
-      config,
-      token,
-      runId,
-      producerId,
-      executionKey,
-      attemptNo,
-      kind,
-      mediaType,
-      file: opened,
-      sha256,
-      journal,
-      deadlineMs,
-      deps: uploadDeps(seams),
-    });
-
-    const name = escapeControlCharacters(opened.path.split(/[\\/]/).pop() ?? opened.path);
-    if (config.json) {
-      io.stdout(
-        `${JSON.stringify({
-          file: name,
-          artifact_id: result.artifactId,
-          state: result.state,
-          bytes: result.bytes,
-          scan_state: result.scanState,
-        })}\n`,
-      );
-    } else {
-      io.stdout(
-        `artifact_id=${result.artifactId} state=${result.state} bytes=${String(result.bytes)} file=${name}\n`,
-      );
-    }
-    return ExitCode.Ok;
-  } catch (error) {
-    if (error instanceof UploadFailedError && error.status === 401) {
-      // Best effort: the server's error is the one that must surface (04.2.1 §6).
-      await deleteCachedToken(config).catch(() => undefined);
-    }
-    throw error;
   }
 }
 
@@ -179,12 +183,14 @@ function uploadDeps(seams: ArtifactsUploadSeams): UploadDeps {
  * upload works exactly the same but has no state to resume from after a crash (stated in
  * contracts/cli.md §12). With it, the producer directory is opened/created like the spool
  * commands do, and the journal writes under its `spool.lock` — only around its own writes,
- * so a long PUT never blocks `events send`.
+ * so a long PUT never blocks `events send`. A busy lock is waited for with bounded backoff
+ * (bounded by the upload deadline) instead of failing the upload at once.
  */
 async function openJournal(
   config: CommandContext['config'],
   runId: string,
   producerId: string,
+  lock: UploadJournalLockOptions,
 ): Promise<UploadJournal | undefined> {
   const settings = config.spoolSettings();
   const spoolDir = settings.spoolDir;
@@ -202,6 +208,7 @@ async function openJournal(
     spoolDir,
     producerDirectory: spool.directory,
     withLock: (fn) => spool.withLock(fn),
+    lock,
   });
 }
 

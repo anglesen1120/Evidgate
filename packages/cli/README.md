@@ -46,7 +46,7 @@ then calls `complete` and verifies the byte count the server reports.
 A rejected `complete` is terminal for that artifact row: a re-run replays
 `complete` and is rejected again, so fix the cause and re-run with a changed file
 (a new digest mints a new row) or delete
-`<spool_dir>/<run_id>/<producer_id>/uploads/<artifact_id>.json` to start over.
+`<spool_dir>/<run_id>/<producer_id>/uploads/<identity>-<artifact_id>.json` to start over.
 Nothing is retried on a deterministic 4xx; a 5xx, `408`, `429` or transport
 failure is retried inside `EVIDGATE_UPLOAD_DEADLINE`, and an expired presigned URL
 re-mints at most three times in total per invocation (each dead URL costs one

@@ -746,7 +746,7 @@ $EVIDGATE_SPOOL_DIR/<run_id>/<producer_id>/
                     #   present while a reporter writes
   cursor.json       # CLI-owned ack cursor (fields below)
   spool.lock        # exclusive CLI lock, present only while a command holds it
-  uploads/          # 0700: one `<artifact_id>.json` upload journal per artifact (§12)
+  uploads/          # 0700: one `<identity>-<artifact_id>.json` upload journal per artifact (§12)
 ```
 
 - `<run_id>` and `<producer_id>` are single path segments (§5
@@ -844,7 +844,7 @@ drain, and `runs finalize`) takes `spool.lock` first and then inspects
 `runs finalize` re-checks `writer.lock` immediately before its recursive purge:
 if a reporter started writing while the finalize request was in flight, the run
 is still finalized but the producer directory is kept and announced as a warning.
-The upload journal (`uploads/<artifact_id>.json`, §12) is deliberately excluded
+The upload journal (`uploads/<identity>-<artifact_id>.json`, §12) is deliberately excluded
 from this check: it only needs `spool.lock`, so a running test run never blocks
 an artifact upload. [DECISION] (D-S56-Q8) Decided A by the coordinator (owner
 rule 2026-10-23, recommended option); recorded for owner phase review as
@@ -1079,6 +1079,14 @@ sha256}` (`sha256` is `sha256:<64 lowercase hex>`), the PUT to the returned
 `upload_url` with exactly the signed `required_headers`, then
 `POST /v1/artifacts/{a}/complete` with its own `Idempotency-Key`.
 
+No 2xx body is trusted before it is checked against `contracts/openapi.yaml`:
+the `201` needs a UUID `artifact_id` (the same strict check the journal uses),
+a non-empty `object_key`, a `upload_url`, a `required_headers` map of strings
+and a parseable `expires_at`; the `complete` body needs the documented `state`
+and, when ready, a `bytes` count. Anything else is `request_failed` (a
+`bad_response`): it names the member, never a value, and no half-read URL is ever
+PUT to.
+
 ### 12.1 The `upload-url` `Idempotency-Key`
 
 `sha256` of a **length-prefixed** UTF-8 concatenation, one field per member, in
@@ -1093,9 +1101,15 @@ fields would also be a valid seven-field encoding.
 The digest is 64 hex characters, inside the route's 128-character cap, and is
 identical across process restarts: a retried or resumed upload replays the
 stored `201` (T11/T92) instead of minting a second artifact row. `mint_no`
-counts the `upload-url` mints for one (file digest, size) inside the run's
-journal: `0` is the AC1 key, `n > 0` is a deterministic renewal after an expired
-presigned URL, so the dead row is never replayed.
+counts the `upload-url` mints for one upload identity inside the run's journal:
+`0` is the AC1 key, `n > 0` is a deterministic renewal after an expired
+presigned URL, so the dead row is never replayed. The identity is the six-key
+`upload-url` body, so a different execution, kind or attempt is a different key
+and therefore a different server row; a changed `--media-type` is the one
+exception — it keeps the key (it is not a key field) and changes the body, so the
+server answers its own `409 idempotency_conflict`, which surfaces verbatim and is
+never retried. Either way the CLI starts again at mint `0` instead of resuming
+the other record.
 
 `complete` uses the same shape as `runs finalize`: the lowercase-hex SHA-256 of
 the UTF-8 JSON array `["evidgate.artifact-complete-key.v1", artifact_id,
@@ -1106,18 +1120,35 @@ file_sha256, size]`.
 - `Content-Length` and `x-amz-checksum-sha256` are required in the signed headers
   (T18 signs both). A response that signs neither, a length that disagrees with
   the `fstat` size, or a checksum that disagrees with the local digest is
-  `request_failed` before the PUT: nothing is uploaded.
+  `request_failed` before the PUT: nothing is uploaded. So is a signed header the
+  client must never send — `authorization`, `cookie`, `set-cookie`, `host`,
+  `proxy-authorization`, `proxy-*`, `transfer-encoding`, `connection`
+  (case-insensitive): the refusal names the header, never its value, and nothing is
+  sent.
 - The bytes are read in two passes with O(1) memory: pass 1 hashes the **open
-  descriptor** (the guard `fstat`ed inode) in 64 KiB chunks; pass 2 streams the
-  file path again for the PUT while re-hashing every chunk. That is the "one
-  reading pass each / never buffer the whole file" rule of §8: the signed
+  descriptor** (the guard `fstat`ed inode) in 64 KiB chunks; pass 2 streams a
+  **re-opened descriptor** for the PUT while re-hashing every chunk. That is the
+  "one reading pass each / never buffer the whole file" rule of §8: the signed
   checksum header must exist before the PUT, so one pass cannot both produce it
-  and send it. If the digest or the byte count changes between the passes the
-  upload aborts (`upload_checksum_mismatch`), the store object stays
-  uncompleted under `pending/` and expires by lifecycle, and `complete` is never
-  called.
+  and send it.
+- The descriptor pass 1 read stays open until the PUT is over, and every PUT
+  attempt re-opens the file through the same guard: `O_NOFOLLOW|O_NONBLOCK`, then
+  `fstat` with `dev`/`ino`/`size` compared against the pinned descriptor. A file
+  replaced, symlinked over or resized between the passes is
+  `upload_path_refused` (never retried, never completed), so the uploaded bytes are
+  always the bytes that were hashed.
+- If the digest or the byte count changes between the passes the upload aborts
+  (`upload_checksum_mismatch`), the store object stays uncompleted under
+  `pending/` and expires by lifecycle, and `complete` is never called.
 - The bearer token never goes to the object store; the signature in the URL is
   the only credential there.
+- The PUT has no 30 s per-request timeout (that cap belongs to the two JSON
+  calls, §12.3). It is bounded by the remaining upload deadline only, plus an idle
+  timeout that resets on every body chunk (60 s): a trace that takes minutes to
+  send succeeds, and a connection that stops moving is aborted and retried instead
+  of eating the rest of the deadline. A `ready` `complete` must also report
+  exactly the local byte count; `bytes` `null`, missing or different is
+  `request_failed`, never defaulted to the local size.
 
 ### 12.3 Retry, expiry and verbatim refusals
 
@@ -1125,7 +1156,10 @@ One policy for all three calls, shared with `events send` (`sender.ts`:
 `backoffDelay`, `retryAfter`, `attemptSignal`, `isRetryable`):
 
 - retried: `408`, `429` (the longer of `Retry-After` and the jittered backoff),
-  every `5xx`, and transport failures (including the 30 s per-request timeout);
+  every `5xx`, and transport failures (including the 30 s per-request timeout and
+  the PUT's idle timeout). The 30 s cap applies to `upload-url` and `complete`
+  only; the PUT is bounded by the remaining deadline plus its 60 s idle timeout
+  (§12.2), because a multi-GB trace legitimately takes longer to send;
 - never retried: `401` (the cached token is purged, best-effort, and the server
   code surfaces with the `evidgate auth login` hint), `403`/`409`/`412`/`422`,
   `413`, and a checksum mismatch;
@@ -1180,14 +1214,20 @@ guess a type the server would refuse.
 
 ### 12.5 Journal and resume
 
-With `EVIDGATE_SPOOL_DIR` set, one record per artifact is written to
-`<spool_dir>/<run_id>/<producer_id>/uploads/<artifact_id>.json` (§11.1):
+With `EVIDGATE_SPOOL_DIR` set, one record per upload is written to
+`<spool_dir>/<run_id>/<producer_id>/uploads/<identity>-<artifact_id>.json`
+(§11.1), where `<identity>` is the first 16 hex of a SHA-256 over the
+length-prefixed upload identity — every value the `upload-url` body is built from:
 
 ```json
 {
   "artifact_id": "…",
   "file_sha256": "sha256:…",
   "size": 0,
+  "kind": "trace",
+  "execution_key": "…",
+  "attempt_no": 1,
+  "media_type": "application/zip",
   "put_done": false,
   "complete_done": false,
   "mint_no": 0
@@ -1198,17 +1238,34 @@ With `EVIDGATE_SPOOL_DIR` set, one record per artifact is written to
   `spool.lock`, so two CLI processes never interleave; the directory is `0700`
   and a record `0600`. A symlinked `uploads/`, a planted symlink for a record and
   a record that does not parse are `spool_unsafe_path` / `spool_corrupt`.
+- A busy `spool.lock` is **waited for**, not failed: `events send` holds the same
+  lock for its whole run, so a journal write retries with bounded backoff until
+  the upload deadline (a caller may shorten the wait; with no deadline at all it
+  stops after 10 s) and re-raises the last `spool_locked` only when that wait is
+  spent. Once the bytes are in the store, a lock that
+  cannot be taken is not an upload failure: `put_done` / `complete_done` are
+  best-effort, and the next run re-calls the idempotent `complete` instead.
 - The record never carries the presigned URL, a token or a header value: those
   are bearer credentials and the journal survives the process (§6).
-- Resume: the highest `mint_no` for the same (digest, size) is the row to
-  continue. `put_done` means the bytes are in the store, so a restart calls only
+- Resume: the highest `mint_no` whose record matches the identity on **every**
+  field (`file_sha256`, `size`, `kind`, `execution_key`, `attempt_no`,
+  `media_type`) is the row to continue. A record for another execution, kind,
+  attempt or media type is never resumed and never lends its `mint_no`: the
+  command calls `upload-url` at mint `0` again — a new server row for the first
+  three (they are key fields), and the server's `409 idempotency_conflict` for a
+  changed `--media-type`, which the CLI reports verbatim. The name being digest-derived means a lookup reads the
+  directory once and parses only its own candidates; a record written by an older
+  CLI (a legacy `<artifact_id>.json` name, or one without the identity fields) is
+  ignored rather than parsed, so it can neither crash a resume nor claim a mint.
+- `put_done` means the bytes are in the store, so a restart calls only
   `complete`; `complete_done` means the artifact is committed `ready`, so a re-run
   answers from the journal with no request at all. A rejected `complete` leaves
   `complete_done` false, so a re-run asks the server again instead of reporting a
   rejected artifact as ready — and it asks about the _same_ row, so it is rejected
   again. The error's hint says so: the row stays rejected, fix the cause and
-  re-run (a changed file has a new digest and mints a new row), or delete
-  `<spool_dir>/<run_id>/<producer_id>/uploads/<artifact_id>.json` to start over.
+  re-run (a changed file has a new digest and mints a new row), or delete the
+  record — `<spool_dir>/<run_id>/<producer_id>/uploads/<identity>-<artifact_id>.json`,
+  or the whole `uploads/` directory — to start over.
   `put_done` is kept on a rejection because the bytes were stored successfully;
   only `complete` refused them.
 - Without `EVIDGATE_SPOOL_DIR` the upload works exactly the same and has no

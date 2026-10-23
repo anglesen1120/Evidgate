@@ -98,6 +98,40 @@ function chunks(spool: string, producerId = 'pw-0'): number[] {
 /** A pid the liveness seam treats as alive, so two writers in this process can both exist. */
 const FIXED_PID = 1000;
 
+/**
+ * A pid no process on this host has, so the writer after a "crash" finds the abandoned
+ * lock stale and takes it over (the reporter kills its worker; nothing releases the lock).
+ */
+const CRASHED_PID = 4242;
+
+/**
+ * Every sequence on disk for the producer, in chunk order — the order the CLI reader walks
+ * them in (`readUnacked`), so a contiguous list is exactly what its rule accepts.
+ */
+function sequences(spool: string, producerId = 'pw-0'): number[] {
+  const result: number[] = [];
+  const dir = producerDir(spool, producerId);
+  for (const entry of readdirSync(dir, { withFileTypes: true })
+    .filter((item) => item.isFile() && /^\d{6}\.jsonl$/.test(item.name))
+    .sort((left, right) => (left.name < right.name ? -1 : 1))) {
+    const text = readFileSync(join(dir, entry.name), 'utf8');
+    if (text === '') continue;
+    expect(text.endsWith('\n')).toBe(true);
+    for (const line of text.trim().split('\n')) {
+      const parsed: unknown = JSON.parse(line);
+      if (typeof parsed !== 'object' || parsed === null || !('sequence' in parsed)) {
+        throw new Error(`spool chunk line is not an envelope: ${line}`);
+      }
+      const sequence = parsed.sequence;
+      if (typeof sequence !== 'number') {
+        throw new Error(`spool chunk line has no numeric sequence: ${line}`);
+      }
+      result.push(sequence);
+    }
+  }
+  return result;
+}
+
 function options(spool: string, overrides: Partial<SpoolWriterOptions> = {}): SpoolWriterOptions {
   return {
     spoolDir: spool,
@@ -175,8 +209,11 @@ describe('shards.json record', () => {
     writer.flush();
     expect(writer.shardsWriteCount).toBe(1);
     expect(chunks(spool)).toEqual([6, 1]);
+    // F1: the record covers the chunk that just closed (sequences 1..6), not the 7th line
+    // this very flush goes on to write — a rotation happens mid-batch, and a record ahead of
+    // the chunks would leave a hole after a crash.
     const afterRotation = readRecord(spool);
-    expect(afterRotation.sequence_next).toBe(8);
+    expect(afterRotation.sequence_next).toBe(7);
 
     // Further flushes do not rewrite it: the file's bytes stay byte-identical while the
     // chunks move on (the counter stays put too, so this is not just an equal value).
@@ -351,6 +388,84 @@ describe('shards.json record', () => {
 
     expect(() => new SpoolWriter(options(spool))).toThrow(/refusing to read spool record/);
     expect(readFileSync(victim, 'utf8')).toBe('{"producer_id":"pw-0","sequence_next":99}\n');
+  });
+
+  // F1 (P2): a rotation happens MID-BATCH, so the writer's `nextSequence` already covers
+  // envelopes the flush has not written yet. Recording that value leaves a record AHEAD of
+  // the chunks after a crash; the resumed writer then skips sequences, and the CLI reader
+  // (`readUnacked`, "expected = cursor + emitted") refuses the hole as `spool_corrupt`.
+  it('never records a sequence ahead of the chunks, so a crash mid-batch opens no hole', () => {
+    const spool = tempSpool();
+    // One chunk fewer than the batch needs. The first rotation writes the record, the second
+    // one fails, so the batch's last envelopes never reach a chunk — that is the crash
+    // window a rotate-inside-flush opens. (Planted after the writer opened its first chunk:
+    // an obstacle present at open would be caught by the chunk scan instead.)
+    const crashed = new SpoolWriter(
+      options(spool, {
+        lock: { pid: CRASHED_PID, isProcessAlive: () => true, probeDelayMs: 0 },
+        flushThreshold: 5,
+        chunkMaxLines: 2,
+      }),
+    );
+    mkdirSync(join(producerDir(spool), '000003.jsonl'), { recursive: true });
+    expect(() => crashed.appendMany([1, 2, 3, 4, 5].map(() => envelope('pw-0')))).toThrow(
+      /non-regular spool file/,
+    );
+
+    // Sequences 1..4 reached chunks; the record written at the rotation that closed chunk 1
+    // says 3 (the sequence after its last line), never 6 (what the batch had minted).
+    expect(sequences(spool)).toEqual([1, 2, 3, 4]);
+    expect(readRecord(spool).sequence_next).toBe(3);
+    // No `close()`: the worker was killed here, and the lock still names CRASHED_PID.
+    rmSync(join(producerDir(spool), '000003.jsonl'), { recursive: true });
+
+    const resumed = new SpoolWriter(options(spool, { lock: { probeDelayMs: 0 } }));
+    expect(resumed.restartRecordedAt).toBeDefined();
+    expect(resumed.nextSequenceNumber).toBe(5);
+    // The next minted sequence is contiguous with the last durable line, so walking the
+    // chunks the way the CLI does yields 1..5 with no skip.
+    expect(resumed.append(envelope('pw-0')).sequence).toBe(5);
+    resumed.close();
+    expect(sequences(spool)).toEqual([1, 2, 3, 4, 5]);
+    expect(readRecord(spool).sequence_next).toBe(6);
+  });
+
+  // F2 (P3): `shards.json` is advisory — the chunk scan is authoritative on resume — so a
+  // record write that fails on a full/broken disk must not fail the flush that just made
+  // the batch durable. The failure is remembered and retried at the next write point.
+  it('treats a failed record write at rotation as advisory, remembers it and retries', () => {
+    const spool = tempSpool();
+    const dir = producerDir(spool);
+    // One line per chunk, so the second flush rotates. A directory planted at the staging
+    // name makes that record write fail (EISDIR/EPERM) — the inducible stand-in for ENOSPC
+    // or EIO, and the same obstacle the close-time test uses.
+    const writer = new SpoolWriter(options(spool, { chunkMaxLines: 1 }));
+    mkdirSync(join(dir, SHARDS_TMP_FILE), { recursive: true });
+
+    writer.append(envelope('pw-0'));
+    writer.flush();
+    writer.append(envelope('pw-0'));
+    expect(() => writer.flush()).not.toThrow();
+
+    // The flush's line is durable, the record write is not counted, and the failure is kept.
+    expect(sequences(spool)).toEqual([1, 2]);
+    expect(existsSync(join(dir, SHARDS_FILE))).toBe(false);
+    expect(writer.shardsWriteCount).toBe(0);
+    const failure = writer.lastShardsWriteFailure;
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure?.message).toMatch(/shards\.json\.tmp/);
+    expect(failure?.message).toMatch(/E(ISDIR|PERM|ACCES)/);
+
+    // Once the disk is healthy again the next rotation retries the record and clears it: no
+    // replay is needed, because the value is derived from the live counters.
+    rmSync(join(dir, SHARDS_TMP_FILE), { recursive: true });
+    writer.append(envelope('pw-0'));
+    writer.flush();
+    expect(writer.lastShardsWriteFailure).toBeUndefined();
+    expect(writer.shardsWriteCount).toBe(1);
+    expect(readRecord(spool).sequence_next).toBe(3);
+    expect(existsSync(join(dir, SHARDS_TMP_FILE))).toBe(false);
+    writer.close();
   });
 });
 

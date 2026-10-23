@@ -7,11 +7,11 @@
 // The secrets rule (04.2.3 §8): the bearer and the presigned URL are assembled at runtime;
 // the journal assertions prove neither ever reaches the disk.
 import { createHash } from 'node:crypto';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveConfig } from './config.js';
 import { CliError } from './errors.js';
@@ -23,11 +23,15 @@ import {
   deriveUploadUrlIdempotencyKey,
   hashUploadFile,
   maxMintAttempts,
+  putStallTimeoutMs,
   uploadChunkBytes,
   uploadFile,
   type UploadDeps,
+  type UploadRequest,
+  type UploadTimers,
 } from './upload.js';
-import { UploadJournal } from './uploadJournal.js';
+import { SpoolLockedError } from './spoolLock.js';
+import { UploadJournal, journalFileName, type UploadIdentity } from './uploadJournal.js';
 import { closeUploadFile, openUploadFile, type UploadFile } from './uploadPaths.js';
 
 /** Assembled at runtime so no token-shaped literal is stored in the spec (T78). */
@@ -117,6 +121,32 @@ function harness(respond: Responder): Harness {
       random: () => 0.5,
     },
   };
+}
+
+/** The URL of a fetch call, whichever of the three spellings the transport used. */
+function fetchUrl(input: string | URL | Request): string {
+  return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+}
+
+/** Rejects with the signal's reason when the request is aborted: the only non-retryable exit. */
+function aborted(signal: AbortSignal): Promise<never> {
+  return new Promise<never>((_resolve, reject) => {
+    const fail = (): void => {
+      const reason: unknown = signal.reason;
+      reject(reason instanceof Error ? reason : new Error('the request was aborted'));
+    };
+    if (signal.aborted) {
+      fail();
+      return;
+    }
+    signal.addEventListener('abort', fail, { once: true });
+  });
+}
+
+/** The method of a fetch call; the SDK passes a Request, the PUT passes `init`. */
+function fetchMethod(input: string | URL | Request, init: RequestInit | undefined): string {
+  const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
+  return method.toUpperCase();
 }
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
@@ -212,10 +242,28 @@ describe('uploadFile', () => {
     });
   }
 
+  /** The journal identity an upload of this file derives (contracts/cli.md §12.5). */
+  function journalIdentity(
+    digest: string,
+    size: number,
+    overrides: Partial<UploadIdentity> = {},
+  ): UploadIdentity {
+    return {
+      file_sha256: digest,
+      size,
+      kind: 'trace',
+      execution_key: executionKey,
+      attempt_no: 1,
+      media_type: 'application/zip',
+      ...overrides,
+    };
+  }
+
   function request(
     input: { readonly opened: UploadFile; readonly sha256: string },
-    harnessed: Harness,
+    harnessed: { readonly deps: UploadDeps },
     resume: UploadJournal | undefined,
+    overrides: Partial<UploadRequest> = {},
   ) {
     return {
       config,
@@ -231,6 +279,7 @@ describe('uploadFile', () => {
       journal: resume,
       deadlineMs: 1_800_000,
       deps: harnessed.deps,
+      ...overrides,
     };
   }
 
@@ -565,7 +614,7 @@ describe('uploadFile', () => {
     await expect(
       uploadFile(request({ opened: fileHandle, sha256 }, first, resume)),
     ).rejects.toMatchObject({ code: 'artifact_rejected' });
-    expect(await resume.findResumable(sha256, 11)).toMatchObject({
+    expect(await resume.findResumable(journalIdentity(sha256, 11))).toMatchObject({
       artifact_id: artifactId,
       put_done: true,
       complete_done: false,
@@ -587,8 +636,10 @@ describe('uploadFile', () => {
     expect(replay.calls).toHaveLength(1);
     expect(replay.calls[0]?.url.endsWith(`/v1/artifacts/${artifactId}/complete`)).toBe(true);
     expect(error.hint).toContain('this row stays rejected');
-    expect(error.hint).toContain(`uploads/${artifactId}.json`);
-    expect((await resume.findResumable(sha256, 11))?.complete_done).toBe(false);
+    expect(error.hint).toContain(
+      `uploads/${journalFileName(journalIdentity(sha256, 11), artifactId)}`,
+    );
+    expect((await resume.findResumable(journalIdentity(sha256, 11)))?.complete_done).toBe(false);
   });
 
   // §5 error fidelity: the server's code and request id survive; the status is kept so the
@@ -676,7 +727,7 @@ describe('uploadFile', () => {
     await expect(
       uploadFile(request({ opened: fileHandle, sha256 }, failing, resume)),
     ).rejects.toMatchObject({ code: 'unavailable' });
-    const stored = await resume.findResumable(sha256, 11);
+    const stored = await resume.findResumable(journalIdentity(sha256, 11));
     expect(stored).toMatchObject({ artifact_id: artifactId, put_done: true, complete_done: false });
 
     const restarted = harness((call) =>
@@ -690,7 +741,7 @@ describe('uploadFile', () => {
     expect(restarted.calls[0]?.headers.get('idempotency-key')).toBe(
       deriveCompleteIdempotencyKey({ artifactId, fileSha256: sha256, size: 11 }),
     );
-    expect((await resume.findResumable(sha256, 11))?.complete_done).toBe(true);
+    expect((await resume.findResumable(journalIdentity(sha256, 11)))?.complete_done).toBe(true);
   });
 
   // §9 / §12: a second run over a completed journal row answers from the disk — no request,
@@ -713,6 +764,45 @@ describe('uploadFile', () => {
     expect(store.calls.length).toBe(before);
   });
 
+  // F5: `events send` holds spool.lock for the whole send, so a stored upload must not turn
+  // into a failure when the journal cannot record it: `complete` is idempotent and the next
+  // run replays it.
+  it('does_not_fail_a_stored_upload_when_the_journal_lock_stays_busy', async () => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const directory = await mkdtemp(join(tmpdir(), 'evidgate-upload-busy-'));
+    dirs.push(directory);
+    const clock = { now: 1_000 };
+    let locks = 0;
+    // The first write (the row itself) gets the lock; every later one — put_done and
+    // complete_done — is refused for longer than the bounded wait.
+    const busy = await UploadJournal.open({
+      producerDirectory: directory,
+      withLock: <T>(fn: () => Promise<T>): Promise<T> => {
+        locks += 1;
+        if (locks === 1) return fn();
+        return Promise.reject(new SpoolLockedError(join(directory, 'spool.lock'), 4_242));
+      },
+      now: () => clock.now,
+      sleep: (milliseconds) => {
+        clock.now += milliseconds;
+        return Promise.resolve();
+      },
+      deadlineAt: 1_000 + 1_800_000,
+    });
+    const store = harness((call) => {
+      if (call.method === 'PUT') return new Response(null, { status: 200 });
+      if (call.url.endsWith('/complete')) return json(200, readyBody(11));
+      return json(201, uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 }));
+    });
+
+    const outcome = await uploadFile(request({ opened: fileHandle, sha256 }, store, busy));
+
+    expect(outcome.state).toBe('ready');
+    expect(outcome.bytes).toBe(11);
+    expect(locks).toBeGreaterThan(1);
+    expect(store.calls.filter((call) => call.url.endsWith('/complete'))).toHaveLength(1);
+  });
+
   it('resumes_an_abandoned_mint_with_the_same_key', async () => {
     const { opened: fileHandle, sha256 } = await file('trace.zip');
     const resume = await journal();
@@ -726,7 +816,7 @@ describe('uploadFile', () => {
     await expect(
       uploadFile(request({ opened: fileHandle, sha256 }, failing, resume)),
     ).rejects.toBeInstanceOf(CliError);
-    const written = await resume.findResumable(sha256, 11);
+    const written = await resume.findResumable(journalIdentity(sha256, 11));
     expect(written).toMatchObject({ mint_no: 0, put_done: false, complete_done: false });
 
     const restarted = harness((call) => {
@@ -769,7 +859,7 @@ describe('uploadFile', () => {
 
     const directory = resume.uploadsDirectory;
     const names = await readdir(directory);
-    expect(names).toEqual([`${artifactId}.json`]);
+    expect(names).toEqual([journalFileName(journalIdentity(sha256, 11), artifactId)]);
     const text = await readFile(join(directory, names[0] as string), 'utf8');
     expect(text).not.toContain('http');
     expect(text).not.toContain('X-Amz');
@@ -780,10 +870,375 @@ describe('uploadFile', () => {
       artifact_id: artifactId,
       file_sha256: sha256,
       size: 11,
+      kind: 'trace',
+      execution_key: executionKey,
+      attempt_no: 1,
+      media_type: 'application/zip',
       put_done: true,
       complete_done: true,
       mint_no: 0,
     });
+  });
+
+  // F1 (P1): the journal is keyed by the whole upload identity, not by (digest, size). The
+  // same bytes under another execution, kind or attempt are a different server row, so the
+  // command must call `upload-url` instead of replaying the other row's journal record.
+  it.each([
+    ['execution_key', { executionKey: 'b4'.repeat(32) }],
+    ['attempt_no', { attemptNo: 2 }],
+    ['kind', { kind: 'raw_report' as const, mediaType: 'application/xml' }],
+    ['media_type', { mediaType: 'application/octet-stream' }],
+  ])('starts_a_new_upload_for_another_%s', async (_field, overrides) => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const resume = await journal();
+    // A real server mints a different artifact row for a different identity (the key
+    // differs), so the responder does too.
+    const store = harness((call) => {
+      if (call.method === 'PUT') return new Response(null, { status: 200 });
+      if (call.url.endsWith('/complete')) {
+        const completed = call.url.slice(
+          call.url.lastIndexOf('/artifacts/') + '/artifacts/'.length,
+          -'/complete'.length,
+        );
+        return json(200, readyBody(11, completed));
+      }
+      const nth = store.calls.filter((entry) => entry.url.endsWith('/upload-url')).length;
+      return json(
+        201,
+        uploadUrlBody({
+          bytes: Buffer.from('trace-bytes'),
+          sha256,
+          artifact: nth === 1 ? artifactId : secondArtifactId,
+        }),
+      );
+    });
+
+    // The first run commits a `complete_done` row for this file (no request on a re-run).
+    await uploadFile(request({ opened: fileHandle, sha256 }, store, resume));
+    const before = store.calls.length;
+    const other = request({ opened: fileHandle, sha256 }, store, resume, overrides);
+    await uploadFile(other);
+
+    const urls = store.calls
+      .slice(before)
+      .filter((call) => call.url.endsWith('/artifacts/upload-url'));
+    expect(urls).toHaveLength(1);
+    expect(urls[0]?.headers.get('idempotency-key')).toBe(
+      deriveUploadUrlIdempotencyKey({
+        runId,
+        producerId,
+        executionKey: other.executionKey,
+        attemptNo: other.attemptNo,
+        kind: other.kind,
+        fileSha256: sha256,
+        mintNo: 0,
+      }),
+    );
+  });
+
+  // F3 (P2): `ready` must prove the stored object is the file that was signed. openapi
+  // lets `bytes` be null, so a null (or missing) count is a response with no evidence
+  // behind it — never defaulted to the local size.
+  it.each([
+    ['null', { artifact_id: artifactId, state: 'ready', bytes: null, scan_state: 'pending' }],
+    ['missing', { artifact_id: artifactId, state: 'ready', scan_state: 'pending' }],
+  ])('refuses_a_ready_complete_whose_bytes_is_%s', async (_case, complete) => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const store = harness((call) => {
+      if (call.method === 'PUT') return new Response(null, { status: 200 });
+      if (call.url.endsWith('/complete')) return json(200, complete);
+      return json(201, uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 }));
+    });
+
+    let thrown: unknown;
+    try {
+      await uploadFile(request({ opened: fileHandle, sha256 }, store, undefined));
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(UploadFailedError);
+    expect((thrown as UploadFailedError).code).toBe('request_failed');
+    expect((thrown as Error).message).toContain(artifactId);
+  });
+
+  // F4 (P2, TOCTOU): the PUT streams a descriptor re-opened through the guard, so a file
+  // replaced (or symlinked over) between the hash pass and the PUT is refused before a byte
+  // leaves — never uploaded from the new path, never completed, never retried.
+  it('refuses_a_file_replaced_between_the_passes', async () => {
+    const { opened: fileHandle, sha256, path } = await file('trace.zip', 'first-content');
+    const replacement = join(root, 'replacement.zip');
+    await writeFile(replacement, 'first-content');
+    await rename(replacement, path);
+    const store = harness((call) =>
+      call.method === 'PUT'
+        ? new Response(null, { status: 200 })
+        : json(201, uploadUrlBody({ bytes: Buffer.from('first-content'), sha256 })),
+    );
+
+    // The timer seam arms nothing real: the refusal happens before either PUT timer exists,
+    // and a deadline timer armed before the re-open would outlive the refusal and keep the
+    // CLI process alive for the rest of the upload budget.
+    const armed: number[] = [];
+    const cleared: unknown[] = [];
+    const timers = {
+      set: (milliseconds: number): unknown => {
+        armed.push(milliseconds);
+        return armed.length;
+      },
+      clear: (handle: unknown): void => {
+        cleared.push(handle);
+      },
+    };
+
+    await expect(
+      uploadFile(
+        request({ opened: fileHandle, sha256 }, { deps: { ...store.deps, timers } }, undefined),
+      ),
+    ).rejects.toMatchObject({ code: 'upload_path_refused' });
+    expect(store.calls.filter((call) => call.method === 'PUT')).toHaveLength(0);
+    expect(store.calls.some((call) => call.url.endsWith('/complete'))).toBe(false);
+    expect(store.sleeps).toEqual([]);
+    expect(armed).toEqual([]);
+    expect(cleared).toEqual([]);
+  });
+
+  it('refuses_a_symlink_swapped_in_between_the_passes', async () => {
+    const { opened: fileHandle, sha256, path } = await file('trace.zip', 'first-content');
+    const elsewhere = join(root, 'elsewhere.zip');
+    await writeFile(elsewhere, 'first-content');
+    await rm(path);
+    await symlink(elsewhere, path);
+    const store = harness((call) =>
+      call.method === 'PUT'
+        ? new Response(null, { status: 200 })
+        : json(201, uploadUrlBody({ bytes: Buffer.from('first-content'), sha256 })),
+    );
+
+    await expect(
+      uploadFile(request({ opened: fileHandle, sha256 }, store, undefined)),
+    ).rejects.toMatchObject({ code: 'upload_path_refused' });
+    expect(store.calls.filter((call) => call.method === 'PUT')).toHaveLength(0);
+    expect(store.sleeps).toEqual([]);
+  });
+
+  // F7 (P3): a 201 must not be able to make the CLI send a credential, retarget the host or
+  // add a second body framing. The refusal names the header, never its value.
+  it.each([
+    'authorization',
+    'Authorization',
+    'cookie',
+    'set-cookie',
+    'host',
+    'proxy-authorization',
+    'transfer-encoding',
+    'connection',
+  ])('refuses_a_signed_%s_header', async (name) => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const body = uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 });
+    const signed = body['required_headers'] as Record<string, string>;
+    signed[name] = 'MARKER-VALUE-7';
+    const store = harness(() => json(201, body));
+
+    let thrown: unknown;
+    try {
+      await uploadFile(request({ opened: fileHandle, sha256 }, store, undefined));
+    } catch (error) {
+      thrown = error;
+    }
+    const error = thrown as UploadFailedError;
+    expect(error.code).toBe('request_failed');
+    expect(error.message).toContain(name.toLowerCase());
+    expect(error.message).not.toContain('MARKER-VALUE-7');
+    expect(store.calls.some((call) => call.method === 'PUT')).toBe(false);
+  });
+
+  // F8 (P3): a malformed artifact id is a malformed response, not a corrupt journal: the
+  // strict UUID check refuses it before anything is written.
+  it('refuses_a_non_uuid_artifact_id_as_a_bad_response', async () => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const resume = await journal();
+    const store = harness(() =>
+      json(
+        201,
+        uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256, artifact: '-'.repeat(36) }),
+      ),
+    );
+
+    let thrown: unknown;
+    try {
+      await uploadFile(request({ opened: fileHandle, sha256 }, store, resume));
+    } catch (error) {
+      thrown = error;
+    }
+    expect((thrown as UploadFailedError).code).toBe('request_failed');
+    expect(await readdir(resume.uploadsDirectory)).toEqual([]);
+  });
+
+  // F2 (P1): the presigned PUT is bounded by the remaining upload deadline only. It used to
+  // carry the 30 s per-request timeout of the JSON calls, which aborts a trace that takes
+  // longer than half a minute to send.
+  it('does_not_abort_a_put_that_takes_longer_than_thirty_seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      const content = Buffer.from('trace-bytes');
+      const { opened: fileHandle, sha256 } = await file('trace.zip', content);
+      const signals: AbortSignal[] = [];
+      const clock = { now: 1_000 };
+      const deps: UploadDeps = {
+        fetch: async (input, init) => {
+          const url = fetchUrl(input);
+          if (fetchMethod(input, init) !== 'PUT') {
+            return url.endsWith('/complete')
+              ? json(200, readyBody(content.byteLength))
+              : json(201, uploadUrlBody({ bytes: content, sha256 }));
+          }
+          const request: RequestInit = init ?? {};
+          const signal = request.signal as AbortSignal;
+          signals.push(signal);
+          // 45 simulated seconds per chunk: past the 30 s per-request cap of the API calls.
+          for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+            await new Promise((resolve) => setTimeout(resolve, 45_000));
+            if (signal.aborted) throw signal.reason;
+            if (chunk.byteLength === 0) break;
+          }
+          return new Response(null, { status: 200 });
+        },
+        sleep: (milliseconds) => {
+          clock.now += milliseconds;
+          return Promise.resolve();
+        },
+        now: () => clock.now,
+        random: () => 0.5,
+      };
+
+      const pending = uploadFile(request({ opened: fileHandle, sha256 }, { deps }, undefined));
+      let settled = false;
+      const tracked = pending.finally(() => {
+        settled = true;
+      });
+      for (let tick = 0; tick < 40 && !settled; tick += 1) {
+        await vi.advanceTimersByTimeAsync(5_000);
+      }
+      await expect(tracked).resolves.toMatchObject({
+        state: 'ready',
+        bytes: content.byteLength,
+      });
+      expect(signals).toHaveLength(1);
+      expect(signals[0]?.aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('aborts_the_put_at_the_upload_deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const { opened: fileHandle, sha256 } = await file('trace.zip');
+      const deps: UploadDeps = {
+        fetch: async (input, init) => {
+          const url = fetchUrl(input);
+          if (fetchMethod(input, init) !== 'PUT') {
+            return url.endsWith('/complete')
+              ? json(200, readyBody(11))
+              : json(201, uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 }));
+          }
+          const request: RequestInit = init ?? {};
+          for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+            // the bytes leave; the store never answers
+            if (chunk.byteLength === 0) break;
+          }
+          const signal = request.signal as AbortSignal;
+          // Only the upload deadline can end this request.
+          await aborted(signal);
+          return new Response(null, { status: 200 });
+        },
+        sleep: () => Promise.resolve(),
+        now: () => Date.now(),
+        random: () => 0.5,
+      };
+
+      const pending = uploadFile(
+        request({ opened: fileHandle, sha256 }, { deps }, undefined, { deadlineMs: 5_000 }),
+      );
+      let settled = false;
+      const tracked = pending.finally(() => {
+        settled = true;
+      });
+      // The rejection is asserted below; marking it handled now keeps a red herring out of
+      // the runner's unhandled-rejection report while the loop advances the timers.
+      tracked.catch(() => undefined);
+      for (let tick = 0; tick < 20 && !settled; tick += 1) {
+        await vi.advanceTimersByTimeAsync(1_000);
+      }
+      await expect(tracked).rejects.toMatchObject({ code: 'deadline_exceeded' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // F2: a connection that stops moving is caught by the idle timeout (which resets on every
+  // body chunk) and retried, so a stalled store never eats the rest of the deadline.
+  it('retries_a_put_that_stops_making_progress', async () => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const clock = { now: 1_000 };
+    const scheduled = new Map<number, { readonly ms: number; readonly fn: () => void }>();
+    let nextTimer = 1;
+    const timers: UploadTimers = {
+      set: (milliseconds, fn) => {
+        const id = nextTimer;
+        nextTimer += 1;
+        scheduled.set(id, { ms: milliseconds, fn });
+        return id;
+      },
+      clear: (handle) => {
+        scheduled.delete(handle as number);
+      },
+    };
+    let puts = 0;
+    const deps: UploadDeps = {
+      timers,
+      sleep: (milliseconds) => {
+        clock.now += milliseconds;
+        return Promise.resolve();
+      },
+      now: () => clock.now,
+      random: () => 0.5,
+      fetch: async (input, init) => {
+        const url = fetchUrl(input);
+        if (fetchMethod(input, init) !== 'PUT') {
+          return url.endsWith('/complete')
+            ? json(200, readyBody(11))
+            : json(201, uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 }));
+        }
+        puts += 1;
+        const request: RequestInit = init ?? {};
+        const signal = request.signal as AbortSignal;
+        if (puts === 1) {
+          // The connection stalls: no body progress, no response — only the idle timeout
+          // can end this attempt.
+          await aborted(signal);
+        }
+        for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+          // drain the retried body so `body.done` settles
+          if (chunk.byteLength === 0) break;
+        }
+        return new Response(null, { status: 200 });
+      },
+    };
+
+    const pending = uploadFile(request({ opened: fileHandle, sha256 }, { deps }, undefined));
+    await vi.waitFor(() => {
+      expect([...scheduled.values()].map((entry) => entry.ms)).toContain(putStallTimeoutMs);
+    });
+    for (const [id, entry] of [...scheduled]) {
+      if (entry.ms === putStallTimeoutMs) {
+        scheduled.delete(id);
+        entry.fn();
+      }
+    }
+
+    await expect(pending).resolves.toMatchObject({ state: 'ready' });
+    expect(puts).toBe(2);
   });
 
   // §5 retry rule: a transport failure is retried; the second attempt is the same PUT.

@@ -17,7 +17,17 @@
 // directory fsync) at ROTATION, CLOSE and RESTART DETECTION only — never on a per-callback
 // flush, which was ~13 ms of extra fsync work per callback — and a legacy `checkpoint.json`
 // is read as a fallback and never written again (D-S54-Q2/D-S56-Q1: the chunk scan is the
-// authority, so the record can be sparse).
+// authority, so the record can be sparse). Its `sequence_next` is the sequence after the
+// last line that reached a chunk, never one this writer only buffered (F1: a rotation
+// happens mid-batch, and an ahead value would leave a hole after a crash that the CLI
+// reader refuses as `spool_corrupt`); a value that was already on disk at open is kept as a
+// floor and never raised (D-S56-Q9). Because the record is advisory, a failing record write
+// at rotation is remembered and retried at the next rotation/close instead of failing the
+// flush (F2).
+//
+// Hardening: every spool open is `O_NOFOLLOW` and (outside Windows) `O_NONBLOCK`, and a
+// write target is `lstat`-refused unless it is a regular file, so a planted symlink, FIFO or
+// device can neither be followed nor block the writer (PS3, F5).
 //
 // Durability: envelopes are appended per callback (O(1), no whole-suite buffering) into
 // a small pending batch; a flush writes the batch and fsyncs the chunk. A crash loses at
@@ -61,6 +71,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  type Stats,
   unlinkSync,
   writeSync,
 } from 'node:fs';
@@ -118,6 +129,15 @@ const MAX_SHARD_INDEX = 256;
  * symlink/ownership hardening does not apply (S3).
  */
 const O_NOFOLLOW: number = process.platform === 'win32' ? 0 : fsConstants.O_NOFOLLOW;
+
+/**
+ * F5: a planted FIFO must never block a spool open. `O_NONBLOCK` is a no-op on a regular
+ * file; on a FIFO it makes a read open return immediately (the descriptor is then refused by
+ * the regular-file check) and a write open fail with `ENXIO` instead of waiting for a reader.
+ * The writer paths refuse a non-regular target by `lstat` before the open, so they never get
+ * that far.
+ */
+const O_NONBLOCK: number = process.platform === 'win32' ? 0 : fsConstants.O_NONBLOCK;
 
 /** The only characters allowed in a `run_id`/`producer_id` path segment (S3, F8). */
 const SPOOL_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -377,7 +397,7 @@ function directoryBytes(directory: string): number {
     if (!entry.isFile()) continue;
     let fd = -1;
     try {
-      fd = openSync(path, fsConstants.O_RDONLY | O_NOFOLLOW);
+      fd = openSync(path, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
       total += fstatSync(fd).size;
     } catch {
       // A file that vanished or cannot be inspected contributes no bytes; the cap is a
@@ -503,7 +523,17 @@ export class SpoolWriter {
   private readonly shardTotal: number | undefined;
   /** The sequence after the last line that reached a chunk (the `shards.json` value). */
   private durableNextSequence: number;
+  /**
+   * The floor this producer directory already carried when the writer opened:
+   * `max(durableNextSequence, stored sequence_next | next_sequence at open)`. The record is
+   * never written below it (D-S56-Q9), so a floor that arrived on disk is not thrown away by
+   * the first rewrite, while nothing this writer only buffered can push the record ahead of
+   * the chunks (F1).
+   */
+  private recordFloor: number;
   private nextSequence: number;
+  /** The last `shards.json` write failure (F2: the record is advisory, the failure is kept). */
+  private shardsFailure: Error | undefined;
   private chunkIndex: number;
   private chunkBytes = 0;
   private chunkLines = 0;
@@ -576,6 +606,11 @@ export class SpoolWriter {
         this.durableNextSequence,
         record?.sequence_next ?? legacy?.next_sequence,
       );
+      // F1/D-S56-Q9: the reconciled value is the floor this directory already carried. It is
+      // the only thing that may hold the record above the chunks, and it never grows: what
+      // this writer only buffered must not reach the record (a crash would then skip
+      // sequences, which the CLI reader refuses as a hole in `spool_corrupt`).
+      this.recordFloor = this.nextSequence;
       this.openChunk(repairedChunk);
       // Restart detection (T84): any durable state means this producer ran before. The same
       // `producer_id` is kept (no suffix is ever minted); the restart is recorded so the
@@ -617,6 +652,17 @@ export class SpoolWriter {
   /** The `last_restart_at` recorded when this writer opened an existing producer directory. */
   get restartRecordedAt(): string | undefined {
     return this.restartAt;
+  }
+
+  /**
+   * The last advisory `shards.json` write failure (F2). A rotation that could not write the
+   * record keeps going — the chunk scan is the resume authority — and the next rotation or
+   * `close` retries; this seam says whether the last attempt failed, so a caller (or a test)
+   * can tell a refused record from a written one. `close` still throws when its own retry
+   * fails, because that is the last chance to record the state.
+   */
+  get lastShardsWriteFailure(): Error | undefined {
+    return this.shardsFailure;
   }
 
   /** Assigns the next sequence, buffers the envelope, and flushes when the batch is full. */
@@ -757,19 +803,20 @@ export class SpoolWriter {
    * rotation, close and restart detection ONLY (04.3.3-T1 cadence): the chunk scan recovers
    * the sequence, so this record never has to be on the per-callback path. The value is the
    * sequence after the last line that reached a chunk, never one the writer only buffered —
-   * an ahead value would read as a gap after a crash.
+   * an ahead value would read as a gap after a crash (F1). Only a floor that was already on
+   * disk when this writer opened survives (D-S56-Q9).
    */
   private writeShardsRecord(): void {
     const record: ShardsRecord = {
       producer_id: this.producerId,
       ...(this.shardIndex === undefined ? {} : { shard_index: this.shardIndex }),
       ...(this.shardTotal === undefined ? {} : { shard_total: this.shardTotal }),
-      // Never below what is durable AND never a regression: a record read on restart is a
-      // floor (`reconcileSequenceNext`), so writing a lower value here would undo that floor
-      // and let the next open reuse a sequence the server may already have accepted. A value
-      // covering the buffered batch is safe — those sequences either reach the chunk or are
-      // lost with the process, and a hole is never a refusal (events/ordering.md §3).
-      sequence_next: Math.max(this.durableNextSequence, this.nextSequence),
+      // F1: `durableNextSequence`, not `nextSequence`. A rotation happens mid-batch, so
+      // `nextSequence` already covers envelopes still buffered; writing that value leaves a
+      // record ahead of the chunks after a crash, and the resumed writer skips sequences
+      // straight into a hole the CLI reader rejects (`spool_corrupt`, "skips the expected").
+      // `recordFloor` keeps a floor that arrived on disk (D-S56-Q9) without ever raising it.
+      sequence_next: Math.max(this.durableNextSequence, this.recordFloor),
       ...(this.restartAt === undefined ? {} : { last_restart_at: this.restartAt }),
     };
     const body = Buffer.from(`${JSON.stringify(record)}\n`, 'utf8');
@@ -783,6 +830,7 @@ export class SpoolWriter {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
+    this.assertWritableTargetIsRegularFile(tmpPath);
     const fd = this.openVerified(
       tmpPath,
       fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | O_NOFOLLOW,
@@ -797,6 +845,7 @@ export class SpoolWriter {
     renameSync(tmpPath, targetPath);
     this.fsyncDirectory();
     this.recordWrites += 1;
+    this.shardsFailure = undefined;
     // The cap cache stays honest about our own metadata: the rename replaced the previous
     // record, so only the size delta is new bytes.
     this.runBytes += Math.max(0, body.byteLength - this.recordBytes);
@@ -852,7 +901,19 @@ export class SpoolWriter {
     // say `sequence_next` for it. Rotation is also the only place the cap cache is re-read
     // (other producers may have written since the open), which keeps the hot path O(batch).
     this.refreshRunBytes();
-    this.writeShardsRecord();
+    // F2: the record is ADVISORY — the chunk scan is authoritative on resume — so an
+    // ENOSPC/EIO while writing it must never fail the flush that just made the batch
+    // durable. The failure is remembered (`lastShardsWriteFailure`) and retried at the next
+    // write point (the next rotation or close), which re-derives the value from live
+    // counters, so nothing has to be replayed. An identity refusal is a client bug and is
+    // still raised: `EvidgateShardRecordMismatchError` comes from the constructor's record
+    // READ, never from this write, and this catch never covers it.
+    try {
+      this.writeShardsRecord();
+    } catch (error) {
+      if (error instanceof EvidgateShardRecordMismatchError) throw error;
+      this.shardsFailure = error instanceof Error ? error : new Error(String(error));
+    }
   }
 
   /** Re-reads the run directory's byte total; called at rotation, never per batch. */
@@ -873,7 +934,10 @@ export class SpoolWriter {
       this.chunkLines = 0;
     }
     // PS3: O_NOFOLLOW so a planted chunk symlink is refused; openVerified then rejects a
-    // non-regular or foreign-owned file and forces 0600 on the descriptor.
+    // non-regular or foreign-owned file and forces 0600 on the descriptor. F5: the append
+    // open is the one that would BLOCK on a planted FIFO, so the target is refused before
+    // the open when it is not a regular file.
+    this.assertWritableTargetIsRegularFile(path);
     this.fd = this.openVerified(
       path,
       fsConstants.O_WRONLY | fsConstants.O_APPEND | fsConstants.O_CREAT | O_NOFOLLOW,
@@ -941,7 +1005,16 @@ export class SpoolWriter {
         if (line === undefined || line.length === 0) continue;
         try {
           const parsed = JSON.parse(line) as { sequence?: unknown };
-          if (typeof parsed.sequence === 'number') return parsed.sequence;
+          // F4: only a safe integer `>= 1` is a sequence, exactly as the `shards.json` and
+          // `checkpoint.json` readers require. `1e300` (a float past the safe range) or a
+          // negative/float value is not a sequence this writer may resume after: it would
+          // move the counter to an imprecise number and the record would carry it. Such a
+          // line is unreadable, and — like the `catch` below for a non-JSON tail — the scan
+          // keeps going backwards to the last line that IS a sequence.
+          const sequence = parsed.sequence;
+          if (typeof sequence === 'number' && Number.isSafeInteger(sequence) && sequence >= 1) {
+            return sequence;
+          }
         } catch {
           // A torn or corrupt line (crash mid-write) is skipped; keep scanning backwards.
         }
@@ -1056,11 +1129,13 @@ export class SpoolWriter {
     return null;
   }
 
-  /** Reads a small record file through an O_NOFOLLOW, ownership-checked descriptor. */
+  /** Reads a small record file through an O_NOFOLLOW|O_NONBLOCK, ownership-checked descriptor. */
   private readRecordFile(path: string): string | null {
     let fd: number;
     try {
-      fd = openSync(path, fsConstants.O_RDONLY | O_NOFOLLOW);
+      // F5: `O_NONBLOCK` so a planted FIFO opens without waiting for a writer; the `fstat`
+      // below then refuses the non-regular descriptor instead of blocking the reporter.
+      fd = openSync(path, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') return null;
@@ -1120,13 +1195,38 @@ export class SpoolWriter {
   }
 
   /**
-   * PS3: opens a spool file with the given flags and verifies the descriptor: it must be
-   * a regular file owned by the current process, and (when a mode is given) is forced to
-   * that mode. A non-regular file (a symlink target, FIFO or device) or a foreign-owned
-   * file is rejected. On Windows the ownership/mode checks are skipped.
+   * F5: a write open must never reach a planted FIFO/socket/device or a directory. `open`
+   * with `O_WRONLY` on a FIFO would wait for a reader (or, with one, write spool lines into
+   * a pipe), so the target is inspected first and refused when it exists and is not a
+   * regular file. A symlink is refused too (`O_NOFOLLOW` would turn it into `ELOOP`); the
+   * caller's `openVerified` still re-checks the descriptor for a race.
+   */
+  private assertWritableTargetIsRegularFile(path: string): void {
+    let stats: Stats;
+    try {
+      stats = lstatSync(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+    if (!stats.isFile()) {
+      throw new Error(
+        `@evidgate/playwright-reporter: refusing to use non-regular spool file ${path}`,
+      );
+    }
+  }
+
+  /**
+   * PS3/F5: opens a spool file with the given flags (plus `O_NONBLOCK`, see below) and
+   * verifies the descriptor: it must be a regular file owned by the current process, and
+   * (when a mode is given) is forced to that mode. A non-regular file (a symlink target,
+   * FIFO or device) or a foreign-owned file is rejected. On Windows the ownership/mode
+   * checks are skipped. `O_NONBLOCK` is added here so no call site can forget it: it is a
+   * no-op on a regular file and stops a planted FIFO from blocking whichever open reaches it
+   * first (`readChunk`, the torn-tail truncation, the append or the record staging file).
    */
   private openVerified(path: string, flags: number, mode?: number): number {
-    const fd = openSync(path, flags, mode);
+    const fd = openSync(path, flags | O_NONBLOCK, mode);
     try {
       const stats = fstatSync(fd);
       if (!stats.isFile()) {

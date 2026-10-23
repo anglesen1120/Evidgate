@@ -13,6 +13,7 @@ import { readCachedToken, writeCachedToken } from '../auth/tokenCache.js';
 import { resolveConfig } from '../config.js';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
+import { journalFileName, type UploadIdentity } from '../uploadJournal.js';
 
 /** Assembled at runtime so no token-shaped literal is stored in the spec (T78). */
 const devToken = ['dev', 'artifact', 'token'].join('-');
@@ -602,7 +603,22 @@ describe('artifacts upload', () => {
       main(argv(file), devEnv({ EVIDGATE_SPOOL_DIR: spoolDir }), io, { fetch: store.fetchImpl }),
     ).resolves.toBe(0);
 
-    const journal = join(spoolDir, runId, 'shard-1', 'uploads', `${artifactId}.json`);
+    // The record is named by the upload identity (contracts/cli.md §12.5), not by the id.
+    const identity: UploadIdentity = {
+      file_sha256: `sha256:${createHash('sha256').update('trace-bytes').digest('hex')}`,
+      size: 11,
+      kind: 'trace',
+      execution_key: executionKey,
+      attempt_no: 1,
+      media_type: 'application/zip',
+    };
+    const journal = join(
+      spoolDir,
+      runId,
+      'shard-1',
+      'uploads',
+      journalFileName(identity, artifactId),
+    );
     const record = JSON.parse(await readFile(journal, 'utf8')) as Record<string, unknown>;
     expect(record).toMatchObject({ artifact_id: artifactId, put_done: true, complete_done: true });
   });

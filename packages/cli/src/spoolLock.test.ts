@@ -775,15 +775,23 @@ describe('ProducerSpool.withLock — writer guard (D-S56-Q8)', () => {
       withLock: (fn) => spool.withLock(fn),
     });
     const artifactId = randomUUID();
-    await journal.write({
-      artifact_id: artifactId,
+    // 04.2.4 §12.5: the record carries the whole upload identity, not just (digest, size).
+    const identity = {
       file_sha256: `sha256:${'b'.repeat(64)}`,
       size: 128,
+      kind: 'trace' as const,
+      execution_key: 'a3'.repeat(32),
+      attempt_no: 1,
+      media_type: 'application/zip',
+    };
+    await journal.write({
+      artifact_id: artifactId,
+      ...identity,
       put_done: true,
       complete_done: false,
       mint_no: 0,
     });
-    expect(await journal.nextMintNo(`sha256:${'b'.repeat(64)}`, 128)).toBe(1);
+    expect(await journal.nextMintNo(identity)).toBe(1);
     expect((await journal.entries()).map((entry) => entry.artifact_id)).toEqual([artifactId]);
     // The reporter's lock is still the reporter's, and no CLI lock is left behind.
     expect(await readFile(join(spool.directory, writerLockFileName), 'utf8')).toBe(

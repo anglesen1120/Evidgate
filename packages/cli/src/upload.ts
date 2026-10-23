@@ -35,7 +35,6 @@
 // is never sent to the object store. Only the server's `error.code`, `request_id` and the
 // HTTP status are echoed.
 import { createHash, type Hash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 
 import {
@@ -52,9 +51,23 @@ import type { ResolvedConfig } from './config.js';
 import { CliError } from './errors.js';
 import { serverErrorFromResponse, transportError } from './serverError.js';
 import { isRetryable, retryAfter } from './sender.js';
-import type { ArtifactKind, UploadFile } from './uploadPaths.js';
-import type { UploadJournal } from './uploadJournal.js';
-import { retryAttempts, type Attempt, type UploadRetryDeps } from './uploadRetry.js';
+import { reopenUploadFile, type ArtifactKind, type UploadFile } from './uploadPaths.js';
+import {
+  artifactIdPattern,
+  isSpoolLocked,
+  journalFileName,
+  type UploadIdentity,
+  type UploadJournal,
+  type UploadJournalPatch,
+} from './uploadJournal.js';
+import {
+  deadlineExceeded,
+  retryAttempts,
+  type Attempt,
+  type UploadRetryDeps,
+} from './uploadRetry.js';
+
+import type { FileHandle } from 'node:fs/promises';
 
 /** The digest form the server's `sha256` body member and the journal use. */
 export const checksumPattern = /^sha256:[0-9a-f]{64}$/;
@@ -66,11 +79,33 @@ export const checksumPattern = /^sha256:[0-9a-f]{64}$/;
 export const maxMintAttempts = 3;
 /** The chunk size of both passes: 64 KiB, so memory stays flat for a multi-GB trace. */
 export const uploadChunkBytes = 64 * 1024;
+/**
+ * How long the presigned PUT may make NO body progress before it is aborted and retried.
+ * The body of a multi-GB trace legitimately takes minutes, so the PUT has no per-request
+ * cap (`sender.ts`'s 30 s applies to the two JSON calls); a connection that stops moving is
+ * caught by this idle timeout instead, which resets on every chunk.
+ */
+export const putStallTimeoutMs = 60_000;
+
+/** A timer seam: the stall guard and the PUT's deadline must both be injectable. */
+export interface UploadTimers {
+  set(milliseconds: number, fn: () => void): unknown;
+  clear(handle: unknown): void;
+}
+
+const systemTimers: UploadTimers = {
+  set: (milliseconds, fn) => setTimeout(fn, milliseconds),
+  clear: (handle) => clearTimeout(handle as NodeJS.Timeout),
+};
 
 /** Everything an upload needs besides the file: identity, scope, seams. */
 export interface UploadDeps extends UploadRetryDeps {
   /** Transport seam; the SDK calls and the raw PUT both go through it. */
   readonly fetch: typeof fetch;
+  /** The PUT's idle timeout; defaults to {@link putStallTimeoutMs}. */
+  readonly putStallTimeoutMs?: number;
+  /** Timer seam for the PUT's deadline and idle timeout; defaults to the global timers. */
+  readonly timers?: UploadTimers;
 }
 
 export interface UploadRequest {
@@ -217,13 +252,6 @@ export async function hashUploadFile(file: UploadFile): Promise<string> {
   return `sha256:${hash.digest('hex')}`;
 }
 
-/** A re-openable stream of the file at a fixed chunk size (both passes use it). */
-async function* chunksOf(path: string): AsyncGenerator<Uint8Array> {
-  for await (const chunk of createReadStream(path, { highWaterMark: uploadChunkBytes })) {
-    yield chunk as Uint8Array;
-  }
-}
-
 /**
  * Runs one upload. The caller has already opened the file with the allowed-directory guard
  * (`uploadPaths.ts`) and hashed it (`hashUploadFile`); this function owns the three calls,
@@ -238,10 +266,20 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
   const size = request.file.size;
   const deadlineAt = request.deps.now() + request.deadlineMs;
   const client = createApiClient(request.config, request.token, request.deps.fetch);
+  // The journal identity is every value the `upload-url` body is built from: the same bytes
+  // under a different execution, kind, attempt or media type are a different upload and must
+  // not resume (or reuse a mint from) the other one (contracts/cli.md §12.5).
+  const identity: UploadIdentity = {
+    file_sha256: request.sha256,
+    size,
+    kind: request.kind,
+    execution_key: request.executionKey,
+    attempt_no: request.attemptNo,
+    media_type: request.mediaType,
+  };
 
   const journal = request.journal;
-  const resumable =
-    journal === undefined ? undefined : await journal.findResumable(request.sha256, size);
+  const resumable = journal === undefined ? undefined : await journal.findResumable(identity);
 
   let artifactId: string;
   let mintNo: number;
@@ -263,11 +301,23 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
       artifactId = resumable.artifact_id;
     } else {
       // Re-request with the same key: the stored response replays the same artifact row.
-      ({ artifactId, mintNo } = await mintAndPut({ ...request, client, deadlineAt, mintNo }));
+      ({ artifactId, mintNo } = await mintAndPut({
+        ...request,
+        client,
+        deadlineAt,
+        mintNo,
+        identity,
+      }));
     }
   } else {
-    mintNo = journal === undefined ? 0 : await journal.nextMintNo(request.sha256, size);
-    ({ artifactId, mintNo } = await mintAndPut({ ...request, client, deadlineAt, mintNo }));
+    mintNo = journal === undefined ? 0 : await journal.nextMintNo(identity);
+    ({ artifactId, mintNo } = await mintAndPut({
+      ...request,
+      client,
+      deadlineAt,
+      mintNo,
+      identity,
+    }));
   }
 
   const outcome = await completeWithRetry({
@@ -285,11 +335,24 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
       code: 'artifact_rejected',
       hint:
         'this row stays rejected; fix the cause and re-run — a changed file has a new ' +
-        `digest and mints a new row, otherwise delete <spool>/<run>/<producer>/uploads/${artifactId}.json to start over`,
+        `digest and mints a new row, otherwise delete <spool>/<run>/<producer>/uploads/${journalFileName(identity, artifactId)} to start over`,
     });
   }
 
-  const bytes = outcome.bytes ?? size;
+  // AC3: a `ready` artifact is the stored object, so the server must report exactly the
+  // bytes that were signed. A missing count is not `0` and is not the local size: it is a
+  // response that cannot prove the artifact exists (openapi `CompleteResponse.bytes` is
+  // nullable, so `null` is a shape-valid answer with no evidence behind it).
+  const bytes = outcome.bytes;
+  if (bytes === null) {
+    throw new UploadFailedError(
+      `the complete response for ${artifactId} did not report a byte count`,
+      {
+        code: 'request_failed',
+        hint: 'the server answered ready without the stored size; re-run the upload',
+      },
+    );
+  }
   if (bytes !== size) {
     throw new UploadFailedError(
       `the server reported ${bytes} bytes for ${artifactId}, but the file is ${size} bytes`,
@@ -300,7 +363,7 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
     );
   }
   if (journal !== undefined) {
-    await journal.update(artifactId, { complete_done: true });
+    await updateJournalBestEffort(journal, artifactId, { complete_done: true });
   }
   return {
     artifactId,
@@ -311,12 +374,31 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
   };
 }
 
+/**
+ * A journal write that must never turn a finished transfer into a failure (04.2.4 §12.5):
+ * once the bytes are in the store, a busy producer lock only costs the next run one
+ * idempotent `complete`. Any other journal failure (a corrupt or unsafe record) still
+ * surfaces: it means the resume state cannot be trusted.
+ */
+async function updateJournalBestEffort(
+  journal: UploadJournal,
+  artifactId: string,
+  patch: UploadJournalPatch,
+): Promise<void> {
+  try {
+    await journal.update(artifactId, patch);
+  } catch (error) {
+    if (!isSpoolLocked(error)) throw error;
+  }
+}
+
 /** Mints a row and PUTs the bytes, renewing the presigned URL when it expires. */
 async function mintAndPut(
   o: UploadRequest & {
     readonly client: Client;
     readonly deadlineAt: number;
     readonly mintNo: number;
+    readonly identity: UploadIdentity;
   },
 ): Promise<{ artifactId: string; mintNo: number }> {
   let mintNo = o.mintNo;
@@ -326,9 +408,8 @@ async function mintAndPut(
     const artifactId = presigned.artifact_id;
     if (o.journal !== undefined) {
       await o.journal.write({
+        ...o.identity,
         artifact_id: artifactId,
-        file_sha256: o.sha256,
-        size: o.file.size,
         put_done: false,
         complete_done: false,
         mint_no: mintNo,
@@ -337,7 +418,7 @@ async function mintAndPut(
     try {
       await putWithRetry({ ...o, presigned });
       if (o.journal !== undefined) {
-        await o.journal.update(artifactId, { put_done: true });
+        await updateJournalBestEffort(o.journal, artifactId, { put_done: true });
       }
       return { artifactId, mintNo };
     } catch (error) {
@@ -350,7 +431,7 @@ async function mintAndPut(
       lastExpiry = error.cliError;
       mintNo += 1;
       if (o.journal !== undefined) {
-        mintNo = Math.max(mintNo, await o.journal.nextMintNo(o.sha256, o.file.size));
+        mintNo = Math.max(mintNo, await o.journal.nextMintNo(o.identity));
       }
     }
   }
@@ -422,6 +503,11 @@ async function requestUploadUrl(
 /**
  * The PUT, retried only for 429/408/5xx/transport. A 403/404/410 is the expired-URL signal
  * (T18): it is never retried against the same signature, `mintAndPut` re-mints instead.
+ *
+ * The attempt's `signal` from `retryAttempts` is deliberately NOT used: it carries the 30 s
+ * per-request timeout of the two JSON calls, and a multi-GB trace legitimately takes longer
+ * than that. `putOnce` builds its own signal from the remaining upload deadline plus the
+ * idle (no body progress) timeout.
  */
 async function putWithRetry(
   o: UploadRequest & {
@@ -430,15 +516,16 @@ async function putWithRetry(
   },
 ): Promise<void> {
   await retryAttempts(
-    async (_attemptNo, signal) => {
+    async () => {
       try {
         await putOnce({
           presigned: o.presigned,
-          realPath: o.file.realPath,
+          file: o.file,
           sha256: o.sha256,
-          size: o.file.size,
           fetch: o.deps.fetch,
-          signal,
+          deadlineAt: o.deadlineAt,
+          stallMs: o.deps.putStallTimeoutMs ?? putStallTimeoutMs,
+          timers: o.deps.timers ?? systemTimers,
           now: o.deps.now,
         });
         return { ok: true as const, value: undefined };
@@ -538,76 +625,114 @@ function withAuthHint(error: UploadFailedError, status: number): UploadFailedErr
 /** The presigned PUT itself: exactly the signed headers, the file streamed from disk. */
 async function putOnce(o: {
   readonly presigned: UploadUrlResponse;
-  readonly realPath: string;
+  readonly file: UploadFile;
   readonly sha256: string;
-  readonly size: number;
   readonly fetch: typeof fetch;
-  readonly signal: AbortSignal;
+  readonly deadlineAt: number;
+  readonly stallMs: number;
+  readonly timers: UploadTimers;
   readonly now: () => number;
 }): Promise<void> {
+  // Only the remaining upload deadline bounds this request: the 30 s per-request cap of the
+  // two JSON calls would abort any trace that takes longer than half a minute to send.
+  const remaining = o.deadlineAt - o.now();
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    throw deadlineExceeded('upload_put_failed');
+  }
   const url = presignedUrl(o.presigned.upload_url);
-  const headers = signedHeaders(o.presigned.required_headers, o.size, o.sha256);
-  const body = new BodyStream(o.realPath, o.size, o.sha256);
-  let response: Response;
+  const headers = signedHeaders(o.presigned.required_headers, o.file.size, o.sha256);
+  // A FRESH descriptor per attempt, through the same guard: the path is re-opened with
+  // O_NOFOLLOW|O_NONBLOCK and its dev/ino/size must equal the ones the hash pass pinned, so
+  // a file replaced (or symlinked over) between the passes is refused, not uploaded. It is
+  // opened BEFORE a timer is armed, so a refusal here leaves nothing behind to keep the
+  // process alive (a leaked deadline timer would pin the CLI for the whole upload budget).
+  const handle = await reopenUploadFile(o.file);
+  const controller = new AbortController();
+  let stallTimer: unknown;
+  let deadlineTimer: unknown;
+  const armStall = (): void => {
+    if (stallTimer !== undefined) o.timers.clear(stallTimer);
+    stallTimer = o.timers.set(o.stallMs, () => controller.abort(new UploadStalledError(o.stallMs)));
+  };
   try {
-    response = await o.fetch(url, {
-      method: 'PUT',
-      headers,
-      body: Readable.from(body, { objectMode: false }),
-      duplex: 'half',
-      redirect: 'error',
-      signal: o.signal,
-    });
-  } catch (error) {
-    // A body that aborted because the file changed is not a transport failure: it must
-    // never be retried (the same mismatch would repeat) and `complete` must not be called.
+    deadlineTimer = o.timers.set(remaining, () =>
+      controller.abort(deadlineExceeded('upload_put_failed')),
+    );
+    const body = new BodyStream(handle, o.file.size, o.sha256, armStall);
+    let response: Response;
+    try {
+      armStall();
+      response = await o.fetch(url, {
+        method: 'PUT',
+        headers,
+        body: Readable.from(body, { objectMode: false }),
+        duplex: 'half',
+        redirect: 'error',
+        signal: controller.signal,
+      });
+    } catch (error) {
+      // A body that aborted because the file changed is not a transport failure: it must
+      // never be retried (the same mismatch would repeat) and `complete` must not be called.
+      if (body.failure !== undefined) {
+        throw body.failure;
+      }
+      throw error;
+    }
+
+    if (!response.ok) {
+      body.abort();
+      if (response.status === 403 || response.status === 404 || response.status === 410) {
+        throw new PresignExpiredError(
+          new UploadFailedError(
+            `the presigned upload URL is no longer valid (HTTP ${response.status})`,
+            {
+              code: 'upload_put_failed',
+              hint: 'the upload URL expired; the command requests a fresh one',
+            },
+            response.status,
+          ),
+        );
+      }
+      const refusal = new UploadFailedError(
+        `the object store refused the upload (HTTP ${response.status})`,
+        {
+          code: 'upload_put_failed',
+          hint: 'the store refused the signed request; re-run the upload',
+        },
+        response.status,
+      );
+      // §5: only 408/429/5xx are retried; 412 (a conditional or checksum failure) and the
+      // other 4xx are deterministic, so the signed request is never sent again.
+      if (isRetryable(response.status, undefined)) {
+        throw new PutRetryableError(refusal, retryAfter(response, o.now()));
+      }
+      throw new PutRejectedError(refusal);
+    }
+    // The response may arrive before the request body has been flushed; the digest and the
+    // size are only trustworthy once the generator finished.
+    await body.done;
     if (body.failure !== undefined) {
       throw body.failure;
     }
-    throw error;
-  }
-
-  if (!response.ok) {
-    body.abort();
-    if (response.status === 403 || response.status === 404 || response.status === 410) {
-      throw new PresignExpiredError(
-        new UploadFailedError(
-          `the presigned upload URL is no longer valid (HTTP ${response.status})`,
-          {
-            code: 'upload_put_failed',
-            hint: 'the upload URL expired; the command requests a fresh one',
-          },
-          response.status,
-        ),
+    // The generator's last act is the digest comparison, so `done` resolving means the body
+    // matched; the byte count is re-checked here because it is what `complete` verifies.
+    if (body.bytes !== o.file.size) {
+      throw checksumMismatch(
+        `the file changed while it was uploaded (${o.file.size} bytes declared, ${body.bytes} sent)`,
       );
     }
-    const refusal = new UploadFailedError(
-      `the object store refused the upload (HTTP ${response.status})`,
-      {
-        code: 'upload_put_failed',
-        hint: 'the store refused the signed request; re-run the upload',
-      },
-      response.status,
-    );
-    // §5: only 408/429/5xx are retried; 412 (a conditional or checksum failure) and the
-    // other 4xx are deterministic, so the signed request is never sent again.
-    if (isRetryable(response.status, undefined)) {
-      throw new PutRetryableError(refusal, retryAfter(response, o.now()));
-    }
-    throw new PutRejectedError(refusal);
+  } finally {
+    if (stallTimer !== undefined) o.timers.clear(stallTimer);
+    if (deadlineTimer !== undefined) o.timers.clear(deadlineTimer);
+    await handle.close().catch(() => undefined);
   }
-  // The response may arrive before the request body has been flushed; the digest and the
-  // size are only trustworthy once the generator finished.
-  await body.done;
-  if (body.failure !== undefined) {
-    throw body.failure;
-  }
-  // The generator's last act is the digest comparison, so `done` resolving means the body
-  // matched; the byte count is re-checked here because it is what `complete` verifies.
-  if (body.bytes !== o.size) {
-    throw checksumMismatch(
-      `the file changed while it was uploaded (${o.size} bytes declared, ${body.bytes} sent)`,
-    );
+}
+
+/** The connection stopped moving: retryable, and never confused with a file change. */
+class UploadStalledError extends Error {
+  constructor(milliseconds: number) {
+    super(`the presigned upload made no progress for ${milliseconds} ms`);
+    this.name = 'UploadStalledError';
   }
 }
 
@@ -615,6 +740,8 @@ async function putOnce(o: {
  * The PUT body: streams the file in bounded chunks while hashing, and refuses to finish if
  * the bytes are not exactly the declared size and digest — which aborts the request, so a
  * half-sent object is never completed (the `pending/` object expires by lifecycle, T18).
+ * It reads the guarded descriptor `putOnce` re-opened (never a path), so a swapped file can
+ * not be sent, and it reports every chunk to the idle timer.
  */
 class BodyStream implements AsyncIterable<Uint8Array> {
   readonly hash: Hash;
@@ -626,9 +753,10 @@ class BodyStream implements AsyncIterable<Uint8Array> {
   private rejectDone: (error: unknown) => void = () => undefined;
 
   constructor(
-    private readonly path: string,
+    private readonly handle: FileHandle,
     private readonly size: number,
     private readonly sha256: string,
+    private readonly onProgress: () => void,
   ) {
     this.hash = createHash('sha256');
     // `Promise.withResolvers` is ES2024 and the workspace targets ES2022 (tsconfig.base).
@@ -643,7 +771,12 @@ class BodyStream implements AsyncIterable<Uint8Array> {
 
   async *[Symbol.asyncIterator](): AsyncGenerator<Uint8Array> {
     try {
-      for await (const chunk of chunksOf(this.path)) {
+      const stream = this.handle.createReadStream({
+        start: 0,
+        autoClose: false,
+        highWaterMark: uploadChunkBytes,
+      }) as AsyncIterable<Uint8Array>;
+      for await (const chunk of stream) {
         this.bytes += chunk.byteLength;
         if (this.bytes > this.size) {
           throw checksumMismatch(
@@ -651,6 +784,7 @@ class BodyStream implements AsyncIterable<Uint8Array> {
           );
         }
         this.hash.update(chunk);
+        this.onProgress();
         yield chunk;
       }
       if (this.bytes !== this.size) {
@@ -742,7 +876,7 @@ function readUploadUrl(data: unknown): UploadUrlResponse {
   const uploadUrl = body['upload_url'];
   const requiredHeaders = body['required_headers'];
   const expiresAt = body['expires_at'];
-  if (typeof artifactId !== 'string' || !/^[0-9a-f-]{36}$/i.test(artifactId)) {
+  if (typeof artifactId !== 'string' || !artifactIdPattern.test(artifactId)) {
     throw badResponse('the upload-url response carries no artifact id');
   }
   // `object_key` is required by the contract (openapi `UploadUrlResponse`), so a body
@@ -831,6 +965,23 @@ function headerLabel(lowerName: string): string {
 }
 
 /**
+ * Headers a presigned PUT must never carry, whatever the server signs: a credential
+ * (`authorization`, `cookie`, `set-cookie`, `proxy-authorization`), the target
+ * (`host`), or a second framing (`transfer-encoding`, `connection`) — plus any `proxy-*`.
+ * The client keeps its own bearer off the object store (04 §6/S3), and a response is not
+ * allowed to talk it into doing otherwise.
+ */
+const forbiddenSignedHeaders: Readonly<Record<string, true>> = {
+  authorization: true,
+  cookie: true,
+  'set-cookie': true,
+  host: true,
+  'proxy-authorization': true,
+  'transfer-encoding': true,
+  connection: true,
+};
+
+/**
  * Exactly the signed headers, validated against the local file: `Content-Length` must be the
  * declared size and the `x-amz-checksum-sha256` header must equal the base64 of the digest.
  * A response that signs neither is refused — the checksum exists to make the PUT
@@ -844,6 +995,14 @@ function signedHeaders(
   const byLowerName = new Map<string, { readonly name: string; readonly value: string }>();
   for (const [name, value] of Object.entries(headers)) {
     const lower = name.toLowerCase();
+    if (forbiddenSignedHeaders[lower] === true || lower.startsWith('proxy-')) {
+      // A 201 can name any header; these would let the response make the CLI send a
+      // credential, rewrite the target host, or smuggle a second body framing. The value is
+      // never echoed — only the name.
+      throw badResponse(
+        `the upload URL signed the ${headerLabel(lower)} header, which is never sent to the object store`,
+      );
+    }
     const existing = byLowerName.get(lower);
     // Two names that fold to the same header are one signed header. The same value twice
     // is a harmless duplicate; two different values make the signed set ambiguous (the

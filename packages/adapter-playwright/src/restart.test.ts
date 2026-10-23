@@ -153,6 +153,30 @@ describe('reporter restart (T84)', () => {
     }
   });
 
+  it('ignores an unreadable sequence in a chunk line instead of jumping to it (F4)', () => {
+    const spool = tempSpool();
+    const dir = join(spool, 'run-1', PRODUCER_ID);
+    mkdirSync(dir, { recursive: true });
+    // The last line the scan may trust carries sequence 3. The three complete lines after it
+    // carry values no writer may resume after — a float past the safe range, a negative and
+    // a fraction — and are unreadable exactly like a torn line, so the scan walks backwards.
+    const valid = [1, 2, 3].map((sequence) => `${JSON.stringify({ ...envelope(), sequence })}\n`);
+    writeFileSync(
+      join(dir, '000001.jsonl'),
+      `${valid.join('')}{"sequence":1e300}\n{"sequence":-7}\n{"sequence":2.5}\n`,
+    );
+
+    const resumed = new SpoolWriter(options(spool));
+    // Not 1e300, not 0: the last safe integer `>= 1` decides (the same rule the record and
+    // checkpoint readers apply), so the producer continues contiguously across the damage.
+    expect(resumed.nextSequenceNumber).toBe(4);
+    const minted = resumed.append(envelope());
+    expect(minted.sequence).toBe(4);
+    resumed.close();
+    // The record carries the real next sequence, never the unusable one.
+    expect(readFileSync(join(dir, SHARDS_FILE), 'utf8')).toContain('"sequence_next":5');
+  });
+
   it('a crash before the first rotation leaves no record and still resumes from the chunks', () => {
     const spool = tempSpool();
     const crashed = crashedWriter(spool, { flushThreshold: 1, chunkMaxLines: 100 });

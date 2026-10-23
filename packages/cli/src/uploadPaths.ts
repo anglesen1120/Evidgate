@@ -75,7 +75,15 @@ export interface UploadFile {
   readonly realPath: string;
   /** Bytes of the opened descriptor (`fstat`), the only size that is trusted. */
   readonly size: number;
-  /** The open descriptor every pass reads from; close it with {@link closeUploadFile}. */
+  /** `dev` of the pinned descriptor: a re-open must land on the same object. */
+  readonly dev: number;
+  /** `ino` of the pinned descriptor: a re-open must land on the same object. */
+  readonly ino: number;
+  /**
+   * The open descriptor that pins the inode the guard accepted. Keep it open until the
+   * last pass has finished, then release it with {@link closeUploadFile}: while it is open
+   * the inode cannot be recycled, so a re-open can be compared against this one.
+   */
   readonly handle: FileHandle;
 }
 
@@ -248,9 +256,56 @@ export async function openUploadFile(input: OpenUploadFileInput): Promise<Upload
         },
       );
     }
-    return { path, realPath: realFile, size: stats.size, handle };
+    return { path, realPath: realFile, size: stats.size, dev: stats.dev, ino: stats.ino, handle };
   } catch (error) {
     await handle.close();
+    throw error;
+  }
+}
+
+/**
+ * Re-opens the guarded file for one more read pass and proves it is still the same object:
+ * `O_NOFOLLOW|O_NONBLOCK` on the resolved path, `fstat`ed, with its `dev`/`ino`/`size`
+ * compared against the descriptor the guard pinned. A path swapped for a symlink
+ * (`ELOOP`), a different inode (the file was replaced) or a different length is
+ * `upload_path_refused` before a byte is read — that is the TOCTOU half of the two-pass
+ * upload, and it is never retried because the same path would fail again.
+ *
+ * The caller owns the returned descriptor and must close it on every path.
+ */
+export async function reopenUploadFile(file: UploadFile): Promise<FileHandle> {
+  let handle: FileHandle;
+  try {
+    handle = await open(file.realPath, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  } catch (error) {
+    const code = errnoName(error);
+    throw pathRefused(
+      code === 'ELOOP'
+        ? `refusing to follow a symlink swapped in for --file ${displayPath(file.path, process.cwd())}`
+        : `cannot re-open --file ${displayPath(file.path, process.cwd())}: ${code}`,
+      'the file must not be replaced, renamed or linked over while it is uploaded',
+    );
+  }
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) {
+      throw pathRefused(`--file ${displayPath(file.path, process.cwd())} is not a regular file`);
+    }
+    if (stats.dev !== file.dev || stats.ino !== file.ino) {
+      throw pathRefused(
+        `--file ${displayPath(file.path, process.cwd())} was replaced while it was uploaded`,
+        'the file was moved or rewritten under the upload; re-run the command on the finished file',
+      );
+    }
+    if (stats.size !== file.size) {
+      throw pathRefused(
+        `--file ${displayPath(file.path, process.cwd())} changed size while it was uploaded`,
+        'the file was still being written; re-run the command after it is complete',
+      );
+    }
+    return handle;
+  } catch (error) {
+    await handle.close().catch(() => undefined);
     throw error;
   }
 }
