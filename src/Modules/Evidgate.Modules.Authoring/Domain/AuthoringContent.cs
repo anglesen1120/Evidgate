@@ -440,27 +440,49 @@ internal static class AuthoringContent
             return null;
         }
 
-        // Every string leaf is NFC-normalised before the document is stored, so the composed and the decomposed spelling
-        // of one step are one stored document, one content_hash and one version (AC14). Rebuilding the node tree keeps
-        // member order, so the serialised text is stable.
+        JsonNode? node;
         try
         {
-            return JsonNode.Parse(raw) is { } node
-                ? NormaliseLeaves(node).ToJsonString()
-                : raw;
+            node = JsonNode.Parse(raw);
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
+        catch (JsonException)
         {
-            // An unpaired surrogate in a leaf: the value is not valid UTF-16, so it cannot be composed or stored.
+            problems.Add(("/content/steps", "invalid_json"));
+            return null;
+        }
+
+        if (node is null)
+        {
+            return raw;
+        }
+
+        // Every string leaf is NFC-normalised before the document is stored, so the composed and the decomposed spelling
+        // of one step are one stored document, one content_hash and one version (AC14). The tree is normalised in place,
+        // which keeps member order, so the serialised text is stable.
+        //
+        // The catch is this narrow on purpose: the only two exceptions a leaf of caller JSON can raise here are the
+        // normaliser refusing text that is not valid UTF-16 (ArgumentException) and the reader's transcode of an
+        // unpaired surrogate failing the same way (InvalidOperationException). Nothing in this method touches the
+        // service graph, so an infrastructure failure is never turned into a caller error here.
+        try
+        {
+            NormaliseLeaves(node);
+            return node.ToJsonString();
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
             problems.Add(("/content/steps", "invalid_text"));
             return null;
         }
     }
 
-    /// <summary>NFC-normalises every string leaf of a JSON document in place; non-string leaves are left alone.</summary>
+    /// <summary>
+    /// NFC-normalises every string leaf of a JSON document in place; non-string leaves are left alone. Nested objects and
+    /// arrays are walked, never reassigned: a node that is already attached to its parent cannot be assigned back into it
+    /// (<c>JsonNode</c> refuses a node that already has a parent), and only a leaf value is replaced.
+    /// </summary>
     /// <param name="node">The document or subtree.</param>
-    /// <returns>The same node, normalised.</returns>
-    private static JsonNode NormaliseLeaves(JsonNode node)
+    private static void NormaliseLeaves(JsonNode node)
     {
         switch (node)
         {
@@ -469,30 +491,49 @@ internal static class AuthoringContent
                 {
                     if (property.Value is { } child)
                     {
-                        jsonObject[property.Key] = NormaliseLeaves(child);
+                        if (child is JsonObject or JsonArray)
+                        {
+                            NormaliseLeaves(child);
+                        }
+                        else if (Composed(child) is { } composed)
+                        {
+                            jsonObject[property.Key] = composed;
+                        }
                     }
                 }
 
-                return jsonObject;
+                break;
 
             case JsonArray jsonArray:
                 for (var index = 0; index < jsonArray.Count; index++)
                 {
                     if (jsonArray[index] is { } child)
                     {
-                        jsonArray[index] = NormaliseLeaves(child);
+                        if (child is JsonObject or JsonArray)
+                        {
+                            NormaliseLeaves(child);
+                        }
+                        else if (Composed(child) is { } composed)
+                        {
+                            jsonArray[index] = composed;
+                        }
                     }
                 }
 
-                return jsonArray;
-
-            case JsonValue value when value.TryGetValue<string>(out var text):
-                return JsonValue.Create(AuthoringText.Normalize(text)!);
+                break;
 
             default:
-                return node;
+                break;
         }
     }
+
+    /// <summary>The NFC-composed replacement of one leaf value, or null when the leaf is not a string to compose.</summary>
+    /// <param name="node">The leaf.</param>
+    /// <returns>A detached <see cref="JsonValue"/> for a string leaf, null for every other value.</returns>
+    private static JsonValue? Composed(JsonNode node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text)
+            ? JsonValue.Create(AuthoringText.Normalize(text))
+            : null;
 
     private static void Length(string? text, string path, int maximum, List<(string Path, string Reason)> problems)
     {

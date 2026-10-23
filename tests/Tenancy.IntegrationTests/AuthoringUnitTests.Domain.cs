@@ -162,6 +162,41 @@ public sealed partial class AuthoringUnitTests
     }
 
     [Fact]
+    public void ContentParse_AcceptsAFullCaseDocument()
+    {
+        // The positive half of the parser: a complete case document (a steps array with a step object) is accepted, and
+        // the snapshot carries the normalised document text that is hashed and stored.
+        var itemId = Guid.CreateVersion7();
+        using var document = JsonDocument.Parse(
+            "{\"checklist_item_id\":\"" + itemId.ToString("D") + "\",\"code\":\"SHOP-001\",\"title\":\"Pay with a card\","
+            + "\"description\":null,\"precondition\":null,"
+            + "\"steps\":{\"steps\":[{\"no\":1,\"action\":\"Tap caf\\u0065\\u0301\",\"expected\":\"The cart opens\"}]},"
+            + "\"priority\":\"high\",\"state\":\"draft\"}");
+
+        AuthoringContent.Parse(AuthoringEntityKind.ManualTestCase, document.RootElement, out var parsed, out var details)
+            .ShouldBeTrue();
+        details.ShouldBeEmpty();
+
+        var manualCase = parsed.ShouldBeOfType<ManualTestCaseSnapshot>();
+        manualCase.ChecklistItemId.ShouldBe(itemId);
+        manualCase.Code.ShouldBe("SHOP-001");
+        manualCase.Priority.ShouldBe(AuthoringPriorities.High);
+        manualCase.State.ShouldBe(ManualTestCaseStateMachine.Draft);
+
+        // The nested step object is walked and its string leaves are composed, not reassigned onto their parent.
+        manualCase.Steps.ShouldBe(
+            "{\"steps\":[{\"no\":1,\"action\":\"Tap caf\u00e9\",\"expected\":\"The cart opens\"}]}");
+        manualCase.Steps.Contains('\u0301').ShouldBeFalse("no combining mark survives the parse");
+
+        // A node document parses too: the ladder's other half has the same positive path.
+        using var node = JsonDocument.Parse("{\"kind\":\"module\",\"title\":\"Shop\",\"position\":0,\"parent_id\":null}");
+        AuthoringContent.Parse(AuthoringEntityKind.FeatureNode, node.RootElement, out var parsedNode, out var nodeDetails)
+            .ShouldBeTrue();
+        nodeDetails.ShouldBeEmpty();
+        parsedNode.ShouldBeOfType<FeatureNodeSnapshot>().ParentId.ShouldBeNull();
+    }
+
+    [Fact]
     public void ContentParse_RefusesDuplicateMembersAndInvalidText()
     {
         var itemId = Guid.CreateVersion7().ToString("D");

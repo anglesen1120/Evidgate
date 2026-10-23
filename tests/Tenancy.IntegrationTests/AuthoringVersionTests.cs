@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring;
@@ -55,6 +56,11 @@ public sealed class AuthoringVersionTests
         var services = new ServiceCollection();
         services.AddSingleton(dataSource);
         services.AddEvidgateTenancy();
+
+        // The module's lazy ContractSchemaSet resolves IHostEnvironment, which a test container has none of. The explicit
+        // contracts directory overload registers the compiled set first, so the module's TryAdd leaves it alone: the
+        // steps schema is the real contracts/schemas/authoring-steps.v1.json, not a stand-in.
+        services.AddEvidgateContractValidation(Path.Combine(RlsExceptionFile.RepositoryRoot, "contracts"));
         services.AddAuthoringModule();
 
         return (dataSource, services.BuildServiceProvider());
