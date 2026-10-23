@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="vi" data-theme="light" data-nav="generation" data-phase-min="G1">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Tạo kiểm thử · Evidgate</title>
+  <link rel="stylesheet" href="../assets/evidgate.css">
+  <script src="../assets/evidgate.js" defer></script>
+</head>
+<body>
+  <a class="eg-skip-link" href="#main"><span data-en="Skip to main content" data-vi="Bỏ qua đến nội dung chính">Bỏ qua đến nội dung chính</span></a>
+  <div class="eg-shell">
+    <aside class="eg-nav" id="eg-primary-nav" data-eg-nav aria-label="Điều hướng sản phẩm"></aside>
+    <div class="eg-shell__main">
+      <header class="eg-topbar">
+        <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-nav-toggle aria-expanded="true" aria-controls="eg-primary-nav" aria-label="Mở hoặc thu gọn điều hướng">
+          <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-menu"></use></svg>
+        </button>
+        <div class="eg-topbar__scope">
+          <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Project" data-vi="Dự án">Dự án</span></span>
+          <span><strong>storefront-web</strong> · Lotus Commerce</span>
+        </div>
+        <div class="eg-topbar__search">
+          <label class="eg-visually-hidden" for="nav-search">Tìm mục điều hướng</label>
+          <input class="eg-input eg-input--search" id="nav-search" type="search" data-eg-nav-search data-placeholder-en="Search navigation" data-placeholder-vi="Tìm mục điều hướng" placeholder="Tìm mục điều hướng">
+        </div>
+        <div class="eg-topbar__actions">
+          <span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Author</span></span>
+          <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-open="shortcuts-dialog" aria-haspopup="dialog" aria-label="Phím tắt">
+            <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-book"></use></svg>
+          </button>
+          <div class="eg-menu">
+            <button class="eg-btn eg-btn--ghost eg-btn--sm eg-menu__trigger" type="button" aria-expanded="false" aria-controls="account-menu">
+              <span>LN</span>
+              <span class="eg-btn__label">Linh Nguyễn</span>
+              <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg>
+            </button>
+            <div class="eg-menu__panel" id="account-menu" hidden>
+              <p><strong>Linh Nguyễn</strong><br><span data-en="QA engineer · Lotus Commerce" data-vi="Kỹ sư QA · Lotus Commerce">Kỹ sư QA · Lotus Commerce</span></p>
+              <a class="eg-menu__item" href="../27-settings-shell/evidgate-settings.html" data-en="Workspace settings" data-vi="Cài đặt không gian làm việc">Cài đặt không gian làm việc</a>
+              <a class="eg-menu__item" href="../44-ai-settings/evidgate-ai-settings.html" data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</a>
+              <a class="eg-menu__item" href="../02-login/evidgate-sign-in.html" data-en="Sign out" data-vi="Đăng xuất">Đăng xuất</a>
+            </div>
+          </div>
+        </div>
+      </header>
+      <main tabindex="-1" class="eg-shell__content" id="main">
+        <nav class="eg-breadcrumbs" aria-label="Đường dẫn">
+          <ol>
+            <li class="eg-breadcrumbs__item"><a href="../index.html" data-en="Design index" data-vi="Hồ sơ thiết kế">Hồ sơ thiết kế</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item"><a href="../24-project-connection/evidgate-project-overview.html">storefront-web</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item" aria-current="page" data-en="Generate tests" data-vi="Tạo kiểm thử">Tạo kiểm thử</li>
+          </ol>
+        </nav>
+
+        <div class="eg-banner eg-banner--desktop">
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong data-en="Desktop required for generation" data-vi="Cần máy tính để tạo">Cần máy tính để tạo</strong>
+            <p data-en="This narrow view is read-only. Requirement input, estimates and generated output remain inspectable." data-vi="Chế độ hẹp này là chỉ đọc. Yêu cầu đầu vào, ước tính và kết quả tạo vẫn xem được.">Chế độ hẹp này là chỉ đọc. Yêu cầu đầu vào, ước tính và kết quả tạo vẫn xem được.</p>
+          </div>
+        </div>
+
+        <header class="eg-page-header">
+          <div>
+            <p class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Generation</span></p>
+            <h1 class="eg-page-header__title" data-en="Generate tests" data-vi="Tạo kiểm thử">Tạo kiểm thử</h1>
+            <p class="eg-page-header__description" data-en="Take a requirement through credit-aware checklist generation, human batch review and then manual-test-case generation. Every AI action has an explicit preflight; failures stay honest." data-vi="Đưa yêu cầu qua quá trình tạo danh mục kiểm tra có tính tín dụng, người duyệt theo lô, rồi tạo ca thủ công. Mọi hành động AI đều có kiểm tra trước rõ ràng; lỗi được hiển thị trung thực.">Đưa yêu cầu qua quá trình tạo danh mục kiểm tra có tính tín dụng, người duyệt theo lô, rồi tạo ca thủ công. Mọi hành động AI đều có kiểm tra trước rõ ràng; lỗi được hiển thị trung thực.</p>
+            <p class="eg-page-header__meta">
+              <span>storefront-web · SHOP</span><span aria-hidden="true">·</span>
+              <span>ais-3</span><span aria-hidden="true">·</span>
+              <span data-en="Period 2026-10" data-vi="Kỳ 2026-10">Kỳ 2026-10</span><span aria-hidden="true">·</span>
+              <a href="../44-ai-settings/evidgate-ai-settings.html" data-en="Project AI settings" data-vi="Cài đặt AI của dự án">Cài đặt AI của dự án</a>
+            </p>
+          </div>
+          <div class="eg-page-header__actions">
+            <a class="eg-btn eg-btn--secondary" href="../44-ai-settings/evidgate-ai-settings.html"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-sliders"></use></svg><span class="eg-btn__label" data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</span></a>
+            <a class="eg-btn eg-btn--secondary" href="../40-authoring-tree/evidgate-authoring-tree.html"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-tree"></use></svg><span class="eg-btn__label" data-en="Manual authoring" data-vi="Soạn thủ công">Soạn thủ công</span></a>
+          </div>
+        </header>
+
+        <div data-eg-review data-eg-states="default,loading,empty,error,403,404,401,429,412,submitting"></div>
+
+        <div data-eg-show-state="loading" hidden aria-busy="true">
+          <section class="eg-card" aria-hidden="true">
+            <div class="eg-card__header"><span class="eg-skeleton eg-skeleton--title"></span><span class="eg-skeleton eg-skeleton--control"></span></div>
+            <div class="eg-card__body"><span class="eg-skeleton eg-skeleton--block"></span><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span></div>
+          </section>
+          <span class="eg-visually-hidden" role="status" data-en="Loading the generation workspace" data-vi="Đang tải không gian tạo kiểm thử">Đang tải không gian tạo kiểm thử</span>
+        </div>
+
+        <div class="eg-stack" data-gap="4">
+          <div class="eg-state eg-state--empty" data-eg-show-state="empty" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-sparkle"></use></svg></span>
+            <span class="eg-state__title" data-en="No requirement supplied" data-vi="Chưa có yêu cầu">Chưa có yêu cầu</span>
+            <span class="eg-state__description" data-en="Add requirement text or a supported attachment to estimate credits. Manual authoring remains available without AI." data-vi="Thêm văn bản yêu cầu hoặc tệp đính kèm được hỗ trợ để ước tính tín dụng. Soạn thủ công vẫn khả dụng khi không dùng AI.">Thêm văn bản yêu cầu hoặc tệp đính kèm được hỗ trợ để ước tính tín dụng. Soạn thủ công vẫn khả dụng khi không dùng AI.</span>
+            <span class="eg-state__actions"><a class="eg-btn eg-btn--secondary eg-btn--sm" href="../40-authoring-tree/evidgate-authoring-tree.html"><span class="eg-btn__label" data-en="Author manually" data-vi="Soạn thủ công">Soạn thủ công</span></a></span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="error" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="The generation workspace could not be loaded" data-vi="Không thể tải không gian tạo kiểm thử">Không thể tải không gian tạo kiểm thử</span>
+            <span class="eg-state__description" data-en="Retry keeps the requirement text and nothing is generated or applied automatically." data-vi="Thử lại giữ nguyên văn bản yêu cầu và không có gì được tạo hay áp dụng tự động.">Thử lại giữ nguyên văn bản yêu cầu và không có gì được tạo hay áp dụng tự động.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Retry" data-vi="Thử lại">Thử lại</span></button></span>
+          </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="403" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+            <span class="eg-state__title" data-en="Generation is not permitted" data-vi="Không được phép tạo">Không được phép tạo</span>
+            <span class="eg-state__description" data-en="The authoring:generate grant is missing. Manual authoring and reading existing cases still work." data-vi="Thiếu quyền authoring:generate. Soạn thủ công và đọc ca hiện có vẫn hoạt động.">Thiếu quyền authoring:generate. Soạn thủ công và đọc ca hiện có vẫn hoạt động.</span>
+            <span class="eg-state__actions"><a class="eg-btn eg-btn--secondary eg-btn--sm" href="../40-authoring-tree/evidgate-authoring-tree.html"><span class="eg-btn__label" data-en="Author manually" data-vi="Soạn thủ công">Soạn thủ công</span></a></span>
+          </div>
+          <div class="eg-state eg-state--not-found" data-eg-show-state="404" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-search"></use></svg></span>
+            <span class="eg-state__title" data-en="Settings version not found" data-vi="Không tìm thấy phiên bản cài đặt">Không tìm thấy phiên bản cài đặt</span>
+            <span class="eg-state__description" data-en="ais-3 is not available to this project. Choose a supplied settings version; no fallback model is inferred." data-vi="ais-3 không khả dụng cho dự án này. Chọn một phiên bản cài đặt được cung cấp; không suy đoán mô hình thay thế.">ais-3 không khả dụng cho dự án này. Chọn một phiên bản cài đặt được cung cấp; không suy đoán mô hình thay thế.</span>
+          </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="401" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+            <span class="eg-state__title" data-en="Your session expired" data-vi="Phiên đăng nhập đã hết hạn">Phiên đăng nhập đã hết hạn</span>
+            <span class="eg-state__description" data-en="Sign in again. The requirement text and any generated result are retained; nothing is resubmitted." data-vi="Đăng nhập lại. Văn bản yêu cầu và kết quả đã tạo được giữ; không có gì được gửi lại.">Đăng nhập lại. Văn bản yêu cầu và kết quả đã tạo được giữ; không có gì được gửi lại.</span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="429" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+            <span class="eg-state__title" data-en="Too many generation requests" data-vi="Quá nhiều yêu cầu tạo">Quá nhiều yêu cầu tạo</span>
+            <span class="eg-state__description" data-en="No checklist or case version was created. The current input is retained; retry is explicit after the wait." data-vi="Không danh mục hay phiên bản ca nào được tạo. Dữ liệu đầu vào hiện tại được giữ; thử lại rõ ràng sau khi chờ.">Không danh mục hay phiên bản ca nào được tạo. Dữ liệu đầu vào hiện tại được giữ; thử lại rõ ràng sau khi chờ.</span>
+          </div>
+          <div class="eg-state eg-state--conflict" data-eg-show-state="412" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-shield-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="The reviewed checklist changed" data-vi="Danh mục đã duyệt đã thay đổi">Danh mục đã duyệt đã thay đổi</span>
+            <span class="eg-state__description" data-en="Generation was based on av-12 and the current authoring version is av-13. No test case was created. Reload the base explicitly; there is no auto-merge, automatic retry or partial version." data-vi="Việc tạo dựa trên av-12 và phiên bản soạn hiện tại là av-13. Không ca kiểm thử nào được tạo. Tải lại bản gốc rõ ràng; không tự hợp nhất, tự thử lại hay phiên bản một phần.">Việc tạo dựa trên av-12 và phiên bản soạn hiện tại là av-13. Không ca kiểm thử nào được tạo. Tải lại bản gốc rõ ràng; không tự hợp nhất, tự thử lại hay phiên bản một phần.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Reload current checklist" data-vi="Tải lại danh mục hiện tại">Tải lại danh mục hiện tại</span></button></span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="submitting" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+            <span class="eg-state__title" data-en="Checklist generation in progress" data-vi="Đang tạo danh mục kiểm tra">Đang tạo danh mục kiểm tra</span>
+            <span class="eg-state__description" data-en="One request is in flight. The UI announces stage names without a fabricated completion percentage or invented output." data-vi="Một yêu cầu đang xử lý. Giao diện thông báo tên giai đoạn mà không bịa phần trăm hoàn thành hay kết quả.">Một yêu cầu đang xử lý. Giao diện thông báo tên giai đoạn mà không bịa phần trăm hoàn thành hay kết quả.</span>
+          </div>
+        </div>
+
+        <div class="eg-stack" data-gap="6" data-eg-hide-state="loading,empty,error,403,404,401,429,412,submitting">
+          <div class="eg-banner eg-banner--info eg-banner--stack">
+            <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-sparkle"></use></svg></span>
+            <div class="eg-banner__body">
+              <strong data-en="AI output stays unreviewed until a person acts" data-vi="Kết quả AI vẫn chưa được duyệt cho đến khi người dùng hành động">Kết quả AI vẫn chưa được duyệt cho đến khi người dùng hành động</strong>
+              <p data-en="Every AI action confirms estimate, balance, tenant opt-in and authoring:generate before running. Checklist changes route through pending changes; generated cases open in the manual-case editor for human review." data-vi="Mọi hành động AI đều xác nhận ước tính, số dư, chấp thuận của tổ chức và authoring:generate trước khi chạy. Thay đổi danh mục đi qua thay đổi chờ áp dụng; ca được tạo mở trong trình soạn ca thủ công để người dùng duyệt.">Mọi hành động AI đều xác nhận ước tính, số dư, chấp thuận của tổ chức và authoring:generate trước khi chạy. Thay đổi danh mục đi qua thay đổi chờ áp dụng; ca được tạo mở trong trình soạn ca thủ công để người dùng duyệt.</p>
+            </div>
+            <div class="eg-banner__actions"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Local fixtures · no provider calls" data-vi="Dữ liệu cục bộ · không gọi nhà cung cấp">Dữ liệu cục bộ · không gọi nhà cung cấp</span></span></div>
+          </div>
+
+          <ol class="eg-stepper" aria-label="Các giai đoạn tạo kiểm thử">
+            <li class="eg-stepper__step"><span class="eg-stepper__marker">1</span><div><span class="eg-stepper__label" data-en="Input" data-vi="Đầu vào">Đầu vào</span><span class="eg-stepper__description" data-en="Requirement and attachment" data-vi="Yêu cầu và tệp đính kèm">Yêu cầu và tệp đính kèm</span></div></li>
+            <li class="eg-stepper__step"><span class="eg-stepper__marker">2</span><div><span class="eg-stepper__label" data-en="Credit estimate" data-vi="Ước tính tín dụng">Ước tính tín dụng</span><span class="eg-stepper__description" data-en="12 credits · period 2026-10" data-vi="12 tín dụng · kỳ 2026-10">12 tín dụng · kỳ 2026-10</span></div></li>
+            <li class="eg-stepper__step"><span class="eg-stepper__marker">3</span><div><span class="eg-stepper__label" data-en="Progress" data-vi="Tiến trình">Tiến trình</span><span class="eg-stepper__description" data-en="Named stages · no fake percent" data-vi="Giai đoạn có tên · không phần trăm giả">Giai đoạn có tên · không phần trăm giả</span></div></li>
+            <li class="eg-stepper__step"><span class="eg-stepper__marker">4</span><div><span class="eg-stepper__label" data-en="Checklist review" data-vi="Duyệt danh mục">Duyệt danh mục</span><span class="eg-stepper__description" data-en="Human boundary · page 42" data-vi="Ranh giới người duyệt · trang 42">Ranh giới người duyệt · trang 42</span></div></li>
+            <li class="eg-stepper__step"><span class="eg-stepper__marker">5</span><div><span class="eg-stepper__label" data-en="Test cases" data-vi="Ca kiểm thử">Ca kiểm thử</span><span class="eg-stepper__description" data-en="Review in the editor" data-vi="Duyệt trong trình soạn">Duyệt trong trình soạn</span></div></li>
+          </ol>
+
+          <div class="eg-tabs eg-tabs--scroll" data-eg-tabs>
+            <label class="eg-visually-hidden" for="stage-tab-select">Chọn giai đoạn</label>
+            <select class="eg-select eg-tabs__mobile" id="stage-tab-select" data-eg-tab-select>
+              <option value="stage-input" selected>Đầu vào</option>
+              <option value="stage-estimate">Ước tính tín dụng</option>
+              <option value="stage-progress">Tiến trình</option>
+              <option value="stage-checklist">Duyệt danh mục</option>
+              <option value="stage-cases">Ca kiểm thử</option>
+            </select>
+            <div class="eg-tabs__list" role="tablist" aria-label="Giai đoạn tạo kiểm thử">
+              <button class="eg-tabs__tab" type="button" role="tab" id="stage-input" aria-controls="stage-input-panel" aria-selected="true"><span data-en="1 · Input" data-vi="1 · Đầu vào">1 · Đầu vào</span></button>
+              <button class="eg-tabs__tab" type="button" role="tab" id="stage-estimate" aria-controls="stage-estimate-panel" aria-selected="false" tabindex="-1"><span data-en="2 · Credit estimate" data-vi="2 · Ước tính tín dụng">2 · Ước tính tín dụng</span></button>
+              <button class="eg-tabs__tab" type="button" role="tab" id="stage-progress" aria-controls="stage-progress-panel" aria-selected="false" tabindex="-1"><span data-en="3 · Progress" data-vi="3 · Tiến trình">3 · Tiến trình</span></button>
+              <button class="eg-tabs__tab" type="button" role="tab" id="stage-checklist" aria-controls="stage-checklist-panel" aria-selected="false" tabindex="-1"><span data-en="4 · Checklist review" data-vi="4 · Duyệt danh mục">4 · Duyệt danh mục</span></button>
+              <button class="eg-tabs__tab" type="button" role="tab" id="stage-cases" aria-controls="stage-cases-panel" aria-selected="false" tabindex="-1"><span data-en="5 · Test cases" data-vi="5 · Ca kiểm thử">5 · Ca kiểm thử</span></button>
+            </div>
+
+            <div class="eg-tabs__panel" id="stage-input-panel" role="tabpanel" aria-labelledby="stage-input">
+              <div class="eg-split-pane eg-split-pane--context">
+                <div class="eg-stack" data-gap="4">
+                  <section class="eg-card" id="requirement-card" aria-labelledby="requirement-title">
+                    <header class="eg-card__header"><div><h2 id="requirement-title" data-en="Requirement" data-vi="Yêu cầu">Yêu cầu</h2><p data-en="Paste text or attach DOCX/PDF for extraction and images for reference. Input is retained when switching stages." data-vi="Dán văn bản hoặc đính kèm DOCX/PDF để trích xuất và hình ảnh để tham chiếu. Dữ liệu đầu vào được giữ khi chuyển giai đoạn.">Dán văn bản hoặc đính kèm DOCX/PDF để trích xuất và hình ảnh để tham chiếu. Dữ liệu đầu vào được giữ khi chuyển giai đoạn.</p></div><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">SHOP</span></span></header>
+                    <div class="eg-card__body">
+                      <div class="eg-readonly-summary" data-eg-summary-scope="#requirement-card">
+                        <div>
+                          <span class="eg-field__label" data-en="Requirement text" data-vi="Văn bản yêu cầu">Văn bản yêu cầu</span>
+                          <p data-eg-summary-value="requirement-text">Khách hàng xem lại đơn hàng trước khi xác nhận</p>
+                        </div>
+                        <div>
+                          <span class="eg-field__label" data-en="Attachment" data-vi="Tệp đính kèm">Tệp đính kèm</span>
+                          <p>checkout-requirement.pdf · PDF · <span data-en="Scan clean" data-vi="Quét sạch">Quét sạch</span></p>
+                        </div>
+                        <p class="eg-field__hint" data-en="Read-only at this width. Open the editor on a wider screen to change input." data-vi="Chỉ đọc ở độ rộng này. Mở trình soạn trên màn hình rộng hơn để thay đổi đầu vào.">Chỉ đọc ở độ rộng này. Mở trình soạn trên màn hình rộng hơn để thay đổi đầu vào.</p>
+                      </div>
+                      <div class="eg-field" data-eg-mutate>
+                        <label class="eg-field__label" for="requirement-text" data-en="Requirement text" data-vi="Văn bản yêu cầu">Văn bản yêu cầu</label>
+                        <textarea class="eg-textarea" id="requirement-text" rows="5" data-value-en="A customer reviews an order before confirming" data-value-vi="Khách hàng xem lại đơn hàng trước khi xác nhận">Khách hàng xem lại đơn hàng trước khi xác nhận</textarea>
+                        <span class="eg-field__counter" data-eg-counter-for="requirement-text" data-eg-counter-suffix="characters" data-eg-counter-suffix-vi="ký tự">0</span>
+                        <p class="eg-field__hint" data-en="Plain text. No numeric text limit is supplied by plan 13; the counter does not invent a cap." data-vi="Văn bản thuần. Kế hoạch 13 không cung cấp giới hạn số ký tự; bộ đếm không tự đặt giới hạn.">Văn bản thuần. Kế hoạch 13 không cung cấp giới hạn số ký tự; bộ đếm không tự đặt giới hạn.</p>
+                      </div>
+                      <div class="eg-field" data-eg-mutate>
+                        <label class="eg-field__label" for="requirement-file" data-en="Attachment" data-vi="Tệp đính kèm">Tệp đính kèm</label>
+                        <input class="eg-input" id="requirement-file" type="file" accept=".docx,.pdf,image/png,image/jpeg" data-eg-mutate>
+                        <p class="eg-field__hint" data-en="Supported types: DOCX, PDF, PNG, JPEG. File-size, count and type caps must come from supplied configuration; they are unavailable here and are recorded as an open contract, never guessed." data-vi="Loại được hỗ trợ: DOCX, PDF, PNG, JPEG. Giới hạn kích thước, số lượng và loại tệp phải lấy từ cấu hình được cung cấp; ở đây chưa có và được ghi là hợp đồng mở, không đoán.">Loại được hỗ trợ: DOCX, PDF, PNG, JPEG. File-size, count and type caps must come from supplied configuration; they are unavailable here and are recorded as an open contract, never guessed.</p>
+                      </div>
+                      <div class="eg-toolbar">
+                        <button class="eg-btn eg-btn--primary" type="button" data-eg-open="checklist-preflight-dialog" data-eg-mutate><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-sparkle"></use></svg><span class="eg-btn__label" data-en="Analyse requirement" data-vi="Phân tích yêu cầu">Phân tích yêu cầu</span></button>
+                        <span class="eg-kpi__context" data-en="Opens the credit preflight first. Nothing is generated without confirmation." data-vi="Mở kiểm tra tín dụng trước. Không có gì được tạo nếu chưa xác nhận.">Opens the credit preflight first. Nothing is generated without confirmation.</span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="eg-card" aria-labelledby="attachment-title">
+                    <header class="eg-card__header"><div><h2 id="attachment-title" data-en="Supplied attachment" data-vi="Tệp đính kèm được cung cấp">Tệp đính kèm được cung cấp</h2></div><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Scan clean" data-vi="Quét sạch">Quét sạch</span></span></header>
+                    <div class="eg-card__body">
+                      <div class="eg-toolbar"><span class="eg-chip eg-chip--source"><span class="eg-chip__label">checkout-requirement.pdf</span></span><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">PDF</span></span><span class="eg-kpi__context" data-en="Text extraction · sensitivity state supplied as clean" data-vi="Trích xuất văn bản · trạng thái nhạy cảm được cung cấp là sạch">Trích xuất văn bản · trạng thái nhạy cảm được cung cấp là sạch</span></div>
+                      <p class="eg-kpi__context" data-en="Filename and scan result are fixture values. No file is uploaded and no provider is called." data-vi="Tên tệp và kết quả quét là giá trị minh hoạ. Không tệp nào được tải lên và không nhà cung cấp nào được gọi.">Tên tệp và kết quả quét là giá trị minh hoạ. Không tệp nào được tải lên và không nhà cung cấp nào được gọi.</p>
+                    </div>
+                  </section>
+                </div>
+
+                <aside class="eg-shell__context">
+                  <section class="eg-card" aria-labelledby="scope-title">
+                    <header class="eg-card__header"><div><h2 id="scope-title" data-en="Scope" data-vi="Phạm vi">Phạm vi</h2></div></header>
+                    <div class="eg-card__body">
+                      <div class="eg-stack" data-gap="2">
+                        <p><strong data-en="Project" data-vi="Dự án">Dự án</strong><br>storefront-web · SHOP</p>
+                        <p><strong data-en="Settings version" data-vi="Phiên bản cài đặt">Phiên bản cài đặt</strong><br>ais-3</p>
+                        <p><strong data-en="Checklist estimate" data-vi="Ước tính danh mục">Ước tính danh mục</strong><br>12</p>
+                        <p><strong data-en="Balance" data-vi="Số dư">Số dư</strong><br>1 240 / 2 000 · 2026-10</p>
+                      </div>
+                      <p class="eg-field__hint" data-en="The estimate is credits, not currency. No price is shown." data-vi="Ước tính là tín dụng, không phải tiền. Không hiển thị giá.">The estimate is credits, not currency. No price is shown.</p>
+                    </div>
+                  </section>
+                </aside>
+              </div>
+            </div>
+
+            <div class="eg-tabs__panel" id="stage-estimate-panel" role="tabpanel" aria-labelledby="stage-estimate" hidden>
+              <div class="eg-stack" data-gap="4">
+                <div class="eg-split-pane eg-split-pane--balanced">
+                  <div class="eg-credit-meter">
+                    <span class="eg-credit-meter__label" data-en="Estimated credits · checklist" data-vi="Tín dụng AI ước tính · danh mục">Tín dụng AI ước tính · danh mục</span>
+                    <span class="eg-credit-meter__balance">12 / 2 000</span>
+                    <span class="eg-credit-meter__estimate" data-en="Remaining balance 1 240 of 2 000 · period 2026-10 · not currency" data-vi="Số dư còn 1 240 trên 2 000 · kỳ 2026-10 · không phải tiền">Số dư còn 1 240 trên 2 000 · kỳ 2026-10 · không phải tiền</span>
+                    <span class="eg-credit-meter__track"><span class="eg-credit-meter__fill" style="--pct:62%"></span></span>
+                  </div>
+                  <div class="eg-card">
+                    <div class="eg-card__header"><div><h2 data-en="Before any AI action" data-vi="Trước mọi hành động AI">Trước mọi hành động AI</h2></div></div>
+                    <div class="eg-card__body">
+                      <div class="eg-stack" data-gap="2">
+                        <p><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Opt-in on" data-vi="Đã chấp thuận">Đã chấp thuận</span></span> <span data-en="Tenant AI consent supplied as on." data-vi="Chấp thuận AI của tổ chức được cung cấp là bật.">Chấp thuận AI của tổ chức được cung cấp là bật.</span></p>
+                        <p><span class="eg-badge eg-badge--success"><span class="eg-badge__label">authoring:generate</span></span> <span data-en="Grant supplied as granted." data-vi="Quyền được cung cấp là đã cấp.">Quyền được cung cấp là đã cấp.</span></p>
+                        <p><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">ais-3</span></span> <span data-en="Checklist and case output keep this settings version." data-vi="Danh mục và ca đầu ra giữ phiên bản cài đặt này.">Danh mục và ca đầu ra giữ phiên bản cài đặt này.</span></p>
+                      </div>
+                      <div class="eg-toolbar eg-toolbar--actions">
+                        <button class="eg-btn eg-btn--primary" type="button" data-eg-open="checklist-preflight-dialog" data-eg-mutate><span class="eg-btn__label" data-en="Generate checklist" data-vi="Tạo danh sách kiểm tra">Tạo danh sách kiểm tra</span></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="eg-banner eg-banner--warning"><div class="eg-banner__body"><strong data-en="Explicit confirmation required" data-vi="Cần xác nhận rõ ràng">Cần xác nhận rõ ràng</strong><p data-en="If estimate, balance, opt-in or grant is unavailable, the AI call is blocked. Manual authoring stays available." data-vi="Nếu ước tính, số dư, chấp thuận hoặc quyền không khả dụng, lệnh gọi AI bị chặn. Soạn thủ công vẫn khả dụng.">Nếu ước tính, số dư, chấp thuận hoặc quyền không khả dụng, lệnh gọi AI bị chặn. Soạn thủ công vẫn khả dụng.</p></div><div class="eg-banner__actions"><a class="eg-btn eg-btn--ghost eg-btn--sm" href="../31-quota-retention/evidgate-usage-retention.html"><span class="eg-btn__label" data-en="Usage and retention" data-vi="Sử dụng và lưu trữ">Sử dụng và lưu trữ</span></a></div></div>
+              </div>
+            </div>
+
+            <div class="eg-tabs__panel" id="stage-progress-panel" role="tabpanel" aria-labelledby="stage-progress" hidden>
+              <div class="eg-stack" data-gap="4">
+                <section class="eg-card" aria-labelledby="progress-title">
+                  <header class="eg-card__header"><div><h2 id="progress-title" data-en="Generation progress" data-vi="Tiến trình tạo">Tiến trình tạo</h2><p data-en="Named stages only. The interface does not claim a completion percentage it does not have." data-vi="Chỉ các giai đoạn có tên. Giao diện không tuyên bố phần trăm hoàn thành mà nó không có.">Chỉ các giai đoạn có tên. Giao diện không tuyên bố phần trăm hoàn thành mà nó không có.</p></div><span class="eg-badge eg-badge--info"><span class="eg-badge__label" data-en="Local specimen" data-vi="Mẫu cục bộ">Mẫu cục bộ</span></span></header>
+                  <div class="eg-card__body">
+                    <div class="eg-progress" data-state="indeterminate" role="status" aria-live="polite"><div class="eg-progress__label"><span data-en="Generating checklist · schema validation pending" data-vi="Đang tạo danh mục · chờ kiểm tra lược đồ">Đang tạo danh mục · chờ kiểm tra lược đồ</span><span data-en="No percentage" data-vi="Không phần trăm">Không phần trăm</span></div><span class="eg-progress__track"><span class="eg-progress__fill"></span></span></div>
+                    <ol class="eg-stepper" aria-label="Các bước xử lý">
+                      <li class="eg-stepper__step" data-state="complete"><span class="eg-stepper__marker">✓</span><div><span class="eg-stepper__label" data-en="Intake" data-vi="Tiếp nhận">Tiếp nhận</span><span class="eg-stepper__description" data-en="Attachment state supplied" data-vi="Trạng thái tệp được cung cấp">Trạng thái tệp được cung cấp</span></div></li>
+                      <li class="eg-stepper__step" data-state="complete"><span class="eg-stepper__marker">✓</span><div><span class="eg-stepper__label" data-en="Extraction" data-vi="Trích xuất">Trích xuất</span><span class="eg-stepper__description" data-en="Text extracted" data-vi="Đã trích xuất văn bản">Đã trích xuất văn bản</span></div></li>
+                      <li class="eg-stepper__step" data-state="complete"><span class="eg-stepper__marker">✓</span><div><span class="eg-stepper__label" data-en="Redaction" data-vi="Ẩn dữ liệu nhạy cảm">Ẩn dữ liệu nhạy cảm</span><span class="eg-stepper__description" data-en="Sensitive values removed" data-vi="Đã loại bỏ giá trị nhạy cảm">Đã loại bỏ giá trị nhạy cảm</span></div></li>
+                      <li class="eg-stepper__step" data-state="current"><span class="eg-stepper__marker">4</span><div><span class="eg-stepper__label" data-en="Generation" data-vi="Tạo">Tạo</span><span class="eg-stepper__description" data-en="Running" data-vi="Đang chạy">Đang chạy</span></div></li>
+                      <li class="eg-stepper__step"><span class="eg-stepper__marker">5</span><div><span class="eg-stepper__label" data-en="Schema validation" data-vi="Kiểm tra lược đồ">Kiểm tra lược đồ</span><span class="eg-stepper__description" data-en="Not started" data-vi="Chưa bắt đầu">Chưa bắt đầu</span></div></li>
+                    </ol>
+                    <div class="eg-toolbar eg-toolbar--actions">
+                      <button class="eg-btn eg-btn--danger" type="button" data-eg-open="cancel-dialog" data-eg-mutate><span class="eg-btn__label" data-en="Cancel generation" data-vi="Huỷ tạo">Huỷ tạo</span></button>
+                    </div>
+                  </div>
+                </section>
+                <p class="eg-kpi__context" data-en="Requests in this artifact are local fixtures, not live provider calls. Successful work is never retried automatically." data-vi="Các yêu cầu trong hiện vật này là dữ liệu cục bộ, không phải lệnh gọi nhà cung cấp thực. Công việc thành công không bao giờ được tự động thử lại.">Các yêu cầu trong hiện vật này là dữ liệu cục bộ, không phải lệnh gọi nhà cung cấp thực. Công việc thành công không bao giờ được tự động thử lại.</p>
+              </div>
+            </div>
+
+            <div class="eg-tabs__panel" id="stage-checklist-panel" role="tabpanel" aria-labelledby="stage-checklist" hidden>
+              <div class="eg-stack" data-gap="4">
+                <div class="eg-banner eg-banner--warning eg-banner--stack">
+                  <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-layers"></use></svg></span>
+                  <div class="eg-banner__body"><strong data-en="Review boundary · nothing saved yet" data-vi="Ranh giới duyệt · chưa lưu gì">Ranh giới duyệt · chưa lưu gì</strong><p data-en="The generated checklist is unapproved. Comments, merge, split and delete route to pending changes; page 42 applies the batch as one version." data-vi="Danh mục được tạo chưa được duyệt. Nhận xét, gộp, tách và xóa đi qua thay đổi chờ áp dụng; trang 42 áp dụng lô thành một phiên bản.">Danh mục được tạo chưa được duyệt. Nhận xét, gộp, tách và xóa đi qua thay đổi chờ áp dụng; trang 42 áp dụng lô thành một phiên bản.</p></div>
+                  <div class="eg-banner__actions"><a class="eg-btn eg-btn--primary eg-btn--sm" href="../42-pending-changes/evidgate-pending-changes.html"><span class="eg-btn__label" data-en="Review pending changes" data-vi="Xem xét thay đổi chờ áp dụng">Xem xét thay đổi chờ áp dụng</span></a></div>
+                </div>
+                <section class="eg-card" aria-labelledby="checklist-result-title">
+                  <header class="eg-card__header"><div><h2 id="checklist-result-title" data-en="Generated checklist · pending human review" data-vi="Danh mục được tạo · chờ người duyệt">Danh mục được tạo · chờ người duyệt</h2><p data-en="Plain-text suggestion with supplied provenance. No script or run route is offered in G1." data-vi="Gợi ý văn bản thuần với nguồn gốc được cung cấp. G1 không cung cấp tuyến kịch bản hay lượt chạy.">Gợi ý văn bản thuần với nguồn gốc được cung cấp. G1 không cung cấp tuyến kịch bản hay lượt chạy.</p></div><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="AI · unreviewed" data-vi="AI · chưa duyệt">AI · chưa duyệt</span></span></header>
+                  <div class="eg-card__body">
+                    <div class="eg-stack" data-gap="3">
+                      <div class="eg-toolbar"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">SHOP-CL-0017</span></span><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Priority high" data-vi="Ưu tiên cao">Ưu tiên cao</span></span><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="1 checklist item" data-vi="1 danh mục kiểm tra">1 danh mục kiểm tra</span></span></div>
+                      <p data-en="Show the order total · confirm that the total, delivery and discount lines are visible before the order is confirmed." data-vi="Hiển thị tổng đơn hàng · xác nhận tổng tiền, phí giao hàng và dòng giảm giá hiển thị trước khi xác nhận đơn.">Hiển thị tổng đơn hàng · xác nhận tổng tiền, phí giao hàng và dòng giảm giá hiển thị trước khi xác nhận đơn.</p>
+                      <p class="eg-editor__provenance"><span class="eg-chip eg-chip--source"><span class="eg-chip__label">AI · model-large</span></span><span>9b71e4c0…2a8f</span><span>ais-3</span><span>2026-10-23T09:14:27Z</span></p>
+                      <div class="eg-toolbar"><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Not applied" data-vi="Chưa áp dụng">Chưa áp dụng</span></span><span class="eg-kpi__context" data-en="Model and hash are supplied provenance placeholders, not live output." data-vi="Mô hình và mã băm là nguồn gốc minh hoạ được cung cấp, không phải kết quả thực.">Mô hình và mã băm là nguồn gốc minh hoạ được cung cấp, không phải kết quả thực.</span></div>
+                    </div>
+                  </div>
+                </section>
+                <section class="eg-card" aria-labelledby="checklist-ops-title">
+                  <header class="eg-card__header"><div><h2 id="checklist-ops-title" data-en="Checklist operations · queued only" data-vi="Thao tác danh mục · chỉ xếp hàng">Thao tác danh mục · chỉ xếp hàng</h2></div></header>
+                  <div class="eg-card__body">
+                    <div class="eg-toolbar">
+                      <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-open="queue-dialog" data-eg-mutate><span class="eg-btn__label" data-en="Comment" data-vi="Nhận xét">Nhận xét</span></button>
+                      <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-open="queue-dialog" data-eg-mutate><span class="eg-btn__label" data-en="Merge" data-vi="Gộp">Gộp</span></button>
+                      <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-open="queue-dialog" data-eg-mutate><span class="eg-btn__label" data-en="Split" data-vi="Tách">Tách</span></button>
+                      <button class="eg-btn eg-btn--danger eg-btn--sm" type="button" data-eg-open="queue-dialog" data-eg-mutate><span class="eg-btn__label" data-en="Delete" data-vi="Xóa">Xóa</span></button>
+                      <span class="eg-kpi__context" data-en="These actions queue for page 42; none saves an approved version here." data-vi="Các thao tác này xếp hàng cho trang 42; không thao tác nào lưu phiên bản đã duyệt tại đây.">Các thao tác này xếp hàng cho trang 42; không thao tác nào lưu phiên bản đã duyệt tại đây.</span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div class="eg-tabs__panel" id="stage-cases-panel" role="tabpanel" aria-labelledby="stage-cases" hidden>
+              <div class="eg-stack" data-gap="4">
+                <div class="eg-banner eg-banner--success">
+                  <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-check"></use></svg></span>
+                  <div class="eg-banner__body"><strong data-en="Checklist reviewed and applied · av-13" data-vi="Danh mục đã duyệt và áp dụng · av-13">Danh mục đã duyệt và áp dụng · av-13</strong><p data-en="Supplied fixture state. Test-case generation is available only after this boundary. This is credits, not a release verdict." data-vi="Trạng thái minh hoạ được cung cấp. Chỉ sau ranh giới này mới có thể tạo ca kiểm thử. Đây là tín dụng, không phải kết luận phát hành.">Trạng thái minh hoạ được cung cấp. Chỉ sau ranh giới này mới có thể tạo ca kiểm thử. Đây là tín dụng, không phải kết luận phát hành.</p></div>
+                </div>
+                <div class="eg-split-pane eg-split-pane--balanced">
+                  <div class="eg-credit-meter"><span class="eg-credit-meter__label" data-en="Estimated credits · test cases" data-vi="Tín dụng AI ước tính · ca kiểm thử">Tín dụng AI ước tính · ca kiểm thử</span><span class="eg-credit-meter__balance">4 / 2 000</span><span class="eg-credit-meter__estimate" data-en="4 per checklist item · 1 item · balance 1 240 of 2 000 · period 2026-10" data-vi="4 mỗi danh mục · 1 mục · số dư 1 240 trên 2 000 · kỳ 2026-10">4 mỗi danh mục · 1 mục · số dư 1 240 trên 2 000 · kỳ 2026-10</span><span class="eg-credit-meter__track"><span class="eg-credit-meter__fill" style="--pct:62%"></span></span></div>
+                  <div class="eg-card"><div class="eg-card__header"><div><h2 data-en="Preflight is required again" data-vi="Cần kiểm tra trước lần nữa">Cần kiểm tra trước lần nữa</h2></div></div><div class="eg-card__body"><p data-en="Test-case generation asks for confirmation of estimate, balance, opt-in and grant immediately before running." data-vi="Tạo ca kiểm thử yêu cầu xác nhận ước tính, số dư, chấp thuận và quyền ngay trước khi chạy.">Tạo ca kiểm thử yêu cầu xác nhận ước tính, số dư, chấp thuận và quyền ngay trước khi chạy.</p><div class="eg-toolbar eg-toolbar--actions"><button class="eg-btn eg-btn--primary" type="button" data-eg-open="cases-preflight-dialog" data-eg-mutate><span class="eg-btn__label" data-en="Generate test cases" data-vi="Tạo ca kiểm thử">Tạo ca kiểm thử</span></button></div></div></div>
+                </div>
+
+                <div class="eg-segmented" role="group" aria-label="Kết quả tạo ca kiểm thử">
+                  <label><input type="radio" name="case-result" value="all-success" checked data-eg-local-panel-toggle><span class="eg-segmented__option" data-en="All-success fixture" data-vi="Mẫu tất cả thành công">Mẫu tất cả thành công</span></label>
+                  <label><input type="radio" name="case-result" value="partial" data-eg-local-panel-toggle><span class="eg-segmented__option" data-en="Partial-failure fixture" data-vi="Mẫu lỗi một phần">Mẫu lỗi một phần</span></label>
+                </div>
+
+                <div data-eg-local-panel="all-success" data-eg-local-panel-name="case-result">
+                <section class="eg-card" aria-labelledby="generated-title">
+                  <header class="eg-card__header"><div><h2 id="generated-title" data-en="Generated case previews · review in the editor" data-vi="Xem trước ca được tạo · duyệt trong trình soạn">Xem trước ca được tạo · duyệt trong trình soạn</h2><p data-en="Preconditions, paired action/expected steps and priority are inspectable. Each case opens page 41; none is approved or executable here." data-vi="Điều kiện tiên quyết, cặp thao tác/mong đợi và mức ưu tiên đều xem được. Mỗi ca mở trang 41; không ca nào được duyệt hay thực thi tại đây.">Điều kiện tiên quyết, cặp thao tác/mong đợi và mức ưu tiên đều xem được. Mỗi ca mở trang 41; không ca nào được duyệt hay thực thi tại đây.</p></div><span class="eg-badge eg-badge--info"><span class="eg-badge__label" data-en="3 preview cases" data-vi="3 ca xem trước">3 ca xem trước</span></span></header>
+                  <div class="eg-card__body">
+                    <div class="eg-table__wrap">
+                      <table class="eg-table eg-table--compact" data-eg-table aria-label="Ca kiểm thử được tạo">
+                        <thead><tr><th scope="col"><span data-en="Case" data-vi="Ca">Ca</span></th><th scope="col"><span data-en="Title" data-vi="Tiêu đề">Tiêu đề</span></th><th scope="col"><span data-en="Priority" data-vi="Mức ưu tiên">Mức ưu tiên</span></th><th scope="col"><span data-en="Step preview" data-vi="Xem trước bước">Xem trước bước</span></th><th scope="col"><span data-en="Provenance" data-vi="Nguồn gốc">Nguồn gốc</span></th></tr></thead>
+                        <tbody>
+                          <tr><td data-label-en="Case" data-label-vi="Ca" data-label="Ca"><a href="../41-test-case-editor/evidgate-test-case-editor.html"><code>SHOP-TC-0042</code></a><br><span class="eg-chip eg-chip--revision"><span class="eg-chip__label">v5</span></span></td><td data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề"><span data-en="Confirm order shows the total" data-vi="Xác nhận đơn hàng hiển thị tổng tiền">Xác nhận đơn hàng hiển thị tổng tiền</span><br><span class="eg-kpi__context" data-en="Precondition: Checkout is open" data-vi="Điều kiện: Đã mở trang thanh toán">Điều kiện: Đã mở trang thanh toán</span></td><td data-label-en="Priority" data-label-vi="Mức ưu tiên" data-label="Mức ưu tiên"><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="High" data-vi="Cao">Cao</span></span></td><td data-label-en="Step preview" data-label-vi="Xem trước bước" data-label="Xem trước bước"><span data-en="Confirm the order → the order total is shown" data-vi="Xác nhận đơn hàng → hiển thị tổng tiền đơn hàng">Xác nhận đơn hàng → hiển thị tổng tiền đơn hàng</span></td><td data-label-en="Provenance" data-label-vi="Nguồn gốc" data-label="Nguồn gốc"><span class="eg-chip eg-chip--source"><span class="eg-chip__label">AI · model-large</span></span></td></tr>
+                          <tr><td data-label-en="Case" data-label-vi="Ca" data-label="Ca"><a href="../41-test-case-editor/evidgate-test-case-editor.html"><code>SHOP-TC-0043</code></a><br><span class="eg-chip eg-chip--revision"><span class="eg-chip__label">v2</span></span></td><td data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề"><span data-en="Required delivery address" data-vi="Địa chỉ giao hàng bắt buộc">Địa chỉ giao hàng bắt buộc</span><br><span class="eg-kpi__context" data-en="Precondition: Checkout is open" data-vi="Điều kiện: Đã mở trang thanh toán">Điều kiện: Đã mở trang thanh toán</span></td><td data-label-en="Priority" data-label-vi="Mức ưu tiên" data-label="Mức ưu tiên"><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="High" data-vi="Cao">Cao</span></span></td><td data-label-en="Step preview" data-label-vi="Xem trước bước" data-label="Xem trước bước"><span data-en="Leave the address blank → the required-address error is shown" data-vi="Để trống địa chỉ → hiển thị lỗi địa chỉ bắt buộc">Để trống địa chỉ → hiển thị lỗi địa chỉ bắt buộc</span></td><td data-label-en="Provenance" data-label-vi="Nguồn gốc" data-label="Nguồn gốc"><span class="eg-chip eg-chip--source"><span class="eg-chip__label">AI · model-small</span></span></td></tr>
+                          <tr><td data-label-en="Case" data-label-vi="Ca" data-label="Ca"><a href="../41-test-case-editor/evidgate-test-case-editor.html"><code>SHOP-TC-0051</code></a><br><span class="eg-chip eg-chip--revision"><span class="eg-chip__label">v3</span></span></td><td data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề"><span data-en="Apply a discount code" data-vi="Áp dụng mã giảm giá">Áp dụng mã giảm giá</span><br><span class="eg-kpi__context" data-en="Precondition: Checkout is open" data-vi="Điều kiện: Đã mở trang thanh toán">Điều kiện: Đã mở trang thanh toán</span></td><td data-label-en="Priority" data-label-vi="Mức ưu tiên" data-label="Mức ưu tiên"><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="High" data-vi="Cao">Cao</span></span></td><td data-label-en="Step preview" data-label-vi="Xem trước bước" data-label="Xem trước bước"><span data-en="Enter a code → the discount is applied to the total" data-vi="Nhập mã → mã giảm giá được áp dụng vào tổng tiền">Nhập mã → mã giảm giá được áp dụng vào tổng tiền</span></td><td data-label-en="Provenance" data-label-vi="Nguồn gốc" data-label="Nguồn gốc"><span class="eg-chip eg-chip--source"><span class="eg-chip__label">AI · model-large</span></span></td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </section>
+                </div>
+
+                <div data-eg-local-panel="partial" data-eg-local-panel-name="case-result" hidden>
+                  <div class="eg-stack" data-gap="4">
+                    <section class="eg-card" aria-labelledby="partial-title">
+                      <header class="eg-card__header"><div><h2 id="partial-title" data-en="Partial failure · validated results only" data-vi="Lỗi một phần · chỉ kết quả đã xác thực">Lỗi một phần · chỉ kết quả đã xác thực</h2><p data-en="Alternate fixture. Two items were validated and kept; SHOP-TC-0051 is not a created result in this state. Successful work is never retried automatically." data-vi="Mẫu thay thế. Hai mục đã được xác thực và được giữ; SHOP-TC-0051 không phải kết quả được tạo trong trạng thái này. Công việc thành công không bao giờ được tự động thử lại.">Mẫu thay thế. Hai mục đã được xác thực và được giữ; SHOP-TC-0051 không phải kết quả được tạo trong trạng thái này. Công việc thành công không bao giờ được tự động thử lại.</p></div><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Partial · supplied result" data-vi="Một phần · kết quả được cung cấp">Một phần · kết quả được cung cấp</span></span></header>
+                      <div class="eg-card__body">
+                        <div class="eg-table__wrap">
+                          <table class="eg-table eg-table--compact" data-eg-table aria-label="Kết quả tạo một phần">
+                            <thead><tr><th scope="col"><span data-en="Outcome" data-vi="Kết quả">Kết quả</span></th><th scope="col"><span data-en="Item" data-vi="Mục">Mục</span></th><th scope="col"><span data-en="Supplied credit / refund" data-vi="Tín dụng / hoàn được cung cấp">Tín dụng / hoàn được cung cấp</span></th><th scope="col"><span data-en="Next step" data-vi="Bước tiếp theo">Bước tiếp theo</span></th></tr></thead>
+                            <tbody>
+                              <tr><td data-label-en="Outcome" data-label-vi="Kết quả" data-label="Kết quả"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Validated" data-vi="Đã xác thực">Đã xác thực</span></span></td><td data-label-en="Item" data-label-vi="Mục" data-label="Mục"><code>SHOP-TC-0042</code></td><td data-label-en="Supplied credit / refund" data-label-vi="Tín dụng / hoàn được cung cấp" data-label="Tín dụng / hoàn được cung cấp"><span data-en="4 used" data-vi="Dùng 4">Dùng 4</span></td><td data-label-en="Next step" data-label-vi="Bước tiếp theo" data-label="Bước tiếp theo"><a href="../41-test-case-editor/evidgate-test-case-editor.html"><span data-en="Open in editor" data-vi="Mở trong trình soạn">Mở trong trình soạn</span></a></td></tr>
+                              <tr><td data-label-en="Outcome" data-label-vi="Kết quả" data-label="Kết quả"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Validated" data-vi="Đã xác thực">Đã xác thực</span></span></td><td data-label-en="Item" data-label-vi="Mục" data-label="Mục"><code>SHOP-TC-0043</code></td><td data-label-en="Supplied credit / refund" data-label-vi="Tín dụng / hoàn được cung cấp" data-label="Tín dụng / hoàn được cung cấp"><span data-en="4 used" data-vi="Dùng 4">Dùng 4</span></td><td data-label-en="Next step" data-label-vi="Bước tiếp theo" data-label="Bước tiếp theo"><a href="../41-test-case-editor/evidgate-test-case-editor.html"><span data-en="Open in editor" data-vi="Mở trong trình soạn">Mở trong trình soạn</span></a></td></tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="eg-card" aria-labelledby="failed-title">
+                      <header class="eg-card__header"><div><h2 id="failed-title" data-en="Failed item · refund supplied" data-vi="Mục lỗi · hoàn tín dụng được cung cấp">Mục lỗi · hoàn tín dụng được cung cấp</h2><p data-en="SHOP-TC-0051 was not created. The supplied response refunds the credits and requires a fresh preflight before retrying." data-vi="SHOP-TC-0051 không được tạo. Phản hồi được cung cấp hoàn tín dụng và yêu cầu kiểm tra trước mới trước khi thử lại.">SHOP-TC-0051 không được tạo. Phản hồi được cung cấp hoàn tín dụng và yêu cầu kiểm tra trước mới trước khi thử lại.</p></div><span class="eg-badge eg-badge--danger"><span class="eg-badge__label" data-en="Failed" data-vi="Lỗi">Lỗi</span></span></header>
+                      <div class="eg-card__body">
+                        <div class="eg-stack" data-gap="2">
+                          <p><code>SHOP-TC-0051</code> · <span data-en="4 credits used · 4 refunded" data-vi="Dùng 4 tín dụng · hoàn 4">Dùng 4 tín dụng · hoàn 4</span></p>
+                          <p class="eg-kpi__context" data-en="No case version was created. No automatic retry; the safe input is retained." data-vi="Không phiên bản ca nào được tạo. Không tự động thử lại; đầu vào an toàn được giữ.">No case version was created. No automatic retry; the safe input is retained.</p>
+                        </div>
+                        <div class="eg-toolbar eg-toolbar--actions">
+                          <button class="eg-btn eg-btn--secondary" type="button" data-eg-open="cases-preflight-dialog" data-eg-mutate><span class="eg-btn__label" data-en="Fresh preflight" data-vi="Kiểm tra trước mới">Kiểm tra trước mới</span></button>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="eg-card" aria-labelledby="rejected-title">
+                      <header class="eg-card__header"><div><h2 id="rejected-title" data-en="Rejected output · no version" data-vi="Kết quả bị từ chối · không phiên bản">Kết quả bị từ chối · không phiên bản</h2><p data-en="Schema validation rejected the generated structure. No version was created; the supplied response refunds the credits for the rejected output." data-vi="Kiểm tra lược đồ từ chối cấu trúc được tạo. Không phiên bản nào được tạo; phản hồi được cung cấp hoàn tín dụng cho kết quả bị từ chối.">Kiểm tra lược đồ từ chối cấu trúc được tạo. Không phiên bản nào được tạo; phản hồi được cung cấp hoàn tín dụng cho kết quả bị từ chối.</p></div><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Rejected output" data-vi="Kết quả bị từ chối">Kết quả bị từ chối</span></span></header>
+                      <div class="eg-card__body">
+                        <p data-en="Inspect the safe input and results. Rejection is not a case version and is never presented as a created result." data-vi="Kiểm tra đầu vào và kết quả an toàn. Việc từ chối không phải phiên bản ca và không bao giờ được trình bày như kết quả đã tạo.">Inspect the safe input and results. Rejection is not a case version and is never presented as a created result.</p>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <section class="eg-card" aria-labelledby="generation-states-title">
+            <header class="eg-card__header"><div><h2 id="generation-states-title" data-en="Other fixture states" data-vi="Các trạng thái minh hoạ khác">Các trạng thái minh hoạ khác</h2><p data-en="Attachment, extraction and AI failure specimens. Numeric upload caps are an open contract, not a guessed value." data-vi="Mẫu lỗi tệp đính kèm, trích xuất và AI. Giới hạn số lượng tải lên là hợp đồng mở, không phải giá trị đoán.">Mẫu lỗi tệp đính kèm, trích xuất và AI. Giới hạn số lượng tải lên là hợp đồng mở, không phải giá trị đoán.</p></div></header>
+            <div class="eg-card__body">
+              <div class="eg-grid" data-cols="3" data-gap="4">
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="Unsupported attachment" data-vi="Tệp không được hỗ trợ">Tệp không được hỗ trợ</h3><p data-en="The file type is not DOCX, PDF, PNG or JPEG. It is rejected before extraction; other input is retained." data-vi="Loại tệp không phải DOCX, PDF, PNG hoặc JPEG. Bị từ chối trước khi trích xuất; dữ liệu khác được giữ.">Loại tệp không phải DOCX, PDF, PNG hoặc JPEG. Bị từ chối trước khi trích xuất; dữ liệu khác được giữ.</p><span class="eg-badge eg-badge--danger"><span class="eg-badge__label" data-en="Rejected · type" data-vi="Từ chối · loại">Từ chối · loại</span></span></div></div>
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="File cap unavailable" data-vi="Chưa có giới hạn tệp">Chưa có giới hạn tệp</h3><p data-en="Size, count and type caps are not supplied by plan 13 for this page. Validation cannot claim they passed; the contract stays open." data-vi="Kế hoạch 13 không cung cấp giới hạn kích thước, số lượng và loại cho trang này. Không thể tuyên bố đã đạt; hợp đồng vẫn mở.">Size, count and type caps are not supplied by plan 13 for this page. Validation cannot claim they passed; the contract stays open.</p><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Open contract" data-vi="Hợp đồng mở">Hợp đồng mở</span></span></div></div>
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="Scanning" data-vi="Đang quét">Đang quét</h3><p data-en="The attachment is still being scanned. Extraction and generation wait; no result is claimed." data-vi="Tệp vẫn đang được quét. Trích xuất và tạo phải chờ; không tuyên bố kết quả.">Tệp vẫn đang được quét. Trích xuất và tạo phải chờ; không tuyên bố kết quả.</p><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Scan pending" data-vi="Đang chờ quét">Đang chờ quét</span></span></div></div>
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="Scan-rejected attachment" data-vi="Tệp bị từ chối khi quét">Tệp bị từ chối khi quét</h3><p data-en="The scanner rejected the supplied attachment. Nothing is extracted, no checklist or case is generated, and the safe requirement text is retained. Removal is the only offered next step." data-vi="Bộ quét từ chối tệp được cung cấp. Không trích xuất gì, không tạo danh mục hay ca, và văn bản yêu cầu an toàn được giữ. Chỉ có thao tác gỡ bỏ.">The scanner rejected the supplied attachment. Nothing is extracted, no checklist or case is generated, and the safe requirement text is retained. Removal is the only offered next step.</p><span class="eg-badge eg-badge--danger"><span class="eg-badge__label" data-en="Scan rejected" data-vi="Quét bị từ chối">Quét bị từ chối</span></span></div></div>
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="Extraction failure" data-vi="Lỗi trích xuất">Lỗi trích xuất</h3><p data-en="Text could not be extracted from the supplied file. No checklist is generated and the requirement text stays safe." data-vi="Không thể trích xuất văn bản từ tệp được cung cấp. Không danh mục nào được tạo và văn bản yêu cầu vẫn an toàn.">Text could not be extracted from the supplied file. No checklist is generated and the requirement text stays safe.</p></div></div>
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="AI opt-in off" data-vi="Chấp thuận AI đang tắt">Chấp thuận AI đang tắt</h3><p data-en="AI generation is unavailable. The reason links to the authorized admin entry; manual authoring remains available." data-vi="Tính năng tạo bằng AI không khả dụng. Lý do liên kết tới mục quản trị được cấp quyền; soạn thủ công vẫn khả dụng.">Tính năng tạo bằng AI không khả dụng. Lý do liên kết tới mục quản trị được cấp quyền; soạn thủ công vẫn khả dụng.</p><div class="eg-toolbar"><a class="eg-btn eg-btn--secondary eg-btn--sm" href="../27-settings-shell/evidgate-settings.html"><span class="eg-btn__label" data-en="Consent status" data-vi="Trạng thái chấp thuận">Trạng thái chấp thuận</span></a></div></div></div>
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="Credits exhausted" data-vi="Hết tín dụng">Hết tín dụng</h3><p data-en="Balance 0 of 2 000 for 2026-10. Generation is blocked; no purchase flow is offered." data-vi="Số dư 0 trên 2 000 cho 2026-10. Tạo bị chặn; không có luồng mua.">Số dư 0 trên 2 000 cho 2026-10. Tạo bị chặn; không có luồng mua.</p><div class="eg-toolbar"><a class="eg-btn eg-btn--secondary eg-btn--sm" href="../31-quota-retention/evidgate-usage-retention.html"><span class="eg-btn__label" data-en="Usage and retention" data-vi="Sử dụng và lưu trữ">Sử dụng và lưu trữ</span></a></div></div></div>
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="Estimate unavailable" data-vi="Ước tính không khả dụng">Ước tính không khả dụng</h3><p data-en="The estimate could not be read, so the AI call is blocked. This is not zero credits, and manual authoring still works." data-vi="Không đọc được ước tính nên lệnh gọi AI bị chặn. Đây không phải 0 tín dụng và soạn thủ công vẫn hoạt động.">The estimate could not be read, so the AI call is blocked. This is not zero credits, and manual authoring still works.</p><div class="eg-toolbar"><a class="eg-btn eg-btn--ghost eg-btn--sm" href="../40-authoring-tree/evidgate-authoring-tree.html"><span class="eg-btn__label" data-en="Author manually" data-vi="Soạn thủ công">Soạn thủ công</span></a></div></div></div>
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="Gateway unavailable" data-vi="Cổng AI không khả dụng">Cổng AI không khả dụng</h3><p data-en="The provider gateway did not respond. Retry is explicit and keeps the safe input; no fallback model is invented." data-vi="Cổng nhà cung cấp không phản hồi. Thử lại là thao tác rõ ràng và giữ đầu vào an toàn; không bịa mô hình thay thế.">The gateway did not respond. Retry is explicit and keeps the safe input; no fallback model is invented.</p><div class="eg-toolbar"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-open="checklist-preflight-dialog"><span class="eg-btn__label" data-en="Retry with preflight" data-vi="Thử lại kèm kiểm tra trước">Thử lại kèm kiểm tra trước</span></button></div></div></div>
+                <div class="eg-card"><div class="eg-card__body"><h3 data-en="Schema invalid · no version" data-vi="Sai lược đồ · không phiên bản">Sai lược đồ · không phiên bản</h3><p data-en="The generated structure failed validation. No version was created; supplied response refunds the credits for the rejected output." data-vi="Cấu trúc được tạo không qua kiểm tra. Không phiên bản nào được tạo; phản hồi được cung cấp hoàn tín dụng cho kết quả bị từ chối.">The generated structure failed validation. No version was created; supplied response refunds the credits for the rejected output.</p><span class="eg-badge eg-badge--danger"><span class="eg-badge__label" data-en="Rejected · no version" data-vi="Từ chối · không phiên bản">Từ chối · không phiên bản</span></span></div></div>
+              </div>
+            </div>
+          </section>
+
+          <p class="eg-kpi__context" data-en="Illustrative fixture · storefront-web · SHOP · ais-3 · period 2026-10 · balance 1 240 of 2 000 · checklist estimate 12 · test cases 4 per checklist item · translate 1 per case. No G2 script or release action is present." data-vi="Dữ liệu minh hoạ · storefront-web · SHOP · ais-3 · kỳ 2026-10 · số dư 1 240 trên 2 000 · ước tính danh mục 12 · ca kiểm thử 4 mỗi danh mục · dịch 1 mỗi ca. Không có hành động kịch bản G2 hay phát hành.">Dữ liệu minh hoạ · storefront-web · SHOP · ais-3 · kỳ 2026-10 · số dư 1 240 trên 2 000 · ước tính danh mục 12 · ca kiểm thử 4 mỗi danh mục · dịch 1 mỗi ca. No G2 script or release action is present.</p>
+        </div>
+
+        <footer>
+          <hr>
+          <p><span data-en="Evidgate · G1 generation fixture · Illustrative values, not live data" data-vi="Evidgate · Dữ liệu tạo kiểm thử G1 · Giá trị minh hoạ, không phải dữ liệu thực">Evidgate · Dữ liệu tạo kiểm thử G1 · Giá trị minh hoạ, không phải dữ liệu thực</span></p>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <dialog class="eg-dialog eg-dialog--wide" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <header class="eg-dialog__header"><div><h2 id="shortcuts-title" data-en="Keyboard shortcuts" data-vi="Phím tắt">Phím tắt</h2><p data-en="Available in this review fixture." data-vi="Khả dụng trong bản xem xét này.">Khả dụng trong bản xem xét này.</p></div><button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng hộp thoại"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button></header>
+    <div class="eg-dialog__body"><div class="eg-stack" data-gap="2"><p><kbd>Tab</kbd> · <span data-en="Move between controls" data-vi="Di chuyển giữa các điều khiển">Di chuyển giữa các điều khiển</span></p><p><kbd>←</kbd> <kbd>→</kbd> · <span data-en="Move between stages" data-vi="Di chuyển giữa các giai đoạn">Di chuyển giữa các giai đoạn</span></p><p><kbd>Esc</kbd> · <span data-en="Close a dialog and return focus" data-vi="Đóng hộp thoại và trả tiêu điểm">Đóng hộp thoại và trả tiêu điểm</span></p></div></div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Close" data-vi="Đóng">Đóng</span></button></footer>
+  </dialog>
+
+  <dialog class="eg-dialog" id="checklist-preflight-dialog" aria-labelledby="checklist-preflight-title">
+    <header class="eg-dialog__header"><div><h2 id="checklist-preflight-title" data-en="Preflight · generate checklist" data-vi="Kiểm tra trước · tạo danh mục kiểm tra">Kiểm tra trước · tạo danh mục kiểm tra</h2><p data-en="Confirm estimate, balance, opt-in and grant before any AI action." data-vi="Xác nhận ước tính, số dư, chấp thuận và quyền trước mọi hành động AI.">Xác nhận ước tính, số dư, chấp thuận và quyền trước mọi hành động AI.</p></div><button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button></header>
+    <div class="eg-dialog__body">
+      <div class="eg-stack" data-gap="3">
+        <div class="eg-credit-meter"><span class="eg-credit-meter__label" data-en="Estimated credits" data-vi="Tín dụng AI ước tính">Tín dụng AI ước tính</span><span class="eg-credit-meter__balance">12 / 2 000</span><span class="eg-credit-meter__estimate" data-en="Balance 1 240 of 2 000 · period 2026-10 · not currency" data-vi="Số dư 1 240 trên 2 000 · kỳ 2026-10 · không phải tiền">Số dư 1 240 trên 2 000 · kỳ 2026-10 · không phải tiền</span><span class="eg-credit-meter__track"><span class="eg-credit-meter__fill" style="--pct:62%"></span></span></div>
+        <div class="eg-stack" data-gap="2">
+          <p><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Opt-in on" data-vi="Đã chấp thuận">Đã chấp thuận</span></span> <span data-en="Tenant AI consent is supplied as on." data-vi="Chấp thuận AI của tổ chức được cung cấp là bật.">Chấp thuận AI của tổ chức được cung cấp là bật.</span></p>
+          <p><span class="eg-badge eg-badge--success"><span class="eg-badge__label">authoring:generate</span></span> <span data-en="Grant supplied as granted." data-vi="Quyền được cung cấp là đã cấp.">Quyền được cung cấp là đã cấp.</span></p>
+          <p><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">ais-3</span></span> <span data-en="Result keeps this settings version and prompt provenance." data-vi="Kết quả giữ phiên bản cài đặt và nguồn gốc gợi ý này.">Kết quả giữ phiên bản cài đặt và nguồn gốc gợi ý này.</span></p>
+        </div>
+        <p data-en="If any of these values is unavailable, the AI call is blocked. Manual authoring is never blocked by credits." data-vi="Nếu bất kỳ giá trị nào không khả dụng, lệnh gọi AI bị chặn. Tín dụng không bao giờ chặn soạn thủ công.">Nếu bất kỳ giá trị nào không khả dụng, lệnh gọi AI bị chặn. Tín dụng không bao giờ chặn soạn thủ công.</p>
+        <p class="eg-field__hint" data-en="Local fixture only. No provider request is sent and no checklist version is saved by this dialog." data-vi="Chỉ là dữ liệu cục bộ. Không yêu cầu nhà cung cấp nào được gửi và hộp thoại này không lưu phiên bản danh mục nào.">Chỉ là dữ liệu cục bộ. Không yêu cầu nhà cung cấp nào được gửi và hộp thoại này không lưu phiên bản danh mục nào.</p>
+      </div>
+    </div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Cancel" data-vi="Huỷ">Huỷ</span></button><button class="eg-btn eg-btn--primary" type="button" data-eg-close data-eg-mutate><span class="eg-btn__label" data-en="Confirm and generate checklist" data-vi="Xác nhận và tạo danh mục">Xác nhận và tạo danh mục</span></button></footer>
+  </dialog>
+
+  <dialog class="eg-dialog" id="cases-preflight-dialog" aria-labelledby="cases-preflight-title">
+    <header class="eg-dialog__header"><div><h2 id="cases-preflight-title" data-en="Preflight · generate test cases" data-vi="Kiểm tra trước · tạo ca kiểm thử">Kiểm tra trước · tạo ca kiểm thử</h2><p data-en="Available only after the checklist is reviewed and applied. Confirm before running." data-vi="Chỉ khả dụng sau khi danh mục được duyệt và áp dụng. Xác nhận trước khi chạy.">Chỉ khả dụng sau khi danh mục được duyệt và áp dụng. Xác nhận trước khi chạy.</p></div><button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button></header>
+    <div class="eg-dialog__body">
+      <div class="eg-stack" data-gap="3">
+        <div class="eg-credit-meter"><span class="eg-credit-meter__label" data-en="Estimated credits" data-vi="Tín dụng AI ước tính">Tín dụng AI ước tính</span><span class="eg-credit-meter__balance">4 / 2 000</span><span class="eg-credit-meter__estimate" data-en="4 per checklist item · 1 item · balance 1 240 of 2 000 · period 2026-10" data-vi="4 mỗi danh mục · 1 mục · số dư 1 240 trên 2 000 · kỳ 2026-10">4 mỗi danh mục · 1 mục · số dư 1 240 trên 2 000 · kỳ 2026-10</span><span class="eg-credit-meter__track"><span class="eg-credit-meter__fill" style="--pct:62%"></span></span></div>
+        <p data-en="Checklist state · reviewed and applied as av-13 (supplied fixture). Opt-in on · authoring:generate granted." data-vi="Trạng thái danh mục · đã duyệt và áp dụng thành av-13 (dữ liệu được cung cấp). Chấp thuận bật · authoring:generate đã cấp.">Trạng thái danh mục · đã duyệt và áp dụng thành av-13 (dữ liệu được cung cấp). Chấp thuận bật · authoring:generate đã cấp.</p>
+        <p data-en="Generated cases are unapproved previews. They open page 41 for human review and never a script or release action." data-vi="Ca được tạo là bản xem trước chưa duyệt. Chúng mở trang 41 để người dùng duyệt và không bao giờ là kịch bản hay hành động phát hành.">Ca được tạo là bản xem trước chưa duyệt. Chúng mở trang 41 để người dùng duyệt và không bao giờ là kịch bản hay hành động phát hành.</p>
+      </div>
+    </div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Cancel" data-vi="Huỷ">Huỷ</span></button><button class="eg-btn eg-btn--primary" type="button" data-eg-close data-eg-mutate><span class="eg-btn__label" data-en="Confirm and generate test cases" data-vi="Xác nhận và tạo ca kiểm thử">Xác nhận và tạo ca kiểm thử</span></button></footer>
+  </dialog>
+
+  <dialog class="eg-dialog eg-dialog--confirm" id="cancel-dialog" aria-labelledby="cancel-title">
+    <header class="eg-dialog__header"><div><h2 id="cancel-title" data-en="Cancel checklist generation?" data-vi="Huỷ tạo danh mục kiểm tra?">Huỷ tạo danh mục kiểm tra?</h2><p data-en="The request stops; no partial checklist is treated as complete. Safe input is retained." data-vi="Yêu cầu dừng; không danh mục một phần nào được coi là hoàn tất. Đầu vào an toàn được giữ.">Yêu cầu dừng; không danh mục một phần nào được coi là hoàn tất. Đầu vào an toàn được giữ.</p></div><button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button></header>
+    <div class="eg-dialog__body"><p data-en="No second cancellation request is sent and no version is created by cancelling." data-vi="Không gửi yêu cầu huỷ thứ hai và không phiên bản nào được tạo khi huỷ.">Không gửi yêu cầu huỷ thứ hai và không phiên bản nào được tạo khi huỷ.</p></div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Keep running" data-vi="Tiếp tục chạy">Tiếp tục chạy</span></button><button class="eg-btn eg-btn--danger" type="button" data-eg-close data-eg-mutate><span class="eg-btn__label" data-en="Cancel generation" data-vi="Huỷ tạo">Huỷ tạo</span></button></footer>
+  </dialog>
+
+  <dialog class="eg-dialog" id="queue-dialog" aria-labelledby="queue-title">
+    <header class="eg-dialog__header"><div><h2 id="queue-title" data-en="Queue a checklist change" data-vi="Đưa thay đổi danh mục vào hàng chờ">Đưa thay đổi danh mục vào hàng chờ</h2><p data-en="Queues for page 42. Nothing is applied or approved on this page." data-vi="Xếp hàng cho trang 42. Không có gì được áp dụng hay duyệt tại trang này.">Xếp hàng cho trang 42. Không có gì được áp dụng hay duyệt tại trang này.</p></div><button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button></header>
+    <div class="eg-dialog__body">
+      <div class="eg-stack" data-gap="3">
+        <div class="eg-field"><label class="eg-field__label" for="gen-queue-operation" data-en="Operation" data-vi="Thao tác">Thao tác</label><select class="eg-select" id="gen-queue-operation"><option data-en="Comment" data-vi="Nhận xét">Nhận xét</option><option data-en="Merge" data-vi="Gộp">Gộp</option><option data-en="Split" data-vi="Tách">Tách</option><option data-en="Delete" data-vi="Xóa">Xóa</option></select></div>
+        <div class="eg-field"><label class="eg-field__label" for="gen-queue-reason" data-en="Reason" data-vi="Lý do">Lý do</label><textarea class="eg-textarea" id="gen-queue-reason" rows="3">Làm rõ tổng tiền bao gồm phí giao hàng</textarea></div>
+        <p data-en="Delete and split consequences are supplied by the response; none are inferred here." data-vi="Hậu quả xóa và tách được cung cấp bởi phản hồi; không suy đoán tại đây.">Hậu quả xóa và tách được cung cấp bởi phản hồi; không suy đoán tại đây.</p>
+      </div>
+    </div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Cancel" data-vi="Huỷ">Huỷ</span></button><button class="eg-btn eg-btn--primary" type="button" data-eg-close data-eg-mutate><span class="eg-btn__label" data-en="Queue change" data-vi="Đưa vào hàng chờ">Đưa vào hàng chờ</span></button></footer>
+  </dialog>
+</body>
+</html>
