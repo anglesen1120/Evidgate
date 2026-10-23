@@ -214,16 +214,40 @@ jobs:
           echo "::add-mask::$manifest_hash"
           echo "manifest_id=$manifest_id" >> "$GITHUB_OUTPUT"
           echo "manifest_hash=$manifest_hash" >> "$GITHUB_OUTPUT"
-      # Create the run for that manifest. The ids travel in the step env, never
-      # interpolated into the script. GITHUB_REF is a full ref for this job's events
-      # (refs/heads/main); the CLI also accepts refs/tags/<tag> and
-      # refs/pull/<n>/merge.
-      - env:
+      # Create the run for that manifest and keep its id for the steps below. The ids
+      # travel in the step env, never interpolated into the script. GITHUB_REF is a full
+      # ref for this job's events (refs/heads/main); the CLI also accepts
+      # refs/tags/<tag> and refs/pull/<n>/merge, and --json is what makes run_id
+      # machine-readable.
+      - id: run
+        env:
           MANIFEST_ID: \${{ steps.manifest.outputs.manifest_id }}
           MANIFEST_HASH: \${{ steps.manifest.outputs.manifest_hash }}
-        run: ${npx(version, 'runs create --manifest-id "$MANIFEST_ID" --manifest-hash "$MANIFEST_HASH" --ci-ref "$GITHUB_REF"')}
-      # Not yet available — these steps land with their owning tasks:
-      #   events send + runs finalize (04.2.3-T1/T2)
+        run: |
+          out=$(${npx(version, 'runs create --manifest-id "$MANIFEST_ID" --manifest-hash "$MANIFEST_HASH" --ci-ref "$GITHUB_REF" --json')})
+          run_id=$(printf '%s' "$out" | jq -r .run_id)
+          echo "::add-mask::$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+      # The reporter writes one envelope per result into this job's spool directory; both
+      # steps below read that same EVIDGATE_SPOOL_DIR. The reporter ships with the
+      # Playwright adapter (04.3.1-T1, 04.3.3-T1), so run your suite through it here.
+      # Send every spooled envelope for the run: batches of at most 500 events / 1 MiB,
+      # each with an Idempotency-Key, retried inside EVIDGATE_SEND_DEADLINE. The spool is
+      # never deleted by this step.
+      - env:
+          RUN_ID: \${{ steps.run.outputs.run_id }}
+          EVIDGATE_SPOOL_DIR: \${{ github.workspace }}/.evidgate-spool
+        run: ${npx(version, 'events send --run "$RUN_ID"')}
+      # Declare this producer done: last_sequence and count come from the spool's ack
+      # cursor. A 403 producer_slot_taken or 422 unknown_producer exits 3 with the server
+      # code; the command is idempotent, so re-running it is safe. A sharded matrix runs
+      # one producer per shard (shard-<index>) with that shard's --producer/--shard.
+      - env:
+          RUN_ID: \${{ steps.run.outputs.run_id }}
+          MANIFEST_HASH: \${{ steps.manifest.outputs.manifest_hash }}
+          EVIDGATE_SPOOL_DIR: \${{ github.workspace }}/.evidgate-spool
+        run: ${npx(version, 'runs finalize --run "$RUN_ID" --producer shard-1 --shard 1 --manifest-hash "$MANIFEST_HASH"')}
+      # Not yet available — this step lands with its owning task:
       #   artifacts upload (04.2.4-T1)
 `;
 }
@@ -261,12 +285,29 @@ out=$(${npx(version, 'manifests upload --file evidgate-manifest.json --json')})
 manifest_id=$(node -p 'JSON.parse(process.argv[1]).manifest_id' "$out")
 manifest_hash=$(node -p 'JSON.parse(process.argv[1]).manifest_hash' "$out")
 
-# Create the run for that manifest. Add --ci-ref refs/heads/<branch> (or
-# refs/tags/<tag>) here to record where the run came from.
-${npx(version, 'runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash"')}
+# Create the run for that manifest and keep its id for the steps below. Add --ci-ref
+# refs/heads/<branch> (or refs/tags/<tag>) here to record where the run came from.
+out=$(${npx(version, 'runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash" --json')})
+run_id=$(node -p 'JSON.parse(process.argv[1]).run_id' "$out")
 
-# Not yet available — these steps land with their owning tasks:
-#   events send + runs finalize (04.2.3-T1/T2)
+# The reporter writes one envelope per result into this directory, and the two commands
+# below read it. The reporter ships with the Playwright adapter (04.3.1-T1, 04.3.3-T1):
+# run your suite through it before this point. Any absolute path works.
+EVIDGATE_SPOOL_DIR="\${EVIDGATE_SPOOL_DIR:-$PWD/.evidgate-spool}"
+export EVIDGATE_SPOOL_DIR
+
+# Send every spooled envelope for the run: batches of at most 500 events / 1 MiB, each
+# with an Idempotency-Key, retried inside EVIDGATE_SEND_DEADLINE. It never deletes the
+# spool, so a re-run after a failure resumes from the first unacked sequence.
+${npx(version, 'events send --run "$run_id"')}
+
+# Declare this producer done: last_sequence and count come from the spool's ack cursor.
+# A 403 producer_slot_taken or 422 unknown_producer exits 3 with the server code; the
+# command is idempotent, so re-running it is safe. One producer per shard: shard-<index>
+# with --shard its 1-based manifest index.
+${npx(version, 'runs finalize --run "$run_id" --producer shard-1 --shard 1 --manifest-hash "$manifest_hash"')}
+
+# Not yet available — this step lands with its owning task:
 #   artifacts upload (04.2.4-T1)
 `;
 }
