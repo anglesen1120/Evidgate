@@ -353,6 +353,10 @@ export type ProjectDto = {
      * Runs per calendar month; null = no limit (enforced by plan 12).
      */
     monthly_run_quota: number | null;
+    /**
+     * Uppercase prefix of this project's manual test case codes, `<case_prefix>-<n>` (13.1.1 AC4, T2). The default is the stem rule of `0039_authoring_tree.sql`: the first four alphanumerics of the slug, upper-cased, `P`-prefixed when the stem would start with a digit, with a numeric suffix when the stem is already taken (`flashcards` → `FLAS`, `shop-web` → `SHOP`). Unique per organization.
+     */
+    case_prefix: string;
 };
 
 /**
@@ -891,6 +895,10 @@ export type CreateProjectRequest = {
 export type UpdateProjectRequest = {
     name?: string | null;
     slug?: string | null;
+    /**
+     * Changes this project's manual test case code prefix (13.1.1-T2, 02.1.1 §5). Unique per organization: another project already using it is 409 `case_prefix_taken` (`details[].path = /case_prefix`), and codes already allocated are never rewritten.
+     */
+    case_prefix?: string | null;
     retention_days?: number | null;
 };
 
@@ -1058,6 +1066,286 @@ export type CompleteResponse = {
     bytes: number | null;
     scan_state: string | null;
     failure_code: string | null;
+};
+
+/**
+ * One feature-tree node (13.1.1 §4); 13.1.1-T2. `child_count` and `item_count` count live children and live checklist items and are always returned (§5 route 1).
+ */
+export type NodeDto = {
+    node_id: string;
+    parent_id: string | null;
+    kind: 'module' | 'feature' | 'category' | 'sub_category';
+    title: string;
+    /**
+     * Unique among the live siblings of one parent (AC2).
+     */
+    position: number;
+    /**
+     * The `ETag` / `If-Match` value (AC19).
+     */
+    version: number;
+    child_count: number;
+    item_count: number;
+};
+
+export type NodePathEntry = AuthoringNodePathEntry;
+
+/**
+ * One ancestor of a node in `path`, root first (13.1.1 §5 route 1).
+ */
+export type AuthoringNodePathEntry = {
+    node_id: string;
+    kind: 'module' | 'feature' | 'category' | 'sub_category';
+    title: string;
+};
+
+/**
+ * The 200 body of route 1: a page of nodes, plus the addressed `node` and its `path` when the call named `node_id` (13.1.1-T2).
+ */
+export type AuthoringTreeResponse = {
+    items: Array<NodeDto>;
+    next_cursor: string | null;
+    node?: NodeDto | null;
+    path?: Array<AuthoringNodePathEntry> | null;
+};
+
+/**
+ * Body of route 2 (13.1.1-T2). `position` is omitted to append; the placement ladder is strict, so only a `module` may omit `parent_id`.
+ */
+export type CreateNodeRequest = {
+    parent_id?: string | null;
+    kind: 'module' | 'feature' | 'category' | 'sub_category';
+    title: string;
+    position?: number | null;
+};
+
+/**
+ * The 201 body of route 2 (13.1.1-T2).
+ */
+export type CreateNodeResponse = {
+    node_id: string;
+    version: number;
+};
+
+/**
+ * Body of route 3 (13.1.1-T2); an omitted member is unchanged and `parent_id: null` moves the node to the root level.
+ */
+export type UpdateNodeRequest = {
+    title?: string | null;
+    parent_id?: string | null;
+    position?: number | null;
+};
+
+/**
+ * Body of route 4 (13.1.1-T2): the complete live sibling set of the node's parent, each id exactly once, the addressed node included.
+ */
+export type ReorderNodesRequest = {
+    ordered_ids: Array<string>;
+};
+
+/**
+ * The 200 body of route 4 (13.1.1-T2); `changed` is false when the request reproduces the stored order.
+ */
+export type ReorderNodesResponse = {
+    changed: boolean;
+};
+
+/**
+ * The whole body of a delete route is optional (13.1.1-T2); the only member is the reason recorded on the `SoftDelete` version row.
+ */
+export type DeleteAuthoringRequest = {
+    reason?: string | null;
+};
+
+/**
+ * The 200 body of a PATCH or state route (13.1.1-T2): the version after the call and whether anything changed; a no-op answers the stored version with `changed: false`.
+ */
+export type AuthoringChangeResponse = {
+    version: number;
+    changed: boolean;
+};
+
+/**
+ * One checklist item of the feature tree (13.1.1 §4); 13.1.1-T2.
+ */
+export type ChecklistItemDto = {
+    item_id: string;
+    node_id: string;
+    title: string;
+    description: string | null;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+    state: 'draft' | 'active' | 'retired';
+    source: 'manual' | 'ai' | 'import';
+    position: number;
+    version: number;
+};
+
+/**
+ * 00 §9.1 keyset page of `ChecklistItemDto`, ordered `(position, id)` (13.1.1-T2).
+ */
+export type ChecklistItemListResponse = {
+    items: Array<ChecklistItemDto>;
+    next_cursor: string | null;
+};
+
+/**
+ * Body of route 8 (13.1.1-T2). A manual create starts `active` (§6, CR-13-1) and `source` is `manual`; `position` is omitted to append.
+ */
+export type CreateChecklistItemRequest = {
+    node_id: string;
+    title: string;
+    description?: string | null;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+    position?: number | null;
+};
+
+/**
+ * The 201 body of route 8 (13.1.1-T2).
+ */
+export type CreateChecklistItemResponse = {
+    item_id: string;
+    version: number;
+    state: 'draft' | 'active' | 'retired';
+};
+
+/**
+ * Body of route 9 (13.1.1-T2); an omitted member is unchanged and an explicit `null` description clears it. `reason` is required when the move retires the item.
+ */
+export type UpdateChecklistItemRequest = {
+    title?: string | null;
+    description?: string | null;
+    priority?: 'critical' | 'high' | 'medium' | 'low' | null;
+    position?: number | null;
+    state?: 'draft' | 'active' | 'retired' | null;
+    reason?: string | null;
+};
+
+/**
+ * The optional body of route 10; the only member is the reason on the `SoftDelete` version row (13.1.1-T2).
+ */
+export type DeleteChecklistItemRequest = {
+    reason?: string | null;
+};
+
+/**
+ * One step of a manual test case, the item shape of `contracts/schemas/authoring-steps.v1.json` (13.1.1-T1.2), which stays the validated source: 1..100 steps, unknown members refused at the document level and inside a step.
+ */
+export type ManualCaseStepDto = {
+    /**
+     * The number shown to the tester; array order is the execution order.
+     */
+    no: number;
+    action: string;
+    expected: string;
+    data?: string | null;
+};
+
+/**
+ * One row of the manual-case list (13.1.1-T2). The list projection carries no `description`, `precondition` or `steps`, and no coverage field: `linked_live_count` belongs to 13.1.1-T4.
+ */
+export type ManualCaseListItemDto = {
+    case_id: string;
+    /**
+     * The allocated, immutable code `<PREFIX>-<n>` (AC4).
+     */
+    code: string;
+    checklist_item_id: string;
+    node_id: string;
+    title: string;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+    state: 'draft' | 'approved' | 'retired';
+    version: number;
+};
+
+/**
+ * 00 §9.1 keyset page of `ManualCaseListItemDto`, ordered `(code, id)` (13.1.1-T2).
+ */
+export type ManualCaseListResponse = {
+    items: Array<ManualCaseListItemDto>;
+    next_cursor: string | null;
+};
+
+/**
+ * The 200 body of route 14: one manual test case with its steps (13.1.1-T2). The `links`/coverage members belong to 13.1.1-T4 and are absent here.
+ */
+export type ManualCaseDetailDto = {
+    case_id: string;
+    code: string;
+    checklist_item_id: string;
+    node_id: string;
+    title: string;
+    description: string | null;
+    precondition: string | null;
+    steps: Array<ManualCaseStepDto>;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+    state: 'draft' | 'approved' | 'retired';
+    version: number;
+    created_at: string;
+    updated_at: string;
+};
+
+/**
+ * Body of route 13 (13.1.1-T2). `steps` is validated against `contracts/schemas/authoring-steps.v1.json`; `code` is server-allocated and must not be sent.
+ */
+export type CreateManualCaseRequest = {
+    checklist_item_id: string;
+    title: string;
+    description?: string | null;
+    precondition?: string | null;
+    steps: Array<ManualCaseStepDto>;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+};
+
+/**
+ * The 201 body of route 13: the new case's id, its allocated code and its first version (13.1.1-T2).
+ */
+export type CreateManualCaseResponse = {
+    case_id: string;
+    code: string;
+    version: number;
+};
+
+/**
+ * Body of route 15 (13.1.1-T2). An absent member is unchanged, an explicit `null` description or precondition clears it, and `code` / `checklist_item_id` are not members at all (a move is route 19).
+ */
+export type UpdateManualCaseRequest = {
+    title?: string | null;
+    description?: string | null;
+    precondition?: string | null;
+    steps?: Array<ManualCaseStepDto> | null;
+    priority?: 'critical' | 'high' | 'medium' | 'low' | null;
+};
+
+/**
+ * Body of route 17 (13.1.1-T2); `reason` is required when the target state is `retired`.
+ */
+export type SetManualCaseStateRequest = {
+    state: 'draft' | 'approved' | 'retired';
+    reason?: string | null;
+};
+
+/**
+ * The 200 body of route 17: the state the case is in now and its version (13.1.1-T2).
+ */
+export type SetManualCaseStateResponse = {
+    state: 'draft' | 'approved' | 'retired';
+    version: number;
+};
+
+/**
+ * Body of route 19 (13.1.1-T2): the checklist item the case moves under.
+ */
+export type MoveManualCaseRequest = {
+    checklist_item_id: string;
+    reason?: string | null;
+};
+
+/**
+ * The 200 body of route 19: the case's version and its new checklist item (13.1.1-T2).
+ */
+export type MoveManualCaseResponse = {
+    version: number;
+    checklist_item_id: string;
 };
 
 /**
@@ -1428,6 +1716,71 @@ export type CandidateId = string;
 export type WaiverId = string;
 
 export type QuarantineEntryId = string;
+
+/**
+ * Feature-tree node id (13.1.1).
+ */
+export type AuthoringNodeId = string;
+
+/**
+ * Checklist item id (13.1.1).
+ */
+export type AuthoringChecklistItemId = string;
+
+/**
+ * Manual test case id (13.1.1).
+ */
+export type AuthoringManualCaseId = string;
+
+/**
+ * List the live children of this node instead of the roots (13.1.1 §5 route 1). An unknown, soft-deleted or other-project id is 404 `not_found`.
+ */
+export type AuthoringParentIdFilter = string;
+
+/**
+ * Address one node (route 1) or narrow a list to this node's entries (13.1.1).
+ */
+export type AuthoringNodeIdFilter = string;
+
+/**
+ * Narrow the manual-case list to one checklist item (13.1.1 §5 route 12).
+ */
+export type AuthoringItemIdFilter = string;
+
+/**
+ * Comma-separated tokens. `path` adds `path` (the addressed node's ancestors, root first); `counts` is always present and needs no token. Any other token is 422 `request_invalid` with `details[].path = /include`.
+ */
+export type AuthoringInclude = string;
+
+/**
+ * Checklist item state filter (13.1.1 §6).
+ */
+export type AuthoringItemStateFilter = 'draft' | 'active' | 'retired';
+
+/**
+ * Manual test case state filter (13.1.1 §6).
+ */
+export type AuthoringCaseStateFilter = 'draft' | 'approved' | 'retired';
+
+/**
+ * Priority filter shared by checklist items and manual test cases (13.1.1).
+ */
+export type AuthoringPriorityFilter = 'critical' | 'high' | 'medium' | 'low';
+
+/**
+ * Case-insensitive title substring, at most 200 characters; `%`, `_` and `\` are escaped so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
+ */
+export type AuthoringQuery = string;
+
+/**
+ * Opaque cursor from `next_cursor`; the order is the one the route declares (`(position, id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+ */
+export type AuthoringCursor = string;
+
+/**
+ * Order tag of the sibling set, `"order:sha256:<hex>"` — `AuthoringHashes.OrderHash` over the sorted `(id, version)` pairs of the parent's live siblings (13.1.1-T2) — never a row `version`. Absent or malformed is 422 `request_invalid` with `details[].path = /If-Match` (`required` / `invalid`); a stale tag is 412 `precondition_failed` with the current tag in `error.details`, and nothing is written.
+ */
+export type IfMatchOrder = string;
 
 export type ExchangeCiTokenData = {
     body?: CiTokenRequest;
@@ -6540,3 +6893,1189 @@ export type ListQuarantineEntriesResponses = {
 };
 
 export type ListQuarantineEntriesResponse = ListQuarantineEntriesResponses[keyof ListQuarantineEntriesResponses];
+
+export type ListAuthoringTreeData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * List the live children of this node instead of the roots (13.1.1 §5 route 1). An unknown, soft-deleted or other-project id is 404 `not_found`.
+         */
+        parent_id?: string;
+        /**
+         * Address one node (route 1) or narrow a list to this node's entries (13.1.1).
+         */
+        node_id?: string;
+        /**
+         * Comma-separated tokens. `path` adds `path` (the addressed node's ancestors, root first); `counts` is always present and needs no token. Any other token is 422 `request_invalid` with `details[].path = /include`.
+         */
+        include?: string;
+        /**
+         * Opaque cursor from `next_cursor`; the order is the one the route declares (`(position, id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/authoring/tree';
+};
+
+export type ListAuthoringTreeErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListAuthoringTreeError = ListAuthoringTreeErrors[keyof ListAuthoringTreeErrors];
+
+export type ListAuthoringTreeResponses = {
+    /**
+     * Page of nodes, optionally with the addressed node and its ancestor path
+     */
+    200: AuthoringTreeResponse;
+};
+
+export type ListAuthoringTreeResponse = ListAuthoringTreeResponses[keyof ListAuthoringTreeResponses];
+
+export type CreateAuthoringNodeData = {
+    body: CreateNodeRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/nodes';
+};
+
+export type CreateAuthoringNodeErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateAuthoringNodeError = CreateAuthoringNodeErrors[keyof CreateAuthoringNodeErrors];
+
+export type CreateAuthoringNodeResponses = {
+    /**
+     * The node, its `version`, and `ETag: "<version>"`
+     */
+    201: CreateNodeResponse;
+};
+
+export type CreateAuthoringNodeResponse = CreateAuthoringNodeResponses[keyof CreateAuthoringNodeResponses];
+
+export type DeleteAuthoringNodeData = {
+    body?: DeleteAuthoringRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Feature-tree node id (13.1.1).
+         */
+        n: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/nodes/{n}';
+};
+
+export type DeleteAuthoringNodeErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DeleteAuthoringNodeError = DeleteAuthoringNodeErrors[keyof DeleteAuthoringNodeErrors];
+
+export type DeleteAuthoringNodeResponses = {
+    /**
+     * Node soft-deleted; no body
+     */
+    204: void;
+};
+
+export type DeleteAuthoringNodeResponse = DeleteAuthoringNodeResponses[keyof DeleteAuthoringNodeResponses];
+
+export type UpdateAuthoringNodeData = {
+    body: UpdateNodeRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Feature-tree node id (13.1.1).
+         */
+        n: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/nodes/{n}';
+};
+
+export type UpdateAuthoringNodeErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateAuthoringNodeError = UpdateAuthoringNodeErrors[keyof UpdateAuthoringNodeErrors];
+
+export type UpdateAuthoringNodeResponses = {
+    /**
+     * The node's version after the call and whether it changed
+     */
+    200: AuthoringChangeResponse;
+};
+
+export type UpdateAuthoringNodeResponse = UpdateAuthoringNodeResponses[keyof UpdateAuthoringNodeResponses];
+
+export type ReorderAuthoringNodesData = {
+    body: ReorderNodesRequest;
+    headers: {
+        /**
+         * Order tag of the sibling set, `"order:sha256:<hex>"` — `AuthoringHashes.OrderHash` over the sorted `(id, version)` pairs of the parent's live siblings (13.1.1-T2) — never a row `version`. Absent or malformed is 422 `request_invalid` with `details[].path = /If-Match` (`required` / `invalid`); a stale tag is 412 `precondition_failed` with the current tag in `error.details`, and nothing is written.
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Feature-tree node id (13.1.1).
+         */
+        n: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/nodes/{n}/reorder';
+};
+
+export type ReorderAuthoringNodesErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ReorderAuthoringNodesError = ReorderAuthoringNodesErrors[keyof ReorderAuthoringNodesErrors];
+
+export type ReorderAuthoringNodesResponses = {
+    /**
+     * Whether the order changed
+     */
+    200: ReorderNodesResponse;
+};
+
+export type ReorderAuthoringNodesResponse = ReorderAuthoringNodesResponses[keyof ReorderAuthoringNodesResponses];
+
+export type ListChecklistItemsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Address one node (route 1) or narrow a list to this node's entries (13.1.1).
+         */
+        node_id?: string;
+        /**
+         * Checklist item state filter (13.1.1 §6).
+         */
+        state?: 'draft' | 'active' | 'retired';
+        /**
+         * Priority filter shared by checklist items and manual test cases (13.1.1).
+         */
+        priority?: 'critical' | 'high' | 'medium' | 'low';
+        /**
+         * Opaque cursor from `next_cursor`; the order is the one the route declares (`(position, id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/authoring/checklist-items';
+};
+
+export type ListChecklistItemsErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListChecklistItemsError = ListChecklistItemsErrors[keyof ListChecklistItemsErrors];
+
+export type ListChecklistItemsResponses = {
+    /**
+     * Page of checklist items
+     */
+    200: ChecklistItemListResponse;
+};
+
+export type ListChecklistItemsResponse = ListChecklistItemsResponses[keyof ListChecklistItemsResponses];
+
+export type CreateChecklistItemData = {
+    body: CreateChecklistItemRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/checklist-items';
+};
+
+export type CreateChecklistItemErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateChecklistItemError = CreateChecklistItemErrors[keyof CreateChecklistItemErrors];
+
+export type CreateChecklistItemResponses = {
+    /**
+     * The item, its `version`, its `state`, and `ETag: "<version>"`
+     */
+    201: CreateChecklistItemResponse;
+};
+
+export type CreateChecklistItemResponse2 = CreateChecklistItemResponses[keyof CreateChecklistItemResponses];
+
+export type DeleteChecklistItemData = {
+    body?: DeleteChecklistItemRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Checklist item id (13.1.1).
+         */
+        i: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/checklist-items/{i}';
+};
+
+export type DeleteChecklistItemErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DeleteChecklistItemError = DeleteChecklistItemErrors[keyof DeleteChecklistItemErrors];
+
+export type DeleteChecklistItemResponses = {
+    /**
+     * Item soft-deleted; no body
+     */
+    204: void;
+};
+
+export type DeleteChecklistItemResponse = DeleteChecklistItemResponses[keyof DeleteChecklistItemResponses];
+
+export type UpdateChecklistItemData = {
+    body: UpdateChecklistItemRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Checklist item id (13.1.1).
+         */
+        i: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/checklist-items/{i}';
+};
+
+export type UpdateChecklistItemErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateChecklistItemError = UpdateChecklistItemErrors[keyof UpdateChecklistItemErrors];
+
+export type UpdateChecklistItemResponses = {
+    /**
+     * The item's version after the call and whether it changed
+     */
+    200: AuthoringChangeResponse;
+};
+
+export type UpdateChecklistItemResponse = UpdateChecklistItemResponses[keyof UpdateChecklistItemResponses];
+
+export type ListManualCasesData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Address one node (route 1) or narrow a list to this node's entries (13.1.1).
+         */
+        node_id?: string;
+        /**
+         * Narrow the manual-case list to one checklist item (13.1.1 §5 route 12).
+         */
+        item_id?: string;
+        /**
+         * Manual test case state filter (13.1.1 §6).
+         */
+        state?: 'draft' | 'approved' | 'retired';
+        /**
+         * Priority filter shared by checklist items and manual test cases (13.1.1).
+         */
+        priority?: 'critical' | 'high' | 'medium' | 'low';
+        /**
+         * Case-insensitive title substring, at most 200 characters; `%`, `_` and `\` are escaped so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
+         */
+        q?: string;
+        /**
+         * Opaque cursor from `next_cursor`; the order is the one the route declares (`(position, id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/authoring/manual-cases';
+};
+
+export type ListManualCasesErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListManualCasesError = ListManualCasesErrors[keyof ListManualCasesErrors];
+
+export type ListManualCasesResponses = {
+    /**
+     * Page of manual test cases
+     */
+    200: ManualCaseListResponse;
+};
+
+export type ListManualCasesResponse = ListManualCasesResponses[keyof ListManualCasesResponses];
+
+export type CreateManualCaseData = {
+    body: CreateManualCaseRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/manual-cases';
+};
+
+export type CreateManualCaseErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateManualCaseError = CreateManualCaseErrors[keyof CreateManualCaseErrors];
+
+export type CreateManualCaseResponses = {
+    /**
+     * The case id, its allocated code, its version, and `ETag: "<version>"`
+     */
+    201: CreateManualCaseResponse;
+};
+
+export type CreateManualCaseResponse2 = CreateManualCaseResponses[keyof CreateManualCaseResponses];
+
+export type DeleteManualCaseData = {
+    body?: DeleteAuthoringRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Manual test case id (13.1.1).
+         */
+        m: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/manual-cases/{m}';
+};
+
+export type DeleteManualCaseErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DeleteManualCaseError = DeleteManualCaseErrors[keyof DeleteManualCaseErrors];
+
+export type DeleteManualCaseResponses = {
+    /**
+     * Case soft-deleted; no body
+     */
+    204: void;
+};
+
+export type DeleteManualCaseResponse = DeleteManualCaseResponses[keyof DeleteManualCaseResponses];
+
+export type GetManualCaseData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * Manual test case id (13.1.1).
+         */
+        m: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/manual-cases/{m}';
+};
+
+export type GetManualCaseErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetManualCaseError = GetManualCaseErrors[keyof GetManualCaseErrors];
+
+export type GetManualCaseResponses = {
+    /**
+     * The case, its steps and `ETag: "<version>"`
+     */
+    200: ManualCaseDetailDto;
+};
+
+export type GetManualCaseResponse = GetManualCaseResponses[keyof GetManualCaseResponses];
+
+export type UpdateManualCaseData = {
+    body: UpdateManualCaseRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Manual test case id (13.1.1).
+         */
+        m: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/manual-cases/{m}';
+};
+
+export type UpdateManualCaseErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateManualCaseError = UpdateManualCaseErrors[keyof UpdateManualCaseErrors];
+
+export type UpdateManualCaseResponses = {
+    /**
+     * The case's version after the call and whether it changed
+     */
+    200: AuthoringChangeResponse;
+};
+
+export type UpdateManualCaseResponse = UpdateManualCaseResponses[keyof UpdateManualCaseResponses];
+
+export type SetManualCaseStateData = {
+    body: SetManualCaseStateRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Manual test case id (13.1.1).
+         */
+        m: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/manual-cases/{m}/state';
+};
+
+export type SetManualCaseStateErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type SetManualCaseStateError = SetManualCaseStateErrors[keyof SetManualCaseStateErrors];
+
+export type SetManualCaseStateResponses = {
+    /**
+     * The case's state and version after the call
+     */
+    200: SetManualCaseStateResponse;
+};
+
+export type SetManualCaseStateResponse2 = SetManualCaseStateResponses[keyof SetManualCaseStateResponses];
+
+export type MoveManualCaseData = {
+    body: MoveManualCaseRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Manual test case id (13.1.1).
+         */
+        m: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/manual-cases/{m}/item';
+};
+
+export type MoveManualCaseErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type MoveManualCaseError = MoveManualCaseErrors[keyof MoveManualCaseErrors];
+
+export type MoveManualCaseResponses = {
+    /**
+     * The case's version and its new checklist item
+     */
+    200: MoveManualCaseResponse;
+};
+
+export type MoveManualCaseResponse2 = MoveManualCaseResponses[keyof MoveManualCaseResponses];

@@ -43,6 +43,14 @@ precedence is the one 00 §2 itself sets:
    `ingest_token:read`, `service_identity:*`, `support:read`, `membership:read`,
    `sso:*`, `agent_pool:*`, `job:cleanup`, `webhook:*`, `billing:*`, `project:create`,
    `environment:write`, `security_event:read`.
+   Line 60 also carries the four authoring strings of CR-D-2 / 13 §13 CR-2 with their
+   default roles, and the line itself marks that mapping `[INFERENCE]` (it mirrors
+   03 §4.5): `authoring:read` for every member role, `authoring:write` and
+   `authoring:generate` for `qa_engineer`, `test_maintainer` and `tenant_admin` (generation
+   spends AI credits, 08.5.5), `script:generate` for `test_maintainer` and `tenant_admin`
+   only (it opens a pull request against the customer's repository, 13.5.1). The matrix
+   transcribes those cells as `explicit` because the line names the roles, and a plan
+   that later narrows them changes this fixture first.
 2. **Where 00 §2 delegates, the owning plan wins.** 00 §2 line 60 hands the catalog
    strings (`case:*`, `suite:*`, `fixture:write`, `draft:*`, `ai_draft:request`) and
    their default role mapping to **03 §4.5** (`plans/03-catalog-authoring.md:116-136`).
@@ -59,7 +67,7 @@ precedence is the one 00 §2 itself sets:
    is excluded for `viewer` by 00 §2:50 "No secrets" and for `tenant_admin` by 00 §2:54,
    so the other three member roles hold it). These grants are marked `basis: inferred` in
    the section below, so the cells the plans leave implicit are visible.
-4. **The `permissions` axis** is every catalogue code the plans name — all 56 codes of
+4. **The `permissions` axis** is every catalogue code the plans name — all 60 codes of
    `contracts/permissions.json` appear somewhere in `plans/`, so the axis equals the
    catalogue's code list. The matrix test asserts that equality, so a catalogue code the
    fixture omits fails before any cell is compared.
@@ -90,7 +98,7 @@ merely names the permission.
   `artifact:read_sensitive` is inferred). The holder is derived from the surrounding plan
   text, and `source` points at the owner of the authoritative text.
 
-74 of the 119 grants are `explicit`; the 45 `inferred` ones are listed here. The
+87 of the 132 grants are `explicit`; the 45 `inferred` ones are listed here. The
 `RoleMatrixFixture.InferredGrants` property exposes the same list.
 
 | Role                | Permission                | Citation (owner of the authoritative text) |

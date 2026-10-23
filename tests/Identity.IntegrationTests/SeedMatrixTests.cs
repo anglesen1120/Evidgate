@@ -330,6 +330,24 @@ public sealed class SeedMatrixTests : CatalogueTestBase
         holders["policy:write"].ShouldBe(["release_approver"]);
     }
 
+    /// <summary>
+    /// 13.1.1-T2.1: the four authoring strings 00 §2:60 adds are seeded with the role sets that line names — read
+    /// for every member role, write and generate for the drafting triple, script generation for the approving pair
+    /// only. Pinned by name so the mapping is visible next to the seed, not only implied by the full matrix
+    /// (<c>Every_Role_Permission_Cell_Matches_The_Overview_Fixture</c> already compares every cell).
+    /// </summary>
+    [Fact]
+    public async Task Authoring_Four_Codes_Have_The_Overview_Matrix()
+    {
+        var catalogue = await ReadCatalogueAsync(await Fixture.SeedOrgAsync(cancellationToken: Token));
+        var holders = Holders(catalogue);
+
+        holders["authoring:read"].ShouldBe(["qa_engineer", "release_approver", "tenant_admin", "test_maintainer", "viewer"]);
+        holders["authoring:write"].ShouldBe(["qa_engineer", "tenant_admin", "test_maintainer"]);
+        holders["authoring:generate"].ShouldBe(["qa_engineer", "tenant_admin", "test_maintainer"]);
+        holders["script:generate"].ShouldBe(["tenant_admin", "test_maintainer"]);
+    }
+
     /// <summary>Reads the catalogue and the role grants through one tenant scope (the app role, under RLS).</summary>
     private async Task<CatalogueRead> ReadCatalogueAsync(Guid orgId)
     {

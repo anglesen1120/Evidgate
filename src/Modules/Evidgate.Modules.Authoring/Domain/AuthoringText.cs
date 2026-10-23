@@ -19,13 +19,14 @@ namespace Evidgate.Modules.Authoring.Domain;
 /// (13.2.1 §4 "char_length vs the UI counter").
 /// </para>
 /// <para>
-/// <b>Normalisation needs ICU.</b> <c>Evidgate.Api</c> and <c>Evidgate.Worker</c> run with
-/// <c>InvariantGlobalization=true</c> (00 §5.7 P7, <c>Directory.Build.props</c>), and in that mode
-/// .NET's <see cref="string.Normalize(NormalizationForm)"/> is a no-op: it returns the input
-/// unchanged instead of composing it. A silent no-op would store decomposed text and break AC14
-/// while every test passes, so <see cref="Normalize"/> and <see cref="EnsureNfcSupported"/> refuse
-/// instead of pretending. <see cref="IsNfcSupported"/> is the runtime probe;
-/// <see cref="NfcUnavailableMessage"/> names the conflict so a host that cannot normalize fails
+/// <b>Normalisation needs ICU.</b> Globalization-invariant mode (00 §5.7 P7) makes
+/// <see cref="string.Normalize(NormalizationForm)"/> a no-op: it returns the input unchanged instead of
+/// composing it. <c>Evidgate.Worker</c> runs that mode (it hosts no authoring write path); <c>Evidgate.Api</c>
+/// must keep ICU — <c>Directory.Build.props</c> leaves <c>InvariantGlobalization</c> off for it and its image
+/// runs the <c>-extra</c> chiseled base that ships ICU (13.1.1-T2, D-S55-Q1). A silent no-op would store
+/// decomposed text and break AC14 while every test passes, so <see cref="Normalize"/> and
+/// <see cref="EnsureNfcSupported"/> refuse instead of pretending. <see cref="IsNfcSupported"/> is the runtime
+/// probe; <see cref="NfcUnavailableMessage"/> names the conflict so a host that cannot normalize fails
 /// at composition instead of at the first write.
 /// </para>
 /// </remarks>
@@ -39,14 +40,15 @@ internal static class AuthoringText
 
     /// <summary>
     /// The failure message of <see cref="Normalize"/> and <see cref="EnsureNfcSupported"/>: why the
-    /// text cannot be composed and which two settings resolve it. Never a user-facing message.
+    /// text cannot be composed and how a host resolves it. Never a user-facing message.
     /// </summary>
     public const string NfcUnavailableMessage =
         "Unicode NFC normalisation is unavailable in this process: it runs with globalization-invariant mode " +
         "(`InvariantGlobalization`, 00 §5.7 P7), where string.Normalize(FormC) returns the input unchanged. " +
-        "Authorship text must be stored composed (13.1.1 AC14), so either the host keeps ICU " +
-        "(`InvariantGlobalization=true` removed for Evidgate.Api/Evidgate.Worker in Directory.Build.props, " +
-        "which needs the P7 decision recorded) or the authoring write path is not enabled on this host.";
+        "Authorship text must be stored composed (13.1.1 AC14), so a host that composes the authoring module " +
+        "must keep ICU: `InvariantGlobalization` is off for Evidgate.Api in Directory.Build.props and its image " +
+        "runs the `-extra` chiseled base that ships ICU (13.1.1-T2, D-S55-Q1). " +
+        "Either run the authoring write path on such a host or do not enable it on this one.";
 
     /// <summary>
     /// True when this process can compose text, i.e. when <see cref="Normalize"/> actually

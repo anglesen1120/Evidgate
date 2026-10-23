@@ -20,7 +20,7 @@ namespace Tenancy.IntegrationTests;
 /// members refused at every level); a 100-step document and a 2 000-character field are accepted and
 /// one past either is not, so an off-by-one in the schema fails here rather than in a stubbed route.
 /// </remarks>
-public sealed class AuthoringManualCaseTests
+public sealed partial class AuthoringManualCaseTests
 {
     private const string CorpusDirectory = "fixtures/contracts/vectors/authoring-steps.v1";
 

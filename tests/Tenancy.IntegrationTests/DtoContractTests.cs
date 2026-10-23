@@ -56,6 +56,8 @@ public sealed class DtoContractTests
     [Fact]
     public void Project_Dto_Matches_Plan_Shape()
     {
+        // `case_prefix` is the last member so every earlier position (and so Dapper's positional match) is unchanged; it
+        // is 13.1.1 AC4/OI-13-101's stored code prefix (0039), read-only outside PATCH /v1/projects/{p}.
         var dto = new ProjectDto(
             Guid.Parse("018f0000-0000-7000-8000-000000000002"),
             Guid.Parse("018f0000-0000-7000-8000-000000000001"),
@@ -67,11 +69,12 @@ public sealed class DtoContractTests
             Timestamp,
             1,
             90,
-            1000);
+            1000,
+            "CHEC");
 
         JsonSerializer.Serialize(dto, SnakeCase).ShouldBe(
             """
-            {"id":"018f0000-0000-7000-8000-000000000002","org_id":"018f0000-0000-7000-8000-000000000001","name":"Checkout","slug":"checkout","status":"active","default_environment_id":"018f0000-0000-7000-8000-000000000003","created_at":"2026-09-26T12:30:00+00:00","updated_at":"2026-09-26T12:30:00+00:00","version":1,"retention_days":90,"monthly_run_quota":1000}
+            {"id":"018f0000-0000-7000-8000-000000000002","org_id":"018f0000-0000-7000-8000-000000000001","name":"Checkout","slug":"checkout","status":"active","default_environment_id":"018f0000-0000-7000-8000-000000000003","created_at":"2026-09-26T12:30:00+00:00","updated_at":"2026-09-26T12:30:00+00:00","version":1,"retention_days":90,"monthly_run_quota":1000,"case_prefix":"CHEC"}
             """);
 
         // default_environment_id is null until 05.1.2-T1 adds the FK target.

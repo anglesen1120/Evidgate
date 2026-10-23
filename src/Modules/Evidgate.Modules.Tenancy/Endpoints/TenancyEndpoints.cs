@@ -235,7 +235,14 @@ public static class TenancyEndpoints
         }
 
         var result = await mediator.Send(
-            new UpdateProjectCommand(p, request.Name, request.Slug, request.RetentionDays, version, IdempotencyKey(context)),
+            new UpdateProjectCommand(
+                p,
+                request.Name,
+                request.Slug,
+                request.RetentionDays,
+                request.CasePrefix,
+                version,
+                IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
 
         return WithETag(context, result, project => project.Version);

@@ -6,9 +6,12 @@
 #   docker buildx build --platform linux/arm64 -f infra/docker/Dockerfile.worker \
 #     --load -t evidgate-worker:dev .
 #
-# Same pins, same build strategy and the same non-root chiseled runtime as
-# Dockerfile.api — the two entry points differ only in the project they publish,
-# the exposed port and the assembly they start.
+# Same builder pin, same build strategy and the same non-root chiseled runtime as
+# Dockerfile.api except for the runtime *variant*: the Worker keeps the plain
+# `-chiseled` base because it never composes the authoring module and stays
+# globalization-invariant, while the Api needs the `-extra` variant's ICU
+# (13.1.1-T2, D-S55-Q1). Otherwise the two entry points differ only in the
+# project they publish, the exposed port and the assembly they start.
 #
 # Carried by 08.4.1-T3.3 (ruling T36): the pinned Node runtime that
 # packages/healing-validator needs. That package does not exist yet, so this

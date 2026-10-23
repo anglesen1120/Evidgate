@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { ActivatePolicyRevisionData, ActivatePolicyRevisionErrors, ActivatePolicyRevisionResponses, ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, ApproveWaiverData, ApproveWaiverErrors, ApproveWaiverResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreatePolicyRevisionData, CreatePolicyRevisionErrors, CreatePolicyRevisionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateQuarantineEntryData, CreateQuarantineEntryErrors, CreateQuarantineEntryResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteData, CreateSuiteErrors, CreateSuiteResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, CreateWaiverData, CreateWaiverErrors, CreateWaiverResponses, DisableCiBindingData, DisableCiBindingErrors, DisableCiBindingResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, ExportAuditData, ExportAuditErrors, ExportAuditResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetCaseData, GetCaseErrors, GetCaseResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetPolicyRevisionData, GetPolicyRevisionErrors, GetPolicyRevisionResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteData, GetSuiteErrors, GetSuiteResponses, GetSuiteRevisionData, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetSuiteRevisionErrors, GetSuiteRevisionResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCaseRevisionsData, ListCaseRevisionsErrors, ListCaseRevisionsResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListCiBindingsData, ListCiBindingsErrors, ListCiBindingsResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListIngestTokensData, ListIngestTokensErrors, ListIngestTokensResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListMyOrganizationsData, ListMyOrganizationsErrors, ListMyOrganizationsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListPolicyRevisionsData, ListPolicyRevisionsErrors, ListPolicyRevisionsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListProjectWaiversData, ListProjectWaiversErrors, ListProjectWaiversResponses, ListQuarantineEntriesData, ListQuarantineEntriesErrors, ListQuarantineEntriesResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, ListSuitesData, ListSuitesErrors, ListSuitesResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, RemoveQuarantineEntryData, RemoveQuarantineEntryErrors, RemoveQuarantineEntryResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeIngestTokenData, RevokeIngestTokenErrors, RevokeIngestTokenResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, RevokeWaiverData, RevokeWaiverErrors, RevokeWaiverResponses, RotateIngestTokenData, RotateIngestTokenErrors, RotateIngestTokenResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, UpdateCaseData, UpdateCaseErrors, UpdateCaseResponses, UpdateCiBindingData, UpdateCiBindingErrors, UpdateCiBindingResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
+import type { ActivatePolicyRevisionData, ActivatePolicyRevisionErrors, ActivatePolicyRevisionResponses, ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, ApproveWaiverData, ApproveWaiverErrors, ApproveWaiverResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateAuthoringNodeData, CreateAuthoringNodeErrors, CreateAuthoringNodeResponses, CreateChecklistItemData, CreateChecklistItemErrors, CreateChecklistItemResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateManualCaseData, CreateManualCaseErrors, CreateManualCaseResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreatePolicyRevisionData, CreatePolicyRevisionErrors, CreatePolicyRevisionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateQuarantineEntryData, CreateQuarantineEntryErrors, CreateQuarantineEntryResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteData, CreateSuiteErrors, CreateSuiteResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, CreateWaiverData, CreateWaiverErrors, CreateWaiverResponses, DeleteAuthoringNodeData, DeleteAuthoringNodeErrors, DeleteAuthoringNodeResponses, DeleteChecklistItemData, DeleteChecklistItemErrors, DeleteChecklistItemResponses, DeleteManualCaseData, DeleteManualCaseErrors, DeleteManualCaseResponses, DisableCiBindingData, DisableCiBindingErrors, DisableCiBindingResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, ExportAuditData, ExportAuditErrors, ExportAuditResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetCaseData, GetCaseErrors, GetCaseResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetManualCaseData, GetManualCaseErrors, GetManualCaseResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetPolicyRevisionData, GetPolicyRevisionErrors, GetPolicyRevisionResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteData, GetSuiteErrors, GetSuiteResponses, GetSuiteRevisionData, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetSuiteRevisionErrors, GetSuiteRevisionResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListAuthoringTreeData, ListAuthoringTreeErrors, ListAuthoringTreeResponses, ListCaseRevisionsData, ListCaseRevisionsErrors, ListCaseRevisionsResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListChecklistItemsData, ListChecklistItemsErrors, ListChecklistItemsResponses, ListCiBindingsData, ListCiBindingsErrors, ListCiBindingsResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListIngestTokensData, ListIngestTokensErrors, ListIngestTokensResponses, ListManualCasesData, ListManualCasesErrors, ListManualCasesResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListMyOrganizationsData, ListMyOrganizationsErrors, ListMyOrganizationsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListPolicyRevisionsData, ListPolicyRevisionsErrors, ListPolicyRevisionsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListProjectWaiversData, ListProjectWaiversErrors, ListProjectWaiversResponses, ListQuarantineEntriesData, ListQuarantineEntriesErrors, ListQuarantineEntriesResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, ListSuitesData, ListSuitesErrors, ListSuitesResponses, MoveManualCaseData, MoveManualCaseErrors, MoveManualCaseResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, RemoveQuarantineEntryData, RemoveQuarantineEntryErrors, RemoveQuarantineEntryResponses, ReorderAuthoringNodesData, ReorderAuthoringNodesErrors, ReorderAuthoringNodesResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeIngestTokenData, RevokeIngestTokenErrors, RevokeIngestTokenResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, RevokeWaiverData, RevokeWaiverErrors, RevokeWaiverResponses, RotateIngestTokenData, RotateIngestTokenErrors, RotateIngestTokenResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, SetManualCaseStateData, SetManualCaseStateErrors, SetManualCaseStateResponses, UpdateAuthoringNodeData, UpdateAuthoringNodeErrors, UpdateAuthoringNodeResponses, UpdateCaseData, UpdateCaseErrors, UpdateCaseResponses, UpdateChecklistItemData, UpdateChecklistItemErrors, UpdateChecklistItemResponses, UpdateCiBindingData, UpdateCiBindingErrors, UpdateCiBindingResponses, UpdateManualCaseData, UpdateManualCaseErrors, UpdateManualCaseResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -1470,4 +1470,292 @@ export const listQuarantineEntries = <ThrowOnError extends boolean = false>(opti
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/quarantine',
     ...options
+});
+
+/**
+ * The project's feature tree, one node with its ancestor path, or one parent's children (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 1. Without `node_id` and `parent_id` the live roots (parent null) are returned in `(position, id)` order, so `next_cursor` pages the whole root set; with `parent_id` the live children of that node; with `node_id` the answer also carries `node` and `path` (its ancestors, root first) and `items` holds its live children (page 1 only). `include` accepts the tokens `path` and `counts` (counts are always returned, `path` is honoured with `parent_id` too); any other token is 422 `request_invalid` with `details[].path = /include`. `child_count` counts live child nodes and `item_count` live checklist items (13.1.1 §5). Another tenant's project is 404 `not_found`; a credential scoped to a sibling project of the same org is 403 `project_scope_mismatch`; an unknown, soft-deleted or other-project `node_id`/`parent_id` is 404 `not_found`. A `limit` outside 1..200 or a malformed `cursor` is 422 `request_invalid` (`details[].path` = `limit` / `cursor`). Every member role holding `authoring:read`, `viewer` included, may read.
+ */
+export const listAuthoringTree = <ThrowOnError extends boolean = false>(options: Options<ListAuthoringTreeData, ThrowOnError>): RequestResult<ListAuthoringTreeResponses, ListAuthoringTreeErrors, ThrowOnError> => (options.client ?? client).get<ListAuthoringTreeResponses, ListAuthoringTreeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/tree',
+    ...options
+});
+
+/**
+ * Create a feature-tree node (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 2 (`authoring:write`). `kind` is one of `module`, `feature`, `category`, `sub_category`; the placement ladder is strict (a `module` is a root and names no `parent_id`, every other kind names one), so a missing, wrong-kind, soft-deleted or other-project parent, a self-parent and a placement deeper than the four-level ladder are 422 `authoring_parent_invalid` with `details[].reason` ∈ `parent_not_found`, `parent_kind_invalid`, `parent_deleted`, `depth_exceeded`, `cycle`. `title` is 1..200 characters. An omitted `position` appends the node at `max(live sibling position) + 1`; a taken live position is 422 `request_invalid` with `details[].path = /position` and `reason = position_taken`. An unknown body member is 422 `request_invalid` (`details[].path` names it), a body over 64 KiB 413 `payload_too_large` (AC16), a missing `Idempotency-Key` 400 `request_invalid` (00 §9.1), and a replay of the same key with the same body answers the stored 201 without a second version or audit row (AC18). The write and its `authoring_version` row are one transaction (`13.1.1` AC5); a lock timeout is 503 `unavailable` with `Retry-After`.
+ */
+export const createAuthoringNode = <ThrowOnError extends boolean = false>(options: Options<CreateAuthoringNodeData, ThrowOnError>): RequestResult<CreateAuthoringNodeResponses, CreateAuthoringNodeErrors, ThrowOnError> => (options.client ?? client).post<CreateAuthoringNodeResponses, CreateAuthoringNodeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/nodes',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Soft-delete a node; a node that still holds content is 409 (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 5 (`authoring:write`). The node is soft-deleted (`deleted_at`), so it disappears from the tree and from every list, and the delete is recorded as one `SoftDelete` version row with the optional `reason` (1..500 characters; no body at all is allowed). A node that still holds a live child node or a live checklist item is 409 `authoring_not_empty` with `details[].reason` `node_has_children` / `node_has_items`, and nothing is written (AC7). `If-Match` is the node's `version` (absent/malformed 422 with `details[].path = /If-Match`; stale 412 `precondition_failed` with the current `version` in `error.details`, no write, AC19). An unknown or already soft-deleted node is 404 `not_found`; a body over 64 KiB is 413 `payload_too_large`; a missing `Idempotency-Key` is 400 `request_invalid`; a lock timeout is 503 `unavailable` with `Retry-After`. The answer is a bodiless 204.
+ */
+export const deleteAuthoringNode = <ThrowOnError extends boolean = false>(options: Options<DeleteAuthoringNodeData, ThrowOnError>): RequestResult<DeleteAuthoringNodeResponses, DeleteAuthoringNodeErrors, ThrowOnError> => (options.client ?? client).delete<DeleteAuthoringNodeResponses, DeleteAuthoringNodeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/nodes/{n}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Change a node's title, parent or position under If-Match (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 3 (`authoring:write`). Omitted members are unchanged; `parent_id: null` moves the node to the root level. A `parent_id` change re-applies the kind ladder and cycle guards (422 `authoring_parent_invalid` with its `details[].reason`, as on create), and a re-parent renumbers the target siblings. `If-Match` carries the node's `version` (ETag); absent or malformed is 422 `request_invalid` with `details[].path = /If-Match` and `reason` `required` / `invalid`; stale is 412 `precondition_failed` with the current `version` in `error.details` and nothing written (no version row, no audit row, AC19). A request that equals the stored content answers 200 `changed: false` and writes nothing (AC5). An unknown member 422, a body over 64 KiB 413 `payload_too_large`, an unknown or soft-deleted node 404 `not_found`, a lock timeout 503 `unavailable` with `Retry-After`.
+ */
+export const updateAuthoringNode = <ThrowOnError extends boolean = false>(options: Options<UpdateAuthoringNodeData, ThrowOnError>): RequestResult<UpdateAuthoringNodeResponses, UpdateAuthoringNodeErrors, ThrowOnError> => (options.client ?? client).patch<UpdateAuthoringNodeResponses, UpdateAuthoringNodeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/nodes/{n}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Renumber one parent's live siblings under an order ETag (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 4 (`authoring:write`). `ordered_ids` is the complete live sibling set of `{n}`'s parent, each id exactly once, and `{n}` itself must be one of them; the set is renumbered `0..n-1` so sibling positions stay a total order (AC2). `If-Match` is the order tag the caller read, `"order:sha256:<hex>"` — `AuthoringHashes.OrderHash` over the sorted `(id, version)` pairs of those siblings — so a concurrent re-parent or rename makes the reorder 412 `precondition_failed` without writing anything; absent or malformed is 422 `request_invalid` with `details[].path = /If-Match` (`required` / `invalid`). An `ordered_ids` that is not exactly the live sibling set (missing, extra, duplicate or a foreign id) is 422 `request_invalid` with `details[].path = /ordered_ids`. The renumber is two statements in one transaction (AC2); a lock timeout is 503 `unavailable` with `Retry-After`. The answer is `{changed}`, and `changed: false` when the request reproduces the stored order.
+ */
+export const reorderAuthoringNodes = <ThrowOnError extends boolean = false>(options: Options<ReorderAuthoringNodesData, ThrowOnError>): RequestResult<ReorderAuthoringNodesResponses, ReorderAuthoringNodesErrors, ThrowOnError> => (options.client ?? client).post<ReorderAuthoringNodesResponses, ReorderAuthoringNodesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/nodes/{n}/reorder',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Cursor page of the project's checklist items (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 7. Live items of the project in a total `(position, id)` order — the keyset order of the route — optionally narrowed by the exact `node_id` filter and by `state` (`draft`, `active`, `retired`) and `priority` (`critical`, `high`, `medium`, `low`). `node_id` is optional and unfiltered lists the project's items. A malformed uuid filter, a value outside a closed list, a `limit` outside 1..200 or a garbled `cursor` is 422 `request_invalid` with `details[].path` naming the parameter. Another tenant's project is 404 `not_found`; a credential scoped to a sibling project of the same org is 403 `project_scope_mismatch` (a project-scoped credential never reaches a sibling, even though RLS is org-level). `authoring:read` is held by every role that also holds `authoring:write`.
+ */
+export const listChecklistItems = <ThrowOnError extends boolean = false>(options: Options<ListChecklistItemsData, ThrowOnError>): RequestResult<ListChecklistItemsResponses, ListChecklistItemsErrors, ThrowOnError> => (options.client ?? client).get<ListChecklistItemsResponses, ListChecklistItemsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/checklist-items',
+    ...options
+});
+
+/**
+ * Create a checklist item under a tree node (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 8 (`authoring:write`). The parent node must exist in the project and be a `category` or `sub_category` node, else 422 `authoring_parent_invalid` (`details[]. reason` `parent_not_found`, `parent_kind_invalid` or `parent_deleted`). `title` is 1..500 characters, `description` at most 4000, `priority` is `critical`, `high`, `medium` or `low`; a manual create starts `active` (13.1.1 §6, CR-13-1) and `source` is `manual`. An omitted `position` appends at `max(live sibling position) + 1` and a taken live position is 422 `request_invalid` with `details[].path = /position` and `reason = position_taken`. An unknown member is 422; a body over 64 KiB is 413 `payload_too_large`; a missing `Idempotency-Key` is 400 `request_invalid`; a replay answers the stored 201 with no second version or audit row (AC18). A lock timeout is 503 `unavailable` with `Retry-After`.
+ */
+export const createChecklistItem = <ThrowOnError extends boolean = false>(options: Options<CreateChecklistItemData, ThrowOnError>): RequestResult<CreateChecklistItemResponses, CreateChecklistItemErrors, ThrowOnError> => (options.client ?? client).post<CreateChecklistItemResponses, CreateChecklistItemErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/checklist-items',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Soft-delete a checklist item; an item that still holds cases is 409 (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 10 (`authoring:write`). Soft-deletes the item and appends one `SoftDelete` version row with the optional `reason` (1..500 characters). An item that still holds a live manual test case is 409 `authoring_not_empty` with `details[].reason = item_has_cases`, and nothing is written (AC7). `If-Match` is the item's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412 `precondition_failed` with the current `version` in `error.details`, no write, AC19). Unknown or already soft-deleted 404 `not_found`, body over 64 KiB 413 `payload_too_large`, missing `Idempotency-Key` 400 `request_invalid`, lock timeout 503 `unavailable` with `Retry-After`. The answer is a bodiless 204.
+ */
+export const deleteChecklistItem = <ThrowOnError extends boolean = false>(options: Options<DeleteChecklistItemData, ThrowOnError>): RequestResult<DeleteChecklistItemResponses, DeleteChecklistItemErrors, ThrowOnError> => (options.client ?? client).delete<DeleteChecklistItemResponses, DeleteChecklistItemErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/checklist-items/{i}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Change a checklist item, including its state, under If-Match (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 9 (`authoring:write`). Omitted members are unchanged. `state` moves per 13.1.1 §6 (`draft` → `active`, `active` → `retired`, `draft` → `retired`; `retired` is terminal for edits, its only way back is the restore route of 13.1.1-T3), so any other move is 409 `invalid_transition`. Moving to `retired` requires the body member `reason` (1..500 characters; absent is 422 `request_invalid` with `details[].path = /reason`). `If-Match` is the item's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412 `precondition_failed` with the current `version` in `error.details` and nothing written, AC19). A no-op answers 200 `changed: false` with no version or audit row (AC5). Unknown member 422, body over 64 KiB 413 `payload_too_large`, unknown or soft-deleted item 404 `not_found`, lock timeout 503 `unavailable` with `Retry-After`.
+ */
+export const updateChecklistItem = <ThrowOnError extends boolean = false>(options: Options<UpdateChecklistItemData, ThrowOnError>): RequestResult<UpdateChecklistItemResponses, UpdateChecklistItemErrors, ThrowOnError> => (options.client ?? client).patch<UpdateChecklistItemResponses, UpdateChecklistItemErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/checklist-items/{i}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Cursor page of the project's manual test cases, in code order (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 12 (the `covered` filter and the `linked_live_count` member are 13.1.1-T4's and are absent here). Live cases in `(code, id)` order, optionally narrowed by the exact `node_id` and `item_id` filters, by `state` (`draft`, `approved`, `retired`), by `priority` (`critical`, `high`, `medium`, `low`) and by `q` — a case-insensitive title substring of at most 200 characters, with `%`, `_` and `\` escaped so a caller cannot inject a LIKE wildcard. A present but invalid filter value, a `limit` outside 1..200 or a garbled `cursor` is 422 `request_invalid` with `details[].path` naming the parameter. Another tenant's project is 404 `not_found`; a credential scoped to a sibling project of the same org is 403 `project_scope_mismatch`.
+ */
+export const listManualCases = <ThrowOnError extends boolean = false>(options: Options<ListManualCasesData, ThrowOnError>): RequestResult<ListManualCasesResponses, ListManualCasesErrors, ThrowOnError> => (options.client ?? client).get<ListManualCasesResponses, ListManualCasesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/manual-cases',
+    ...options
+});
+
+/**
+ * Create a manual test case with a server-allocated code (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 13 (`authoring:write`). The item must exist in the project, else 422 `authoring_parent_invalid` (`details[].reason` `parent_not_found` / `parent_deleted`). `steps` is validated against `contracts/schemas/authoring-steps.v1.json` — 1..100 steps, each with `no` (1..1000), `action` and `expected` (≤ 2000 characters) and an optional `data` string, unknown members refused at the document level and inside a step — and a violation is 422 `request_invalid` with one `details[]` entry per problem, its `path` rebased under `/steps`. `code` is server-allocated as `<project case_prefix>-<n>` (the counter is per project, `≥ 3` digits, never reused or editable, AC4); an exhausted counter is 409 `quota_exceeded`. A new case starts `draft` with `source = manual` (13.1.1 §6). An unknown member is 422, a body over 64 KiB 413 `payload_too_large`, a missing `Idempotency-Key` 400 `request_invalid`, and a replay answers the stored 201 with no second version or audit row (AC18). A lock timeout is 503 `unavailable` with `Retry-After`.
+ */
+export const createManualCase = <ThrowOnError extends boolean = false>(options: Options<CreateManualCaseData, ThrowOnError>): RequestResult<CreateManualCaseResponses, CreateManualCaseErrors, ThrowOnError> => (options.client ?? client).post<CreateManualCaseResponses, CreateManualCaseErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/manual-cases',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Soft-delete a manual test case (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 16 (`authoring:write`). Soft-deletes the case and appends one `SoftDelete` version row with the optional `reason` (1..500 characters). `If-Match` is the case's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412 `precondition_failed` with the current `version` in `error.details`, no write, AC19). Unknown or already soft-deleted 404 `not_found`, body over 64 KiB 413 `payload_too_large`, missing `Idempotency-Key` 400 `request_invalid`, lock timeout 503 `unavailable` with `Retry-After`. The answer is a bodiless 204.
+ */
+export const deleteManualCase = <ThrowOnError extends boolean = false>(options: Options<DeleteManualCaseData, ThrowOnError>): RequestResult<DeleteManualCaseResponses, DeleteManualCaseErrors, ThrowOnError> => (options.client ?? client).delete<DeleteManualCaseResponses, DeleteManualCaseErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/manual-cases/{m}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * One manual test case with its steps; ETag is its version (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 14. Returns the case with its steps and `ETag: "<version>"` (the member set of `ManualCaseDetailDto`). Unknown, another tenant's, another project's or soft-deleted case is 404 `not_found`; a credential scoped to a sibling project is 403 `project_scope_mismatch`; `authoring:read` suffices. The `links` member, `covered` and the linked-case counts belong to 13.1.1-T4 and are absent here.
+ */
+export const getManualCase = <ThrowOnError extends boolean = false>(options: Options<GetManualCaseData, ThrowOnError>): RequestResult<GetManualCaseResponses, GetManualCaseErrors, ThrowOnError> => (options.client ?? client).get<GetManualCaseResponses, GetManualCaseErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/manual-cases/{m}',
+    ...options
+});
+
+/**
+ * Change a manual test case's content under If-Match (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 15 (`authoring:write`). Omitted members are unchanged. `code` and `checklist_item_id` are not members of this body at all — the code never changes and moving is route 19 — so either one is 422 `request_invalid` with `details[].path = /code` or `/checklist_item_id`. `steps`, when present, is validated against `contracts/schemas/authoring-steps.v1.json` exactly as on create. `If-Match` is the case's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412 `precondition_failed` with the current `version` in `error.details` and nothing written, AC19); a no-op answers 200 `changed: false` with no version or audit row (AC5). State moves are route 17. Unknown member 422, body over 64 KiB 413 `payload_too_large`, unknown or soft-deleted case 404 `not_found`, `retired` case 409 `invalid_transition` (terminal for edits, 13.1.1 §6), lock timeout 503 `unavailable` with `Retry-After`.
+ */
+export const updateManualCase = <ThrowOnError extends boolean = false>(options: Options<UpdateManualCaseData, ThrowOnError>): RequestResult<UpdateManualCaseResponses, UpdateManualCaseErrors, ThrowOnError> => (options.client ?? client).patch<UpdateManualCaseResponses, UpdateManualCaseErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/manual-cases/{m}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Move a manual test case through its state machine (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 17 (`authoring:write`). `state` is `draft`, `approved` or `retired`, and the moves of 13.1.1 §6 are `draft → approved`, `draft → retired` and `approved → retired`; every other pair, including a move of a `retired` case, is 409 `invalid_transition` and writes nothing. `retired` requires `reason` (1..500 characters; absent is 422 `request_invalid` with `details[].path = /reason`); the reason is optional on `draft → approved` (AC21). `If-Match` is the case's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412 `precondition_failed` with the current `version` in `error.details`, no write, AC19). A request that names the current state answers 200 with that state and `changed: false` in the version only — no version row and no audit row (AC5). Unknown or soft-deleted case 404 `not_found`, body over 64 KiB 413 `payload_too_large`, missing `Idempotency-Key` 400 `request_invalid`, lock timeout 503 `unavailable` with `Retry-After`. `code` never changes.
+ */
+export const setManualCaseState = <ThrowOnError extends boolean = false>(options: Options<SetManualCaseStateData, ThrowOnError>): RequestResult<SetManualCaseStateResponses, SetManualCaseStateErrors, ThrowOnError> => (options.client ?? client).post<SetManualCaseStateResponses, SetManualCaseStateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/manual-cases/{m}/state',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Re-parent a manual test case to another checklist item (13.1.1-T2)
+ *
+ * 13.1.1 §5 route 19 (`authoring:write`). Re-parents one case to a checklist item of the same project through `AuthoringVersionWriter.MoveManualTestCaseAsync`, which keeps `code`, bumps `version` and appends one `update` version row carrying the new `checklist_item_id` and the given `reason` (≤ 500 characters). The target must exist in the project and not be soft-deleted, else 422 `authoring_parent_invalid` (`details[].reason` `parent_not_found` / `parent_deleted`); a `retired` case or a `retired` target is 409 `invalid_transition`; a move onto the item that already holds the case writes nothing and answers the unchanged version. `If-Match` is the case's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412 `precondition_failed` with the current `version` in `error.details`, no write); of two concurrent moves one wins and the other is 412 (AC22). Unknown or soft-deleted case 404 `not_found`, body over 64 KiB 413 `payload_too_large`, missing `Idempotency-Key` 400 `request_invalid`, lock timeout 503 `unavailable` with `Retry-After` (the target item is locked before the case, so a nested call cannot invert the order into a `40P01`).
+ */
+export const moveManualCase = <ThrowOnError extends boolean = false>(options: Options<MoveManualCaseData, ThrowOnError>): RequestResult<MoveManualCaseResponses, MoveManualCaseErrors, ThrowOnError> => (options.client ?? client).post<MoveManualCaseResponses, MoveManualCaseErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/authoring/manual-cases/{m}/item',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });

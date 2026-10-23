@@ -77,6 +77,14 @@ public sealed class CatalogueTests
             "06.2.1",
             "plans/features/06-evidence-artifacts/06.2.1-sensitivity-classification-and-access-control.md:108 — 06.2.1-T2.1 `IssueArtifactDownloadUrl` permission check"),
         new(
+            // The Story must be a file that exists under plans/features (the guard below globs "{Story}-*.md"):
+            // 13.3.1's own plan file has not landed yet, so the code is classified under the story that ships it and
+            // assigns its consumer — 13.1.1 §2 AC17 / §3 name 13.3.1 as the receiver. Move the Story when 13.3.1's
+            // plan lands; the receiver itself does not change.
+            "authoring:generate",
+            "13.1.1",
+            "plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md:39 — AC17 seeds the four codes and names 13.3.1 as the consumer of `authoring:generate` (route-less here); the T2.1 row at :438 repeats it"),
+        new(
             "billing:read",
             "12.4.1",
             "plans/features/12-pilot-commercial/12.4.1-cost-is-known-before-price-is.md:105 — 12.4.1-T2.1 `GetInvoiceWorksheet` (`billing:read`, line 50)"),
@@ -88,6 +96,12 @@ public sealed class CatalogueTests
             "fixture:write",
             "03.3.1",
             "plans/features/03-catalog-authoring/03.3.1-fixtures-and-per-run-data.md:133 — 03.3.1-T1.2 `CreateFixtureCommand`/`CreateFixtureRevisionCommand`"),
+        new(
+            // Same rule as `authoring:generate` above: 13.5.1's plan file has not landed, so the Story is the one that
+            // ships the code and names the receiver (13.1.1 §2 AC17).
+            "script:generate",
+            "13.1.1",
+            "plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md:39 — AC17 seeds `script:generate` and names 13.5.1 as its consumer (route-less here)"),
         new(
             "support:read",
             "02.8.1",

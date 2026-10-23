@@ -68,6 +68,13 @@ internal static class AuthoringContent
     /// <summary>Longest accepted description or precondition (§4: ≤ 4 000).</summary>
     internal const int MaximumLongTextLength = 4000;
 
+    /// <summary>
+    /// The one <c>details[].path</c> an unstorable member <b>name</b> is reported under (OI-13-116). A name that is not
+    /// valid UTF-16 cannot be echoed in a detail: reading it throws, and writing it into the answer would throw again
+    /// when the response is serialised, so every such name answers this stable placeholder instead of the raw name.
+    /// </summary>
+    internal const string InvalidMemberNamePath = "/content/<invalid-member-name>";
+
     /// <summary>The exact, ordered member set of each entity's <c>content</c> object (§4 line 207).</summary>
     /// <param name="kind">The entity kind.</param>
     internal static IReadOnlyList<string> Members(AuthoringEntityKind kind) => kind switch
@@ -185,19 +192,31 @@ internal static class AuthoringContent
         }
 
         var members = Members(kind);
+
+        // The name scan comes FIRST, before any name comparison: `TryGetProperty` unescapes a stored name to compare it
+        // with an ASCII member, so a name such as `{"k\ud800d":1}` throws the reader's InvalidOperationException even when
+        // the candidate member exists. One unstorable name is therefore answered immediately, with the stable placeholder
+        // path and nothing echoed (OI-13-116); the rest of the object is not read, because no later probe on that
+        // document can be trusted.
+        foreach (var property in content.EnumerateObject())
+        {
+            if (!TryName(property, out var name))
+            {
+                details = [(InvalidMemberNamePath, "invalid_text")];
+                return false;
+            }
+
+            if (!members.Contains(name, StringComparer.Ordinal))
+            {
+                problems.Add(("/content/" + name, "unknown_member"));
+            }
+        }
+
         foreach (var member in members)
         {
             if (!content.TryGetProperty(member, out _))
             {
                 problems.Add(("/content/" + member, "required"));
-            }
-        }
-
-        foreach (var property in content.EnumerateObject())
-        {
-            if (!members.Contains(property.Name, StringComparer.Ordinal))
-            {
-                problems.Add(("/content/" + property.Name, "unknown_member"));
             }
         }
 
@@ -333,6 +352,30 @@ internal static class AuthoringContent
         }
     }
 
+    /// <summary>
+    /// Reads one member name, answering <c>false</c> for a name that is not valid UTF-16 (an unpaired surrogate, which
+    /// <c>{"\ud800":1}</c> decodes to) instead of letting the reader's transcode throw. The catch is exactly one
+    /// exception on purpose: <see cref="JsonProperty.Name"/> decodes the stored UTF-8 name through a strict
+    /// <see cref="JsonDocument"/>, and the only failure a caller's document can cause there is that transcode. Nothing
+    /// else in this method touches the service graph, so an infrastructure fault is never turned into a caller error.
+    /// </summary>
+    /// <param name="property">The enumerated member.</param>
+    /// <param name="name">The member name on success.</param>
+    /// <returns><c>true</c> when the name can be read and echoed.</returns>
+    private static bool TryName(JsonProperty property, out string name)
+    {
+        try
+        {
+            name = property.Name;
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            name = string.Empty;
+            return false;
+        }
+    }
+
     private static string? NullableText(JsonElement content, string member, string path, List<(string Path, string Reason)> problems)
     {
         if (!content.TryGetProperty(member, out var value))
@@ -424,7 +467,18 @@ internal static class AuthoringContent
             return null;
         }
 
-        var raw = steps.GetRawText();
+        string raw;
+        try
+        {
+            raw = steps.GetRawText();
+        }
+        catch (InvalidOperationException)
+        {
+            // The document holds bytes that are not valid UTF-16 (a lone surrogate written as a value or a name), so even
+            // its raw text cannot be read. Same shape as the value guard below: a caller error, never a 500 (OI-13-116).
+            problems.Add(("/content/steps", "invalid_text"));
+            return null;
+        }
 
         // A duplicate member name is a caller error the node model refuses to build, so it is refused here rather than
         // surfacing as a 500 from JsonNode: the document never reaches the validator or the column.
@@ -439,6 +493,13 @@ internal static class AuthoringContent
             problems.Add(("/content/steps", "invalid_json"));
             return null;
         }
+        catch (InvalidOperationException)
+        {
+            // Duplicate detection forces the reader to materialise every member name, and a name that is not valid
+            // UTF-16 throws there instead of at the point a value would have been read (OI-13-116).
+            problems.Add(("/content/steps", "invalid_text"));
+            return null;
+        }
 
         JsonNode? node;
         try
@@ -448,6 +509,12 @@ internal static class AuthoringContent
         catch (JsonException)
         {
             problems.Add(("/content/steps", "invalid_json"));
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            // The node model materialises member names and string values, so an unpaired surrogate fails here too.
+            problems.Add(("/content/steps", "invalid_text"));
             return null;
         }
 
