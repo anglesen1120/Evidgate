@@ -1130,13 +1130,25 @@ internal sealed class AuthoringVersionWriter(
         var versionNo = last?.VersionNo ?? 0;
         var contentHash = last?.ContentHash ?? string.Empty;
 
-        return row switch
+        switch (row)
         {
-            NodeRow node => node with { LastVersionNo = versionNo, LastContentHash = contentHash },
-            ItemRow item => item with { LastVersionNo = versionNo, LastContentHash = contentHash },
-            CaseRow manualCase => manualCase with { LastVersionNo = versionNo, LastContentHash = contentHash },
-            _ => throw new InvalidOperationException("the locked row is not an authoring entity"),
-        };
+            case NodeRow node:
+                node.LastVersionNo = versionNo;
+                node.LastContentHash = contentHash;
+                break;
+            case ItemRow item:
+                item.LastVersionNo = versionNo;
+                item.LastContentHash = contentHash;
+                break;
+            case CaseRow manualCase:
+                manualCase.LastVersionNo = versionNo;
+                manualCase.LastContentHash = contentHash;
+                break;
+            default:
+                throw new InvalidOperationException("the locked row is not an authoring entity");
+        }
+
+        return row;
     }
 
     /// <summary>
@@ -1729,67 +1741,148 @@ internal sealed class AuthoringVersionWriter(
 
     // ------------------------------------------------------------------ rows
 
-    /// <summary>The row of <c>public.feature_node</c> as the writer locks it.</summary>
-    internal sealed record NodeRow(
-        Guid Id,
-        Guid? ParentId,
-        string Kind,
-        string Title,
-        int Position,
-        DateTimeOffset? DeletedAt,
-        int Version,
-        int LastVersionNo,
-        string LastContentHash);
+    /// <summary>
+    /// The row of <c>public.feature_node</c> as the writer locks it. A mutable class, like the Catalog read models: Dapper
+    /// binds the seven selected columns by property name (<c>DefaultTypeMap.MatchNamesWithUnderscores</c>) and converts
+    /// <c>timestamptz</c> to <see cref="DateTimeOffset"/>, while a positional record would need a constructor whose
+    /// parameters match the result columns exactly. The last version of the history is filled in after the lock, because
+    /// it is a statement of its own that must run after it.
+    /// </summary>
+    internal sealed class NodeRow
+    {
+        public Guid Id { get; set; }
 
-    /// <summary>The row of <c>public.checklist_item</c> as the writer locks it.</summary>
-    internal sealed record ItemRow(
-        Guid Id,
-        Guid FeatureNodeId,
-        string Title,
-        string? Description,
-        string Priority,
-        string State,
-        string Source,
-        int Position,
-        DateTimeOffset? DeletedAt,
-        int Version,
-        int LastVersionNo,
-        string LastContentHash);
+        public Guid? ParentId { get; set; }
 
-    /// <summary>The row of <c>public.manual_test_case</c> as the writer locks it.</summary>
-    internal sealed record CaseRow(
-        Guid Id,
-        Guid ChecklistItemId,
-        string Code,
-        string Title,
-        string? Description,
-        string? Precondition,
-        string Steps,
-        string Priority,
-        string State,
-        string Source,
-        DateTimeOffset? DeletedAt,
-        int Version,
-        int LastVersionNo,
-        string LastContentHash);
+        public string Kind { get; set; } = string.Empty;
+
+        public string Title { get; set; } = string.Empty;
+
+        public int Position { get; set; }
+
+        /// <summary>The <c>deleted_at</c> of the row; the reader hands <c>timestamptz</c> over as <see cref="DateTime"/>.</summary>
+        public DateTime? DeletedAt { get; set; }
+
+        public int Version { get; set; }
+
+        public int LastVersionNo { get; set; }
+
+        public string LastContentHash { get; set; } = string.Empty;
+    }
+
+    /// <summary>The row of <c>public.checklist_item</c> as the writer locks it; see <see cref="NodeRow"/>.</summary>
+    internal sealed class ItemRow
+    {
+        public Guid Id { get; set; }
+
+        public Guid FeatureNodeId { get; set; }
+
+        public string Title { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
+
+        public string Priority { get; set; } = string.Empty;
+
+        public string State { get; set; } = string.Empty;
+
+        public string Source { get; set; } = string.Empty;
+
+        public int Position { get; set; }
+
+        /// <summary>The <c>deleted_at</c> of the row; the reader hands <c>timestamptz</c> over as <see cref="DateTime"/>.</summary>
+        public DateTime? DeletedAt { get; set; }
+
+        public int Version { get; set; }
+
+        public int LastVersionNo { get; set; }
+
+        public string LastContentHash { get; set; } = string.Empty;
+    }
+
+    /// <summary>The row of <c>public.manual_test_case</c> as the writer locks it; see <see cref="NodeRow"/>.</summary>
+    internal sealed class CaseRow
+    {
+        public Guid Id { get; set; }
+
+        public Guid ChecklistItemId { get; set; }
+
+        public string Code { get; set; } = string.Empty;
+
+        public string Title { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
+
+        public string? Precondition { get; set; }
+
+        public string Steps { get; set; } = string.Empty;
+
+        public string Priority { get; set; } = string.Empty;
+
+        public string State { get; set; } = string.Empty;
+
+        public string Source { get; set; } = string.Empty;
+
+        /// <summary>The <c>deleted_at</c> of the row; the reader hands <c>timestamptz</c> over as <see cref="DateTime"/>.</summary>
+        public DateTime? DeletedAt { get; set; }
+
+        public int Version { get; set; }
+
+        public int LastVersionNo { get; set; }
+
+        public string LastContentHash { get; set; } = string.Empty;
+    }
 
     /// <summary>The <c>version</c> a write returned.</summary>
-    internal sealed record VersionRow(int Version);
+    internal sealed class VersionRow
+    {
+        public int Version { get; set; }
+    }
 
     /// <summary>The last <c>authoring_version</c> row of one entity, read after its lock.</summary>
-    internal sealed record LastVersionRow(int VersionNo, string ContentHash);
+    internal sealed class LastVersionRow
+    {
+        public int VersionNo { get; set; }
+
+        public string ContentHash { get; set; } = string.Empty;
+    }
 
     /// <summary>The two answers of the AC7 guard.</summary>
-    internal sealed record NodeContentsRow(bool HasChildren, bool HasItems);
+    internal sealed class NodeContentsRow
+    {
+        public bool HasChildren { get; set; }
+
+        public bool HasItems { get; set; }
+    }
 
     /// <summary>The AC7 guard of a checklist item.</summary>
-    internal sealed record ItemContentsRow(bool HasCases);
+    internal sealed class ItemContentsRow
+    {
+        public bool HasCases { get; set; }
+    }
 
     /// <summary>AC8's position answers.</summary>
-    internal sealed record SiblingPositionRow(bool Taken, int MaxPosition);
+    internal sealed class SiblingPositionRow
+    {
+        public bool Taken { get; set; }
+
+        public int MaxPosition { get; set; }
+    }
 
     /// <summary>One stored version (the <c>fromVersionId</c> restore).</summary>
-    internal sealed record StoredVersion(Guid Id, string EntityKind, Guid EntityId, int VersionNo, string Content, string ContentHash);
+    internal sealed class StoredVersion
+    {
+        public Guid Id { get; set; }
+
+        public string EntityKind { get; set; } = string.Empty;
+
+        public Guid EntityId { get; set; }
+
+        public int VersionNo { get; set; }
+
+        public string Content { get; set; } = string.Empty;
+
+        public string ContentHash { get; set; } = string.Empty;
+    }
 
     /// <summary>A version row still to be inserted.</summary>
     internal sealed record PendingVersion(
