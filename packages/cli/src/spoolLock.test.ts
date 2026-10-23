@@ -6,7 +6,7 @@
 // injected; everything else is real IO in a temporary directory.
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { chmodSync, writeFileSync } from 'node:fs';
 import {
   chmod,
   mkdir,
@@ -456,6 +456,60 @@ describe('withSpoolLock', () => {
     const error = expectError(failure, CliError);
     expect(error.code).toBe('spool_unsafe_path');
     expect(ran).toBe(false);
+    expect(await readdir(directory)).toEqual([spoolLockFileName]);
+  });
+
+  it('puts the lock back when the quarantined copy cannot be inspected', async () => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) return;
+    await writeLock(`${JSON.stringify({ pid: deadPid, started_at: fixedIso })}\n`);
+    let ran = false;
+    const failure = await failureOf(
+      withSpoolLock(
+        directory,
+        () => {
+          ran = true;
+          return Promise.resolve();
+        },
+        {
+          // The seam of the slow loser: the lock turns unreadable between the read of the
+          // dead holder and the rename-aside, so the quarantined re-read fails.
+          isProcessAlive: (pid) => {
+            if (pid === deadPid) chmodSync(lockPath, 0o000);
+            return pid !== deadPid;
+          },
+        },
+      ),
+    );
+    const error = expectError(failure, CliError);
+    expect(error.code).toBe('spool_unsafe_path');
+    expect(error.message).toContain('put back');
+    expect(ran).toBe(false);
+    // The quarantined lock is back at its path, still unreadable, and nothing else remains.
+    expect(await readdir(directory)).toEqual([spoolLockFileName]);
+    expect((await stat(lockPath)).mode & 0o777).toBe(0o000);
+  });
+
+  it('keeps the callback result when the lock cannot be inspected on release', async () => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) return;
+    const result = await withSpoolLock(directory, async () => {
+      await chmod(lockPath, 0o000);
+      return 'released-blind';
+    });
+    expect(result).toBe('released-blind');
+    // The lock could not be read, so it was left in place instead of unlinked blind.
+    expect(await readdir(directory)).toEqual([spoolLockFileName]);
+
+    await rm(lockPath, { force: true });
+    const failure = await withSpoolLock(directory, async () => {
+      await chmod(lockPath, 0o000);
+      throw new Error('send failed');
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    // Release failing too must never mask the callback's own error.
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe('send failed');
     expect(await readdir(directory)).toEqual([spoolLockFileName]);
   });
 

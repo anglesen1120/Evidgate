@@ -651,8 +651,15 @@ async function* splitLines(
       }
       const text = buffered.slice(0, newline);
       buffered = buffered.slice(newline + 1);
-      bufferedBytes -= Buffer.byteLength(text, 'utf8') + 1;
+      const textBytes = Buffer.byteLength(text, 'utf8');
+      bufferedBytes -= textBytes + 1;
       lineNumber += 1;
+      // A line that completes inside the block that pushed it past the bound never sits in
+      // `buffered` at the end of the block, so the pending check below cannot see it: the
+      // completed line is measured here, before it can be yielded and spooled.
+      if (textBytes > maxSpoolLineBytes) {
+        throw inputError(`line ${lineNumber} is longer than ${maxSpoolLineBytes} bytes`);
+      }
       const line = text.endsWith('\r') ? text.slice(0, -1) : text;
       yield { text: line, lineNumber };
     }

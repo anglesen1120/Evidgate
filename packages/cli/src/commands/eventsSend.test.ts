@@ -648,6 +648,64 @@ describe('events send', () => {
     await expect(readdir(join(spoolDir, runId))).rejects.toThrow(/ENOENT/);
   });
 
+  /** A stdin of exactly these byte blocks, then end of stream. */
+  function blocks(chunks: ReadonlyArray<Uint8Array>): AsyncIterable<Uint8Array> {
+    let index = 0;
+    return {
+      [Symbol.asyncIterator]: () => ({
+        next: (): Promise<IteratorResult<Uint8Array>> => {
+          const chunk = chunks[index];
+          index += 1;
+          return Promise.resolve(
+            chunk === undefined ? { done: true, value: undefined } : { done: false, value: chunk },
+          );
+        },
+      }),
+    };
+  }
+
+  // N3 follow-up: a line that GROWS past the bound and completes (its newline arrives)
+  // inside the same read block never sits in the pending buffer at the end of that block,
+  // so the pending check cannot see it. The completed line is measured before the yield.
+  it('refuses an over-cap line that completes after a pending prefix (N3)', async () => {
+    const spoolDir = await tempDir();
+    // A cap-1 pending prefix passes the pending check, then the rest of the line plus its
+    // newline arrives in a second block: only the completed-line check can refuse it.
+    const prefix = 'a'.repeat(maxSpoolLineBytes - 1);
+    const stub = stubFetch((call) => acked(call));
+    const out = capture();
+
+    const code = await invoke(sendArgv(['--from', '-']), baseEnv(spoolDir), out, {
+      fetch: stub.fetchImpl,
+      stdin: blocks([Buffer.from(prefix, 'utf8'), Buffer.from('ab\n', 'utf8')]),
+    });
+
+    expect(code).toBe(3);
+    expect(stub.calls).toHaveLength(0);
+    const stderr = out.stderr.join('');
+    expect(stderr).toContain('evidgate: error invalid_spool_input:');
+    expect(stderr).toContain(`line 1 is longer than ${maxSpoolLineBytes} bytes`);
+    await expect(readdir(join(spoolDir, runId))).rejects.toThrow(/ENOENT/);
+  });
+
+  it('refuses an over-cap line that arrives complete in one block (N3)', async () => {
+    const spoolDir = await tempDir();
+    const stub = stubFetch((call) => acked(call));
+    const out = capture();
+
+    const code = await invoke(sendArgv(['--from', '-']), baseEnv(spoolDir), out, {
+      fetch: stub.fetchImpl,
+      stdin: blocks([Buffer.from(`${'a'.repeat(maxSpoolLineBytes + 1)}\n`, 'utf8')]),
+    });
+
+    expect(code).toBe(3);
+    expect(stub.calls).toHaveLength(0);
+    const stderr = out.stderr.join('');
+    expect(stderr).toContain('evidgate: error invalid_spool_input:');
+    expect(stderr).toContain(`line 1 is longer than ${maxSpoolLineBytes} bytes`);
+    await expect(readdir(join(spoolDir, runId))).rejects.toThrow(/ENOENT/);
+  });
+
   // CR7: the failure names the FULL unsent range read after the send settled, not just the
   // failed batch's range. Batch 1 (1..500) is held open on a 503 while batch 2 (501..1000)
   // fails permanently, so the cursor never moves and 1..1000 is what the operator must

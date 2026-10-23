@@ -308,7 +308,21 @@ async function takeOverObservedLock(
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'retry' };
     throw error;
   }
-  const moved = await readSpoolLockPath(quarantined);
+  let moved: SpoolLockFile | null;
+  try {
+    moved = await readSpoolLockPath(quarantined);
+  } catch (error) {
+    // The path is empty at this instant: hand the quarantined lock back before failing, so
+    // the failure never leaves a live holder's lock detached from its path.
+    const errno = error instanceof LockInspectionError ? error.errno : undefined;
+    const restored = await restoreQuarantinedLock(quarantined, path);
+    throw new CliError(
+      restored
+        ? `cannot inspect the quarantined spool lock (${errno ?? 'unknown OS error'}); the takeover was abandoned and the lock put back`
+        : `cannot inspect the quarantined spool lock (${errno ?? 'unknown OS error'}); the takeover was abandoned and another lock holds the path`,
+      { code: 'spool_unsafe_path', hint: inspectionHint },
+    );
+  }
   const stillTheObservedStaleLock =
     matchesObserved(observed, moved) && (moved === null || !alive(moved.pid));
   if (!stillTheObservedStaleLock) {
@@ -326,17 +340,23 @@ function matchesObserved(observed: ObservedLock, moved: SpoolLockFile | null): b
   return moved !== null && moved.pid === observed.pid && moved.startedAt === observed.startedAt;
 }
 
-/** Puts a quarantined lock back at `path` unless a newer lock already took the slot. */
-async function restoreQuarantinedLock(quarantined: string, path: string): Promise<void> {
+/**
+ * Puts a quarantined lock back at `path` unless a newer lock already took the slot.
+ * Returns whether the moved lock is back at the path.
+ */
+async function restoreQuarantinedLock(quarantined: string, path: string): Promise<boolean> {
+  let restored = true;
   try {
     await link(quarantined, path);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     // EEXIST: a newer lock owns the path. ENOENT: the quarantined file is already gone.
+    restored = false;
     if (code !== 'EEXIST' && code !== 'ENOENT') throw error;
   } finally {
     await removeIfPresent(quarantined);
   }
+  return restored;
 }
 
 async function removeIfPresent(path: string): Promise<void> {
@@ -364,7 +384,15 @@ export function readSpoolLock(directory: string): Promise<SpoolLockFile | null> 
  * removed by inode, so no phantom `spool.lock` naming live pid can survive.
  */
 async function releaseSpoolLock(held: HeldSpoolLock): Promise<void> {
-  const holder = await readSpoolLockPath(held.path);
+  let holder: SpoolLockFile | null;
+  try {
+    holder = await readSpoolLockPath(held.path);
+  } catch {
+    // The lock cannot be inspected, so it cannot be removed safely either: leave it in
+    // place (our pid dies with this process, so a later run sees a stale lock) and never
+    // replace `fn`'s result or error with a release failure.
+    return;
+  }
   if (holder === null) {
     await scavengeQuarantinedLock(held);
     return;
@@ -407,14 +435,23 @@ export function isMissingLockErrno(code: string | undefined): boolean {
   return code === 'ENOENT' || code === 'ELOOP' || code === 'ENXIO';
 }
 
-function lockInspectionError(code: string | undefined): CliError {
-  return new CliError(
-    `cannot inspect the spool lock (${code ?? 'unknown OS error'}); nothing was taken over`,
-    {
-      code: 'spool_unsafe_path',
-      hint: 'check the spool directory is on a healthy, owned filesystem, then retry',
-    },
-  );
+const inspectionHint = 'check the spool directory is on a healthy, owned filesystem, then retry';
+
+/** `spool_unsafe_path` from an inspection failure, carrying the errno for re-framing. */
+class LockInspectionError extends CliError {
+  readonly errno: string | undefined;
+
+  constructor(errno: string | undefined) {
+    super(
+      `cannot inspect the spool lock (${errno ?? 'unknown OS error'}); nothing was taken over`,
+      {
+        code: 'spool_unsafe_path',
+        hint: inspectionHint,
+      },
+    );
+    this.name = 'LockInspectionError';
+    this.errno = errno;
+  }
 }
 
 /**
@@ -441,7 +478,7 @@ async function readSpoolLockPath(path: string): Promise<SpoolLockFile | null> {
     // filesystem could not be inspected, and calling that "stale" would let a live lock be
     // taken over, so they abort the command instead.
     if (isMissingLockErrno(code)) return null;
-    throw lockInspectionError(code);
+    throw new LockInspectionError(code);
   }
   let parsed: unknown;
   try {
