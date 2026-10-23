@@ -4,7 +4,7 @@ Project: Evidgate — Web UI. Before changing anything, read `00-shared-brief.md
 
 **Page:** `31-quota-retention/evidgate-usage-retention.html`. Edit in place.
 **Phase:** G1 (existing quota/retention from G2). **Nav item:** `quota` (set `data-nav` on `<html>`).
-**Plan ids:** 13.4.1-T7, 08.5.5-T2, 09.7.1-T5.
+**Plan ids:** 13.4.1-T7, 08.5.5-T5, 09.7.1-T5.
 
 ## Goal
 

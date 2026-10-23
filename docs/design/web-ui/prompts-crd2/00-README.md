@@ -17,14 +17,14 @@ The phase of a page comes from the Milestone cells of the 09.x tasks behind it (
 | # | Page | Phase | Action | Why (plan id) | Prompt |
 |---|---|---|---|---|---|
 | 01 | app shell + nav (`assets/evidgate.js`) | G1 | **Modify** | Nav regrouped by phase, phase switch, Authoring group first (13.4.1-T7) | B1-01 |
-| 02 | login | G1 | Keep | Unchanged by CR-D-2 | — |
+| 02 | login | G1 | Keep | Footer tagline "Evidence-first release decisions" pending owner question 4 | — |
 | 03 | run list | G2 | **Modify** | Local `evidgate run` vs CI source, script status, link to manual case (13.5.2) | B3-03 |
 | 04 / 05 | run detail, evidence panel | G2 | **Modify** | Manual case + script links, profile captured per bound step (13.5, 13.6.1) | B3-04 |
 | 06 | decision + waivers | G4 | Hide | 09.3.1-T5/T9/T11 moved to G3/G4 | — |
 | 07 | report comparison | G2 | **Modify** | Remove the stored release-decision field: no release verdict in G1–G3 (09.2.1-T4/T8 G2) | B3-07 |
 | 08 | failure inbox | G3 | **Modify** | Failure label + drift class filter/column (13.8.1, 08.2.2) | B4-08 |
 | 09 | failure detail / triage | G3 | **Modify** | Classification panel with rule reason and outcome (13.8.1) | B4-09 |
-| 10 / 11 | case history, artifact viewer | G3 | Keep | Unchanged; 11 reused by 13.8.2 screenshots | — |
+| 10 / 11 | case history, artifact viewer | G3 / G2 | **Modify** | Remove the stored release-decision metric and decision fields (no release verdict in G1–G3); 11 reused by 13.8.2 screenshots | B4-10 |
 | 12 | healing queue | G3 | **Modify** | Becomes the repair-proposal queue: locator-drift candidates and UI-change proposals (13.8.1) | B4-12 |
 | 13 | candidate detail (shadow) | G3 | **Modify** | Before/after screenshots (opt-in), a11y/DOM diff, matching test case edit, PR delivery (13.8.2-T2) | B4-13 |
 | 14 / 15 | approval, knowledge lineage | G3 | **Modify** | `data-nav` of 14 becomes `repairs`; fixtures follow the canonical incidents (`inc-91` product defect, no repair; `cand-73` on `inc-92`) (09.5.2) | B4-14 |
@@ -40,7 +40,7 @@ The phase of a page comes from the Milestone cells of the 09.x tasks behind it (
 | 27 | settings shell | G1 | **Modify** | AI settings tab + AI opt-in status; G4 tabs hidden by phase | B1-05 |
 | 28 / 29 | members, secret refs | G1 / G2 | Keep | New permission names appear in 28's matrix via fixture only | — |
 | 30 | policy revisions | G4 | Hide | 09.7.1-T4 G4 | — |
-| 31 | usage & retention | G1 | **Modify** | AI credit balance and usage by action (13.4.1-T7, 08.5.5) | B1-04 |
+| 31 | usage & retention | G1 | **Modify** | AI credit balance and usage by action (13.4.1-T7, 08.5.5-T5); only the credit region is G1, quota and retention stay G2 (09.7.1-T5) | B1-04 |
 | 32 / 33 / 36 | audit, security events, support | G1–G2 | Keep | Authoring actions appear as audit rows in the fixture only | — |
 | 34 / 35 / 37 / 38 | agents, webhooks, API tokens, deploy targets | G4 | Hide | 09.7.1-T7/T8, 09.7.2 G4 | — |
 | 39 | locale stress review | G3 | **Modify** | Add longest-vi specimens of the new authoring and drift strings (09.8.1) | B5-02 |
@@ -60,7 +60,7 @@ New pages (all built by OpenDesign, then copied into `../output/`):
 
 ## 2. Plan: batches and order
 
-Run batches in order: they share one OpenDesign conversation, `assets/` and the nav array. Each batch has 4–6 pages, following the skill `opendesign-batched-redesign-review-loop`.
+Run batches in order: they share one OpenDesign conversation, `assets/` and the nav array. Each batch has 2–7 prompts, following the skill `opendesign-batched-redesign-review-loop`.
 
 ```mermaid
 flowchart LR
@@ -78,7 +78,7 @@ flowchart LR
 | B1 | G1 | B1-01 … B1-05 | design review: nav phase switch hides G2–G4 items on every page |
 | B2 | G1 | B2-40 … B2-45 | design review + **owner approval** (13.4.1-T1 is the gate for G1 build) |
 | B3 | G2 | B3-03, B3-04, B3-07, B3-25, B3-46 | design review |
-| B4 | G3 | B4-08, B4-09, B4-12, B4-13, B4-14, B4-47 | design review |
+| B4 | G3 | B4-08, B4-09, B4-10, B4-12, B4-13, B4-14, B4-47 | design review |
 | B5 | G3/G4 | B5-01, B5-02 | design review, then copy back |
 
 **B0 detail.**
@@ -107,11 +107,12 @@ Format: [`TEMPLATE.md`](TEMPLATE.md). Each prompt is ≤ 60 lines and names one 
 | B1 | [B1-01](B1-01-nav-shell.md) · [B1-02](B1-02-project-home.md) · [B1-03](B1-03-onboarding.md) · [B1-04](B1-04-usage-credits.md) · [B1-05](B1-05-settings-ai.md) |
 | B2 | [B2-40](B2-40-feature-tree.md) · [B2-41](B2-41-test-case-editor.md) · [B2-42](B2-42-pending-changes.md) · [B2-43](B2-43-generation-flow.md) · [B2-44](B2-44-ai-settings.md) · [B2-45](B2-45-import-export.md) |
 | B3 | [B3-03](B3-03-run-list.md) · [B3-04](B3-04-run-detail.md) · [B3-07](B3-07-report-compare.md) · [B3-25](B3-25-test-catalog.md) · [B3-46](B3-46-generated-scripts.md) |
-| B4 | [B4-08](B4-08-failure-inbox.md) · [B4-09](B4-09-failure-detail.md) · [B4-12](B4-12-repair-queue.md) · [B4-13](B4-13-repair-detail.md) · [B4-14](B4-14-approval-lineage-fixtures.md) · [B4-47](B4-47-ui-change-proposal.md) |
+| B4 | [B4-08](B4-08-failure-inbox.md) · [B4-09](B4-09-failure-detail.md) · [B4-10](B4-10-history-artifact-decision.md) · [B4-12](B4-12-repair-queue.md) · [B4-13](B4-13-repair-detail.md) · [B4-14](B4-14-approval-lineage-fixtures.md) · [B4-47](B4-47-ui-change-proposal.md) |
 | B5 | [B5-01](B5-01-retire-studio.md) · [B5-02](B5-02-locale-review.md) |
 
-## 4. Open questions for the owner
+## 4. Open questions for the owner `[OPEN]`
 
-1. Is the nav label for the authoring group "Test design / Thiết kế kiểm thử" or "Authoring / Soạn kiểm thử"? The prompts use the first. It can be changed in one place, the nav array.
-2. What is the credit price per action (plan 13 Q2)? Fixtures show credit counts only, with no money amounts.
-3. Should the G1 workspace show CI health at all? The prompts hide it until G2.
+1. `[OPEN]` Is the nav label for the authoring group "Test design / Thiết kế kiểm thử" or "Authoring / Soạn kiểm thử"? The prompts use the first as a working assumption. It can be changed in one place, the nav array.
+2. `[OPEN]` What is the credit price per action (plan 13 Q2 `[OPEN]`)? Fixtures show credit counts only, with no money amounts.
+3. `[OPEN]` Should the G1 workspace show CI health at all? The prompts hide it until G2.
+4. `[OPEN]` The login footer tagline still reads "Evidence-first release decisions". Keep it, or change it to the CR-D-2 lead (authoring and self-learning repair)?

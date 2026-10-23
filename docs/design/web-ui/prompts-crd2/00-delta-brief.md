@@ -99,6 +99,6 @@ Work ships in four phases:
 
 ## Do not
 
-- Do not invent endpoints, prices or credit amounts. Fixtures are illustrative and labelled as such.
+- Do not invent endpoints, prices, or credit amounts beyond the illustrative fixture table above. Plan 13 Q1 (model pair) and Q2 (credit price) are still `[OPEN]`.
 - Do not show a release verdict on G1–G3 screens.
 - Do not show a mobile UI: mobile is a G4 decision after the spike.

@@ -151,7 +151,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 **Epic 13.3 total: 7.0**
 
 ### Epic 13.4 Authoring screens (G1)
-#### Story 13.4.1 Authoring UI — acceptance: an approved design (`design-ui` agent) precedes build; tree, table with filters, test case editor, batched changes panel, generation flow, timeline, settings and export work in vi + en and meet WCAG 2.2 AA.
+#### Story 13.4.1 Authoring UI — acceptance: an approved design (`design-ui` agent) precedes build; tree, table with filters, test case editor, batched changes panel, generation flow, timeline, settings and export work in vi + en and meet WCAG 2.2 AA; the navigation hides items of a later phase and the usage page shows the AI credit balance and usage by action.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 13.4.1-T1 | UI design via the `design-ui` agent: wireframes and all states for the authoring flows, the phase-gated navigation and the CR-D-2 deltas to existing pages (`docs/design/web-ui/prompts-crd2/`) | L | V1 | G1 | 09.1.1-T11 |
@@ -160,11 +160,11 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | 13.4.1-T4 | Generation flow screens (input, progress, credit cost shown before the call) | M | V1 | G1 | 13.4.1-T3, 13.3.1-T3 |
 | 13.4.1-T5 | Timeline / versions, AI settings and export screens | M | V1 | G1 | 13.4.1-T2, 13.1.1-T3, 13.1.1-T5, 13.2.1-T1 |
 | 13.4.1-T6 | E2E Playwright flows for authoring in vi + en | M | V1 | G1 | 13.4.1-T4, 13.4.1-T5 |
-| 13.4.1-T7 | Navigation regrouped by phase (items of a later phase hidden, not disabled) and the AI credit balance and usage by action on the usage page | M | V1 | G1 | 13.4.1-T1, 09.1.1-T4, 08.5.5-T2 |
+| 13.4.1-T7 | Navigation regrouped by phase (items of a later phase hidden, not disabled) and the AI credit balance and usage by action on the usage page (G1 builds only the credit region; the quota and retention regions stay 09.7.1-T5, G2) | M | V1 | G1 | 13.4.1-T1, 09.1.1-T4, 08.5.5-T5 |
 **Epic 13.4 total: 10.0**
 
 ### Epic 13.5 Script generation and local runs (G2)
-#### Story 13.5.1 Test case → bound Playwright script — acceptance: an approved test case with an environment URL and a seed test yields a TypeScript Playwright script whose every step is bound to an element found on the live page; the locator policy holds; forbidden patterns are never emitted; the script reaches the repository only as a PR and becomes `active` after 3 of 3 green runs on one build.
+#### Story 13.5.1 Test case → bound Playwright script — acceptance: an approved test case with an environment URL and a seed test yields a TypeScript Playwright script whose every step is bound to an element found on the live page; the locator policy holds; forbidden patterns are never emitted; the script reaches the repository only as a PR and becomes `active` after 3 of 3 green runs on one build; a scripts screen shows status, stability, unbound steps, lint results, PR state and testability.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 13.5.1-T1 | `evidgate generate` in `packages/cli`: seed test, live page exploration, per-step element binding with a pre-action target check (element exists, unique, visible, actionable), unbound steps keep the script `draft` | XL | V1 | G2 | 04.2.1-T2, 13.1.1-T4, 03.7.1-T3 |
@@ -173,7 +173,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | 13.5.1-T4 | Stability check 3 of 3 on one build; `generated_script` states draft / active / flaky | M | V1 | G2 | 13.5.1-T1, 04.3.1-T1 |
 | 13.5.1-T5 | PR delivery through 03.4.2 with the `evidgate.id` annotation linking test case, script and `test_case` | M | V1 | G2 | 13.5.1-T4, 03.4.2-T1 |
 | 13.5.1-T6 | Testability score per project | S | V1 | G2 | 13.5.1-T1 |
-| 13.5.1-T7 | Generated scripts screen: status, 3-of-3 stability, unbound steps, lint results, PR state and testability score (design via `design-ui` first) | M | V1 | G2 | 13.5.1-T4, 13.5.1-T6 |
+| 13.5.1-T7 | Generated scripts screen: status, 3-of-3 stability, unbound steps, lint results, PR state and testability score (design via `design-ui` first) | M | V1 | G2 | 13.5.1-T2, 13.5.1-T4, 13.5.1-T5, 13.5.1-T6 |
 #### Story 13.5.2 Local runs — acceptance: `evidgate run` executes selected generated tests on a developer machine and ingests results and redacted snapshots exactly like CI.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
@@ -215,7 +215,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 13.8.2-T1 | Capture and diff data for before / after | M | V1 | G3 | 13.8.1-T2, 08.6.1-T1 |
-| 13.8.2-T2 | Review screen additions, plus the failure label and drift class on the failure inbox and detail (design via `design-ui` first) | M | V1 | G3 | 13.8.2-T1, 09.5.1-T2 |
+| 13.8.2-T2 | Review screen additions, plus the failure label and drift class on the failure inbox and detail (design via `design-ui` first) | M | V1 | G3 | 13.8.2-T1, 09.4.1-T1, 09.4.1-T2, 09.5.1-T1, 09.5.1-T2 |
 **Epic 13.8 total: 7.0**
 
 ### Epic 13.9 Phase gates
