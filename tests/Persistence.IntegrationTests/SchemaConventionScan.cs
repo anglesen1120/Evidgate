@@ -107,6 +107,17 @@ internal static class SchemaConventionScan
             "public.event_batch",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only batch receipts (04.1.1-T1; migration 0034): a batch row is the immutable receipt of the batch that wrote its events (the revoked UPDATE/DELETE say so), so it keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FK and RLS are NOT exempt."),
+        // The plan's third entry, `public.manual_case_link` (created_at only), lands with 13.1.1-T4:
+        // 0039 does not create the table, and this allow-list pins exactly the exemptions of the
+        // tables the executed migrations leave in place.
+        new SchemaExemption(
+            "public.authoring_version",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only authoring versions (13.1.1-T1.1; migration 0039): a version is never updated (the `authoring_version_immutable` trigger raises 23514 for every role) and only the owner erasure path may delete one, so it keeps `created_at` (clock_timestamp()) only — no updated_at/version and no version trigger. Its tenant key, composite FK and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.authoring_code_counter",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "A per-project code allocator (13.1.1-T1.1; migration 0039) carrying no timestamps and no version at all — it is a counter row updated in place (`insert … on conflict do nothing` + `update … returning`), so there is no created_at/updated_at/version and no version trigger. `SchemaRule.TenantKey` is NOT exempt: the plan's natural key `(org_id, project_id)` has no `id`, so 0039 adds the surrogate `id` + `unique (org_id, id)` that `scripts/check-rls.py` and this scan demand (the 0033 `policy_activation` precedent). Its composite FK and RLS are checked like any other business table."),
         new SchemaExemption(
             "public.rls_probe",
             SchemaRule.VersionTrigger,

@@ -38,6 +38,9 @@
     <!-- 04.7.1-T2: the ingestion capability store, negotiator and first-send seam run through the same host and database. -->
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion\Evidgate.Modules.Ingestion.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
+    <!-- 13.1.1: the authoring tree, its version writer and the code allocator run through the same host and database. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring\Evidgate.Modules.Authoring.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring.Contracts\Evidgate.Modules.Authoring.Contracts.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
     <!-- 02.1.1-T2: the endpoint suites drive Program (ApiHost) through WebApplicationFactory. -->
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />

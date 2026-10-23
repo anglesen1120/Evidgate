@@ -277,4 +277,10 @@ public static class ApiErrorCode
 
     /// <summary>403: the route names no project and the caller's credential names none (06.1.2-T1 decision 10).</summary>
     public const string ProjectRequired = "project_required";
+
+    /// <summary>422: a feature-tree placement breaks the kind ladder, names a parent that is missing, soft-deleted or in another project, or restores under a deleted parent (13.1.1 AC1/AC3/AC8).</summary>
+    public const string AuthoringParentInvalid = "authoring_parent_invalid";
+
+    /// <summary>409: a delete is refused because the node still holds live children or items, or the item still holds live manual cases (13.1.1 AC7).</summary>
+    public const string AuthoringNotEmpty = "authoring_not_empty";
 }

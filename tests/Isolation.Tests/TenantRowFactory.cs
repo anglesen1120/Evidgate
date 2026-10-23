@@ -111,6 +111,19 @@ internal sealed class TenantRowFactory
     // under test is reached.
     private static int _attemptNo;
 
+    // A fresh sibling position and a fresh case code per generated authoring row (migration 0039): the live
+    // sibling index is unique over (org_id, project_id, parent_id, position) with NULL parents equal, and
+    // manual_test_case's code is unique per project, so a constant would collide with the valid row the
+    // corrupt one is generated next to.
+    private static int _authoringPosition;
+
+    private static int _authoringCode;
+
+    // A fresh case-code prefix per generated project: 0039 makes `case_prefix` NOT NULL with the
+    // grammar ^[A-Z][A-Z0-9]{1,7}$ and a per-org unique index, and each generated project row is a
+    // different one, so a constant is either invalid or a duplicate ("P0001", "P0002", …).
+    private static int _casePrefix;
+
     // A fresh sequence per generated event row: event's unique key is
     // (org_id, run_id, producer_id, sequence), and the corrupt row reuses the valid row's run_id and
     // producer_id (both the manifest-derived "shard-1"), so a constant would collide on that key before
@@ -120,6 +133,10 @@ internal sealed class TenantRowFactory
     private readonly TenantSchema _schema;
     private readonly TenantInsertExecutor _insert;
     private readonly Dictionary<(string Table, Guid Org), GeneratedRow> _created = [];
+
+    // The rows currently being built, outermost first: a foreign-key cycle that reaches the same
+    // (table, org) twice must fail one test instead of recursing until the host's stack dies.
+    private readonly List<(string Table, Guid Org)> _creating = [];
 
     internal TenantRowFactory(TenantSchema schema, TenantInsertExecutor insert)
     {
@@ -170,31 +187,49 @@ internal sealed class TenantRowFactory
         Guid? forcedId,
         CancellationToken cancellationToken)
     {
-        var values = await ResolveAsync(table, org, org, forcedId, createMissingParents: true, cancellationToken);
-        var row = GeneratedRow.Build(_schema, table, values);
+        var key = (Table: table, Org: org);
+        var position = _creating.IndexOf(key);
+        if (position >= 0)
+        {
+            throw new InvalidOperationException(
+                "the generated-row walk revisits "
+                + string.Join(" -> ", _creating.Skip(position).Select(step => $"{step.Table} (org {step.Org})"))
+                + $" -> {table} (org {org}): this foreign-key cycle has no valid row to generate");
+        }
 
-        int affected;
+        _creating.Add(key);
         try
         {
-            affected = await _insert(row.InsertSql, row.Parameters);
-        }
-        catch (PostgresException error)
-        {
-            throw new InvalidOperationException(
-                $"the generated row for {table} (org {org}) was rejected by the database: {error.SqlState} "
-                + $"{error.ConstraintName} {error.MessageText} — generated columns: "
-                + string.Join(", ", row.Parameters.Select(parameter => parameter.Name)),
-                error);
-        }
+            var values = await ResolveAsync(table, org, org, forcedId, createMissingParents: true, cancellationToken);
+            var row = GeneratedRow.Build(_schema, table, values);
 
-        if (affected != 1)
-        {
-            throw new InvalidOperationException(
-                $"inserting the generated row into {table} (org {org}) affected {affected} rows, expected 1");
-        }
+            int affected;
+            try
+            {
+                affected = await _insert(row.InsertSql, row.Parameters);
+            }
+            catch (PostgresException error)
+            {
+                throw new InvalidOperationException(
+                    $"the generated row for {table} (org {org}) was rejected by the database: {error.SqlState} "
+                    + $"{error.ConstraintName} {error.MessageText} — generated columns: "
+                    + string.Join(", ", row.Parameters.Select(parameter => parameter.Name)),
+                    error);
+            }
 
-        _created[(table, org)] = row;
-        return row;
+            if (affected != 1)
+            {
+                throw new InvalidOperationException(
+                    $"inserting the generated row into {table} (org {org}) affected {affected} rows, expected 1");
+            }
+
+            _created[key] = row;
+            return row;
+        }
+        finally
+        {
+            _creating.RemoveAt(_creating.Count - 1);
+        }
     }
 
     /// <summary>
@@ -226,16 +261,21 @@ internal sealed class TenantRowFactory
 
         foreach (var foreignKey in _schema.ForeignKeysOf(table))
         {
-            // A nullable reference is left null unless it is the key under test: following it could loop forever, through
-            // a self-reference (ingest_token.rotated_to_id) or a cycle of tables (project.default_environment_id ->
-            // environment -> project).
+            // MATCH SIMPLE (the only match type in this schema): a composite key with a NULL member
+            // is not enforced, so such a reference is left NULL unless it is the key under test.
+            // Following it can also loop forever — a self-reference (feature_node.parent_id,
+            // ingest_token.rotated_to_id) or a cycle of tables (project.default_environment_id ->
+            // environment -> project). `feature_node_parent_fk` is exactly the trap: its other
+            // member `project_id` is NOT NULL, so an `All` test here followed `parent_id` into a
+            // second `feature_node`, whose own parent was followed again (CompositeFkTests.cs:141
+            // uses the same `Any` rule).
             var corrupted = corruptedForeignKey is null || string.Equals(corruptedForeignKey, foreignKey.Name, StringComparison.Ordinal);
             var ownColumns = foreignKey.Columns
                 .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
                 .ToArray();
             if (!(corruptedForeignKey is not null && corrupted)
                 && ownColumns.Length > 0
-                && ownColumns.All(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
+                && ownColumns.Any(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
             {
                 continue;
             }
@@ -394,6 +434,20 @@ internal sealed class TenantRowFactory
             ("public.artifact_kind_policy", "kind") => "trace",
             ("public.artifact_kind_policy", "default_sensitivity") => "normal",
             ("public.producer_slot", "shard_index") => 1,
+            ("public.feature_node", "kind") => "module",
+            ("public.feature_node", "position") or ("public.checklist_item", "position") =>
+                Interlocked.Increment(ref _authoringPosition),
+            ("public.checklist_item" or "public.manual_test_case", "priority") => "high",
+            ("public.checklist_item" or "public.manual_test_case", "state") => "draft",
+            ("public.checklist_item" or "public.manual_test_case", "source") or ("public.authoring_version", "source") => "manual",
+            ("public.manual_test_case", "steps") => "{}",
+            ("public.manual_test_case", "code") =>
+                "PROBE-" + Interlocked.Increment(ref _authoringCode).ToString("D3", CultureInfo.InvariantCulture),
+            ("public.authoring_version", "entity_kind") => "feature_node",
+            ("public.authoring_version", "change_kind") => "create",
+            ("public.authoring_version", "content_hash") => "sha256:" + new string('c', 64),
+            ("public.project", "case_prefix") =>
+                "P" + Interlocked.Increment(ref _casePrefix).ToString("D4", CultureInfo.InvariantCulture),
             ("public.producer_slot", "producer_id") => "shard-1",
             // planned_execution's execution_key is the 00 §7 sha256 hex and its unique key is
             // (org_id, run_id, execution_key), so a constant would collide with the valid row the

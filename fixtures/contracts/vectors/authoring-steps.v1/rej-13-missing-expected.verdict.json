@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/steps/0/expected",
+      "reason": "required"
+    }
+  ],
+  "comment": "'expected' is a member of every step (plan 13.1.1 §3)"
+}

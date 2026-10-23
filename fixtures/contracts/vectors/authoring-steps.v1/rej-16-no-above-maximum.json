@@ -1,0 +1,9 @@
+{
+  "steps": [
+    {
+      "no": 1001,
+      "action": "Open the page",
+      "expected": "The page is shown"
+    }
+  ]
+}

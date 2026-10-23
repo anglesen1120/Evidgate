@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/steps/0/no",
+      "reason": "minimum"
+    }
+  ],
+  "comment": "step numbers start at 1 (the 1..1000 window is the schema's [INFERENCE] bound)"
+}

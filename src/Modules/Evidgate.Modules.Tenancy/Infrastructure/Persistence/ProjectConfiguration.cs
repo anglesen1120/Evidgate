@@ -92,5 +92,18 @@ internal sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
         builder.Property(project => project.MonthlyRunQuota)
             .HasColumnName("monthly_run_quota");
+
+        // 0039 / OI-13-101: the case-code prefix is stored on the row and filled by the
+        // `project_case_prefix_default` BEFORE INSERT trigger when it is NULL, so the write model
+        // maps it **read-only** (shadow property, store-generated on add): EF omits the column on
+        // INSERT and reads the trigger's value back through RETURNING, and no command of the Tenancy
+        // module writes it — the PATCH surface is 13.1.1-T2's. Mapping it keeps the model and the
+        // migrated table from drifting apart (WriteModelMappingTests.ModelMatchesSchema) without
+        // adding a column to the Project aggregate or the DTO.
+        builder.Property<string>("CasePrefix")
+            .HasColumnName("case_prefix")
+            .HasMaxLength(8)
+            .ValueGeneratedOnAdd()
+            .IsRequired();
     }
 }
