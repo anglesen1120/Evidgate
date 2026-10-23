@@ -37,6 +37,9 @@
          test cases through the public case-identity service (no POST /v1 route for cases). -->
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
+    <!-- 13.1.1-T2: the authoring tree is org- and project-scoped, so its isolation route cases
+         seed through this module's public contracts exactly as the catalog ones do. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring.Contracts\Evidgate.Modules.Authoring.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />

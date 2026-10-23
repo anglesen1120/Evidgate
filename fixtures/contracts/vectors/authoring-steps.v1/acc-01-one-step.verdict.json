@@ -1,0 +1,5 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": true,
+  "comment": "one step: the smallest documents the schema accepts (plan 13.1.1 §3)"
+}

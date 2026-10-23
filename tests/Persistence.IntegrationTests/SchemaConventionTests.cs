@@ -530,6 +530,8 @@ public sealed class SchemaConventionAllowListTests
                 ("public.case_attempt", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.event", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.event_batch", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+                ("public.authoring_version", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+                ("public.authoring_code_counter", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.rls_probe", SchemaRule.VersionTrigger),
                 ("public.role_permission", SchemaRule.CompositeForeignKey),
             ]);

@@ -111,6 +111,14 @@ internal sealed class TenantRowFactory
     // under test is reached.
     private static int _attemptNo;
 
+    // A fresh sibling position and a fresh case code per generated authoring row (migration 0039): the live
+    // sibling index is unique over (org_id, project_id, parent_id, position) with NULL parents equal, and
+    // manual_test_case's code is unique per project, so a constant would collide with the valid row the
+    // corrupt one is generated next to.
+    private static int _authoringPosition;
+
+    private static int _authoringCode;
+
     // A fresh sequence per generated event row: event's unique key is
     // (org_id, run_id, producer_id, sequence), and the corrupt row reuses the valid row's run_id and
     // producer_id (both the manifest-derived "shard-1"), so a constant would collide on that key before
@@ -394,6 +402,18 @@ internal sealed class TenantRowFactory
             ("public.artifact_kind_policy", "kind") => "trace",
             ("public.artifact_kind_policy", "default_sensitivity") => "normal",
             ("public.producer_slot", "shard_index") => 1,
+            ("public.feature_node", "kind") => "module",
+            ("public.feature_node", "position") or ("public.checklist_item", "position") =>
+                Interlocked.Increment(ref _authoringPosition),
+            ("public.checklist_item" or "public.manual_test_case", "priority") => "high",
+            ("public.checklist_item" or "public.manual_test_case", "state") => "draft",
+            ("public.checklist_item" or "public.manual_test_case", "source") or ("public.authoring_version", "source") => "manual",
+            ("public.manual_test_case", "steps") => "{}",
+            ("public.manual_test_case", "code") =>
+                "PROBE-" + Interlocked.Increment(ref _authoringCode).ToString("D3", CultureInfo.InvariantCulture),
+            ("public.authoring_version", "entity_kind") => "feature_node",
+            ("public.authoring_version", "change_kind") => "create",
+            ("public.authoring_version", "content_hash") => "sha256:" + new string('c', 64),
             ("public.producer_slot", "producer_id") => "shard-1",
             // planned_execution's execution_key is the 00 §7 sha256 hex and its unique key is
             // (org_id, run_id, execution_key), so a constant would collide with the valid row the

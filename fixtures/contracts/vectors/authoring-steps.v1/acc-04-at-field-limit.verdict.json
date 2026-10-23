@@ -1,0 +1,5 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": true,
+  "comment": "each field at its declared maximum of 2000 characters (plan 13.1.1 §3)"
+}

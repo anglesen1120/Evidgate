@@ -48,7 +48,12 @@ The playbook for changing a table without breaking the running version is
   exchange never stores (D-S45-Q2, 2026-10-13)
   and `0038` is 05.2.2-T2.2's `run_project_ref_idx (project_id, ref_name, created_at, id)` on `run`, the
   keyset index of the run list's `ref_name` filter (plain `create index`, one transaction, no
-  `concurrently`: see the file header); the next free number is `0039`; a gap means two branches
+  `concurrently`: see the file header), and `0039` is 13.1.1-T1.1's authoring tree — `feature_node`,
+  `checklist_item`, `manual_test_case`, `authoring_code_counter` and the append-only
+  `authoring_version` (FORCE RLS, the tenant and owner policies, the `nulls not distinct` partial
+  sibling-position index) plus `project.case_prefix` with `evidgate.case_prefix_stem()`, the
+  dedupe backfill, `project_org_case_prefix_uq` and the `project_case_prefix_default` insert
+  trigger; the next free number is `0040`; a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
