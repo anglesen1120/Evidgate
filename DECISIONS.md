@@ -1,6 +1,6 @@
 # Evidgate — Decisions and Verified Facts
 
-> Authority: this file (why, verified facts) and `plans/00-overview.md` (contracts) win over `plans/01`–`12`. §3–§5 are locked: reopen only with a written change request in §10.
+> Authority: this file (why, verified facts) and `plans/00-overview.md` (contracts) win over `plans/01`–`13`. §3–§5 are locked: reopen only with a written change request in §10.
 > Legend: ✅ verified from a primary source (link + date) · ⚠️ unverified or secondary source · `[INFERENCE]` reasoning, not a fact · `[DECISION]` a choice · `[OPEN]` needs the owner.
 > Source design: `docs/source/system-design-detailed.vi.md` (Vietnamese system design, 2026-09-23, working name "ReleaseHub"). This repo turns it into an executable plan set. Where this file or `plans/` differ from the source, the source is superseded (delta list in §9).
 
@@ -8,7 +8,7 @@
 
 ## 1. Product in one paragraph
 
-Evidgate is a multi-tenant platform that collects automated test results (web, API, mobile, unit) from customers' CI or agents, keeps them as **immutable evidence** bound to exact builds, and turns that evidence into a **release decision** (PASS / FAIL / INCONCLUSIVE) through versioned policies. It also manages test identity, suites and authoring, and adds **safe healing**: repairing test *mechanics* (for example a changed locator) without changing test *intent*, starting in shadow mode and never hiding a product bug. Execution engines are reused (Playwright, Appium, the repo's own unit framework); Evidgate does not build a browser or API engine.
+Evidgate helps a QA team write and maintain its tests (CR-D-2, owner, 2026-10-23). The team writes requirements; Evidgate drafts a checklist and manual test cases for review, turns approved cases into Playwright scripts bound to real elements, and remembers per project how each element looked when a run was green. When a run fails it classifies the failure as locator drift, UI change or product bug, and proposes a **safe repair** as a pull request for human review: it repairs test *mechanics* (for example a changed locator) without changing test *intent*, starts in shadow mode, never auto-applies, and never hides a product bug. Underneath sits the evidence platform: multi-tenant, results from customers' CI or agents kept as **immutable evidence** bound to exact builds, and a versioned-policy **release decision** (PASS / FAIL / INCONCLUSIVE) that is reported, not the lead feature. Delivery runs in phases G1 Author → G2 Run → G3 Learn and repair → G4 Expand with exit gates ([`docs/decisions/CR-D-2-direction-a.md`](docs/decisions/CR-D-2-direction-a.md) §5, [`plans/13-product-phases.md`](plans/13-product-phases.md)). Execution engines are reused (Playwright; mobile later via mobilewright, CR-D-2 §7); Evidgate does not build a browser or API engine.
 
 ## 2. Name [DECISION]
 
@@ -38,8 +38,8 @@ Code identifiers: .NET root namespace and assembly prefix `Evidgate.*`, npm scop
 | A1 | One modular-monolith backend; API and worker are separate processes from one codebase | Modules own their tables and expose in-process interfaces; no microservices in V1–V2 |
 | A2 | Git holds approved test code | Studio/AI produce drafts and PRs; every run pins a commit and immutable revisions |
 | A3 | Evidence + policy decide a release | A green dashboard is never the decision; the decision is an immutable evaluation row |
-| A4 | Healing starts in shadow/proposal mode | Learns from verified failures; every patch is validated before a human applies it |
-| A5 | Customer-operated execution first (CI mode, then agent mode) | No hosted runner in V1–V2; no inbound port into customer networks |
+| A4 | Healing starts in shadow/proposal mode | Learns from verified failures; every patch is validated before a human applies it. Timing (CR-D-2): repair proposals and approved pull requests from phase G3, after a per-project shadow window |
+| A5 | Customer-operated execution first (CI mode, then agent mode) | No hosted runner in V1–V2; no inbound port into customer networks. Kept for G1–G3 (customer CI or local `evidgate run`); a hosted runner is reconsidered at G4 only on paying demand (CR-D-2) |
 | A6 | PostgreSQL is the system of record; object storage holds raw reports and artifacts | Search/analytics start as read tables and indexes |
 | A7 | No n8n, Kafka, Kubernetes or Temporal in V1 | n8n may consume webhooks for notifications only; Temporal re-evaluated when workflows need long waits and recovery (§10 trigger in plan 10) |
 | A8 | Evidence completeness, test outcome and gate decision are three separate fields | FAIL with `completeness = false` is valid; missing evidence never yields PASS |
@@ -107,7 +107,7 @@ Licence rule [DECISION]: dependencies must allow closed-source commercial SaaS. 
 4. Keeping the assertion hash equal is **necessary, not sufficient**: the validator also checks semantic identity (role/name/test id), unique match, business region and an independent post-condition, plus a negative control that must still fail.
 5. Sensitive cases (payment, authorization, deletion, security) are proposal-only and need a reviewer who is not the author.
 6. Approval binds to `candidate_hash` + base commit; any context change or rebase re-validates.
-7. Runtime auto-apply is **off in V1 and V2**. V3 may reuse *approved* mappings in a narrow context after an independent evaluation (plan 08 gate).
+7. Runtime auto-apply is **off in V1 and V2**, and **off in phases G1–G3** (CR-D-2). Reuse of *approved* mappings in a narrow context is considered at G4 at the earliest, after an independent evaluation (plan 08 gate, O6).
 8. LLM "confidence" is never a safety probability. With 0 failures in *n* independent samples the ~95 % upper bound is ≈ 3/*n* (rule of three; 300 samples → ≈ 1 %) `[INFERENCE: standard statistics]`; correlated failures make real confidence lower.
 9. Kill switches exist at system, tenant and project level **before** any apply capability ships; if the LLM or knowledge store fails, tests and gates run normally and healing becomes `unavailable`.
 
@@ -201,3 +201,4 @@ Checked and kept: capacity arithmetic (100 000 × 1 KiB ≈ 97.7 MiB/day, ≈ 8.
 | 2026-09-25 | **CR-D-1 (owner): stack change.** §4 rewritten: server/worker on .NET 10 LTS + ASP.NET Core minimal APIs + CQRS (`Mediator` 3.0.2, EF Core 10 write model, Dapper read model), DbUp plain-SQL migrations, own outbox + task queue (pg-boss removed), web on Angular 22.2 + `@ngrx/signals`; customer-side CLI/adapters/agent stay Node 26/TS 6.0.x. Rejected on the licence rule: MediatR 14 (RPL-1.5), JsonSchema.Net 9 (maintenance-fee EULA), FluentAssertions 8 (non-commercial); Hangfire (LGPL) avoided. Estimate unit becomes one senior full-stack .NET + Angular developer. Contract edits in 00 §5.1–§5.5, §6, §11, §12, §15; plan edits in 01–12. |
 | 2026-09-26 | O1 engine decided by the owner: Playwright for UI tests; customer CI/producers are per-project customer input. Owner notes recorded verbatim on O2 and O4 with `[INFERENCE]` readings; both rows stay open until the owner confirms the reading. |
 | 2026-10-02 | §8.1 Stage A defaults D-A1…D-A11 recorded (owner accepted the open-items register defaults). |
+| 2026-10-23 | **CR-D-2 (owner): direction (a).** Test authoring and self-learning maintenance on the evidence foundation; phases G1 Author → G2 Run → G3 Learn and repair → G4 Expand with exit gates; A4 timing changed (proposals and approved PRs from G3 after a per-project shadow window); §5.7 runtime auto-apply stays off in G1–G3; A5 kept for G1–G3; §5 rules 1–6, 8, 9 unchanged; §1 rewritten. Master plan [`plans/13-product-phases.md`](plans/13-product-phases.md); the Milestone column of plans 01–12 now holds phases G1–G4 (00 §4, §15). Mobile: G2 spike with mobile-mcp / mobilewright (iOS + Android), chosen over Google ARTEMIS; mobile product work at G4. Record, risk register and edit list: [`docs/decisions/CR-D-2-direction-a.md`](docs/decisions/CR-D-2-direction-a.md). |

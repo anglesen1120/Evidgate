@@ -1,8 +1,9 @@
-# 11 - Security and Compliance (M1-M4)
+# 11 - Security and Compliance (G1–G4)
 
 > Contracts: `00-overview.md` (§2 roles, §9.2 errors, §9.4 events, §9.5 webhooks, §11 NFRs, §12 DoD). Facts: `../DECISIONS.md` §3 (A9/A10), §4 (licence rule), §5 (healing rules), §6 F3/F4/F5/F7/F8, §7 (legal position), §8 (O3/O4). Source: design §8 (security and permission boundaries), §9 (operational deployment and acceptance).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
 > Legend: ✅ verified (link opened for this plan, 2026-09-24) · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`.
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 38.75 · G2 6.5 · G3 1 · G4 9 person-days.
 
 ## 1. Purpose and scope
 
@@ -22,9 +23,18 @@
 - PDPL (Law 91/2025/QH15) program: DPA, privacy notice, data map, impact dossiers, transfer assessment, consent stance, deletion SLAs, breach runbook, sub-processor list.
 - Data residency decision support for O3/O4.
 
-**Out of scope (V1-V2):** ISO 27001 / SOC 2 certification, HIPAA/PCI scope, SAML/enterprise identity federation, on-premise packaging, and any hosted runner or device farm (V3, gated by 11.2.1-T5).
+**Out of scope (V1-V2):** ISO 27001 / SOC 2 certification, HIPAA/PCI scope, SAML/enterprise identity federation, on-premise packaging, and any hosted runner or device farm (G4, gated by 11.2.1-T5).
 
 **Version split:** V1 = baseline + PDPL program + pen test (M1-M3). V2 = AI security, ASVS walkthrough with evidence (M4). V3 = hosted multi-tenant isolation evaluation (M5).
+
+**Phase placement (CR-D-2).** G1 is the authoring phase, and it raises the privacy bar before anything else ships:
+
+- the **CLI redacts DOM and accessibility snapshots before upload** — redaction at source (`11.3.1-T5`, consuming 06.2.2's capture control) is a G1 exit condition for `13.3.1` generation, not a V2 hardening item;
+- snapshots are captured as an **accessibility tree by default**, and screenshots are **opt-in per project** (FR-11-14; the profile store of `13.6` keeps structure, not pixels);
+- the **cross-border transfer assessment is complete before the first G1 pilot data leaves Vietnam**, including the first provider call for checklist / test-case generation, rather than filed within the 60-day window afterwards (`11.8.1-T5`, with `11.4.1-T3`/`T4` and the tenant data-owner approval of `08.5.3-T3`);
+- the rest of the G1 baseline: threat model and ASVS decision (`11.1.1`), CI security baseline and ingest-token review (`11.2.1-T1`..`T3`, `T7`), secrets/key lifecycle (`11.3.1-T1`/`T2`/`T4`/`T5`), AI permission boundary and injection corpus (`11.4.1`), supply chain (`11.6.1`), PDPL paperwork (`11.8.1`) and data-protection operations (`11.9.1`, `11.9.2`), plus the audit taxonomy (`11.5.1-T1`) and the audit-chain ADR (`11.5.2-T1`).
+
+G2 adds automated secret scanning in our CI and over ingested artifacts (`11.3.1-T3`) and the audit, support-access and monitoring rows (`11.5.1-T2`..`T5`, `11.5.2-T2`/`T3`); the V1 replay-sandbox requirement `11.2.1-T6` is G3 with the shadow replay it serves (`08.4.3`). The V2 agent sandbox specification (`11.2.1-T4`) and the hosted multi-tenant isolation evaluation (`11.2.1-T5`) are **G4**, so no hosted multi-tenant execution ships before G4. Everyone else — pen test, SAST/DAST, tenant red-team suite (`11.7.1`) — is G4.
 
 ## 2. Requirements
 
@@ -40,8 +50,8 @@
 - **FR-11-10** Supply chain, dual ecosystem (T40): npm side — committed `package-lock.json` and `npm ci`; NuGet side — committed `packages.lock.json` (`<RestorePackagesWithLockFile>`) with `dotnet restore --locked-mode` in CI, `dotnet list package --vulnerable --include-transitive` (plus `--deprecated`/`--outdated` or `dotnet nuget audit`) gating server/worker dependencies; dependency review on pull requests; licence allowlist enforcing the DECISIONS §4 rule (no AGPL/SSPL/BUSL/non-commercial in shipped or hosted code) across **both** ecosystems (NuGet licence tool chosen and licence-checked in 01.9.1 ⚠️); a CycloneDX SBOM per release covering NuGet and npm ⚠️ (tool licence checked in 11.6.1-T3); CodeQL scanning for C# and TypeScript (11.7.1-T2); provenance for published packages; a vulnerability triage SLA.
 - **FR-11-11** ASVS: the target level is **⚠️ L2 (proposed)** for web and API; a chapter-level mapping with a published gap list is produced in 11.1.1-T3 before the pilot. This is a verification target, not a certification.
 - **FR-11-12** An external penetration test covering tenant isolation, authentication/session, artifact access, injection, webhook and sandbox surfaces is executed before the M3 pilot exit; critical and high findings are fixed and retested.
-- **FR-11-13** PDPL: a processing contract (DPA) is signed **before** the first pilot upload (Art. 37.2.a ✅: a processor may receive personal data only after entering into an agreement/contract on personal data processing — [Law 91/2025/QH15 English text](https://english.luatvietnam.vn/dan-su/law-on-personal-data-protection-law-no-91-2025-qh15-405135-d1.html), Art. 37.2, read 2026-09-24); a processing impact dossier is prepared and kept (Art. 21.1/21.3 ✅); a cross-border transfer impact dossier is filed within 60 days of the first transfer (Art. 20.2 ✅); a breach is notified within 72 hours with the processor notifying the controller **promptly** rather than waiting for the clock (Art. 23.1 ✅); consent duties are documented as the customer's (Art. 9.2/9.4 ✅, "silence or non-response is not considered consent").
-- **FR-11-14** Artifacts may contain personal data (DECISIONS §7): redaction at source is supported and default-on for known patterns; "artifact content to an LLM provider" is off by default; sensitive artifacts require `artifact:read_sensitive` (00 §2) and are viewed on an isolated origin (source §8).
+- **FR-11-13** PDPL: a processing contract (DPA) is signed **before** the first pilot upload (Art. 37.2.a ✅: a processor may receive personal data only after entering into an agreement/contract on personal data processing — [Law 91/2025/QH15 English text](https://english.luatvietnam.vn/dan-su/law-on-personal-data-protection-law-no-91-2025-qh15-405135-d1.html), Art. 37.2, read 2026-09-24); a processing impact dossier is prepared and kept (Art. 21.1/21.3 ✅); a cross-border transfer impact dossier is filed within 60 days of the first transfer (Art. 20.2 ✅), and the assessment behind it is complete **before** the first G1 pilot data leaves Vietnam — the first provider call for checklist / test-case generation counts as a transfer (`11.8.1-T5`); a breach is notified within 72 hours with the processor notifying the controller **promptly** rather than waiting for the clock (Art. 23.1 ✅); consent duties are documented as the customer's (Art. 9.2/9.4 ✅, "silence or non-response is not considered consent").
+- **FR-11-14** Artifacts may contain personal data (DECISIONS §7): redaction at source is supported and default-on for known patterns; "artifact content to an LLM provider" is off by default; sensitive artifacts require `artifact:read_sensitive` (00 §2) and are viewed on an isolated origin (source §8). From G1 the CLI redacts DOM and accessibility snapshots **before upload** (`11.3.1-T5`); captures are an accessibility tree by default and screenshots only where the project opts in (`13.6`).
 - **FR-11-15** Deletion: tenant, project, artifact and log deletions execute within a stated SLA, are verifiable (a deletion report the customer can keep), and never leave the deleted object readable through a cached URL or a backup that is not itself covered by the stated retention.
 - **FR-11-16** Residency: the platform can state, per store (database, object storage, backups, provider calls), where data physically resides; a transfer outside Vietnam triggers the Art. 20 process. Decision belongs to O3/O4.
 - **NFR-11-1** No cross-tenant path exists in API, foreign keys, RLS policies, views, search or presigned URLs, proven by an automated red-team suite on real PostgreSQL (00 §11 tenant isolation).
@@ -115,7 +125,7 @@ Every article citation in this table is from the Law text I opened: Law on Perso
 | Deletion SLA + report | windows per data class, verification method | Art. 37.2 + contract | Tech Lead |
 | Fines exposure note | cross-border violation up to 5 % of preceding-year revenue; other violations up to VND 3 billion; buying/selling up to 10× proceeds | Art. 8.3/8.4/8.5 ✅ | Owner |
 
-### 4.4 Sandbox requirements (V1 replay sandbox for shadow healing, 11.2.1-T6; V2 agents; V3 for hosted)
+### 4.4 Sandbox requirements (V1 replay sandbox for shadow healing, `11.2.1-T6`, G3; V2 agents `11.2.1-T4`, G4; hosted multi-tenant `11.2.1-T5`, G4)
 
 Disposable environment per job · default-deny egress with an explicit allowlist (engine CDN, package registry, customer staging host, LLM gateway) · least-privilege identity, no ambient tenant credentials, no long-lived cloud role · no host mounts, no docker socket, no access to the control-plane network · CPU/memory/disk/time caps with a hard kill · artifact collection through the normal upload path only · teardown verified and logged · escape attempts logged as security events. For V3 hosted multi-tenant execution the boundary must be a VM/microVM or a verified equivalent `[OPEN]`.
 
@@ -123,7 +133,7 @@ The healing validator (`packages/healing-validator`, Node 26 + TypeScript 6.0.x,
 
 ### 4.5 Data flows that trigger Art. 20
 
-1. Artifacts stored in object storage outside Vietnam → transfer. 2. Healing/AI context sent to a provider abroad → transfer. 3. Backups replicated outside Vietnam → transfer. Each is enabled only after the tenant's data owner approves and the transfer dossier is filed or scheduled.
+1. Artifacts stored in object storage outside Vietnam → transfer. 2. Healing/AI context sent to a provider abroad → transfer. 3. Backups replicated outside Vietnam → transfer. Each is enabled only after the tenant's data owner approves and the transfer dossier is filed or scheduled. In G1, flow 2 is live from the first `13.3.1` generation: no provider call is placed until the tenant's data-owner approval (`08.5.3-T3`) and the assessment behind `11.8.1-T5` exist, and the payload is the redacted accessibility tree (screenshots only where the project opted in).
 
 ## 5. Failure modes and edge cases
 
@@ -154,6 +164,7 @@ This plan **is** the security plan; the product-facing rules it owns are: permis
 | Tenant isolation red team | API cross-tenant reads/writes, FK violations, RLS with a non-owner role, views, search, presigned URLs, artifact ids from another tenant — over both server data paths: EF Core write-model commands and Dapper read-only queries on module views (a query missing the tenant setting must still return zero foreign rows) (NFR-11-1, F-11-4) |
 | Untrusted-CI suite | Fork-PR credential reachability, token scope/TTL/replay, workflow recipe lint (SHA pinning, permissions, masking) |
 | Secret-hygiene suite | Scanner on logs/artifacts/error envelopes; metric-label check; command-line visibility check |
+| Redaction before upload (G1) | The CLI removes DOM / accessibility patterns before the upload call; captures are an a11y tree by default and screenshots only with the project's opt-in (`11.3.1-T5`, 06.2.2) |
 | Prompt-injection corpus | DOM/log/document payloads asserting no policy/approval/permission/decision effect and correct security-event logging |
 | Webhook suite | Signature mismatch, timestamp skew, replayed body, duplicate event id, retry stability |
 | Parser hardening suite | XXE, zip-slip, decompression bomb, MIME mismatch, oversized input (with 06) |
@@ -184,10 +195,10 @@ This plan **is** the security plan; the product-facing rules it owns are: permis
 #### Story 11.1.1 A living threat model - acceptance: v1 covers every module and boundary, each threat maps to a control or a written acceptance, and it is re-reviewed at each milestone exit.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.1.1-T1 | Threat model v1: trust boundaries + STRIDE per module, versioned file, milestone review ritual | L | V1 | M1 | 02.1.1-T1, 02.6.1-T1 |
-| 11.1.1-T2 | Security review checklist wired into the feature-plan Definition of Ready (authz, retention/deletion, telemetry, failure path) | S | V1 | M1 | - |
-| 11.1.1-T3 | ASVS L2 decision: chapter mapping to plans, gap list, published level statement | M | V1 | M2 | 11.1.1-T1 |
-| 11.1.1-T4 | Security event monitoring baseline: auth failures, cross-tenant 404 patterns, secret-scanner alerts, kill-switch use | S | V1 | M2 | 02.7.1-T1 |
+| 11.1.1-T1 | Threat model v1: trust boundaries + STRIDE per module, versioned file, milestone review ritual | L | V1 | G1 | 02.1.1-T1, 02.6.1-T1 |
+| 11.1.1-T2 | Security review checklist wired into the feature-plan Definition of Ready (authz, retention/deletion, telemetry, failure path) | S | V1 | G1 | - |
+| 11.1.1-T3 | ASVS L2 decision: chapter mapping to plans, gap list, published level statement | M | V1 | G1 | 11.1.1-T1 |
+| 11.1.1-T4 | Security event monitoring baseline: auth failures, cross-tenant 404 patterns, secret-scanner alerts, kill-switch use | S | V1 | G1 | 02.7.1-T1 |
 
 Epic 11.1 total: 4.0
 
@@ -196,13 +207,13 @@ Epic 11.1 total: 4.0
 #### Story 11.2.1 A fork pull request cannot reach our credentials - acceptance: the published recipe and the fork-PR test prove no Evidgate credential is reachable from an untrusted workflow context.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.2.1-T1 | Customer CI security guide: fork-PR rules, `pull_request_target` prohibition, SHA pinning, least-privilege `GITHUB_TOKEN`, masking, rotation ✅ (GitHub secure-use) | M | V1 | M1 | - |
-| 11.2.1-T2 | Fork-PR test: demonstrate no credential reachability and that an attempted use fails authorisation + is logged | M | V1 | M2 | 02.4.1-T1 |
-| 11.2.1-T3 | Ingest token security design review (with 02): scope, TTL, OIDC claim validation, revocation, replay — and the decided storage design: ≥128-bit random token, public prefix, `HMAC-SHA256(pepper_vN, secret)` + `pepper_version`, prefix lookup + `CryptographicOperations.FixedTimeEquals`; review covers pepper custody in the secret store and the versioned rotation runbook (10.7.1-T4) (T5) | M | V1 | M2 | 02.4.1-T1, 02.4.2-T1 |
-| 11.2.1-T4 | Sandbox requirements spec + verification plan for V2 agent/healing (disposable, allowlist, least privilege, teardown proof) | L | V2 | M4 | 05.7.4-T1, 11.2.1-T6 |
-| 11.2.1-T5 | Hosted multi-tenant isolation evaluation: VM/microVM boundary options and evidence | M | V3 | M5 | 11.2.1-T4 |
-| 11.2.1-T6 | V1 replay-sandbox requirements for shadow healing (08.4.3): one-shot workspace, network allowlist, no tenant secrets, resource caps, teardown check; includes the `packages/healing-validator` child-process contract — JSON stdin/stdout, CPU/memory/wall-time limits enforced by the worker, pinned Node runtime in the worker image, never in the API process (T36); 11.2.1-T4 extends it to V2 agents | M | V1 | M3 | 08.4.3-T1 |
-| 11.2.1-T7 | `evidgate_resolve` SECURITY DEFINER review (with 02/03): pinned `search_path`, return limited to `(org_id, project_id, binding_id, status)`, app role `EXECUTE`-only, every call audited; abuse cases checked (binding enumeration, timing oracle, revoked-but-resolvable bindings) (T1) | S | V1 | M2 | 02.6.1-T3, 03.4.1-T2 |
+| 11.2.1-T1 | Customer CI security guide: fork-PR rules, `pull_request_target` prohibition, SHA pinning, least-privilege `GITHUB_TOKEN`, masking, rotation ✅ (GitHub secure-use) | M | V1 | G1 | - |
+| 11.2.1-T2 | Fork-PR test: demonstrate no credential reachability and that an attempted use fails authorisation + is logged | M | V1 | G1 | 02.4.1-T1 |
+| 11.2.1-T3 | Ingest token security design review (with 02): scope, TTL, OIDC claim validation, revocation, replay — and the decided storage design: ≥128-bit random token, public prefix, `HMAC-SHA256(pepper_vN, secret)` + `pepper_version`, prefix lookup + `CryptographicOperations.FixedTimeEquals`; review covers pepper custody in the secret store and the versioned rotation runbook (10.7.1-T4) (T5) | M | V1 | G1 | 02.4.1-T1, 02.4.2-T1 |
+| 11.2.1-T4 | Sandbox requirements spec + verification plan for V2 agent/healing (disposable, allowlist, least privilege, teardown proof) | L | V2 | G4 | 05.7.4-T1, 11.2.1-T6 |
+| 11.2.1-T5 | Hosted multi-tenant isolation evaluation: VM/microVM boundary options and evidence | M | V3 | G4 | 11.2.1-T4 |
+| 11.2.1-T6 | V1 replay-sandbox requirements for shadow healing (08.4.3): one-shot workspace, network allowlist, no tenant secrets, resource caps, teardown check; includes the `packages/healing-validator` child-process contract — JSON stdin/stdout, CPU/memory/wall-time limits enforced by the worker, pinned Node runtime in the worker image, never in the API process (T36); 11.2.1-T4 extends it to V2 agents | M | V1 | G3 | 08.4.3-T1 |
+| 11.2.1-T7 | `evidgate_resolve` SECURITY DEFINER review (with 02/03): pinned `search_path`, return limited to `(org_id, project_id, binding_id, status)`, app role `EXECUTE`-only, every call audited; abuse cases checked (binding enumeration, timing oracle, revoked-but-resolvable bindings) (T1) | S | V1 | G1 | 02.6.1-T3, 03.4.1-T2 |
 
 Epic 11.2 total: 7.5
 
@@ -211,11 +222,11 @@ Epic 11.2 total: 7.5
 #### Story 11.3.1 Secrets never leave a reference - acceptance: no secret value is stored in the database, logged, or visible in an error envelope; leak response is rehearsed.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.3.1-T1 | Secret-reference model and resolution path review (vault/CI, per-job scope, no value in DB/logs) | M | V1 | M2 | 02.4.2-T1, 06.2.3-T1 |
-| 11.3.1-T2 | Leak runbook: mask-before-upload, log purge, rotation order per system, customer notice criteria | M | V1 | M2 | 11.3.1-T1 |
-| 11.3.1-T3 | Automated secret scanning in our CI and over ingested artifacts (fail-closed), with an exception process | M | V1 | M3 | 04.1.1-T1, 06.2.3-T1 |
-| 11.3.1-T4 | Encryption and key lifecycle review: at rest, in transit, presigned URLs, token rotation, backup keys | M | V1 | M3 | 10.1.1-T2, 10.5.1-T1, 10.7.1-T4 |
-| 11.3.1-T5 | Redaction-at-source: documented patterns, tenant toggle, verification that redaction ran | L | V1 | M3 | 06.2.2-T1 |
+| 11.3.1-T1 | Secret-reference model and resolution path review (vault/CI, per-job scope, no value in DB/logs) | M | V1 | G1 | 02.4.2-T1, 06.2.3-T1 |
+| 11.3.1-T2 | Leak runbook: mask-before-upload, log purge, rotation order per system, customer notice criteria | M | V1 | G1 | 11.3.1-T1 |
+| 11.3.1-T3 | Automated secret scanning in our CI and over ingested artifacts (fail-closed), with an exception process | M | V1 | G2 | 04.1.1-T1, 06.2.3-T1 |
+| 11.3.1-T4 | Encryption and key lifecycle review: at rest, in transit, presigned URLs, token rotation, backup keys | M | V1 | G1 | 10.1.1-T2, 10.5.1-T1, 10.7.1-T4 |
+| 11.3.1-T5 | Redaction-at-source: documented patterns, tenant toggle, verification that redaction ran | L | V1 | G1 | 06.2.2-T1 |
 
 Epic 11.3 total: 6.0
 
@@ -224,10 +235,10 @@ Epic 11.3 total: 6.0
 #### Story 11.4.1 A model cannot change the product's mind - acceptance: the injection corpus produces zero policy/approval/permission/decision effects, and every outbound request is opt-in, redacted and audited.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.4.1-T1 | AI permission boundary spec + enforcement review (structured I/O, no shell/merge/policy, tenant-filtered retrieval) | M | V2 | M4 | 08.5.1-T1, 08.5.2-T1 |
-| 11.4.1-T2 | Prompt-injection corpus and harness: DOM/log/document payloads with assertions on state and security logging; the injection-attempt events it produces join the security-event set from V2 (11.5.1-T5) | L | V2 | M4 | 08.5.2-T1 |
-| 11.4.1-T3 | Outbound context control: per-tenant opt-in record, provider allowlist, per-request audit; uses the redaction pipeline of 08.5.3-T1 and the source redaction of 11.3.1-T5, no third redaction implementation | L | V2 | M4 | 08.5.3-T1, 11.3.1-T5 |
-| 11.4.1-T4 | LLM provider due diligence: DPA, sub-processor entry, residency input for O4, retention terms | M | V2 | M4 | 11.8.1-T1 |
+| 11.4.1-T1 | AI permission boundary spec + enforcement review (structured I/O, no shell/merge/policy, tenant-filtered retrieval) | M | V2 | G1 | 08.5.1-T1, 08.5.2-T1 |
+| 11.4.1-T2 | Prompt-injection corpus and harness: DOM/log/document payloads with assertions on state and security logging; the injection-attempt events it produces join the security-event set from V2 (11.5.1-T5) | L | V2 | G1 | 08.5.2-T1 |
+| 11.4.1-T3 | Outbound context control: per-tenant opt-in record, provider allowlist, per-request audit; uses the redaction pipeline of 08.5.3-T1 and the source redaction of 11.3.1-T5, no third redaction implementation | L | V2 | G1 | 08.5.3-T1, 11.3.1-T5 |
+| 11.4.1-T4 | LLM provider due diligence: DPA, sub-processor entry, residency input for O4, retention terms | M | V2 | G1 | 11.8.1-T1 |
 
 Epic 11.4 total: 6.0
 
@@ -236,18 +247,18 @@ Epic 11.4 total: 6.0
 #### Story 11.5.1 Who saw what, provably - acceptance: audit rows are append-only with before/after hashes, and any operator access is scoped, expiring, tenant-visible and audited.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.5.1-T1 | Audit event taxonomy + immutability approach (append-only, hash-linked) and retention | M | V1 | M2 | 02.7.1-T1 |
-| 11.5.1-T2 | Support-access verification on top of 02.8.1-T1: tenant-visible banner, per-read audit assertions, access-review log and quarterly report | M | V1 | M3 | 02.8.1-T1, 09.1.1-T4 |
-| 11.5.1-T3 | Security monitoring and alerting on the 11.1.1-T4 baseline, with an on-call routing decision | M | V1 | M3 | 11.1.1-T4 |
-| 11.5.1-T4 | Break-glass procedure and quarterly operator-access review | S | V1 | M3 | 11.5.1-T2 |
-| 11.5.1-T5 | `GET /v1/orgs/{o}/security-events` read endpoint + authorisation (`security_event:read`, `tenant_admin` only), filters by project/type/severity/time over the V1 event set: the 11.1.1-T4 baseline plus support-access rows from 02.8.1-T1 and 11.5.1-T2 (injection-attempt events join in V2 via 11.4.1-T2) | M | V1 | M3 | 11.1.1-T4 |
+| 11.5.1-T1 | Audit event taxonomy + immutability approach (append-only, hash-linked) and retention | M | V1 | G1 | 02.7.1-T1 |
+| 11.5.1-T2 | Support-access verification on top of 02.8.1-T1: tenant-visible banner, per-read audit assertions, access-review log and quarterly report | M | V1 | G2 | 02.8.1-T1, 09.1.1-T4 |
+| 11.5.1-T3 | Security monitoring and alerting on the 11.1.1-T4 baseline, with an on-call routing decision | M | V1 | G2 | 11.1.1-T4 |
+| 11.5.1-T4 | Break-glass procedure and quarterly operator-access review | S | V1 | G2 | 11.5.1-T2 |
+| 11.5.1-T5 | `GET /v1/orgs/{o}/security-events` read endpoint + authorisation (`security_event:read`, `tenant_admin` only), filters by project/type/severity/time over the V1 event set: the 11.1.1-T4 baseline plus support-access rows from 02.8.1-T1 and 11.5.1-T2 (injection-attempt events join in V2 via 11.4.1-T2) | M | V1 | G2 | 11.1.1-T4 |
 
 #### Story 11.5.2 Audit chain integrity outside its own database — acceptance: a tampered or truncated audit chain is detected by a job that does not trust the database.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.5.2-T1 | ADR: HMAC-keyed chain, key custody and rotation (10.7.1-T4), checkpoint cadence | S | V1 | M2 | 11.5.1-T1 |
-| 11.5.2-T2 | Signed periodic checkpoint exported to separate storage with a write-once policy | M | V1 | M2 | 11.5.2-T1 |
-| 11.5.2-T3 | Verification job and tamper/truncation tests; alert on mismatch | M | V1 | M3 | 11.5.2-T2, 10.3.1-T5 |
+| 11.5.2-T1 | ADR: HMAC-keyed chain, key custody and rotation (10.7.1-T4), checkpoint cadence | S | V1 | G1 | 11.5.1-T1 |
+| 11.5.2-T2 | Signed periodic checkpoint exported to separate storage with a write-once policy | M | V1 | G2 | 11.5.2-T1 |
+| 11.5.2-T3 | Verification job and tamper/truncation tests; alert on mismatch | M | V1 | G2 | 11.5.2-T2, 10.3.1-T5 |
 
 **Story 11.5.2 total: 2.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 
@@ -258,10 +269,10 @@ Epic 11.5 total: 7
 #### Story 11.6.1 Every dependency is a decision - acceptance: licence allowlist and lockfile enforced in CI, actions pinned, SBOM produced per release.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.6.1-T1 | Gap check on top of 01.7.1-T2/T4 (licence gate, lockfiles, audit gates already shipped): confirm lockfile enforcement and PR dependency review cover both ecosystems and close any gap; no second licence tool (T40) | S | V1 | M1 | 01.1.1-T2, 01.7.1-T1, 01.7.1-T2, 01.7.1-T4 |
-| 11.6.1-T2 | Document the SHA-pinning and least-privilege rules for customers; our own pinning and Dependabot are 01.7.1-T4 (T40) | XS | V1 | M1 | 11.2.1-T1 |
-| 11.6.1-T3 | Attach the CycloneDX SBOM from 01.7.1-T4 to each release and the provenance of 04.9.2-T1 for published packages; no second SBOM generator (T40) | S | V1 | M3 | 01.7.1-T1, 01.7.1-T4 |
-| 11.6.1-T4 | Vulnerability triage SLA, patch cadence, base-image refresh schedule | M | V1 | M3 | 10.2.1-T1, 10.2.1-T2 |
+| 11.6.1-T1 | Gap check on top of 01.7.1-T2/T4 (licence gate, lockfiles, audit gates already shipped): confirm lockfile enforcement and PR dependency review cover both ecosystems and close any gap; no second licence tool (T40) | S | V1 | G1 | 01.1.1-T2, 01.7.1-T1, 01.7.1-T2, 01.7.1-T4 |
+| 11.6.1-T2 | Document the SHA-pinning and least-privilege rules for customers; our own pinning and Dependabot are 01.7.1-T4 (T40) | XS | V1 | G1 | 11.2.1-T1 |
+| 11.6.1-T3 | Attach the CycloneDX SBOM from 01.7.1-T4 to each release and the provenance of 04.9.2-T1 for published packages; no second SBOM generator (T40) | S | V1 | G1 | 01.7.1-T1, 01.7.1-T4 |
+| 11.6.1-T4 | Vulnerability triage SLA, patch cadence, base-image refresh schedule | M | V1 | G1 | 10.2.1-T1, 10.2.1-T2 |
 
 Epic 11.6 total: 2.25
 
@@ -270,11 +281,11 @@ Epic 11.6 total: 2.25
 #### Story 11.7.1 Proved against isolation, not asserted - acceptance: the tenant-isolation red-team suite is green in CI, and an external pen test report exists with criticals/highs closed before pilot exit.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.7.1-T1 | Tenant isolation red-team suite: adds only attack classes not in 01.6.1-T4, 02.9.1-T1..T3 (views, search, presigned URLs, artifact ids, Dapper read-model queries missing the tenant setting must still return zero foreign rows) (F-11-4); no re-implementation of those suites | M | V1 | M2 | 02.9.1-T1, 06.3.3-T1, 01.6.1-T4, 02.9.1-T3 |
-| 11.7.1-T2 | SAST/DAST baseline: CodeQL for C# and TypeScript, Roslyn security analyzers on the .NET solution, ESLint on `apps/web`/`packages/*`, plus a staging DAST scan, with triage loop (T40, F-11-4) | M | V1 | M3 | 01.7.1-T1 |
-| 11.7.1-T3 | External pen test: scope, vendor selection, execution window | L | V1 | M3 | 10.1.1-T3, 10.2.2-T4 |
-| 11.7.1-T4 | Pen-test remediation, retest of criticals, customer-facing summary | M | V1 | M3 | 11.7.1-T3 |
-| 11.7.1-T5 | ASVS L2 walkthrough with evidence and a published gap list | M | V2 | M4 | 11.1.1-T3, 11.7.1-T4 |
+| 11.7.1-T1 | Tenant isolation red-team suite: adds only attack classes not in 01.6.1-T4, 02.9.1-T1..T3 (views, search, presigned URLs, artifact ids, Dapper read-model queries missing the tenant setting must still return zero foreign rows) (F-11-4); no re-implementation of those suites | M | V1 | G4 | 02.9.1-T1, 06.3.3-T1, 01.6.1-T4, 02.9.1-T3 |
+| 11.7.1-T2 | SAST/DAST baseline: CodeQL for C# and TypeScript, Roslyn security analyzers on the .NET solution, ESLint on `apps/web`/`packages/*`, plus a staging DAST scan, with triage loop (T40, F-11-4) | M | V1 | G4 | 01.7.1-T1 |
+| 11.7.1-T3 | External pen test: scope, vendor selection, execution window | L | V1 | G4 | 10.1.1-T3, 10.2.2-T4 |
+| 11.7.1-T4 | Pen-test remediation, retest of criticals, customer-facing summary | M | V1 | G4 | 11.7.1-T3 |
+| 11.7.1-T5 | ASVS L2 walkthrough with evidence and a published gap list | M | V2 | G4 | 11.1.1-T3, 11.7.1-T4 |
 
 Epic 11.7 total: 6.0
 
@@ -283,12 +294,12 @@ Epic 11.7 total: 6.0
 #### Story 11.8.1 The paperwork exists before the data does - acceptance: DPA, privacy notice, data map, dossiers and sub-processor list are versioned, counsel-reviewed and available before the first pilot upload.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.8.1-T1 | DPA template (roles, sub-processors, breach cooperation, audit, deletion, cross-border) + counsel review | L | V1 | M1 | - |
-| 11.8.1-T2 | Privacy notice for the platform + counsel review (Art. 9.2 elements ✅) | M | V1 | M1 | - |
-| 11.8.1-T3 | Data map / record of processing across stores, fields, retention, cross-border flags | M | V1 | M2 | 06.4.1-T1, 10.8.1-T3 |
-| 11.8.1-T4 | Processing impact dossier (Art. 21 ✅) for Evidgate + a customer-facing template | L | V1 | M3 | 11.8.1-T3 |
-| 11.8.1-T5 | Cross-border transfer dossier within 60 days of first transfer (Art. 20.2 ✅), per store/provider; residency input for O3/O4 | L | V1 | M3 | 11.8.1-T3 |
-| 11.8.1-T6 | Consent/redaction stance documented: Evidgate is processor; consent sits with the customer; redaction and no-LLM defaults | M | V1 | M2 | 11.8.1-T1 |
+| 11.8.1-T1 | DPA template (roles, sub-processors, breach cooperation, audit, deletion, cross-border) + counsel review | L | V1 | G1 | - |
+| 11.8.1-T2 | Privacy notice for the platform + counsel review (Art. 9.2 elements ✅) | M | V1 | G1 | - |
+| 11.8.1-T3 | Data map / record of processing across stores, fields, retention, cross-border flags | M | V1 | G1 | 06.4.1-T1, 10.8.1-T3 |
+| 11.8.1-T4 | Processing impact dossier (Art. 21 ✅) for Evidgate + a customer-facing template | L | V1 | G1 | 11.8.1-T3 |
+| 11.8.1-T5 | Cross-border transfer dossier within 60 days of first transfer (Art. 20.2 ✅), per store/provider; residency input for O3/O4 | L | V1 | G1 | 11.8.1-T3 |
+| 11.8.1-T6 | Consent/redaction stance documented: Evidgate is processor; consent sits with the customer; redaction and no-LLM defaults | M | V1 | G1 | 11.8.1-T1 |
 
 Epic 11.8 total: 9.0
 
@@ -297,18 +308,18 @@ Epic 11.8 total: 9.0
 #### Story 11.9.1 Deletion and breach are runnable procedures - acceptance: a deletion request produces a verifiable report, and a breach rehearsal completes the processor→controller notice inside the runbook's target.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.9.1-T1 | Deletion SLAs + verified deletion (tenant, project, artifact, log) with a customer-facing report | L | V1 | M3 | 06.4.4-T1, 06.4.5-T1 |
-| 11.9.1-T2 | Breach runbook with the 72 h clock (Art. 23.1 ✅), prompt processor→controller notice, evidence pack, regulator-support steps | L | V1 | M3 | 11.5.1-T1 |
-| 11.9.1-T3 | Tabletop exercise + timed rehearsal of the breach notification path | S | V1 | M3 | 11.9.1-T2 |
-| 11.9.1-T4 | Sub-processor change process: notification, objection window, versioned list | S | V1 | M3 | 11.8.1-T1 |
-| 11.9.1-T5 | Customer-facing proof that `pending_delete → deleted` converged; the verification run itself is 06.4.5-T1 and this task consumes its report | S | V1 | M3 | 11.9.1-T1 |
+| 11.9.1-T1 | Deletion SLAs + verified deletion (tenant, project, artifact, log) with a customer-facing report | L | V1 | G1 | 06.4.4-T1, 06.4.5-T1 |
+| 11.9.1-T2 | Breach runbook with the 72 h clock (Art. 23.1 ✅), prompt processor→controller notice, evidence pack, regulator-support steps | L | V1 | G1 | 11.5.1-T1 |
+| 11.9.1-T3 | Tabletop exercise + timed rehearsal of the breach notification path | S | V1 | G1 | 11.9.1-T2 |
+| 11.9.1-T4 | Sub-processor change process: notification, objection window, versioned list | S | V1 | G1 | 11.8.1-T1 |
+| 11.9.1-T5 | Customer-facing proof that `pending_delete → deleted` converged; the verification run itself is 06.4.5-T1 and this task consumes its report | S | V1 | G1 | 11.9.1-T1 |
 
 #### Story 11.9.2 Data-subject requests (PDPL) — acceptance: a data-subject request for access, correction, deletion or restriction is handled by a runnable procedure with a recorded outcome.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.9.2-T1 | Intake, identity check, scope lookup across tables and artifacts, response template and deadline tracker (deadline per counsel ⚠️) | M | V1 | M3 | 11.9.1-T1 |
-| 11.9.2-T2 | Reconcile the audit chain with deletion: pseudonymous subject ids in audit rows, no personal data in chain payloads; written rule | S | V1 | M3 | 11.5.2-T1 |
-| 11.9.2-T3 | Rehearse one request end to end in staging and attach the report | S | V1 | M3 | 11.9.2-T1, 11.9.2-T2 |
+| 11.9.2-T1 | Intake, identity check, scope lookup across tables and artifacts, response template and deadline tracker (deadline per counsel ⚠️) | M | V1 | G1 | 11.9.1-T1 |
+| 11.9.2-T2 | Reconcile the audit chain with deletion: pseudonymous subject ids in audit rows, no personal data in chain payloads; written rule | S | V1 | G1 | 11.5.2-T1 |
+| 11.9.2-T3 | Rehearse one request end to end in staging and attach the report | S | V1 | G1 | 11.9.2-T1, 11.9.2-T2 |
 
 **Story 11.9.2 total: 2** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 

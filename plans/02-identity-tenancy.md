@@ -1,7 +1,10 @@
-# 02 - Identity and Tenancy (M1-M2)
+# 02 - Identity and Tenancy (G1–G2, G4)
 
 > Contracts: `00-overview.md` §2 (roles), §5.4 (tenancy and data access), §8 (states), §9 (API conventions), §11 (NFR). Facts: `../DECISIONS.md` §4 (stack), §6 F3/F5/F6, §9 R4/R5. Source: design §3 (technical requirements), §4 (Test creation and management), §6 (Data model, storage constraints), §8 (Security and permission boundaries).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build. Field lists below are starting points for that step.
+
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 27 · G2 12.5 · G4 6.5 person-days.
+
 ## 1. Purpose and scope
 
 **Goal.** Every business row is tenant-scoped, and every actor that touches the platform — human, CI job, agent, Evidgate operator — authenticates into a least-privilege identity whose actions are auditable. This plan owns orgs, projects, membership, the role/permission catalogue, all authentication paths, database-enforced tenant isolation and the audit core.
@@ -163,73 +166,73 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 #### Story 02.1.1 Org and project registry — acceptance: an org and its projects are created/read by API; `unique (org_id, slug)` and `unique (org_id, id)` exist; a request for another org's object returns 404 and an audit row is written.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.1.1-T1 | `organization` / `project` schema, composite keys, migrations with the RLS template | M | V1 | M1 | 01.4.1-T3 |
-| 02.1.1-T2 | Org/project CRUD commands/queries + scope resolution (org from the authenticated principal, project in URL must match) (C1/C5) | M | V1 | M1 | 02.1.1-T1, 02.2.1-T2 |
-| 02.1.1-T3 | Quota/limit columns on org and project + enforcement hooks for 12 | S | V1 | M2 | 02.1.1-T1 |
+| 02.1.1-T1 | `organization` / `project` schema, composite keys, migrations with the RLS template | M | V1 | G1 | 01.4.1-T3 |
+| 02.1.1-T2 | Org/project CRUD commands/queries + scope resolution (org from the authenticated principal, project in URL must match) (C1/C5) | M | V1 | G1 | 02.1.1-T1, 02.2.1-T2 |
+| 02.1.1-T3 | Quota/limit columns on org and project + enforcement hooks for 12 | S | V1 | G1 | 02.1.1-T1 |
 **Story 02.1.1 total: 2.5** (Epic 02.1 continues in 02.1.2)
 #### Story 02.1.2 Membership and invites — acceptance: an invite binds to a membership only on first login with a verified matching email; removing a member revokes their sessions immediately; removing the last `tenant_admin` is rejected.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.1.2-T1 | `membership` + `membership_role` schema and API | M | V1 | M1 | 02.1.1-T1 |
-| 02.1.2-T2 | Invite flow: pending invite, verified-email bind on login, resend/cancel | M | V1 | M2 | 02.1.2-T1, 02.3.1-T2 |
-| 02.1.2-T3 | Last-admin guard + session revocation on member removal/disable | S | V1 | M2 | 02.1.2-T1, 02.3.2-T2 |
+| 02.1.2-T1 | `membership` + `membership_role` schema and API | M | V1 | G1 | 02.1.1-T1 |
+| 02.1.2-T2 | Invite flow: pending invite, verified-email bind on login, resend/cancel | M | V1 | G1 | 02.1.2-T1, 02.3.1-T2 |
+| 02.1.2-T3 | Last-admin guard + session revocation on member removal/disable | S | V1 | G1 | 02.1.2-T1, 02.3.2-T2 |
 **Epic 02.1 total: 5.0**
 ### Epic 02.2 Roles and permissions as data
 #### Story 02.2.1 Permission catalogue and enforcement — acceptance: the seeded built-in roles match 00 §2 exactly; every endpoint denies by default; a permission referenced in code but missing from the catalogue fails the test suite.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.2.1-T1 | `contracts/permissions.json` + `permission` / `role` / `role_permission` seed with the 00 §2 built-in roles (incl. `billing:read` granted to `billing_operator`, cross-tenant and audited; `project:read` for all member roles, `project:write` and `project:create` for `tenant_admin` — T21, 00 §9.3) | M | V1 | M1 | 02.1.1-T1 |
-| 02.2.1-T2 | Mediator authorization behaviour (C2): per-project permission evaluation, deny-by-default, service identities handled like members | M | V1 | M1 | 02.2.1-T1 |
-| 02.2.1-T3 | Role × permission matrix tests incl. `viewer` deny paths and an assertion that no permission in the catalogue exposes secret values | M | V1 | M1 | 02.2.1-T2 |
+| 02.2.1-T1 | `contracts/permissions.json` + `permission` / `role` / `role_permission` seed with the 00 §2 built-in roles (incl. `billing:read` granted to `billing_operator`, cross-tenant and audited; `project:read` for all member roles, `project:write` and `project:create` for `tenant_admin` — T21, 00 §9.3) | M | V1 | G1 | 02.1.1-T1 |
+| 02.2.1-T2 | Mediator authorization behaviour (C2): per-project permission evaluation, deny-by-default, service identities handled like members | M | V1 | G1 | 02.2.1-T1 |
+| 02.2.1-T3 | Role × permission matrix tests incl. `viewer` deny paths and an assertion that no permission in the catalogue exposes secret values | M | V1 | G1 | 02.2.1-T2 |
 **Epic 02.2 total: 3.0**
 ### Epic 02.3 Human login (OIDC / OAuth2)
 #### Story 02.3.1 Federated login — acceptance: a GitHub (OAuth2 + PKCE) or Google Workspace (OIDC) user with a verified email and an active membership reaches an authenticated session; no password path exists in the API schema.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.3.1-T1 | Login on ASP.NET Core auth handlers: Google Workspace OIDC (ID token + JWKS verify) and GitHub OAuth2 auth-code + PKCE (no ID token; identity from `GET /user`, verified email from `GET /user/emails`); state, nonce/PKCE verifier, redirect allowlist (T6) | L | V1 | M1 | 02.1.2-T1, 01.1.2-T1 |
-| 02.3.1-T2 | Identity linking on `(provider, subject)`, email-verification rule, optional org domain allowlist | M | V1 | M2 | 02.3.1-T1 |
-| 02.3.1-T3 | `GET /v1/me` profile + `PATCH /v1/me {preferred_locale}` (`vi`/`en`) for the web locale preference (T37) | S | V1 | M2 | 02.3.1-T1 |
+| 02.3.1-T1 | Login on ASP.NET Core auth handlers: Google Workspace OIDC (ID token + JWKS verify) and GitHub OAuth2 auth-code + PKCE (no ID token; identity from `GET /user`, verified email from `GET /user/emails`); state, nonce/PKCE verifier, redirect allowlist (T6) | L | V1 | G1 | 02.1.2-T1, 01.1.2-T1 |
+| 02.3.1-T2 | Identity linking on `(provider, subject)`, email-verification rule, optional org domain allowlist | M | V1 | G1 | 02.3.1-T1 |
+| 02.3.1-T3 | `GET /v1/me` profile + `PATCH /v1/me {preferred_locale}` (`vi`/`en`) for the web locale preference (T37) | S | V1 | G1 | 02.3.1-T1 |
 **Story 02.3.1 total: 3.5**
 #### Story 02.3.2 Sessions and revocation — acceptance: the cookie is opaque, `httpOnly`, `Secure`, `SameSite=Lax`; idle and absolute expiry are enforced; a revoked session gets 401 on the next request; users can list and revoke their sessions.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.3.2-T1 | `session` table, `__Host-` cookie handling, ASP.NET Core antiforgery (`XSRF-TOKEN` cookie / `X-XSRF-TOKEN` header), rotation on login/role change (T38) | M | V1 | M1 | 02.3.1-T1 |
-| 02.3.2-T2 | Logout, session list/revoke, revoke-all (self and admin-triggered) | S | V1 | M2 | 02.3.2-T1 |
+| 02.3.2-T1 | `session` table, `__Host-` cookie handling, ASP.NET Core antiforgery (`XSRF-TOKEN` cookie / `X-XSRF-TOKEN` header), rotation on login/role change (T38) | M | V1 | G1 | 02.3.1-T1 |
+| 02.3.2-T2 | Logout, session list/revoke, revoke-all (self and admin-triggered) | S | V1 | G1 | 02.3.2-T1 |
 **Story 02.3.2 total: 1.5**
 #### Story 02.3.3 Enterprise SAML — acceptance: an org can configure a SAML IdP and its users log in and land in the same session model as OIDC users.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.3.3-T1 | SAML 2.0 SSO (metadata, SP-initiated login, assertion mapping, JIT membership policy) | XL | V3 | M5 | 02.3.2-T1, 02.1.2-T2 |
+| 02.3.3-T1 | SAML 2.0 SSO (metadata, SP-initiated login, assertion mapping, JIT membership policy) | XL | V3 | G4 | 02.3.2-T1, 02.1.2-T2 |
 **Epic 02.3 total: 8.0 · (V1 5.0 · V3 3.0)**
 ### Epic 02.4 CI authentication
 #### Story 02.4.1 GitHub OIDC exchange — acceptance: a workflow job of a bound repository with the allowed `ref` and `job_workflow_ref` receives a `ci_producer` token scoped to one project; any claim mismatch, unbound repository, fork workflow, or replayed `jti` receives 401/403 and no token.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.4.1-T1 | GitHub OIDC JWT validator via `Microsoft.IdentityModel.JsonWebTokens`: `iss`, `aud`, JWKS caching/rotation, `exp`/`nbf` ±60 s, both `sub` formats | L | V1 | M1 | 02.1.1-T2 |
-| 02.4.1-T2 | `ci_binding` model + admin API (repository_id, ref patterns, workflow refs, disable) | M | V1 | M1 | 02.1.1-T1 |
-| 02.4.1-T3 | `POST /v1/ci/token` → pre-tenant resolve via `evidgate_resolve` (T1) → mint short-lived `ci_producer` with `Microsoft.IdentityModel.JsonWebTokens` (claims, scope, permission set, TTL) | M | V1 | M1 | 02.4.1-T1, 02.2.1-T2, 02.6.1-T3 |
-| 02.4.1-T4 | `ci_token_issue` replay cache — `jti` kept for the OIDC token lifetime + 10 min skew, daily purge task (Cronos schedule, unique fire key, 00 §5.3) (T7) — + issuance rate limit + clock-skew handling | M | V1 | M2 | 02.4.1-T3 |
+| 02.4.1-T1 | GitHub OIDC JWT validator via `Microsoft.IdentityModel.JsonWebTokens`: `iss`, `aud`, JWKS caching/rotation, `exp`/`nbf` ±60 s, both `sub` formats | L | V1 | G1 | 02.1.1-T2 |
+| 02.4.1-T2 | `ci_binding` model + admin API (repository_id, ref patterns, workflow refs, disable) | M | V1 | G1 | 02.1.1-T1 |
+| 02.4.1-T3 | `POST /v1/ci/token` → pre-tenant resolve via `evidgate_resolve` (T1) → mint short-lived `ci_producer` with `Microsoft.IdentityModel.JsonWebTokens` (claims, scope, permission set, TTL) | M | V1 | G1 | 02.4.1-T1, 02.2.1-T2, 02.6.1-T3 |
+| 02.4.1-T4 | `ci_token_issue` replay cache — `jti` kept for the OIDC token lifetime + 10 min skew, daily purge task (Cronos schedule, unique fire key, 00 §5.3) (T7) — + issuance rate limit + clock-skew handling | M | V1 | G2 | 02.4.1-T3 |
 **Story 02.4.1 total: 5.0**
 #### Story 02.4.2 Non-GitHub CI ingest tokens — acceptance: a token is shown once at creation, only its prefix and hash are stored, rotation keeps the old token valid only for the overlap window, and revoke makes the next exchange fail with 401.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.4.2-T1 | `ingest_token` (prefix + `HMAC-SHA256` + `pepper_version`, T5), show-once response, rotate/revoke API, `last_used_at` tracking | S | V1 | M2 | 02.4.1-T3 |
-| 02.4.2-T2 | CI auth contract tests: fork PR, renamed repo, wrong audience, replayed `jti`, rotated and revoked tokens | S | V1 | M2 | 02.4.1-T4, 02.4.2-T1 |
+| 02.4.2-T1 | `ingest_token` (prefix + `HMAC-SHA256` + `pepper_version`, T5), show-once response, rotate/revoke API, `last_used_at` tracking | S | V1 | G1 | 02.4.1-T3 |
+| 02.4.2-T2 | CI auth contract tests: fork PR, renamed repo, wrong audience, replayed `jti`, rotated and revoked tokens | S | V1 | G2 | 02.4.1-T4, 02.4.2-T1 |
 #### Story 02.4.3 GitHub App installation — acceptance: one GitHub App is installed per organization, its installation id is stored per org, a short-lived installation token is minted on demand and never persisted, an uninstall or suspension disables the integrations that use it, and every change is audited. [PROPOSAL review 2026-10-02]
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.4.3-T1 | Decision (ADR): one Evidgate GitHub App serves checks (07.6.1), catalog webhooks (03.4.x), healing PRs (08.6.x) and re-run triggers (05.5.2), with the minimal permission set per feature and a documented owner for its private key | S | V1 | M2 | 02.4.1-T2 |
-| 02.4.3-T2 | `github_installation` table (org_id, installation_id, account, permissions, state), install callback with state/nonce, installation-token minting with cache below expiry, RLS + composite FK, audit | M | V1 | M2 | 02.4.3-T1, 02.1.1-T1 |
-| 02.4.3-T3 | Installation lifecycle webhooks (`installation`, `installation_repositories`, suspend/unsuspend): update state, disable dependent bindings, notify the org admin | S | V1 | M3 | 02.4.3-T2 |
+| 02.4.3-T1 | Decision (ADR): one Evidgate GitHub App serves checks (07.6.1), catalog webhooks (03.4.x), healing PRs (08.6.x) and re-run triggers (05.5.2), with the minimal permission set per feature and a documented owner for its private key | S | V1 | G2 | 02.4.1-T2 |
+| 02.4.3-T2 | `github_installation` table (org_id, installation_id, account, permissions, state), install callback with state/nonce, installation-token minting with cache below expiry, RLS + composite FK, audit | M | V1 | G2 | 02.4.3-T1, 02.1.1-T1 |
+| 02.4.3-T3 | Installation lifecycle webhooks (`installation`, `installation_repositories`, suspend/unsuspend): update state, disable dependent bindings, notify the org admin | S | V1 | G2 | 02.4.3-T2 |
 
 **Story 02.4.3 total: 2.0**
 
 #### Story 02.4.4 API tokens for automation — acceptance: a project admin creates an expiring, scope-limited API token that works for read/automation calls, cannot exceed its creator's permissions or hold admin permissions, and is shown once.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.4.4-T1 | `api_token` table (project scope, permission subset, mandatory expiry, HMAC + `pepper_version` like 02.4.2-T1, show-once, revoke, `last_used_at`) and create/list/revoke API | M | V1 | M3 | 02.4.2-T1, 02.2.1-T2, 02.7.1-T2 |
-| 02.4.4-T2 | Bearer authentication for `evg_` tokens through the permission evaluator; refuses member/role/support/billing-admin permissions and any permission the creator lacks | M | V1 | M3 | 02.4.4-T1 |
-| 02.4.4-T3 | Tests: self-escalation, expired, revoked, wrong project, rotated pepper, audit rows on create/use-denied/revoke | S | V1 | M3 | 02.4.4-T2 |
+| 02.4.4-T1 | `api_token` table (project scope, permission subset, mandatory expiry, HMAC + `pepper_version` like 02.4.2-T1, show-once, revoke, `last_used_at`) and create/list/revoke API | M | V1 | G2 | 02.4.2-T1, 02.2.1-T2, 02.7.1-T2 |
+| 02.4.4-T2 | Bearer authentication for `evg_` tokens through the permission evaluator; refuses member/role/support/billing-admin permissions and any permission the creator lacks | M | V1 | G2 | 02.4.4-T1 |
+| 02.4.4-T3 | Tests: self-escalation, expired, revoked, wrong project, rotated pepper, audit rows on create/use-denied/revoke | S | V1 | G2 | 02.4.4-T2 |
 
 **Story 02.4.4 total: 2.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
 
@@ -239,61 +242,61 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 #### Story 02.5.1 Agent identity per tenant and pool — acceptance: an `evidgate-agent` enrols into one pool of one tenant, can claim only that pool's jobs, cannot approve, change policy or read another project; its credential can be rotated or revoked and the revocation takes effect on the next request.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.5.1-T1 | `service_identity` enrolment (tenant + pool), keypair issue, agent token minting | M | V2 | M4 | 02.4.1-T3, 05.7.3-T1 |
-| 02.5.1-T2 | Pool-scoped enforcement on `job:claim` / `job:execute` / `artifact:write`; denial of approvals and cross-project reads | S | V2 | M4 | 02.5.1-T1, 02.2.1-T2 |
-| 02.5.1-T3 | Rotation/revocation + kill-switch path and runbook hooks | S | V2 | M4 | 02.5.1-T1, 10.7.1-T4 |
+| 02.5.1-T1 | `service_identity` enrolment (tenant + pool), keypair issue, agent token minting | M | V2 | G4 | 02.4.1-T3, 05.7.3-T1 |
+| 02.5.1-T2 | Pool-scoped enforcement on `job:claim` / `job:execute` / `artifact:write`; denial of approvals and cross-project reads | S | V2 | G4 | 02.5.1-T1, 02.2.1-T2 |
+| 02.5.1-T3 | Rotation/revocation + kill-switch path and runbook hooks | S | V2 | G4 | 02.5.1-T1, 10.7.1-T4 |
 **Epic 02.5 total: 2.0**
 ### Epic 02.6 Tenant isolation (RLS)
 #### Story 02.6.1 Database-enforced isolation — acceptance: every business table has `ENABLE` + `FORCE ROW LEVEL SECURITY` and an `org_id` policy (the platform-scoped identity tables are outside the org policy per D12, access goes through membership, and the platform catalogue rows use the all-org read policy of §4.5); the app role is not the owner and has no `BYPASSRLS`; a table without a policy fails CI.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.6.1-T1 | Role split (`evidgate_owner` / `evidgate_app` / `evidgate_operator`), `evidgate.current_org_id()`/`current_project_id()` helpers (T2), policy template, policies for all M1 tables | L | V1 | M1 | 02.1.1-T1 |
-| 02.6.1-T2 | RLS lint in CI: new table without `org_id`, a policy or `unique (org_id, id)` fails (T3), checked against the §4.5 exception list (`user`, `user_identity`, `session`, `permission`, built-in `role`/`role_permission`, built-in `template`, `organization`, `report_parser`, and 01's `schema_migration`/`task`); boot-time policy self-check | S | V1 | M1 | 02.6.1-T1 |
-| 02.6.1-T3 | `evidgate_resolve` schema + owner-owned SECURITY DEFINER functions (`member_orgs`, ci-binding resolver, ingest-token resolver) returning `(org_id, project_id, binding_id, status)`; app role `EXECUTE` only; every call audited (T1, T4) | M | V1 | M1 | 02.6.1-T1 |
+| 02.6.1-T1 | Role split (`evidgate_owner` / `evidgate_app` / `evidgate_operator`), `evidgate.current_org_id()`/`current_project_id()` helpers (T2), policy template, policies for all M1 tables | L | V1 | G1 | 02.1.1-T1 |
+| 02.6.1-T2 | RLS lint in CI: new table without `org_id`, a policy or `unique (org_id, id)` fails (T3), checked against the §4.5 exception list (`user`, `user_identity`, `session`, `permission`, built-in `role`/`role_permission`, built-in `template`, `organization`, `report_parser`, and 01's `schema_migration`/`task`); boot-time policy self-check | S | V1 | G1 | 02.6.1-T1 |
+| 02.6.1-T3 | `evidgate_resolve` schema + owner-owned SECURITY DEFINER functions (`member_orgs`, ci-binding resolver, ingest-token resolver) returning `(org_id, project_id, binding_id, status)`; app role `EXECUTE` only; every call audited (T1, T4) | M | V1 | G1 | 02.6.1-T1 |
 **Story 02.6.1 total: 3.5**
 #### Story 02.6.2 Tenant context — acceptance: every request, job and background task opens its transaction via `ITenantScope.BeginAsync` (parameterised `set_config`, C3); a missing setting yields zero rows, never an error or all rows (platform-scoped identity tables and platform catalogue rows excepted, §4.5).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.6.2-T1 | Entry points only: API request and `task`-queue worker call `ITenantScope` from 01.4.2-T1 (shipped); adds tenant-context helpers and the W7-SEC-06 follow-up, no second scope implementation | S | V1 | M1 | 02.6.1-T1, 01.4.2-T1 |
+| 02.6.2-T1 | Entry points only: API request and `task`-queue worker call `ITenantScope` from 01.4.2-T1 (shipped); adds tenant-context helpers and the W7-SEC-06 follow-up, no second scope implementation | S | V1 | G1 | 02.6.1-T1, 01.4.2-T1 |
 **Epic 02.6 total: 4.0**
 ### Epic 02.7 Audit core
 #### Story 02.7.1 Audit trail — acceptance: every permission-checked mutation appends one audit row in the same transaction with actor, action, object, before/after hash and `request_id`; the app role cannot update or delete audit rows; a broken chain is detectable by a verification job.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.7.1-T1 | `audit_log` schema, append-only grants, per-org hash chain + `seq` serialised by `pg_advisory_xact_lock` before commit (T8), indexes by `(org_id, created_at)` | M | V1 | M1 | 02.6.1-T1 |
-| 02.7.1-T2 | Audit writer used by the Mediator authorization behaviour and by command handlers; `actor_type` for user / ci_producer / agent / operator / system | M | V1 | M1 | 02.7.1-T1, 02.2.1-T2 |
-| 02.7.1-T3 | Audit read API + export (JSONL/CSV) + periodic chain-verification task walking `seq` (Cronos schedule, unique fire key, 00 §5.3) (T8) | S | V1 | M2 | 02.7.1-T2 |
+| 02.7.1-T1 | `audit_log` schema, append-only grants, per-org hash chain + `seq` serialised by `pg_advisory_xact_lock` before commit (T8), indexes by `(org_id, created_at)` | M | V1 | G1 | 02.6.1-T1 |
+| 02.7.1-T2 | Audit writer used by the Mediator authorization behaviour and by command handlers; `actor_type` for user / ci_producer / agent / operator / system | M | V1 | G1 | 02.7.1-T1, 02.2.1-T2 |
+| 02.7.1-T3 | Audit read API + export (JSONL/CSV) + periodic chain-verification task walking `seq` (Cronos schedule, unique fire key, 00 §5.3) (T8) | S | V1 | G1 | 02.7.1-T2 |
 **Epic 02.7 total: 2.5**
 ### Epic 02.8 Support access
 #### Story 02.8.1 Time-boxed operator access — acceptance: an operator has no tenant data access until a grant is approved by a tenant admin; every operator read/write is audited with the grant id; access ends at expiry without manual action.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.8.1-T1 | `support_grant` model, request/approve/revoke flow, expiry enforcement, notifications | M | V1 | M2 | 02.7.1-T2, 02.1.2-T1 |
-| 02.8.1-T2 | Operator access path: separate DB role, context switch, session banner, alerting on grant and on operator reads | M | V1 | M2 | 02.8.1-T1, 02.6.2-T1 |
+| 02.8.1-T1 | `support_grant` model, request/approve/revoke flow, expiry enforcement, notifications | M | V1 | G2 | 02.7.1-T2, 02.1.2-T1 |
+| 02.8.1-T2 | Operator access path: separate DB role, context switch, session banner, alerting on grant and on operator reads | M | V1 | G2 | 02.8.1-T1, 02.6.2-T1 |
 **Epic 02.8 total: 2.0**
 ### Epic 02.9 Cross-tenant isolation test suite (acceptance gate)
 #### Story 02.9.1 Isolation suite — acceptance: with two fully populated orgs, no API, FK or RLS test can read, write or infer another tenant's data; the suite is required to pass for M1 to close (00 §4).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.9.1-T1 | API suite: other-tenant id → 404, token/project scope mismatch → 403, list endpoints never leak counts | M | V1 | M1 | 02.1.1-T2, 02.2.1-T2 |
-| 02.9.1-T2 | Composite FK suite: cross-org inserts rejected on every tenant table | M | V1 | M1 | 02.1.1-T1 |
-| 02.9.1-T3 | RLS suite: unset GUC → 0 rows, set GUC → exact rows, `relforcerowsecurity` true, app role has no `BYPASSRLS` (platform catalogue rows asserted separately per §4.5; platform-scoped identity tables excluded) | M | V1 | M1 | 02.6.1-T1, 02.6.2-T1, 02.6.1-T2 |
+| 02.9.1-T1 | API suite: other-tenant id → 404, token/project scope mismatch → 403, list endpoints never leak counts | M | V1 | G1 | 02.1.1-T2, 02.2.1-T2 |
+| 02.9.1-T2 | Composite FK suite: cross-org inserts rejected on every tenant table | M | V1 | G1 | 02.1.1-T1 |
+| 02.9.1-T3 | RLS suite: unset GUC → 0 rows, set GUC → exact rows, `relforcerowsecurity` true, app role has no `BYPASSRLS` (platform catalogue rows asserted separately per §4.5; platform-scoped identity tables excluded) | M | V1 | G1 | 02.6.1-T1, 02.6.2-T1, 02.6.1-T2 |
 **Epic 02.9 total: 3.0**
 
 ### Epic 02.10 Transactional notifications [PROPOSAL review 2026-10-02 P4]
 #### Story 02.10.1 One outbound email channel — acceptance: an invite, a support grant, a quota warning and a candidate expiry each send exactly one localized (vi/en) email through the outbox; a bounce or complaint suppresses further mail to that address; no email contains a secret or customer test data.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.10.1-T1 | Provider choice and sender setup (SPF/DKIM/DMARC, sending domain, region vs PDPL transfer note), recorded as a decision in DECISIONS §8 | S | V1 | M2 | — |
-| 02.10.1-T2 | `Evidgate.Modules.Notifications`: `notification` table (RLS, idempotency key), outbox-driven sender task with retry/dead-letter, vi/en templates, no PII beyond recipient and org name in logs | L | V1 | M2 | 02.10.1-T1, 01.5.1-T3 |
-| 02.10.1-T3 | Bounce/complaint webhook, suppression list, per-org opt-out for non-transactional mail | M | V1 | M3 | 02.10.1-T2 |
-| 02.10.1-T4 | Wire consumers: invite (02.1.2-T2), support grant (02.8.1-T1), quota 80 % warning (12.3.1-T4); candidate expiry (08.6.1-T3) is wired in V2 | M | V1 | M3 | 02.10.1-T2, 02.1.2-T2, 02.8.1-T1, 12.3.1-T4 |
+| 02.10.1-T1 | Provider choice and sender setup (SPF/DKIM/DMARC, sending domain, region vs PDPL transfer note), recorded as a decision in DECISIONS §8 | S | V1 | G2 | — |
+| 02.10.1-T2 | `Evidgate.Modules.Notifications`: `notification` table (RLS, idempotency key), outbox-driven sender task with retry/dead-letter, vi/en templates, no PII beyond recipient and org name in logs | L | V1 | G2 | 02.10.1-T1, 01.5.1-T3 |
+| 02.10.1-T3 | Bounce/complaint webhook, suppression list, per-org opt-out for non-transactional mail | M | V1 | G2 | 02.10.1-T2 |
+| 02.10.1-T4 | Wire consumers: invite (02.1.2-T2), support grant (02.8.1-T1), quota 80 % warning (12.3.1-T4); candidate expiry (08.6.1-T3) is wired in V2 | M | V1 | G2 | 02.10.1-T2, 02.1.2-T2, 02.8.1-T1, 12.3.1-T4 |
 
 #### Story 02.10.2 Chat notifications (Slack, Teams) — acceptance: an org admin routes selected events to a chat incoming webhook without storing the URL as plain text.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.10.2-T1 | Incoming-webhook channel per org: URL kept as a secret reference, https-only and private-address guard, per-event opt-in | M | V2 | M4 | 02.10.1-T2, 11.3.1-T1 |
-| 02.10.2-T2 | Message templates for blocked release, quota 80 %, candidate expiry; no test content or secrets in the message | S | V2 | M4 | 02.10.2-T1, 02.10.1-T4 |
+| 02.10.2-T1 | Incoming-webhook channel per org: URL kept as a secret reference, https-only and private-address guard, per-event opt-in | M | V2 | G4 | 02.10.1-T2, 11.3.1-T1 |
+| 02.10.2-T2 | Message templates for blocked release, quota 80 %, candidate expiry; no test content or secrets in the message | S | V2 | G4 | 02.10.2-T1, 02.10.1-T4 |
 
 **Story 02.10.2 total: 1.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
 

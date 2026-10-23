@@ -1,8 +1,10 @@
-# 10 - Operations: environments, deploy, observability, backup and capacity (M1-M3)
+# 10 - Operations: environments, deploy, observability, backup and capacity (G1–G2, G4)
 
 > Contracts: `00-overview.md` §4 (milestones, exit gates), §5.1-§5.3, §8, §11 (targets), §12. Facts: `../DECISIONS.md` §4 (licence rule, PostgreSQL 18, OpenTelemetry), §5.9 (kill switch before apply), §7, §9, A7 (no Kubernetes/Temporal in V1), A10, F3, F5, F6, O2, O3. Source: design §9 (deploy, capacity, SLI, recovery) and §9 acceptance table ✅ (a ✅ attached to a `Source:` reference means the passage was read in this task; a ✅ elsewhere is an external primary source with a link).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
 > Source numbers kept verbatim (recomputed in this task ✅): 5 projects × 10 runs/day × 2 000 results = 100 000 results/day ≈ 98 MiB/day ≈ 8.6 GiB/90 days before index/retry/backup; 50 runs × 20 artifacts × 2 MB = 2 GB/day, 14-day retention ≈ 28 GB; burst 50 000 events/60 s ≈ 833 events/s. These are assumptions, not a benchmark.
+
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 35.75 · G2 16 · G4 4.5 person-days.
 
 ## 1. Purpose and scope
 
@@ -115,20 +117,20 @@
 #### Story 10.1.1 Three environments — acceptance: staging and prod have separate credentials and data; a config error stops the boot with a non-zero exit
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.1.1-T1 | Environment model and configuration matrix: dev/staging/prod differences, `EVIDGATE_*` schema validated at boot, per-environment inventory doc | M | V1 | M1 | 01.1.2-T1 |
-| 10.1.1-T2 | Secret handling behind one interface (provider-agnostic: env injection first, managed secret store when O3 lands) with no values in the repo or images | M | V1 | M1 | 10.1.1-T1 |
-| 10.1.1-T3 | Environment bootstrap automation: database + owner/app/operator roles (01.4.1-T2), object storage buckets and policies, secret placeholders, network rules | L | V1 | M2 | 10.1.1-T2 |
-| 10.1.1-T4 | Isolated artifact-viewer origin: separate registrable domain, DNS record and TLS certificate, hosting/deploy of the viewer bundle, CSP/CORS headers, no app cookies on that origin | M | V1 | M2 | - |
+| 10.1.1-T1 | Environment model and configuration matrix: dev/staging/prod differences, `EVIDGATE_*` schema validated at boot, per-environment inventory doc | M | V1 | G1 | 01.1.2-T1 |
+| 10.1.1-T2 | Secret handling behind one interface (provider-agnostic: env injection first, managed secret store when O3 lands) with no values in the repo or images | M | V1 | G1 | 10.1.1-T1 |
+| 10.1.1-T3 | Environment bootstrap automation: database + owner/app/operator roles (01.4.1-T2), object storage buckets and policies, secret placeholders, network rules | L | V1 | G1 | 10.1.1-T2 |
+| 10.1.1-T4 | Isolated artifact-viewer origin: separate registrable domain, DNS record and TLS certificate, hosting/deploy of the viewer bundle, CSP/CORS headers, no app cookies on that origin | M | V1 | G1 | - |
 
 Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, headers); the viewer application and its iframe/CSP behaviour stay in 06.3.3-T1, which already lists the 10 DNS/TLS dependency. Static hosting for `apps/web` is settled by T41: the Angular build is a static bundle on object storage + CDN (closes 09 §11 #3).
 
 #### Story 10.1.2 Secrets inventory, scanning and break-glass — acceptance: every secret has an owner, a store and a rotation cadence in one checked inventory, pushes containing secrets are blocked, a documented break-glass path exists, and built images are scanned for known vulnerabilities.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.1.2-T1 | Secret inventory (name, owner, store, rotation cadence, break-glass holder) as a machine-readable file; CI check that every secret in `infra/config-matrix.json` appears in it | M | V1 | M1 | 10.1.1-T2 |
-| 10.1.2-T2 | Enable repository secret scanning and push protection and record the setting and who can bypass it | XS | V1 | M1 | 01.7.1-T1 |
-| 10.1.2-T3 | Break-glass procedure for secrets: sealed offline copy, who may open it, forced rotation after use, audit row | S | V1 | M2 | 10.1.2-T1, 10.7.1-T4 |
-| 10.1.2-T4 | Image vulnerability scan on built images in CI with a severity gate and a documented exception list (tool licence checked per DECISIONS §4 ⚠️) | M | V1 | M2 | 10.2.1-T1 |
+| 10.1.2-T1 | Secret inventory (name, owner, store, rotation cadence, break-glass holder) as a machine-readable file; CI check that every secret in `infra/config-matrix.json` appears in it | M | V1 | G1 | 10.1.1-T2 |
+| 10.1.2-T2 | Enable repository secret scanning and push protection and record the setting and who can bypass it | XS | V1 | G1 | 01.7.1-T1 |
+| 10.1.2-T3 | Break-glass procedure for secrets: sealed offline copy, who may open it, forced rotation after use, audit row | S | V1 | G1 | 10.1.2-T1, 10.7.1-T4 |
+| 10.1.2-T4 | Image vulnerability scan on built images in CI with a severity gate and a documented exception list (tool licence checked per DECISIONS §4 ⚠️) | M | V1 | G1 | 10.2.1-T1 |
 
 **Story 10.1.2 total: 2.75** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4. Triage SLA and base-image refresh cadence stay in 11.6.1-T4.
 
@@ -137,34 +139,34 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 #### Story 10.2.1 Images and provenance — acceptance: one image per app built once, pinned by digest, promoted unchanged; `latest` never reachable in a deploy file
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.2.1-T1 | Container images for `src/Evidgate.Api`, `src/Evidgate.Worker` and `src/Evidgate.Migrator`: multi-stage `dotnet publish` on a pinned `mcr.microsoft.com/dotnet/sdk:10.0` builder, runtime on a digest-pinned chiseled non-root `mcr.microsoft.com/dotnet/aspnet:10.0` (⚠️ exact chiseled tag/digest verified at build), CycloneDX SBOM per image; `apps/web` is an Angular static bundle on object storage + CDN, not a container (T41, F-10-1) | L | V1 | M1 | 01.1.2-T1 |
-| 10.2.1-T2 | Registry, image signing and provenance (attestation), digest promotion rule enforced by the deploy workflow | M | V1 | M1 | 10.2.1-T1 |
+| 10.2.1-T1 | Container images for `src/Evidgate.Api`, `src/Evidgate.Worker` and `src/Evidgate.Migrator`: multi-stage `dotnet publish` on a pinned `mcr.microsoft.com/dotnet/sdk:10.0` builder, runtime on a digest-pinned chiseled non-root `mcr.microsoft.com/dotnet/aspnet:10.0` (⚠️ exact chiseled tag/digest verified at build), CycloneDX SBOM per image; `apps/web` is an Angular static bundle on object storage + CDN, not a container (T41, F-10-1) | L | V1 | G1 | 01.1.2-T1 |
+| 10.2.1-T2 | Registry, image signing and provenance (attestation), digest promotion rule enforced by the deploy workflow | M | V1 | G1 | 10.2.1-T1 |
 
 #### Story 10.2.2 Deploy with expand/contract and canary — acceptance: a deploy never takes traffic on a version whose migrations have not run, and a decision-changing canary is blocked by the shadow compare
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.2.2-T1 | Deploy pipeline: `Evidgate.Migrator` job (owner role, DbUp 7) → expand gate that verifies the DbUp checksum journal head → rollout → post-deploy verification; refuses a deploy whose migration set is not expand-only while the old version lives (F-10-2) | L | V1 | M1 | 10.2.1-T2, 01.4.1-T1 |
-| 10.2.2-T2 | Canary rollout + automatic rollback on SLI breach (error rate, latency, readiness) with a documented rollback that never rewrites the schema | L | V1 | M2 | 10.2.2-T1, 10.3.1-T5 |
-| 10.2.2-T3 | Shadow decision compare: replay a fixed evidence set under the incoming policy revision, diff decisions, block promotion on unexplained diff, per-project rollout — source §9 ✅ | L | V1 | M2 | 10.2.2-T1 |
-| 10.2.2-T4 | Release runbook: who deploys, order of steps, verification checklist, rollback drill, post-deploy watch window | M | V1 | M2 | 10.2.2-T2 |
+| 10.2.2-T1 | Deploy pipeline: `Evidgate.Migrator` job (owner role, DbUp 7) → expand gate that verifies the DbUp checksum journal head → rollout → post-deploy verification; refuses a deploy whose migration set is not expand-only while the old version lives (F-10-2) | L | V1 | G1 | 10.2.1-T2, 01.4.1-T1 |
+| 10.2.2-T2 | Canary rollout + automatic rollback on SLI breach (error rate, latency, readiness) with a documented rollback that never rewrites the schema | L | V1 | G1 | 10.2.2-T1, 10.3.1-T5 |
+| 10.2.2-T3 | Shadow decision compare: replay a fixed evidence set under the incoming policy revision, diff decisions, block promotion on unexplained diff, per-project rollout — source §9 ✅ | L | V1 | G1 | 10.2.2-T1 |
+| 10.2.2-T4 | Release runbook: who deploys, order of steps, verification checklist, rollback drill, post-deploy watch window | M | V1 | G1 | 10.2.2-T2 |
 
 ### Epic 10.3 Instrumentation, dashboards and alerts (M1-M2)
 
 #### Story 10.3.1 Telemetry and alerting — acceptance: every alert in FR-10-6 fires in staging with a severity and a runbook link; no secret appears in a label or log field
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.3.1-T1 | OpenTelemetry instrumentation in `Evidgate.Api` and `Evidgate.Worker`: traces, metrics, logs with `request_id`/`run_id`/`job_id`/`trace_id`, sampling policy, resource attributes (service, env, version); browser web-vitals are emitted by 09's telemetry (09.1.1-T9) and only recorded here (T39) | L | V1 | M1 | 10.1.1-T1 |
-| 10.3.1-T2 | Collector deployment and exporters with retention, batching and redaction of secrets (00 §11) | M | V1 | M1 | 10.3.1-T1, 10.3.2-T1 |
-| 10.3.1-T3 | Metrics catalogue: `task`-queue age, `outbox` dispatch lag, lease loss, dead-letter depth (own queue tables, 00 §5.3), incomplete rate, parser errors, artifact failures, healing false-positive rate, ingest p95, decision p95, .NET runtime metrics (GC heap/gen-2/LOH collections, thread-pool worker counts and starvation, Npgsql pool occupancy/wait, EF Core command durations), plus per-unit cost counters (10.9.1-T1) (F-10-3/F-10-4) | M | V1 | M1 | 10.3.1-T2 |
-| 10.3.1-T4 | Dashboards: service health, ingest/decision SLI, queue and lease state, tenant-neutral cost view | M | V1 | M2 | 10.3.1-T3 |
-| 10.3.1-T5 | Alert rules with thresholds, owners and runbook links, routing to the on-call channel; consumed by 01.5.1-T4 (dead-letter hook) and 10.2.2-T2 (rollback trigger) | L | V1 | M2 | 10.3.1-T3 |
+| 10.3.1-T1 | OpenTelemetry instrumentation in `Evidgate.Api` and `Evidgate.Worker`: traces, metrics, logs with `request_id`/`run_id`/`job_id`/`trace_id`, sampling policy, resource attributes (service, env, version); browser web-vitals are emitted by 09's telemetry (09.1.1-T9) and only recorded here (T39) | L | V1 | G1 | 10.1.1-T1 |
+| 10.3.1-T2 | Collector deployment and exporters with retention, batching and redaction of secrets (00 §11) | M | V1 | G1 | 10.3.1-T1, 10.3.2-T1 |
+| 10.3.1-T3 | Metrics catalogue: `task`-queue age, `outbox` dispatch lag, lease loss, dead-letter depth (own queue tables, 00 §5.3), incomplete rate, parser errors, artifact failures, healing false-positive rate, ingest p95, decision p95, .NET runtime metrics (GC heap/gen-2/LOH collections, thread-pool worker counts and starvation, Npgsql pool occupancy/wait, EF Core command durations), plus per-unit cost counters (10.9.1-T1) (F-10-3/F-10-4) | M | V1 | G1 | 10.3.1-T2 |
+| 10.3.1-T4 | Dashboards: service health, ingest/decision SLI, queue and lease state, tenant-neutral cost view | M | V1 | G1 | 10.3.1-T3 |
+| 10.3.1-T5 | Alert rules with thresholds, owners and runbook links, routing to the on-call channel; consumed by 01.5.1-T4 (dead-letter hook) and 10.2.2-T2 (rollback trigger) | L | V1 | G1 | 10.3.1-T3 |
 
 #### Story 10.3.2 Observability backend and external probe — acceptance: the telemetry backend is decided before the collector lands, availability is measured from outside the service network, and log retention is tied to deletion promises.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.3.2-T1 | ADR: observability backend for M1 (compose-local stack now, managed OTLP after O3) with the retention and cost limits; unblocks 10.3.1-T2 | S | V1 | M1 | 10.3.1-T1 |
-| 10.3.2-T2 | External synthetic probe: a scheduled check from outside the service network against health and a canary ingest-to-decision path on a dedicated tenant, feeding the availability SLI (probe location depends on O3) | M | V1 | M2 | 10.4.1-T1, 10.3.1-T3 |
-| 10.3.2-T3 | Log and trace retention per signal, no customer content in logs beyond ids, purge path on tenant deletion verified against 11.9.1-T1 | S | V1 | M3 | 10.3.1-T2, 11.9.1-T1 |
+| 10.3.2-T1 | ADR: observability backend for M1 (compose-local stack now, managed OTLP after O3) with the retention and cost limits; unblocks 10.3.1-T2 | S | V1 | G1 | 10.3.1-T1 |
+| 10.3.2-T2 | External synthetic probe: a scheduled check from outside the service network against health and a canary ingest-to-decision path on a dedicated tenant, feeding the availability SLI (probe location depends on O3) | M | V1 | G1 | 10.4.1-T1, 10.3.1-T3 |
+| 10.3.2-T3 | Log and trace retention per signal, no customer content in logs beyond ids, purge path on tenant deletion verified against 11.9.1-T1 | S | V1 | G1 | 10.3.1-T2, 11.9.1-T1 |
 
 **Story 10.3.2 total: 2** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 
@@ -173,25 +175,25 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 #### Story 10.4.1 Measured service targets — acceptance: the three 00 §11 targets are queryable per environment with a monthly report, and a burn-rate alert fires on a staged breach
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.4.1-T1 | SLI definitions and recording rules for ingest p95, decision p95 and availability (core endpoints only, never the test pass rate), per environment and per tenant class; plus web-vitals SLIs (LCP, INP) recorded from 09's vitals telemetry (09.1.1-T9) against the 00 §5.6 W7 budgets (T39, F-09-6) | M | V1 | M2 | 10.3.1-T3 |
-| 10.4.1-T2 | Error budget: burn-rate alerts, monthly review ritual, and the rule that a budget breach pauses feature rollout instead of lowering the target | M | V1 | M2 | 10.4.1-T1 |
+| 10.4.1-T1 | SLI definitions and recording rules for ingest p95, decision p95 and availability (core endpoints only, never the test pass rate), per environment and per tenant class; plus web-vitals SLIs (LCP, INP) recorded from 09's vitals telemetry (09.1.1-T9) against the 00 §5.6 W7 budgets (T39, F-09-6) | M | V1 | G1 | 10.3.1-T3 |
+| 10.4.1-T2 | Error budget: burn-rate alerts, monthly review ritual, and the rule that a budget breach pauses feature rollout instead of lowering the target | M | V1 | G4 | 10.4.1-T1 |
 
 ### Epic 10.5 Backup, PITR and restore drills (M2)
 
 #### Story 10.5.1 Recoverability — acceptance: a restore into a clean environment reproduces a run, its evidences and its decision, within RPO 15 min / RTO 4 h
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.5.1-T1 | Database backup and PITR configuration (provider feature per O3), retention, and a documented recovery point expectation | M | V1 | M2 | 10.1.1-T3 |
-| 10.5.1-T2 | Object storage protection: versioning, lifecycle, orphan-object sweep hook (reconcile job from 06) and integrity verification | M | V1 | M2 | 10.1.1-T3 |
-| 10.5.1-T3 | Restore drill automation: restore into a clean project, apply migrations head, run isolation + smoke suites, record duration against RTO, attach evidence to the M2 exit gate | L | V1 | M2 | 10.5.1-T1 |
-| 10.5.1-T4 | DR runbook: failover decision, communication, data-loss statement at the measured RPO, recovery order (database → object storage → queues → app) | M | V1 | M2 | 10.5.1-T3 |
+| 10.5.1-T1 | Database backup and PITR configuration (provider feature per O3), retention, and a documented recovery point expectation | M | V1 | G1 | 10.1.1-T3 |
+| 10.5.1-T2 | Object storage protection: versioning, lifecycle, orphan-object sweep hook (reconcile job from 06) and integrity verification | M | V1 | G1 | 10.1.1-T3 |
+| 10.5.1-T3 | Restore drill automation: restore into a clean project, apply migrations head, run isolation + smoke suites, record duration against RTO, attach evidence to the M2 exit gate | L | V1 | G2 | 10.5.1-T1 |
+| 10.5.1-T4 | DR runbook: failover decision, communication, data-loss statement at the measured RPO, recovery order (database → object storage → queues → app) | M | V1 | G2 | 10.5.1-T3 |
 
 #### Story 10.5.2 Object storage delete protection and restore — acceptance: a compromised application credential cannot delete evidence or its versions, and an object restore is tested.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.5.2-T1 | Separate write-only app credential and a deletion-only retention credential; bucket policy or object lock where the provider supports it; note the PDPL transfer implication of offshore replicas | M | V1 | M3 | 10.5.1-T2 |
-| 10.5.2-T2 | Automated object restore test: delete an object, restore from version/copy, verify checksum and artifact `ready` state | M | V1 | M3 | 10.5.1-T3, 10.5.2-T1 |
-| 10.5.2-T3 | Runbook entry and drill result attached to the restore evidence | S | V1 | M3 | 10.5.2-T2, 10.5.1-T4 |
+| 10.5.2-T1 | Separate write-only app credential and a deletion-only retention credential; bucket policy or object lock where the provider supports it; note the PDPL transfer implication of offshore replicas | M | V1 | G2 | 10.5.1-T2 |
+| 10.5.2-T2 | Automated object restore test: delete an object, restore from version/copy, verify checksum and artifact `ready` state | M | V1 | G2 | 10.5.1-T3, 10.5.2-T1 |
+| 10.5.2-T3 | Runbook entry and drill result attached to the restore evidence | S | V1 | G2 | 10.5.2-T2, 10.5.1-T4 |
 
 **Story 10.5.2 total: 2.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 
@@ -200,29 +202,29 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 #### Story 10.6.1 Proving the pilot load — acceptance: 50 000 events in 60 s and the pilot artifact profile pass on staging, and the capacity model names the next bottleneck
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.6.1-T1 | Ingest load generator: valid batches within the 00 §9.3 limits (≤ 500 events, ≤ 1 MiB), 833 events/s target, quota and error-rate measurement; measures the hot path end to end — the single `INSERT … SELECT … FROM unnest(…) ON CONFLICT DO NOTHING RETURNING` batch insert (T50) and the per-org audit hash chain serialised by `pg_advisory_xact_lock` (T8) | L | V1 | M2 | 10.3.1-T3 |
-| 10.6.1-T2 | Artifact upload load profile (presigned URL concurrency, 2 GB/day, ≥ 20 MB objects) + one smoke against the real provider S3 endpoint to close the emulator-parity gap of 01.8.1-T1, verifying presigned-PUT parity: `Content-Length` and the checksum header are signed (⚠️ parity on SeaweedFS and the provider, T18) | M | V1 | M3 | 10.5.1-T2 |
-| 10.6.1-T3 | Capacity model: recompute the source §9 numbers ✅ (100 000 results/day ≈ 98 MiB/day ≈ 8.6 GiB/90 d; 2 GB/day artifacts, 28 GB/14 d; 833 events/s burst), add Npgsql pool sizes/connection counts, container memory limits and .NET GC settings (`DOTNET_GCServer`, heap hard-limit), thread-pool headroom and growth triggers (F-10-3) | M | V1 | M2 | 10.6.1-T1 |
-| 10.6.1-T4 | Soak and back-pressure test: sustained multi-hour ingest, quota behaviour (429/503 with `Retry-After`), queue growth limits, recovery after overload | M | V2 | M4 | 10.6.1-T2 |
+| 10.6.1-T1 | Ingest load generator: valid batches within the 00 §9.3 limits (≤ 500 events, ≤ 1 MiB), 833 events/s target, quota and error-rate measurement; measures the hot path end to end — the single `INSERT … SELECT … FROM unnest(…) ON CONFLICT DO NOTHING RETURNING` batch insert (T50) and the per-org audit hash chain serialised by `pg_advisory_xact_lock` (T8) | L | V1 | G2 | 10.3.1-T3 |
+| 10.6.1-T2 | Artifact upload load profile (presigned URL concurrency, 2 GB/day, ≥ 20 MB objects) + one smoke against the real provider S3 endpoint to close the emulator-parity gap of 01.8.1-T1, verifying presigned-PUT parity: `Content-Length` and the checksum header are signed (⚠️ parity on SeaweedFS and the provider, T18) | M | V1 | G4 | 10.5.1-T2 |
+| 10.6.1-T3 | Capacity model: recompute the source §9 numbers ✅ (100 000 results/day ≈ 98 MiB/day ≈ 8.6 GiB/90 d; 2 GB/day artifacts, 28 GB/14 d; 833 events/s burst), add Npgsql pool sizes/connection counts, container memory limits and .NET GC settings (`DOTNET_GCServer`, heap hard-limit), thread-pool headroom and growth triggers (F-10-3) | M | V1 | G2 | 10.6.1-T1 |
+| 10.6.1-T4 | Soak and back-pressure test: sustained multi-hour ingest, quota behaviour (429/503 with `Retry-After`), queue growth limits, recovery after overload | M | V2 | G4 | 10.6.1-T2 |
 
 ### Epic 10.7 Runbooks and incident readiness (M1-M3)
 
 #### Story 10.7.1 Operable by a second person — acceptance: each runbook is executed once by someone who did not write it, in staging, and its steps are correct without tribal knowledge
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.7.1-T1 | Dead-letter runbook for the `task` queue table: triage query, classification, safe replay, escalation — the linked action for 01.5.1-T4 and alert 10.3.1-T5 (F-10-4) | M | V1 | M2 | 01.5.1-T4 |
-| 10.7.1-T2 | Stuck run runbook: detect runs past the collection deadline, inspect lease/epoch state (00 §5.3), reconcile or cancel without inventing evidence | M | V1 | M2 | 10.3.1-T3 |
-| 10.7.1-T3 | Orphan artifact runbook: objects without `ready`, `pending_upload` past TTL, retention sweep failures (00 §8.4) | S | V1 | M2 | 10.5.1-T2 |
-| 10.7.1-T4 | Key rotation runbook: ingest tokens, CI OIDC trust, JWT signing keys, webhook secrets, database credentials, provider keys, and the ingest/API token HMAC pepper — a new `pepper_vN` signs new tokens while old versions verify until their last token expires (T5) — rotation without downtime or lost events; GitHub App private key and webhook secret per [`docs/runbooks/github-app-key-custody.md`](../docs/runbooks/github-app-key-custody.md) (stub from 02.4.3-T1, ADR-0007) | M | V1 | M2 | 10.1.1-T2 |
-| 10.7.1-T5 | Kill switch runbook + drill: system → tenant → project healing availability (00 §8.7, DECISIONS §5.9) flipped while ingest, runs and gates continue | M | V1 | M3 | 10.3.1-T5, 08.6.3-T1 |
-| 10.7.1-T6 | Incident process: severity ladder, on-call expectation for the pilot, communication, postmortem template with a follow-up task rule | M | V1 | M3 | 10.7.1-T1 |
+| 10.7.1-T1 | Dead-letter runbook for the `task` queue table: triage query, classification, safe replay, escalation — the linked action for 01.5.1-T4 and alert 10.3.1-T5 (F-10-4) | M | V1 | G2 | 01.5.1-T4 |
+| 10.7.1-T2 | Stuck run runbook: detect runs past the collection deadline, inspect lease/epoch state (00 §5.3), reconcile or cancel without inventing evidence | M | V1 | G2 | 10.3.1-T3 |
+| 10.7.1-T3 | Orphan artifact runbook: objects without `ready`, `pending_upload` past TTL, retention sweep failures (00 §8.4) | S | V1 | G2 | 10.5.1-T2 |
+| 10.7.1-T4 | Key rotation runbook: ingest tokens, CI OIDC trust, JWT signing keys, webhook secrets, database credentials, provider keys, and the ingest/API token HMAC pepper — a new `pepper_vN` signs new tokens while old versions verify until their last token expires (T5) — rotation without downtime or lost events; GitHub App private key and webhook secret per [`docs/runbooks/github-app-key-custody.md`](../docs/runbooks/github-app-key-custody.md) (stub from 02.4.3-T1, ADR-0007) | M | V1 | G1 | 10.1.1-T2 |
+| 10.7.1-T5 | Kill switch runbook + drill: system → tenant → project healing availability (00 §8.7, DECISIONS §5.9) flipped while ingest, runs and gates continue | M | V1 | G2 | 10.3.1-T5, 08.6.3-T1 |
+| 10.7.1-T6 | Incident process: severity ladder, on-call expectation for the pilot, communication, postmortem template with a follow-up task rule | M | V1 | G2 | 10.7.1-T1 |
 
 #### Story 10.7.2 Paging and on-call at the first alert — acceptance: every alert in 10.3.1-T5 reaches a named destination and a person, including out of hours.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.7.2-T1 | Choose the paging tool and route alert rules to it; record the decision | S | V1 | M2 | 10.3.1-T5 |
-| 10.7.2-T2 | Escalation and out-of-hours cover for a single operator (primary, secondary or auto-ack fallback); a test page each month | S | V1 | M2 | 10.7.2-T1 |
-| 10.7.2-T3 | Tie the breach runbook (11.9.1-T2) to the paging path and name the 72 h clock owner | S | V1 | M3 | 10.7.2-T1, 11.9.1-T2 |
+| 10.7.2-T1 | Choose the paging tool and route alert rules to it; record the decision | S | V1 | G2 | 10.3.1-T5 |
+| 10.7.2-T2 | Escalation and out-of-hours cover for a single operator (primary, secondary or auto-ack fallback); a test page each month | S | V1 | G2 | 10.7.2-T1 |
+| 10.7.2-T3 | Tie the breach runbook (11.9.1-T2) to the paging path and name the 72 h clock owner | S | V1 | G2 | 10.7.2-T1, 11.9.1-T2 |
 
 **Story 10.7.2 total: 1.5** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 
@@ -231,33 +233,33 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 #### Story 10.8.1 Decision memo, no vendor chosen — acceptance: the owner can pick a provider from the memo without further research, and each candidate has measured restore and latency numbers
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.8.1-T1 | Criteria and shortlist: residency options (VN/APAC), managed PostgreSQL 18 with PITR, S3-compatible storage, egress cost, latency from the pilot's CI region, operational burden for one team | S | V1 | M1 | — |
-| 10.8.1-T2 | Hands-on spike on two candidates: create managed PostgreSQL 18, measure PITR restore time, object storage presigned-URL behaviour, and ingest latency from a CI-like runner | L | V1 | M2 | 10.8.1-T1 |
-| 10.8.1-T3 | Decision memo for the owner (O3): recommendation, disqualifiers, cost estimate, residency note for plan 11; no procurement in this plan | S | V1 | M2 | 10.8.1-T2 |
+| 10.8.1-T1 | Criteria and shortlist: residency options (VN/APAC), managed PostgreSQL 18 with PITR, S3-compatible storage, egress cost, latency from the pilot's CI region, operational burden for one team | S | V1 | G1 | — |
+| 10.8.1-T2 | Hands-on spike on two candidates: create managed PostgreSQL 18, measure PITR restore time, object storage presigned-URL behaviour, and ingest latency from a CI-like runner | L | V1 | G1 | 10.8.1-T1 |
+| 10.8.1-T3 | Decision memo for the owner (O3): recommendation, disqualifiers, cost estimate, residency note for plan 11; no procurement in this plan | S | V1 | G1 | 10.8.1-T2 |
 
 ### Epic 10.9 Cost monitoring (M2-M3)
 
 #### Story 10.9.1 Unit economics — acceptance: cost per 1 000 events, per artifact GB-month and per run is reported monthly per environment and handed to plan 12
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.9.1-T1 | Resource tagging + budget alerts per environment, with the per-unit counters exposed from 10.3.1-T3 | S | V1 | M2 | 10.3.1-T3 |
-| 10.9.1-T2 | Unit-cost model: storage/egress/runner-less V1 baseline, then LLM and healing-replay cost per tenant (V2), handed to plan 12 for pricing and quota | M | V2 | M4 | 10.9.1-T1 |
+| 10.9.1-T1 | Resource tagging + budget alerts per environment, with the per-unit counters exposed from 10.3.1-T3 | S | V1 | G2 | 10.3.1-T3 |
+| 10.9.1-T2 | Unit-cost model: storage/egress/runner-less V1 baseline, then LLM and healing-replay cost per tenant (V2), handed to plan 12 for pricing and quota | M | V2 | G2 | 10.9.1-T1 |
 
 ### Epic 10.10 Temporal re-evaluation trigger (A7) (M2, M5)
 
 #### Story 10.10.1 Trigger and spike — acceptance: the trigger is either not met (and the queue stays) or fires with evidence, and then a bounded spike answers whether Temporal reduces operational risk
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.10.1-T1 | Define and measure the trigger: number of workflows with long human waits, recovery incidents caused by queue/outbox limitations, and the manual work each costs (metrics from 10.3.1-T3) | S | V1 | M2 | 10.3.1-T3 |
-| 10.10.1-T2 | Temporal evaluation spike (only if the trigger fires): model the healing PR flow and approval waits, cost of running one more system, migration path; output memo to plan 08/00 | M | V3 | M5 | 10.10.1-T1 |
+| 10.10.1-T1 | Define and measure the trigger: number of workflows with long human waits, recovery incidents caused by queue/outbox limitations, and the manual work each costs (metrics from 10.3.1-T3) | S | V1 | G4 | 10.3.1-T3 |
+| 10.10.1-T2 | Temporal evaluation spike (only if the trigger fires): model the healing PR flow and approval waits, cost of running one more system, migration path; output memo to plan 08/00 | M | V3 | G4 | 10.10.1-T1 |
 
 ### Epic 10.11 Edge and abuse limits (M2) [PROPOSAL review 2026-10-02]
 #### Story 10.11.1 Ingress and abuse limits — acceptance: unauthenticated endpoints, presign issuance and org-level reads have limits, and oversized or slow requests are cut at the edge.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 10.11.1-T1 | Request body-size, header and timeout limits in Kestrel; per-IP limits for unauthenticated routes; per-org limits for reads and presign issuance, all with `Retry-After` | M | V1 | M2 | 04.1.2-T1 |
-| 10.11.1-T2 | Abuse test in CI: burst on `/v1/ci/token`, slow-body and oversized-body requests, presign flood; expected status codes asserted | S | V1 | M2 | 10.11.1-T1 |
-| 10.11.1-T3 | Record the WAF/edge decision as dependent on O3 and list what runs without it | S | V1 | M2 | 10.8.1-T1 |
+| 10.11.1-T1 | Request body-size, header and timeout limits in Kestrel; per-IP limits for unauthenticated routes; per-org limits for reads and presign issuance, all with `Retry-After` | M | V1 | G1 | 04.1.2-T1 |
+| 10.11.1-T2 | Abuse test in CI: burst on `/v1/ci/token`, slow-body and oversized-body requests, presign flood; expected status codes asserted | S | V1 | G1 | 10.11.1-T1 |
+| 10.11.1-T3 | Record the WAF/edge decision as dependent on O3 and list what runs without it | S | V1 | G1 | 10.8.1-T1 |
 
 **Story 10.11.1 total: 2** — `[INFERENCE]` sizes; added from review 2026-10-02 §5.4.
 

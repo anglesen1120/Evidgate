@@ -1,9 +1,10 @@
-# 08 - Safe Healing and Learning (M3, M4, M5)
+# 08 - Safe Healing and Learning (G1–G4)
 
 > Contracts: `00-overview.md` §3 (glossary), §6 (IDs, sizes), §7 (hashes, naming), §8.7 (healing states), §9.3 (approve/revoke), §9.5 (`healing.candidate_changed`), §11 (NFRs). Facts: `../DECISIONS.md` §5 rules 1-9 (locked), §6 F1 (Playwright ships planner/generator/healer agents), §6 F8 + §7 (PDPL cross-border), §8 O4 (LLM provider/residency) and O6 (false-heal threshold), §9 R3 (healer reuse).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
 > Source: design §4 "Ranh giới safe healing", "Luồng kiểm chứng và áp dụng healing", "Học từ lỗi và đánh giá chất lượng"; §8 "Quyền của AI"; §9 "Nghiệm thu healing theo giai đoạn".
 > Legend: ✅ verified with a link opened in this task · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]` (owner).
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 13.5 · G2 19.5 · G3 52.25 · G4 7 person-days.
 
 ---
 
@@ -16,6 +17,8 @@
 **Out of scope:** changing assertions, expected values, API schema/status, unit expectations or snapshot baselines (§5.1); auto-applying anything in V1-V2 (rule 7); hosted runners; source-code coverage; fixing product bugs (the customer fixes them — Evidgate only hands the failure back to the developer); a vector database before measured need.
 
 **Version split.** **V1 (M3):** capture, fingerprint, triage, retrieval and ranker, candidate generation by rules + retrieval, full validator and sandbox replay, **shadow only — no repo change**, quality and triage-time measurement. **V2 (M4):** LLM gateway, redaction, per-tenant opt-in, healer-as-generator, PR/approval/canary/revoke, knowledge and feedback, kill switches, evaluation set and the V2 gate. **V3 (M5):** narrow-context reuse of *approved* mappings only, severity-weighted false-heal threshold (O6), and mobile locator healing once its prerequisites exist.
+
+**Phases (CR-D-2).** Target phases per story ([13 §4.4](13-product-phases.md)), with dependencies pulled earlier where the §9 cells show them: G1 targets `08.5.1`, `08.5.2`, `08.5.3`, `08.5.5` plus the kill switch `08.6.3-T1`; G2 targets `08.1`; G3 targets `08.2`, `08.3`, `08.4`, `08.6`, `08.7`, `08.8`; G4 targets `08.5.4` and `08.9`. A few task rows inside a G2/G3 story sit one phase earlier because something in that earlier phase depends on them (§9 is authoritative). The gateway, prompt safety, structured output and credits ship in G1 because the authoring generation pipeline (`13.3.1`) needs them; `08.5.1-T3`, `08.5.2-T2` and `08.5.5-T4` stay in G3. Element profiles and per-project memory are owned by `13.6`; drift classification (locator drift vs UI change) and its review evidence (before/after screenshots where the project opted in, accessibility / DOM diff) are `13.8` and feed this plan's labels (`08.2.2`) and candidates (`08.3`). Shadow-only operation and no auto-apply (`08.3.3-T1`, DECISIONS §5 rule 7) are unchanged in every phase.
 
 ## 2. Requirements
 
@@ -70,7 +73,7 @@
 | `knowledge_record` | `org_id`, `project_id`, `engine`, `test_revision_id`, `fingerprint`, `old_locator`, `new_locator`, `context_hash`, `label`, `label_source`, `state (active | revoked)`, `source_candidate_id` | tenant-scoped; cross-tenant reuse needs written consent |
 | `healing_feedback` | `org_id`, `candidate_id`, `label (accepted | rejected | reverted | unknown)`, `at`, `by` | append-only; never rewritten; composite FK `(org_id, candidate_id)` → `healing_candidate (org_id, id)`; RLS (NFR-08-4, 00 §5.4.1) |
 | `healing_optin` | `org_id`, `provider`, `approved_by`, `approved_at`, `scope`, `revoked_at` | absent row = off |
-| `healing_llm_call` | `org_id`, `project_id`, `incident_id`, `candidate_id`, `purpose`, `model`, `prompt_version`, `tokens`, `cost`, `status`, `redaction_report_hash` | `project_id`/`incident_id`/`candidate_id` make spend attributable per project and per candidate (T30); cost rows feed plan 12 |
+| `healing_llm_call` | `org_id`, `project_id`, `incident_id`, `candidate_id`, `purpose`, `model`, `prompt_version`, `tokens`, `cost`, `status`, `redaction_report_hash` | `project_id`/`incident_id`/`candidate_id` make spend attributable per project and per candidate (T30); `purpose` includes `authoring_generation`, where `incident_id`/`candidate_id` are null (13.3.1-T2); cost rows feed plan 12 |
 | `healing_switch` | `scope (system | tenant | project)`, `org_id`, `project_id`, `mode (enabled | shadow | disabled)`, `reason`, `set_by`, `at` | settable modes are `enabled | shadow | disabled`; `unavailable` is derived at resolution time from component health, never persisted (T33); resolved system → tenant → project |
 | `healing_quota` | `org_id`, `project_id`, `candidates_per_day`, `replay_minutes_per_day`, `deadline_minutes`, counters | consumed atomically inside the candidate-mint transaction: `UPDATE healing_quota SET counters = counters + 1 WHERE … AND counters < cap RETURNING` — zero rows returned stops generation (T32); composite FK `(org_id, project_id)` → `project (org_id, id)`; RLS (NFR-08-4, 00 §5.4.1) |
 
@@ -83,6 +86,8 @@ Used from 00 §9.3: `POST /v1/healing/candidates/{c}/approve`, `POST /v1/healing
 ### 4.3 Flow
 
 1. **Capture** — a failure in an evidence revision creates an incident + filtered context (08.1). 2. **Triage** — rule triage proposes a label, a human may override (08.2). 3. **Retrieve** — same-project records ordered by fingerprint and similarity; the ranker only orders (08.2). 4. **Generate** — ≤ 3 candidates, using only context artifacts that are `ready` (T31) (V1 rules + retrieval; V2 LLM gateway and Playwright healer, both sandboxed) (08.3, 08.5). 5. **Validate** — AST allowlist, forbidden patterns, assertion hash equality, semantic checks, negative control, then sandbox replay on the same digest/fixture/env, ≤ 2 rounds (08.4). 6. **Propose/apply (V2)** — PR → approval bound to `candidate_hash` + base commit → the customer's Git merge (08.6); the approve route ships behind a feature flag defaulting off until the kill switch is live (T29). 7. **Learn** — knowledge record, feedback label, lineage, revocation cascade (08.7). 8. **Measure and gate** (08.8); then narrow-context reuse and mobile (08.9).
+
+**Where learning sits (CR-D-2).** Between steps 4 and 5: a green run records an element profile per bound step (`13.6`); inside the 08.2.2 label `test_drift`, profile rules decide *locator drift* vs *UI change* (`13.8.1`). Only the locator-drift outcome reaches candidate generation (08.3) and then the validator (08.4); a UI change becomes a test-case review proposal instead. Review evidence (`13.8.2`) adds before/after screenshots where the project opted in and an accessibility / DOM diff to the 08.6.1 fields. The per-project shadow window (`13.8.1-T4`) runs before any repair PR is offered, and nothing is auto-applied.
 
 ### 4.4 States
 
@@ -138,36 +143,36 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 #### Story 08.1.1 Incident record from verified failures — acceptance: each failure of a required case creates one incident per `(org_id, run_id, execution_key)` linked to run, attempt, `execution_key`, case and case revision, with failed retries attached as `incident_attempt` rows (T34); states follow `open → triaged(label) → closed`; the original failure is never modified.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.1.1-T1 | `incident` + `incident_attempt` models, states, RLS, audit, creation from the evidence revision (unique `(org_id, run_id, execution_key)`, retries attach, `context_state = pending` at freeze, T31/T34); runs with `purpose = replay` never create incidents (T67) | L | V1 | M3 | 05.3.2-T5, 05.2.1-T5 |
-| 08.1.1-T2 | Incident API + `healing:triage` permission + list contract for the UI | S | V1 | M3 | 08.1.1-T1 |
+| 08.1.1-T1 | `incident` + `incident_attempt` models, states, RLS, audit, creation from the evidence revision (unique `(org_id, run_id, execution_key)`, retries attach, `context_state = pending` at freeze, T31/T34); runs with `purpose = replay` never create incidents (T67) | L | V1 | G2 | 05.3.2-T5, 05.2.1-T5 |
+| 08.1.1-T2 | Incident API + `healing:triage` permission + list contract for the UI | S | V1 | G2 | 08.1.1-T1 |
 #### Story 08.1.2 Filtered context capture and versioned fingerprint — acceptance: error text, filtered DOM/accessibility snapshot, old locator, trace reference and revision ids are stored with checksums and retention, secrets and input values are masked, and the same break yields the same fingerprint across runs.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.1.2-T1 | Context capture: error, filtered DOM/a11y snapshot, old locator, trace pointer, revisions | L | V1 | M3 | 08.1.1-T1, 06.1.1-T1 |
-| 08.1.2-T2 | Masking (credentials/inputs), size caps, retention hooks | M | V1 | M3 | 08.1.2-T1 |
-| 08.1.2-T3 | Fingerprint spec v1 (versioned) + computation + backfill job | L | V1 | M3 | 08.1.2-T1 |
-| 08.1.2-T4 | Fingerprint stability tests (dynamic ids, locales, reorder) | M | V1 | M3 | 08.1.2-T3 |
-| 08.1.2-T5 | Incident-context settle task: Cronos schedule (unique fire key, 00 §5.3) at collection deadline + late window → `complete \| partial`; generation gated on `ready` context (T31) | S | V1 | M3 | 08.1.2-T1 |
+| 08.1.2-T1 | Context capture: error, filtered DOM/a11y snapshot, old locator, trace pointer, revisions | L | V1 | G2 | 08.1.1-T1, 06.1.1-T1 |
+| 08.1.2-T2 | Masking (credentials/inputs), size caps, retention hooks | M | V1 | G2 | 08.1.2-T1 |
+| 08.1.2-T3 | Fingerprint spec v1 (versioned) + computation + backfill job | L | V1 | G2 | 08.1.2-T1 |
+| 08.1.2-T4 | Fingerprint stability tests (dynamic ids, locales, reorder) | M | V1 | G2 | 08.1.2-T3 |
+| 08.1.2-T5 | Incident-context settle task: Cronos schedule (unique fire key, 00 §5.3) at collection deadline + late window → `complete \| partial`; generation gated on `ready` context (T31) | S | V1 | G2 | 08.1.2-T1 |
 ### Epic 08.2 Retrieval, ranker and triage labels (V1, M3)
 #### Story 08.2.1 Tenant-scoped retrieval and ranker — acceptance: retrieval is filtered by tenant/project/engine and returns prior records with label and `label_source`; ranking orders by prior acceptance and similarity and never authorises, approves or applies.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.2.1-T1 | Retrieval query and indexes (org/project/engine/fingerprint) | M | V1 | M3 | 08.1.2-T3 |
-| 08.2.1-T2 | Retrieval result contract (labels + `label_source`, advisory only) | S | V1 | M3 | 08.2.1-T1 |
-| 08.2.1-T3 | Ranker v0 + explanation output + "similarity never grants permission" test | M | V1 | M3 | 08.2.1-T2 |
+| 08.2.1-T1 | Retrieval query and indexes (org/project/engine/fingerprint) | M | V1 | G2 | 08.1.2-T3 |
+| 08.2.1-T2 | Retrieval result contract (labels + `label_source`, advisory only) | S | V1 | G2 | 08.2.1-T1 |
+| 08.2.1-T3 | Ranker v0 + explanation output + "similarity never grants permission" test | M | V1 | G2 | 08.2.1-T2 |
 #### Story 08.2.2 Triage labels with provenance — acceptance: one current label per incident from the five labels with `label_source ∈ {rule, model, human}`; human overrides model/rule; only human labels are ground truth; `unknown` never enables automation; triage time is measured.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.2.2-T1 | Label taxonomy, `label_source` precedence, storage | S | V1 | M3 | 08.1.1-T2 |
-| 08.2.2-T2 | Rule triage (product_defect/test_drift/environment/data_issue/unknown) with evidence refs | L | V1 | M3 | 08.2.2-T1 |
-| 08.2.2-T3 | Human triage action, audit, ground-truth rule, `unknown` guard, triage-time metric | M | V1 | M3 | 08.2.2-T2 |
-| 08.2.2-T4 | Assignee on the label write (`assignee_membership_id`) and `POST /v1/incidents/{i}/close` with reason + `If-Match` (T66) | M | V1 | M3 | 08.2.2-T3 |
+| 08.2.2-T1 | Label taxonomy, `label_source` precedence, storage | S | V1 | G3 | 08.1.1-T2 |
+| 08.2.2-T2 | Rule triage (product_defect/test_drift/environment/data_issue/unknown) with evidence refs | L | V1 | G3 | 08.2.2-T1 |
+| 08.2.2-T3 | Human triage action, audit, ground-truth rule, `unknown` guard, triage-time metric | M | V1 | G3 | 08.2.2-T2 |
+| 08.2.2-T4 | Assignee on the label write (`assignee_membership_id`) and `POST /v1/incidents/{i}/close` with reason + `If-Match` (T66) | M | V1 | G3 | 08.2.2-T3 |
 
 #### Story 08.2.3 External issue reference on an incident — acceptance: an incident can carry a link to the team's own tracker so triage results are traceable there.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.2.3-T1 | `incident.external_issue_url` (https only, length cap, audited PATCH, never fetched by the server) | S | V1 | M3 | 08.2.2-T3 |
-| 08.2.3-T2 | Show and edit the link in the failure detail and carry it in the incident webhook payload | S | V1 | M3 | 08.2.3-T1, 09.4.1-T3 |
+| 08.2.3-T1 | `incident.external_issue_url` (https only, length cap, audited PATCH, never fetched by the server) | S | V1 | G3 | 08.2.2-T3 |
+| 08.2.3-T2 | Show and edit the link in the failure detail and carry it in the incident webhook payload | S | V1 | G3 | 08.2.3-T1, 09.4.1-T3 |
 
 **Story 08.2.3 total: 1** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
 
@@ -175,135 +180,139 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 #### Story 08.3.1 Candidate model and rule-based generation — acceptance: at most 3 candidates per incident, each with `candidate_hash`, base commit, old/new locator, context hash and expiry; states follow 00 §8.7.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.3.1-T1 | Candidate model, states, `candidate_hash` canonicalisation (00 §7), rule-based locator generator capped at 3 | XL | V1 | M3 | 08.1.1-T1, 08.2.1-T3, 08.6.3-T1 |
+| 08.3.1-T1 | Candidate model, states, `candidate_hash` canonicalisation (00 §7), rule-based locator generator capped at 3 | XL | V1 | G2 | 08.1.1-T1, 08.2.1-T3, 08.6.3-T1 |
 #### Story 08.3.2 Bounded validation loop — acceptance: ≤ 2 rounds per candidate; project quota and deadline stop every loop; non-reproducible candidates reach `insufficient_evidence`.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.3.2-T1 | Round cap + attempt ledger | M | V1 | M3 | 08.3.1-T1 |
-| 08.3.2-T2 | Quota (candidates/day, replay minutes) consumed atomically in the candidate-mint transaction (`UPDATE … SET counters = counters + 1 WHERE counters < cap RETURNING`, T32) + deadline + expiry/quota-release Cronos schedule (unique fire key, 00 §5.3) | M | V1 | M3 | 08.3.2-T1 |
-| 08.3.2-T3 | `insufficient_evidence` rules and transition | M | V1 | M3 | 08.3.2-T1 |
+| 08.3.2-T1 | Round cap + attempt ledger | M | V1 | G3 | 08.3.1-T1 |
+| 08.3.2-T2 | Quota (candidates/day, replay minutes) consumed atomically in the candidate-mint transaction (`UPDATE … SET counters = counters + 1 WHERE counters < cap RETURNING`, T32) + deadline + expiry/quota-release Cronos schedule (unique fire key, 00 §5.3) | M | V1 | G3 | 08.3.2-T1 |
+| 08.3.2-T3 | `insufficient_evidence` rules and transition | M | V1 | G3 | 08.3.2-T1 |
 #### Story 08.3.3 Shadow-only operation and measurement — acceptance: no V1 code path writes to a repository; shadow results never replace an official run or decision; candidate quality and triage time are reported per project.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.3.3-T1 | Shadow-only guard + "no repo write path" invariant test | S | V1 | M3 | 08.3.1-T1, 08.6.3-T1 |
-| 08.3.3-T2 | Shadow result storage; official evaluation untouched | M | V1 | M3 | 08.3.3-T1, 07.2.2-T1 |
-| 08.3.3-T3 | Shadow quality + triage-time reporting | L | V1 | M3 | 08.3.3-T2, 12.5.1-T1 |
+| 08.3.3-T1 | Shadow-only guard + "no repo write path" invariant test | S | V1 | G3 | 08.3.1-T1, 08.6.3-T1 |
+| 08.3.3-T2 | Shadow result storage; official evaluation untouched | M | V1 | G3 | 08.3.3-T1, 07.2.2-T1 |
+| 08.3.3-T3 | Shadow quality + triage-time reporting | L | V1 | G3 | 08.3.3-T2, 12.5.1-T1 |
 ### Epic 08.4 Validation: AST allowlist, semantics, negative control, sandbox (V1, M3)
 #### Story 08.4.1 AST allowlist validator for Playwright TS — acceptance: only mechanics node kinds may change; every DECISIONS §5.2 pattern is detected and rejected with a reason code; new imports, helpers or config edits are rejected.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.4.1-T1 | `packages/healing-validator` (Node 26 + TypeScript compiler API, TS 6.0.x): allowlist spec (which node kinds may change) + AST parser/writer + patch-scope check, JSON stdin/stdout protocol (T36) | XL | V1 | M3 | 08.3.1-T1 |
-| 08.4.1-T2 | Forbidden-pattern detectors in `packages/healing-validator` (assertion removal/weakening, `skip`/`fixme`, `force: true`, catch-and-ignore, business mock, network-check disable, unbounded retry, test-id/build/policy/data change) | L | V1 | M3 | 08.4.1-T1 |
-| 08.4.1-T3 | `Evidgate.Worker` host for the validator: spawn `packages/healing-validator` as a child process over JSON stdin/stdout with CPU, memory and wall-time limits; worker image carries a pinned Node runtime; the API process never runs it (T36) | L | V1 | M3 | 08.4.1-T1 |
+| 08.4.1-T1 | `packages/healing-validator` (Node 26 + TypeScript compiler API, TS 6.0.x): allowlist spec (which node kinds may change) + AST parser/writer + patch-scope check, JSON stdin/stdout protocol (T36) | XL | V1 | G2 | 08.3.1-T1 |
+| 08.4.1-T2 | Forbidden-pattern detectors in `packages/healing-validator` (assertion removal/weakening, `skip`/`fixme`, `force: true`, catch-and-ignore, business mock, network-check disable, unbounded retry, test-id/build/policy/data change) | L | V1 | G2 | 08.4.1-T1 |
+| 08.4.1-T3 | `Evidgate.Worker` host for the validator: spawn `packages/healing-validator` as a child process over JSON stdin/stdout with CPU, memory and wall-time limits; worker image carries a pinned Node runtime; the API process never runs it (T36) | L | V1 | G3 | 08.4.1-T1 |
 #### Story 08.4.2 Assertion hash, semantic checks and negative control — acceptance: assertion hash before/after is equal and treated as necessary but not sufficient; identity, unique match, business region and an independent post-condition are checked; a seeded broken state still fails.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.4.2-T1 | Assertion hash computation + equality gate + semantic checks (role/name/test-id identity, unique match, business region, independent post-condition) | XL | V1 | M3 | 08.4.1-T1, 08.1.2-T1 |
-| 08.4.2-T2 | Negative-control runner, seeded broken states, fixtures incl. `reject-pay-button-save-order` | L | V1 | M3 | 08.4.2-T1 |
+| 08.4.2-T1 | Assertion hash computation + equality gate + semantic checks (role/name/test-id identity, unique match, business region, independent post-condition) | XL | V1 | G3 | 08.4.1-T1, 08.1.2-T1 |
+| 08.4.2-T2 | Negative-control runner, seeded broken states, fixtures incl. `reject-pay-button-save-order` | L | V1 | G3 | 08.4.2-T1 |
 #### Story 08.4.3 Sandbox replay — acceptance: baseline and candidate run on the same app digest, fixture and environment; non-comparable runs are rejected; the replay host chosen in O10 meets the 11.2.1-T6 requirements (one-shot, network allowlist, no tenant secrets).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.4.3-T1 | Replay job spec (app digest, fixture, env, engine pin) + comparability gate | L | V1 | M3 | 08.3.2-T1, 05.2.1-T4, 04.9.1-T1 |
-| 08.4.3-T2 | One-shot isolation, replay caps + metering, Playwright version pin | M | V1 | M3 | 08.4.3-T1, 11.2.1-T6 |
-| 08.4.3-T3 | Validation report + rejection taxonomy; incident returns to triage | S | V1 | M3 | 08.4.3-T2 |
-### Epic 08.5 LLM gateway, privacy and healer generator (V2, M4)
+| 08.4.3-T1 | Replay job spec (app digest, fixture, env, engine pin) + comparability gate | L | V1 | G3 | 08.3.2-T1, 05.2.1-T4, 04.9.1-T1 |
+| 08.4.3-T2 | One-shot isolation, replay caps + metering, Playwright version pin | M | V1 | G3 | 08.4.3-T1, 11.2.1-T6 |
+| 08.4.3-T3 | Validation report + rejection taxonomy; incident returns to triage | S | V1 | G3 | 08.4.3-T2 |
+### Epic 08.5 LLM gateway, privacy and healer generator (G1–G4)
+
+**Phase placement (CR-D-2).** The gateway, prompt safety, structured output and credits are **G1**: `13.3.1` sends requirement text, documents and images through this gateway to produce checklists and then test cases, so the adapter, JSON-schema output, budget hard stop and metering (`08.5.1-T1`), untrusted-context handling (`08.5.2-T1`), redaction with leak tests and per-tenant opt-in (`08.5.3-T1`..`T3`) and credits with key custody (`08.5.5-T1`..`T3`, `T5`) are built before any authoring screen goes live. `08.5.1-T1` therefore depends on `12.3.1-T1` only: its earlier dependency on `08.4.3-T3` assumed sandbox candidate validation that G1 authoring never runs, and `12.3.1-T2` (usage-ledger aggregation) is not needed by the gateway (it is G1 anyway because the pilot measurement `12.2.1-T5` needs it). The rule/model/prompt registry with model triage (`08.5.1-T3`), the injection corpus and prompt-level tenant filter (`08.5.2-T2`) and the provider evaluation harness (`08.5.5-T4`) stay in G3; the Playwright healer (`08.5.4`) stays in G4. Provider egress still needs the tenant's data-owner approval (`08.5.3-T3`) and the plan 11 transfer assessment (`11.8.1-T5`) — in G1 those are a precondition of the first real generation call, not a follow-up to it.
+
 #### Story 08.5.1 LLM gateway — acceptance: provider adapter interface, JSON-schema-constrained output, per-call timeout, per-tenant/project budget with hard stop, model/prompt versions recorded; model triage is a hypothesis (`label_source = model`).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.5.1-T1 | Gateway: typed `HttpClient` provider adapter with resilience (timeout, bounded retry) + JSON-schema output + refuses any request without a redaction report hash from 08.5.3-T1 (redaction itself is 08.5.3-T1) + per-tenant/project budget with hard stop + `healing_llm_call` metering incl. `project_id`/`incident_id`/`candidate_id` (T30) | XL | V2 | M4 | 08.4.3-T3, 12.3.1-T2 |
-| 08.5.1-T3 | Rule/model/prompt version registry + model triage as hypothesis | M | V2 | M4 | 08.5.1-T1, 08.2.2-T1 |
+| 08.5.1-T1 | Gateway: typed `HttpClient` provider adapter with resilience (timeout, bounded retry) + JSON-schema output + refuses any request without a redaction report hash from 08.5.3-T1 (redaction itself is 08.5.3-T1) + per-tenant/project budget with hard stop + `healing_llm_call` metering incl. `project_id`/`purpose`/`incident_id`/`candidate_id` (T30; an `authoring_generation` call carries no incident or candidate) | XL | V2 | G1 | 12.3.1-T1 |
+| 08.5.1-T3 | Rule/model/prompt version registry + model triage as hypothesis | M | V2 | G3 | 08.5.1-T1, 08.2.2-T1 |
 #### Story 08.5.2 Untrusted context, injection containment and tenant filter — acceptance: DOM, logs and retrieved records are delimited data with no tool, shell, secret, policy or merge capability; an injection corpus cannot produce a forbidden patch; retrieval is tenant-filtered.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.5.2-T1 | Untrusted-input handling + capability removal (no tools/shell/secrets/merge) | M | V2 | M4 | 08.5.1-T1 |
-| 08.5.2-T2 | Injection corpus tests + tenant filter on retrieval (cross-tenant record never reaches a prompt) | L | V2 | M4 | 08.5.2-T1, 08.2.1-T1 |
+| 08.5.2-T1 | Untrusted-input handling + capability removal (no tools/shell/secrets/merge) | M | V2 | G1 | 08.5.1-T1 |
+| 08.5.2-T2 | Injection corpus tests + tenant filter on retrieval (cross-tenant record never reaches a prompt) | L | V2 | G3 | 08.5.2-T1, 08.2.1-T1 |
 #### Story 08.5.3 Redaction and per-tenant opt-in — acceptance: no context leaves the tenant boundary before redaction runs and the data owner has approved that provider; default off; a detected leak blocks the call, is audited, and the cross-border evidence record is written.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.5.3-T1 | Redaction pipeline before the provider + redaction report hash | L | V2 | M4 | 08.5.1-T1 |
-| 08.5.3-T2 | Leak/negative tests; call blocked and audited on leak | M | V2 | M4 | 08.5.3-T1 |
-| 08.5.3-T3 | Per-tenant opt-in + data-owner approval record + revocation + cross-border evidence for plan 11 (two-person opt-in with reject/withdraw/expiry exits, T64; TL review M→L) | L | V2 | M4 | 08.5.3-T1 |
+| 08.5.3-T1 | Redaction pipeline before the provider + redaction report hash | L | V2 | G1 | 08.5.1-T1 |
+| 08.5.3-T2 | Leak/negative tests; call blocked and audited on leak | M | V2 | G1 | 08.5.3-T1 |
+| 08.5.3-T3 | Per-tenant opt-in + data-owner approval record + revocation + cross-border evidence for plan 11 (two-person opt-in with reject/withdraw/expiry exits, T64; TL review M→L) | L | V2 | G1 | 08.5.3-T1 |
 #### Story 08.5.4 Playwright healer as one sandboxed generator — acceptance: the healer (F1 ✅) runs only in the sandbox; its output passes the same validator; `skip`/`fixme` output is rejected; agent definitions are regenerated on Playwright updates.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.5.4-T1 | Healer run in the sandbox + output mapping + `skip`/`fixme` rejection | M | V2 | M4 | 08.4.3-T2, 08.4.1-T2 |
-| 08.5.4-T2 | Agent-definition regeneration on Playwright bumps + compatibility gate | M | V2 | M4 | 08.5.4-T1 |
+| 08.5.4-T1 | Healer run in the sandbox + output mapping + `skip`/`fixme` rejection | M | V2 | G4 | 08.4.3-T2, 08.4.1-T2 |
+| 08.5.4-T2 | Agent-definition regeneration on Playwright bumps + compatibility gate | M | V2 | G4 | 08.5.4-T1 |
 
 #### Story 08.5.5 AI credits and spend control — acceptance: a tenant can call the model only while it has credit and has opted in; every call consumes credit exactly once under an idempotent key; the provider key is held only by Evidgate and never reaches a tenant, log or artifact; a per-tenant cap, a global daily cap and the kill switch each stop model calls within one request. [CR from owner decision O4, 2026-10-02]
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.5.5-T1 | `ai_credit_account` (org_id, balance, period cap) + append-only `ai_credit_entry` (grant, consume, refund, expire) with RLS, composite FKs and audit; each entry also writes a usage-ledger row, metric `ai_credit` (12.3.1) | M | V2 | M4 | 08.5.1-T1, 12.3.1-T1 |
-| 08.5.5-T2 | Gateway consumption path: reserve → provider call → settle, billing key `ai:<call_id>`; insufficient credit returns `ai_credit_exhausted` with no provider call; failed calls are refunded once | M | V2 | M4 | 08.5.5-T1 |
-| 08.5.5-T3 | Provider key custody and spend control: Evidgate-held key in the secret store (10.1.1-T2) with rotation (10.7.1-T4), global daily cap + per-tenant cap, alert at 80 %, kill switch (08.6.3-T1) halts all model calls | M | V2 | M4 | 08.5.5-T2, 08.6.3-T1, 10.7.1-T4 |
-| 08.5.5-T4 | Provider evaluation harness on the locator-break corpus (accuracy, cost per accepted candidate, refusal, latency) + decision memo covering the no-retention term and region | L | V2 | M4 | 08.5.1-T1, 08.8.1-T1 |
-| 08.5.5-T5 | Credit administration: operator grant/adjust (two-person above a threshold, audited) and tenant read of balance and usage | S | V2 | M4 | 08.5.5-T1 |
+| 08.5.5-T1 | `ai_credit_account` (org_id, balance, period cap) + append-only `ai_credit_entry` (grant, consume, refund, expire) with RLS, composite FKs and audit; each entry also writes a usage-ledger row, metric `ai_credit` (12.3.1) | M | V2 | G1 | 08.5.1-T1, 12.3.1-T1 |
+| 08.5.5-T2 | Gateway consumption path: reserve → provider call → settle, billing key `ai:<call_id>`; insufficient credit returns `ai_credit_exhausted` with no provider call; failed calls are refunded once | M | V2 | G1 | 08.5.5-T1 |
+| 08.5.5-T3 | Provider key custody and spend control: Evidgate-held key in the secret store (10.1.1-T2) with rotation (10.7.1-T4), global daily cap + per-tenant cap, alert at 80 %, kill switch (08.6.3-T1) halts all model calls | M | V2 | G1 | 08.5.5-T2, 08.6.3-T1, 10.7.1-T4 |
+| 08.5.5-T4 | Provider evaluation harness on the locator-break corpus (accuracy, cost per accepted candidate, refusal, latency) + decision memo covering the no-retention term and region | L | V2 | G3 | 08.5.1-T1, 08.8.1-T1 |
+| 08.5.5-T5 | Credit administration: operator grant/adjust (two-person above a threshold, audited) and tenant read of balance and usage | S | V2 | G1 | 08.5.5-T1 |
 
 **Story 08.5.5 total: 5.5**
 ### Epic 08.6 Apply: PR, approval, canary, revoke, kill switches (V2, M4)
 #### Story 08.6.1 Validation PR and approval binding — acceptance: the PR carries the diff, original failure, context hash, validation results, assertion hash and expiry; approval binds `candidate_hash` + base commit via `If-Match`; sensitive cases are proposal-only and the approver must differ from the candidate's requester/editor and from the member whose human label set `test_drift` (T35); approval never grants Git merge unless the integration is explicitly permitted.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.6.1-T1 | PR builder with the required fields and expiry + approve endpoint bound to `candidate_hash` + base commit (`If-Match`, 412 on stale); approve route behind a feature flag defaulting off (T29) | XL | V2 | M4 | 08.4.3-T3, 03.4.2-T1, 08.6.3-T1 |
-| 08.6.1-T2 | Sensitive-case rules: approver ≠ `requested_by`/`edited_by` and ≠ the member whose human label set `test_drift` (T35); permissions (`healing:approve`/`healing:revoke`), no-merge guarantee, approval audit | L | V2 | M4 | 08.6.1-T1 |
-| 08.6.1-T3 | Context/rebase invalidation + expiry Cronos schedule (unique fire key, 00 §5.3) + notification | M | V2 | M4 | 08.6.1-T1 |
+| 08.6.1-T1 | PR builder with the required fields and expiry + approve endpoint bound to `candidate_hash` + base commit (`If-Match`, 412 on stale); approve route behind a feature flag defaulting off (T29) | XL | V2 | G3 | 08.4.3-T3, 03.4.2-T1, 08.6.3-T1 |
+| 08.6.1-T2 | Sensitive-case rules: approver ≠ `requested_by`/`edited_by` and ≠ the member whose human label set `test_drift` (T35); permissions (`healing:approve`/`healing:revoke`), no-merge guarantee, approval audit | L | V2 | G3 | 08.6.1-T1 |
+| 08.6.1-T3 | Context/rebase invalidation + expiry Cronos schedule (unique fire key, 00 §5.3) + notification | M | V2 | G3 | 08.6.1-T1 |
 #### Story 08.6.2 Post-merge canary and rollback — acceptance: a canary run on the selected suite detects regression; on regression or a suspected false heal the rule is disabled, the candidate revoked and a revert PR opened, and old release decisions are untouched.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.6.2-T1 | Canary run on the selected suite + regression detection | L | V2 | M4 | 08.6.1-T2 |
-| 08.6.2-T2 | Rule disable + revoke (reason required) + revert PR draft | M | V2 | M4 | 08.6.2-T1 |
+| 08.6.2-T1 | Canary run on the selected suite + regression detection | L | V2 | G3 | 08.6.1-T2 |
+| 08.6.2-T2 | Rule disable + revoke (reason required) + revert PR draft | M | V2 | G3 | 08.6.2-T1 |
 #### Story 08.6.3 Kill switches and degradation — acceptance: system/tenant/project switches persist `enabled | shadow | disabled` and resolve to `enabled | shadow | disabled | unavailable` (most restrictive wins; `unavailable` is derived, never set, T33); they exist and take effect before any apply capability ships; with the LLM or knowledge store down, tests and gates run normally and healing resolves `unavailable`.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.6.3-T1 | Switch model (`enabled \| shadow \| disabled` settable, `unavailable` derived, T33), resolution order, immediate effect on in-flight work — ships before any apply capability (T29) — V1/M3 so tenants can switch shadow healing off from the pilot on (00 §9.3, DECISIONS §5.9; TL review) | M | V1 | M3 | — |
-| 08.6.3-T2 | Degradation path: LLM/knowledge store failure resolves `unavailable` (T33) + alerting | M | V2 | M4 | 08.6.3-T1, 08.5.1-T1 |
-| 08.6.3-T3 | Kill-switch and degradation drill + runbook entry | M | V2 | M4 | 08.6.3-T2, 10.7.1-T5 |
+| 08.6.3-T1 | Switch model (`enabled \| shadow \| disabled` settable, `unavailable` derived, T33), resolution order, immediate effect on in-flight work — ships before any apply capability (T29) — V1/M3 so tenants can switch shadow healing off from the pilot on (00 §9.3, DECISIONS §5.9; TL review) | M | V1 | G1 | — |
+| 08.6.3-T2 | Degradation path: LLM/knowledge store failure resolves `unavailable` (T33) + alerting | M | V2 | G3 | 08.6.3-T1, 08.5.1-T1 |
+| 08.6.3-T3 | Kill-switch and degradation drill + runbook entry | M | V2 | G3 | 08.6.3-T2, 10.7.1-T5 |
 ### Epic 08.7 Knowledge, feedback and lineage (V2, M4)
 #### Story 08.7.1 Knowledge records, ranking and feedback — acceptance: an applied candidate writes one tenant/project-scoped record; feedback labels are `accepted | rejected | reverted | unknown`; a single passing run never creates a ground-truth label; the ranker may weight records but never authorises.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.7.1-T1 | Knowledge record table + write path on `applied` | M | V2 | M4 | 08.6.1-T2 |
-| 08.7.1-T2 | Feedback label model + rules + post-merge `reverted` detection | L | V2 | M4 | 08.6.2-T2 |
-| 08.7.1-T3 | Ranker feedback weighting (ranking only) | XS | V2 | M4 | 08.7.1-T1, 08.2.1-T3 |
+| 08.7.1-T1 | Knowledge record table + write path on `applied` | M | V2 | G3 | 08.6.1-T2 |
+| 08.7.1-T2 | Feedback label model + rules + post-merge `reverted` detection | L | V2 | G3 | 08.6.2-T2 |
+| 08.7.1-T3 | Ranker feedback weighting (ranking only) | XS | V2 | G3 | 08.7.1-T1, 08.2.1-T3 |
 #### Story 08.7.2 Lineage and revocation cascade — acceptance: each candidate/knowledge row stores rule/model/prompt version, retrieved record ids, patch hash and validation run ids; revoking a record marks dependent candidates and stops reuse; tenant deletion covers healing knowledge.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.7.2-T1 | Lineage fields + query endpoint | M | V2 | M4 | 08.5.1-T3, 08.7.1-T1 |
-| 08.7.2-T2 | Revocation cascade + tests + retention/tenant-deletion coverage | M | V2 | M4 | 08.7.2-T1 |
+| 08.7.2-T1 | Lineage fields + query endpoint | M | V2 | G3 | 08.5.1-T3, 08.7.1-T1 |
+| 08.7.2-T2 | Revocation cascade + tests + retention/tenant-deletion coverage | M | V2 | G3 | 08.7.2-T1 |
 ### Epic 08.8 Evaluation, metrics and phase gates (V2 M4, V3 M5)
 #### Story 08.8.1 Evaluation set and holdout — acceptance: the corpus covers real locator breaks, real product bugs, business UI changes, duplicate names, locales, network errors and data errors; the holdout is split by time or project and adjudicated independently; the named rejection tests are included.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.8.1-T1 | Corpus construction for the seven categories; labelling starts from shadow candidates at M3 so the M4 entry gate (00 §4) can be checked | L | V1 | M3 | 08.4.3-T3 |
-| 08.8.1-T2 | Named rejection tests (`reject-pay-button-save-order`, assertion weakening, skip injection, force click, stale context, duplicate name, cross-tenant record) | M | V2 | M4 | 08.8.1-T1, 08.4.2-T2 |
-| 08.8.1-T3 | Holdout split (time/project) + adjudication + independent reviewer | M | V2 | M4 | 08.8.1-T1 |
+| 08.8.1-T1 | Corpus construction for the seven categories; labelling starts from shadow candidates at M3 so the M4 entry gate (00 §4) can be checked | L | V1 | G3 | 08.4.3-T3 |
+| 08.8.1-T2 | Named rejection tests (`reject-pay-button-save-order`, assertion weakening, skip injection, force click, stale context, duplicate name, cross-tenant record) | M | V2 | G3 | 08.8.1-T1, 08.4.2-T2 |
+| 08.8.1-T3 | Holdout split (time/project) + adjudication + independent reviewer | M | V2 | G3 | 08.8.1-T1 |
 #### Story 08.8.2 Metrics and reporting — acceptance: candidate precision, false-heal rate (adjudicated denominator, `unknown` separate), missed-bug rate, review rate, rollback rate and cost per accepted fix are reported; 0 failures in `n` samples is reported as ≈ 3/`n`, never as LLM confidence.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.8.2-T1 | Metric definitions + pipeline incl. severity weighting | L | V2 | M4 | 08.8.1-T3, 08.7.1-T2 |
-| 08.8.2-T2 | Rule-of-three reporting and caveats in the report template | M | V2 | M4 | 08.8.2-T1 |
+| 08.8.2-T1 | Metric definitions + pipeline incl. severity weighting | L | V2 | G3 | 08.8.1-T3, 08.7.1-T2 |
+| 08.8.2-T2 | Rule-of-three reporting and caveats in the report template | M | V2 | G3 | 08.8.2-T1 |
 #### Story 08.8.3 Phase gates — acceptance: the V2 gate requires every forbidden case blocked, reproducible validation, hash-bound review and a successful rollback drill; the V3 gate requires a severity-weighted false-heal threshold agreed by the owner (O6) and an independent evaluation.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.8.3-T1 | V2 gate report (forbidden cases, reproducibility, hash-bound review, rollback drill) | S | V2 | M4 | 08.8.2-T2, 08.6.2-T2 |
-| 08.8.3-T2 | V3 gate: severity-weighted false-heal threshold (O6) + independent evaluation | M | V3 | M5 | 08.8.3-T1 |
+| 08.8.3-T1 | V2 gate report (forbidden cases, reproducibility, hash-bound review, rollback drill) | S | V2 | G3 | 08.8.2-T2, 08.6.2-T2 |
+| 08.8.3-T2 | V3 gate: severity-weighted false-heal threshold (O6) + independent evaluation | M | V3 | G3 | 08.8.3-T1 |
 ### Epic 08.9 V3 narrow reuse and mobile healing (V3, M5)
 #### Story 08.9.1 Narrow-context reuse of approved mappings — acceptance: only approved mappings are reused, only when context hash, engine and test-revision lineage match; reuse is gated by the kill switch and a canary, is auto-revoked on regression and never crosses tenants.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.9.1-T1 | Reuse matcher + policy for approved mappings in a narrow context | L | V3 | M5 | 08.8.3-T2 |
-| 08.9.1-T2 | Reuse guards: kill switch, canary, auto-revoke, no cross-tenant reuse | M | V3 | M5 | 08.9.1-T1 |
+| 08.9.1-T1 | Reuse matcher + policy for approved mappings in a narrow context | L | V3 | G4 | 08.8.3-T2 |
+| 08.9.1-T2 | Reuse guards: kill switch, canary, auto-revoke, no cross-tenant reuse | M | V3 | G4 | 08.9.1-T1 |
 #### Story 08.9.2 Mobile locator healing — acceptance: mobile healing stays off until hierarchy capture, native/webview context and a separate validator allowlist exist and pass their own evaluation.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 08.9.2-T1 | Mobile prerequisites: hierarchy capture, native/webview context, separate allowlist | M | V3 | M5 | 08.9.1-T2, 04.5.1-T1 |
-| 08.9.2-T2 | Mobile pilot scope + mobile evaluation set | M | V3 | M5 | 08.9.2-T1 |
+| 08.9.2-T1 | Mobile prerequisites: hierarchy capture, native/webview context, separate allowlist | M | V3 | G4 | 08.9.1-T2, 04.5.1-T1 |
+| 08.9.2-T2 | Mobile pilot scope + mobile evaluation set | M | V3 | G4 | 08.9.2-T1 |
 
 ## 10. Dependencies
 
-- **04 (ingestion/adapters) + 03 (catalog/git flow):** evidence revisions, raw status, trace/artifact refs, test revisions, `evidgate.id`, the PR workflow used by 08.6 (`03.4.2-T1`), and the Appium mapper (mobile, V3: `04.5.1-T1`/`04.5.1-T2`).
+- **04 (ingestion/adapters) + 03 (catalog/git flow):** evidence revisions, raw status, trace/artifact refs, test revisions, `evidgate.id`, the PR workflow used by 08.6 (`03.4.2-T1`), and the mobile mapper (`adapter-mobile` — mobilewright / mobile-mcp: `04.5.1-T1`/`04.5.1-T2`; shipping a mobile producer is a G4 decision after the `13.7.1` go / no-go memo).
 - **05 (runs/orchestration) + 06 (evidence/artifacts):** sandbox replay as a runner job (lease, epoch, deadline) with no DB lock while a test runs; `ready` artifacts (`06.1.1-T1`), redaction at source, retention and deletion. ⚠️ 05 has no V1 (M3) replay executor — the runner-job path `05.7.2-T1` is V2/M4 and DECISIONS A5 rules out a hosted runner in V1–V2 — so 08.4.3-T1 cites the V1 CI-mode job path `05.2.1-T4` and the execution host is owner decision O10 (DECISIONS §8).
 - **07 (policy/decisions) + 02 (identity/tenancy):** official evaluations stay untouched by shadow results (`07.2.2-T1`); incidents come from verified failures (`05.3.2-T5`); `test_maintainer` role and `healing:*` permissions (`02.2.1-T1`/`02.2.1-T2`), audit core (`02.7.1-T1`/`02.7.1-T2`).
-- **11 (security/compliance):** sandbox isolation (`11.2.1-T6` for the V1 replay sandbox; `11.2.1-T4` extends it to V2 agents), provider opt-in, PDPL transfer assessment (O4), untrusted CI rules.
+- **11 (security/compliance):** sandbox isolation (`11.2.1-T6` for the V1 replay sandbox, G3 with `08.4.3`; `11.2.1-T4` extends it to V2 agents and `11.2.1-T5` evaluates hosted multi-tenant isolation, both G4), provider opt-in, untrusted CI rules, and the PDPL cross-border assessment (O4) that G1 needs **before** the first generation call (`11.8.1-T5`).
+- **13 (authoring, element memory and repair proposals):** `13.3.1` is the first consumer of this gateway (G1); `13.6` records the element profile per bound step; `13.8` classifies drift and adds the screenshots (opt-in) and accessibility / DOM diff to the 08.6.1 proposal. `03.7.1-T1`/`T2` are superseded by `13.3.1` (13 §3).
 - **09 (web UI):** the shadow review queue (`09.5.1-T1`..`09.5.1-T3`) renders the candidates for inspection; candidate quality and triage-time metrics come from the metric pipeline `12.5.1-T1`.
 - **10 (operations) + 12 (pilot/commercial):** kill-switch and degradation runbook (`10.7.1-T5`), alerting, restore drill; healing quota and cost per accepted fix in the usage ledger (`12.3.1-T2`).
 
@@ -311,9 +320,9 @@ Exactly per 00 §8.7: incident `open → triaged(label) → closed`; incident co
 
 | # | Question | Owner | Needed by |
 |---|---|---|---|
-| O4 | LLM provider(s) and whether any tenant data may leave Vietnam | Owner + data owner | before the V2 healing PR (M4) |
+| O4 | LLM provider(s) and whether any tenant data may leave Vietnam | Owner + data owner | before the first real G1 generation call (`13.3.1`, `08.5.1-T1` with `08.5.3-T3`) and before the transfer assessment `11.8.1-T5` is filed; the V2 healing PR follows the same decision |
 | O6 | False-heal acceptance threshold, weighted by severity (V3 gate only; V2 gate = every forbidden case blocked, FR-08-19) | Owner + QA lead | before the V3 gate (08.8.3-T2, M5) |
-| Q-08-1 | Approve provider use during the M3 pilot to shorten the V2 lane? | Owner | M3 `[OPEN]` |
+| Q-08-1 | Approve provider use before G1 exit so `13.3.1` generation and this gateway call a real provider, not only the mock adapter? | Owner | before G1 exit `[OPEN]` |
 | O10 | V1 replay execution host: (a) customer CI job via the CLI (A5-aligned; conflicts with FR-08-9 only if the patched test must enter the customer's repo, needs a sized customer-side step in 04), (b) pull 05.7.1/05.7.2/05.7.4 + 11.2.1-T4 into V1 (DECISIONS A5 change), or (c) slip sandbox replay to V2/M4 (V1 = capture, triage, candidates). Recommended [INFERENCE]: (a) — keeps A5, no hosted execution of customer code in V1, and still measures real replay quality in the pilot; (b) adds ≈ 12 raw days for 05.7.1/05.7.2/05.7.4 + 11.2.1-T4 (≈ 20 if all of 05.7 moves) | Owner + Tech Lead | before 08.4.3 feature plan (M3) |
 | Q-08-2 | Which project supplies the first real locator-break corpus (pilot project vs Evidgate's own CI, R10)? | Tech Lead + pilot | M3 |
 

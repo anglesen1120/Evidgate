@@ -1,8 +1,10 @@
-# 09 - Web UI (M2-M4)
+# 09 - Web UI (G1–G4)
 
 > Contracts: `00-overview.md`. Facts: `../DECISIONS.md` §2 (IDs), §4 (stack), §5 (healing rules), §7 (data position). Source: design §3 (screens and mandatory UX criteria), §2 (phasing), §7 (rerun vs reprocess), §8 (viewer isolation, roles).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
 > Legend: ✅ verified (link opened for this plan) · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`.
+
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 16 · G2 21 · G3 24.5 · G4 21.5 person-days.
 
 ## 1. Purpose and scope
 
@@ -15,6 +17,8 @@
 - V3 (M5+): trend/root-cause analytics, enterprise settings (SSO/SAML), visual-regression review surface.
 
 **Out of scope:** any client-side policy evaluation, a mobile app, an offline mode, a public share portal (customer-facing report links are V3 at the earliest), and any screen that renders a secret value.
+
+**Authoring screens and phases (CR-D-2).** The authoring surface — requirement input, checklist, manual test cases and their batched review — is specified and built by [13](13-product-phases.md) epic 13.4 (G1); this plan builds no authoring screen. The Healing Review screens stay here and render the review evidence defined by 13.8.2 (before/after screenshots where the project opted in, accessibility / DOM diff) on top of the 08.6.1 fields. Rows whose phase differs from their epic's pre-CR-D-2 milestone: 09.2.1-T2…T8 are G2; 09.7.1-T3, -T5, -T9, -T10, -T11 are G2 and -T4, -T7, -T8 are G4; 09.7.2 is G4. The Milestone column is authoritative where prose disagrees.
 
 ## 2. Requirements
 
@@ -167,18 +171,18 @@ Web libraries are fixed by DECISIONS §4.2 (licence and version verified 2026-09
 #### Story 09.1.1 App scaffold and build - acceptance: `npm ci && npm run build -w apps/web` runs `ng build` and produces a production bundle inside the W7 budgets; Vitest and Playwright configs run in CI (F-09-1).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.1.1-T1 | Scaffold the `apps/web` Angular workspace project inside npm workspaces (standalone bootstrap, `@angular/build` production `ng build`, `angular.json` budgets enforcing W7, `angular-eslint` lint/format, Vitest + Playwright configs) | M | V1 | M2 | 01.1.1-T3 |
-| 09.1.1-T2 | Spike: (a) `@hey-api/openapi-ts` SDK consumption shape behind `HttpClient` interceptors; (b) zoneless change detection + Trusted Types confirmation (W3/W6); (c) CDK primitives for dense tables and virtual scroll; (d) `@ngrx/signals` SignalStore shape; outcome is an ADR | M | V1 | M2 | - |
-| 09.1.1-T3 | Generated SDK consumption (`@evidgate/sdk`) behind feature data services (W5); interceptors for `X-Request-Id`/`traceparent`, `Idempotency-Key`, typed error-envelope mapping | M | V1 | M2 | 01.3.2-T1, 09.1.1-T2 |
-| 09.1.1-T4 | App shell: layout, navigation, `CanMatchFn`/`CanActivateFn` permission-aware route guards reading server-declared permissions, tenant/project switcher, lazy feature routes | M | V1 | M2 | 09.1.1-T1 |
-| 09.1.1-T5 | OIDC login/logout + cookie session with XSRF wiring (`withXsrfConfiguration`, `X-XSRF-TOKEN` header); 401 → re-auth without losing the current route | M | V1 | M2 | 02.3.1-T1 |
-| 09.1.1-T6 | i18n foundation: `@angular/localize` per-locale builds at `/vi/` and `/en/`, locale switch via prefix navigation + user-profile preference (T37), key-completeness test | M | V1 | M2 | 02.3.1-T3 |
-| 09.1.1-T7 | Shared state components: `EvidenceBadge`, `DecisionChip`, status pills, missing-reason list, hash/revision chips, waiver banner, label chips | M | V1 | M2 | 09.1.1-T4 |
-| 09.1.1-T8 | Loading/empty/error/403/404/412/429 patterns and an idempotent-retry helper | S | V1 | M2 | 09.1.1-T3 |
-| 09.1.1-T9 | Web telemetry: vitals + API error funnel (no PII, ids only); emits the LCP/INP SLIs plan 10 records (T39) | S | V1 | M2 | 09.1.1-T3 |
-| 09.1.1-T10 | App-origin strict CSP + Trusted Types (W6, FR-09-15): policy set at the hosting layer, build verified under it in E2E, `bypassSecurityTrust*` lint rule | S | V1 | M2 | 09.1.1-T1 |
-| 09.1.1-T11 | UX design foundation: wireframes of the six core flows (all states), design tokens (CSS custom properties), light/dark themes, breakpoints and dense-table rules, component state sheet + raw-literal lint; owner approval gates every feature screen task | L | V1 | M2 | 09.1.1-T1 |
-| 09.1.1-T12 | Dev-only fixture backend: `fixtures` build configuration answering SDK calls from `fixtures/` with latency/error toggles; every fixture validated against `contracts/openapi.yaml` | S | V1 | M2 | 09.1.1-T3, 01.6.1-T3 |
+| 09.1.1-T1 | Scaffold the `apps/web` Angular workspace project inside npm workspaces (standalone bootstrap, `@angular/build` production `ng build`, `angular.json` budgets enforcing W7, `angular-eslint` lint/format, Vitest + Playwright configs) | M | V1 | G1 | 01.1.1-T3 |
+| 09.1.1-T2 | Spike: (a) `@hey-api/openapi-ts` SDK consumption shape behind `HttpClient` interceptors; (b) zoneless change detection + Trusted Types confirmation (W3/W6); (c) CDK primitives for dense tables and virtual scroll; (d) `@ngrx/signals` SignalStore shape; outcome is an ADR | M | V1 | G1 | - |
+| 09.1.1-T3 | Generated SDK consumption (`@evidgate/sdk`) behind feature data services (W5); interceptors for `X-Request-Id`/`traceparent`, `Idempotency-Key`, typed error-envelope mapping | M | V1 | G1 | 01.3.2-T1, 09.1.1-T2 |
+| 09.1.1-T4 | App shell: layout, navigation, `CanMatchFn`/`CanActivateFn` permission-aware route guards reading server-declared permissions, tenant/project switcher, lazy feature routes | M | V1 | G1 | 09.1.1-T1 |
+| 09.1.1-T5 | OIDC login/logout + cookie session with XSRF wiring (`withXsrfConfiguration`, `X-XSRF-TOKEN` header); 401 → re-auth without losing the current route | M | V1 | G1 | 02.3.1-T1 |
+| 09.1.1-T6 | i18n foundation: `@angular/localize` per-locale builds at `/vi/` and `/en/`, locale switch via prefix navigation + user-profile preference (T37), key-completeness test | M | V1 | G1 | 02.3.1-T3 |
+| 09.1.1-T7 | Shared state components: `EvidenceBadge`, `DecisionChip`, status pills, missing-reason list, hash/revision chips, waiver banner, label chips | M | V1 | G1 | 09.1.1-T4 |
+| 09.1.1-T8 | Loading/empty/error/403/404/412/429 patterns and an idempotent-retry helper | S | V1 | G1 | 09.1.1-T3 |
+| 09.1.1-T9 | Web telemetry: vitals + API error funnel (no PII, ids only); emits the LCP/INP SLIs plan 10 records (T39) | S | V1 | G1 | 09.1.1-T3 |
+| 09.1.1-T10 | App-origin strict CSP + Trusted Types (W6, FR-09-15): policy set at the hosting layer, build verified under it in E2E, `bypassSecurityTrust*` lint rule | S | V1 | G1 | 09.1.1-T1 |
+| 09.1.1-T11 | UX design foundation: wireframes of the six core flows (all states), design tokens (CSS custom properties), light/dark themes, breakpoints and dense-table rules, component state sheet + raw-literal lint; owner approval gates every feature screen task | L | V1 | G1 | 09.1.1-T1 |
+| 09.1.1-T12 | Dev-only fixture backend: `fixtures` build configuration answering SDK calls from `fixtures/` with latency/error toggles; every fixture validated against `contracts/openapi.yaml` | S | V1 | G1 | 09.1.1-T3, 01.6.1-T3 |
 
 Epic 09.1 total: 11.0
 
@@ -187,14 +191,14 @@ Epic 09.1 total: 11.0
 #### Story 09.2.1 Onboarding wizard - acceptance: a new tenant reaches an enabled collecting project through the five steps, resumable, each step showing the run/evidence it produced.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.2.1-T1 | Wizard shell with resumable steps and per-step evidence panel | L | V1 | M2 | 09.1.1-T4 |
-| 09.2.1-T2 | Connect repo/CI step: GitHub OIDC exchange path and project ingest token (shown once, copyable, rotatable) | M | V1 | M2 | 02.4.1-T1, 02.4.2-T1 |
-| 09.2.1-T3 | Sample-suite step: first run shown live (state, attempts, failures) | M | V1 | M2 | 09.3.1-T2 |
-| 09.2.1-T4 | Report comparison step: normalised results vs the original producer report with per-case diffs and discrepancy reasons | L | V1 | M3 | 04.4.1-T6, 06.1.2-T1 |
-| 09.2.1-T5 | Enable step: collect mode, policy advisory preview, explicit "not gating yet" statement, confirmation audit | M | V1 | M3 | 07.1.1-T1 |
-| 09.2.1-T6 | Project & Catalog screens: test list (id, revision, platform/level/purpose, owner, rename history), filters, owner assignment | L | V1 | M3 | 03.1.1-T1, 03.1.2-T2 |
-| 09.2.1-T7 | Connection health panel + CLI quickstart snippet (copyable, secret-free) | S | V1 | M3 | 09.2.1-T2 |
-| 09.2.1-T8 | Mapping resolution screen for `unmapped`/`conflicted` producer results: list with state filter, bind to a case or dismiss, deep link from the report-comparison step | M | V1 | M3 | 09.2.1-T6, 03.1.2-T2 |
+| 09.2.1-T1 | Wizard shell with resumable steps and per-step evidence panel | L | V1 | G1 | 09.1.1-T4 |
+| 09.2.1-T2 | Connect repo/CI step: GitHub OIDC exchange path and project ingest token (shown once, copyable, rotatable) | M | V1 | G2 | 02.4.1-T1, 02.4.2-T1 |
+| 09.2.1-T3 | Sample-suite step: first run shown live (state, attempts, failures) | M | V1 | G2 | 09.3.1-T2 |
+| 09.2.1-T4 | Report comparison step: normalised results vs the original producer report with per-case diffs and discrepancy reasons | L | V1 | G2 | 04.4.1-T6, 06.1.2-T1 |
+| 09.2.1-T5 | Enable step: collect mode, policy advisory preview, explicit "not gating yet" statement, confirmation audit | M | V1 | G2 | 07.1.1-T1 |
+| 09.2.1-T6 | Project & Catalog screens: test list (id, revision, platform/level/purpose, owner, rename history), filters, owner assignment | L | V1 | G2 | 03.1.1-T1, 03.1.2-T2 |
+| 09.2.1-T7 | Connection health panel + CLI quickstart snippet (copyable, secret-free) | S | V1 | G2 | 09.2.1-T2 |
+| 09.2.1-T8 | Mapping resolution screen for `unmapped`/`conflicted` producer results: list with state filter, bind to a case or dismiss, deep link from the report-comparison step | M | V1 | G2 | 09.2.1-T6, 03.1.2-T2 |
 
 Epic 09.2 total: 10.5
 
@@ -203,17 +207,17 @@ Epic 09.2 total: 10.5
 #### Story 09.3.1 Run detail is the truth surface - acceptance: for any run the page shows manifest, build digests, per-producer finalize state, every attempt and the stored evaluation without computing anything client-side.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.3.1-T1 | Run list with state/completeness/decision filters and rerun-scope labels | M | V1 | M2 | 09.1.1-T7 |
-| 09.3.1-T2 | Run detail: manifest summary, release components + digests, environment, pinned `manifest_hash`/suite/policy revision | L | V1 | M2 | 05.2.1-T1 |
-| 09.3.1-T3 | Evidence panel: completeness verdict, `missing[]` reasons with deep links, immutable evidence-revision selector | L | V1 | M2 | 05.3.2-T1, 06.5.1-T1 |
-| 09.3.1-T4 | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible | M | V1 | M2 | 05.3.1-T1 |
-| 09.3.1-T5 | Decision view from `GET /v1/runs/{r}/decision`: verdict, reasons, policy hash, evaluation revision, `pending` | M | V1 | M2 | 07.5.2-T1 |
-| 09.3.1-T6 | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events | M | V1 | M2 | 05.3.2-T1 |
-| 09.3.1-T7 | Actions with correct semantics: create run (Idempotency-Key), cancel (202), rerun full/subset, reprocess-vs-rerun copy | L | V1 | M3 | 05.2.1-T1, 05.4.1-T1, 05.5.1-T1 |
-| 09.3.1-T8 | Flaky and healed labels rendered separately; retry fail→pass shows both attempts | M | V1 | M3 | 07.4.1-T1, 08.3.1-T1 |
-| 09.3.1-T9 | Waiver/quarantine rendering: banner with approver+expiry, quarantine chip, results never suppressed | M | V1 | M3 | 07.3.1-T1, 07.3.2-T1 |
-| 09.3.1-T10 | Release view: components → digests → runs → decisions matrix with freshness/late-window warnings | L | V2 | M4 | 07.5.3-T1 |
-| 09.3.1-T11 | Waiver request/approve/revoke and quarantine add/remove actions on case rows; approve disabled for the requester, server refusals (403/409/422) shown verbatim | M | V1 | M3 | 09.3.1-T9, 07.3.1-T1, 07.3.1-T2 |
+| 09.3.1-T1 | Run list with state/completeness/decision filters and rerun-scope labels | M | V1 | G2 | 09.1.1-T7 |
+| 09.3.1-T2 | Run detail: manifest summary, release components + digests, environment, pinned `manifest_hash`/suite/policy revision | L | V1 | G2 | 05.2.1-T1 |
+| 09.3.1-T3 | Evidence panel: completeness verdict, `missing[]` reasons with deep links, immutable evidence-revision selector | L | V1 | G2 | 05.3.2-T1, 06.5.1-T1 |
+| 09.3.1-T4 | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible | M | V1 | G2 | 05.3.1-T1 |
+| 09.3.1-T5 | Decision view from `GET /v1/runs/{r}/decision`: verdict, reasons, policy hash, evaluation revision, `pending` | M | V1 | G3 | 07.5.2-T1 |
+| 09.3.1-T6 | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events | M | V1 | G2 | 05.3.2-T1 |
+| 09.3.1-T7 | Actions with correct semantics: create run (Idempotency-Key), cancel (202), rerun full/subset, reprocess-vs-rerun copy | L | V1 | G2 | 05.2.1-T1, 05.4.1-T1, 05.5.1-T1 |
+| 09.3.1-T8 | Flaky and healed labels rendered separately; retry fail→pass shows both attempts | M | V1 | G3 | 07.4.1-T1, 08.3.1-T1 |
+| 09.3.1-T9 | Waiver/quarantine rendering: banner with approver+expiry, quarantine chip, results never suppressed | M | V1 | G4 | 07.3.1-T1, 07.3.2-T1 |
+| 09.3.1-T10 | Release view: components → digests → runs → decisions matrix with freshness/late-window warnings | L | V2 | G4 | 07.5.3-T1 |
+| 09.3.1-T11 | Waiver request/approve/revoke and quarantine add/remove actions on case rows; approve disabled for the requester, server refusals (403/409/422) shown verbatim | M | V1 | G4 | 09.3.1-T9, 07.3.1-T1, 07.3.1-T2 |
 
 Epic 09.3 total: 15.0
 
@@ -222,13 +226,13 @@ Epic 09.3 total: 15.0
 #### Story 09.4.1 Triage without losing the original failure - acceptance: from the inbox a failure can be labelled, assigned, investigated and either fixed or (V2) sent to healing, with the original evidence intact.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.4.1-T1 | Inbox list with filters (status, label, owner, severity, flaky) and URL-persisted cursor | M | V1 | M3 | 08.1.1-T1, 08.2.2-T1 |
-| 09.4.1-T2 | Failure detail: root error vs infrastructure error separated, log excerpt, step events, artifact links, related issue | L | V1 | M3 | 06.2.1-T1, 08.1.2-T1 |
-| 09.4.1-T3 | Triage actions: label (5 labels), assign, close, with `label_source` shown (rule/model/human) | M | V1 | M3 | 08.2.2-T1, 08.2.2-T4 |
-| 09.4.1-T4 | Investigation flow: case history across revisions, rerun comparison, evidence-revision diff | L | V1 | M3 | 09.3.1-T3 |
-| 09.4.1-T5 | Bounded artifact viewer integration: isolated origin, URL refresh, sensitivity gate | M | V1 | M3 | 06.2.1-T1, 06.3.3-T1 |
-| 09.4.1-T6 | Insufficient-evidence states (unknown status, missing artifact, stale epoch) each with reason + fix action | S | V1 | M3 | 09.3.1-T3 |
-| 09.4.1-T7 | Gated artifact state: `content_gated` rows render kind, size band and reason, never request a download URL | S | V1 | M3 | 06.2.1-T1 |
+| 09.4.1-T1 | Inbox list with filters (status, label, owner, severity, flaky) and URL-persisted cursor | M | V1 | G3 | 08.1.1-T1, 08.2.2-T1 |
+| 09.4.1-T2 | Failure detail: root error vs infrastructure error separated, log excerpt, step events, artifact links, related issue | L | V1 | G3 | 06.2.1-T1, 08.1.2-T1 |
+| 09.4.1-T3 | Triage actions: label (5 labels), assign, close, with `label_source` shown (rule/model/human) | M | V1 | G3 | 08.2.2-T1, 08.2.2-T4 |
+| 09.4.1-T4 | Investigation flow: case history across revisions, rerun comparison, evidence-revision diff | L | V1 | G3 | 09.3.1-T3 |
+| 09.4.1-T5 | Bounded artifact viewer integration: isolated origin, URL refresh, sensitivity gate | M | V1 | G3 | 06.2.1-T1, 06.3.3-T1 |
+| 09.4.1-T6 | Insufficient-evidence states (unknown status, missing artifact, stale epoch) each with reason + fix action | S | V1 | G3 | 09.3.1-T3 |
+| 09.4.1-T7 | Gated artifact state: `content_gated` rows render kind, size band and reason, never request a download URL | S | V1 | G3 | 06.2.1-T1 |
 
 Epic 09.4 total: 8.0
 
@@ -237,16 +241,16 @@ Epic 09.4 total: 8.0
 #### Story 09.5.1 Shadow review (V1) - acceptance: candidates are inspectable with validation and lineage, and no control can apply a patch in V1.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.5.1-T1 | Healing Review queue (shadow): candidate status, label source, sample counts, availability state | M | V1 | M3 | 08.3.1-T1 |
-| 09.5.1-T2 | Candidate detail (V1 read-only): patch diff, validation results, negative control, lineage, risk flags, "proposal only" banner | L | V1 | M3 | 08.4.1-T1, 08.4.2-T1 |
-| 09.5.1-T3 | Shadow comparison: original failure vs shadow result in two blocks, official run untouched | M | V1 | M3 | 09.3.1-T4 |
+| 09.5.1-T1 | Healing Review queue (shadow): candidate status, label source, sample counts, availability state | M | V1 | G3 | 08.3.1-T1 |
+| 09.5.1-T2 | Candidate detail (V1 read-only): patch diff, validation results, negative control, lineage, risk flags, "proposal only" banner | L | V1 | G3 | 08.4.1-T1, 08.4.2-T1 |
+| 09.5.1-T3 | Shadow comparison: original failure vs shadow result in two blocks, official run untouched | M | V1 | G3 | 09.3.1-T4 |
 #### Story 09.5.2 Approval (V2) - acceptance: approve/reject binds to `candidate_hash` + base commit, is re-permissioned, and a stale hash is rejected with a visible conflict.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.5.2-T1 | Approve/reject flow (V2): `If-Match`+`candidate_hash`, reason required, expiry, sensitive-case second reviewer | L | V2 | M4 | 08.6.1-T1 |
-| 09.5.2-T2 | Knowledge-record and revocation UI: lineage, dependent candidates, effect preview, rollback | M | V2 | M4 | 08.7.2-T1 |
-| 09.5.2-T3 | Availability and kill switches: resolved scope (system→tenant→project) plus per-scope controls | M | V2 | M4 | 08.6.3-T1 |
-| 09.5.2-T4 | Separation of healing vs release approval in copy, navigation and E2E assertions | S | V2 | M4 | 09.3.1-T5 |
+| 09.5.2-T1 | Approve/reject flow (V2): `If-Match`+`candidate_hash`, reason required, expiry, sensitive-case second reviewer | L | V2 | G3 | 08.6.1-T1 |
+| 09.5.2-T2 | Knowledge-record and revocation UI: lineage, dependent candidates, effect preview, rollback | M | V2 | G3 | 08.7.2-T1 |
+| 09.5.2-T3 | Availability and kill switches: resolved scope (system→tenant→project) plus per-scope controls | M | V2 | G3 | 08.6.3-T1 |
+| 09.5.2-T4 | Separation of healing vs release approval in copy, navigation and E2E assertions | S | V2 | G3 | 09.3.1-T5 |
 
 Epic 09.5 total: 8.5
 
@@ -255,12 +259,12 @@ Epic 09.5 total: 8.5
 #### Story 09.6.1 Draft to review to merge - acceptance: a draft created from a template can be edited, reviewed as a diff with its assertion hash, dry-run and then approved by another person.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.6.1-T1 | Template gallery and draft creation with required assertion fields | M | V2 | M4 | 03.5.1-T1 |
-| 09.6.1-T2 | Draft editor: intent/assertion, `evidgate.id` assignment, variant parameters, inline forbidden-change lint | L | V2 | M4 | 03.6.1-T1 |
-| 09.6.1-T3 | Patch review: diff vs base revision, assertion-hash change highlight, approver identity | L | V2 | M4 | 03.2.1-T5, 03.6.1-T1 |
-| 09.6.1-T4 | Dry-run panel with bounded results, pre-healing failure and evidence links | M | V2 | M4 | 03.6.1-T2 |
-| 09.6.1-T5 | AI draft review: AI-labelled candidates, untrusted-text rendering, accept/reject into draft | M | V2 | M4 | 03.7.1-T1 |
-| 09.6.1-T6 | Suite composition: case revisions × variants, shard strategy, DAG/coverage gap warnings | M | V2 | M4 | 03.2.1-T1, 03.2.1-T3, 03.2.1-T4 |
+| 09.6.1-T1 | Template gallery and draft creation with required assertion fields | M | V2 | G4 | 03.5.1-T1 |
+| 09.6.1-T2 | Draft editor: intent/assertion, `evidgate.id` assignment, variant parameters, inline forbidden-change lint | L | V2 | G4 | 03.6.1-T1 |
+| 09.6.1-T3 | Patch review: diff vs base revision, assertion-hash change highlight, approver identity | L | V2 | G4 | 03.2.1-T5, 03.6.1-T1 |
+| 09.6.1-T4 | Dry-run panel with bounded results, pre-healing failure and evidence links | M | V2 | G4 | 03.6.1-T2 |
+| 09.6.1-T5 | AI draft review: AI-labelled candidates, untrusted-text rendering, accept/reject into draft | M | V2 | G4 | 03.7.1-T1 |
+| 09.6.1-T6 | Suite composition: case revisions × variants, shard strategy, DAG/coverage gap warnings | M | V2 | G4 | 03.2.1-T1, 03.2.1-T3, 03.2.1-T4 |
 
 Epic 09.6 total: 8.0
 
@@ -269,23 +273,23 @@ Epic 09.6 total: 8.0
 #### Story 09.7.1 Administer without seeing secrets - acceptance: an admin manages members, integrations, policy, quota, retention and audit; no screen can render a secret value.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.7.1-T1 | Settings shell and org/project tabs with permission-aware content | M | V1 | M2 | 02.1.1-T1, 02.2.1-T1 |
-| 09.7.1-T2 | Members and roles: role matrix per project, invite/remove, scope preview | M | V1 | M2 | 02.1.2-T1, 02.2.1-T1 |
-| 09.7.1-T3 | Secret references: metadata only, resolution scope, rotation state and reminder | S | V1 | M3 | 02.4.2-T1 |
-| 09.7.1-T4 | Policy view/edit for release approvers: revision list, revision diff, publish with ETag, advisory-vs-gating indicator | L | V1 | M3 | 07.1.1-T1 |
-| 09.7.1-T5 | Quota and retention view: limits, current counters, retention change with deletion-impact warning | M | V1 | M3 | 06.5.2-T1, 12.3.1-T6 |
-| 09.7.1-T6 | Audit log viewer: actor/action/object/time filters, CSV export, support-access rows flagged | M | V1 | M3 | 02.7.1-T1 |
-| 09.7.1-T7 | Agents page (V2): pools, capabilities, lease/heartbeat health, `unschedulable` reasons, version drift | L | V2 | M4 | 05.7.3-T1 |
-| 09.7.1-T8 | Integrations page: webhook endpoints, signing-secret rotation, delivery log with retry state | M | V1 | M3 | 07.6.2-T1, 07.6.3-T1, 07.6.3-T2 |
-| 09.7.1-T9 | Security events view in Settings (tenant_admin): V1 lists the 11.1.1-T4 baseline events (auth failures, cross-tenant 404 patterns) plus flagged support-access rows, with project/type/severity/time filters, reading `GET /v1/orgs/{o}/security-events`; injection-attempt events appear from V2 (11.4.1-T2) | S | V1 | M3 | 11.5.1-T5 |
-| 09.7.1-T10 | Support access tab (list/approve/revoke support grants) and the app-shell support-access banner driven by `X-Evidgate-Support-Access` | M | V1 | M3 | 02.8.1-T1, 02.8.1-T2, 09.7.1-T1 |
-| 09.7.1-T11 | Quota warning badge in the app shell from the usage summary (`warned_at`/`blocked_at`), hidden without `usage:read` | S | V1 | M3 | 09.7.1-T5, 12.3.1-T6 |
+| 09.7.1-T1 | Settings shell and org/project tabs with permission-aware content | M | V1 | G1 | 02.1.1-T1, 02.2.1-T1 |
+| 09.7.1-T2 | Members and roles: role matrix per project, invite/remove, scope preview | M | V1 | G1 | 02.1.2-T1, 02.2.1-T1 |
+| 09.7.1-T3 | Secret references: metadata only, resolution scope, rotation state and reminder | S | V1 | G2 | 02.4.2-T1 |
+| 09.7.1-T4 | Policy view/edit for release approvers: revision list, revision diff, publish with ETag, advisory-vs-gating indicator | L | V1 | G4 | 07.1.1-T1 |
+| 09.7.1-T5 | Quota and retention view: limits, current counters, retention change with deletion-impact warning | M | V1 | G2 | 06.5.2-T1, 12.3.1-T6 |
+| 09.7.1-T6 | Audit log viewer: actor/action/object/time filters, CSV export, support-access rows flagged | M | V1 | G1 | 02.7.1-T1 |
+| 09.7.1-T7 | Agents page (V2): pools, capabilities, lease/heartbeat health, `unschedulable` reasons, version drift | L | V2 | G4 | 05.7.3-T1 |
+| 09.7.1-T8 | Integrations page: webhook endpoints, signing-secret rotation, delivery log with retry state | M | V1 | G4 | 07.6.2-T1, 07.6.3-T1, 07.6.3-T2 |
+| 09.7.1-T9 | Security events view in Settings (tenant_admin): V1 lists the 11.1.1-T4 baseline events (auth failures, cross-tenant 404 patterns) plus flagged support-access rows, with project/type/severity/time filters, reading `GET /v1/orgs/{o}/security-events`; injection-attempt events appear from V2 (11.4.1-T2) | S | V1 | G2 | 11.5.1-T5 |
+| 09.7.1-T10 | Support access tab (list/approve/revoke support grants) and the app-shell support-access banner driven by `X-Evidgate-Support-Access` | M | V1 | G2 | 02.8.1-T1, 02.8.1-T2, 09.7.1-T1 |
+| 09.7.1-T11 | Quota warning badge in the app shell from the usage summary (`warned_at`/`blocked_at`), hidden without `usage:read` | S | V1 | G2 | 09.7.1-T5, 12.3.1-T6 |
 
 #### Story 09.7.2 API tokens and deploy targets screens — acceptance: an admin manages API tokens and deploy targets and reads promotion history without leaving Settings.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.7.2-T1 | API tokens screen: list, create with mandatory expiry, show-once secret, revoke, last used | M | V1 | M3 | 02.4.4-T1, 09.7.1-T1 |
-| 09.7.2-T2 | Deploy targets and promotion history screen with per-target policy pin and blocked reasons | M | V1 | M3 | 07.8.1-T2, 09.7.1-T1 |
+| 09.7.2-T1 | API tokens screen: list, create with mandatory expiry, show-once secret, revoke, last used | M | V1 | G4 | 02.4.4-T1, 09.7.1-T1 |
+| 09.7.2-T2 | Deploy targets and promotion history screen with per-target policy pin and blocked reasons | M | V1 | G4 | 07.8.1-T2, 09.7.1-T1 |
 
 **Story 09.7.2 total: 2** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
 
@@ -296,11 +300,11 @@ Epic 09.7 total: 13.5
 #### Story 09.8.1 Core flows are usable and proven end to end - acceptance: axe-clean core flows, keyboard-only completion, and an E2E suite green in Evidgate's CI whose results are ingested into Evidgate.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.8.1-T1 | WCAG 2.2 AA pass on core flows (keyboard, focus, contrast, target size, error identification) with fixes | L | V1 | M3 | 09.1.1-T4 |
-| 09.8.1-T2 | Automated a11y checks (axe) in component tests and E2E, with a documented exception list | S | V1 | M3 | 09.8.1-T1 |
-| 09.8.1-T3 | Playwright E2E suite for core flows, wired into CI and dogfooded into Evidgate | L | V1 | M3 | 09.1.1-T1 |
-| 09.8.1-T4 | i18n coverage QA: vi review, longest-string layout, no concatenation bugs | S | V1 | M3 | 09.1.1-T6 |
-| 09.8.1-T5 | V2 E2E extension: draft workflow, healing approve/reject 412 race, agents page | M | V2 | M4 | 09.8.1-T3 |
+| 09.8.1-T1 | WCAG 2.2 AA pass on core flows (keyboard, focus, contrast, target size, error identification) with fixes | L | V1 | G3 | 09.1.1-T4 |
+| 09.8.1-T2 | Automated a11y checks (axe) in component tests and E2E, with a documented exception list | S | V1 | G3 | 09.8.1-T1 |
+| 09.8.1-T3 | Playwright E2E suite for core flows, wired into CI and dogfooded into Evidgate | L | V1 | G3 | 09.1.1-T1 |
+| 09.8.1-T4 | i18n coverage QA: vi review, longest-string layout, no concatenation bugs | S | V1 | G3 | 09.1.1-T6 |
+| 09.8.1-T5 | V2 E2E extension: draft workflow, healing approve/reject 412 race, agents page | M | V2 | G3 | 09.8.1-T3 |
 
 Epic 09.8 total: 6.0
 
@@ -308,9 +312,9 @@ Epic 09.8 total: 6.0
 #### Story 09.9.1 Quality overview for managers — acceptance: a project shows pass rate over time, most flaky cases, time to decision and incomplete rate from stored history, with the same permission rules as run pages.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.9.1-T1 | `GET /v1/projects/{p}/overview` read model (pass rate trend, top-N flaky, decision latency p50/p95, incomplete rate) over 03.9.1 history | M | V2 | M4 | 03.9.1-T2, 07.5.2-T1 |
-| 09.9.1-T2 | Overview screen with date range, per-branch filter and links to run detail | M | V2 | M4 | 09.9.1-T1, 09.1.1-T7 |
-| 09.9.1-T3 | Tests and accessibility: empty state, large history, keyboard and screen-reader pass | S | V2 | M4 | 09.9.1-T2 |
+| 09.9.1-T1 | `GET /v1/projects/{p}/overview` read model (pass rate trend, top-N flaky, decision latency p50/p95, incomplete rate) over 03.9.1 history | M | V2 | G4 | 03.9.1-T2, 07.5.2-T1 |
+| 09.9.1-T2 | Overview screen with date range, per-branch filter and links to run detail | M | V2 | G4 | 09.9.1-T1, 09.1.1-T7 |
+| 09.9.1-T3 | Tests and accessibility: empty state, large history, keyboard and screen-reader pass | S | V2 | G4 | 09.9.1-T2 |
 
 **Story 09.9.1 total: 2.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
 

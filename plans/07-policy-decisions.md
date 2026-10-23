@@ -1,8 +1,10 @@
-# 07 - Policy and Decisions (M2-M3)
+# 07 - Policy and Decisions (G1–G4)
 
 > Contracts: `00-overview.md` (§8.5 completeness/evaluation, §8.6 decision rules and policy fields, §8.8 waiver/quarantine, §9.2 errors, §9.3 endpoints, §9.5 webhooks, §11 NFRs). Facts: `../DECISIONS.md` §3 (A3, A8, A9, A10), §4, §9, F3.
 > Source: design §5 "Chính sách đánh giá release" (decision table, policy v1 rules, waiver, late evidence), §5 "Trình tự chuẩn", §6 "Toàn vẹn tenant và đồng thời" (one evaluation per evidence/policy pair), §9 (canary + shadow decisions).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
+
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 1 · G2 6.5 · G3 0.5 · G4 23.75 person-days.
 
 ## 1. Purpose and scope
 
@@ -154,101 +156,101 @@
 #### Story 07.1.1 Revision record, hash, activation and pinning — acceptance: identical bodies hash equal, a stored revision cannot be updated, and a run keeps the revision it pinned after a new activation.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.1.1-T1 | `policy_revision` table + migration (00 §8.6 fields, immutable, `hash`) | M | V1 | M2 | 01.4.1-T1, 01.4.1-T3, 02.6.1-T1 |
-| 07.1.1-T2 | Canonicalisation + `sha256:` hash service (RFC 8785), hash verification on read | S | V1 | M2 | 07.1.1-T1 |
-| 07.1.1-T3 | Policy endpoints (append-only revision, list, `If-Match` on drafts, `422` on unknown fields) | M | V1 | M2 | 07.1.1-T2 |
-| 07.1.1-T4 | `policy_activation` + mode + audit; run-pinning handshake with 05 | S | V1 | M2 | 07.1.1-T3, 05.2.1-T1 |
+| 07.1.1-T1 | `policy_revision` table + migration (00 §8.6 fields, immutable, `hash`) | M | V1 | G1 | 01.4.1-T1, 01.4.1-T3, 02.6.1-T1 |
+| 07.1.1-T2 | Canonicalisation + `sha256:` hash service (RFC 8785), hash verification on read | S | V1 | G4 | 07.1.1-T1 |
+| 07.1.1-T3 | Policy endpoints (append-only revision, list, `If-Match` on drafts, `422` on unknown fields) | M | V1 | G4 | 07.1.1-T2 |
+| 07.1.1-T4 | `policy_activation` + mode + audit; run-pinning handshake with 05 | S | V1 | G4 | 07.1.1-T3, 05.2.1-T1 |
 
 ### Epic 07.2 Evaluator
 
 #### Story 07.2.1 Pure evaluation: completeness, outcome, decision — acceptance: same inputs give the same output in a fresh process; the three fields are populated independently and `FAIL` with `incomplete` is representable.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.2.1-T1 | Evaluator core as a plain C# function over the three immutable inputs (evidence revision, policy revision, exceptions snapshot — T24) + evaluator version constant (pure, no clock/network) | M | V1 | M2 | 05.3.2-T5, 06.5.1-T1 |
-| 07.2.1-T2 | Completeness/outcome/decision computation + `reasons[]` catalogue | M | V1 | M2 | 07.2.1-T1 |
+| 07.2.1-T1 | Evaluator core as a plain C# function over the three immutable inputs (evidence revision, policy revision, exceptions snapshot — T24) + evaluator version constant (pure, no clock/network) | M | V1 | G2 | 05.3.2-T5, 06.5.1-T1 |
+| 07.2.1-T2 | Completeness/outcome/decision computation + `reasons[]` catalogue | M | V1 | G2 | 07.2.1-T1 |
 
 #### Story 07.2.2 Persistence, idempotency and the decision matrix — acceptance: a duplicate write returns the existing row, a shadow evaluation writes its own row (T22), and every row of 00 §8.6 (M1–M18 in §7) is covered by a passing test.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.2.2-T1 | Evaluation task handler in `Evidgate.Worker` (claims the `task` row 00 §5.3, loads inputs, INSERT guarded by the T22 unique key, returns winner on conflict), deterministic replay test | M | V1 | M2 | 07.2.1-T2, 01.5.1-T2, 01.5.1-T3 |
-| 07.2.2-T2 | Golden matrix tests M1–M18 (xUnit v3, table-driven, no DB/clock) + stored-row replay test | M | V1 | M2 | 07.2.1-T2 |
-| 07.2.2-T3 | Exceptions snapshot resolved at trigger time in the handler (active waiver/quarantine ids + `exceptions_as_of`) and stored as `exceptions_hash` on the evaluation (T24) | S | V1 | M2 | 07.2.2-T1, 07.3.1-T1, 07.3.1-T2 |
-| 07.2.2-T4 | Replay runs (`run.purpose = replay`, T67) are evaluated only with `mode = shadow`, never `live`, and never enter release aggregation (07.5.3); golden-matrix row + test | XS | V1 | M2 | 07.2.2-T1, 05.2.1-T5 |
+| 07.2.2-T1 | Evaluation task handler in `Evidgate.Worker` (claims the `task` row 00 §5.3, loads inputs, INSERT guarded by the T22 unique key, returns winner on conflict), deterministic replay test | M | V1 | G2 | 07.2.1-T2, 01.5.1-T2, 01.5.1-T3 |
+| 07.2.2-T2 | Golden matrix tests M1–M18 (xUnit v3, table-driven, no DB/clock) + stored-row replay test | M | V1 | G4 | 07.2.1-T2 |
+| 07.2.2-T3 | Exceptions snapshot resolved at trigger time in the handler (active waiver/quarantine ids + `exceptions_as_of`) and stored as `exceptions_hash` on the evaluation (T24) | S | V1 | G4 | 07.2.2-T1, 07.3.1-T1, 07.3.1-T2 |
+| 07.2.2-T4 | Replay runs (`run.purpose = replay`, T67) are evaluated only with `mode = shadow`, never `live`, and never enter release aggregation (07.5.3); golden-matrix row + test | XS | V1 | G4 | 07.2.2-T1, 05.2.1-T5 |
 
 ### Epic 07.3 Waivers and quarantine
 
 #### Story 07.3.1 Waiver and quarantine lifecycles — acceptance: a waiver approved by its requester is refused; an active quarantine excludes a case from gating while its failure stays visible; quarantining a case on the policy's critical list is refused `422 critical_case_not_quarantinable` (T23).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.3.1-T1 | `waiver` table, states, endpoints, `approver ≠ requester` (API + DB check) | M | V1 | M2 | 02.2.1-T1, 02.2.1-T2 |
-| 07.3.1-T2 | `quarantine_entry` table, states, endpoints, policy reference, critical-list refusal `422 critical_case_not_quarantinable` (T23) | M | V1 | M2 | 07.1.1-T1 |
+| 07.3.1-T1 | `waiver` table, states, endpoints, `approver ≠ requester` (API + DB check) | M | V1 | G4 | 02.2.1-T1, 02.2.1-T2 |
+| 07.3.1-T2 | `quarantine_entry` table, states, endpoints, policy reference, critical-list refusal `422 critical_case_not_quarantinable` (T23) | M | V1 | G4 | 07.1.1-T1 |
 
 #### Story 07.3.2 Evaluator effects, expiry and audit — acceptance: M14, M15 and M18 pass; no waiver path produces `PASS` from a failed required assertion; expiry changes the next evaluation via its exceptions snapshot (T24).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.3.2-T1 | Waiver/quarantine effects in the evaluator + reason codes | M | V1 | M2 | 07.2.1-T2, 07.3.1-T1, 07.3.1-T2 |
-| 07.3.2-T2 | Expiry sweeper (Cronos schedule, unique `(schedule_name, fire_at)` fire key, 00 §5.3), state transitions, audit rows, tests | S | V1 | M2 | 07.3.2-T1 |
+| 07.3.2-T1 | Waiver/quarantine effects in the evaluator + reason codes | M | V1 | G4 | 07.2.1-T2, 07.3.1-T1, 07.3.1-T2 |
+| 07.3.2-T2 | Expiry sweeper (Cronos schedule, unique `(schedule_name, fire_at)` fire key, 00 §5.3), state transitions, audit rows, tests | S | V1 | G4 | 07.3.2-T1 |
 
 ### Epic 07.4 Flaky detection and budget
 
 #### Story 07.4.1 In-run flaky detection and budget — acceptance: retry fail → pass is detected from attempts, critical cases block under the pilot default, non-critical breaches within budget warn and beyond budget yield `INCONCLUSIVE` (T27).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.4.1-T1 | Flaky detection from attempt history within a run (retry policy from the suite revision) | M | V1 | M2 | 07.2.1-T2, 05.3.3-T1 |
-| 07.4.1-T2 | Flaky budget from the policy revision applied to the decision (critical block, within-budget warning, over-budget `flaky_budget_exceeded` ⇒ `INCONCLUSIVE`, T27) | M | V1 | M2 | 07.4.1-T1 |
+| 07.4.1-T1 | Flaky detection from attempt history within a run (retry policy from the suite revision) | M | V1 | G2 | 07.2.1-T2, 05.3.3-T1 |
+| 07.4.1-T2 | Flaky budget from the policy revision applied to the decision (critical block, within-budget warning, over-budget `flaky_budget_exceeded` ⇒ `INCONCLUSIVE`, T27) | M | V1 | G2 | 07.4.1-T1 |
 
 #### Story 07.4.2 Flaky surface and cross-run trend — acceptance: flaky facts appear in reasons, webhooks and CLI output; the V2 trend label changes no V1 gating semantics.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.4.2-T1 | Flaky reasons in evaluation, webhook payload and CLI output | S | V1 | M2 | 07.4.1-T2 |
-| 07.4.2-T2 | Cross-run flaky trend (read table + label) | S | V2 | M4 | 07.4.1-T1, 05.3.3-T1 |
+| 07.4.2-T1 | Flaky reasons in evaluation, webhook payload and CLI output | S | V1 | G4 | 07.4.1-T2 |
+| 07.4.2-T2 | Cross-run flaky trend (read table + label) | S | V2 | G4 | 07.4.1-T1, 05.3.3-T1 |
 
 ### Epic 07.5 Late evidence, immutability and release decisions
 
 #### Story 07.5.1 Late evidence and immutability — acceptance: in-window late evidence creates evaluation *n+1*; revision *n* remains identical and queryable; no code path mutates a used decision.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.5.1-T1 | Late-window handling + re-evaluation via outbox task (no `/v1` endpoint) + `POST /internal/operator/runs/{r}/evaluations` operator route (T26), immutability guard | M | V1 | M2 | 07.2.2-T1, 05.3.2-T3 |
-| 07.5.1-T2 | Immutability suite (used decision + late evidence + re-evaluation) | S | V1 | M2 | 07.5.1-T1 |
+| 07.5.1-T1 | Late-window handling + re-evaluation via outbox task (no `/v1` endpoint) + `POST /internal/operator/runs/{r}/evaluations` operator route (T26), immutability guard | M | V1 | G2 | 07.2.2-T1, 05.3.2-T3 |
+| 07.5.1-T2 | Immutability suite (used decision + late evidence + re-evaluation) | S | V1 | G2 | 07.5.1-T1 |
 
 #### Story 07.5.2 Run decision API — acceptance: returns the exact revision with reasons, or `pending`, with `decision:read` enforced.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.5.2-T1 | `GET /v1/runs/{r}/decision` (exact revision, reasons, `pending` path) | S | V1 | M2 | 07.2.2-T1, 01.3.1-T1, 02.2.1-T1 |
+| 07.5.2-T1 | `GET /v1/runs/{r}/decision` (exact revision, reasons, `pending` path) | S | V1 | G3 | 07.2.2-T1, 01.3.1-T1, 02.2.1-T1 |
 
 #### Story 07.5.3 Release aggregation and decision endpoint — acceptance: a component whose digest does not match the release is reported missing instead of using the newest run; the endpoint returns per-component decisions.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.5.3-T1 | `release_decision` aggregation over 05's release/components (digest match enforced) | M | V1 | M3 | 07.2.2-T1, 05.6.1-T1 |
-| 07.5.3-T2 | `GET /v1/releases/{id}/decision` + status per component (see §13) | S | V1 | M3 | 07.5.3-T1 |
+| 07.5.3-T1 | `release_decision` aggregation over 05's release/components (digest match enforced) | M | V1 | G4 | 07.2.2-T1, 05.6.1-T1 |
+| 07.5.3-T2 | `GET /v1/releases/{id}/decision` + status per component (see §13) | S | V1 | G4 | 07.5.3-T1 |
 
 #### Story 07.5.4 Multi-component releases with mobile digests — acceptance (V2): app digests participate in the aggregate under the same mismatch rules.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.5.4-T1 | App-component support in release aggregation | S | V2 | M4 | 07.5.3-T1, 04.5.1-T2 |
+| 07.5.4-T1 | App-component support in release aggregation | S | V2 | G4 | 07.5.3-T1, 04.5.1-T2 |
 
 ### Epic 07.6 CI integration and webhooks
 
 #### Story 07.6.1 CI delivery: GitHub and the CLI gate — acceptance: PASS/FAIL/INCONCLUSIVE map to `success`/`failure`/`neutral`, a re-post is idempotent, and `evidgate gate` exits 0/1/2/3 with a deadline that yields 2, never 0.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.6.1-T1 | GitHub App check-run/commit-status delivery + `ci_delivery` records + retry | M | V1 | M3 | 07.2.2-T1, 02.4.1-T2, 02.4.3-T2 |
-| 07.6.1-T2 | `evidgate gate` semantics (exit codes, `--wait` deadline, JSON output) with 04 | M | V1 | M3 | 07.5.2-T1, 04.2.1-T1 |
+| 07.6.1-T1 | GitHub App check-run/commit-status delivery + `ci_delivery` records + retry | M | V1 | G4 | 07.2.2-T1, 02.4.1-T2, 02.4.3-T2 |
+| 07.6.1-T2 | `evidgate gate` semantics (exit codes, `--wait` deadline, JSON output) with 04 | M | V1 | G4 | 07.5.2-T1, 04.2.1-T1 |
 
 #### Story 07.6.2 Outbound webhooks and delivery operations — acceptance: 00 §9.5 headers and signature pass the reference receiver, retries last 24 h with backoff, and dead letters are replayable by `event_id`.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.6.2-T1 | Webhook transport (signing, timestamp, at-least-once retry) + `evaluation.created` payload | M | V1 | M2 | 07.2.2-T1, 01.5.1-T4 |
-| 07.6.2-T2 | Delivery records, dead-letter visibility, replay tool, receiver conformance fixture | S | V1 | M2 | 07.6.2-T1 |
-| 07.6.2-T3 | Decision-latency measurement: histogram `evidence_frozen_at → evaluation.created_at` emitted by the handler; this task builds the freeze→evaluate latency fixture (driven by `10.6.1-T1`'s ingest load generator) asserting p95 < 60 s in the M3 load run; SLI registered in `10.3.1-T3` (T28) | S | V1 | M3 | 07.2.2-T1, 10.3.1-T3, 10.6.1-T1 |
+| 07.6.2-T1 | Webhook transport (signing, timestamp, at-least-once retry) + `evaluation.created` payload | M | V1 | G4 | 07.2.2-T1, 01.5.1-T4 |
+| 07.6.2-T2 | Delivery records, dead-letter visibility, replay tool, receiver conformance fixture | S | V1 | G4 | 07.6.2-T1 |
+| 07.6.2-T3 | Decision-latency measurement: histogram `evidence_frozen_at → evaluation.created_at` emitted by the handler; this task builds the freeze→evaluate latency fixture (driven by `10.6.1-T1`'s ingest load generator) asserting p95 < 60 s in the M3 load run; SLI registered in `10.3.1-T3` (T28) | S | V1 | G4 | 07.2.2-T1, 10.3.1-T3, 10.6.1-T1 |
 
 #### Story 07.6.3 Webhook endpoint management and status badge — acceptance: a project admin registers, rotates and disables outbound webhook endpoints, sees per-endpoint delivery history, and may opt in to a status badge that exposes only the decision label.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.6.3-T1 | `webhook_endpoint` (https URL, private-address/SSRF guard, event types, state, secret reference) + CRUD API with show-once signing secret, audited | M | V1 | M3 | 07.6.2-T1, 02.2.1-T2, 02.7.1-T2 |
-| 07.6.3-T2 | Secret rotation with an overlap window, per-endpoint delivery history filters and manual redeliver on top of 07.6.2-T2 | S | V1 | M3 | 07.6.3-T1, 07.6.2-T2 |
-| 07.6.3-T3 | Tests: SSRF cases (private ranges, redirects, DNS rebinding), rotation overlap, disabled endpoint stops delivery, cross-tenant isolation | S | V1 | M3 | 07.6.3-T2 |
-| 07.6.3-T4 | Opt-in status badge: per-project unguessable token URL, off by default, returns only decision label and timestamp | S | V2 | M4 | 07.5.2-T1, 07.6.3-T1 |
+| 07.6.3-T1 | `webhook_endpoint` (https URL, private-address/SSRF guard, event types, state, secret reference) + CRUD API with show-once signing secret, audited | M | V1 | G4 | 07.6.2-T1, 02.2.1-T2, 02.7.1-T2 |
+| 07.6.3-T2 | Secret rotation with an overlap window, per-endpoint delivery history filters and manual redeliver on top of 07.6.2-T2 | S | V1 | G4 | 07.6.3-T1, 07.6.2-T2 |
+| 07.6.3-T3 | Tests: SSRF cases (private ranges, redirects, DNS rebinding), rotation overlap, disabled endpoint stops delivery, cross-tenant isolation | S | V1 | G4 | 07.6.3-T2 |
+| 07.6.3-T4 | Opt-in status badge: per-project unguessable token URL, off by default, returns only decision label and timestamp | S | V2 | G4 | 07.5.2-T1, 07.6.3-T1 |
 
 **Story 07.6.3 total: 2.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
 
@@ -257,24 +259,24 @@
 #### Story 07.7.1 Advisory and enforcing modes — acceptance: in M2 decisions are computed, stored, shown and delivered without blocking; flipping a project to `enforcing` blocks on FAIL and INCONCLUSIVE per policy, is audited and is reversible.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.7.1-T1 | Advisory mode end-to-end (no blocking effect, full reasoning and audit) | S | V1 | M2 | 07.2.2-T1 |
-| 07.7.1-T2 | Enforcing semantics + flip/rollback with audit and operator runbook notes | S | V1 | M3 | 07.6.1-T2, 07.7.1-T1 |
+| 07.7.1-T1 | Advisory mode end-to-end (no blocking effect, full reasoning and audit) | S | V1 | G4 | 07.2.2-T1 |
+| 07.7.1-T2 | Enforcing semantics + flip/rollback with audit and operator runbook notes | S | V1 | G4 | 07.6.1-T2, 07.7.1-T1 |
 
 #### Story 07.7.2 Shadow evaluation, divergence and rollback — acceptance: a policy or evaluator change is run in `shadow` over recent runs, differences are listed per run before rollout, and rollback to advisory loses no evidence or decision.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.7.2-T1 | Shadow evaluation over recorded evidence + comparison inside 10's deploy flow | M | V1 | M2 | 07.2.2-T1, 10.2.2-T3 |
-| 07.7.2-T2 | Divergence report + rollback to advisory + pilot readiness checklist input | S | V1 | M3 | 07.7.2-T1, 07.7.1-T2 |
+| 07.7.2-T1 | Shadow evaluation over recorded evidence + comparison inside 10's deploy flow | M | V1 | G4 | 07.2.2-T1, 10.2.2-T3 |
+| 07.7.2-T2 | Divergence report + rollback to advisory + pilot readiness checklist input | S | V1 | G4 | 07.7.2-T1, 07.7.1-T2 |
 
 ### Epic 07.8 Promotion gate for deployments [PROPOSAL missing-features review 2026-10-02]
 #### Story 07.8.1 Promotion gate: release to environment — acceptance: a CD pipeline asks whether a release may be promoted to a named target and gets allowed, blocked or pending with reasons from the release decision and the target's policy; a missing component is never allowed.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 07.8.1-T1 | `deploy_target` (project-scoped name such as staging/prod, order, optional pinned policy revision) + CRUD with ETag, audited | M | V1 | M3 | 02.1.1-T1, 07.1.1-T1, 02.7.1-T2 |
-| 07.8.1-T2 | `POST /v1/releases/{id}/promotions` evaluates the release decision under the target's policy and writes an immutable `promotion_check` (allowed \| blocked \| pending, reasons, decision and policy revision); idempotent per release, target and decision revision | L | V1 | M3 | 07.8.1-T1, 07.5.3-T2 |
-| 07.8.1-T3 | `evidgate gate --release <id> --target <name>` with the exit codes 0/1/2/3, `--wait` and JSON output | S | V1 | M3 | 07.8.1-T2, 07.6.1-T2 |
-| 07.8.1-T4 | `promotion.checked` webhook event, audit row and `GET /v1/releases/{id}/promotions` history | S | V1 | M3 | 07.8.1-T2, 07.6.2-T1 |
-| 07.8.1-T5 | Tests: missing component never allowed, per-target policy differences, a waiver cannot turn FAIL into allowed, late evidence creates a new check row | S | V1 | M3 | 07.8.1-T2 |
+| 07.8.1-T1 | `deploy_target` (project-scoped name such as staging/prod, order, optional pinned policy revision) + CRUD with ETag, audited | M | V1 | G4 | 02.1.1-T1, 07.1.1-T1, 02.7.1-T2 |
+| 07.8.1-T2 | `POST /v1/releases/{id}/promotions` evaluates the release decision under the target's policy and writes an immutable `promotion_check` (allowed \| blocked \| pending, reasons, decision and policy revision); idempotent per release, target and decision revision | L | V1 | G4 | 07.8.1-T1, 07.5.3-T2 |
+| 07.8.1-T3 | `evidgate gate --release <id> --target <name>` with the exit codes 0/1/2/3, `--wait` and JSON output | S | V1 | G4 | 07.8.1-T2, 07.6.1-T2 |
+| 07.8.1-T4 | `promotion.checked` webhook event, audit row and `GET /v1/releases/{id}/promotions` history | S | V1 | G4 | 07.8.1-T2, 07.6.2-T1 |
+| 07.8.1-T5 | Tests: missing component never allowed, per-target policy differences, a waiver cannot turn FAIL into allowed, late evidence creates a new check row | S | V1 | G4 | 07.8.1-T2 |
 
 **Story 07.8.1 total: 4.5** — `[INFERENCE]` sizes; added from the missing-features review of 2026-10-02.
 
