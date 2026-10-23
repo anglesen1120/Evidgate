@@ -185,7 +185,7 @@ public sealed partial class AuthoringUnitTests
 
         // The nested step object is walked and its string leaves are composed, not reassigned onto their parent.
         manualCase.Steps.ShouldBe(
-            "{\"steps\":[{\"no\":1,\"action\":\"Tap caf\u00e9\",\"expected\":\"The cart opens\"}]}");
+            "{\"steps\":[{\"no\":1,\"action\":\"Tap caf\\u00E9\",\"expected\":\"The cart opens\"}]}");
         manualCase.Steps.Contains('\u0301').ShouldBeFalse("no combining mark survives the parse");
 
         // A node document parses too: the ladder's other half has the same positive path.

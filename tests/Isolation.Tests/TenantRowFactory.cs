@@ -134,6 +134,10 @@ internal sealed class TenantRowFactory
     private readonly TenantInsertExecutor _insert;
     private readonly Dictionary<(string Table, Guid Org), GeneratedRow> _created = [];
 
+    // The rows currently being built, outermost first: a foreign-key cycle that reaches the same
+    // (table, org) twice must fail one test instead of recursing until the host's stack dies.
+    private readonly List<(string Table, Guid Org)> _creating = [];
+
     internal TenantRowFactory(TenantSchema schema, TenantInsertExecutor insert)
     {
         _schema = schema;
@@ -183,31 +187,49 @@ internal sealed class TenantRowFactory
         Guid? forcedId,
         CancellationToken cancellationToken)
     {
-        var values = await ResolveAsync(table, org, org, forcedId, createMissingParents: true, cancellationToken);
-        var row = GeneratedRow.Build(_schema, table, values);
+        var key = (Table: table, Org: org);
+        var position = _creating.IndexOf(key);
+        if (position >= 0)
+        {
+            throw new InvalidOperationException(
+                "the generated-row walk revisits "
+                + string.Join(" -> ", _creating.Skip(position).Select(step => $"{step.Table} (org {step.Org})"))
+                + $" -> {table} (org {org}): this foreign-key cycle has no valid row to generate");
+        }
 
-        int affected;
+        _creating.Add(key);
         try
         {
-            affected = await _insert(row.InsertSql, row.Parameters);
-        }
-        catch (PostgresException error)
-        {
-            throw new InvalidOperationException(
-                $"the generated row for {table} (org {org}) was rejected by the database: {error.SqlState} "
-                + $"{error.ConstraintName} {error.MessageText} — generated columns: "
-                + string.Join(", ", row.Parameters.Select(parameter => parameter.Name)),
-                error);
-        }
+            var values = await ResolveAsync(table, org, org, forcedId, createMissingParents: true, cancellationToken);
+            var row = GeneratedRow.Build(_schema, table, values);
 
-        if (affected != 1)
-        {
-            throw new InvalidOperationException(
-                $"inserting the generated row into {table} (org {org}) affected {affected} rows, expected 1");
-        }
+            int affected;
+            try
+            {
+                affected = await _insert(row.InsertSql, row.Parameters);
+            }
+            catch (PostgresException error)
+            {
+                throw new InvalidOperationException(
+                    $"the generated row for {table} (org {org}) was rejected by the database: {error.SqlState} "
+                    + $"{error.ConstraintName} {error.MessageText} — generated columns: "
+                    + string.Join(", ", row.Parameters.Select(parameter => parameter.Name)),
+                    error);
+            }
 
-        _created[(table, org)] = row;
-        return row;
+            if (affected != 1)
+            {
+                throw new InvalidOperationException(
+                    $"inserting the generated row into {table} (org {org}) affected {affected} rows, expected 1");
+            }
+
+            _created[key] = row;
+            return row;
+        }
+        finally
+        {
+            _creating.RemoveAt(_creating.Count - 1);
+        }
     }
 
     /// <summary>
@@ -239,16 +261,21 @@ internal sealed class TenantRowFactory
 
         foreach (var foreignKey in _schema.ForeignKeysOf(table))
         {
-            // A nullable reference is left null unless it is the key under test: following it could loop forever, through
-            // a self-reference (ingest_token.rotated_to_id) or a cycle of tables (project.default_environment_id ->
-            // environment -> project).
+            // MATCH SIMPLE (the only match type in this schema): a composite key with a NULL member
+            // is not enforced, so such a reference is left NULL unless it is the key under test.
+            // Following it can also loop forever — a self-reference (feature_node.parent_id,
+            // ingest_token.rotated_to_id) or a cycle of tables (project.default_environment_id ->
+            // environment -> project). `feature_node_parent_fk` is exactly the trap: its other
+            // member `project_id` is NOT NULL, so an `All` test here followed `parent_id` into a
+            // second `feature_node`, whose own parent was followed again (CompositeFkTests.cs:141
+            // uses the same `Any` rule).
             var corrupted = corruptedForeignKey is null || string.Equals(corruptedForeignKey, foreignKey.Name, StringComparison.Ordinal);
             var ownColumns = foreignKey.Columns
                 .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
                 .ToArray();
             if (!(corruptedForeignKey is not null && corrupted)
                 && ownColumns.Length > 0
-                && ownColumns.All(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
+                && ownColumns.Any(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
             {
                 continue;
             }
