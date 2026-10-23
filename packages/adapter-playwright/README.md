@@ -59,7 +59,7 @@ Construction throws (before any callback runs) for:
 - a missing `spool_dir`, `run_id` or `producer_id` option;
 - an invalid `run_id`/`producer_id` (`EvidgateInvalidSpoolIdError`);
 - an unsupported `@playwright/test` version (`EvidgateUnsupportedEngineError`, AC5);
-- **spool initialisation**: `mkdir` or opening the chunk/checkpoint under `spool_dir`
+- **spool initialisation**: `mkdir` or opening the chunk or `shards.json` under `spool_dir`
   fails (unwritable, read-only or unmountable `spool_dir`, `EACCES`, `ENOSPC`). The
   reporter fails the Playwright startup rather than running with no spool.
 
@@ -102,7 +102,7 @@ Every variable is read **once in the constructor**; no callback reads `process.e
   are `lstat`ed: a symlink or a foreign-owned directory is rejected, and an owned one is
   `chmod`ed to `0700`. `spool_dir` itself is left as given (a symlinked spool root is
   allowed and keeps its own mode).
-- **Symlink- and mode-hardened files.** The checkpoint temp file is unlinked if present
+- **Symlink- and mode-hardened files.** The `shards.json` temp file is unlinked if present
   and re-created with `O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW` `0600`; chunks open with
   `O_WRONLY|O_APPEND|O_CREAT|O_NOFOLLOW`; torn-tail truncation opens with `O_NOFOLLOW`.
   After every open the writer `fstat`s the descriptor and rejects non-regular files or
@@ -113,7 +113,7 @@ Every variable is read **once in the constructor**; no callback reads `process.e
   (temp file → fsync → rename → directory fsync) only at chunk rotation, at close and
   when a restart is detected, never per flush; a `checkpoint.json` left by an older
   writer is read as a fallback. Restart resumes at `max(shards.json.sequence_next,
-last chunk sequence + 1)`. `EVIDGATE_SPOOL_MAX_BYTES` caps the run directory at
+  last chunk sequence + 1)`. `EVIDGATE_SPOOL_MAX_BYTES` caps the run directory at
   write time. Contract: `contracts/adapter/playwright-mapping.md` "## shards".
 - **One durable flush per callback batch.** `onBegin` and `onTestEnd` each flush at the
   end of their batch, so a killed run loses at most the current callback's envelopes
@@ -132,7 +132,7 @@ last chunk sequence + 1)`. `EVIDGATE_SPOOL_MAX_BYTES` caps the run directory at
 - **`close()` always releases the descriptor.** The final flush runs inside `try/finally`,
   so the chunk fd is closed and the writer marked closed even when the flush throws — the
   error still propagates.
-- A checkpoint `next_sequence` is only honoured when it is a safe integer ≥ 1; the highest
+- A `shards.json` `sequence_next` (or a legacy checkpoint `next_sequence`) is only honoured as a floor when it is a safe integer ≥ 1; the highest
   chunk is read once on restart and the buffer is shared by torn-tail truncation,
   sequence recovery and chunk open.
 - **Chunk rotation:** a chunk rotates when it reaches 1 MiB (`chunkMaxBytes`) or 1000
@@ -151,7 +151,7 @@ types; it never invents another.
 | `onBegin`     | `run.log` capability carrier (sequence 1) + `run.log` `run_begin`; flushes the batch                                |
 | `onTestBegin` | `test.started` (no `status`)                                                                                        |
 | `onTestEnd`   | `test.finished` (`status` = raw `result.status`) + one `test.step` per step when `steps` is true; flushes the batch |
-| `onEnd`       | `run.log` `run_end` (`status` = run status) + flush + checkpoint                                                    |
+| `onEnd`       | `run.log` `run_end` (`status` = run status) + flush + `shards.json`                                                 |
 
 `attempt_no = result.retry + 1`, one `test.finished` per attempt (never a merged status).
 Callbacks never throw: a spool write failure is buffered
