@@ -184,18 +184,39 @@ function schemaValidator(): ValidateFunction<SidecarDocument> {
 }
 
 /**
+ * Where the loader may look for a manifest (04.3.3-T1, Note from #32).
+ */
+export interface SidecarLoadOptions {
+  /**
+   * The highest directory whose `evidgate.cases.yaml` may be read — the Playwright
+   * `FullConfig.rootDir`. Every test file's directory and its ancestors up to (and including)
+   * this root are searched; nothing above it is. Pinning the root keeps the answer independent
+   * of which test files a *shard* happens to contain: the common ancestor of a shard's files can
+   * be deeper than the run's, so without a pin two shards could resolve different `case_id`s for
+   * the same test (or one shard could read a manifest the other cannot). Absent → the historical
+   * derivation (the common ancestor of the given test files), which is what a call without a
+   * Playwright config (tests, tools) gets.
+   */
+  rootDir?: string;
+}
+
+/**
  * Reads the `evidgate.cases.yaml` of every test file's directory and of every ancestor directory up
- * to the common ancestor of all test files, and returns the `location → case_id` index. The server
- * reads every manifest of the tree and resolves each entry with `RepoPath.Combine(manifest
- * directory, file)`, so a manifest in an ancestor directory can map a test in a subdirectory; the
- * reporter has no tree snapshot, so the common ancestor of the test files is the closest thing to
- * the repository root it can derive (a manifest strictly above it is not read). Each manifest is
- * read once; a directory without a sidecar contributes nothing and no warning. A sidecar that is
- * refused contributes no entry at all.
+ * to the lookup root — the Playwright `config.rootDir` when the caller has one
+ * ({@link SidecarLoadOptions}), else the common ancestor of all test files — and returns the
+ * `location → case_id` index. The server reads every manifest of the tree and resolves each entry
+ * with `RepoPath.Combine(manifest directory, file)`, so a manifest in an ancestor directory can map
+ * a test in a subdirectory. Each manifest is read once; a directory without a sidecar contributes
+ * nothing and no warning. A sidecar that is refused contributes no entry at all.
+ *
+ * A test file outside the pinned root contributes only its own directory: the loader never walks
+ * above the root, so a manifest unrelated to the run cannot be read (the per-entry and symlink
+ * hardening below is unchanged).
  */
 export function loadSidecarIndex(
   testFiles: Iterable<string>,
   fs: SidecarFs = defaultFs,
+  options: SidecarLoadOptions = {},
 ): SidecarIndex {
   const warnings: SidecarWarning[] = [];
   let droppedWarnings = 0;
@@ -213,12 +234,22 @@ export function loadSidecarIndex(
   }
 
   const manifests = new Set<string>();
-  const root = commonAncestor([...directories]);
+  // 04.3.3-T1 (#32): a pinned root makes the manifest set independent of the shard's own test
+  // files. Without one, the common ancestor of the given files stands in for the repository root.
+  const root =
+    options.rootDir !== undefined && options.rootDir.length > 0
+      ? normalizePath(options.rootDir)
+      : commonAncestor([...directories]);
   for (const directory of directories) {
     let current = directory;
     for (;;) {
       manifests.add(join(current, SIDECAR_FILE_NAME));
       if (current === root) {
+        break;
+      }
+      // Never walk above the pinned root: a test file outside it contributes its own directory
+      // only (the walk stops before the first ancestor outside the root).
+      if (!isWithinRoot(current, root)) {
         break;
       }
       const parent = dirname(current);
@@ -327,6 +358,19 @@ function commonAncestor(directories: string[]): string {
   }
 
   return common.join('/') || '/';
+}
+
+/**
+ * True when `directory` is the root or a directory below it. Both are absolute, forward-slashed
+ * forms from {@link normalizePath}, so a plain prefix test on a separator boundary is exact:
+ * `/repo2` is not inside `/repo`.
+ */
+function isWithinRoot(directory: string, root: string): boolean {
+  if (directory === root) {
+    return true;
+  }
+  const prefix = root.endsWith('/') ? root : `${root}/`;
+  return directory.startsWith(prefix);
 }
 
 /** Reads and decodes one inspected manifest, or returns undefined with a warning. */

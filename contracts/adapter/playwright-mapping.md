@@ -356,3 +356,118 @@ Playwright awaits the reporter's `onEnd` result and overrides the run status wit
 it, so a run that silently lost identity fails the CI job instead of passing with
 partial evidence (AC2). A buffered spool write failure still throws from `onEnd`,
 as before.
+
+## shards (04.3.3-T1)
+
+Each Playwright shard is its own producer with its own contiguous sequence (T54, T84).
+The identity is derived, never generated: a restarted shard reuses the same id.
+Index base and slot naming are **D-S56-Q10** (1-based, so slot `i` of the manifest is
+producer `shard-i`; an unsharded run is `shard-1`).
+
+### Verified Playwright 1.63.0 surface
+
+All of the following was read from the installed `@playwright/test@1.63.0`
+(`node_modules/playwright`), not assumed:
+
+| Fact                                                                                                                                          | Source                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `FullConfig.shard` is `null` or `{ current, total }`, and `current` is **one-based**                                                          | `types/test.d.ts:1675,1691-1698`; default `null` at `lib/runner/index.js:581` |
+| `--shard <current>/<total>` CLI flag, one-based, e.g. `3/5`                                                                                   | `lib/program.js:216`                                                          |
+| **No `PLAYWRIGHT_SHARD` environment variable** exists (nothing in `lib/` or `types/` reads it)                                                | grep of `node_modules/playwright/{lib,types}`: no match                       |
+| Blob report file name: `report[-<commandHash>]-<current>.zip`, `current` zero-padded to the width of `total`; unsharded is plain `report.zip` | `lib/runner/index.js:3151-3161` (`_defaultReportName`)                        |
+| `merge-reports` is a CLI subcommand (`playwright merge-reports [dir]`)                                                                        | `lib/program.js:108-109`                                                      |
+| The merged config has **`shard: null`** — `mergeConfigs` overwrites it                                                                        | `lib/runner/index.js:8211-8219`                                               |
+| A custom reporter is wrapped in `ReporterV2Wrapper`, which has no `onReportConfigure`, so the per-blob shard config is not visible to it      | `lib/runner/index.js:1703-1715`, dispatched at `:8012`                        |
+
+The area plan's `[WARN]` ("confirm the `--shard` env surface") resolves to **`[OK]`**:
+the CLI/config surface is `FullConfig.shard`, there is no environment variable, and the
+blob filename carries the same one-based index the config does. This adapter reads
+`config.shard` only; it never parses a blob filename or an env var.
+
+### `producer_id` naming
+
+`resolveProducerId(config)` returns `{ producer_id, shard_index, shard_total }`:
+
+| Run                                 | `producer_id`                  | `shards.json`                                                              |
+| ----------------------------------- | ------------------------------ | -------------------------------------------------------------------------- |
+| Unsharded (`config.shard === null`) | `shard-1`                      | `{ shard_index: 1 }`, no `shard_total` (the manifest owns the shard count) |
+| Sharded                             | `shard-<config.shard.current>` | `{ shard_index: current, shard_total: total }`                             |
+
+- The index is **1-based**, matching `FullConfig.shard.current` and therefore the
+  manifest's `producer_slot` rows (T9): slot `i` ↔ producer `shard-i` (D-S56-Q10).
+- The id must match the spool-safe pattern `^[A-Za-z0-9._-]{1,128}$`; a derived id always
+  does, and an explicit override that does not is refused before any envelope.
+- The reporter option `producer_id` still wins, but **only** if it equals the derived id
+  when Playwright selected a shard. A disagreement is a hard refusal (buffered from
+  `onBegin`, thrown from `onEnd`, zero envelopes written): the server would answer 422
+  `unknown_producer`, or two shards would interleave one sequence. Without a shard config
+  an explicit id is honoured as before, and no shard slot is claimed for it.
+  (D-S56-Q12; the negative case is `packages/adapter-playwright/src/shard.test.ts:272`.)
+- No suffix, generation counter or host name is ever appended (T84).
+
+### Restart (T84)
+
+A restarted shard process derives the same `producer_id`, opens the same
+`<spool>/<run>/<producer_id>/` directory and resumes from the store: the chunk scan is
+authoritative, `shards.json` is the checkpoint. `sequence` continues at
+`sequence_next` — it never restarts at 1 and never repeats a `(run, producer, sequence)`
+tuple. An unknown producer is a server-side 422 `unknown_producer` (the id is not in the
+manifest); the reporter never invents an id outside `shard-<index>`.
+
+`shards.json` (per-producer, written at rotation, close and restart detection only):
+
+| Field              | Meaning                                                                                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `producer_id`      | The deterministic id, verbatim                                                                                                                                                      |
+| `shard_index?`     | The 1-based manifest slot this producer stands for; absent only when an explicit custom `producer_id` was honoured on a run without a shard config, because then no slot is claimed |
+| `shard_total?`     | Present only when Playwright declared a shard count                                                                                                                                 |
+| `sequence_next`    | The sequence after the last line that reached a chunk                                                                                                                               |
+| `last_restart_at?` | Set when a different pid was found holding the lock and the writer took over                                                                                                        |
+
+### Merge mode (AC3)
+
+`playwright merge-reports` replays every blob through **one** reporter instance, with a
+merged config whose `shard` is `null`, and gives the custom reporter no per-event shard
+identity (the per-blob config reaches only built-in reporters, see the table above).
+Re-emitting there would have to guess an id and would duplicate or renumber sequences, so
+the reporter **emits nothing** in a merge replay and says so once on stderr (D-S56-Q11).
+Each shard's originals are already correct, which is exactly "keep each event's original
+shard identity".
+
+Detection is the CLI argument list (`isMergeReplay`, `lib/program.js:106-119`): the first
+token that is not a flag is the subcommand. That is the only valid form — `-c/--config`,
+`--reporter` and `--output` are options of the subcommands themselves, not of the root
+program — so no option-value skipping is needed, and a value that happens to be named
+`merge-reports` cannot hide a real replay. It is deliberately argv- and not status-based: an ordinary run may also have
+`config.shard === null` (that is the unsharded `shard-1` case above) and must still emit.
+The replay _does_ carry each blob's original config with `shard` serialised
+(`lib/runner/index.js:2931`) and dispatches it per blob through `onReportConfigure`
+(`:8011-8015`), but that hook only reaches a reporter that declares the **v2** protocol:
+`wrapReporterAsV2` returns such a reporter unchanged, and `ReporterV2Wrapper` — the wrapper
+every v1 reporter gets — has no `onReportConfigure` method at all (`:1699-1774`). This
+adapter is a v1 reporter (`onBegin(config, suite)`), so the per-blob shard config is not
+reachable and the refusal stands. A v2 reporter built later could read it there instead.
+
+#### Known limitation (D-S56-Q11)
+
+The refusal above is a limitation, not a feature: **the reporter cannot attribute merged
+events to shards**, so a `playwright merge-reports` replay produces no event evidence at
+all (one stderr line only). A v1 reporter never sees `onReportConfigure`, because
+`ReporterV2Wrapper` has no such method (`lib/runner/index.js:1705-1774`), and guessing a
+per-blob id would renumber or duplicate sequences. Customers ingest **per-shard** runs,
+which preserves each shard's original `producer_id`/`sequence`; the merged-report path is
+unusable for event production until a v2 reporter exists. Receiving task:
+`04.6.1-T2` (dogfood fixture "one shard-merged set",
+`plans/04-ingestion-adapters.md:241`), which must ingest the merged set per shard or drive
+a v2 reporter — the note also sits in
+`plans/features/04-ingestion-adapters/04.6.1-per-producer-golden-set.md`.
+
+### Sidecar lookup root
+
+The sidecar root is pinned to `FullConfig.rootDir` (04.3.3-T1, Note from #32), so every
+shard searches the same set of `evidgate.cases.yaml` files and resolves the same
+`case_id` for a test whatever test-file subset it runs. Without the pin, the root was the
+common ancestor of the run's own test files, which differs per shard. A test file outside
+the root contributes only its own directory; nothing above the root is read, and the
+traversal/symlink hardening is unchanged. Without a Playwright config (tools, tests) the
+historical common-ancestor derivation still applies.

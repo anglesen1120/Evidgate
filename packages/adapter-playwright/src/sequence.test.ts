@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildEnvelope, EXT_SCHEMA, type UnsignedEnvelope } from './envelope.js';
-import { CHECKPOINT_FILE, SpoolWriter } from './spool.js';
+import { CHECKPOINT_FILE, SHARDS_FILE, SpoolWriter } from './spool.js';
 
 const tempDirs: string[] = [];
 
@@ -43,13 +43,13 @@ describe('per-producer sequence', () => {
     writer.close();
 
     expect(written.map((item) => item.sequence)).toEqual([1, 2, 3]);
-    const checkpoint: unknown = JSON.parse(
-      readFileSync(join(spool, 'run-1', 'pw-0', CHECKPOINT_FILE), 'utf8'),
+    const record: unknown = JSON.parse(
+      readFileSync(join(spool, 'run-1', 'pw-0', SHARDS_FILE), 'utf8'),
     );
-    expect(checkpoint).toEqual({ producer_id: 'pw-0', next_sequence: 4 });
+    expect(record).toEqual({ producer_id: 'pw-0', sequence_next: 4 });
   });
 
-  it('resumes at the checkpoint after a clean close (no reuse)', () => {
+  it('resumes at the shards record after a clean close (no reuse)', () => {
     const spool = tempSpool();
     const first = new SpoolWriter({ spoolDir: spool, runId: 'run-1', producerId: 'pw-0' });
     first.appendMany([envelope('pw-0'), envelope('pw-0')]);
@@ -63,7 +63,7 @@ describe('per-producer sequence', () => {
     expect(resumed.sequence).toBe(3);
   });
 
-  it('reconciles from the chunk file when the checkpoint is missing (crash before rename)', () => {
+  it('reconciles from the chunk file when shards.json is missing (crash before rotation)', () => {
     const spool = tempSpool();
     const dir = join(spool, 'run-1', 'pw-0');
     mkdirSync(dir, { recursive: true });
@@ -77,7 +77,7 @@ describe('per-producer sequence', () => {
     writer.close();
   });
 
-  it('takes the max of the checkpoint and the chunk contents', () => {
+  it('takes the max of the record and the chunk contents', () => {
     const spool = tempSpool();
     const dir = join(spool, 'run-1', 'pw-0');
     mkdirSync(dir, { recursive: true });
@@ -86,13 +86,41 @@ describe('per-producer sequence', () => {
       chunkLine('pw-0', 1) + chunkLine('pw-0', 2) + chunkLine('pw-0', 3) + chunkLine('pw-0', 4),
     );
     writeFileSync(
-      join(dir, CHECKPOINT_FILE),
-      `${JSON.stringify({ producer_id: 'pw-0', next_sequence: 2 })}\n`,
+      join(dir, SHARDS_FILE),
+      `${JSON.stringify({ producer_id: 'pw-0', shard_index: 1, sequence_next: 2 })}\n`,
     );
 
     const writer = new SpoolWriter({ spoolDir: spool, runId: 'run-1', producerId: 'pw-0' });
     expect(writer.nextSequenceNumber).toBe(5);
+    // The stale record is corrected on the restart write instead of trusted.
     writer.close();
+    expect(JSON.parse(readFileSync(join(dir, SHARDS_FILE), 'utf8'))).toMatchObject({
+      sequence_next: 5,
+    });
+  });
+
+  it('reads a legacy checkpoint.json as a fallback and never writes it again', () => {
+    const spool = tempSpool();
+    const dir = join(spool, 'run-1', 'pw-0');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '000001.jsonl'), chunkLine('pw-0', 1) + chunkLine('pw-0', 2));
+    writeFileSync(
+      join(dir, CHECKPOINT_FILE),
+      `${JSON.stringify({ producer_id: 'pw-0', next_sequence: 3 })}\n`,
+    );
+    const legacyBefore = readFileSync(join(dir, CHECKPOINT_FILE), 'utf8');
+
+    const writer = new SpoolWriter({ spoolDir: spool, runId: 'run-1', producerId: 'pw-0' });
+    expect(writer.nextSequenceNumber).toBe(3);
+    writer.close();
+
+    // The legacy record is untouched (read-only fallback) and the new store carries the state.
+    expect(readFileSync(join(dir, CHECKPOINT_FILE), 'utf8')).toBe(legacyBefore);
+    expect(JSON.parse(readFileSync(join(dir, SHARDS_FILE), 'utf8'))).toMatchObject({
+      producer_id: 'pw-0',
+      sequence_next: 3,
+      last_restart_at: expect.any(String) as unknown,
+    });
   });
 
   it('keeps an independent sequence space per producer', () => {

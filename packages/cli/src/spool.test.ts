@@ -41,7 +41,7 @@ import {
   spoolFileMode,
   spoolIdMaxLength,
 } from './spool.js';
-import { spoolLockFileName } from './spoolLock.js';
+import { spoolLockFileName, writerLockFileName } from './spoolLock.js';
 
 import type { SpoolEvent } from './spool.js';
 
@@ -506,6 +506,40 @@ describe('ProducerSpool', () => {
     expect(await failureOf(open({ createIfMissing: false, producerId: 'other' }))).toBeInstanceOf(
       SpoolMissingError,
     );
+  });
+
+  it('drains and purges a producer dir that also holds shards.json, uploads/ and writer.lock', async () => {
+    const spool = await open();
+    await spool.append(makeEvents([1, 2]).map((event) => event.line));
+    // The reporter's sparse record, its writer lock and the CLI's upload journal live beside
+    // the chunks: none of them is a chunk, so a drain reads only the chunks and a purge
+    // removes the whole producer directory.
+    const shardsText = `${JSON.stringify({
+      producer_id: producerId,
+      shard_index: 1,
+      shard_total: 1,
+      sequence_next: 3,
+    })}\n`;
+    await writeFile(join(spool.directory, 'shards.json'), shardsText);
+    await mkdir(join(spool.directory, 'uploads'), { mode: 0o700 });
+    await writeFile(
+      join(spool.directory, 'uploads', `${randomUUID()}.json`),
+      '{"artifact_id":"x"}\n',
+    );
+    await writeFile(
+      join(spool.directory, writerLockFileName),
+      `${JSON.stringify({ pid: 4242, started_at: '2026-10-23T00:00:00.000Z' })}\n`,
+      { mode: spoolFileMode },
+    );
+
+    const drained: number[] = [];
+    for await (const event of spool.readUnacked()) drained.push(event.sequence);
+    expect(drained).toEqual([1, 2]);
+    await spool.ack(2, 2);
+    expect(await readFile(join(spool.directory, 'shards.json'), 'utf8')).toBe(shardsText);
+
+    await spool.purge();
+    expect(await failureOf(stat(spool.directory))).toMatchObject({ code: 'ENOENT' });
   });
 
   it('lists producer ids and sums the run directory bytes without following symlinks', async () => {

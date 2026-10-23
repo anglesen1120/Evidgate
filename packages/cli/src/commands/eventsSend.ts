@@ -4,11 +4,13 @@
 // 1. **Intake** (`--from <file|->`): stream one JSONL file of 00 §9.4 envelopes, validate
 //    every line against the shared Ajv envelope schema, group the lines by their own
 //    `producer_id` and append them to the producer's spool under the exclusive
-//    `spool.lock` (D2). The cap is enforced twice: a running byte total during the stream
-//    (so memory stays bounded by about the cap and an oversized input is refused while it
-//    is still being read) and one pre-append total over every producer before the first
-//    write, so a refused intake writes nothing at all (CR2/CR3). `append` re-checks under
-//    the lock; the failure is `spool_cap_exceeded` (exit 3) naming run, producer and range.
+//    `spool.lock` (D2) — after refusing while the reporter still holds that producer's
+//    `writer.lock` (D-S56-Q8, `spool_locked`). The cap is enforced twice: a running byte
+//    total during the stream (so memory stays bounded by about the cap and an oversized
+//    input is refused while it is still being read) and one pre-append total over every
+//    producer before the first write, so a refused intake writes nothing at all (CR2/CR3).
+//    `append` re-checks under the lock; the failure is `spool_cap_exceeded` (exit 3)
+//    naming run, producer and range.
 // 2. **Drain**: for `--producer <p>` or every producer directory of the run, read the
 //    unacked events from `cursor.json`'s `next_unacked_sequence`, pack them into
 //    ≤ 500-event / ≤ 1 MiB batches with a derived `Idempotency-Key`, and send them with
@@ -319,17 +321,22 @@ async function intake(o: {
       }));
     // `append` checks the run-directory cap before writing (all-or-nothing per call), so
     // a full spool leaves the spool byte-identical and raises `spool_cap_exceeded` (AC3).
-    // The continuation is re-checked under the lock, which is the authoritative read.
-    await spool.withLock(async () => {
-      const current = await nextExpectedSequence(spool);
-      if (group.first !== current) {
-        throw inputError(
-          `producer ${producerId} moved to sequence ${current} while the intake was waiting ` +
-            `for the lock (the input starts at ${group.first})`,
-        );
-      }
-      await spool.append(group.lines);
-    });
+    // The continuation is re-checked under the lock, which is the authoritative read. The
+    // appender is also a chunk writer, so it refuses while the reporter still writes
+    // (D-S56-Q8): `spool_locked`, exit 3, before a single line is appended.
+    await spool.withLock(
+      async () => {
+        const current = await nextExpectedSequence(spool);
+        if (group.first !== current) {
+          throw inputError(
+            `producer ${producerId} moved to sequence ${current} while the intake was waiting ` +
+              `for the lock (the input starts at ${group.first})`,
+          );
+        }
+        await spool.append(group.lines);
+      },
+      { requireNoLiveWriter: true },
+    );
   }
 }
 
@@ -375,35 +382,40 @@ async function drain(o: {
     // names the run, the producer and what is still unsent (AC3, T9 surfacing).
     let unsent: { readonly first: number; readonly last: number } | null = null;
     try {
-      const outcome = await spool.withLock(async () => {
-        const range = await spool.unsentRange();
-        unsent = range;
-        if (range === null) {
-          return undefined;
-        }
-        // D4: a run directory already above the cap is reported before anything is sent,
-        // naming run, unsent range and cap — never a silent drop.
-        const usedBytes = await runDirBytes(o.spoolDir, o.runId);
-        if (usedBytes > o.maxBytes) {
-          throw capBreach({
+      // D-S56-Q8: a live `writer.lock` makes the drain refuse with `spool_locked` (exit 3)
+      // before the range is read, so nothing is acked and nothing is sent.
+      const outcome = await spool.withLock(
+        async () => {
+          const range = await spool.unsentRange();
+          unsent = range;
+          if (range === null) {
+            return undefined;
+          }
+          // D4: a run directory already above the cap is reported before anything is sent,
+          // naming run, unsent range and cap — never a silent drop.
+          const usedBytes = await runDirBytes(o.spoolDir, o.runId);
+          if (usedBytes > o.maxBytes) {
+            throw capBreach({
+              runId: o.runId,
+              producerId,
+              usedBytes,
+              capBytes: o.maxBytes,
+              first: range.first,
+              last: range.last,
+            });
+          }
+          return sendWithin(spool, {
+            config: o.config,
             runId: o.runId,
             producerId,
-            usedBytes,
-            capBytes: o.maxBytes,
-            first: range.first,
-            last: range.last,
+            token: await currentToken(),
+            deadlineMs: o.sendDeadlineMs,
+            validate: o.validate,
+            deps: sendDeps,
           });
-        }
-        return sendWithin(spool, {
-          config: o.config,
-          runId: o.runId,
-          producerId,
-          token: await currentToken(),
-          deadlineMs: o.sendDeadlineMs,
-          validate: o.validate,
-          deps: sendDeps,
-        });
-      });
+        },
+        { requireNoLiveWriter: true },
+      );
       if (outcome !== undefined) {
         reports.push({ producerId, ...outcome });
         if (!o.config.json) {

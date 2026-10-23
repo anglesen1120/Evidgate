@@ -204,23 +204,41 @@ describe('quickstart', () => {
         expect(resolved?.command.name).toBe(command);
         expect(resolved?.rest).toEqual([]);
       }
+      // Every step is real now: `runs create` (04.2.2-T2), `events send` /
+      // `runs finalize` (04.2.3-T1/T2) and `artifacts upload` (04.2.4-T1), so no
+      // "-- Not yet available" placeholder may remain.
       for (const line of lines) {
-        for (const placeholder of ['artifacts upload']) {
-          if (!line.includes(placeholder)) {
-            continue;
-          }
-          expect(line.trimStart().startsWith('#'), `placeholder not in a comment: ${line}`).toBe(
-            true,
-          );
-          expect(/04\.2\.[234]/.test(line), `placeholder without owning task: ${line}`).toBe(true);
-        }
-        if (!line.trimStart().startsWith('#')) {
-          // `runs create`, `events send` and `runs finalize` are real steps now (04.2.2-T2,
-          // 04.2.3-T1/T2); only `artifacts upload` must not appear as a fake command line.
-          expect(/evidgate artifacts\b/.test(line), `fake command: ${line}`).toBe(false);
-        }
+        expect(line.includes('Not yet available'), `stale placeholder: ${line}`).toBe(false);
       }
     }
+  });
+
+  // 04.2.4-T1: `artifacts upload` requires `--execution-key` (only the manifest knows the
+  // planned execution), so the rendered steps must pass it — a command that exits 3 on a
+  // missing flag would make the template a non-working recipe.
+  it('passes the required execution key to artifacts upload', () => {
+    const github = renderQuickstart({ format: 'github', project: sampleProject, version });
+    const generic = renderQuickstart({ format: 'generic', project: sampleProject, version });
+
+    const githubSteps = github
+      .split('\n')
+      .filter((line) => /-- evidgate artifacts upload /.test(line));
+    expect(githubSteps).toHaveLength(2);
+    for (const line of githubSteps) {
+      expect(line).toContain('--execution-key "$EVIDGATE_EXECUTION"');
+    }
+    expect(github).toContain('          EVIDGATE_EXECUTION: ${{ vars.EVIDGATE_EXECUTION }}\n');
+
+    const genericSteps = generic
+      .split('\n')
+      .filter((line) => /-- evidgate artifacts upload /.test(line));
+    expect(genericSteps).toHaveLength(1);
+    expect(genericSteps[0]).toContain('--execution-key "$EVIDGATE_EXECUTION"');
+    // The script refuses to run without the variable instead of uploading under a wrong
+    // (or empty) execution.
+    expect(generic).toContain(
+      ': "${EVIDGATE_EXECUTION:?set EVIDGATE_EXECUTION to the planned execution this shard ran}"\n',
+    );
   });
 
   // 04.2.2-T2: `runs create` landed, so both templates carry the real step and the
@@ -265,10 +283,11 @@ describe('quickstart', () => {
     const github = renderQuickstart({ format: 'github', project: sampleProject, version });
     const generic = renderQuickstart({ format: 'generic', project: sampleProject, version });
 
-    // The placeholders for these two commands are gone; only `artifacts upload` remains.
+    // Every placeholder is gone: the three spool/upload commands are real steps.
     for (const text of [github, generic]) {
       expect(text).not.toContain('events send + runs finalize (04.2.3-T1/T2)');
-      expect(text).toContain('artifacts upload (04.2.4-T1)');
+      expect(text).not.toContain('artifacts upload (04.2.4-T1)');
+      expect(text).toContain('artifacts upload --run');
     }
 
     // GitHub: the run id comes from the create step's output, the spool dir is absolute.

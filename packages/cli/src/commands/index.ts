@@ -8,6 +8,7 @@ import type { ResolvedConfig } from '../config.js';
 import type { ExitCode } from '../exitCodes.js';
 import type { Io } from '../redact.js';
 
+import { artifactsUploadCommand } from './artifactsUpload.js';
 import { authLoginCommand } from './authLogin.js';
 import { authLogoutCommand } from './authLogout.js';
 import { configCheckCommand } from './configCheck.js';
@@ -68,6 +69,8 @@ export const commandRegistry: Readonly<Record<string, CommandDefinition>> = {
   // the dispatcher in `main.ts` never changes (contracts/cli.md §1).
   [eventsSendCommand.name]: eventsSendCommand,
   [runsFinalizeCommand.name]: runsFinalizeCommand,
+  // 04.2.4-T1: `artifacts upload` (`upload-url` -> presigned PUT -> `complete`).
+  [artifactsUploadCommand.name]: artifactsUploadCommand,
 };
 
 export interface ResolvedCommand {

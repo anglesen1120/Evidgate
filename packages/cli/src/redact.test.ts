@@ -91,3 +91,35 @@ describe('redact', () => {
     expect(stderr).toEqual([`err ${redacted}`]);
   });
 });
+
+// 04.2.4-T1.4: a presigned URL IS a bearer credential (04 §6, T18), so any http(s) URL that
+// carries a query string loses it — naming the signature parameters would leak the ones a
+// future provider names differently. a URL with userinfo before the host loses that userinfo too.
+describe('presigned URL redaction', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  it('strips_the_query_of_any_url', () => {
+    expect(redact('see http://127.0.0.1:9/pending/x?X-Amz-Signature=abc now')).toBe(
+      'see http://127.0.0.1:9/pending/x?[REDACTED] now',
+    );
+    expect(redact('https://store.test/b/k?X-Amz-Credential=AKIA%2F2026&X-Amz-Expires=900')).toBe(
+      'https://store.test/b/k?[REDACTED]',
+    );
+    expect(redact('https://store.test/b/k?x-amz-security-token=tok')).toBe(
+      'https://store.test/b/k?[REDACTED]',
+    );
+    // No query: nothing to strip, so a plain docs URL stays readable.
+    expect(redact('see https://docs.evidgate.dev/cli')).toBe('see https://docs.evidgate.dev/cli');
+  });
+
+  it('strips_userinfo', () => {
+    const userinfo = ['user', 'secret'].join(':');
+    expect(redact(`https://${userinfo}@store.test/object`)).toBe('https://store.test/object');
+  });
+
+  it('keeps_wrapping_punctuation_outside_the_redaction', () => {
+    expect(redact('(http://127.0.0.1:9/p/x?sig=1).')).toBe('(http://127.0.0.1:9/p/x?[REDACTED]).');
+  });
+});
