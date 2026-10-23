@@ -632,8 +632,11 @@ public sealed class AuthoringVersionTests
             EntityChange.Update(AuthoringEntityKind.FeatureNode, entity, NodeContent(FeatureNodeKinds.Module, "Shop renamed", 0, null)),
         ]);
 
-        // The guard refuses before the insert; the ON CONFLICT DO NOTHING row-count check is the second line of defence
-        // for the same shape (a stored history that is not the row's own).
+        // The guard answers after the entity UPDATE has already run inside the caller's transaction: the new title and
+        // the bumped row version are written on this connection when it refuses. Nothing persists only because the test
+        // never commits the scope (disposal rolls it back); in production the out-of-step result is what makes the
+        // caller roll back. The ON CONFLICT DO NOTHING row-count check is the second line of defence for the same shape
+        // (a stored history that is not the row's own).
         duplicate.IsSuccess.ShouldBeFalse();
         duplicate.Error!.Code.ShouldBe(Evidgate.BuildingBlocks.SharedKernel.Api.ApiErrorCode.InvalidTransition);
         duplicate.Error.Message.ShouldContain("out of step");
