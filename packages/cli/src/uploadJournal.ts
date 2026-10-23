@@ -22,14 +22,17 @@
 // Every write is tmp + fsync + rename + directory fsync under the producer's exclusive
 // `spool.lock` (`spoolLock.ts`), the same lock `events send` and `runs finalize` take, so
 // two CLI processes can never interleave a journal write. A busy lock is waited for with
-// bounded backoff (bounded by both the upload deadline and a short per-write budget) instead
-// of failing at once, because a running `events send` must not turn a journal write into
-// `spool_locked`. The directory is created 0700 and hardened like the rest of the spool; a
-// symlinked or foreign-owned `uploads/` entry, a planted symlink for a journal and a record
-// that does not parse are all refused (`spool_unsafe_path`, `spool_corrupt`) instead of
-// trusted. A record from an older CLI (a `<artifact_id>.json` name, or one without the
-// identity fields) is ignored as a resume candidate: it is never parsed into a row, so it
-// can never crash a resume and can never claim a mint.
+// bounded backoff instead of failing at once, because a running `events send` must not turn
+// a journal write into `spool_locked`. The two calls get different budgets: the pre-PUT
+// `write` that records a minted row may wait up to the upload deadline (`deadlineAt`),
+// while the post-transfer best-effort `update` passes a short per-call `maxWaitMs` (2 s in
+// `upload.ts`) and then swallows `spool_locked`, so a busy lock can never spend the deadline
+// the `complete` call still needs. The directory is created 0700 and hardened like the rest
+// of the spool; a symlinked or foreign-owned `uploads/` entry, a planted symlink for a
+// journal and a record that does not parse are all refused (`spool_unsafe_path`,
+// `spool_corrupt`) instead of trusted. A record from an older CLI (a `<artifact_id>.json`
+// name, or one without the identity fields) is ignored as a resume candidate: it is never
+// parsed into a row, so it can never crash a resume and can never claim a mint.
 //
 // A missing `EVIDGATE_SPOOL_DIR` means no journal: the upload still works, it simply has
 // no resume state across process restarts (`journalFor` returns `undefined`).
@@ -100,10 +103,22 @@ export interface UploadJournalLockOptions {
   /** Virtual sleep; the wait between two lock attempts. */
   readonly sleep?: (milliseconds: number) => Promise<void>;
   /**
-   * An optional per-write cap on the wait. By default the wait is bounded by the upload
-   * deadline alone (`deadlineAt`), because `events send` holds the same lock for its whole
-   * run; without a deadline a short fallback keeps a stuck writer from blocking forever.
+   * The journal's own cap on one wait, overridable per call (see
+   * {@link UploadJournalWriteOptions}). By default the wait is bounded by the upload deadline
+   * alone (`deadlineAt`), because `events send` holds the same lock for its whole run;
+   * without a deadline a short fallback keeps a stuck writer from blocking forever.
    */
+  readonly maxWaitMs?: number;
+}
+
+/**
+ * A per-call override of the lock budget. The post-transfer best-effort updates
+ * (`put_done`, `complete_done`) use it: the bytes are already in the store, so costing the
+ * rest of the upload deadline for a lock `events send` may hold for its whole run is worse
+ * than recounting the transfer on the next run.
+ */
+export interface UploadJournalWriteOptions {
+  /** A cap on THIS call's wait for `spool.lock`, on top of the journal's own budget. */
   readonly maxWaitMs?: number;
 }
 
@@ -231,8 +246,16 @@ export class UploadJournal {
     });
   }
 
-  /** Applies a state change to an existing record; a missing record is `spool_corrupt`. */
-  async update(artifactId: string, patch: UploadJournalPatch): Promise<UploadJournalEntry> {
+  /**
+   * Applies a state change to an existing record; a missing record is `spool_corrupt`.
+   * `options.maxWaitMs` caps THIS call's wait for the lock, which is how the post-transfer
+   * best-effort updates keep a busy `events send` from spending the upload deadline.
+   */
+  async update(
+    artifactId: string,
+    patch: UploadJournalPatch,
+    options: UploadJournalWriteOptions = {},
+  ): Promise<UploadJournalEntry> {
     assertArtifactId(artifactId);
     return this.withBoundedLock(async () => {
       const suffix = `-${artifactId}.json`;
@@ -255,7 +278,7 @@ export class UploadJournal {
       };
       await writeRecord(this.uploadsDirectory, next);
       return next;
-    });
+    }, options.maxWaitMs);
   }
 
   /**
@@ -301,12 +324,13 @@ export class UploadJournal {
    * Runs one locked write, waiting out a busy `spool.lock` instead of failing at once: a
    * live `events send` holds the same producer lock, and a journal write is a few hundred
    * bytes, so it is worth a bounded wait rather than a `spool_locked` failure. The wait
-   * stops at the upload deadline (or earlier when a caller sets `maxWaitMs`); the last
-   * `spool_locked` error is re-raised then, unchanged.
+   * stops at the upload deadline, and at the smaller of the journal's budget and a per-call
+   * `maxWaitMs` when one is given; the last `spool_locked` error is re-raised then, unchanged.
    */
-  private async withBoundedLock<T>(fn: () => Promise<T>): Promise<T> {
+  private async withBoundedLock<T>(fn: () => Promise<T>, maxWaitMs?: number): Promise<T> {
     const startedAt = this.now();
-    const until = Math.min(startedAt + this.maxWaitMs, this.lockDeadlineAt);
+    const budget = Math.min(this.maxWaitMs, maxWaitMs ?? Number.POSITIVE_INFINITY);
+    const until = Math.min(startedAt + budget, this.lockDeadlineAt);
     let wait = lockRetryBaseMs;
     for (;;) {
       try {

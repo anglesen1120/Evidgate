@@ -773,8 +773,12 @@ $EVIDGATE_SPOOL_DIR/<run_id>/<producer_id>/
   `sequence_next` is a FLOOR, not the resume point (D-S56-Q9): the only sequence
   refusal the server makes is reuse (`422 sequence_reused`,
   contracts/events/ordering.md §1), while a hole is accepted (§3), so a sparse
-  record can delay a sequence but can never lose one. A value that is not a safe
-  integer is dropped on read rather than trusted. [DECISION] (D-S56-Q9) Decided
+  record can delay a sequence but can never lose one. The reporter itself never
+  writes a record ahead of the chunks (`playwright-mapping.md` "## shards"); a
+  floor that is ahead of them anyway (a legacy or hand-edited file) leaves a
+  hole that `events send` refuses loudly as `spool_corrupt` (§11, exit 3) rather
+  than sending around it. A value that is not a safe integer is dropped on read
+  rather than trusted. [DECISION] (D-S56-Q9) Decided
   A by the coordinator (owner rule 2026-10-23, recommended option); recorded for
   owner phase review as D-S56-Q9, non-blocking.
 - Directories are created `0700`, every spool file is `0600`, and a symlinked or
@@ -1122,9 +1126,15 @@ file_sha256, size]`.
   the `fstat` size, or a checksum that disagrees with the local digest is
   `request_failed` before the PUT: nothing is uploaded. So is a signed header the
   client must never send — `authorization`, `cookie`, `set-cookie`, `host`,
-  `proxy-authorization`, `proxy-*`, `transfer-encoding`, `connection`
-  (case-insensitive): the refusal names the header, never its value, and nothing is
-  sent.
+  `proxy-authorization`, `proxy-*`, `transfer-encoding`, `connection` — and one
+  the transport owns, where `fetch` would throw a `TypeError` the retry loop
+  would read as a transport failure: `expect`, `te`, `trailer`, `upgrade`,
+  `keep-alive`, `content-encoding` (all case-insensitive). A signed header name
+  that is not an RFC 9110 token, or a value carrying a character `fetch` refuses
+  (CR, LF, NUL, ESC or any other byte outside tab / printable ASCII / Latin-1), is
+  refused the same way (`request_failed`, never retried). Every refusal names the
+  header — or, for a name that is not a token, the rule — and never its value, and
+  nothing is sent.
 - The bytes are read in two passes with O(1) memory: pass 1 hashes the **open
   descriptor** (the guard `fstat`ed inode) in 64 KiB chunks; pass 2 streams a
   **re-opened descriptor** for the PUT while re-hashing every chunk. That is the
@@ -1146,9 +1156,12 @@ file_sha256, size]`.
   calls, §12.3). It is bounded by the remaining upload deadline only, plus an idle
   timeout that resets on every body chunk (60 s): a trace that takes minutes to
   send succeeds, and a connection that stops moving is aborted and retried instead
-  of eating the rest of the deadline. A `ready` `complete` must also report
-  exactly the local byte count; `bytes` `null`, missing or different is
-  `request_failed`, never defaulted to the local size.
+  of eating the rest of the deadline. The idle timeout covers the **sending** of
+  the body; once the last chunk is out it is cleared, and the wait for the store's
+  answer is bounded by the deadline alone — a store that takes longer than 60 s to
+  verify a large object is not a stall and is not re-PUT from byte 0. A `ready`
+  `complete` must also report exactly the local byte count; `bytes` `null`,
+  missing or different is `request_failed`, never defaulted to the local size.
 
 ### 12.3 Retry, expiry and verbatim refusals
 
@@ -1242,9 +1255,15 @@ length-prefixed upload identity — every value the `upload-url` body is built f
   lock for its whole run, so a journal write retries with bounded backoff until
   the upload deadline (a caller may shorten the wait; with no deadline at all it
   stops after 10 s) and re-raises the last `spool_locked` only when that wait is
-  spent. Once the bytes are in the store, a lock that
-  cannot be taken is not an upload failure: `put_done` / `complete_done` are
-  best-effort, and the next run re-calls the idempotent `complete` instead.
+  spent. The two updates after a transfer are the exception: `put_done` (after the
+  PUT) and `complete_done` (after `complete`) are **best-effort** and wait at most
+  a short budget (2 s) for the lock before swallowing `spool_locked` — the bytes
+  are already in the store, and waiting out the deadline would leave `complete`
+  with nothing. The pre-PUT `write` that records the minted row keeps the full
+  deadline budget, because that record is what makes a restart resume instead of
+  re-mint. A lost `complete_done` costs one repeat of the idempotent `complete`; a
+  lost `put_done` costs a re-PUT of the same bytes — or a fresh mint when the
+  presigned URL has expired — and never a second artifact.
 - The record never carries the presigned URL, a token or a header value: those
   are bearer credentials and the journal survives the process (§6).
 - Resume: the highest `mint_no` whose record matches the identity on **every**
@@ -1286,6 +1305,14 @@ length-prefixed upload identity — every value the `upload-url` body is built f
   string loses the query (`…?[REDACTED]`), because a presigned URL IS a bearer
   credential and its signature travels there under whatever parameter name the
   provider uses; `scheme://user:pw@host` loses its userinfo.
+- Server text that reaches a message is echoed only in a safe shape. A rejected
+  `complete` names the artifact id and its `failure_code` when that is a plain
+  token (`[A-Za-z0-9_.-]{1,64}`); any other value — an escape sequence, a newline
+  that would forge a line, an over-long string — is replaced by the stable marker
+  `invalid_failure_code`, so stderr and any `--json` copy of the message carry no
+  server-controlled control characters. A signed header is named only through a
+  token filter (a name that is not a short plain token is reported as `same`),
+  and its value is never echoed (§12.2).
 
 [DECISION] (D-S56-Q2) Decided A by the coordinator (owner rule 2026-10-23,
 recommended option); recorded for owner phase review as D-S56-Q2, non-blocking:

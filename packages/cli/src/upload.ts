@@ -86,6 +86,16 @@ export const uploadChunkBytes = 64 * 1024;
  * caught by this idle timeout instead, which resets on every chunk.
  */
 export const putStallTimeoutMs = 60_000;
+/**
+ * How long a best-effort post-transfer journal update (`put_done` after the PUT,
+ * `complete_done` after `complete`) may wait for `spool.lock`. A live `events send` holds
+ * that lock for its whole run, and the bytes are already in the store, so waiting out the
+ * upload deadline for it would leave `complete` (or the process) with nothing — the update is
+ * abandoned after this budget and the `spool_locked` failure is swallowed. The pre-PUT
+ * `write` that records a minted row keeps the full deadline budget, because that record is
+ * what makes a restart resume instead of re-mint.
+ */
+export const journalBestEffortWaitMs = 2_000;
 
 /** A timer seam: the stall guard and the PUT's deadline must both be injectable. */
 export interface UploadTimers {
@@ -106,6 +116,11 @@ export interface UploadDeps extends UploadRetryDeps {
   readonly putStallTimeoutMs?: number;
   /** Timer seam for the PUT's deadline and idle timeout; defaults to the global timers. */
   readonly timers?: UploadTimers;
+  /**
+   * The lock budget of the best-effort `put_done` / `complete_done` journal updates;
+   * defaults to {@link journalBestEffortWaitMs}.
+   */
+  readonly journalBestEffortWaitMs?: number;
 }
 
 export interface UploadRequest {
@@ -330,7 +345,8 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
   if (outcome.state === 'rejected') {
     // `complete_done` stays false: a rejection is replayable, and a re-run must ask the
     // server again (the same row answers `rejected` again) instead of reporting `ready`.
-    const reason = outcome.failure_code ?? 'unknown';
+    const reason =
+      outcome.failure_code === null ? 'unknown' : failureCodeLabel(outcome.failure_code);
     throw new UploadFailedError(`the artifact ${artifactId} was rejected at complete: ${reason}`, {
       code: 'artifact_rejected',
       hint:
@@ -363,7 +379,12 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
     );
   }
   if (journal !== undefined) {
-    await updateJournalBestEffort(journal, artifactId, { complete_done: true });
+    await updateJournalBestEffort(
+      journal,
+      artifactId,
+      { complete_done: true },
+      request.deps.journalBestEffortWaitMs ?? journalBestEffortWaitMs,
+    );
   }
   return {
     artifactId,
@@ -376,17 +397,22 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
 
 /**
  * A journal write that must never turn a finished transfer into a failure (04.2.4 §12.5):
- * once the bytes are in the store, a busy producer lock only costs the next run one
- * idempotent `complete`. Any other journal failure (a corrupt or unsafe record) still
- * surfaces: it means the resume state cannot be trusted.
+ * once the bytes are in the store, a busy producer lock only costs the next run one repeat
+ * of the interrupted step (`put_done` lost: the same bytes are PUT again, or a fresh mint
+ * when the presigned URL has expired; `complete_done` lost: the idempotent `complete` is
+ * called again). The wait itself is capped at `maxWaitMs` — `events send` may hold the lock
+ * for minutes, and spending the rest of the upload deadline on it would make `complete` end
+ * in `deadline_exceeded` for a transfer that already succeeded. Any other journal failure (a
+ * corrupt or unsafe record) still surfaces: it means the resume state cannot be trusted.
  */
 async function updateJournalBestEffort(
   journal: UploadJournal,
   artifactId: string,
   patch: UploadJournalPatch,
+  maxWaitMs: number,
 ): Promise<void> {
   try {
-    await journal.update(artifactId, patch);
+    await journal.update(artifactId, patch, { maxWaitMs });
   } catch (error) {
     if (!isSpoolLocked(error)) throw error;
   }
@@ -418,7 +444,12 @@ async function mintAndPut(
     try {
       await putWithRetry({ ...o, presigned });
       if (o.journal !== undefined) {
-        await updateJournalBestEffort(o.journal, artifactId, { put_done: true });
+        await updateJournalBestEffort(
+          o.journal,
+          artifactId,
+          { put_done: true },
+          o.deps.journalBestEffortWaitMs ?? journalBestEffortWaitMs,
+        );
       }
       return { artifactId, mintNo };
     } catch (error) {
@@ -650,22 +681,47 @@ async function putOnce(o: {
   const controller = new AbortController();
   let stallTimer: unknown;
   let deadlineTimer: unknown;
+  // The idle timer only guards the SENDING of the body. Two things stop it for good: the
+  // generator finishing (`settleTimers` via `onFinish`, N4 — the wait for the response is
+  // then bounded by the upload deadline alone, so a store that takes longer than the idle
+  // budget to verify a large checksum is not aborted and re-PUT from byte 0), and this
+  // function's `finally`. The flag is what makes the stop final: a read that resumes after
+  // the handle was closed could otherwise call `onProgress` and arm a fresh timer that
+  // nothing would ever clear (N3).
+  let timersSettled = false;
+  const clearStall = (): void => {
+    if (stallTimer !== undefined) {
+      o.timers.clear(stallTimer);
+      stallTimer = undefined;
+    }
+  };
+  const settleTimers = (): void => {
+    timersSettled = true;
+    clearStall();
+  };
   const armStall = (): void => {
-    if (stallTimer !== undefined) o.timers.clear(stallTimer);
+    if (timersSettled) return;
+    clearStall();
     stallTimer = o.timers.set(o.stallMs, () => controller.abort(new UploadStalledError(o.stallMs)));
   };
   try {
     deadlineTimer = o.timers.set(remaining, () =>
       controller.abort(deadlineExceeded('upload_put_failed')),
     );
-    const body = new BodyStream(handle, o.file.size, o.sha256, armStall);
+    const body = new BodyStream(handle, o.file.size, o.sha256, armStall, settleTimers);
+    const stream = Readable.from(body, { objectMode: false });
+    // A transport that drops the request (an early 2xx from a proxy, an abort) destroys this
+    // stream without ever resuming the generator — and a generator that never started runs
+    // no `finally`. `close` is therefore what settles `done`; without it `await body.done`
+    // would wait forever (N3).
+    stream.once('close', () => body.abandon());
     let response: Response;
     try {
       armStall();
       response = await o.fetch(url, {
         method: 'PUT',
         headers,
-        body: Readable.from(body, { objectMode: false }),
+        body: stream,
         duplex: 'half',
         redirect: 'error',
         signal: controller.signal,
@@ -714,6 +770,22 @@ async function putOnce(o: {
     if (body.failure !== undefined) {
       throw body.failure;
     }
+    if (body.abandoned) {
+      // The transport dropped the request before the body was flushed (an early 2xx from a
+      // proxy, an abort). A byte-count mismatch would blame the file; the abort reason is
+      // what actually ended the attempt, and a store that just closed the connection is a
+      // retryable transport refusal.
+      if (controller.signal.aborted) {
+        throw abortReason(controller.signal);
+      }
+      throw new PutRetryableError(
+        new UploadFailedError('the object store closed the upload before the body was sent', {
+          code: 'upload_put_failed',
+          hint: 'the store dropped the request early; re-run the upload',
+        }),
+        undefined,
+      );
+    }
     // The generator's last act is the digest comparison, so `done` resolving means the body
     // matched; the byte count is re-checked here because it is what `complete` verifies.
     if (body.bytes !== o.file.size) {
@@ -722,10 +794,20 @@ async function putOnce(o: {
       );
     }
   } finally {
-    if (stallTimer !== undefined) o.timers.clear(stallTimer);
+    settleTimers();
     if (deadlineTimer !== undefined) o.timers.clear(deadlineTimer);
     await handle.close().catch(() => undefined);
   }
+}
+
+/**
+ * The reason a request was aborted, as an Error: the timer seams abort with a
+ * `deadline_exceeded` / `UploadStalledError`, and undici rejects exactly that value.
+ */
+function abortReason(signal: AbortSignal): Error {
+  const reason: unknown = signal.reason;
+  if (reason instanceof Error) return reason;
+  return new UploadFailedError('the upload request was aborted', { code: 'upload_put_failed' });
 }
 
 /** The connection stopped moving: retryable, and never confused with a file change. */
@@ -742,21 +824,30 @@ class UploadStalledError extends Error {
  * half-sent object is never completed (the `pending/` object expires by lifecycle, T18).
  * It reads the guarded descriptor `putOnce` re-opened (never a path), so a swapped file can
  * not be sent, and it reports every chunk to the idle timer.
+ *
+ * `done` always settles, whoever ends the request first: the generator itself, the store
+ * (an early 2xx — see {@link abandon}), or `putOnce`'s refusal path ({@link abort}).
  */
 class BodyStream implements AsyncIterable<Uint8Array> {
   readonly hash: Hash;
   bytes = 0;
   failure: Error | undefined;
+  /** The size and the digest matched: the object is exactly the file. */
+  finished = false;
+  /** The transport dropped the body before it finished, so `bytes` is short. */
+  abandoned = false;
   readonly done: Promise<void>;
 
   private resolveDone: () => void = () => undefined;
   private rejectDone: (error: unknown) => void = () => undefined;
+  private settled = false;
 
   constructor(
     private readonly handle: FileHandle,
     private readonly size: number,
     private readonly sha256: string,
     private readonly onProgress: () => void,
+    private readonly onFinish: () => void,
   ) {
     this.hash = createHash('sha256');
     // `Promise.withResolvers` is ES2024 and the workspace targets ES2022 (tsconfig.base).
@@ -795,17 +886,47 @@ class BodyStream implements AsyncIterable<Uint8Array> {
       if (`sha256:${this.hash.digest('hex')}` !== this.sha256) {
         throw checksumMismatch('the file changed between the hash pass and the upload pass');
       }
-      this.resolveDone();
+      this.finished = true;
+      this.settle();
     } catch (error) {
       this.failure = toCliError(error);
-      this.rejectDone(this.failure);
+      this.fail(this.failure);
       throw this.failure;
+    } finally {
+      // N4: the last chunk is out (or the generator is being closed), so the idle timer has
+      // no meaning any more — the wait for the response is bounded by the deadline alone.
+      this.onFinish();
+      // N3: a generator closed by a destroyed request must still settle `done`, or
+      // `putOnce` would await it forever. Idempotent: a finished or failed body is settled.
+      this.abandon();
     }
   }
 
   /** Stops a request whose response already failed; the body is never read to the end. */
   abort(): void {
+    this.settle();
+  }
+
+  /**
+   * Settles `done` for a body the transport dropped before it finished. The stream's
+   * `close` calls this, because a generator that never started runs no `finally` at all.
+   */
+  abandon(): void {
+    if (this.settled) return;
+    this.abandoned = true;
+    this.settle();
+  }
+
+  private settle(): void {
+    if (this.settled) return;
+    this.settled = true;
     this.resolveDone();
+  }
+
+  private fail(error: Error): void {
+    if (this.settled) return;
+    this.settled = true;
+    this.rejectDone(error);
   }
 }
 
@@ -964,12 +1085,35 @@ function headerLabel(lowerName: string): string {
   return /^[a-z0-9!#$%&'*+.^_`|~-]{1,64}$/.test(lowerName) ? lowerName : 'same';
 }
 
+const failureCodeFallback = 'invalid_failure_code';
+
+/**
+ * The server's `failure_code`, as it may appear in a message. A `rejected` complete puts it
+ * into the message, and the message is printed to stderr and copied by every `--json`
+ * consumer, so only a plain token is echoed verbatim; anything else (an escape sequence that
+ * would repaint the terminal, a newline that would forge an `evidgate:` line, an over-long
+ * value) becomes {@link failureCodeFallback}. The machine-readable code therefore stays
+ * stable, and the raw server text never reaches a stream (§5/§12.6). A missing code is
+ * `unknown`, which is what the caller says, not this fallback.
+ */
+function failureCodeLabel(raw: string): string {
+  return /^[A-Za-z0-9_.-]{1,64}$/.test(raw) ? raw : failureCodeFallback;
+}
+
 /**
  * Headers a presigned PUT must never carry, whatever the server signs: a credential
  * (`authorization`, `cookie`, `set-cookie`, `proxy-authorization`), the target
- * (`host`), or a second framing (`transfer-encoding`, `connection`) — plus any `proxy-*`.
+ * (`host`), a second framing (`transfer-encoding`, `connection`) — plus any `proxy-*`.
  * The client keeps its own bearer off the object store (04 §6/S3), and a response is not
  * allowed to talk it into doing otherwise.
+ *
+ * The transport-owned set (`expect`, `te`, `trailer`, `upgrade`, `keep-alive`,
+ * `content-encoding`) is refused for the same reason: `fetch` throws a `TypeError` (or
+ * `NotSupported`) on most of them, and a thrown `TypeError` reads as a transport failure —
+ * it would be retried until the deadline for a response that will never change. Refusing
+ * them here makes them the deterministic `request_failed` they are. `content-encoding` is
+ * on the list because the body is streamed raw: a signed encoding would either break the
+ * length/checksum framing or make the store decode bytes the CLI never encoded.
  */
 const forbiddenSignedHeaders: Readonly<Record<string, true>> = {
   authorization: true,
@@ -979,7 +1123,24 @@ const forbiddenSignedHeaders: Readonly<Record<string, true>> = {
   'proxy-authorization': true,
   'transfer-encoding': true,
   connection: true,
+  expect: true,
+  te: true,
+  trailer: true,
+  upgrade: true,
+  'keep-alive': true,
+  'content-encoding': true,
 };
+
+/** RFC 9110 `token`: the only shape a header name may have (and what `fetch` accepts). */
+const headerNamePattern = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/;
+/**
+ * The characters a header value may carry, negated: `fetch` (undici's `headerCharRegex`)
+ * refuses anything outside tab, printable ASCII and Latin-1, and a value it refuses throws a
+ * `TypeError`. That throw would read as a transport failure and be retried until the
+ * deadline, so the same class — CR/LF (a split field), NUL, ESC (which would repaint a
+ * terminal), DEL and any higher code point — is refused here first, deterministically.
+ */
+const headerValuePattern = /[^\t\u0020-\u007e\u0080-\u00ff]/;
 
 /**
  * Exactly the signed headers, validated against the local file: `Content-Length` must be the
@@ -995,6 +1156,16 @@ function signedHeaders(
   const byLowerName = new Map<string, { readonly name: string; readonly value: string }>();
   for (const [name, value] of Object.entries(headers)) {
     const lower = name.toLowerCase();
+    // A name `fetch` would refuse (a space, a colon, a bare non-ASCII byte) is a malformed
+    // response, not a transport failure: the name is never echoed when it is not a token.
+    if (!headerNamePattern.test(name)) {
+      throw badResponse('the upload URL signed a header whose name is not an HTTP token');
+    }
+    if (headerValuePattern.test(value)) {
+      throw badResponse(
+        `the upload URL signed the ${headerLabel(lower)} header with a value the request cannot carry`,
+      );
+    }
     if (forbiddenSignedHeaders[lower] === true || lower.startsWith('proxy-')) {
       // A 201 can name any header; these would let the response make the CLI send a
       // credential, rewrite the target host, or smuggle a second body framing. The value is

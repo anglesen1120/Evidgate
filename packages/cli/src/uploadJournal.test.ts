@@ -333,6 +333,46 @@ describe('upload journal', () => {
     expect(clock.now).toBeLessThan(1_000 + 200);
   });
 
+  // N1: the per-call cap is what the post-transfer best-effort updates use. It shortens THAT
+  // call only — the pre-PUT `write` that records a minted row keeps the deadline budget, so a
+  // long `events send` still does not lose the record a restart resumes from.
+  it('caps_one_update_without_shrinking_the_write_budget', async () => {
+    const dir = await producerDir();
+    const clock = { now: 1_000 };
+    let refusals = 0;
+    const store = await UploadJournal.open({
+      producerDirectory: dir,
+      withLock: (fn) => {
+        if (refusals > 0) {
+          refusals -= 1;
+          return Promise.reject(new SpoolLockedError(join(dir, 'spool.lock'), 4_242));
+        }
+        return fn();
+      },
+      now: () => clock.now,
+      sleep: (milliseconds) => {
+        clock.now += milliseconds;
+        return Promise.resolve();
+      },
+      deadlineAt: 1_000 + 3_600_000,
+    });
+    await store.write(entry());
+
+    refusals = 100;
+    await expect(
+      store.update(artifactId, { put_done: true }, { maxWaitMs: 2_000 }),
+    ).rejects.toMatchObject({ code: 'spool_locked' });
+    const capped = clock.now - 1_000;
+    expect(capped).toBeGreaterThan(1_000);
+    expect(capped).toBeLessThan(2_000);
+
+    // The journal's own budget is untouched: this write waits past the 2 s cap and lands.
+    refusals = 8;
+    await expect(store.write(entry({ put_done: true }))).resolves.toBeUndefined();
+    expect(clock.now - 1_000).toBeGreaterThan(2_000);
+    expect((await store.findResumable(identity()))?.put_done).toBe(true);
+  });
+
   it('refuses_a_tampered_record', async () => {
     const dir = await producerDir();
     await mkdir(join(dir, uploadsDirectoryName), { recursive: true });

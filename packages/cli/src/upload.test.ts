@@ -128,6 +128,48 @@ function fetchUrl(input: string | URL | Request): string {
   return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 }
 
+/**
+ * A timer seam over a virtual clock: `set` records when the timer is due instead of arming
+ * anything, and `fireDue()` (called by the spec at the exact point simulated time passes)
+ * runs whatever is due, in due order. Nothing here races real file or network I/O, so a
+ * spec that drives time through this seam never depends on how fast the runner is.
+ */
+function virtualTimers(clock: { now: number }): {
+  readonly timers: UploadTimers;
+  readonly scheduled: Map<number, { readonly ms: number; readonly fn: () => void }>;
+  readonly fireDue: () => number;
+} {
+  const scheduled = new Map<
+    number,
+    { readonly due: number; readonly ms: number; readonly fn: () => void }
+  >();
+  let nextId = 1;
+  const timers: UploadTimers = {
+    set: (milliseconds, fn) => {
+      const id = nextId;
+      nextId += 1;
+      scheduled.set(id, { due: clock.now + milliseconds, ms: milliseconds, fn });
+      return id;
+    },
+    clear: (handle) => {
+      scheduled.delete(handle as number);
+    },
+  };
+  const fireDue = (): number => {
+    let fired = 0;
+    for (;;) {
+      const due = [...scheduled.entries()]
+        .filter(([, entry]) => entry.due <= clock.now)
+        .sort((left, right) => left[1].due - right[1].due)[0];
+      if (due === undefined) return fired;
+      scheduled.delete(due[0]);
+      due[1].fn();
+      fired += 1;
+    }
+  };
+  return { timers, scheduled, fireDue };
+}
+
 /** Rejects with the signal's reason when the request is aborted: the only non-retryable exit. */
 function aborted(signal: AbortSignal): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
@@ -591,6 +633,76 @@ describe('uploadFile', () => {
     expect(store.calls.filter((call) => call.url.endsWith('/complete'))).toHaveLength(1);
   });
 
+  // N7 (P3): `failure_code` is server text that lands in the message, and the message reaches
+  // stderr and every `--json` consumer. Only a plain token is echoed verbatim; anything that
+  // could repaint a terminal or forge a line is replaced by a stable marker.
+  it.each([
+    ['an escape sequence', 'checksum\u001b[31m_mismatch'],
+    ['a newline', 'checksum\nmismatch'],
+    ['an over-long value', 'a'.repeat(65)],
+    ['a colon', 'checksum:mismatch'],
+  ])('does_not_echo_a_failure_code_that_carries_%s', async (_case, failureCode) => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const store = harness((call) => {
+      if (call.method === 'PUT') return new Response(null, { status: 200 });
+      if (call.url.endsWith('/complete')) {
+        return json(200, {
+          artifact_id: artifactId,
+          state: 'rejected',
+          bytes: null,
+          scan_state: null,
+          failure_code: failureCode,
+        });
+      }
+      return json(201, uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 }));
+    });
+
+    let thrown: unknown;
+    try {
+      await uploadFile(request({ opened: fileHandle, sha256 }, store, undefined));
+    } catch (error) {
+      thrown = error;
+    }
+
+    const error = thrown as UploadFailedError;
+    expect(error.code).toBe('artifact_rejected');
+    expect(error.message).toContain('invalid_failure_code');
+    expect(error.message).not.toContain(failureCode);
+    expect(error.message).not.toContain('\u001b');
+    expect(error.message).not.toContain('\n');
+  });
+
+  // The fallback is for unsafe text only: a `rejected` complete with no code at all is
+  // `unknown`, which is what actually happened.
+  it('names_a_rejection_without_a_failure_code_as_unknown', async () => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const store = harness((call) => {
+      if (call.method === 'PUT') return new Response(null, { status: 200 });
+      if (call.url.endsWith('/complete')) {
+        return json(200, {
+          artifact_id: artifactId,
+          state: 'rejected',
+          bytes: null,
+          scan_state: null,
+          failure_code: null,
+        });
+      }
+      return json(201, uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 }));
+    });
+
+    let thrown: unknown;
+    try {
+      await uploadFile(request({ opened: fileHandle, sha256 }, store, undefined));
+    } catch (error) {
+      thrown = error;
+    }
+
+    const error = thrown as UploadFailedError;
+    expect(error.code).toBe('artifact_rejected');
+    expect(error.message).toContain('rejected at complete: unknown');
+    expect(error.message).not.toContain('invalid_failure_code');
+  });
+
   // §12 replay: a rejection leaves `complete_done` false, so a re-run replays `complete`
   // against the same row and is rejected again — the hint names the journal row that must
   // be deleted to start over, because re-running alone never mints a second row.
@@ -801,6 +913,53 @@ describe('uploadFile', () => {
     expect(outcome.bytes).toBe(11);
     expect(locks).toBeGreaterThan(1);
     expect(store.calls.filter((call) => call.url.endsWith('/complete'))).toHaveLength(1);
+    // N1: the wait does not run to the 30 min deadline — the two best-effort updates stop at
+    // the short default budget, so a busy `events send` costs seconds, not the whole upload.
+    expect(clock.now - 1_000).toBeLessThan(10_000);
+  });
+
+  // N1 (P2): the best-effort budget is injectable, and it is per call: each of the two
+  // post-transfer updates gives up inside it, so `complete` still runs with the deadline
+  // almost untouched. Before the fix the wait ran until `deadlineAt`.
+  it('gives_the_best_effort_journal_updates_a_short_lock_budget', async () => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const directory = await mkdtemp(join(tmpdir(), 'evidgate-upload-budget-'));
+    dirs.push(directory);
+    const clock = { now: 1_000 };
+    let locks = 0;
+    const busy = await UploadJournal.open({
+      producerDirectory: directory,
+      withLock: <T>(fn: () => Promise<T>): Promise<T> => {
+        locks += 1;
+        if (locks === 1) return fn();
+        return Promise.reject(new SpoolLockedError(join(directory, 'spool.lock'), 4_242));
+      },
+      now: () => clock.now,
+      sleep: (milliseconds) => {
+        clock.now += milliseconds;
+        return Promise.resolve();
+      },
+      deadlineAt: 1_000 + 1_800_000,
+    });
+    const store = harness((call) => {
+      if (call.method === 'PUT') return new Response(null, { status: 200 });
+      if (call.url.endsWith('/complete')) return json(200, readyBody(11));
+      return json(201, uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 }));
+    });
+
+    const outcome = await uploadFile(
+      request(
+        { opened: fileHandle, sha256 },
+        { deps: { ...store.deps, journalBestEffortWaitMs: 250 } },
+        busy,
+      ),
+    );
+
+    expect(outcome.state).toBe('ready');
+    expect(store.calls.filter((call) => call.url.endsWith('/complete'))).toHaveLength(1);
+    // put_done and complete_done each stop inside the injected 250 ms budget.
+    expect(clock.now - 1_000).toBeGreaterThan(0);
+    expect(clock.now - 1_000).toBeLessThan(500);
   });
 
   it('resumes_an_abandoned_mint_with_the_same_key', async () => {
@@ -1032,6 +1191,14 @@ describe('uploadFile', () => {
     'proxy-authorization',
     'transfer-encoding',
     'connection',
+    // N5: the transport-owned set. `fetch` throws on most of these, and a thrown TypeError
+    // reads as a transport failure — it would be retried until the deadline.
+    'expect',
+    'te',
+    'trailer',
+    'upgrade',
+    'keep-alive',
+    'content-encoding',
   ])('refuses_a_signed_%s_header', async (name) => {
     const { opened: fileHandle, sha256 } = await file('trace.zip');
     const body = uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 });
@@ -1050,6 +1217,81 @@ describe('uploadFile', () => {
     expect(error.message).toContain(name.toLowerCase());
     expect(error.message).not.toContain('MARKER-VALUE-7');
     expect(store.calls.some((call) => call.method === 'PUT')).toBe(false);
+    expect(store.sleeps).toEqual([]);
+  });
+
+  // N5 (P3): a signed name `fetch` would refuse (a space, a colon, a non-token byte) is a
+  // malformed response, not a transport failure. The name is not a token, so it is never
+  // echoed — the message names the rule, not the attacker's text.
+  it('refuses_a_signed_header_whose_name_is_not_a_token', async () => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const body = uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 });
+    const signed = body['required_headers'] as Record<string, string>;
+    signed['x-amz-bad name'] = 'MARKER-VALUE-7';
+    const store = harness(() => json(201, body));
+
+    let thrown: unknown;
+    try {
+      await uploadFile(request({ opened: fileHandle, sha256 }, store, undefined));
+    } catch (error) {
+      thrown = error;
+    }
+    const error = thrown as UploadFailedError;
+    expect(error.code).toBe('request_failed');
+    expect(error.message).toContain('not an HTTP token');
+    expect(error.message).not.toContain('x-amz-bad name');
+    expect(error.message).not.toContain('MARKER-VALUE-7');
+    expect(store.calls.some((call) => call.method === 'PUT')).toBe(false);
+    expect(store.sleeps).toEqual([]);
+  });
+
+  // N5: a value `fetch` itself would refuse is refused here first, so it stays a
+  // deterministic `request_failed` instead of a TypeError the retry loop repeats: CR/LF (a
+  // smuggled second field), NUL, ESC (a terminal escape), DEL and a code point above Latin-1.
+  it.each([
+    ['a CRLF', 'ok\r\nX-Injected: 1'],
+    ['a NUL', 'ok\u0000tail'],
+    ['an ESC', 'ok\u001b[31mred'],
+    ['a DEL', 'ok\u007ftail'],
+    ['a non-Latin-1 code point', 'ok\u20ac'],
+  ])('refuses_a_signed_header_value_with_%s', async (_case, value) => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const body = uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 });
+    const signed = body['required_headers'] as Record<string, string>;
+    signed['x-amz-meta-note'] = value;
+    const store = harness(() => json(201, body));
+
+    let thrown: unknown;
+    try {
+      await uploadFile(request({ opened: fileHandle, sha256 }, store, undefined));
+    } catch (error) {
+      thrown = error;
+    }
+    const error = thrown as UploadFailedError;
+    expect(error.code).toBe('request_failed');
+    expect(error.message).toContain('x-amz-meta-note');
+    expect(error.message).not.toContain('X-Injected');
+    expect(store.calls.some((call) => call.method === 'PUT')).toBe(false);
+    expect(store.sleeps).toEqual([]);
+  });
+
+  // The class is the one `fetch` accepts, not a blanket ASCII filter: tab and a Latin-1 byte
+  // pass through untouched.
+  it('accepts_a_signed_header_value_inside_the_fetch_class', async () => {
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const body = uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 });
+    const signed = body['required_headers'] as Record<string, string>;
+    signed['x-amz-meta-note'] = 'a\tb\u00e9';
+    const store = harness((call) => {
+      if (call.method === 'PUT') return new Response(null, { status: 200 });
+      if (call.url.endsWith('/complete')) return json(200, readyBody(11));
+      return json(201, body);
+    });
+
+    await uploadFile(request({ opened: fileHandle, sha256 }, store, undefined));
+
+    const put = store.calls.find((call) => call.method === 'PUT');
+    expect(put?.headers.get('x-amz-meta-note')).toBe('a\tb\u00e9');
   });
 
   // F8 (P3): a malformed artifact id is a malformed response, not a corrupt journal: the
@@ -1076,104 +1318,191 @@ describe('uploadFile', () => {
 
   // F2 (P1): the presigned PUT is bounded by the remaining upload deadline only. It used to
   // carry the 30 s per-request timeout of the JSON calls, which aborts a trace that takes
-  // longer than half a minute to send.
+  // longer than half a minute to send. Time comes from the injected seam, so nothing races
+  // the real file read: the spec advances the clock and fires what is due itself.
   it('does_not_abort_a_put_that_takes_longer_than_thirty_seconds', async () => {
-    vi.useFakeTimers();
-    try {
-      const content = Buffer.from('trace-bytes');
-      const { opened: fileHandle, sha256 } = await file('trace.zip', content);
-      const signals: AbortSignal[] = [];
-      const clock = { now: 1_000 };
-      const deps: UploadDeps = {
-        fetch: async (input, init) => {
-          const url = fetchUrl(input);
-          if (fetchMethod(input, init) !== 'PUT') {
-            return url.endsWith('/complete')
-              ? json(200, readyBody(content.byteLength))
-              : json(201, uploadUrlBody({ bytes: content, sha256 }));
-          }
-          const request: RequestInit = init ?? {};
-          const signal = request.signal as AbortSignal;
-          signals.push(signal);
-          // 45 simulated seconds per chunk: past the 30 s per-request cap of the API calls.
-          for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
-            await new Promise((resolve) => setTimeout(resolve, 45_000));
-            if (signal.aborted) throw signal.reason;
-            if (chunk.byteLength === 0) break;
-          }
-          return new Response(null, { status: 200 });
-        },
-        sleep: (milliseconds) => {
-          clock.now += milliseconds;
-          return Promise.resolve();
-        },
-        now: () => clock.now,
-        random: () => 0.5,
-      };
+    const content = Buffer.from('trace-bytes');
+    const { opened: fileHandle, sha256 } = await file('trace.zip', content);
+    const clock = { now: 1_000 };
+    const { timers, scheduled, fireDue } = virtualTimers(clock);
+    const signals: AbortSignal[] = [];
+    const deps: UploadDeps = {
+      timers,
+      sleep: (milliseconds) => {
+        clock.now += milliseconds;
+        return Promise.resolve();
+      },
+      now: () => clock.now,
+      random: () => 0.5,
+      fetch: async (input, init) => {
+        const url = fetchUrl(input);
+        if (fetchMethod(input, init) !== 'PUT') {
+          return url.endsWith('/complete')
+            ? json(200, readyBody(content.byteLength))
+            : json(201, uploadUrlBody({ bytes: content, sha256 }));
+        }
+        const request: RequestInit = init ?? {};
+        const signal = request.signal as AbortSignal;
+        signals.push(signal);
+        // 45 simulated seconds per chunk: past the 30 s per-request cap of the API calls.
+        for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+          clock.now += 45_000;
+          fireDue();
+          if (signal.aborted) throw signal.reason;
+          if (chunk.byteLength === 0) break;
+        }
+        return new Response(null, { status: 200 });
+      },
+    };
 
-      const pending = uploadFile(request({ opened: fileHandle, sha256 }, { deps }, undefined));
-      let settled = false;
-      const tracked = pending.finally(() => {
-        settled = true;
-      });
-      for (let tick = 0; tick < 40 && !settled; tick += 1) {
-        await vi.advanceTimersByTimeAsync(5_000);
-      }
-      await expect(tracked).resolves.toMatchObject({
-        state: 'ready',
-        bytes: content.byteLength,
-      });
-      expect(signals).toHaveLength(1);
-      expect(signals[0]?.aborted).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
+    const outcome = await uploadFile(request({ opened: fileHandle, sha256 }, { deps }, undefined));
+
+    expect(outcome).toMatchObject({ state: 'ready', bytes: content.byteLength });
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.aborted).toBe(false);
+    // Both timers came from the seam and both were cleared: nothing outlives the PUT.
+    expect(scheduled.size).toBe(0);
   });
 
   it('aborts_the_put_at_the_upload_deadline', async () => {
-    vi.useFakeTimers();
-    try {
-      const { opened: fileHandle, sha256 } = await file('trace.zip');
-      const deps: UploadDeps = {
-        fetch: async (input, init) => {
-          const url = fetchUrl(input);
-          if (fetchMethod(input, init) !== 'PUT') {
-            return url.endsWith('/complete')
-              ? json(200, readyBody(11))
-              : json(201, uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 }));
-          }
-          const request: RequestInit = init ?? {};
-          for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
-            // the bytes leave; the store never answers
-            if (chunk.byteLength === 0) break;
-          }
-          const signal = request.signal as AbortSignal;
-          // Only the upload deadline can end this request.
-          await aborted(signal);
-          return new Response(null, { status: 200 });
-        },
-        sleep: () => Promise.resolve(),
-        now: () => Date.now(),
-        random: () => 0.5,
-      };
+    const { opened: fileHandle, sha256 } = await file('trace.zip');
+    const clock = { now: 1_000 };
+    const { timers, scheduled, fireDue } = virtualTimers(clock);
+    let abortedAtResponse: boolean | undefined;
+    const deps: UploadDeps = {
+      timers,
+      sleep: (milliseconds) => {
+        clock.now += milliseconds;
+        return Promise.resolve();
+      },
+      now: () => clock.now,
+      random: () => 0.5,
+      fetch: async (input, init) => {
+        const url = fetchUrl(input);
+        if (fetchMethod(input, init) !== 'PUT') {
+          return url.endsWith('/complete')
+            ? json(200, readyBody(11))
+            : json(201, uploadUrlBody({ bytes: Buffer.from('trace-bytes'), sha256 }));
+        }
+        const request: RequestInit = init ?? {};
+        for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+          // the bytes leave; the store never answers
+          if (chunk.byteLength === 0) break;
+        }
+        // Only the upload deadline can end this request, and the seam is its only clock.
+        clock.now += 5_000;
+        fireDue();
+        const signal = request.signal as AbortSignal;
+        abortedAtResponse = signal.aborted;
+        if (signal.aborted) throw signal.reason;
+        return new Response(null, { status: 200 });
+      },
+    };
 
-      const pending = uploadFile(
+    await expect(
+      uploadFile(
         request({ opened: fileHandle, sha256 }, { deps }, undefined, { deadlineMs: 5_000 }),
-      );
-      let settled = false;
-      const tracked = pending.finally(() => {
-        settled = true;
-      });
-      // The rejection is asserted below; marking it handled now keeps a red herring out of
-      // the runner's unhandled-rejection report while the loop advances the timers.
-      tracked.catch(() => undefined);
-      for (let tick = 0; tick < 20 && !settled; tick += 1) {
-        await vi.advanceTimersByTimeAsync(1_000);
-      }
-      await expect(tracked).rejects.toMatchObject({ code: 'deadline_exceeded' });
-    } finally {
-      vi.useRealTimers();
-    }
+      ),
+    ).rejects.toMatchObject({ code: 'deadline_exceeded' });
+
+    expect(abortedAtResponse).toBe(true);
+    expect(scheduled.size).toBe(0);
+  });
+
+  // N3 (P3): a store that answers 2xx before it has read the body and then drops the request.
+  // The body generator never started, so no `finally` runs — only the stream's `close` can
+  // settle `done`. The attempt must end as the abort (retried), never as a hang, and the
+  // cleared timers must leave nothing armed.
+  it('does_not_hang_when_the_store_answers_before_the_body_is_sent', async () => {
+    const content = Buffer.from('trace-bytes');
+    const { opened: fileHandle, sha256 } = await file('trace.zip', content);
+    const clock = { now: 1_000 };
+    const { timers, scheduled, fireDue } = virtualTimers(clock);
+    let puts = 0;
+    const deps: UploadDeps = {
+      timers,
+      sleep: (milliseconds) => {
+        clock.now += milliseconds;
+        return Promise.resolve();
+      },
+      now: () => clock.now,
+      random: () => 0.5,
+      fetch: async (input, init) => {
+        const url = fetchUrl(input);
+        if (fetchMethod(input, init) !== 'PUT') {
+          return url.endsWith('/complete')
+            ? json(200, readyBody(content.byteLength))
+            : json(201, uploadUrlBody({ bytes: content, sha256 }));
+        }
+        puts += 1;
+        const request: RequestInit = init ?? {};
+        if (puts === 1) {
+          // An early 2xx: the store answers before a single byte and closes the connection,
+          // which destroys the request body it never read. `putOnce` hands this fake the
+          // Node Readable it built, so the cast names the real shape rather than BodyInit.
+          const body = request.body as unknown as { destroy(): void };
+          body.destroy();
+          // The idle timer then aborts the attempt: the body can never make progress.
+          clock.now += putStallTimeoutMs;
+          fireDue();
+          return new Response(null, { status: 200 });
+        }
+        for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+          if (chunk.byteLength === 0) break;
+        }
+        return new Response(null, { status: 200 });
+      },
+    };
+
+    const outcome = await uploadFile(request({ opened: fileHandle, sha256 }, { deps }, undefined));
+
+    expect(outcome.state).toBe('ready');
+    expect(puts).toBe(2);
+    // Neither attempt left a timer armed: nothing can keep the process alive.
+    expect(scheduled.size).toBe(0);
+  });
+
+  // N4 (P3): the idle timer guards the SENDING of the body only. A store that needs longer
+  // than the idle budget to verify a large checksum after the last byte is not a stall, and
+  // the deadline (30 min here) is what bounds the wait for its answer.
+  it('waits_for_a_store_that_answers_long_after_the_last_byte', async () => {
+    const content = Buffer.from('trace-bytes');
+    const { opened: fileHandle, sha256 } = await file('trace.zip', content);
+    const clock = { now: 1_000 };
+    const { timers, scheduled, fireDue } = virtualTimers(clock);
+    let abortedAfterBody: boolean | undefined;
+    const deps: UploadDeps = {
+      timers,
+      sleep: (milliseconds) => {
+        clock.now += milliseconds;
+        return Promise.resolve();
+      },
+      now: () => clock.now,
+      random: () => 0.5,
+      fetch: async (input, init) => {
+        const url = fetchUrl(input);
+        if (fetchMethod(input, init) !== 'PUT') {
+          return url.endsWith('/complete')
+            ? json(200, readyBody(content.byteLength))
+            : json(201, uploadUrlBody({ bytes: content, sha256 }));
+        }
+        const request: RequestInit = init ?? {};
+        for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+          if (chunk.byteLength === 0) break;
+        }
+        // Every byte is in; the store verifies the checksum for 90 s before it answers.
+        clock.now += 90_000;
+        fireDue();
+        abortedAfterBody = (request.signal as AbortSignal).aborted;
+        return new Response(null, { status: 200 });
+      },
+    };
+
+    const outcome = await uploadFile(request({ opened: fileHandle, sha256 }, { deps }, undefined));
+
+    expect(outcome).toMatchObject({ state: 'ready', bytes: content.byteLength });
+    expect(abortedAfterBody).toBe(false);
+    expect(scheduled.size).toBe(0);
   });
 
   // F2: a connection that stops moving is caught by the idle timeout (which resets on every
