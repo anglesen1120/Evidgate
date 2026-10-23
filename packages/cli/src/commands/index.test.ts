@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
+import { resolveConfig } from '../config.js';
 import { ExitCode } from '../exitCodes.js';
 
-import { commandRegistry, renderUsage, resolveCommand, type CommandDefinition } from './index.js';
+import {
+  commandRegistry,
+  renderUsage,
+  resolveCommand,
+  usageText,
+  type CommandDefinition,
+} from './index.js';
 
 function stub(name: string, summary: string, positionals?: string): CommandDefinition {
   const command: CommandDefinition = {
@@ -85,5 +92,69 @@ describe('command registry', () => {
   it('shows the positionals usage string in the help line', () => {
     const commands = [stub('manifests upload', 'upload a manifest', '<file>')];
     expect(renderUsage(commands)).toContain('  manifests upload <file>  upload a manifest');
+  });
+
+  // 04.2.3: the two spool commands are registered here and nowhere else; the dispatcher
+  // in `main.ts` only ever sees `resolveCommand`'s answer.
+  it('resolves events send and runs finalize, with single-use options', () => {
+    expect(resolveCommand(['events', 'send'])).toMatchObject({
+      command: commandRegistry['events send'],
+      words: 2,
+      rest: [],
+    });
+    expect(resolveCommand(['events', 'send', 'extra'])).toMatchObject({
+      command: commandRegistry['events send'],
+      words: 2,
+      rest: ['extra'],
+    });
+    expect(resolveCommand(['runs', 'finalize'])).toMatchObject({
+      command: commandRegistry['runs finalize'],
+      words: 2,
+      rest: [],
+    });
+    // A repetition must be observable, so every value option is `multiple: true`.
+    expect(commandRegistry['events send']?.options?.['run']).toEqual({
+      type: 'string',
+      multiple: true,
+    });
+    expect(commandRegistry['events send']?.options?.['producer']).toEqual({
+      type: 'string',
+      multiple: true,
+    });
+    expect(commandRegistry['events send']?.options?.['from']).toEqual({
+      type: 'string',
+      multiple: true,
+    });
+  });
+
+  it('lists both spool commands in the help text', () => {
+    expect(usageText).toContain('events send');
+    expect(usageText).toContain('runs finalize');
+  });
+
+  // CR8 (S54): the spool surface is lazy, so only the two spool commands force it in their
+  // `validateConfig` pre-flight. A malformed `EVIDGATE_SPOOL_MAX_BYTES` is therefore their
+  // `invalid_config` — and never a `runs create` / `auth login` failure.
+  it('forces the lazy spool settings only in the spool commands', () => {
+    const config = resolveConfig({
+      env: {
+        EVIDGATE_API_URL: 'https://api.evidgate.test',
+        EVIDGATE_PROJECT: 'proj-1',
+        EVIDGATE_DEV_TOKEN: 'dev-token-value',
+        EVIDGATE_SPOOL_DIR: '/var/tmp/evidgate-spool',
+        EVIDGATE_SPOOL_MAX_BYTES: 'lots',
+      },
+    });
+    // `resolveConfig` itself is unaffected by the malformed value.
+    expect(config.project).toBe('proj-1');
+    for (const name of ['events send', 'runs finalize']) {
+      const validate = commandRegistry[name]?.validateConfig;
+      expect(validate).toBeDefined();
+      expect(() => validate?.(config)).toThrowError(
+        expect.objectContaining({ code: 'invalid_config' }),
+      );
+    }
+    expect(commandRegistry['runs create']?.validateConfig).toBeUndefined();
+    expect(commandRegistry['auth login']?.validateConfig).toBeUndefined();
   });
 });

@@ -3,11 +3,22 @@
 // value counts as unset and a token value is never accepted from a flag (argv is
 // visible in `ps`, 04.2.1 §5). Every secret read here is registered for redaction.
 // 04.2.1-T1.1: adds `cacheDir` (the token-cache location, §5 `auth/token-cache.ts`).
+// 04.2.3-T1.4: adds the spool surface — `EVIDGATE_SPOOL_DIR` (D5, optional here because
+// only the spool commands need it and they raise `missing_config` themselves),
+// `EVIDGATE_SPOOL_MAX_BYTES` (D4) and `EVIDGATE_SEND_DEADLINE` (D5). All three are
+// env-only: no flag can carry them. They are resolved LAZILY ({@link SpoolSettings},
+// S54 CR8): a malformed spool value must never break `runs create`, `auth login` or any
+// other command that does not touch the spool.
 import { homedir as osHomedir } from 'node:os';
-import { posix, win32 } from 'node:path';
+import { posix, resolve, win32 } from 'node:path';
 
 import { CliError } from './errors.js';
 import { redacted, registerSecret } from './redact.js';
+import { defaultSpoolMaxBytes } from './spool.js';
+
+// The cap's default is part of this module's surface: `EVIDGATE_SPOOL_MAX_BYTES` is
+// resolved here, and the tests document the default without importing the spool module.
+export { defaultSpoolMaxBytes };
 
 /** Flags the parser accepts from argv; token values are deliberately absent. */
 export interface ConfigFlags {
@@ -31,6 +42,20 @@ export interface ResolveConfigInput {
 /** Where the bearer token comes from, in §5 precedence order. */
 export type TokenSource = 'oidc' | 'actions-id-token' | 'ingest' | 'dev';
 
+/**
+ * The spool surface (04.2.3 D4/D5): the root (still optional — only the spool commands
+ * decide it is required), the run-directory byte cap and the one send deadline. Resolved
+ * together by {@link resolveSpoolSettings}; never by `resolveConfig` itself (S54 CR8).
+ */
+export interface SpoolSettings {
+  /** Absolute spool root (`EVIDGATE_SPOOL_DIR`), or `undefined` when it is unset. */
+  readonly spoolDir: string | undefined;
+  /** The run-directory byte cap (`EVIDGATE_SPOOL_MAX_BYTES`, D4). */
+  readonly spoolMaxBytes: number;
+  /** The one send deadline in milliseconds (`EVIDGATE_SEND_DEADLINE`, D5). */
+  readonly sendDeadlineMs: number;
+}
+
 export interface ResolvedConfig {
   readonly apiUrl: string;
   readonly project: string;
@@ -43,6 +68,16 @@ export interface ResolvedConfig {
   readonly ingestToken: string | undefined;
   readonly devToken: string | undefined;
   readonly bindingChallenge: string | undefined;
+  /**
+   * The spool surface, resolved on first call and memoised (S54 CR8). `events send` and
+   * `runs finalize` force it in their `validateConfig` pre-flight — before the
+   * `--verbose` dump and before any token work — and nothing else calls it, so a
+   * malformed `EVIDGATE_SPOOL_MAX_BYTES` / `EVIDGATE_SEND_DEADLINE` cannot break a
+   * command that never touches the spool. Throws the same `invalid_config` errors as a
+   * direct {@link resolveSpoolSettings} call; only the spool commands decide that an
+   * unset `spoolDir` is `missing_config` ({@link resolveSpoolDir}).
+   */
+  readonly spoolSettings: () => SpoolSettings;
   readonly verbose: boolean;
   readonly json: boolean;
 }
@@ -59,6 +94,9 @@ export const envNames = {
   devToken: 'EVIDGATE_DEV_TOKEN',
   bindingChallenge: 'EVIDGATE_BINDING_CHALLENGE',
   cacheDir: 'EVIDGATE_CACHE_DIR',
+  spoolDir: 'EVIDGATE_SPOOL_DIR',
+  spoolMaxBytes: 'EVIDGATE_SPOOL_MAX_BYTES',
+  sendDeadline: 'EVIDGATE_SEND_DEADLINE',
 } as const;
 
 const apiUrlNames = `${envNames.apiUrl} (or --api-url)`;
@@ -85,6 +123,34 @@ const envPattern = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 
 /** Whitespace, C0/C1 controls and Unicode format characters are all rejected. */
 const projectForbidden = /[\s\p{Cc}\p{Cf}]/u;
+
+/**
+ * Paths may contain spaces (`/Users/x/My Spool` is legal), but never a control or format
+ * character: such a value could forge a line in any log or cursor file it lands in.
+ */
+const pathForbidden = /[\p{Cc}\p{Cf}]/u;
+
+/**
+ * The largest accepted `EVIDGATE_SPOOL_MAX_BYTES`: 2^40 bytes (1 TiB). Above it the
+ * value is a typo (a 32-bit overflow or a unit mix-up), and the spool's own accounting
+ * could no longer be reasoned about; the spool then fails with `invalid_config`.
+ */
+export const maxSpoolMaxBytes = 1_099_511_627_776;
+
+/** `EVIDGATE_SEND_DEADLINE` default: 30 minutes for the whole send (04.2.3 D5). */
+export const defaultSendDeadlineMs = 1_800_000;
+
+/** `EVIDGATE_SEND_DEADLINE` ceiling: 24 hours (04.2.3 D5). */
+export const maxSendDeadlineMs = 86_400_000;
+
+/** A bare decimal integer, used for the byte count and for bare deadline seconds. */
+const decimalPattern = /^[0-9]{1,20}$/;
+
+/**
+ * `EVIDGATE_SEND_DEADLINE`: a bare integer (seconds) or `<n>s`, `<n>m`, `<n>h`. The
+ * amount is bounded to 9 digits so `amount x 3 600 000` can never leave the safe range.
+ */
+const deadlinePattern = /^([0-9]{1,9})([smh]?)$/;
 
 /**
  * Registers every secret env value for redaction. `main` calls it before parsing argv
@@ -159,6 +225,15 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
     input.homedir ?? osHomedir(),
   );
 
+  // CR8: the spool surface stays unresolved here. The first `spoolSettings()` call
+  // resolves all three values and memoises them; a throwing resolution is not cached, so
+  // every later call reports exactly the same error.
+  let spool: SpoolSettings | undefined;
+  const spoolSettings = (): SpoolSettings => {
+    spool ??= resolveSpoolSettings(env);
+    return spool;
+  };
+
   return Object.freeze({
     apiUrl: validateApiUrl(apiUrlRaw),
     project: validateProject(projectRaw),
@@ -170,9 +245,27 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
     ingestToken,
     devToken,
     bindingChallenge,
+    spoolSettings,
     verbose: flags.verbose === true,
     json: flags.json === true,
   });
+}
+
+/**
+ * The spool surface `events send` and `runs finalize` need (04.2.3 D4/D5), resolved in
+ * the same order the eager fields used to be: root, cap, deadline. The errors are
+ * unchanged (`invalid_config` naming the variable, never echoing the value), so a
+ * malformed value reads the same to the operator as before — it is simply reported only
+ * by the commands that would use it (S54 CR8).
+ */
+export function resolveSpoolSettings(
+  env: Readonly<Record<string, string | undefined>>,
+): SpoolSettings {
+  return {
+    spoolDir: resolveOptionalSpoolDir(env),
+    spoolMaxBytes: resolveSpoolMaxBytes(env),
+    sendDeadlineMs: resolveSendDeadlineMs(env),
+  };
 }
 
 /** The fields `resolveTokenSource` reads; `ResolvedConfig` satisfies it structurally. */
@@ -219,10 +312,35 @@ export function formatConfigForVerbose(config: ResolvedConfig): string {
     `  ingest_token=${maskSecret(config.ingestToken)}`,
     `  dev_token=${maskSecret(config.devToken)}`,
     `  binding_challenge=${maskSecret(config.bindingChallenge)}`,
+    // Paths and counts are not secrets (04.2.3 T78 scope): the operator needs to see
+    // which spool and cap a send will use.
+    ...spoolDumpLines(config),
     `  token_source=${resolveTokenSource(config) ?? 'none'}`,
     `  verbose=${String(config.verbose)}`,
     `  json=${String(config.json)}`,
   ].join('\n');
+}
+
+/**
+ * The spool lines of the `--verbose` dump. The surface is lazy (CR8) and this dump runs
+ * for commands that never touch the spool, so an invalid value is reported as
+ * `spool_settings=invalid (<code>)` instead of failing the command — the spool commands
+ * themselves already refused with that exact error in `validateConfig`, which `main`
+ * runs BEFORE this dump.
+ */
+function spoolDumpLines(config: ResolvedConfig): string[] {
+  let settings: SpoolSettings;
+  try {
+    settings = config.spoolSettings();
+  } catch (error) {
+    const code = error instanceof CliError ? error.code : 'invalid_config';
+    return [`  spool_settings=invalid (${code})`];
+  }
+  return [
+    `  spool_dir=${settings.spoolDir ?? 'unset'}`,
+    `  spool_max_bytes=${String(settings.spoolMaxBytes)}`,
+    `  send_deadline_ms=${String(settings.sendDeadlineMs)}`,
+  ];
 }
 
 function maskSecret(value: string | undefined): string {
@@ -299,6 +417,103 @@ function requireAbsolutePath(value: string, name: string, paths: typeof posix): 
     throw invalidConfig(name, 'must be an absolute path');
   }
   return value;
+}
+
+/**
+ * The `missing_config` entry for "no spool root is set" (04.2.3 D5). Exported so a
+ * command can refuse the configuration in its `validateConfig` pre-flight, before the
+ * `--verbose` dump and before any token work.
+ */
+export function spoolDirMissingError(): CliError {
+  return new CliError(`missing configuration: ${envNames.spoolDir}`, {
+    code: 'missing_config',
+    hint: 'set EVIDGATE_SPOOL_DIR to the directory your reporter writes the spool to',
+  });
+}
+
+/**
+ * `EVIDGATE_SPOOL_DIR` (04.2.3 D5): required by the spool commands, with no default.
+ * The value is trimmed and absolute-resolved, so a relative one is anchored at the
+ * process's current directory — the same rule the merged reporter applies when it joins
+ * `<spool_dir>/<run_id>/<producer_id>`. An unset, empty or blank value is
+ * `missing_config` naming the variable, never a path; a control character is
+ * `invalid_config`, so a value can neither forge a log line nor reach the filesystem.
+ */
+export function resolveSpoolDir(env: Readonly<Record<string, string | undefined>>): string {
+  const directory = resolveOptionalSpoolDir(env);
+  if (directory === undefined) {
+    throw spoolDirMissingError();
+  }
+  return directory;
+}
+
+/** The same read as {@link resolveSpoolDir}, but an unset variable is `undefined`. */
+function resolveOptionalSpoolDir(
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  const value = trimmedEnv(env, envNames.spoolDir);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (pathForbidden.test(value)) {
+    throw invalidConfig(envNames.spoolDir, 'must not contain control characters');
+  }
+  return resolve(value);
+}
+
+/**
+ * `EVIDGATE_SPOOL_MAX_BYTES` (04.2.3 D4): the run-directory cap, a positive decimal byte
+ * count, defaulting to 256 MiB ({@link defaultSpoolMaxBytes}). Zero, a negative or
+ * fractional value, a unit suffix, junk and anything above {@link maxSpoolMaxBytes} is
+ * `invalid_config` naming the variable; the raw value is never echoed (it could forge a
+ * log line and is never needed to fix the value).
+ */
+export function resolveSpoolMaxBytes(env: Readonly<Record<string, string | undefined>>): number {
+  const value = trimmedEnv(env, envNames.spoolMaxBytes);
+  if (value === undefined) {
+    return defaultSpoolMaxBytes;
+  }
+  const parsed = decimalPattern.test(value) ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw invalidConfig(envNames.spoolMaxBytes, 'must be a positive integer number of bytes');
+  }
+  if (parsed > maxSpoolMaxBytes) {
+    throw invalidConfig(
+      envNames.spoolMaxBytes,
+      `must be at most ${maxSpoolMaxBytes} bytes (1 TiB)`,
+    );
+  }
+  return parsed;
+}
+
+/**
+ * `EVIDGATE_SEND_DEADLINE` (04.2.3 D5): one deadline for the whole send, as a bare
+ * integer number of seconds or `<n>s` / `<n>m` / `<n>h`. Default 30 minutes, ceiling
+ * 24 hours; zero, a fraction, an unknown unit and junk are `invalid_config`.
+ */
+export function resolveSendDeadlineMs(env: Readonly<Record<string, string | undefined>>): number {
+  const value = trimmedEnv(env, envNames.sendDeadline);
+  if (value === undefined) {
+    return defaultSendDeadlineMs;
+  }
+  const match = deadlinePattern.exec(value);
+  if (match === null) {
+    throw invalidConfig(
+      envNames.sendDeadline,
+      'must be an integer number of seconds, or <n>s, <n>m or <n>h',
+    );
+  }
+  const amount = Number(match[1]);
+  const unit = match[2] ?? 's';
+  const factor = unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : 1_000;
+  const milliseconds = amount * factor;
+  if (!Number.isSafeInteger(milliseconds) || milliseconds <= 0) {
+    throw invalidConfig(envNames.sendDeadline, 'must be greater than zero');
+  }
+  if (milliseconds > maxSendDeadlineMs) {
+    throw invalidConfig(envNames.sendDeadline, 'must be at most 24h');
+  }
+  return milliseconds;
 }
 
 /**

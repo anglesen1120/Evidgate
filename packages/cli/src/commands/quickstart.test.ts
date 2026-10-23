@@ -205,7 +205,7 @@ describe('quickstart', () => {
         expect(resolved?.rest).toEqual([]);
       }
       for (const line of lines) {
-        for (const placeholder of ['runs finalize', 'artifacts upload']) {
+        for (const placeholder of ['artifacts upload']) {
           if (!line.includes(placeholder)) {
             continue;
           }
@@ -215,9 +215,9 @@ describe('quickstart', () => {
           expect(/04\.2\.[234]/.test(line), `placeholder without owning task: ${line}`).toBe(true);
         }
         if (!line.trimStart().startsWith('#')) {
-          // `runs create` is a real step now (04.2.2-T2); the remaining unbuilt
-          // commands must not appear as a fake command line.
-          expect(/evidgate (events|artifacts)\b/.test(line), `fake command: ${line}`).toBe(false);
+          // `runs create`, `events send` and `runs finalize` are real steps now (04.2.2-T2,
+          // 04.2.3-T1/T2); only `artifacts upload` must not appear as a fake command line.
+          expect(/evidgate artifacts\b/.test(line), `fake command: ${line}`).toBe(false);
         }
       }
     }
@@ -226,7 +226,8 @@ describe('quickstart', () => {
   // 04.2.2-T2: `runs create` landed, so both templates carry the real step and the
   // placeholder comment for it is gone. The id/hash reach the command: the GitHub
   // template through step outputs (masked, per R4), the generic one through shell
-  // variables from the captured `--json` output.
+  // variables from the captured `--json` output. The `run_id` it prints is captured the
+  // same way, because the spool steps below take it as `--run` (04.2.3-T1/T2).
   it('renders the pinned runs create step and no runs-create placeholder', () => {
     const npxPin = `npx --yes --package @evidgate/cli@${version}`;
     const github = renderQuickstart({ format: 'github', project: sampleProject, version });
@@ -235,8 +236,11 @@ describe('quickstart', () => {
       expect(text).not.toContain('runs create (04.2.2-T2)');
     }
     expect(github).toContain(
-      `        run: ${npxPin} -- evidgate runs create --manifest-id "$MANIFEST_ID" --manifest-hash "$MANIFEST_HASH" --ci-ref "$GITHUB_REF"\n`,
+      `          out=$(${npxPin} -- evidgate runs create --manifest-id "$MANIFEST_ID" --manifest-hash "$MANIFEST_HASH" --ci-ref "$GITHUB_REF" --json)\n`,
     );
+    expect(github).toContain('          run_id=$(printf \'%s\' "$out" | jq -r .run_id)\n');
+    expect(github).toContain('          echo "::add-mask::$run_id"\n');
+    expect(github).toContain('          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"\n');
     expect(github).toContain(
       `          out=$(${npxPin} -- evidgate manifests upload --file evidgate-manifest.json --json)\n`,
     );
@@ -249,7 +253,52 @@ describe('quickstart', () => {
       `manifest_id=$(node -p 'JSON.parse(process.argv[1]).manifest_id' "$out")\n`,
     );
     expect(generic).toContain(
-      `${npxPin} -- evidgate runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash"\n`,
+      `out=$(${npxPin} -- evidgate runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash" --json)\n`,
+    );
+    expect(generic).toContain(`run_id=$(node -p 'JSON.parse(process.argv[1]).run_id' "$out")\n`);
+  });
+
+  // 04.2.3-T1/T2: the spool steps are real commands now, in that order, and both read
+  // the same EVIDGATE_SPOOL_DIR the reporter writes (contracts/cli.md §11/§10).
+  it('renders the pinned events send and runs finalize steps', () => {
+    const npxPin = `npx --yes --package @evidgate/cli@${version}`;
+    const github = renderQuickstart({ format: 'github', project: sampleProject, version });
+    const generic = renderQuickstart({ format: 'generic', project: sampleProject, version });
+
+    // The placeholders for these two commands are gone; only `artifacts upload` remains.
+    for (const text of [github, generic]) {
+      expect(text).not.toContain('events send + runs finalize (04.2.3-T1/T2)');
+      expect(text).toContain('artifacts upload (04.2.4-T1)');
+    }
+
+    // GitHub: the run id comes from the create step's output, the spool dir is absolute.
+    expect(github).toContain(`        run: ${npxPin} -- evidgate events send --run "$RUN_ID"\n`);
+    expect(github).toContain(
+      `        run: ${npxPin} -- evidgate runs finalize --run "$RUN_ID" --producer shard-1 --shard 1 --manifest-hash "$MANIFEST_HASH"\n`,
+    );
+    expect(github).toContain(
+      '          EVIDGATE_SPOOL_DIR: ${{ github.workspace }}/.evidgate-spool\n',
+    );
+    // The finalize step is the last one and runs after the event step.
+    expect(github.indexOf('evidgate events send')).toBeLessThan(
+      github.indexOf('evidgate runs finalize'),
+    );
+    expect(github.indexOf('evidgate runs create')).toBeLessThan(
+      github.indexOf('evidgate events send'),
+    );
+
+    // Generic: the same order, from the shell variables the `--json` output produced.
+    expect(generic).toContain(`${npxPin} -- evidgate events send --run "$run_id"\n`);
+    expect(generic).toContain(
+      `${npxPin} -- evidgate runs finalize --run "$run_id" --producer shard-1 --shard 1 --manifest-hash "$manifest_hash"\n`,
+    );
+    expect(generic).toContain('EVIDGATE_SPOOL_DIR="${EVIDGATE_SPOOL_DIR:-$PWD/.evidgate-spool}"\n');
+    expect(generic).toContain('export EVIDGATE_SPOOL_DIR\n');
+    expect(generic.indexOf('evidgate runs create')).toBeLessThan(
+      generic.indexOf('evidgate events send'),
+    );
+    expect(generic.indexOf('evidgate events send')).toBeLessThan(
+      generic.indexOf('evidgate runs finalize'),
     );
   });
 
