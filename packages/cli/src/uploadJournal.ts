@@ -102,14 +102,7 @@ export class UploadJournal {
 
   static async open(o: UploadJournalOptions): Promise<UploadJournal> {
     const journal = new UploadJournal(o);
-    try {
-      await journal.ensureDirectory();
-    } catch (error) {
-      // A missing producer directory means "no spool for this producer yet"; the command
-      // creates it explicitly (ProducerSpool.createIfMissing), so surface the errno-style
-      // refusal instead of silently forgetting resume state.
-      throw error;
-    }
+    await journal.ensureDirectory();
     return journal;
   }
 

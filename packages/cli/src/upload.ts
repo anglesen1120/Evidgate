@@ -738,14 +738,25 @@ function readUploadUrl(data: unknown): UploadUrlResponse {
   }
   const body = data as Record<string, unknown>;
   const artifactId = body['artifact_id'];
+  const objectKey = body['object_key'];
   const uploadUrl = body['upload_url'];
   const requiredHeaders = body['required_headers'];
   const expiresAt = body['expires_at'];
   if (typeof artifactId !== 'string' || !/^[0-9a-f-]{36}$/i.test(artifactId)) {
     throw badResponse('the upload-url response carries no artifact id');
   }
-  if (typeof uploadUrl !== 'string' || typeof expiresAt !== 'string') {
+  // `object_key` is required by the contract (openapi `UploadUrlResponse`), so a body
+  // without one is refused exactly like a missing `artifact_id` — never defaulted to ''.
+  if (typeof objectKey !== 'string' || objectKey.length === 0) {
+    throw badResponse('the upload-url response carries no object key');
+  }
+  if (typeof uploadUrl !== 'string') {
     throw badResponse('the upload-url response carries no presigned URL');
+  }
+  // Required, `format: date-time`: an expiry the client cannot read is a malformed body,
+  // not a URL with an unknown lifetime.
+  if (typeof expiresAt !== 'string' || !Number.isFinite(Date.parse(expiresAt))) {
+    throw badResponse('the upload-url response carries no parseable expiry');
   }
   if (typeof requiredHeaders !== 'object' || requiredHeaders === null) {
     throw badResponse('the upload-url response carries no signed headers');
@@ -759,7 +770,7 @@ function readUploadUrl(data: unknown): UploadUrlResponse {
   }
   return {
     artifact_id: artifactId,
-    object_key: typeof body['object_key'] === 'string' ? body['object_key'] : '',
+    object_key: objectKey,
     upload_url: uploadUrl,
     required_headers: headers,
     expires_at: expiresAt,
@@ -814,6 +825,11 @@ function presignedUrl(raw: string): URL {
   return url;
 }
 
+/** A lower-cased header name, but only when it is a plain HTTP token: never echoed raw. */
+function headerLabel(lowerName: string): string {
+  return /^[a-z0-9!#$%&'*+.^_`|~-]{1,64}$/.test(lowerName) ? lowerName : 'same';
+}
+
 /**
  * Exactly the signed headers, validated against the local file: `Content-Length` must be the
  * declared size and the `x-amz-checksum-sha256` header must equal the base64 of the digest.
@@ -827,7 +843,20 @@ function signedHeaders(
 ): Record<string, string> {
   const byLowerName = new Map<string, { readonly name: string; readonly value: string }>();
   for (const [name, value] of Object.entries(headers)) {
-    byLowerName.set(name.toLowerCase(), { name, value });
+    const lower = name.toLowerCase();
+    const existing = byLowerName.get(lower);
+    // Two names that fold to the same header are one signed header. The same value twice
+    // is a harmless duplicate; two different values make the signed set ambiguous (the
+    // transport would send whichever it kept), so the response is refused. The value is
+    // signed material and never enters the message — only the header name may.
+    if (existing !== undefined && existing.value !== value) {
+      throw badResponse(
+        `the upload URL signed the ${headerLabel(lower)} header twice with different values`,
+      );
+    }
+    if (existing === undefined) {
+      byLowerName.set(lower, { name, value });
+    }
   }
   const length = byLowerName.get('content-length');
   if (length === undefined) {

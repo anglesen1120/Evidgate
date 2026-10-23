@@ -25,7 +25,7 @@
 // replace the server's authority.
 import { constants as fsConstants, type Stats } from 'node:fs';
 import { lstat, open, realpath, type FileHandle } from 'node:fs/promises';
-import { extname, isAbsolute, join, relative, resolve } from 'node:path';
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { CliError } from './errors.js';
 import { O_NOFOLLOW, O_NONBLOCK } from './spool.js';
@@ -260,10 +260,18 @@ export async function closeUploadFile(file: UploadFile): Promise<void> {
   await file.handle.close().catch(() => undefined);
 }
 
+/**
+ * True when a `relative()` result leaves the base. `..foo` is a child named `..foo`, not a
+ * traversal: only the exact `..` segment and `..` followed by a separator escape.
+ */
+function escapes(rel: string): boolean {
+  return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+}
+
 /** True when `target` is `root` itself or sits under it (both already realpath'd). */
 function contains(root: string, target: string): boolean {
   const rel = relative(root, target);
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+  return rel === '' || !escapes(rel);
 }
 
 /**
@@ -272,13 +280,10 @@ function contains(root: string, target: string): boolean {
  */
 function displayPath(path: string, cwd: string): string {
   const rel = relative(cwd, path);
-  if (rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)) {
-    return rel;
-  }
   if (rel === '') {
     return '.';
   }
-  return `…/${path.split(/[\\/]/).pop() ?? path}`;
+  return escapes(rel) ? `…/${path.split(/[\\/]/).pop() ?? path}` : rel;
 }
 
 /** The errno code of a filesystem failure, or `unknown` — never the message or a path. */
