@@ -119,7 +119,7 @@ Every variable is read **once in the constructor**; no callback reads `process.e
   end of their batch, so a killed run loses at most the current callback's envelopes
   instead of the whole suite; `onEnd` flushes the final `run_end` marker and closes. The
   64-envelope `flushThreshold` remains an upper bound on how many envelopes a single
-  flush carries. On restart the writer reconciles `next_sequence` against the highest
+  flush carries. On restart the writer reconciles `sequence_next` against the highest
   sequence already on disk — the last complete parseable line of the highest chunk,
   scanning backwards, then lower chunks — so a sequence is never reused (T84). A torn
   tail (a crash mid-write leaves a partial line with no trailing newline) is truncated
