@@ -487,6 +487,57 @@ public sealed class TenantGucTests
             ("org_id", orgId),
             ("run_id", runId));
 
+        // The 13.1.1-T1 tables (migration 0039): one row per org-scoped authoring table, chained by
+        // their composite FKs, so the discovered tenant set is never empty.
+        var featureNodeId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.feature_node (id, org_id, project_id, kind, title, position)
+            values (@id, @org_id, @project_id, 'module', 'Shop', 0)
+            """,
+            ("id", featureNodeId),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        var checklistItemId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.checklist_item
+                (id, org_id, project_id, feature_node_id, title, priority, state, source, position)
+            values (@id, @org_id, @project_id, @feature_node_id, 'Checkout', 'high', 'active', 'manual', 0)
+            """,
+            ("id", checklistItemId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("feature_node_id", featureNodeId));
+        var manualTestCaseId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.manual_test_case
+                (id, org_id, project_id, checklist_item_id, code, title, steps, priority, state, source)
+            values (@id, @org_id, @project_id, @checklist_item_id, 'SHOP-001', 'Buy a sticker', '{"schemaVersion":1,"steps":[]}', 'high', 'draft', 'manual')
+            """,
+            ("id", manualTestCaseId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("checklist_item_id", checklistItemId));
+        await scope.ExecuteAsync(
+            "insert into public.authoring_code_counter (id, org_id, project_id) values (@id, @org_id, @project_id)",
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.authoring_version
+                (id, org_id, project_id, entity_kind, entity_id, version_no, batch_id, change_kind, content, content_hash, source)
+            values (@id, @org_id, @project_id, 'manual_test_case', @entity_id, 1, @batch_id, 'create', '{}'::jsonb, @hash, 'manual')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("entity_id", manualTestCaseId),
+            ("batch_id", Guid.CreateVersion7()),
+            ("hash", "sha256:" + new string('f', 64)));
+
         await scope.CommitAsync();
     }
 }

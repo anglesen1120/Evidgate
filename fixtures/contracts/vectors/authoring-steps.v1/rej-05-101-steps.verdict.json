@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/steps",
+      "reason": "max_items"
+    }
+  ],
+  "comment": "101 steps is one past the declared maximum (plan 13.1.1 §3)"
+}

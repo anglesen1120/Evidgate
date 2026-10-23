@@ -107,6 +107,9 @@ public sealed class OrgProjectSchemaTests
             "version:integer:int4:NO:1",
             "retention_days:integer:int4:YES:-",
             "monthly_run_quota:integer:int4:YES:-",
+            // 0039 / OI-13-101: appended by `alter table … add column`, no default (the BEFORE INSERT
+            // trigger fills a NULL), NOT NULL after the backfill.
+            "case_prefix:text:text:NO:-",
         ]);
 
         var constraints = await _fixture.ConstraintsAsync(database, "project");
@@ -116,6 +119,7 @@ public sealed class OrgProjectSchemaTests
         constraints.ShouldContain("f:project_organization_fk:FOREIGN KEY (org_id) REFERENCES organization(id)");
         (await _fixture.ConstraintNamesAsync(database, "project")).ShouldBe(
         [
+            "c:project_case_prefix_format",
             "c:project_monthly_run_quota_check",
             "c:project_name_length_check",
             "c:project_retention_days_check",
@@ -131,6 +135,7 @@ public sealed class OrgProjectSchemaTests
         (await _fixture.IndexesAsync(database, "project")).ShouldBe(
         [
             "project_default_environment_idx:CREATE INDEX project_default_environment_idx ON public.project USING btree (org_id, default_environment_id) WHERE (default_environment_id IS NOT NULL)",
+            "project_org_case_prefix_uq:CREATE UNIQUE INDEX project_org_case_prefix_uq ON public.project USING btree (org_id, case_prefix)",
             "project_org_id_key:CREATE UNIQUE INDEX project_org_id_key ON public.project USING btree (org_id, id)",
             "project_org_slug_key:CREATE UNIQUE INDEX project_org_slug_key ON public.project USING btree (org_id, slug)",
             "project_org_status_created_id_idx:CREATE INDEX project_org_status_created_id_idx ON public.project USING btree (org_id, status, created_at, id)",
@@ -226,11 +231,23 @@ public sealed class OrgProjectSchemaTests
             .Order(StringComparer.Ordinal)
             .ShouldBe(FieldNames<OrganizationDto>().Order(StringComparer.Ordinal));
 
+        // `project.case_prefix` (0039 / OI-13-101) is deliberately not a wire field: the migration is
+        // additive and changes no route (13.1.1:471); exposing it through `PATCH /v1/projects/{p}` —
+        // `ProjectDto`, `contracts/openapi.yaml`, the generated SDK — is 13.1.1-T2's hand-over
+        // (13.1.1:517). The authoring module reads the stored value through `AuthoringSql.ReadCasePrefix`.
+        // Every other column stays an exact comparison, so a real drift still fails here.
         (await _fixture.ColumnsAsync(database, "project"))
             .Select(column => column.Split(':')[0])
+            .Where(column => !ProjectWireExclusions.Contains(column))
             .Order(StringComparer.Ordinal)
             .ShouldBe(FieldNames<ProjectDto>().Order(StringComparer.Ordinal));
     }
+
+    /// <summary>
+    /// Columns of <c>project</c> that are not on the project wire contract: <c>case_prefix</c> is read
+    /// by the authoring module only until 13.1.1-T2 exposes it (13.1.1:471, :517).
+    /// </summary>
+    private static readonly string[] ProjectWireExclusions = ["case_prefix"];
 
     /// <summary>The DTO's wire field names, snake_case (00 §7), for the schema cross-check.</summary>
     private static List<string> FieldNames<T>() =>

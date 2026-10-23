@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/steps/0/expected",
+      "reason": "max_length"
+    }
+  ],
+  "comment": "a 2001-character expected result is one past the maximum (plan 13.1.1 §3)"
+}

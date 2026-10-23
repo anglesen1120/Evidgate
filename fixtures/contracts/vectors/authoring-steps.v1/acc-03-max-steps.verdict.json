@@ -1,0 +1,5 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": true,
+  "comment": "100 steps is the declared maximum (plan 13.1.1 §3)"
+}

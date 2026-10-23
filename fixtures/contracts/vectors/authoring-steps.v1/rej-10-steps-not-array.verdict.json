@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/steps",
+      "reason": "type"
+    }
+  ],
+  "comment": "the steps member is the array; a JSON object is refused"
+}

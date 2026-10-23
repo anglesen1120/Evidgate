@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-steps.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/steps",
+      "reason": "min_items"
+    }
+  ],
+  "comment": "a case without steps is meaningless: 1..100 steps (plan 13.1.1 §3)"
+}
