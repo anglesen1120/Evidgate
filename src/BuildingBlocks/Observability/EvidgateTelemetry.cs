@@ -44,6 +44,12 @@ public static class EvidgateTelemetry
     /// <summary>Counter of dependant case attempts marked <c>blocked</c> because their setup failed (05.3.3-T2.2).</summary>
     public const string CaseAttemptBlockedBySetupMetricName = "evidgate_case_attempt_blocked_by_setup_total";
 
+    /// <summary>Counter of finalize requests refused because the producer slot is bound to another identity (05.3.2-T1, the T9 abuse signal).</summary>
+    public const string FinalizeProducerSlotTakenMetricName = "evidgate_finalize_producer_slot_taken_total";
+
+    /// <summary>Counter of repeat finalizes whose declared values disagree with the stored declaration (05.3.2-T1, the T68/D3 signal).</summary>
+    public const string FinalizeDeclarationMismatchMetricName = "evidgate_finalize_declaration_mismatch_total";
+
     /// <summary>Histogram of pipeline-handler durations in milliseconds (01.4.2-T4.1, the C2 telemetry stage).</summary>
     public const string PipelineDurationMetricName = "evidgate.pipeline.duration";
 
@@ -86,6 +92,16 @@ public static class EvidgateTelemetry
         CaseAttemptBlockedBySetupMetricName,
         unit: "{attempt}",
         description: "Dependant case attempts marked blocked because their setup failed (05.3.3-T2.2). No labels.");
+
+    private static readonly Counter<long> FinalizeProducerSlotTaken = Meter.CreateCounter<long>(
+        FinalizeProducerSlotTakenMetricName,
+        unit: "{request}",
+        description: "Finalize requests refused with producer_slot_taken (05.3.2-T1, T9). No labels: never a token, a producer id or a run id.");
+
+    private static readonly Counter<long> FinalizeDeclarationMismatch = Meter.CreateCounter<long>(
+        FinalizeDeclarationMismatchMetricName,
+        unit: "{request}",
+        description: "Repeat finalizes whose declared values disagree with the stored declaration (05.3.2-T1, T68/D3). No labels.");
 
     private static readonly Histogram<double> PipelineDurations = Meter.CreateHistogram<double>(
         PipelineDurationMetricName,
@@ -180,6 +196,18 @@ public static class EvidgateTelemetry
 
         CaseAttemptsBlockedBySetup.Add(count);
     }
+
+    /// <summary>
+    /// Counts one finalize request refused because the producer slot is bound to another identity (05.3.2-T1, the T9
+    /// abuse signal the plan §11 names). No labels: the request's token, run id and producer id are never recorded.
+    /// </summary>
+    public static void RecordFinalizeProducerSlotTaken() => FinalizeProducerSlotTaken.Add(1);
+
+    /// <summary>
+    /// Counts one repeat finalize whose declared values disagree with the values the first close stored (05.3.2-T1;
+    /// the stored declaration stays authoritative — D3/Q1). No labels; the values themselves are never recorded.
+    /// </summary>
+    public static void RecordFinalizeDeclarationMismatch() => FinalizeDeclarationMismatch.Add(1);
 
     /// <summary>Bounds the protocol-major label to <c>1</c>–<c>8</c> (the majors a v1 server can see) or <c>other</c>, so the tag stays low-cardinality.</summary>
     private static string ProtocolMajorBucket(int? protocolMajor) => protocolMajor switch

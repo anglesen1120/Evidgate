@@ -235,8 +235,24 @@ public static class IsolationRouteCases
                 Fixed(bp.WaiverIds), aAdmin, $"/v1/projects/{ap.Id}/waivers?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/quarantine"), $"org B project {bp.Slug} quarantine entries", bAdmin, $"/v1/projects/{bp.Id}/quarantine?limit=1", "id",
                 Fixed(bp.QuarantineIds), aAdmin, $"/v1/projects/{ap.Id}/quarantine?limit=1"));
+            // The run-create case below is a positive control: it proves that org B's own
+            // `POST /v1/projects/{p}/runs` is accepted, so org B's first project can hold one run more than the
+            // seed recorded, and whether it does depends on which test of the suite runs first (nothing resets
+            // between them — see ApiIsolationFixture's remarks; the side effect is 05.2.1-T1's, not finalize's).
+            // The expectation is therefore the seed's ids UNION the database's own row set for the project (owner
+            // connection, filtered by `project_id`), exactly as the audit walk above derives its ids. The union is
+            // the database set whenever the seed's rows are there, so a paged run from another project or another
+            // org, a dropped row, or a seeded run missing from the database each still fail the set equality.
             walks.Add(new(Get("/v1/projects/{p}/runs"), $"org B project {bp.Slug} runs", bAdmin, $"/v1/projects/{bp.Id}/runs?limit=1", "run_id",
-                Fixed(bp.RunIds), aAdmin, $"/v1/projects/{ap.Id}/runs?limit=1"));
+                async runner =>
+                {
+                    var expected = new HashSet<string>(
+                        await runner.OwnerIdsAsync("select id::text from public.run where project_id = @org", bp.Id),
+                        StringComparer.OrdinalIgnoreCase);
+                    expected.UnionWith(bp.RunIds.Select(id => id.ToString("D")));
+                    return expected;
+                },
+                aAdmin, $"/v1/projects/{ap.Id}/runs?limit=1"));
             for (var c = 0; c < bp.CaseIds.Count; c++)
             {
                 walks.Add(new(Get("/v1/cases/{c}/revisions"), $"org B case {bp.Slug}#{c} revisions", bAdmin, $"/v1/cases/{bp.CaseIds[c]}/revisions?limit=1", "id",
@@ -408,6 +424,7 @@ public static class IsolationRouteCases
         // ---- Evidence (EvidenceEndpoints.cs:28; 06.1.2) ---------------------------------------------------------
         EvidenceUploadUrlCase(),
         EventBatchCase(),
+        FinalizeShardCase(),
         EvidenceCompleteCase(),
 
         // ---- Dev surface (SliceEndpoints.cs:29-40; recorded in ServedDocumentTests.cs:59) -------------------------
@@ -878,6 +895,50 @@ public static class IsolationRouteCases
                 [
                     Pair(route, "org A's run id in the path", ProbeExpect.ServiceRefused, OrgBService(w),
                         Create(Guid.CreateVersion7()), Create(Guid.CreateVersion7())),
+                ];
+            });
+    }
+
+    /// <summary>
+    /// <c>POST /v1/runs/{r}/finalize</c> (05.3.2-T1): the run is named in the path, the org in
+    /// <c>X-Evidgate-Org</c>, and the shard's identity is the caller's token. A fresh run id is used on purpose —
+    /// the handler reads the run under the caller's tenant scope before it touches a slot, so an org-A run addressed
+    /// by org B is the 404 <c>not_found</c> the isolation rule names (never a 403), exactly as the events probe does.
+    /// The body is shape-valid, because a malformed one is 422 before the run lookup; the hash is a well-formed but
+    /// unrelated <c>sha256:</c> value, so a leak of the expected one would show up as a different answer.
+    /// Org B's header-scoped <c>tenant_admin</c> holds no token identity and no <c>event:write</c>, so the C2 pipeline
+    /// refuses it 403 before the handler runs — the events route's own answer to the same caller (05.3.2-T1).
+    /// </summary>
+    private static RouteCase FinalizeShardCase()
+    {
+        var route = new ApiRoute("POST", "/v1/runs/{r}/finalize");
+        static ProbeRequest Close(Guid run) => new(HttpMethod.Post, $"/v1/runs/{run}/finalize", new JsonObject
+        {
+            ["producer_id"] = "shard-1",
+            ["shard"] = 1,
+            ["last_sequence"] = 0,
+            ["count"] = 0,
+            ["manifest_hash"] = "sha256:" + new string('a', 64),
+        });
+
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "org A's run id in the path", ProbeExpect.NotSuccess, OrgBAdmin(w),
+                        Close(w.Acme.Projects[0].RunId), Close(Guid.CreateVersion7())),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "org A's run id in the path", ProbeExpect.ServiceRefused, OrgBService(w),
+                        Close(w.Acme.Projects[0].RunId), Close(Guid.CreateVersion7())),
                 ];
             });
     }
