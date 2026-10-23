@@ -47,6 +47,7 @@ import {
   SpoolMissingError,
   assertValidSpoolId,
   listProducers,
+  maxSpoolLineBytes,
   runDirBytes,
 } from '../spool.js';
 
@@ -61,12 +62,6 @@ import type { CommandDefinition, CommandContext, ParsedValues } from './index.js
 const helpHint = "run 'evidgate --help' for usage";
 /** `--from -` reads the envelopes from stdin. */
 const stdinName = '-';
-/**
- * Upper bound for one `--from` line, as a runaway-stream guard. It is far above the 1 MiB
- * batch-body cap on purpose: an event that is too large for a batch must reach the sender
- * and fail there with its `event_id` named (AC4), not be refused as unreadable input.
- */
-const maxInputLineBytes = 32 * 1_048_576;
 /**
  * openapi `RunId`: the path parameter `r` of `POST /v1/runs/{r}/events` and the `run_id`
  * the reporter writes `<spool_dir>/<run_id>/…` with. Validated here exactly like
@@ -620,9 +615,12 @@ function unsentSuffix(range: { readonly first: number; readonly last: number } |
 
 /**
  * Streams one JSONL source as lines. Only a bounded amount of text is held: the longest
- * line seen plus one read block. A line above {@link maxInputLineBytes} is refused as
- * input rather than buffered, and a final line without a trailing newline IS accepted
- * here (intake is not the spool reader, whose torn-tail rule is D3).
+ * line seen plus one read block. A line above {@link maxSpoolLineBytes} — the spool
+ * reader's own bound (S54 N3) — is refused as input rather than buffered, and the bound is
+ * measured in UTF-8 BYTES, not UTF-16 code units: a multibyte line that fits the unit count
+ * but not the byte count would otherwise be spooled and then be `spool_corrupt` for the
+ * reader, blocking that producer. A final line without a trailing newline IS accepted here
+ * (intake is not the spool reader, whose torn-tail rule is D3).
  */
 async function* splitLines(
   source: AsyncIterable<Uint8Array>,
@@ -631,13 +629,21 @@ async function* splitLines(
   // with U+FFFD, which would make an invalid envelope look like a different one.
   const decoder = new TextDecoder('utf-8', { fatal: true });
   let buffered = '';
+  // The UTF-8 size of `buffered`, kept incrementally so the guard costs O(bytes) once
+  // instead of re-encoding the pending line on every read block. Decoding is lossless
+  // (fatal), so a chunk's byte length equals its decoded text's byte length, and a yielded
+  // line removes exactly `text + "\n"` from the pending total.
+  let bufferedBytes = 0;
   let lineNumber = 0;
   for await (const chunk of source) {
+    let decoded: string;
     try {
-      buffered += decoder.decode(chunk, { stream: true });
+      decoded = decoder.decode(chunk, { stream: true });
     } catch {
       throw inputError(`line ${lineNumber + 1} is not valid UTF-8`);
     }
+    buffered += decoded;
+    bufferedBytes += Buffer.byteLength(decoded, 'utf8');
     for (;;) {
       const newline = buffered.indexOf('\n');
       if (newline === -1) {
@@ -645,18 +651,23 @@ async function* splitLines(
       }
       const text = buffered.slice(0, newline);
       buffered = buffered.slice(newline + 1);
+      bufferedBytes -= Buffer.byteLength(text, 'utf8') + 1;
       lineNumber += 1;
       const line = text.endsWith('\r') ? text.slice(0, -1) : text;
       yield { text: line, lineNumber };
     }
-    if (buffered.length > maxInputLineBytes) {
-      throw inputError(`line ${lineNumber + 1} is longer than ${maxInputLineBytes} bytes`);
+    if (bufferedBytes > maxSpoolLineBytes) {
+      throw inputError(`line ${lineNumber + 1} is longer than ${maxSpoolLineBytes} bytes`);
     }
   }
   try {
     buffered += decoder.decode();
   } catch {
     throw inputError(`line ${lineNumber + 1} is not valid UTF-8`);
+  }
+  bufferedBytes = Buffer.byteLength(buffered, 'utf8');
+  if (bufferedBytes > maxSpoolLineBytes) {
+    throw inputError(`line ${lineNumber + 1} is longer than ${maxSpoolLineBytes} bytes`);
   }
   if (buffered.length > 0) {
     lineNumber += 1;

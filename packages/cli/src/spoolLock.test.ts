@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import {
+  chmod,
   mkdir,
   mkdtemp,
   open,
@@ -25,8 +26,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ProducerSpool, defaultSpoolMaxBytes } from './spool.js';
+import { CliError } from './errors.js';
 import {
   SpoolLockedError,
+  isHardLinkUnsupportedErrno,
+  isMissingLockErrno,
   isProcessAlive,
   readSpoolLock,
   spoolLockFileMode,
@@ -139,14 +143,17 @@ describe('withSpoolLock', () => {
 
   it('gives a second holder spool_locked instead of interleaving', async () => {
     let secondRan = false;
-    const failure = await withSpoolLock(directory, () =>
-      failureOf(
+    const failure = await withSpoolLock(directory, async () => {
+      const inner = await failureOf(
         withSpoolLock(directory, () => {
           secondRan = true;
           return Promise.resolve();
         }),
-      ),
-    );
+      );
+      // The loser's staging file is gone: only the holder's lock is in the directory.
+      expect(await readdir(directory)).toEqual([spoolLockFileName]);
+      return inner;
+    });
     const locked = expectError(failure, SpoolLockedError);
     expect(locked.code).toBe('spool_locked');
     expect(locked.holderPid).toBe(process.pid);
@@ -399,6 +406,57 @@ describe('withSpoolLock', () => {
     expect(isProcessAlive(0)).toBe(false);
     expect(isProcessAlive(-1)).toBe(false);
     expect(isProcessAlive(1.5)).toBe(false);
+  });
+
+  it('treats only "nothing is there" errnos as an absent lock', () => {
+    for (const code of ['ENOENT', 'ELOOP', 'ENXIO']) {
+      expect(isMissingLockErrno(code)).toBe(true);
+    }
+    const failures: (string | undefined)[] = [
+      'EMFILE',
+      'ENFILE',
+      'EIO',
+      'EACCES',
+      'EPERM',
+      'ENOTDIR',
+      'EISDIR',
+      undefined,
+    ];
+    for (const code of failures) {
+      expect(isMissingLockErrno(code)).toBe(false);
+    }
+  });
+
+  it('refuses the lock on a filesystem without hard links', () => {
+    for (const code of ['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'ENOSYS']) {
+      expect(isHardLinkUnsupportedErrno(code)).toBe(true);
+    }
+    for (const code of ['EEXIST', 'ENOENT', 'EMLINK', 'EIO', undefined]) {
+      expect(isHardLinkUnsupportedErrno(code)).toBe(false);
+    }
+  });
+
+  it('fails instead of taking over a lock it could not inspect', async () => {
+    // Root ignores file modes, so the permission check below would not fire.
+    if (process.platform === 'win32' || process.getuid?.() === 0) return;
+    await writeLock(`${JSON.stringify({ pid: deadPid, started_at: fixedIso })}\n`);
+    await chmod(lockPath, 0o000);
+    let ran = false;
+    const failure = await failureOf(
+      withSpoolLock(
+        directory,
+        () => {
+          ran = true;
+          return Promise.resolve();
+        },
+        { isProcessAlive: () => false },
+      ),
+    );
+    // EACCES is not "no lock": the dead-pid record is left alone, never taken over.
+    const error = expectError(failure, CliError);
+    expect(error.code).toBe('spool_unsafe_path');
+    expect(ran).toBe(false);
+    expect(await readdir(directory)).toEqual([spoolLockFileName]);
   });
 
   it('reads a FIFO planted at spool.lock without blocking, then takes it over', async () => {

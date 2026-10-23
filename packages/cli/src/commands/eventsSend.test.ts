@@ -18,7 +18,7 @@ import { readCachedToken, writeCachedToken } from '../auth/tokenCache.js';
 import { resolveConfig } from '../config.js';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
-import { ProducerSpool, listProducers } from '../spool.js';
+import { ProducerSpool, listProducers, maxSpoolLineBytes } from '../spool.js';
 
 import type { ExchangeDeps } from '../auth/exchange.js';
 
@@ -605,6 +605,47 @@ describe('events send', () => {
     expect(stderr).toContain('EVIDGATE_SPOOL_MAX_BYTES');
     // The pre-append refusal leaves no producer directory behind for the input's producer.
     await expect(readdir(join(spoolDir, runId, producer))).rejects.toThrow(/ENOENT/);
+  });
+
+  // N3: the `--from` line bound must be measured in BYTES, like the spool reader's own
+  // `maxSpoolLineBytes`. A 3-byte BMP character repeated past the byte cap while staying
+  // under it in UTF-16 code units would otherwise be spooled and then be `spool_corrupt`
+  // for the reader, blocking that producer.
+  it('refuses a multibyte --from line that is over the byte cap (N3)', async () => {
+    const spoolDir = await tempDir();
+    // 11.2M code units (< the 32 Mi unit count) but 33.6M UTF-8 bytes (> the 32 Mi byte
+    // cap). The line has no newline, so it is still the pending partial line.
+    const overLong = '\u4e00'.repeat(11_200_000);
+    expect(overLong.length).toBeLessThan(maxSpoolLineBytes);
+    expect(Buffer.byteLength(overLong, 'utf8')).toBeGreaterThan(maxSpoolLineBytes);
+    const bytes = Buffer.from(overLong, 'utf8');
+    let pulled = false;
+    const overLongStream: AsyncIterable<Uint8Array> = {
+      [Symbol.asyncIterator]: () => ({
+        next: (): Promise<IteratorResult<Uint8Array>> => {
+          const done = pulled;
+          pulled = true;
+          return Promise.resolve(
+            done ? { done: true, value: undefined } : { done: false, value: bytes },
+          );
+        },
+      }),
+    };
+    const stub = stubFetch((call) => acked(call));
+    const out = capture();
+
+    const code = await invoke(sendArgv(['--from', '-']), baseEnv(spoolDir), out, {
+      fetch: stub.fetchImpl,
+      stdin: overLongStream,
+    });
+
+    expect(code).toBe(3);
+    expect(stub.calls).toHaveLength(0);
+    const stderr = out.stderr.join('');
+    expect(stderr).toContain('evidgate: error invalid_spool_input:');
+    expect(stderr).toContain(`line 1 is longer than ${maxSpoolLineBytes} bytes`);
+    // Refused before the first append: not even the run directory exists.
+    await expect(readdir(join(spoolDir, runId))).rejects.toThrow(/ENOENT/);
   });
 
   // CR7: the failure names the FULL unsent range read after the send settled, not just the

@@ -212,17 +212,46 @@ async function createLockAtomically(
     await removeIfPresent(tempPath);
     throw error;
   }
-  await handle.close();
   try {
+    // `close` sits inside the guarded region: a failed close must not leave the staging
+    // name behind (the `finally` removes it whatever happened).
+    await handle.close();
     await link(tempPath, path);
     return claim;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return null;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') return null;
+    if (isHardLinkUnsupportedErrno(code)) throw hardLinkUnsupportedError(code);
     throw error;
   } finally {
     // The lock keeps its inode through the link; the temp name is only a staging entry.
     await removeIfPresent(tempPath);
   }
+}
+
+/**
+ * Errnos a `link` fails with when the filesystem cannot hard-link the record into place
+ * (FAT/exFAT, some network and overlay mounts). The lock would need an unsound fallback, so
+ * the acquisition is refused with an actionable error instead.
+ */
+export function isHardLinkUnsupportedErrno(code: string | undefined): boolean {
+  return (
+    code === 'EPERM' ||
+    code === 'ENOTSUP' ||
+    code === 'EOPNOTSUPP' ||
+    code === 'EXDEV' ||
+    code === 'ENOSYS'
+  );
+}
+
+function hardLinkUnsupportedError(code: string | undefined): CliError {
+  return new CliError(
+    `cannot create the spool lock (${code ?? 'unknown OS error'}): the spool directory must be on a filesystem that supports hard links`,
+    {
+      code: 'spool_unsafe_path',
+      hint: 'point EVIDGATE_SPOOL_DIR at a local filesystem that supports hard links',
+    },
+  );
 }
 
 /**
@@ -319,7 +348,9 @@ async function removeIfPresent(path: string): Promise<void> {
 /**
  * Reads a producer directory's lock, or `null` when there is none (or when it cannot be
  * read as a lock: a torn, empty, symlinked or foreign file is treated as stale by the
- * caller, never as a token-bearing document).
+ * caller, never as a token-bearing document). A lock the filesystem could not be asked
+ * about (I/O, descriptor exhaustion, permissions) raises `CliError` instead of reading as
+ * absent, so such a failure can never turn into a takeover of a live lock.
  */
 export function readSpoolLock(directory: string): Promise<SpoolLockFile | null> {
   return readSpoolLockPath(join(directory, spoolLockFileName));
@@ -368,10 +399,30 @@ async function scavengeQuarantinedLock(held: HeldSpoolLock): Promise<void> {
 }
 
 /**
+ * Errnos from inspecting the lock path that mean "there is no lock record here": the file is
+ * gone, a symlink we refuse to follow, or a FIFO/device with no reader. Any other errno is a
+ * real IO or permission failure and must never be read as "stale".
+ */
+export function isMissingLockErrno(code: string | undefined): boolean {
+  return code === 'ENOENT' || code === 'ELOOP' || code === 'ENXIO';
+}
+
+function lockInspectionError(code: string | undefined): CliError {
+  return new CliError(
+    `cannot inspect the spool lock (${code ?? 'unknown OS error'}); nothing was taken over`,
+    {
+      code: 'spool_unsafe_path',
+      hint: 'check the spool directory is on a healthy, owned filesystem, then retry',
+    },
+  );
+}
+
+/**
  * Reads one lock record. The open is `O_NOFOLLOW|O_NONBLOCK` and the descriptor must name a
  * regular file of a plausible size, so a symlink, FIFO or device planted at the lock path
  * (by another user of a shared spool, or by a hostile reporter) can neither be followed nor
- * block the CLI.
+ * block the CLI. `null` means "no record here" only for {@link isMissingLockErrno}, a
+ * non-regular or oversized file, or unparseable content; any other errno throws.
  */
 async function readSpoolLockPath(path: string): Promise<SpoolLockFile | null> {
   let text: string;
@@ -384,8 +435,13 @@ async function readSpoolLockPath(path: string): Promise<SpoolLockFile | null> {
     } finally {
       await handle.close();
     }
-  } catch {
-    return null;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    // Only "there is nothing to read" means "no lock". EMFILE/ENFILE/EIO/EACCES say the
+    // filesystem could not be inspected, and calling that "stale" would let a live lock be
+    // taken over, so they abort the command instead.
+    if (isMissingLockErrno(code)) return null;
+    throw lockInspectionError(code);
   }
   let parsed: unknown;
   try {
