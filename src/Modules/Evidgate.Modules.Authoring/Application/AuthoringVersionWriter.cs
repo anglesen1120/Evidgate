@@ -1554,6 +1554,14 @@ internal sealed class AuthoringVersionWriter(
             parent = await LockAsync(orgId, projectId, parentId, AuthoringEntityKind.FeatureNode, cancellationToken, shared: true).ConfigureAwait(false) is NodeRow row
                 ? new FeatureNodeParent(row.Id, row.Kind, row.DeletedAt is not null, SameProject: true)
                 : null;
+
+            if (parent is null)
+            {
+                // A named parent that resolves to nothing is absent, not "no parent was named": AC1's reasons separate
+                // the two (`parent_not_found` vs. a kind that cannot stand at the root, which is `parent_kind_invalid`),
+                // and a parent in another project or tenant is deliberately indistinguishable from an absent one (AC10).
+                return PlacementReason.ParentNotFound;
+            }
         }
 
         var placement = FeatureNodeRules.CheckPlacement(node.Kind, parent);

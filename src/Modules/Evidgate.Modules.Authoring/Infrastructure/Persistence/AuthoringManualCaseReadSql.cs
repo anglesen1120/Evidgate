@@ -124,15 +124,24 @@ internal static class AuthoringManualCaseReadSql
     /// serialise here and the second one compares its stale version to the fresh row. Its column list is the detail's,
     /// so the same row type carries the snapshot a PATCH rebuilds.
     /// </summary>
+    /// <remarks>
+    /// The item's node is a <b>correlated subquery</b>, never a join: <c>manual_test_case.checklist_item_id</c> is the
+    /// one column a concurrent command changes (route 19), and a READ COMMITTED <c>FOR UPDATE</c> that blocks and is
+    /// then re-checked against the updated tuple can drop the row when the search condition spans the joined table —
+    /// measured in <c>AuthoringManualCaseTests.MoveBetweenItems_Concurrent_412</c>, where the loser of two concurrent
+    /// moves read "no such case" (404) instead of the AC19 412. The locked row's own columns are the only search
+    /// condition here, so its identity, item and version are always the tuple the lock holder committed.
+    /// </remarks>
     internal const string LockCase = """
-        select m.id as case_id, m.code, m.checklist_item_id, i.feature_node_id as node_id,
+        select m.id as case_id, m.code, m.checklist_item_id,
+               (select i.feature_node_id
+                  from public.checklist_item i
+                 where i.org_id = m.org_id
+                   and i.project_id = m.project_id
+                   and i.id = m.checklist_item_id) as node_id,
                m.title, m.description, m.precondition, m.steps::text as steps,
                m.priority, m.state, m.version, m.created_at, m.updated_at
           from public.manual_test_case m
-          join public.checklist_item i
-            on i.org_id = m.org_id
-           and i.project_id = m.project_id
-           and i.id = m.checklist_item_id
          where m.org_id = @org_id
            and m.project_id = @project_id
            and m.id = @case_id

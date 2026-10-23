@@ -137,10 +137,11 @@ public sealed partial class AuthoringManualCaseTests
         secondCodes.Intersect(firstCodes, StringComparer.Ordinal)
             .ShouldBeEmpty("the keyset cursor never repeats a case the first page carried");
 
-        // `q` is a literal substring, not a LIKE pattern: `%` matches only a title that contains one.
+        // `q` is a literal substring, not a LIKE pattern: `%` matches only the one title that contains a percent sign.
         var percent = await client.SendAsync(HttpMethod.Get, CasePath(project) + "?q=%25", caller);
         percent.Status.ShouldBe(HttpStatusCode.OK);
-        percent.Body.GetProperty("items").GetArrayLength().ShouldBe(0);
+        percent.Body.GetProperty("items").GetArrayLength().ShouldBe(1, "only 'Refund 100% of the order' contains a %");
+        percent.Body.GetProperty("items")[0].GetProperty("title").GetString().ShouldBe("Refund 100% of the order");
         percent.Body.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
 
         var refund = await client.SendAsync(HttpMethod.Get, CasePath(project) + "?q=REFUND", caller);

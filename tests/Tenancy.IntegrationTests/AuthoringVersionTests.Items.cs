@@ -19,11 +19,12 @@ public sealed partial class AuthoringVersionTests
         await using var world = await StartAsync();
         var (_, _, _, item) = await SeedLadderAsync(world);
 
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(world.Database));
+        // Authorization is not what this test asserts (AuthoringPermissionSeedTests owns that), so the host grants
+        // every permission and the caller publishes the tenant from the headers — the same seam the other authoring
+        // route suites use. A service credential of a directly seeded org holds no authoring grant at all.
+        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(world.Database));
         using var client = api.CreateClient();
-        var caller = TenancyApiFactory.Resolved(
-            serviceOrg: world.Org,
-            servicePermissions: ["authoring:write", "authoring:read"]);
+        var caller = TenancyApiFactory.Caller(org: world.Org, project: world.Project, user: Guid.CreateVersion7());
 
         var changed = await client.SendAsync(
             HttpMethod.Patch,

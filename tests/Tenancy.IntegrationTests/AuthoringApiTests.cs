@@ -246,7 +246,7 @@ public sealed class AuthoringApiTests
         {
             new("PATCH node", HttpMethod.Patch, world.Node(feature), new { title = "Renamed feature" }),
             new("DELETE node", HttpMethod.Delete, world.Node(category), null),
-            new("reorder siblings", HttpMethod.Post, $"{world.Node(feature)}/reorder", new { ordered_ids = new[] { category } }, OrderTag: true),
+            new("reorder siblings", HttpMethod.Post, $"{world.Node(feature)}/reorder", new { ordered_ids = new[] { feature } }, OrderTag: true),
             new("PATCH item", HttpMethod.Patch, world.Item(item), new { title = "Renamed item" }),
             new("DELETE item", HttpMethod.Delete, world.Item(item), null),
             new("PATCH case", HttpMethod.Patch, world.Case(manualCase), new { title = "Renamed case" }),

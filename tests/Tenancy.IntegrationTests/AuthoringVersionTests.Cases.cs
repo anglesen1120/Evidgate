@@ -77,9 +77,15 @@ public sealed partial class AuthoringVersionTests
         var target = Guid.CreateVersion7();
         var retired = Guid.CreateVersion7();
 
+        // A new item is active (or a draft, when AI generated it) — AC20 — so the retired target is created and then
+        // retired with a reason, the same two steps route 9 takes.
         (await AppendAsync(world, Guid.CreateVersion7(), [
             EntityChange.Create(AuthoringEntityKind.ChecklistItem, target, ItemContent(category, "Refunds", 1)),
-            EntityChange.Create(AuthoringEntityKind.ChecklistItem, retired, ItemContent(category, "Old refunds", 2, ChecklistItemStateMachine.Retired)),
+            EntityChange.Create(AuthoringEntityKind.ChecklistItem, retired, ItemContent(category, "Old refunds", 2)),
+        ])).IsSuccess.ShouldBeTrue();
+
+        (await AppendAsync(world, Guid.CreateVersion7(), [
+            EntityChange.Update(AuthoringEntityKind.ChecklistItem, retired, ItemContent(category, "Old refunds", 2, ChecklistItemStateMachine.Retired)) with { Reason = "cleanup" },
         ])).IsSuccess.ShouldBeTrue();
 
         var caseId = Guid.CreateVersion7();

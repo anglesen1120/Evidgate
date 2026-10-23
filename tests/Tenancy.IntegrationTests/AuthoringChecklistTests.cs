@@ -40,8 +40,13 @@ public sealed class AuthoringChecklistTests
         /// <summary>The founder, whose <c>tenant_admin</c> membership holds <c>authoring:write</c> (AC17).</summary>
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
-        /// <summary>A service credential of the same org that holds no authoring code, so the gate answers 403.</summary>
-        public Action<HttpRequestHeaders> WithoutPermission => TenancyApiFactory.Resolved(serviceOrg: Org);
+        /// <summary>
+        /// An authenticated service credential of the same org that holds no <c>authoring:write</c>, so the gate answers
+        /// 403. The stand-in authenticator builds a service principal only from a permissions claim, so the credential
+        /// claims a permission of another module: the evaluator refuses the write, the request is authorized, not anonymous.
+        /// </summary>
+        public Action<HttpRequestHeaders> WithoutPermission =>
+            TenancyApiFactory.Resolved(serviceOrg: Org, serviceProject: Project, servicePermissions: ["authoring:read"]);
 
         public string Items => $"/v1/projects/{Project}/authoring/checklist-items";
 

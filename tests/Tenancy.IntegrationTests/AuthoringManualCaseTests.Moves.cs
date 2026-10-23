@@ -141,13 +141,18 @@ public sealed partial class AuthoringManualCaseTests
             database,
             $"update public.manual_test_case set state = 'retired' where id = '{caseId}'");
 
+        // The 0004 version trigger bumps the row on that direct write, so the tag is what the row holds now.
+        var retiredVersion = await _fixture.ScalarAsync<int>(
+            database,
+            $"select version from public.manual_test_case where id = '{caseId}'");
+
         var retiredCase = await client.SendAsync(
             HttpMethod.Post,
             movePath,
             caller,
             Element("""{"checklist_item_id":"__ITEM__"}""".Replace("__ITEM__", other.ToString("D"), StringComparison.Ordinal)),
             NewKey(),
-            "\"1\"");
+            "\"" + retiredVersion + "\"");
 
         retiredCase.Status.ShouldBe(HttpStatusCode.Conflict);
         retiredCase.ErrorCode.ShouldBe("invalid_transition");
@@ -194,10 +199,11 @@ public sealed partial class AuthoringManualCaseTests
             NewKey(),
             "\"1\"")));
 
-        answers.Count(answer => answer.Status == HttpStatusCode.OK).ShouldBe(1);
-        answers.Count(answer => answer.Status == HttpStatusCode.PreconditionFailed).ShouldBe(1);
+        var seen = string.Join(" | ", answers.Select(answer => $"{answer.Status}:{answer.Body}"));
+        answers.Count(answer => answer.Status == HttpStatusCode.OK).ShouldBe(1, seen);
+        answers.Count(answer => answer.Status == HttpStatusCode.PreconditionFailed).ShouldBe(1, seen);
         answers.Single(answer => answer.Status == HttpStatusCode.PreconditionFailed)
-            .ErrorCode.ShouldBe("precondition_failed");
+            .ErrorCode.ShouldBe("precondition_failed", seen);
 
         (await _fixture.ScalarAsync<long>(
             database,

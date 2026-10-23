@@ -22,13 +22,6 @@ public sealed partial class AuthoringManualCaseTests
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
 
-        var created = await client.SendAsync(HttpMethod.Post, CasePath(project), caller, CaseBody(item, "Pay with a card"), NewKey());
-        created.Status.ShouldBe(HttpStatusCode.Created);
-        var caseId = created.Body.GetProperty("case_id").GetGuid();
-        var statePath = CasePath(project) + "/" + caseId.ToString("D") + "/state";
-
-        // Nothing but the row's own columns decides the edge, so the "from" state is set as the owner and the version
-        // stays 1 (a direct write is not an authoring change).
         var cases = new (string From, string To, string? Reason, HttpStatusCode Status)[]
         {
             ("draft", "draft", null, HttpStatusCode.OK),
@@ -43,23 +36,40 @@ public sealed partial class AuthoringManualCaseTests
 
         foreach (var (from, to, reason, status) in cases)
         {
-            await _fixture.ExecuteAsync(
-                database,
-                $"update public.manual_test_case set state = '{from}', version = 1 where id = '{caseId}'");
+            // Each row gets its own case: the state machine is a path, so a "from" state is reached the way a caller
+            // reaches it — the legal moves of §6 — and the tag is the version those moves left behind. A direct SQL
+            // write would bump `version` through the 0004 trigger without a version row, and the writer's
+            // `version_no == row.version` guard would then refuse the next legitimate edit.
+            var seeded = await client.SendAsync(HttpMethod.Post, CasePath(project), caller, CaseBody(item, "Pay with a card"), NewKey());
+            seeded.Status.ShouldBe(HttpStatusCode.Created);
+            var caseId = seeded.Body.GetProperty("case_id").GetGuid();
+            var statePath = CasePath(project) + "/" + caseId.ToString("D") + "/state";
+            var current = seeded.Body.GetProperty("version").GetInt32();
+
+            if (!string.Equals(from, "draft", StringComparison.Ordinal))
+            {
+                var toFrom = string.Equals(from, "approved", StringComparison.Ordinal)
+                    ? """{"state":"approved"}"""
+                    : """{"state":"retired","reason":"superseded by SHOP-001"}""";
+                var reached = await client.SendAsync(
+                    HttpMethod.Post, statePath, caller, Element(toFrom), NewKey(), "\"" + current + "\"");
+                reached.Status.ShouldBe(HttpStatusCode.OK, $"{from} is a legal first move");
+                current = reached.Body.GetProperty("version").GetInt32();
+            }
 
             var body = reason is null
                 ? $$"""{"state":"{{to}}"}"""
                 : $$"""{"state":"{{to}}","reason":"{{reason}}"}""";
 
             var answer = await client.SendAsync(
-                HttpMethod.Post, statePath, caller, Element(body), NewKey(), "\"1\"");
+                HttpMethod.Post, statePath, caller, Element(body), NewKey(), "\"" + current + "\"");
 
             answer.Status.ShouldBe(status, $"{from} → {to}");
 
             if (status == HttpStatusCode.OK)
             {
                 answer.Body.GetProperty("state").GetString().ShouldBe(to);
-                answer.Body.GetProperty("version").GetInt32().ShouldBe(to == from ? 1 : 2);
+                answer.Body.GetProperty("version").GetInt32().ShouldBe(to == from ? current : current + 1);
             }
             else if (status == HttpStatusCode.UnprocessableEntity)
             {
@@ -127,18 +137,24 @@ public sealed partial class AuthoringManualCaseTests
             database,
             $"update public.manual_test_case set state = 'retired' where id = '{caseId}'");
 
+        // The 0004 version trigger bumps the row on that direct write, so the tag is what the row holds now.
+        var retiredVersion = await _fixture.ScalarAsync<int>(
+            database,
+            $"select version from public.manual_test_case where id = '{caseId}'");
+        var tag = "\"" + retiredVersion + "\"";
+
         var patched = await client.SendAsync(
-            HttpMethod.Patch, path, caller, Element("""{"title":"Renamed"}"""), NewKey(), "\"1\"");
+            HttpMethod.Patch, path, caller, Element("""{"title":"Renamed"}"""), NewKey(), tag);
         patched.Status.ShouldBe(HttpStatusCode.Conflict);
         patched.ErrorCode.ShouldBe("invalid_transition");
 
         var moved = await client.SendAsync(
-            HttpMethod.Post, path + "/state", caller, Element("""{"state":"approved"}"""), NewKey(), "\"1\"");
+            HttpMethod.Post, path + "/state", caller, Element("""{"state":"approved"}"""), NewKey(), tag);
         moved.Status.ShouldBe(HttpStatusCode.Conflict);
         moved.ErrorCode.ShouldBe("invalid_transition");
 
         var deleted = await client.SendAsync(
-            HttpMethod.Delete, path, caller, Element("""{"reason":"cleanup"}"""), NewKey(), "\"1\"");
+            HttpMethod.Delete, path, caller, Element("""{"reason":"cleanup"}"""), NewKey(), tag);
         deleted.Status.ShouldBe(HttpStatusCode.Conflict);
         deleted.ErrorCode.ShouldBe("invalid_transition");
 
@@ -179,8 +195,8 @@ public sealed partial class AuthoringManualCaseTests
             .ShouldBe(1);
         (await _fixture.ScalarAsync<long>(
             database,
-            $"select count(*) from public.authoring_version where entity_id = '{caseId}' and change_kind = 'soft_delete'"))
-            .ShouldBe(1);
+            $"select count(*) from public.authoring_version where entity_id = '{caseId}' and change_kind = 'delete'"))
+            .ShouldBe(1, "AC5's change_kind vocabulary is {create, update, delete, restore, import}");
 
         // A deleted case is not readable by id any more.
         (await client.SendAsync(HttpMethod.Get, path, caller)).Status.ShouldBe(HttpStatusCode.NotFound);

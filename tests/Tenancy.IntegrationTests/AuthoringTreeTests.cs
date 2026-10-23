@@ -166,13 +166,14 @@ public sealed class AuthoringTreeTests
         var versions = before.Member("items").EnumerateArray()
             .ToDictionary(item => item.GetProperty("node_id").GetGuid(), item => item.GetProperty("version").GetInt32());
 
-        // Move only the first node to the end: `second` and `third` keep their positions and must not be touched.
+        // Swap the first two siblings: `third` keeps position 2, so it is the row the renumber must not touch. (Any
+        // rotation would move every row — an id list is the new order of the whole group, not a "move this one".)
         var reordered = await AuthoringCalls.SendAsync(
             world.Client,
             world.As,
             HttpMethod.Post,
             world.ReorderUrl(first),
-            JsonSerializer.Serialize(new { ordered_ids = new[] { second, third, first } }),
+            JsonSerializer.Serialize(new { ordered_ids = new[] { second, first, third } }),
             ifMatch: before.ETag);
         reordered.Status.ShouldBe(HttpStatusCode.OK);
 
@@ -180,11 +181,11 @@ public sealed class AuthoringTreeTests
         var afterVersions = after.Member("items").EnumerateArray()
             .ToDictionary(item => item.GetProperty("node_id").GetGuid(), item => item.GetProperty("version").GetInt32());
 
-        // AC2's renumber is two UPDATE statements in one transaction, so the trigger of 0004 bumps a moved row exactly
-        // twice — and a row that did not move keeps its single version bump of the create. A third statement (or a
-        // per-change call into the writer's UpdateAsync) would show as a different delta.
+        // AC2's renumber is two UPDATE statements in one transaction over the moved rows only, so the 0004 trigger bumps
+        // a moved row exactly twice — and a row that did not move keeps the single bump of its create. A third statement
+        // (or a per-change call into the writer's UpdateAsync) would show as a different delta.
         afterVersions[first].ShouldBe(versions[first] + 2);
-        afterVersions[second].ShouldBe(versions[second]);
+        afterVersions[second].ShouldBe(versions[second] + 2);
         afterVersions[third].ShouldBe(versions[third]);
     }
 
