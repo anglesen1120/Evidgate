@@ -88,8 +88,18 @@ ALLOWED_RAW=(
   'npm run build --workspaces --if-present'
   # Playwright e2e: not a verify.sh stage (non-blocking until 09, T1.3).
   'npm run e2e -w apps/web'
-  # Runner browser install, not a repo command.
+  # Playwright shell suite on the fixtures build (09.1.1-T4 hand-over): not a
+  # verify.sh stage, non-blocking like the production e2e job.
+  'npm run e2e:fixtures -w apps/web'
+  # The one workspace the e2e jobs need compiled before `ng build`
+  # (`@evidgate/sdk` resolves to its `dist/`). The tsc-build stage may appear
+  # only once in the workflow (rule 2) and runs in the web job, so the e2e jobs
+  # compile this single package directly.
+  'npm run build -w packages/sdk'
+  # Runner browser installs, not repo commands (the fixtures config launches
+  # `channel: chrome`).
   'npx playwright install --with-deps chromium'
+  'npx playwright install --with-deps chrome'
 )
 
 # Canonical stage list — the workflow's coverage is diffed against this, so the
