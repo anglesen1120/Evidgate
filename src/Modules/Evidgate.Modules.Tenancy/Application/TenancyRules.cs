@@ -20,6 +20,13 @@ internal static partial class TenancyRules
     /// <summary>DECISIONS §8.1 D-A1, identical to the 0012 check constraints.</summary>
     internal const string SlugPattern = "^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$";
 
+    /// <summary>
+    /// The case-code prefix grammar of <c>project_case_prefix_format</c> (0039:176, OI-13-101): one leading capital and
+    /// 1–7 more capitals or digits. <c>\z</c> and not <c>$</c>: in .NET <c>$</c> also matches before a trailing newline,
+    /// so <c>"SHOP\n"</c> would pass here and be refused by the database as a 23514 turned into a 500.
+    /// </summary>
+    internal const string CasePrefixPattern = @"^[A-Z][A-Z0-9]{1,7}\z";
+
     /// <summary>Name length cap of 0004/0005 (<c>char_length(name) between 1 and 128</c>).</summary>
     internal const int MaxNameLength = 128;
 
@@ -34,6 +41,9 @@ internal static partial class TenancyRules
 
     /// <summary>True when <paramref name="slug"/> matches the D-A1 grammar.</summary>
     internal static bool IsSlug(string? slug) => slug is not null && Slug().IsMatch(slug);
+
+    /// <summary>True when <paramref name="casePrefix"/> matches <c>project_case_prefix_format</c>.</summary>
+    internal static bool IsCasePrefix(string? casePrefix) => casePrefix is not null && CasePrefix().IsMatch(casePrefix);
 
     /// <summary>
     /// True when <paramref name="name"/> is 1–128 characters after trimming and holds no
@@ -53,6 +63,9 @@ internal static partial class TenancyRules
     [GeneratedRegex(SlugPattern, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex Slug();
 
+    [GeneratedRegex(CasePrefixPattern, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
+    private static partial Regex CasePrefix();
+
     [GeneratedRegex(
         "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$",
         RegexOptions.CultureInvariant,
@@ -71,6 +84,16 @@ internal static class TenancyErrors
 
     /// <summary>A unique slug key refused the write (AC2).</summary>
     internal static Error SlugTaken => Error.Conflict(ApiErrorCode.SlugTaken, "that slug is already taken");
+
+    /// <summary>
+    /// A unique case-prefix key refused the write (13.1.1 AC4/OI-13-101): <c>project_org_case_prefix_uq</c> holds
+    /// <c>(org_id, case_prefix)</c>, so only a sibling project of the same org can collide. The code comes from
+    /// <see cref="ApiErrorCode.CasePrefixTaken"/> like every other 00 §9.2 code, so the catalogue stays the one
+    /// definition of the wire code and its message key (<c>error.case_prefix_taken</c>).
+    /// </summary>
+    internal static Error CasePrefixTaken => Error.Conflict(
+        ApiErrorCode.CasePrefixTaken,
+        "another project of this organization already uses that case prefix");
 
     /// <summary>Mutations of a suspended org's registry are refused (02.1.1 §6).</summary>
     internal static Error OrgSuspended => Error.Conflict(
@@ -111,6 +134,17 @@ internal static class TenancyErrors
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
             ConstraintName: "organization_slug_key" or "project_org_slug_key",
+        };
+
+    /// <summary>
+    /// True when the write failed on the per-org case-prefix key (<c>project_org_case_prefix_uq</c>, 0039:79-80), so a
+    /// caller who PATCHes a taken prefix answers 409 instead of a 23505 turned into a 500.
+    /// </summary>
+    internal static bool IsCasePrefixConflict(DbUpdateException exception) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "project_org_case_prefix_uq",
         };
 }
 

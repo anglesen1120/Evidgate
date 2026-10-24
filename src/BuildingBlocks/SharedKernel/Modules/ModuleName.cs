@@ -11,6 +11,7 @@ public static class ModuleName
     public const string Identity = "identity";
     public const string Tenancy = "tenancy";
     public const string Catalog = "catalog";
+    public const string Authoring = "authoring";
     public const string Orchestrator = "orchestrator";
     public const string Ingestion = "ingestion";
     public const string Evidence = "evidence";

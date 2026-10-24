@@ -55,9 +55,11 @@ public sealed class IdempotencyBehaviour<TMessage, TResponse>(IIdempotencyStore 
 
         if (string.IsNullOrWhiteSpace(key) || key.Length > MaxKeyLength)
         {
+            // The detail path is the header's pointer in the error envelope's vocabulary, so it carries the leading
+            // slash every other detail path does (`/If-Match`, `/reason`); 13.1.1-AC18 names the shape it has to match.
             return ResultFactory.Failure<TResponse>(Error.BadRequest(
                 $"Idempotency-Key must be 1..{MaxKeyLength} characters",
-                [new ErrorDetail("Idempotency-Key", string.IsNullOrWhiteSpace(key) ? "required" : "too_long")]));
+                [new ErrorDetail("/Idempotency-Key", string.IsNullOrWhiteSpace(key) ? "required" : "too_long")]));
         }
 
         var operation = idempotent.Operation;

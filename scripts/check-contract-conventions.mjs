@@ -121,6 +121,22 @@ const EXPECTED = [
   ['/healing/candidates/{c}/reject', 'post', 'healing:approve', 'v2'],
   ['/healing/switch', 'get', 'healing:triage', 'v1'],
   ['/healing/switch', 'put', 'healing:configure', 'v1'],
+  ['/projects/{p}/authoring/tree', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/nodes', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/nodes/{n}', 'patch', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/nodes/{n}/reorder', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/nodes/{n}', 'delete', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/checklist-items', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/checklist-items', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/checklist-items/{i}', 'patch', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/checklist-items/{i}', 'delete', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/manual-cases', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/manual-cases', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/manual-cases/{m}', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/manual-cases/{m}', 'patch', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/manual-cases/{m}', 'delete', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/manual-cases/{m}/state', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/manual-cases/{m}/item', 'post', 'authoring:write', 'v1'],
 ];
 
 const byKey = new Map(ops.map((o) => [`${o.method} ${o.path}`, o]));

@@ -7,39 +7,61 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// 00 §5.7 S2 / T51 (07.1.1-T3.1 done-when): the permission a policy handler declares in the Mediator pipeline is
-/// the <c>x-permission</c> its OpenAPI operation documents. The spec is read as text (the same line-based
-/// approach <c>PermissionCatalogueTests</c> uses), and the handlers are found by name in the Policy assembly, so a
-/// namespace move inside the module does not break this test's compile.
+/// 00 §5.7 S2 / T51 (07.1.1-T3.1 done-when, extended by 13.1.1-T2.4): the permission a handler declares in the
+/// Mediator pipeline is the <c>x-permission</c> its OpenAPI operation documents. The spec is read as text (the same
+/// line-based approach <c>PermissionCatalogueTests</c> uses), and the handlers are found by name in their module
+/// assembly, so a namespace move inside a module does not break this test's compile.
 /// </summary>
 public sealed class PolicyPermissionContractTests
 {
-    /// <summary>Each policy operation, the handler that serves it, and the permission both must carry.</summary>
-    private static readonly (string OperationId, string HandlerName, string Permission)[] Operations =
+    /// <summary>Each operation, the module assembly holding its handler, and the permission both must carry.</summary>
+    private static readonly (string Module, string OperationId, string HandlerName, string Permission)[] Operations =
     [
-        ("createPolicyRevision", "CreatePolicyRevisionCommandHandler", "policy:write"),
-        ("activatePolicyRevision", "ActivatePolicyCommandHandler", "policy:write"),
-        ("getPolicyRevision", "GetPolicyRevisionQueryHandler", "policy:read"),
-        ("listPolicyRevisions", "ListPolicyRevisionsQueryHandler", "policy:read"),
-        ("createQuarantineEntry", "CreateQuarantineEntryCommandHandler", "quarantine:write"),
-        ("removeQuarantineEntry", "RemoveQuarantineEntryCommandHandler", "quarantine:write"),
-        ("listQuarantineEntries", "ListQuarantineEntriesQueryHandler", "policy:read"),
+        ("Policy", "createPolicyRevision", "CreatePolicyRevisionCommandHandler", "policy:write"),
+        ("Policy", "activatePolicyRevision", "ActivatePolicyCommandHandler", "policy:write"),
+        ("Policy", "getPolicyRevision", "GetPolicyRevisionQueryHandler", "policy:read"),
+        ("Policy", "listPolicyRevisions", "ListPolicyRevisionsQueryHandler", "policy:read"),
+        ("Policy", "createQuarantineEntry", "CreateQuarantineEntryCommandHandler", "quarantine:write"),
+        ("Policy", "removeQuarantineEntry", "RemoveQuarantineEntryCommandHandler", "quarantine:write"),
+        ("Policy", "listQuarantineEntries", "ListQuarantineEntriesQueryHandler", "policy:read"),
+
+        // 13.1.1-T2.4: the sixteen authoring operations of 13.1.1 §5 — four reads on authoring:read, twelve writes
+        // on authoring:write (the split §5's permission column states).
+        ("Authoring", "listAuthoringTree", "GetAuthoringTreeQueryHandler", "authoring:read"),
+        ("Authoring", "createAuthoringNode", "CreateNodeCommandHandler", "authoring:write"),
+        ("Authoring", "updateAuthoringNode", "UpdateNodeCommandHandler", "authoring:write"),
+        ("Authoring", "reorderAuthoringNodes", "ReorderNodesCommandHandler", "authoring:write"),
+        ("Authoring", "deleteAuthoringNode", "DeleteNodeCommandHandler", "authoring:write"),
+        ("Authoring", "listChecklistItems", "ListChecklistItemsQueryHandler", "authoring:read"),
+        ("Authoring", "createChecklistItem", "CreateChecklistItemCommandHandler", "authoring:write"),
+        ("Authoring", "updateChecklistItem", "UpdateChecklistItemCommandHandler", "authoring:write"),
+        ("Authoring", "deleteChecklistItem", "DeleteChecklistItemCommandHandler", "authoring:write"),
+        ("Authoring", "listManualCases", "ListManualCasesQueryHandler", "authoring:read"),
+        ("Authoring", "createManualCase", "CreateManualCaseCommandHandler", "authoring:write"),
+        ("Authoring", "getManualCase", "GetManualCaseQueryHandler", "authoring:read"),
+        ("Authoring", "updateManualCase", "UpdateManualCaseCommandHandler", "authoring:write"),
+        ("Authoring", "deleteManualCase", "DeleteManualCaseCommandHandler", "authoring:write"),
+        ("Authoring", "setManualCaseState", "SetManualCaseStateCommandHandler", "authoring:write"),
+        ("Authoring", "moveManualCase", "MoveManualTestCaseCommandHandler", "authoring:write"),
     ];
 
     [Fact]
-    public void Policy_Handlers_Declare_The_OpenApi_Permission()
+    public void Handlers_Declare_The_OpenApi_Permission()
     {
         var specPermissions = SpecPermissionsByOperationId();
-        var policy = SolutionLayout.EvidgateAssemblies().Single(assembly => assembly.GetName().Name == "Evidgate.Modules.Policy");
-        var types = ArchitectureRules.SafeGetTypes(policy);
+        var modules = SolutionLayout.EvidgateAssemblies()
+            .Where(assembly => assembly.GetName().Name?.StartsWith("Evidgate.Modules.", StringComparison.Ordinal) == true)
+            .ToDictionary(assembly => assembly.GetName().Name!, StringComparer.Ordinal);
 
-        foreach (var (operationId, handlerName, permission) in Operations)
+        foreach (var (module, operationId, handlerName, permission) in Operations)
         {
             specPermissions.ContainsKey(operationId).ShouldBeTrue($"the spec must document the {operationId} operation");
             specPermissions[operationId].ShouldBe(permission, $"{operationId} must declare x-permission {permission}");
 
+            modules.ShouldContainKey($"Evidgate.Modules.{module}");
+            var types = ArchitectureRules.SafeGetTypes(modules[$"Evidgate.Modules.{module}"]);
             var handler = types.SingleOrDefault(type => type.Name == handlerName);
-            handler.ShouldNotBeNull($"the Policy assembly must declare {handlerName}");
+            handler.ShouldNotBeNull($"the {module} assembly must declare {handlerName}");
             DeclaredPermission(handler!).ShouldBe(permission, $"{handlerName} must declare the operation's x-permission");
         }
     }

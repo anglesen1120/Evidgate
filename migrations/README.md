@@ -53,7 +53,10 @@ The playbook for changing a table without breaking the running version is
   `authoring_version` (FORCE RLS, the tenant and owner policies, the `nulls not distinct` partial
   sibling-position index) plus `project.case_prefix` with `evidgate.case_prefix_stem()`, the
   dedupe backfill, `project_org_case_prefix_uq` and the `project_case_prefix_default` insert
-  trigger; the next free number is `0040`; a gap means two branches
+  trigger, and `0040` is 13.1.1-T2.1's authoring permission seed — the four 00 §2:60 strings
+  (`authoring:read`, `authoring:write`, `authoring:generate`, `script:generate`) with their default
+  built-in role grants, no DDL (the file header records why); the next free number is `0041`;
+  a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and

@@ -44,15 +44,15 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     private static readonly string[] MustHoldNothing = ["viewer", "ci_producer", "agent"];
 
     /// <summary>
-    /// The served GET routes this scan cannot call. Empty on purpose: every served GET
-    /// route is addressed with a real id — the seeded org, project and membership, the
-    /// created ingest token and CI binding, and the case, suite, suite revisions,
-    /// environment revision and policy revision <see cref="SeedReadableResourcesAsync"/>
-    /// arranges. The set is kept, and asserted against the served table, so a route
+    /// The served GET routes this scan cannot call. It holds one route: the manual test case
+    /// detail of 13.1.1-T2, which only answers for a case this suite does not create (authoring
+    /// rows are the subject of <c>Tenancy.IntegrationTests</c>, and a seeded case here would
+    /// assert a state the writer never produced). The three authoring lists are scanned like
+    /// every other list. The set is kept, and asserted against the served table, so a route
     /// that cannot be addressed must be named here with its reason instead of slipping
     /// past the scan silently.
     /// </summary>
-    private static readonly string[] SkippedGetRoutes = [];
+    private static readonly string[] SkippedGetRoutes = ["/v1/projects/{p}/authoring/manual-cases/{m}"];
 
     /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>
     private static readonly JsonSerializerOptions Wire = new()
@@ -403,6 +403,11 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/waivers"] = $"/v1/projects/{project}/waivers",
             ["/v1/projects/{p}/quarantine"] = $"/v1/projects/{project}/quarantine",
             ["/v1/projects/{p}/runs"] = $"/v1/projects/{project}/runs",
+            // 13.1.1-T2's three authoring lists: one page each, empty for a project with no authoring rows, so the
+            // scan covers them like every other list (their detail route is the one skipped entry).
+            ["/v1/projects/{p}/authoring/tree"] = $"/v1/projects/{project}/authoring/tree",
+            ["/v1/projects/{p}/authoring/checklist-items"] = $"/v1/projects/{project}/authoring/checklist-items",
+            ["/v1/projects/{p}/authoring/manual-cases"] = $"/v1/projects/{project}/authoring/manual-cases",
             ["/v1/cases/{c}"] = $"/v1/cases/{seeded.CaseId}",
             ["/v1/cases/{c}/revisions"] = $"/v1/cases/{seeded.CaseId}/revisions",
             ["/v1/suites/{s}"] = $"/v1/suites/{seeded.SuiteId}",

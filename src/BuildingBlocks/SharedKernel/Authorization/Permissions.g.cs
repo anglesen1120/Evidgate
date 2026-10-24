@@ -57,6 +57,20 @@ public static class Permissions
         public const string Read = "audit:read";
     }
 
+    /// <summary>The <c>authoring</c> resource.</summary>
+    public static class Authoring
+    {
+        /// authoring:generate — Generate authoring content — feature nodes, checklist items and manual test cases —
+        /// from an imported or AI-drafted source (13.3.1). Generation spends AI credits (08.5.5), so it is its own
+        /// code.
+        public const string Generate = "authoring:generate";
+        /// authoring:read — Read the feature tree, its checklist items and its manual test cases (00 §2, 13.1.1).
+        public const string Read = "authoring:read";
+        /// authoring:write — Create, change, reorder, move, retire and delete feature nodes, checklist items and
+        /// manual test cases (00 §2, 13.1.1).
+        public const string Write = "authoring:write";
+    }
+
     /// <summary>The <c>billing</c> resource.</summary>
     public static class Billing
     {
@@ -240,6 +254,14 @@ public static class Permissions
         public const string Read = "run:read";
     }
 
+    /// <summary>The <c>script</c> resource.</summary>
+    public static class Script
+    {
+        /// script:generate — Generate a test script from a manual test case and open it against the customer
+        /// repository as a pull request (13.5.1).
+        public const string Generate = "script:generate";
+    }
+
     /// <summary>The <c>security_event</c> resource.</summary>
     public static class SecurityEvent
     {
@@ -321,6 +343,9 @@ public static class Permissions
         "artifact:read_sensitive",
         "artifact:write",
         "audit:read",
+        "authoring:generate",
+        "authoring:read",
+        "authoring:write",
         "billing:read",
         "billing:write",
         "case:read",
@@ -357,6 +382,7 @@ public static class Permissions
         "run:cancel",
         "run:create",
         "run:read",
+        "script:generate",
         "security_event:read",
         "service_identity:read",
         "service_identity:write",
@@ -384,6 +410,9 @@ public static class Permissions
         "artifact:read_sensitive",
         "artifact:write",
         "audit:read",
+        "authoring:generate",
+        "authoring:read",
+        "authoring:write",
         "billing:read",
         "billing:write",
         "case:read",
@@ -420,6 +449,7 @@ public static class Permissions
         "run:cancel",
         "run:create",
         "run:read",
+        "script:generate",
         "security_event:read",
         "service_identity:read",
         "service_identity:write",

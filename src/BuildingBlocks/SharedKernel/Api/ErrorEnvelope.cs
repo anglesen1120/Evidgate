@@ -283,4 +283,7 @@ public static class ApiErrorCode
 
     /// <summary>409: a delete is refused because the node still holds live children or items, or the item still holds live manual cases (13.1.1 AC7).</summary>
     public const string AuthoringNotEmpty = "authoring_not_empty";
+
+    /// <summary>409: another project of the same organization already uses the requested case-code prefix (13.1.1 AC4, OI-13-101); retryable false, message key <c>error.case_prefix_taken</c>.</summary>
+    public const string CasePrefixTaken = "case_prefix_taken";
 }

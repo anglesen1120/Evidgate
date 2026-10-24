@@ -15,10 +15,13 @@
 #
 # Checks per image:
 #   AC1  the built image's first layers ARE the pinned chiseled aspnet layers, so
-#        the runtime base is the digest-pinned image and not something else;
+#        the runtime base is the digest-pinned image and not something else (the
+#        Api pins the `-extra` variant, Worker/Migrator the plain one);
 #   AC1  `docker inspect .Config.User` is a non-root uid (the chiseled base's 1654);
-#   P7   the published runtimeconfig.json carries InvariantGlobalization and
-#        Server GC, and (Api/Worker) the main assembly has a ReadyToRun header;
+#   P7   the published runtimeconfig.json carries Server GC plus the per-image
+#        globalization setting (invariant for Worker, NOT invariant for the Api,
+#        which needs ICU for NFC — 13.1.1-T2, D-S55-Q1), and (Api/Worker) the main
+#        assembly has a ReadyToRun header;
 #   AC5  the Migrator image is its own image on the same pins and
 #        `docker run <image> --help` still prints the CLI contract;
 #   AC1/AC5 with --with-db: a throwaway PostgreSQL 18 (the pinned compose.dev.yml
@@ -154,24 +157,20 @@ runtime_pin() { sed -n 's/^FROM \([^ ]*\) AS runtime$/\1/p' "$(dockerfile_for "$
 declared_sdk_version() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sdk"]["version"])' global.json; }
 
 check_pins() {
-  local fail=0 sdk builder runtime image other_builder other_runtime builder_tag ref
+  local fail=0 sdk builder runtime worker_runtime migrator_runtime image other_builder
+  local runtime_tag base_tag ref
   sdk="$(declared_sdk_version)"
   builder="$(builder_pin api)"
   runtime="$(runtime_pin api)"
   [[ -n "$builder" ]] || { echo "check-pins: no builder FROM in $(dockerfile_for api)" >&2; fail=1; }
   [[ -n "$runtime" ]] || { echo "check-pins: no runtime FROM in $(dockerfile_for api)" >&2; fail=1; }
 
-  # One builder and one runtime across all three Dockerfiles, and one context
-  # ignore list: drift here is how a pin silently stops applying to an image.
+  # One builder and one context ignore list across all three Dockerfiles: drift here
+  # is how a pin silently stops applying to an image.
   for image in api worker migrator; do
     other_builder="$(builder_pin "$image")"
-    other_runtime="$(runtime_pin "$image")"
     if [[ "$other_builder" != "$builder" ]]; then
       echo "check-pins: $(dockerfile_for "$image") builder '$other_builder' differs from $(dockerfile_for api) '$builder'" >&2
-      fail=1
-    fi
-    if [[ "$other_runtime" != "$runtime" ]]; then
-      echo "check-pins: $(dockerfile_for "$image") runtime '$other_runtime' differs from $(dockerfile_for api) '$runtime'" >&2
       fail=1
     fi
     if ! cmp -s infra/docker/Dockerfile.api.dockerignore "infra/docker/Dockerfile.$image.dockerignore"; then
@@ -179,6 +178,30 @@ check_pins() {
       fail=1
     fi
   done
+
+  # 13.1.1-T2 (D-S55-Q1): the Api composes the authoring module, which stores NFC
+  # text and refuses to start without ICU, so its runtime base is the `-extra`
+  # chiseled variant; Worker/Migrator never compose it and stay on the plain
+  # invariant-only chiseled base. The two bases must remain one aspnet version —
+  # `<version>-noble-chiseled` and its `-extra` sibling — or the images diverge.
+  worker_runtime="$(runtime_pin worker)"
+  migrator_runtime="$(runtime_pin migrator)"
+  [[ -n "$worker_runtime" ]] || { echo "check-pins: no runtime FROM in $(dockerfile_for worker)" >&2; fail=1; }
+  [[ -n "$migrator_runtime" ]] || { echo "check-pins: no runtime FROM in $(dockerfile_for migrator)" >&2; fail=1; }
+  if [[ "$worker_runtime" != "$migrator_runtime" ]]; then
+    echo "check-pins: $(dockerfile_for migrator) runtime '$migrator_runtime' differs from $(dockerfile_for worker) '$worker_runtime'" >&2
+    fail=1
+  fi
+  runtime_tag="${worker_runtime%%@*}"
+  runtime_tag="${runtime_tag##*:}"
+  base_tag="${runtime%%@*}"
+  base_tag="${base_tag##*:}"
+  if [[ "$base_tag" != "${runtime_tag}-extra" ]]; then
+    echo "check-pins: the api runtime '$runtime' is not the -extra chiseled variant of the" \
+      "worker/migrator base '$worker_runtime': the Api must ship ICU to compose NFC text" \
+      "(13.1.1-T2, D-S55-Q1)" >&2
+    fail=1
+  fi
 
   # Context hygiene: the ignore list must keep the git-ignored host state out of
   # the build context. `.env.dev` is the one that matters — scripts/dev/up.sh
@@ -200,7 +223,7 @@ check_pins() {
     fail=1
   fi
 
-  for ref in "$builder" "$runtime"; do
+  for ref in "$builder" "$runtime" "$worker_runtime" "$migrator_runtime"; do
     case "$ref" in
       *@sha256:*) ;;
       *) echo "check-pins: '$ref' is not digest-pinned (@sha256:<64 hex>): a mutable tag must not reach a build or a deploy file" >&2; fail=1 ;;
@@ -208,7 +231,8 @@ check_pins() {
   done
 
   printf 'builder  %s\n' "$builder"
-  printf 'runtime  %s\n' "$runtime"
+  printf 'runtime  %s (api: -extra, ships ICU + tzdata for the authoring NFC rule)\n' "$runtime"
+  printf 'runtime  %s (worker/migrator: plain -chiseled, globalization-invariant)\n' "$worker_runtime"
   printf 'sdk      %s (global.json: the same SDK CI installs, so the image and the test build compile with one toolchain)\n' "$sdk"
   return "$fail"
 }
@@ -217,7 +241,7 @@ check_pins() {
 # A moved tag is informational (upstream published a patch under the same tag;
 # the pin still points at what was reviewed), a tag that no longer resolves is fatal.
 check_registry() {
-  python3 - "$(builder_pin api)" "$(runtime_pin api)" <<'PYEOF'
+  python3 - "$(builder_pin api)" "$(runtime_pin api)" "$(runtime_pin worker)" <<'PYEOF'
 import sys, urllib.request
 
 ACCEPT = ", ".join([
@@ -389,25 +413,49 @@ copy_from_image() {
   docker rm -f "$container" >/dev/null
 }
 
+# 00 §5.7 P7 + 13.1.1-T2 (D-S55-Q1): every long-lived image carries Server GC, and the
+# globalization-invariant switch is per image — Worker keeps it (nothing it hosts
+# composes text), the Api must NOT have it, because the authoring module stores NFC
+# text and `string.Normalize(FormC)` is a silent no-op under invariant mode (13.1.1
+# AC14). `System.Globalization.Invariant` is a runtimeconfig property, but the *base
+# image* can force it with DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true — the plain
+# chiseled base does exactly that — and the environment wins over the file, so the
+# Api's image environment is checked too.
+invariant_of() { case "$(prefix "$1")" in api) echo 0 ;; *) echo 1 ;; esac; }
+
 check_p7() {
   local reference="$1" name="$2" assembly scratch
   assembly="$(assembly_of "$name")"
   scratch="$(mktemp -d)"
   copy_from_image "$reference" "/app/$assembly" "$scratch/$assembly"
   copy_from_image "$reference" "/app/${assembly%.dll}.runtimeconfig.json" "$scratch/runtimeconfig.json"
-  python3 - "$scratch/runtimeconfig.json" <<'PYEOF'
+  python3 - "$scratch/runtimeconfig.json" "$(invariant_of "$name")" \
+    "$(docker image inspect "$reference" --format '{{json .Config.Env}}')" <<'PYEOF'
 import json, sys
 
 document = json.load(open(sys.argv[1], encoding="utf-8"))
+invariant_expected = sys.argv[2] == "1"
+environment = json.loads(sys.argv[3]) or []
 properties = document.get("runtimeOptions", {}).get("configProperties", {})
-expected = {"System.Globalization.Invariant": True, "System.GC.Server": True}
-missing = [key for key, value in expected.items() if properties.get(key) is not value]
-if missing:
-    sys.exit("build-images: runtimeconfig.json misses the 00 §5.7 P7 process setting(s): %s"
-             % ", ".join(missing))
+if properties.get("System.GC.Server") is not True:
+    sys.exit("build-images: runtimeconfig.json misses the 00 §5.7 P7 process setting "
+             "System.GC.Server")
+invariant_actual = properties.get("System.Globalization.Invariant") is True
+if invariant_actual is not invariant_expected:
+    sys.exit("build-images: runtimeconfig.json carries System.Globalization.Invariant=%s, "
+             "expected %s for this image (00 §5.7 P7 — invariant is Worker-only; the Api "
+             "needs ICU for NFC, 13.1.1-T2 D-S55-Q1)" % (invariant_actual, invariant_expected))
+if not invariant_expected:
+    forced = [entry for entry in environment
+              if entry in ("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1",
+                           "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true")]
+    if forced:
+        sys.exit("build-images: the runtime base sets %s, which overrides the runtimeconfig "
+                 "and would make NFC normalisation a no-op: the Api must run on the `-extra` "
+                 "chiseled base (13.1.1-T2 D-S55-Q1)" % forced[0])
 frameworks = [entry.get("name") for entry in document.get("runtimeOptions", {}).get("frameworks", [])]
-print("   P7: runtimeconfig.json has InvariantGlobalization + Server GC (frameworks=%s)"
-      % ", ".join(str(name) for name in frameworks))
+print("   P7: runtimeconfig.json has Server GC and System.Globalization.Invariant=%s "
+      "(frameworks=%s)" % (invariant_actual, ", ".join(str(name) for name in frameworks)))
 PYEOF
   if [[ "$(is_r2r "$name")" == "1" ]]; then
     python3 - "$scratch/$assembly" <<'PYEOF'

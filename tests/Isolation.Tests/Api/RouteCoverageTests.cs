@@ -176,6 +176,92 @@ public sealed class RouteCoverageTests
         ]);
     }
 
+    /// <summary>
+    /// The sixteen authoring operations of 13.1.1 §5 (13.1.1-T2.4), with the permission each documents: reads carry
+    /// <c>authoring:read</c>, every write <c>authoring:write</c>.
+    /// </summary>
+    private static readonly (string Method, string Template, string Permission)[] AuthoringOperations =
+    [
+        ("GET", "/v1/projects/{p}/authoring/tree", "authoring:read"),
+        ("POST", "/v1/projects/{p}/authoring/nodes", "authoring:write"),
+        ("PATCH", "/v1/projects/{p}/authoring/nodes/{n}", "authoring:write"),
+        ("POST", "/v1/projects/{p}/authoring/nodes/{n}/reorder", "authoring:write"),
+        ("DELETE", "/v1/projects/{p}/authoring/nodes/{n}", "authoring:write"),
+        ("GET", "/v1/projects/{p}/authoring/checklist-items", "authoring:read"),
+        ("POST", "/v1/projects/{p}/authoring/checklist-items", "authoring:write"),
+        ("PATCH", "/v1/projects/{p}/authoring/checklist-items/{i}", "authoring:write"),
+        ("DELETE", "/v1/projects/{p}/authoring/checklist-items/{i}", "authoring:write"),
+        ("GET", "/v1/projects/{p}/authoring/manual-cases", "authoring:read"),
+        ("POST", "/v1/projects/{p}/authoring/manual-cases", "authoring:write"),
+        ("GET", "/v1/projects/{p}/authoring/manual-cases/{m}", "authoring:read"),
+        ("PATCH", "/v1/projects/{p}/authoring/manual-cases/{m}", "authoring:write"),
+        ("DELETE", "/v1/projects/{p}/authoring/manual-cases/{m}", "authoring:write"),
+        ("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/state", "authoring:write"),
+        ("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/item", "authoring:write"),
+    ];
+
+    /// <summary>
+    /// 13.1.1-T2.4: every operation of <c>contracts/openapi.yaml</c> declares the <c>x-permission</c> that gates it, and
+    /// the sixteen authoring operations of 13.1.1 §5 are in the inventory with the permission §5 assigns — so an
+    /// authoring route can never ship without its gate, and a spec addition cannot slip in without one.
+    /// </summary>
+    [Fact]
+    public void EveryOperationDeclaresXPermission()
+    {
+        var operations = OpenApiRouteInventory.Permissions();
+
+        // Non-vacuity: the permission reader sees exactly the operations the coverage gate sees, in the same order.
+        operations.Select(operation => operation.Route).ToList().ShouldBe(OpenApiRouteInventory.Load().ToList());
+
+        OpenApiRouteInventory.EveryOperationDeclaresXPermission(operations).ShouldBeEmpty(
+            "every spec operation must declare x-permission (13.1.1-T2.4)");
+
+        foreach (var (method, template, permission) in AuthoringOperations)
+        {
+            var route = new ApiRoute(method, template);
+            var operation = operations.SingleOrDefault(candidate => candidate.Route == route);
+
+            operation.ShouldNotBeNull($"{route} must be in the contract's operation inventory");
+            operation!.Permission.ShouldBe(permission, $"{route} must declare x-permission {permission}");
+        }
+    }
+
+    /// <summary>The rule is non-vacuous: an operation without <c>x-permission</c> is reported, and a folded scalar's body is not a declaration.</summary>
+    [Fact]
+    public void EveryOperationDeclaresXPermission_Reports_TheOperationWithoutOne()
+    {
+        string[] spec =
+        [
+            "servers:",
+            "  - url: /v1",
+            "paths:",
+            "  /things:",
+            "    get:",
+            "      operationId: listThings",
+            "      x-permission: thing:read",
+            "      responses: {}",
+            "    post:",
+            "      operationId: createThing",
+            "      description: >-",
+            "        x-permission: not-a-declaration-of-this-operation",
+            "      responses: {}",
+        ];
+
+        var operations = OpenApiRouteInventory.Permissions(spec, "inline.yaml");
+        (string Route, string? Permission)[] expected =
+        [
+            ("GET /v1/things", "thing:read"),
+            ("POST /v1/things", null),
+        ];
+
+        operations.Select(operation => (operation.Route.ToString(), operation.Permission)).ToList().ShouldBe(expected);
+
+        var violations = OpenApiRouteInventory.EveryOperationDeclaresXPermission(operations);
+        string[] expectedViolation = ["POST /v1/things declares no x-permission"];
+
+        violations.ShouldBe(expectedViolation);
+    }
+
     private static RouteEndpoint Route(string pattern, params string[] methods)
     {
         var metadata = methods.Length == 0

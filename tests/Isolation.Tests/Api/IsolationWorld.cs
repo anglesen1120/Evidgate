@@ -105,6 +105,35 @@ public sealed class IsolationProject
 
     /// <summary>The first quarantine entry (<c>{q}</c>), created by the org's <c>test_maintainer</c>; <see cref="QuarantineIds"/>[0].</summary>
     public Guid QuarantineEntryId => QuarantineIds[0];
+
+    /// <summary>
+    /// The project's feature-tree nodes (<c>{n}</c> of <c>/v1/projects/{p}/authoring/nodes/{n}</c>), root first:
+    /// a <c>module</c> root, a <c>feature</c> child and a <c>category</c> grandchild — the ladder of 13.1.1 AC1,
+    /// where only a <c>category</c>/<c>sub_category</c> may hold checklist items — so the tree list pages at
+    /// limit 1 (13.1.1-T2).
+    /// </summary>
+    public required IReadOnlyList<Guid> AuthoringNodeIds { get; init; }
+
+    /// <summary>The root <c>module</c> node (<c>{n}</c>); <see cref="AuthoringNodeIds"/>[0].</summary>
+    public Guid AuthoringRootNodeId => AuthoringNodeIds[0];
+
+    /// <summary>The deepest node, the <c>category</c> the checklist item hangs off; <see cref="AuthoringNodeIds"/>[2].</summary>
+    public Guid AuthoringChildNodeId => AuthoringNodeIds[2];
+
+    /// <summary>The project's checklist item (<c>{i}</c> of <c>…/authoring/checklist-items/{i}</c>), under the <c>category</c> node.</summary>
+    public required Guid AuthoringItemId { get; init; }
+
+    /// <summary>The project's manual test case (<c>{m}</c> of <c>…/authoring/manual-cases/{m}</c>), under <see cref="AuthoringItemId"/>.</summary>
+    public required Guid AuthoringManualCaseId { get; init; }
+
+    /// <summary>The project's second root <c>module</c> node: the tree list pages at limit 1 (13.1.1-T2).</summary>
+    public required Guid AuthoringSecondRootNodeId { get; init; }
+
+    /// <summary>The project's second checklist item, listed after <see cref="AuthoringItemId"/>.</summary>
+    public required Guid AuthoringSecondItemId { get; init; }
+
+    /// <summary>The project's second manual test case, listed after <see cref="AuthoringManualCaseId"/>.</summary>
+    public required Guid AuthoringSecondManualCaseId { get; init; }
 }
 
 /// <summary>One seeded org: its admin, members, projects and every id a route can name.</summary>
@@ -572,6 +601,85 @@ public sealed class IsolationWorld
                 throw new InvalidOperationException($"seed: the OIDC ci_producer token of project {project} names another project");
             }
 
+            // The feature tree, one checklist item and one manual test case (13.1.1-T2), created through the
+            // routes themselves so the isolation cases address the ids a real caller would hold.
+            var authoringNodes = new List<Guid>();
+            var authoringRoot = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/nodes",
+                admin,
+                org,
+                new { kind = "module", title = "isolation module" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("node_id").GetGuid();
+            authoringNodes.Add(authoringRoot);
+            var authoringFeature = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/nodes",
+                admin,
+                org,
+                new { parent_id = authoringRoot, kind = "feature", title = "isolation feature" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("node_id").GetGuid();
+            authoringNodes.Add(authoringFeature);
+            // Items attach only to a `category`/`sub_category` node (13.1.1 AC1/AC3), so the item hangs off the
+            // third level, never off the `feature`.
+            authoringNodes.Add((await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/nodes",
+                admin,
+                org,
+                new { parent_id = authoringFeature, kind = "category", title = "isolation category" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("node_id").GetGuid());
+            var authoringItem = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/checklist-items",
+                admin,
+                org,
+                new { node_id = authoringNodes[2], title = "isolation item", priority = "high" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("item_id").GetGuid();
+            var authoringCase = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/manual-cases",
+                admin,
+                org,
+                new
+                {
+                    checklist_item_id = authoringItem,
+                    title = "isolation case",
+                    steps = new[] { new { no = 1, action = "open", expected = "shown" } },
+                    priority = "high",
+                },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("case_id").GetGuid();
+
+            // A second row on each list route, so the three authoring lists page at limit 1 and the cross-org cursor
+            // step of the full-pagination case runs (a one-row list has no next_cursor).
+            var authoringSecondRoot = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/nodes",
+                admin,
+                org,
+                new { kind = "module", title = "isolation module 2" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("node_id").GetGuid();
+            var authoringSecondItem = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/checklist-items",
+                admin,
+                org,
+                new { node_id = authoringNodes[2], title = "isolation item 2", priority = "high" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("item_id").GetGuid();
+            var authoringSecondCase = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/manual-cases",
+                admin,
+                org,
+                new
+                {
+                    checklist_item_id = authoringItem,
+                    title = "isolation case 2",
+                    steps = new[] { new { no = 1, action = "open", expected = "shown" } },
+                    priority = "high",
+                },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("case_id").GetGuid();
+
             return new IsolationProject
             {
                 Id = project,
@@ -598,6 +706,12 @@ public sealed class IsolationWorld
                 RunIds = runs,
                 WaiverIds = waivers,
                 QuarantineIds = quarantines,
+                AuthoringNodeIds = authoringNodes,
+                AuthoringItemId = authoringItem,
+                AuthoringManualCaseId = authoringCase,
+                AuthoringSecondRootNodeId = authoringSecondRoot,
+                AuthoringSecondItemId = authoringSecondItem,
+                AuthoringSecondManualCaseId = authoringSecondCase,
             };
         }
 

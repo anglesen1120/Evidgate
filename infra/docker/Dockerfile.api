@@ -13,14 +13,31 @@
 # stage carries the target architecture, so an amd64 image builds on arm64
 # without emulation.
 #
-# Pins, resolved from mcr.microsoft.com on 2026-09-27 (recorded in
-# infra/README.md, registered in ADR-0002, asserted by
-# `scripts/build-images.sh --check-pins`):
+# Pins, recorded per artefact (all registered in infra/README.md and ADR-0002,
+# asserted by `scripts/build-images.sh --check-pins`):
+#   builder           resolved 2026-09-27 — shared with Dockerfile.worker/.migrator
+#   runtime (`extra`) resolved 2026-10-23 — this image's own base ("the Api's
+#                     runtime" below; Worker/Migrator keep the plain chiseled base
+#                     resolved 2026-09-27, recorded in infra/README.md)
 #   builder  mcr.microsoft.com/dotnet/sdk:10.0.100
 #            (= global.json sdk.version, the SDK CI installs)
-#   runtime  mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled
+#   runtime  mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra
 #            (digest of the multi-arch manifest list — one pin, both platforms;
-#             chiseled: no shell, no package manager, runs as UID 1654)
+#             chiseled + `extra`: no shell, no package manager, runs as UID 1654,
+#             and ships ICU + tzdata, which the authoring module needs to compose
+#             NFC text — `string.Normalize(FormC)` is a silent no-op under
+#             InvariantGlobalization, so the Api cannot run invariant
+#             (13.1.1-T2, D-S55-Q1; `Directory.Build.props` sets the switch for
+#             Evidgate.Worker only). The plain `-chiseled` base is invariant-only:
+#             it sets DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true and carries no
+#             libicu, so it cannot serve this image)
+#            index digest sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd
+#            platform manifests: linux/amd64 sha256:69c87e30c013eac2024da453545dfc13f1476347726da4e1a534d66789a7564f,
+#            linux/arm64 sha256:c4b3500d52b81de8b82db578c16c90fd621770e135c978c0c516d852ea086985,
+#            linux/arm/v7 sha256:330dedb6a14bef22ca30219a98f6090e4c5ea676eb91d3a1e9e8caea8882ca03
+#
+# Worker and Migrator stay on the plain `10.0.12-noble-chiseled` base: neither
+# composes the authoring module, so both keep globalization-invariant mode.
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.100@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71 AS build
 
@@ -62,9 +79,10 @@ RUN dotnet restore --locked-mode -p:PublishReadyToRun=true src/Evidgate.Api/Evid
 # `dotnet publish -r linux-<rid>` needs no restore. TARGETARCH is BuildKit's:
 # amd64 on an x64 runner, arm64 on an Apple Silicon/arm64 runner.
 #
-# PublishReadyToRun is an image-only property (00 §5.7 P7); InvariantGlobalization
-# and ServerGarbageCollection come from Directory.Build.props and are verified on
-# the published runtimeconfig.json by scripts/build-images.sh.
+# PublishReadyToRun is an image-only property (00 §5.7 P7);
+# ServerGarbageCollection and the per-host InvariantGlobalization value come from
+# Directory.Build.props (Server GC on, invariant on for Worker only) and are
+# verified on the published runtimeconfig.json, per image, by scripts/build-images.sh.
 RUN set -eux; \
     case "$TARGETARCH" in \
       amd64) rid=x64 ;; \
@@ -79,12 +97,15 @@ RUN set -eux; \
       -p:PublishReadyToRun=true \
       --output /app
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra@sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd AS runtime
 
 # Non-root by construction (ruling T41, 00 §5.7 S3): the chiseled base already
 # runs as UID 1654 via APP_UID, and the two lines below keep that true even if
 # the base image is ever swapped for one that does not. No shell and no package
-# manager are installed, so nothing can be added at run time.
+# manager are installed, so nothing can be added at run time. The `-extra`
+# variant is still distroless chiseled — it adds ICU + tzdata (the globalization
+# libraries), not a shell or a package manager, and it does not set
+# DOTNET_SYSTEM_GLOBALIZATION_INVARIANT, which the plain `-chiseled` base does.
 USER $APP_UID
 WORKDIR /app
 COPY --from=build --chown=$APP_UID:$APP_UID /app ./
