@@ -9,10 +9,25 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
-  <!-- 00 §5.7 P7: server-side process settings only for the long-lived entry points -->
+  <!-- 00 §5.7 P7: server-side process settings only for the long-lived entry points.
+       Server GC stays on for both. InvariantGlobalization is Worker-only since
+       13.1.1-T2 (coordinator decision D-S55-Q1): `Evidgate.Api` composes
+       Evidgate.Modules.Authoring, whose AuthoringText.EnsureNfcSupported() refuses to
+       start when globalization is invariant, because in that mode
+       string.Normalize(FormC) returns its input unchanged and the NFC storage rule
+       (13.1.1 AC14) would be dropped silently instead of failing. The Api image
+       therefore runs on the `-extra` chiseled base that ships ICU
+       (infra/docker/Dockerfile.api), and the explicit `false` keeps the intent in the
+       generated runtimeconfig.json — where scripts/build-images.sh asserts it per
+       image — instead of leaving the setting to whatever base image is picked. -->
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Api' or '$(MSBuildProjectName)' == 'Evidgate.Worker'">
-    <InvariantGlobalization>true</InvariantGlobalization>
     <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Api'">
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Worker'">
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <!-- 10.2.1-T1.1 + 00 §11 (server runtime: Linux x64 + arm64): every shipped
        project declares both container RIDs, so a locked mode restore resolves

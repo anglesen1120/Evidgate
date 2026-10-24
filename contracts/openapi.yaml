@@ -65,6 +65,8 @@ tags:
     description: Runner job claim and heartbeat (V2, 04/05)
   - name: policy
     description: Waivers and quarantine lifecycles (07)
+  - name: authoring
+    description: Feature tree, checklist items and manual test cases (13.1.1)
 paths:
   /ci/token:
     post:
@@ -3998,6 +4000,920 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/tree:
+    get:
+      operationId: listAuthoringTree
+      tags: [authoring]
+      summary: The project's feature tree, one node with its ancestor path, or one parent's children (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 1. Without `node_id` and `parent_id` the live roots (parent null) are
+        returned in `(position, id)` order, so `next_cursor` pages the whole root set; with
+        `parent_id` the live children of that node; with `node_id` the answer also carries
+        `node` and `path` (its ancestors, root first) and `items` holds its live children
+        (page 1 only). `include` accepts the tokens `path` and `counts` (counts are always
+        returned, `path` is honoured with `parent_id` too); any other token is 422
+        `request_invalid` with `details[].path = /include`. `child_count` counts live child
+        nodes and `item_count` live checklist items (13.1.1 §5). Another tenant's project is
+        404 `not_found`; a credential scoped to a sibling project of the same org is 403
+        `project_scope_mismatch`; an unknown, soft-deleted or other-project `node_id`/`parent_id`
+        is 404 `not_found`. A `limit` outside 1..200 or a malformed `cursor` is 422
+        `request_invalid` (`details[].path` = `limit` / `cursor`). Every member role holding
+        `authoring:read`, `viewer` included, may read.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringParentIdFilter'
+        - $ref: '#/components/parameters/AuthoringNodeIdFilter'
+        - $ref: '#/components/parameters/AuthoringInclude'
+        - $ref: '#/components/parameters/AuthoringCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of nodes, optionally with the addressed node and its ancestor path
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringTreeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/nodes:
+    post:
+      operationId: createAuthoringNode
+      tags: [authoring]
+      summary: Create a feature-tree node (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 2 (`authoring:write`). `kind` is one of `module`, `feature`, `category`,
+        `sub_category`; the placement ladder is strict (a `module` is a root and names no
+        `parent_id`, every other kind names one), so a missing, wrong-kind, soft-deleted or
+        other-project parent, a self-parent and a placement deeper than the four-level ladder are
+        422 `authoring_parent_invalid` with `details[].reason` ∈ `parent_not_found`,
+        `parent_kind_invalid`, `parent_deleted`, `depth_exceeded`, `cycle`. `title` is 1..200
+        code points. A parent whose live sibling group already holds 1000 nodes is 422
+        `request_invalid` with `details[].path = /parent_id` and
+        `reason = children_limit_exceeded` (renumber or move some of them first); an omitted
+        `position` appends the node at `max(live sibling position) + 1`; a taken live position
+        is 422 `request_invalid` with `details[].path = /position` and
+        `reason = position_taken`. An unknown body member is 422 `request_invalid`
+        (`details[].path` names it), a body over 64 KiB 413 `payload_too_large` (AC16), a missing
+        `Idempotency-Key` 400 `request_invalid` (00 §9.1), and a replay of the same key with the
+        same body answers the stored 201 without a second version or audit row (AC18). The write
+        and its `authoring_version` row are one transaction (`13.1.1` AC5); a lock timeout is 503
+        `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNodeRequest'
+      responses:
+        '201':
+          description: 'The node, its `version`, and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateNodeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/nodes/{n}:
+    patch:
+      operationId: updateAuthoringNode
+      tags: [authoring]
+      summary: Change a node's title, parent or position under If-Match (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 3 (`authoring:write`). Omitted members are unchanged; `parent_id: null`
+        moves the node to the root level. A `parent_id` change re-applies the kind ladder and
+        cycle guards (422 `authoring_parent_invalid` with its `details[].reason`, as on create),
+        and a re-parent renumbers the target siblings. A `parent_id` move into a group that
+        already holds 1000 live siblings is 422 `request_invalid` with
+        `details[].path = /parent_id` and `reason = children_limit_exceeded` (the create
+        refusal). `If-Match` carries the node's `version`
+        (ETag); absent or malformed is 422 `request_invalid` with `details[].path = /If-Match`
+        and `reason` `required` / `invalid`; stale is 412 `precondition_failed` with the
+        current `version` in `error.details` and nothing written (no version row, no audit row,
+        AC19). A request that equals the stored content answers 200 `changed: false` and writes
+        nothing (AC5). An unknown member 422, a body over 64 KiB 413 `payload_too_large`, an
+        unknown or soft-deleted node 404 `not_found`, a lock timeout 503 `unavailable` with
+        `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringNodeId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNodeRequest'
+      responses:
+        '200':
+          description: The node's version after the call and whether it changed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringChangeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: deleteAuthoringNode
+      tags: [authoring]
+      summary: Soft-delete a node; a node that still holds content is 409 (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 5 (`authoring:write`). The node is soft-deleted (`deleted_at`), so it
+        disappears from the tree and from every list, and the delete is recorded as one
+        `SoftDelete` version row with the optional `reason` (1..500 code points; a
+        whitespace-only reason is accepted, the rule every authoring reason follows; no body at
+        all is allowed). A node that still holds a live child node or a live checklist item is
+        409 `authoring_not_empty` with `details[].reason` `node_has_children` / `node_has_items`,
+        and nothing is written (AC7). `If-Match` is the node's `version` (absent/malformed 422
+        with `details[].path = /If-Match`; stale 412 `precondition_failed` with the current
+        `version` in `error.details`, no write, AC19). An unknown or already soft-deleted node
+        is 404 `not_found`; a body over 64 KiB is 413 `payload_too_large`; a missing
+        `Idempotency-Key` is 400 `request_invalid`; a lock timeout is 503 `unavailable` with
+        `Retry-After`. The answer is a bodiless 204.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringNodeId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAuthoringRequest'
+      responses:
+        '204':
+          description: Node soft-deleted; no body
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/nodes/{n}/reorder:
+    post:
+      operationId: reorderAuthoringNodes
+      tags: [authoring]
+      summary: Renumber one parent's live siblings under an order ETag (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 4 (`authoring:write`). `ordered_ids` is the complete live sibling set of
+        `{n}`'s parent, each id exactly once, and `{n}` itself must be one of them; the set is
+        renumbered `0..n-1` so sibling positions stay a total order (AC2). `If-Match` is the
+        order tag the caller read, `"order:sha256:<hex>"` — `AuthoringHashes.OrderHash` over the
+        sorted `(id, version)` pairs of those siblings — so a concurrent re-parent or rename
+        makes the reorder 412 `precondition_failed` without writing anything; absent or
+        malformed is 422 `request_invalid` with `details[].path = /If-Match` (`required` /
+        `invalid`). An `ordered_ids` that is not exactly the live sibling set (missing, extra,
+        duplicate or a foreign id) is 422 `request_invalid` with `details[].path =
+        /ordered_ids`; a list longer than 1000 — the same cap a create or a move-in meets — is
+        422 with `details[].path = /ordered_ids` and `reason = too_many`. The renumber is two
+        statements in one transaction (AC2); a lock timeout is 503 `unavailable` with
+        `Retry-After`. The answer is `{changed}`, and `changed: false`
+        when the request reproduces the stored order.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringNodeId'
+        - $ref: '#/components/parameters/IfMatchOrder'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderNodesRequest'
+      responses:
+        '200':
+          description: Whether the order changed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReorderNodesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/checklist-items:
+    get:
+      operationId: listChecklistItems
+      tags: [authoring]
+      summary: Cursor page of the project's checklist items (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 7. Live items of the project in a total `(position, id)` order — the
+        keyset order of the route — optionally narrowed by the exact `node_id` filter and by
+        `state` (`draft`, `active`, `retired`) and `priority` (`critical`, `high`, `medium`,
+        `low`). `node_id` is optional and unfiltered lists the project's items. A malformed uuid
+        filter, a value outside a closed list, a `limit` outside 1..200 or a garbled `cursor` is
+        422 `request_invalid` with `details[].path` naming the parameter. Another tenant's
+        project is 404 `not_found`; a credential scoped to a sibling project of the same org is
+        403 `project_scope_mismatch` (a project-scoped credential never reaches a sibling, even
+        though RLS is org-level). `authoring:read` is held by every role that also holds
+        `authoring:write`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringNodeIdFilter'
+        - $ref: '#/components/parameters/AuthoringItemStateFilter'
+        - $ref: '#/components/parameters/AuthoringPriorityFilter'
+        - $ref: '#/components/parameters/AuthoringCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of checklist items
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistItemListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: createChecklistItem
+      tags: [authoring]
+      summary: Create a checklist item under a tree node (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 8 (`authoring:write`). The parent node must exist in the project and be
+        a `category` or `sub_category` node, else 422 `authoring_parent_invalid` (`details[].
+        reason` `parent_not_found`, `parent_kind_invalid` or `parent_deleted`). `title` is 1..500
+        code points, `description` at most 4000, `priority` is `critical`, `high`, `medium` or
+        `low`; a manual create starts `active` (13.1.1 §6, CR-13-1) and `source` is `manual`. An
+        omitted `position` appends at `max(live sibling position) + 1` and a taken live position
+        is 422 `request_invalid` with `details[].path = /position` and `reason =
+        position_taken`. An unknown member is 422; a body over 64 KiB is 413
+        `payload_too_large`; a missing `Idempotency-Key` is 400 `request_invalid`; a replay
+        answers the stored 201 with no second version or audit row (AC18). A lock timeout is 503
+        `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChecklistItemRequest'
+      responses:
+        '201':
+          description: 'The item, its `version`, its `state`, and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateChecklistItemResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/checklist-items/{i}:
+    patch:
+      operationId: updateChecklistItem
+      tags: [authoring]
+      summary: Change a checklist item, including its state, under If-Match (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 9 (`authoring:write`). Omitted members are unchanged. `state` moves per
+        13.1.1 §6 (`draft` → `active`, `active` → `retired`, `draft` → `retired`; `retired` is
+        terminal for edits, its only way back is the restore route of 13.1.1-T3), so any other
+        move is 409 `invalid_transition`. Moving to `retired` requires the body member `reason`
+        (1..500 code points; absent is 422 `request_invalid` with `details[].path = /reason`).
+        `If-Match` is the item's `version` (absent/malformed 422 with `details[].path =
+        /If-Match`, stale 412 `precondition_failed` with the current `version` in
+        `error.details` and nothing written, AC19). A no-op answers 200 `changed: false` with no
+        version or audit row (AC5). Unknown member 422, body over 64 KiB 413
+        `payload_too_large`, unknown or soft-deleted item 404 `not_found`, lock timeout 503
+        `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringChecklistItemId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateChecklistItemRequest'
+      responses:
+        '200':
+          description: The item's version after the call and whether it changed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringChangeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: deleteChecklistItem
+      tags: [authoring]
+      summary: Soft-delete a checklist item; an item that still holds cases is 409 (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 10 (`authoring:write`). Soft-deletes the item and appends one
+        `SoftDelete` version row with the optional `reason` (1..500 code points). An item that
+        still holds a live manual test case is 409 `authoring_not_empty` with
+        `details[].reason = item_has_cases`, and nothing is written (AC7). `If-Match` is the
+        item's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412
+        `precondition_failed` with the current `version` in `error.details`, no write, AC19).
+        Unknown or already soft-deleted 404 `not_found`, body over 64 KiB 413
+        `payload_too_large`, missing `Idempotency-Key` 400 `request_invalid`, lock timeout 503
+        `unavailable` with `Retry-After`. The answer is a bodiless 204.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringChecklistItemId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteChecklistItemRequest'
+      responses:
+        '204':
+          description: Item soft-deleted; no body
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/manual-cases:
+    get:
+      operationId: listManualCases
+      tags: [authoring]
+      summary: Cursor page of the project's manual test cases, in code order (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 12 (the `covered` filter and the `linked_live_count` member are
+        13.1.1-T4's and are absent here). Live cases in `(code, id)` order, optionally narrowed
+        by the exact `node_id` and `item_id` filters, by `state` (`draft`, `approved`,
+        `retired`), by `priority` (`critical`, `high`, `medium`, `low`) and by `q` — a
+        case-insensitive title substring of at most 200 code points, with `%`, `_` and `\`
+        escaped so a caller cannot inject a LIKE wildcard. A present but invalid filter value,
+        a `limit` outside 1..200 or a garbled `cursor` is 422 `request_invalid` with
+        `details[].path` naming the parameter. Another tenant's project is 404 `not_found`; a
+        credential scoped to a sibling project of the same org is 403 `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringNodeIdFilter'
+        - $ref: '#/components/parameters/AuthoringItemIdFilter'
+        - $ref: '#/components/parameters/AuthoringCaseStateFilter'
+        - $ref: '#/components/parameters/AuthoringPriorityFilter'
+        - $ref: '#/components/parameters/AuthoringQuery'
+        - $ref: '#/components/parameters/AuthoringCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of manual test cases
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManualCaseListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: createManualCase
+      tags: [authoring]
+      summary: Create a manual test case with a server-allocated code (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 13 (`authoring:write`). The item must exist in the project, else 422
+        `authoring_parent_invalid` (`details[].reason` `parent_not_found` / `parent_deleted`).
+        `steps` is validated against `contracts/schemas/authoring-steps.v1.json` — 1..100 steps,
+        each with `no` (1..1000), `action` and `expected` (≤ 2000 code points) and an optional
+        `data` string, unknown members refused at the document level and inside a step — and a
+        violation is 422 `request_invalid` with one `details[]` entry per problem, its `path`
+        rebased under `/steps`. `code` is server-allocated as `<project case_prefix>-<n>` (the
+        counter is per project, `≥ 3` digits, never reused or editable, AC4); an exhausted
+        counter is 409 `quota_exceeded`. A new case starts `draft` with `source = manual` (13.1.1
+        §6). An unknown member is 422, a body over 64 KiB 413 `payload_too_large`, a missing
+        `Idempotency-Key` 400 `request_invalid`, and a replay answers the stored 201 with no
+        second version or audit row (AC18). A lock timeout is 503 `unavailable` with
+        `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateManualCaseRequest'
+      responses:
+        '201':
+          description: 'The case id, its allocated code, its version, and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateManualCaseResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/manual-cases/{m}:
+    get:
+      operationId: getManualCase
+      tags: [authoring]
+      summary: One manual test case with its steps; ETag is its version (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 14. Returns the case with its steps and `ETag: "<version>"` (the member
+        set of `ManualCaseDetailDto`). Unknown, another tenant's, another project's or
+        soft-deleted case is 404 `not_found`; a credential scoped to a sibling project is 403
+        `project_scope_mismatch`; `authoring:read` suffices. The `links` member, `covered` and
+        the linked-case counts belong to 13.1.1-T4 and are absent here.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringManualCaseId'
+      responses:
+        '200':
+          description: 'The case, its steps and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManualCaseDetailDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      operationId: updateManualCase
+      tags: [authoring]
+      summary: Change a manual test case's content under If-Match (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 15 (`authoring:write`). Omitted members are unchanged. `code` and
+        `checklist_item_id` are not members of this body at all — the code never changes and
+        moving is route 19 — so either one is 422 `request_invalid` with `details[].path =
+        /code` or `/checklist_item_id`. `steps`, when present, is validated against
+        `contracts/schemas/authoring-steps.v1.json` exactly as on create. `If-Match` is the
+        case's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412
+        `precondition_failed` with the current `version` in `error.details` and nothing written,
+        AC19); a no-op answers 200 `changed: false` with no version or audit row (AC5). State
+        moves are route 17. Unknown member 422, body over 64 KiB 413 `payload_too_large`,
+        unknown or soft-deleted case 404 `not_found`, `retired` case 409 `invalid_transition`
+        (terminal for edits, 13.1.1 §6), lock timeout 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringManualCaseId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateManualCaseRequest'
+      responses:
+        '200':
+          description: The case's version after the call and whether it changed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringChangeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: deleteManualCase
+      tags: [authoring]
+      summary: Soft-delete a manual test case (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 16 (`authoring:write`). Soft-deletes the case and appends one
+        `SoftDelete` version row with the optional `reason` (1..500 code points). `If-Match` is
+        the case's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412
+        `precondition_failed` with the current `version` in `error.details`, no write, AC19).
+        Unknown or already soft-deleted 404 `not_found`, body over 64 KiB 413
+        `payload_too_large`, missing `Idempotency-Key` 400 `request_invalid`, lock timeout 503
+        `unavailable` with `Retry-After`. The answer is a bodiless 204.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringManualCaseId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAuthoringRequest'
+      responses:
+        '204':
+          description: Case soft-deleted; no body
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/manual-cases/{m}/state:
+    post:
+      operationId: setManualCaseState
+      tags: [authoring]
+      summary: Move a manual test case through its state machine (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 17 (`authoring:write`). `state` is `draft`, `approved` or `retired`, and
+        the moves of 13.1.1 §6 are `draft → approved`, `draft → retired` and `approved →
+        retired`; every other pair, including a move of a `retired` case, is 409
+        `invalid_transition` and writes nothing. `retired` requires `reason` (1..500 code points;
+        absent is 422 `request_invalid` with `details[].path = /reason`); the reason is optional
+        on `draft → approved` (AC21). `If-Match` is the case's `version` (absent/malformed 422
+        with `details[].path = /If-Match`, stale 412 `precondition_failed` with the current
+        `version` in `error.details`, no write, AC19). A request that names the current state
+        answers 200 with that state and `changed: false` in the version only — no version row
+        and no audit row (AC5). Unknown or soft-deleted case 404 `not_found`, body over 64 KiB
+        413 `payload_too_large`, missing `Idempotency-Key` 400 `request_invalid`, lock timeout
+        503 `unavailable` with `Retry-After`. `code` never changes.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringManualCaseId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetManualCaseStateRequest'
+      responses:
+        '200':
+          description: The case's state and version after the call
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetManualCaseStateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/manual-cases/{m}/item:
+    post:
+      operationId: moveManualCase
+      tags: [authoring]
+      summary: Re-parent a manual test case to another checklist item (13.1.1-T2)
+      description: >-
+        13.1.1 §5 route 19 (`authoring:write`). Re-parents one case to a checklist item of the
+        same project through `AuthoringVersionWriter.MoveManualTestCaseAsync`, which keeps
+        `code`, bumps `version` and appends one `update` version row carrying the new
+        `checklist_item_id` and the given `reason` (≤ 500 code points). The target must exist in
+        the project and not be soft-deleted, else 422 `authoring_parent_invalid`
+        (`details[].reason` `parent_not_found` / `parent_deleted`); a `retired` case or a
+        `retired` target is 409 `invalid_transition`; a move onto the item that already holds
+        the case writes nothing and answers the unchanged version. `If-Match` is the case's
+        `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412
+        `precondition_failed` with the current `version` in `error.details`, no write); of two
+        concurrent moves one wins and the other is 412 (AC22). Unknown or soft-deleted case 404
+        `not_found`, body over 64 KiB 413 `payload_too_large`, missing `Idempotency-Key` 400
+        `request_invalid`, lock timeout 503 `unavailable` with `Retry-After` (the target item is
+        locked before the case, so a nested call cannot invert the order into a `40P01`).
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringManualCaseId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveManualCaseRequest'
+      responses:
+        '200':
+          description: The case's version and its new checklist item
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoveManualCaseResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 components:
   securitySchemes:
     sessionCookie:
@@ -4362,6 +5278,122 @@ components:
       schema:
         type: string
         format: uuid
+    AuthoringNodeId:
+      name: n
+      in: path
+      required: true
+      description: Feature-tree node id (13.1.1).
+      schema:
+        type: string
+        format: uuid
+    AuthoringChecklistItemId:
+      name: i
+      in: path
+      required: true
+      description: Checklist item id (13.1.1).
+      schema:
+        type: string
+        format: uuid
+    AuthoringManualCaseId:
+      name: m
+      in: path
+      required: true
+      description: Manual test case id (13.1.1).
+      schema:
+        type: string
+        format: uuid
+    AuthoringParentIdFilter:
+      name: parent_id
+      in: query
+      required: false
+      description: >-
+        List the live children of this node instead of the roots (13.1.1 §5 route 1). An
+        unknown, soft-deleted or other-project id is 404 `not_found`.
+      schema:
+        type: string
+        format: uuid
+    AuthoringNodeIdFilter:
+      name: node_id
+      in: query
+      required: false
+      description: Address one node (route 1) or narrow a list to this node's entries (13.1.1).
+      schema:
+        type: string
+        format: uuid
+    AuthoringItemIdFilter:
+      name: item_id
+      in: query
+      required: false
+      description: Narrow the manual-case list to one checklist item (13.1.1 §5 route 12).
+      schema:
+        type: string
+        format: uuid
+    AuthoringInclude:
+      name: include
+      in: query
+      required: false
+      description: >-
+        Comma-separated tokens. `path` adds `path` (the addressed node's ancestors, root first);
+        `counts` is always present and needs no token. Any other token is 422 `request_invalid`
+        with `details[].path = /include`.
+      schema:
+        type: string
+        maxLength: 64
+    AuthoringItemStateFilter:
+      name: state
+      in: query
+      required: false
+      description: Checklist item state filter (13.1.1 §6).
+      schema:
+        type: string
+        enum: [draft, active, retired]
+    AuthoringCaseStateFilter:
+      name: state
+      in: query
+      required: false
+      description: Manual test case state filter (13.1.1 §6).
+      schema:
+        type: string
+        enum: [draft, approved, retired]
+    AuthoringPriorityFilter:
+      name: priority
+      in: query
+      required: false
+      description: Priority filter shared by checklist items and manual test cases (13.1.1).
+      schema:
+        type: string
+        enum: [critical, high, medium, low]
+    AuthoringQuery:
+      name: q
+      in: query
+      required: false
+      description: >-
+        Case-insensitive title substring, at most 200 code points; `%`, `_` and `\` are escaped
+        so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
+      schema:
+        type: string
+        maxLength: 200
+    AuthoringCursor:
+      name: cursor
+      in: query
+      required: false
+      description: >-
+        Opaque cursor from `next_cursor`; the order is the one the route declares (`(position,
+        id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+      schema:
+        type: string
+    IfMatchOrder:
+      name: If-Match
+      in: header
+      required: true
+      description: >-
+        Order tag of the sibling set, `"order:sha256:<hex>"` — `AuthoringHashes.OrderHash` over
+        the sorted `(id, version)` pairs of the parent's live siblings (13.1.1-T2) — never a
+        row `version`. Absent or malformed is 422 `request_invalid` with `details[].path =
+        /If-Match` (`required` / `invalid`); a stale tag is 412 `precondition_failed` with the
+        current tag in `error.details`, and nothing is written.
+      schema:
+        type: string
   headers:
     XRequestId:
       description: Server request id; echoed in `error.request_id` (00 §9.1/§9.2).
@@ -4376,6 +5408,17 @@ components:
       schema:
         type: string
   responses:
+    BadRequest:
+      description: >-
+        400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key`
+        every mutating authoring route requires (00 §9.1)
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
     Unauthorized:
       description: 401 unauthenticated (00 §9.2)
       headers:
@@ -4962,6 +6005,7 @@ components:
           version,
           retention_days,
           monthly_run_quota,
+          case_prefix,
         ]
       properties:
         id:
@@ -4999,6 +6043,16 @@ components:
         monthly_run_quota:
           type: [integer, 'null']
           description: Runs per calendar month; null = no limit (enforced by plan 12).
+        case_prefix:
+          type: string
+          pattern: '^[A-Z][A-Z0-9]{1,7}$'
+          maxLength: 8
+          description: >-
+            Uppercase prefix of this project's manual test case codes, `<case_prefix>-<n>`
+            (13.1.1 AC4, T2). The default is the stem rule of `0039_authoring_tree.sql`: the
+            first four alphanumerics of the slug, upper-cased, `P`-prefixed when the stem would
+            start with a digit, with a numeric suffix when the stem is already taken
+            (`flashcards` → `FLAS`, `shop-web` → `SHOP`). Unique per organization.
     ProjectListResponse:
       type: object
       description: 00 §9.1 cursor page of `ProjectDto`, keyset-ordered on `(created_at, id)`.
@@ -5848,6 +6902,14 @@ components:
         slug:
           type: [string, 'null']
           pattern: '^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$'
+        case_prefix:
+          type: [string, 'null']
+          pattern: '^[A-Z][A-Z0-9]{1,7}$'
+          maxLength: 8
+          description: >-
+            Changes this project's manual test case code prefix (13.1.1-T2, 02.1.1 §5). Unique
+            per organization: another project already using it is 409 `case_prefix_taken`
+            (`details[].path = /case_prefix`), and codes already allocated are never rewritten.
         retention_days:
           type: [integer, 'null']
           minimum: 1
@@ -6060,6 +7122,357 @@ components:
         bytes: { type: [integer, 'null'] }
         scan_state: { type: [string, 'null'] }
         failure_code: { type: [string, 'null'] }
+    NodeDto:
+      type: object
+      description: >-
+        One feature-tree node (13.1.1 §4); 13.1.1-T2. `child_count` and `item_count` count live
+        children and live checklist items and are always returned (§5 route 1).
+      required: [node_id, parent_id, kind, title, position, version, child_count, item_count]
+      properties:
+        node_id: { type: string, format: uuid }
+        parent_id: { type: [string, 'null'], format: uuid }
+        kind: { type: string, enum: [module, feature, category, sub_category] }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        position:
+          {
+            type: integer,
+            minimum: 0,
+            description: 'Unique among the live siblings of one parent (AC2).',
+          }
+        version: { type: integer, minimum: 1, description: 'The `ETag` / `If-Match` value (AC19).' }
+        child_count: { type: integer, minimum: 0 }
+        item_count: { type: integer, minimum: 0 }
+    NodePathEntry:
+      $ref: '#/components/schemas/AuthoringNodePathEntry'
+    AuthoringNodePathEntry:
+      type: object
+      description: One ancestor of a node in `path`, root first (13.1.1 §5 route 1).
+      required: [node_id, kind, title]
+      properties:
+        node_id: { type: string, format: uuid }
+        kind: { type: string, enum: [module, feature, category, sub_category] }
+        title: { type: string, maxLength: 200 }
+    AuthoringTreeResponse:
+      type: object
+      description: >-
+        The 200 body of route 1: a page of nodes, plus the addressed `node` and its `path` when
+        the call named `node_id` (13.1.1-T2).
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeDto'
+        next_cursor: { type: [string, 'null'] }
+        node: { oneOf: [{ $ref: '#/components/schemas/NodeDto' }, { type: 'null' }] }
+        path:
+          oneOf:
+            [
+              { type: array, items: { $ref: '#/components/schemas/NodePathEntry' } },
+              { type: 'null' },
+            ]
+    CreateNodeRequest:
+      type: object
+      description: >-
+        Body of route 2 (13.1.1-T2). `position` is omitted to append; the placement ladder is
+        strict, so only a `module` may omit `parent_id`.
+      additionalProperties: false
+      required: [kind, title]
+      properties:
+        parent_id: { type: [string, 'null'], format: uuid }
+        kind: { type: string, enum: [module, feature, category, sub_category] }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        position: { type: [integer, 'null'], minimum: 0 }
+    CreateNodeResponse:
+      type: object
+      description: The 201 body of route 2 (13.1.1-T2).
+      required: [node_id, version]
+      properties:
+        node_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+    UpdateNodeRequest:
+      type: object
+      description: >-
+        Body of route 3 (13.1.1-T2); an omitted member is unchanged and `parent_id: null` moves
+        the node to the root level.
+      additionalProperties: false
+      properties:
+        title: { type: [string, 'null'], minLength: 1, maxLength: 200 }
+        parent_id: { type: [string, 'null'], format: uuid }
+        position: { type: [integer, 'null'], minimum: 0 }
+    ReorderNodesRequest:
+      type: object
+      description: >-
+        Body of route 4 (13.1.1-T2): the complete live sibling set of the node's parent, each id
+        exactly once, the addressed node included, at most 1000 ids — the same cap a create or a
+        move-in meets.
+      additionalProperties: false
+      required: [ordered_ids]
+      properties:
+        ordered_ids:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+    ReorderNodesResponse:
+      type: object
+      description: The 200 body of route 4 (13.1.1-T2); `changed` is false when the request reproduces the stored order.
+      required: [changed]
+      properties:
+        changed: { type: boolean }
+    DeleteAuthoringRequest:
+      type: object
+      description: >-
+        The whole body of a delete route is optional (13.1.1-T2); the only member is the reason
+        recorded on the `SoftDelete` version row. A reason is 1..500 code points — `maxLength`
+        counts code points, so the schema, the column CHECK and the validator agree — and a
+        whitespace-only reason is accepted, the rule every authoring reason follows.
+      additionalProperties: false
+      properties:
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+    AuthoringChangeResponse:
+      type: object
+      description: >-
+        The 200 body of a PATCH or state route (13.1.1-T2): the version after the call and
+        whether anything changed; a no-op answers the stored version with `changed: false`.
+      required: [version, changed]
+      properties:
+        version: { type: integer, minimum: 1 }
+        changed: { type: boolean }
+    ChecklistItemDto:
+      type: object
+      description: One checklist item of the feature tree (13.1.1 §4); 13.1.1-T2.
+      required: [item_id, node_id, title, description, priority, state, source, position, version]
+      properties:
+        item_id: { type: string, format: uuid }
+        node_id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: [string, 'null'], maxLength: 4000 }
+        priority: { type: string, enum: [critical, high, medium, low] }
+        state: { type: string, enum: [draft, active, retired] }
+        source: { type: string, enum: [manual, ai, import] }
+        position: { type: integer, minimum: 0 }
+        version: { type: integer, minimum: 1 }
+    ChecklistItemListResponse:
+      type: object
+      description: 00 §9.1 keyset page of `ChecklistItemDto`, ordered `(position, id)` (13.1.1-T2).
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChecklistItemDto'
+        next_cursor: { type: [string, 'null'] }
+    CreateChecklistItemRequest:
+      type: object
+      description: >-
+        Body of route 8 (13.1.1-T2). A manual create starts `active` (§6, CR-13-1) and `source`
+        is `manual`; `position` is omitted to append.
+      additionalProperties: false
+      required: [node_id, title, priority]
+      properties:
+        node_id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: [string, 'null'], maxLength: 4000 }
+        priority: { type: string, enum: [critical, high, medium, low] }
+        position: { type: [integer, 'null'], minimum: 0 }
+    CreateChecklistItemResponse:
+      type: object
+      description: The 201 body of route 8 (13.1.1-T2).
+      required: [item_id, version, state]
+      properties:
+        item_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        state: { type: string, enum: [draft, active, retired] }
+    UpdateChecklistItemRequest:
+      type: object
+      description: >-
+        Body of route 9 (13.1.1-T2); an omitted member is unchanged and an explicit `null`
+        description clears it. `reason` is required when the move retires the item.
+      additionalProperties: false
+      properties:
+        title: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+        description: { type: [string, 'null'], maxLength: 4000 }
+        priority: { type: [string, 'null'], enum: [critical, high, medium, low, null] }
+        position: { type: [integer, 'null'], minimum: 0 }
+        state: { type: [string, 'null'], enum: [draft, active, retired, null] }
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+    DeleteChecklistItemRequest:
+      type: object
+      description: The optional body of route 10; the only member is the reason on the `SoftDelete` version row (13.1.1-T2).
+      additionalProperties: false
+      properties:
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+    ManualCaseStepDto:
+      type: object
+      description: >-
+        One step of a manual test case, the item shape of
+        `contracts/schemas/authoring-steps.v1.json` (13.1.1-T1.2), which stays the validated
+        source: 1..100 steps, unknown members refused at the document level and inside a step.
+      additionalProperties: false
+      required: [no, action, expected]
+      properties:
+        no:
+          {
+            type: integer,
+            minimum: 1,
+            maximum: 1000,
+            description: 'The number shown to the tester; array order is the execution order.',
+          }
+        action: { type: string, maxLength: 2000 }
+        expected: { type: string, maxLength: 2000 }
+        data: { type: [string, 'null'], maxLength: 2000 }
+    ManualCaseListItemDto:
+      type: object
+      description: >-
+        One row of the manual-case list (13.1.1-T2). The list projection carries no
+        `description`, `precondition` or `steps`, and no coverage field: `linked_live_count`
+        belongs to 13.1.1-T4.
+      required: [case_id, code, checklist_item_id, node_id, title, priority, state, version]
+      properties:
+        case_id: { type: string, format: uuid }
+        code:
+          {
+            type: string,
+            pattern: '^[A-Z][A-Z0-9]{1,7}-[0-9]{3,}$',
+            description: 'The allocated, immutable code `<PREFIX>-<n>` (AC4).',
+          }
+        checklist_item_id: { type: string, format: uuid }
+        node_id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        priority: { type: string, enum: [critical, high, medium, low] }
+        state: { type: string, enum: [draft, approved, retired] }
+        version: { type: integer, minimum: 1 }
+    ManualCaseListResponse:
+      type: object
+      description: 00 §9.1 keyset page of `ManualCaseListItemDto`, ordered `(code, id)` (13.1.1-T2).
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ManualCaseListItemDto'
+        next_cursor: { type: [string, 'null'] }
+    ManualCaseDetailDto:
+      type: object
+      description: >-
+        The 200 body of route 14: one manual test case with its steps (13.1.1-T2). The
+        `links`/coverage members belong to 13.1.1-T4 and are absent here.
+      required:
+        [
+          case_id,
+          code,
+          checklist_item_id,
+          node_id,
+          title,
+          description,
+          precondition,
+          steps,
+          priority,
+          state,
+          version,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        case_id: { type: string, format: uuid }
+        code: { type: string, pattern: '^[A-Z][A-Z0-9]{1,7}-[0-9]{3,}$' }
+        checklist_item_id: { type: string, format: uuid }
+        node_id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: [string, 'null'], maxLength: 4000 }
+        precondition: { type: [string, 'null'], maxLength: 4000 }
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ManualCaseStepDto'
+        priority: { type: string, enum: [critical, high, medium, low] }
+        state: { type: string, enum: [draft, approved, retired] }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateManualCaseRequest:
+      type: object
+      description: >-
+        Body of route 13 (13.1.1-T2). `steps` is validated against
+        `contracts/schemas/authoring-steps.v1.json`; `code` is server-allocated and must not be
+        sent.
+      additionalProperties: false
+      required: [checklist_item_id, title, steps, priority]
+      properties:
+        checklist_item_id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: [string, 'null'], maxLength: 4000 }
+        precondition: { type: [string, 'null'], maxLength: 4000 }
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ManualCaseStepDto'
+        priority: { type: string, enum: [critical, high, medium, low] }
+    CreateManualCaseResponse:
+      type: object
+      description: "The 201 body of route 13: the new case's id, its allocated code and its first version (13.1.1-T2)."
+      required: [case_id, code, version]
+      properties:
+        case_id: { type: string, format: uuid }
+        code: { type: string, pattern: '^[A-Z][A-Z0-9]{1,7}-[0-9]{3,}$' }
+        version: { type: integer, minimum: 1 }
+    UpdateManualCaseRequest:
+      type: object
+      description: >-
+        Body of route 15 (13.1.1-T2). An absent member is unchanged, an explicit `null`
+        description or precondition clears it, and `code` / `checklist_item_id` are not members
+        at all (a move is route 19).
+      additionalProperties: false
+      properties:
+        title: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+        description: { type: [string, 'null'], maxLength: 4000 }
+        precondition: { type: [string, 'null'], maxLength: 4000 }
+        steps:
+          oneOf:
+            [
+              {
+                type: array,
+                minItems: 1,
+                maxItems: 100,
+                items: { $ref: '#/components/schemas/ManualCaseStepDto' },
+              },
+              { type: 'null' },
+            ]
+        priority: { type: [string, 'null'], enum: [critical, high, medium, low, null] }
+    SetManualCaseStateRequest:
+      type: object
+      description: Body of route 17 (13.1.1-T2); `reason` is required when the target state is `retired`.
+      additionalProperties: false
+      required: [state]
+      properties:
+        state: { type: string, enum: [draft, approved, retired] }
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+    SetManualCaseStateResponse:
+      type: object
+      description: 'The 200 body of route 17: the state the case is in now and its version (13.1.1-T2).'
+      required: [state, version]
+      properties:
+        state: { type: string, enum: [draft, approved, retired] }
+        version: { type: integer, minimum: 1 }
+    MoveManualCaseRequest:
+      type: object
+      description: 'Body of route 19 (13.1.1-T2): the checklist item the case moves under.'
+      additionalProperties: false
+      required: [checklist_item_id]
+      properties:
+        checklist_item_id: { type: string, format: uuid }
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+    MoveManualCaseResponse:
+      type: object
+      description: "The 200 body of route 19: the case's version and its new checklist item (13.1.1-T2)."
+      required: [version, checklist_item_id]
+      properties:
+        version: { type: integer, minimum: 1 }
+        checklist_item_id: { type: string, format: uuid }
 security:
   - sessionCookie: []
   - bearerToken: []

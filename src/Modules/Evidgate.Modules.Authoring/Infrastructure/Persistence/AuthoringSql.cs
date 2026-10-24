@@ -230,23 +230,175 @@ internal static class AuthoringSql
         """;
 
     /// <summary>
-    /// The sibling rule of AC2 applied to a restore (AC8): is the restored row's old <c>position</c> held by a live
+    /// The sibling rule of AC2 applied to a create or a restore (AC8): is the row's <c>position</c> held by a live
     /// sibling, and what is the highest position among the live siblings (<c>@id</c> is the row itself, which never
-    /// counts as its own sibling).
+    /// counts as its own sibling; a create passes its new id, which no row holds yet).
     /// </summary>
-    internal const string NodeSiblingPosition = """
-        select exists (select 1 from public.feature_node t
-                        where t.org_id = @org_id and t.project_id = @project_id
-                          and t.parent_id is not distinct from @parent_id
-                          and t.position = @position
-                          and t.deleted_at is null
-                          and t.id <> @id) as taken,
-               coalesce(max(s.position), -1) as max_position
-          from public.feature_node s
-         where s.org_id = @org_id and s.project_id = @project_id
-           and s.parent_id is not distinct from @parent_id
-           and s.deleted_at is null
-           and s.id <> @id
+    /// <param name="root">
+    /// True for the <c>parent_id is null</c> branch, false for the <c>parent_id = @parent_id</c> one. The predicate is
+    /// branched instead of written <c>parent_id is not distinct from @parent_id</c> (OI-13-112): the latter is not a
+    /// searchable form, so PostgreSQL scans the whole <c>(org_id, project_id)</c> prefix of <c>feature_node</c> for every
+    /// call, while both branches are served by <c>feature_node_tree_idx</c> (and, for the <c>exists</c> half, by
+    /// <c>feature_node_sibling_position_uq</c>). Both indexes stay: the read order covers <c>id</c>, the unique index
+    /// covers the position.
+    /// </param>
+    internal static string NodeSiblingPosition(bool root) => root
+        ? """
+            select exists (select 1 from public.feature_node t
+                            where t.org_id = @org_id and t.project_id = @project_id
+                              and t.parent_id is null
+                              and t.position = @position
+                              and t.deleted_at is null
+                              and t.id <> @id) as taken,
+                   coalesce(max(s.position), -1) as max_position
+              from public.feature_node s
+             where s.org_id = @org_id and s.project_id = @project_id
+               and s.parent_id is null
+               and s.deleted_at is null
+               and s.id <> @id
+            """
+        : """
+            select exists (select 1 from public.feature_node t
+                            where t.org_id = @org_id and t.project_id = @project_id
+                              and t.parent_id = @parent_id
+                              and t.position = @position
+                              and t.deleted_at is null
+                              and t.id <> @id) as taken,
+                   coalesce(max(s.position), -1) as max_position
+              from public.feature_node s
+             where s.org_id = @org_id and s.project_id = @project_id
+               and s.parent_id = @parent_id
+               and s.deleted_at is null
+               and s.id <> @id
+            """;
+
+    /// <summary>
+    /// One group's size and its append position in one statement: the number of live siblings and AC2's
+    /// <c>max(live sibling position) + 1</c> (0 for the first sibling). Both numbers belong together because both are
+    /// only true under the group's advisory lock (<see cref="LockSiblingGroup"/>): a create takes that lock before this
+    /// read, so the append cannot meet a parked value of a concurrent renumber, and a group at or past
+    /// <c>NodeLimits.MaximumSiblingsPerGroup</c> is refused instead of being read for a position no reorder could ever
+    /// order.
+    /// </summary>
+    /// <param name="root">True for the root group, false for a named parent (same branching as <see cref="NodeSiblingPosition"/>).</param>
+    internal static string NodeGroupSummary(bool root) => root
+        ? """
+            select count(*) as live_count,
+                   coalesce(max(n.position), -1) + 1 as next_position
+              from public.feature_node n
+             where n.org_id = @org_id
+               and n.project_id = @project_id
+               and n.parent_id is null
+               and n.deleted_at is null
+            """
+        : """
+            select count(*) as live_count,
+                   coalesce(max(n.position), -1) + 1 as next_position
+              from public.feature_node n
+             where n.org_id = @org_id
+               and n.project_id = @project_id
+               and n.parent_id = @parent_id
+               and n.deleted_at is null
+            """;
+
+    /// <summary>
+    /// The transaction-scoped advisory lock of one sibling group (project + parent, the root group included): the
+    /// serialisation AC2 needs between a renumber of a group and every write that adds or moves a row into it
+    /// (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>). The key is one bound text parameter, built in C#, so the
+    /// root group (<c>…:root</c>) can never collide with a node id and no statement has to type a null uuid.
+    /// </summary>
+    internal const string LockSiblingGroup = "select pg_advisory_xact_lock(hashtextextended(@group_key, 0))";
+
+    /// <summary>
+    /// The live sibling set of one parent group, locked <c>for update</c> in id order (the writer-wide lock order: one
+    /// rank, so ascending id) — the whole group, because a reorder renumbers all of it and a create only lands if no
+    /// concurrent writer is moving the same group. Ordering by <c>id</c> rather than by the index's
+    /// <c>(position, id)</c> keeps two reorders from acquiring the rows in opposite orders if a position changes
+    /// between their snapshots.
+    /// </summary>
+    /// <param name="root">True for the root group, false for a named parent.</param>
+    internal static string LockNodeSiblings(bool root) => root
+        ? """
+            select n.id, n.kind, n.title, n.position, n.version
+              from public.feature_node n
+             where n.org_id = @org_id
+               and n.project_id = @project_id
+               and n.parent_id is null
+               and n.deleted_at is null
+             order by n.id
+             for update
+            """
+        : """
+            select n.id, n.kind, n.title, n.position, n.version
+              from public.feature_node n
+             where n.org_id = @org_id
+               and n.project_id = @project_id
+               and n.parent_id = @parent_id
+               and n.deleted_at is null
+             order by n.id
+             for update
+            """;
+
+    /// <summary>
+    /// The first statement of AC2's two-phase renumber (OI-13-110): every <b>moved</b> sibling is parked above the
+    /// group's current maximum, <c>position + @offset</c> with <c>@offset = max(position) + 1</c>. Parked values are
+    /// therefore greater than every live position of the group (moved or not), so the assignment of the next statement
+    /// can never collide with a value still held — and the partial unique index, which cannot be
+    /// <c>DEFERRABLE</c>, is satisfied throughout.
+    /// <para>
+    /// Only the moved ids are touched: a sibling whose position does not change must keep its single version bump, or
+    /// the row's <c>version</c> and its last <c>authoring_version.version_no</c> would drift apart.
+    /// </para>
+    /// </summary>
+    /// <param name="root">True for the root group, false for a named parent.</param>
+    internal static string ReorderPark(bool root) => root
+        ? """
+            update public.feature_node
+               set position = position + @offset
+             where org_id = @org_id
+               and project_id = @project_id
+               and parent_id is null
+               and deleted_at is null
+               and id = any(@ids)
+            """
+        : """
+            update public.feature_node
+               set position = position + @offset
+             where org_id = @org_id
+               and project_id = @project_id
+               and parent_id = @parent_id
+               and deleted_at is null
+               and id = any(@ids)
+            """;
+
+    /// <summary>
+    /// The second statement of AC2's two-phase renumber: each parked row takes its final, 0-based position from the
+    /// caller's list in <b>one</b> set-based assignment. The final positions are <c>0..n-1</c> and the parked values are
+    /// <c>&gt;= n</c> (they start at <c>max + 1</c> and <c>max &gt;= n-1</c>), so no final value meets a parked one.
+    /// </summary>
+    internal const string ReorderAssign = """
+        update public.feature_node n
+           set position = wanted.position
+          from jsonb_to_recordset(@rows::jsonb) as wanted(id uuid, position integer)
+         where n.org_id = @org_id
+           and n.project_id = @project_id
+           and n.deleted_at is null
+           and n.id = wanted.id
+        """;
+
+    /// <summary>
+    /// The versions the renumber left behind, read after the second statement: each moved node's <c>version</c> is the
+    /// <c>version_no</c> its one <c>update</c> row carries (AC2, AC5), and it is two greater than the version the caller
+    /// was shown — the trigger bumps on each of the two position statements. The writer asserts that delta instead of
+    /// assuming it, so a future third statement surfaces as <c>409 invalid_transition</c> rather than as a gap in the
+    /// history.
+    /// </summary>
+    internal const string ReorderVersions = """
+        select n.id, n.version
+          from public.feature_node n
+         where n.org_id = @org_id
+           and n.project_id = @project_id
+           and n.id = any(@ids)
         """;
 
     /// <summary>The same two answers over the live checklist items of one node.</summary>
@@ -317,4 +469,18 @@ internal static class AuthoringSql
 
     /// <summary>The bounded wait of the counter lock (§4: <c>unavailable</c> 503 on a lock timeout, <c>SuiteCommands.cs:161</c>).</summary>
     internal const string SetLockTimeout = "select set_config('lock_timeout', '5000', true)";
+
+    /// <summary>
+    /// One row of <see cref="NodeGroupSummary"/>: the size of a sibling group and the position a new member appends at.
+    /// A mutable class with settable properties, like every other Dapper row of this module, because
+    /// <c>MatchNamesWithUnderscores</c> binds the two columns by property name.
+    /// </summary>
+    internal sealed class NodeGroupRow
+    {
+        /// <summary>The number of live siblings of the group.</summary>
+        public int LiveCount { get; set; }
+
+        /// <summary><c>max(live position) + 1</c>, or 0 for an empty group (AC2's append position).</summary>
+        public int NextPosition { get; set; }
+    }
 }

@@ -9,6 +9,7 @@
       "description": "Read granted reports. No secrets: no `sensitive` permission and no non-assignable code (00 §2).",
       "permissions": [
         "artifact:read",
+        "authoring:read",
         "case:read",
         "decision:read",
         "organization:read",
@@ -29,6 +30,9 @@
         "artifact:read",
         "artifact:read_sensitive",
         "artifact:write",
+        "authoring:generate",
+        "authoring:read",
+        "authoring:write",
         "case:read",
         "decision:read",
         "draft:dry_run",
@@ -57,6 +61,9 @@
         "artifact:read",
         "artifact:read_sensitive",
         "artifact:write",
+        "authoring:generate",
+        "authoring:read",
+        "authoring:write",
         "case:read",
         "case:write",
         "decision:read",
@@ -76,6 +83,7 @@
         "run:cancel",
         "run:create",
         "run:read",
+        "script:generate",
         "suite:read",
         "suite:write"
       ]
@@ -88,6 +96,7 @@
       "permissions": [
         "artifact:read",
         "artifact:read_sensitive",
+        "authoring:read",
         "case:read",
         "decision:read",
         "organization:read",
@@ -111,6 +120,9 @@
         "artifact:read",
         "artifact:write",
         "audit:read",
+        "authoring:generate",
+        "authoring:read",
+        "authoring:write",
         "case:read",
         "case:write",
         "ci_binding:write",
@@ -136,6 +148,7 @@
         "run:cancel",
         "run:create",
         "run:read",
+        "script:generate",
         "security_event:read",
         "service_identity:read",
         "service_identity:write",
@@ -239,6 +252,33 @@
       "resource": "audit",
       "action": "read",
       "description": "Read and export the tenant audit log, support-grant actions included (00 §9.3, 02.7.1).",
+      "sensitive": false,
+      "reserved": false,
+      "tenant_assignable": true
+    },
+    {
+      "code": "authoring:generate",
+      "resource": "authoring",
+      "action": "generate",
+      "description": "Generate authoring content — feature nodes, checklist items and manual test cases — from an imported or AI-drafted source (13.3.1). Generation spends AI credits (08.5.5), so it is its own code.",
+      "sensitive": false,
+      "reserved": false,
+      "tenant_assignable": true
+    },
+    {
+      "code": "authoring:read",
+      "resource": "authoring",
+      "action": "read",
+      "description": "Read the feature tree, its checklist items and its manual test cases (00 §2, 13.1.1).",
+      "sensitive": false,
+      "reserved": false,
+      "tenant_assignable": true
+    },
+    {
+      "code": "authoring:write",
+      "resource": "authoring",
+      "action": "write",
+      "description": "Create, change, reorder, move, retire and delete feature nodes, checklist items and manual test cases (00 §2, 13.1.1).",
       "sensitive": false,
       "reserved": false,
       "tenant_assignable": true
@@ -563,6 +603,15 @@
       "resource": "run",
       "action": "read",
       "description": "Read run state, the evidence revision, report comparisons and environment revisions (00 §9.3).",
+      "sensitive": false,
+      "reserved": false,
+      "tenant_assignable": true
+    },
+    {
+      "code": "script:generate",
+      "resource": "script",
+      "action": "generate",
+      "description": "Generate a test script from a manual test case and open it against the customer repository as a pull request (13.5.1).",
       "sensitive": false,
       "reserved": false,
       "tenant_assignable": true

@@ -35,7 +35,11 @@ public sealed record CreateProjectRequest(string Name, string Slug);
 /// <param name="Name">New display name, or null to keep it.</param>
 /// <param name="Slug">New slug, or null to keep it.</param>
 /// <param name="RetentionDays">New retention override in days (≥ 1), or null to keep it.</param>
-public sealed record UpdateProjectRequest(string? Name, string? Slug, int? RetentionDays);
+/// <param name="CasePrefix">
+/// New case-code prefix, or null to keep it (13.1.1 AC4/OI-13-101): <c>^[A-Z][A-Z0-9]{1,7}$</c>, unique per org, and a
+/// change never rewrites an existing manual test case <c>code</c>.
+/// </param>
+public sealed record UpdateProjectRequest(string? Name, string? Slug, int? RetentionDays, string? CasePrefix);
 
 /// <summary>Cursor page of <c>GET /v1/orgs/{o}/projects</c> (00 §9.1 keyset paging).</summary>
 /// <param name="Items">The page, ordered by <c>(created_at, id)</c>.</param>

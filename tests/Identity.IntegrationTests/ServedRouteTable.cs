@@ -513,12 +513,18 @@ internal sealed record RouteRequestContext(
     Guid QuarantineId,
     Guid CiBindingId,
     Guid IngestTokenId,
-    Guid RunId)
+    Guid RunId,
+    Guid NodeId,
+    Guid ItemId,
+    Guid ManualCaseId)
 {
     /// <summary>The seeded tenant plus fresh ids for everything else.</summary>
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
+        Guid.CreateVersion7(),
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -729,6 +735,50 @@ internal static class RouteRequests
                     },
                 },
             }));
+
+        // ---- Authoring (13.1.1-T2: routes 1-5, 7-10, 12-17 and 19; the restore and link routes are T3/T4) ------
+        // The ids are fresh, so a granted call answers 404/412/422 rather than a body; the matrix only asserts the
+        // authz outcome (403 for a denied route, never 403 for a granted one), and a denied call is refused by the
+        // pipeline before the body is bound.
+        Add("GET", "/v1/projects/{p}/authoring/tree", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/tree"));
+        Add("POST", "/v1/projects/{p}/authoring/nodes", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/nodes",
+            new JsonObject { ["kind"] = "feature", ["title"] = "probe node" }, IdempotencyKey: Key()));
+        Add("PATCH", "/v1/projects/{p}/authoring/nodes/{n}", ctx => new(HttpMethod.Patch, $"/v1/projects/{ctx.ProjectId}/authoring/nodes/{ctx.NodeId}",
+            new JsonObject { ["title"] = "probe node" }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("POST", "/v1/projects/{p}/authoring/nodes/{n}/reorder", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/nodes/{ctx.NodeId}/reorder",
+            // A non-empty, syntactically valid sibling list: `[]` is refused by the validator (`required`) before the
+            // permission pipeline could be observed, so a denied probe would answer 422 instead of the 403 it asserts.
+            new JsonObject { ["ordered_ids"] = new JsonArray(ctx.NodeId.ToString()) },
+            IfMatch: "\"order:sha256:" + new string('0', 64) + "\"", IdempotencyKey: Key()));
+        Add("DELETE", "/v1/projects/{p}/authoring/nodes/{n}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/authoring/nodes/{ctx.NodeId}",
+            IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/checklist-items", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/checklist-items"));
+        Add("POST", "/v1/projects/{p}/authoring/checklist-items", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/checklist-items",
+            new JsonObject { ["node_id"] = ctx.NodeId.ToString(), ["title"] = "probe item", ["priority"] = "medium" },
+            IdempotencyKey: Key()));
+        Add("PATCH", "/v1/projects/{p}/authoring/checklist-items/{i}", ctx => new(HttpMethod.Patch, $"/v1/projects/{ctx.ProjectId}/authoring/checklist-items/{ctx.ItemId}",
+            new JsonObject { ["title"] = "probe item" }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("DELETE", "/v1/projects/{p}/authoring/checklist-items/{i}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/authoring/checklist-items/{ctx.ItemId}",
+            IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/manual-cases", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases"));
+        Add("POST", "/v1/projects/{p}/authoring/manual-cases", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases",
+            new JsonObject
+            {
+                ["checklist_item_id"] = ctx.ItemId.ToString(),
+                ["title"] = "probe case",
+                ["steps"] = new JsonArray(new JsonObject { ["no"] = 1, ["action"] = "open the page", ["expected"] = "it renders" }),
+                ["priority"] = "medium",
+            },
+            IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/manual-cases/{m}", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}"));
+        Add("PATCH", "/v1/projects/{p}/authoring/manual-cases/{m}", ctx => new(HttpMethod.Patch, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}",
+            new JsonObject { ["title"] = "probe case" }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("DELETE", "/v1/projects/{p}/authoring/manual-cases/{m}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}",
+            IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/state", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}/state",
+            new JsonObject { ["state"] = "approved" }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/item", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}/item",
+            new JsonObject { ["checklist_item_id"] = ctx.ItemId.ToString() }, IfMatch: "\"1\"", IdempotencyKey: Key()));
 
         // ---- Dev surface (absent from the spec; allowlisted in ServedRouteTable) ------------------------------
         Add("POST", "/v1/slice/run", ctx => new(HttpMethod.Post, "/v1/slice/run",

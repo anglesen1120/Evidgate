@@ -65,7 +65,8 @@ internal static class TenancyReadSql
                updated_at,
                version,
                retention_days,
-               monthly_run_quota
+               monthly_run_quota,
+               case_prefix
           from public.project
          where id = @project_id
         """;
@@ -88,7 +89,8 @@ internal static class TenancyReadSql
                updated_at,
                version,
                retention_days,
-               monthly_run_quota
+               monthly_run_quota,
+               case_prefix
           from public.project
          where org_id = @org_id
            and status = @status
@@ -117,7 +119,8 @@ internal static class TenancyReadSql
                updated_at,
                version,
                retention_days,
-               monthly_run_quota
+               monthly_run_quota,
+               case_prefix
           from public.project
          where org_id = @org_id
            and status = @status
