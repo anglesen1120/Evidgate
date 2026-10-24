@@ -4,17 +4,20 @@
 // resource twice, and a shared key across two actions would turn the second into a 409
 // `idempotency_conflict`.
 
+import { newUuid } from './random-id';
+
 /** One user intent: the key a mutation is retried with until the action is done or abandoned. */
 export interface Intent {
   readonly idempotencyKey: string;
 }
 
 /**
- * Mint an intent for a user action. `crypto.randomUUID()` is a v4 UUID (122 random bits), which
- * stays unique per `(org_id, project_id, operation)` for the 24 h the server remembers a key.
+ * Mint an intent for a user action. `newUuid()` yields a v4 UUID (122 random bits), which stays
+ * unique per `(org_id, project_id, operation)` for the 24 h the server remembers a key, and
+ * still works in a non-secure context where `crypto.randomUUID` is absent.
  */
 export function createIntent(): Intent {
-  return { idempotencyKey: crypto.randomUUID() };
+  return { idempotencyKey: newUuid() };
 }
 
 /**

@@ -30,8 +30,8 @@ import {
 import { firstValueFrom } from 'rxjs';
 
 import { isApiRequestError, type ApiError } from './api-error';
-import { API_CLIENT, provideApi } from './api-client';
-import { ApiGateway } from './api-gateway';
+import { provideApi } from './api-client';
+import { ApiGateway, type SdkResult } from './api-gateway';
 import { API_BASE_PATH } from './api-origin';
 import { createIntent, intentHeaders, type Intent } from './intent';
 
@@ -103,23 +103,28 @@ async function takeRequest(
   throw new Error('no HTTP request reached HttpTestingController');
 }
 
-/** Resolves with the typed failure of a call that must not succeed. */
-async function captureApiError(promise: Promise<unknown>): Promise<ApiError> {
+/** Resolves with whatever a call that must not succeed rejected with. */
+async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
   try {
     await promise;
   } catch (cause) {
-    if (isApiRequestError(cause)) {
-      return cause.error;
-    }
-    throw cause;
+    return cause;
   }
-  throw new Error('expected the call to fail with an ApiRequestError, but it resolved');
+  throw new Error('expected the call to fail, but it resolved');
+}
+
+/** Resolves with the typed failure of a call that must fail with an `ApiRequestError`. */
+async function captureApiError(promise: Promise<unknown>): Promise<ApiError> {
+  const cause = await captureRejection(promise);
+  if (isApiRequestError(cause)) {
+    return cause.error;
+  }
+  throw cause;
 }
 
 describe('API client stack (09.1.1-T3.2)', () => {
   let httpMock: HttpTestingController;
   let gateway: ApiGateway;
-  let client: Client;
 
   beforeEach(() => {
     document.cookie = 'XSRF-TOKEN=csrf-cookie-1; path=/';
@@ -133,16 +138,11 @@ describe('API client stack (09.1.1-T3.2)', () => {
     });
     httpMock = TestBed.inject(HttpTestingController);
     gateway = TestBed.inject(ApiGateway);
-    client = TestBed.inject(API_CLIENT);
   });
 
   afterEach(() => {
     httpMock.verify();
     document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
-  });
-
-  it('calls the configured API client', () => {
-    expect(gateway.client).toBe(client);
   });
 
   it('adds X-Request-Id and traceparent to an API request', async () => {
@@ -278,7 +278,7 @@ describe('API client stack (09.1.1-T3.2)', () => {
     expect(error.retryAfterSeconds).toBe(30);
   });
 
-  it('reports an HTML 502 without an envelope as unexpected/envelope_missing', async () => {
+  it('reports an HTML 502 without an envelope as unavailable/envelope_missing', async () => {
     const page = gateway.call((sdk) => listRuns({ client: sdk, path: { p: 'p-1' } }));
     const html = new Blob(['<html><body>Bad Gateway</body></html>'], { type: 'text/html' });
     (await takeRequest(httpMock, RUNS_URL)).flush(html, {
@@ -287,18 +287,72 @@ describe('API client stack (09.1.1-T3.2)', () => {
       headers: { 'Content-Type': 'text/html' },
     });
     const error = await captureApiError(page);
-    expect(error.kind).toBe('unexpected');
+    expect(error.kind).toBe('unavailable');
     expect(error.code).toBe('envelope_missing');
     expect(error.status).toBe(502);
   });
 
-  it('reports a transport failure as network with status 0', async () => {
+  it('reports a transport failure as network with status 0 and keeps the cause', async () => {
     const page = gateway.call((sdk) => listRuns({ client: sdk, path: { p: 'p-1' } }));
     (await takeRequest(httpMock, RUNS_URL)).error(new ProgressEvent('error'));
-    const error = await captureApiError(page);
-    expect(error.kind).toBe('network');
-    expect(error.status).toBe(0);
-    expect(error.retryable).toBe(true);
+    const rejection = await captureRejection(page);
+    if (!isApiRequestError(rejection)) {
+      throw rejection;
+    }
+    expect(rejection.error.kind).toBe('network');
+    expect(rejection.error.status).toBe(0);
+    expect(rejection.error.retryable).toBe(true);
+    expect(rejection.cause).toBeInstanceOf(TypeError);
+  });
+
+  it('rethrows the AbortError of an aborted call instead of a network failure', async () => {
+    const controller = new AbortController();
+    const page = gateway.call((sdk) =>
+      listRuns({ client: sdk, path: { p: 'p-1' }, signal: controller.signal }),
+    );
+    await takeRequest(httpMock, RUNS_URL);
+    controller.abort();
+    const rejection = await captureRejection(page);
+    expect(rejection).toBeInstanceOf(DOMException);
+    expect(isApiRequestError(rejection)).toBe(false);
+    expect(rejection).toHaveProperty('name', 'AbortError');
+  });
+
+  it('treats a non-Error abort reason as a cancellation too', async () => {
+    const controller = new AbortController();
+    const page = gateway.call((sdk) =>
+      listRuns({ client: sdk, path: { p: 'p-1' }, signal: controller.signal }),
+    );
+    await takeRequest(httpMock, RUNS_URL);
+    // A plain string reason cannot become a typed API failure: an abort is a cancellation
+    // whatever its reason, so the call still rejects as an `AbortError`, never as `network`.
+    controller.abort('timeout');
+    const rejection = await captureRejection(page);
+    expect(rejection).toBeInstanceOf(DOMException);
+    expect(isApiRequestError(rejection)).toBe(false);
+    expect(rejection).toHaveProperty('name', 'AbortError');
+  });
+
+  // The two cases below reject through the operation itself: the SDK catches every rejection of
+  // its `fetch`, so only an operation that fails before `fetch` (or a differently configured
+  // client) reaches this branch of `ApiGateway.call`.
+  it('maps a TypeError rejected by the operation to network, keeping it as the cause', async () => {
+    const transportFailure = new TypeError('fetch failed');
+    const rejection = await captureRejection(
+      gateway.call<SdkResult>(() => Promise.reject(transportFailure)),
+    );
+    if (!isApiRequestError(rejection)) {
+      throw rejection;
+    }
+    expect(rejection.error.kind).toBe('network');
+    expect(rejection.error.status).toBe(0);
+    expect(rejection.cause).toBe(transportFailure);
+  });
+
+  it('rethrows any other operation rejection unchanged', async () => {
+    const bug = new RangeError('the operation misused the SDK');
+    const rejection = await captureRejection(gateway.call<SdkResult>(() => Promise.reject(bug)));
+    expect(rejection).toBe(bug);
   });
 
   it('leaves a foreign-origin request untouched by all three API headers', async () => {

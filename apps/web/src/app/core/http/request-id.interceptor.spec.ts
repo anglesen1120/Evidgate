@@ -154,6 +154,37 @@ describe('requestIdInterceptor', () => {
     request.flush({});
   });
 
+  it('mints both UUID headers without crypto.randomUUID (non-secure context)', () => {
+    const realCrypto = globalThis.crypto;
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    // A plain-http origin outside localhost: getRandomValues exists, randomUUID does not.
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: {
+        getRandomValues: (bytes: Uint8Array<ArrayBuffer>) => realCrypto.getRandomValues(bytes),
+      },
+    });
+    try {
+      const url = `${harness.origin}/v1/runs`;
+      harness.http.post(url, {}).subscribe();
+      const request = harness.controller.expectOne(url);
+
+      expect(request.request.headers.get('X-Request-Id') ?? '').toMatch(UUID_V4);
+      expect(request.request.headers.get('Idempotency-Key') ?? '').toMatch(UUID_V4);
+      expect(request.request.headers.get('traceparent') ?? '').toMatch(TRACEPARENT);
+
+      request.flush({});
+    } finally {
+      if (cryptoDescriptor === undefined) {
+        Reflect.deleteProperty(globalThis, 'crypto');
+      } else {
+        Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
+      }
+    }
+  });
+
   it('hands a non-API request to the next interceptor as the same HttpRequest instance', () => {
     const captured: HttpRequest<unknown>[] = [];
     const capture: HttpInterceptorFn = (request, next) => {
@@ -212,5 +243,27 @@ describe('isApiRequestUrl', () => {
     expect(isApiRequestUrl('/v1/runs', 'not a url')).toBe(false);
     expect(isApiRequestUrl('/v1/runs', '')).toBe(false);
     expect(isApiRequestUrl('http://[', page)).toBe(false);
+  });
+
+  it('still accepts a plain-http page on the same origin', () => {
+    const plainPage = 'http://localhost:4200/projects/p-1';
+    expect(isApiRequestUrl('/v1/runs', plainPage)).toBe(true);
+    expect(isApiRequestUrl('http://localhost:4200/v1/runs', plainPage)).toBe(true);
+  });
+
+  it('rejects an opaque-origin page even when both origins stringify to "null"', () => {
+    const filePage = 'file:///Users/me/app/index.html';
+    expect(isApiRequestUrl('/v1/runs', filePage)).toBe(false);
+    expect(isApiRequestUrl('file:///v1/runs', filePage)).toBe(false);
+    expect(isApiRequestUrl('/v1/runs', 'data:text/html,<p>app</p>')).toBe(false);
+    expect(isApiRequestUrl('/v1/runs', 'about:blank')).toBe(false);
+  });
+
+  it('rejects a non-http(s) request URL', () => {
+    // `blob:` inherits the creating origin, and the others are opaque: none of them carries
+    // API traffic, so the scheme alone decides regardless of origin or path.
+    expect(isApiRequestUrl('blob:https://app.evidgate.test/v1/runs', page)).toBe(false);
+    expect(isApiRequestUrl('data:text/plain,/v1/runs', page)).toBe(false);
+    expect(isApiRequestUrl('ftp://app.evidgate.test/v1/runs', page)).toBe(false);
   });
 });

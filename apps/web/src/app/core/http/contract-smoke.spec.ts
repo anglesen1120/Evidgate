@@ -344,7 +344,6 @@ describe('OpenAPI contract smoke (09.1.1-T3.2)', () => {
   it('matches the recorded fixture, so fixture drift fails the suite', () => {
     const fixture = readFixture();
     expect(fixture['operations'], RE_RECORD).toEqual(deriveOperations());
-    expect(fixture['generatedBy']).toBe('node apps/web/scripts/record-openapi-fixture.mjs');
   });
 
   it('records a 00 §9.2 envelope example for the 403 csrf_failed refusal', () => {

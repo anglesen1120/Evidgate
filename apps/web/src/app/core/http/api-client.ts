@@ -45,9 +45,12 @@ export const API_CLIENT = new InjectionToken<Client>('evidgate.api-client');
 
 /**
  * `HttpClient` with the API interceptors and XSRF wiring, plus the SDK `API_CLIENT` built on the
- * Angular adapter. Interceptor order is request id first, then idempotency; Angular's XSRF
- * interceptor runs after both. A spec adds `provideHttpClientTesting()` after this call to reach
- * the real stack.
+ * Angular adapter. Angular registers its own XSRF interceptor first: `provideHttpClient()` pushes
+ * `xsrfInterceptorFn` into `HTTP_INTERCEPTOR_FNS` before the `withInterceptors()` features and the
+ * chain runs in provider order, so it sees the request ahead of request id and idempotency. The
+ * order changes nothing on the wire — `xsrfInterceptorFn` returns early for GET/HEAD and for an
+ * origin that is not the page's, so only same-origin `/v1` mutations gain `X-XSRF-TOKEN`. A spec
+ * adds `provideHttpClientTesting()` after this call to reach the real stack.
  *
  * `baseUrl` stays `/v1` in the application (the API shares the page origin, rule 1) and exists as
  * a parameter only because the SDK builds `new Request(baseUrl + path)`: a browser resolves the

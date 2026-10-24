@@ -11,8 +11,13 @@
 // an error-envelope value inline.
 'use strict';
 
-/** Wire keys are snake_case, so any underscore marks a hand-written payload field. */
-const WIRE_KEY = /_/;
+// A wire key is snake_case — at least two lowercase-or-digit segments joined by one
+// underscore (`run_id`, `next_cursor`). A leading underscore is not snake_case but a
+// private/phantom marker (`_private`, `__brand`), so the anchored shape keeps those legal.
+// Known limit (accepted heuristic): only declared property signatures are inspected, so a
+// snake_case key that appears only inside an array element type
+// (`items: { run_id: string }[]`) or a mapped/`Record` value type is not flagged.
+const WIRE_KEY = /^[a-z0-9]+(?:_[a-z0-9]+)+$/;
 
 /** Payload-shaped declaration names. */
 const WIRE_NAME = /(?:Dto|DTO|Payload|Request|Response|Envelope)$/;

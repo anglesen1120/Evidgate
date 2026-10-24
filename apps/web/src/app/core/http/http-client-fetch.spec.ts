@@ -1,11 +1,17 @@
 // 09.1.1-T3.2 (ADR-0008 decision row a + adapter gotchas): specs for the `fetch` adapter that
 // puts the generated SDK behind Angular `HttpClient`. They pin what the interceptors see
 // (method, absolute URL, forwarded headers, exact text body, withCredentials) and what the SDK
-// gets back (a fetch `Response` for 2xx and for 00 §9.2 error statuses, `TypeError` for
-// status 0, `AbortError` on abort).
+// gets back (a fetch `Response` for 2xx and for 00 §9.2 error statuses, `TypeError` for status 0,
+// for a status a `Response` cannot carry, for a 2xx `HttpErrorResponse` and for a non-text
+// request body, `AbortError` on abort).
 
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
-import { HttpClient, HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpErrorResponse,
+  HttpResponse,
+  provideHttpClient,
+} from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting,
@@ -132,6 +138,45 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     await pending;
   });
 
+  it('refuses a non-text request body before it reaches HttpClient', async () => {
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const pending = adapter(
+      new Request(apiUrl('/artifacts'), {
+        method: 'POST',
+        body: bytes,
+        headers: { 'Content-Type': 'application/octet-stream' },
+      }),
+    );
+
+    const error: unknown = await pending.catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(TypeError);
+    httpMock.expectNone(apiUrl('/artifacts'));
+  });
+
+  it('forwards an application/x-www-form-urlencoded body as text', async () => {
+    const text = 'grant_type=client_credentials&scope=runs%3Aread';
+    const pending = adapter(
+      new Request(apiUrl('/oauth/token'), {
+        method: 'POST',
+        body: text,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' },
+      }),
+    );
+
+    const testRequest = await nextRequest(httpMock, apiUrl('/oauth/token'));
+    const body: unknown = testRequest.request.body;
+    expect(body).toBe(text);
+
+    testRequest.flush(jsonBlob({ access_token: 'token-1' }), {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const response = await pending;
+    expect(response.status).toBe(200);
+  });
+
   it('converts a 200 JSON blob into a Response with the payload, status and headers', async () => {
     const payload = { items: [{ id: 'run-1' }], next_cursor: null };
     const pending = adapter(new Request(apiUrl('/runs')));
@@ -210,6 +255,19 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     expect(response.headers.get('Retry-After')).toBe('120');
   });
 
+  it('joins a repeated response header instead of dropping a value', async () => {
+    const pending = adapter(new Request(apiUrl('/runs')));
+
+    (await nextRequest(httpMock, apiUrl('/runs'))).flush(jsonBlob({ items: [] }), {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'Content-Type': 'application/json', 'X-Trace-Id': ['span-1', 'span-2'] },
+    });
+
+    const response = await pending;
+    expect(response.headers.get('X-Trace-Id')).toBe('span-1, span-2');
+  });
+
   it('keeps a non-envelope text error body on a 502', async () => {
     const html = '<html><body>Bad Gateway</body></html>';
     const pending = adapter(new Request(apiUrl('/runs')));
@@ -234,6 +292,56 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     expect(error).toBeInstanceOf(TypeError);
     const { cause } = error as TypeError;
     expect(cause).toBeInstanceOf(HttpErrorResponse);
+  });
+
+  it('rejects a 101 status instead of letting Response throw a RangeError', async () => {
+    const pending = adapter(new Request(apiUrl('/runs')));
+
+    // A non-2xx status reaches the adapter as an `HttpErrorResponse`; 101 cannot become a fetch
+    // `Response` (its constructor only accepts 200-599).
+    (await nextRequest(httpMock, apiUrl('/runs'))).flush(new Blob(['']), {
+      status: 101,
+      statusText: 'Switching Protocols',
+    });
+
+    const error: unknown = await pending.catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error).not.toBeInstanceOf(RangeError);
+    const { cause } = error as TypeError;
+    expect(cause).toBeInstanceOf(HttpErrorResponse);
+    expect((cause as HttpErrorResponse).status).toBe(101);
+  });
+
+  it('rejects a response event whose status is below 200', async () => {
+    const pending = adapter(new Request(apiUrl('/runs')));
+    const testRequest = await nextRequest(httpMock, apiUrl('/runs'));
+
+    // `event` is how a non-error `HttpResponse` reaches the conversion without flush's 2xx
+    // filter; a 1xx there must not surface as the constructor's `RangeError`.
+    testRequest.event(
+      new HttpResponse({ body: null, status: 101, statusText: 'Switching Protocols' }),
+    );
+
+    const error: unknown = await pending.catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error).not.toBeInstanceOf(RangeError);
+    const { cause } = error as TypeError;
+    expect(cause).toBeInstanceOf(HttpResponse);
+    expect((cause as HttpResponse<unknown>).status).toBe(101);
+  });
+
+  it('rejects a 2xx HttpErrorResponse instead of returning it as a success', async () => {
+    const pending = adapter(new Request(apiUrl('/runs')));
+
+    (await nextRequest(httpMock, apiUrl('/runs'))).error(new ProgressEvent('error'), {
+      status: 200,
+    });
+
+    const error: unknown = await pending.catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(TypeError);
+    const { cause } = error as TypeError;
+    expect(cause).toBeInstanceOf(HttpErrorResponse);
+    expect((cause as HttpErrorResponse).status).toBe(200);
   });
 
   it('rejects with an AbortError before sending an already-aborted request', async () => {

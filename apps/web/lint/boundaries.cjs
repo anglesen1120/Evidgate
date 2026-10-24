@@ -2,8 +2,10 @@
 // `apps/web`, exported as ready-to-spread ESLint flat-config blocks. eslint.config.js only
 // requires and spreads this array, so the rule logic lives here and a later change to the
 // root config has one small additive block to merge. The HTTP boundary is split: its
-// import allow-list is a local rule (no `no-restricted-imports` option can express one),
-// its `fetch`/XHR/WebSocket/EventSource half is ESLint's own `no-restricted-globals`.
+// import half is a local rule (no `no-restricted-imports` option can express an allow-list,
+// and none has a notion of a type-only import) covering both the `@angular/common/http`
+// names and the `@evidgate/sdk` values a file outside core may use; its
+// `fetch`/XHR/WebSocket/EventSource half is ESLint's own `no-restricted-globals`.
 //
 // The blocks need no type information: they run next to the typed blocks of
 // eslint.config.js (which own the parser and the project service) and can be given to a

@@ -129,6 +129,151 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       expect(ruleIds(banned, FEATURE_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
     });
 
+    it('rejects a re-export, a star re-export and a dynamic import of @angular/common/http', () => {
+      const reExport = ["export { HttpClient } from '@angular/common/http';", ''].join('\n');
+      expect(ruleIds(reExport, FEATURE_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+
+      const star = ["export * from '@angular/common/http';", ''].join('\n');
+      expect(ruleIds(star, FEATURE_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+
+      const dynamic = [
+        "export const load = (): Promise<unknown> => import('@angular/common/http');",
+        '',
+      ].join('\n');
+      expect(ruleIds(dynamic, FEATURE_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+    });
+
+    it('allows an allowed symbol through a re-export, and the whole module inside core', () => {
+      const allowedReExport = [
+        "export { provideHttpClient, withInterceptors } from '@angular/common/http';",
+        '',
+      ].join('\n');
+      expect(lint(allowedReExport, APP_CONFIG_FILE)).toEqual([]);
+
+      const typeReExport = [
+        "export type { HttpErrorResponse } from '@angular/common/http';",
+        '',
+      ].join('\n');
+      expect(lint(typeReExport, SHARED_FILE)).toEqual([]);
+
+      const dynamic = [
+        "export const load = (): Promise<unknown> => import('@angular/common/http');",
+        '',
+      ].join('\n');
+      expect(lint(dynamic, CORE_HTTP_FILE)).toEqual([]);
+      expect(lint(dynamic, CORE_DATA_FILE)).toEqual([]);
+    });
+
+    it('rejects an SDK operation, the default client and a namespace import outside core', () => {
+      const operation = [
+        "import { listRuns } from '@evidgate/sdk';",
+        '',
+        'export const load = listRuns;',
+        '',
+      ].join('\n');
+      expect(ruleIds(operation, FEATURE_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+
+      const defaultClient = [
+        "import { client } from '@evidgate/sdk';",
+        '',
+        'export const api = client;',
+        '',
+      ].join('\n');
+      expect(ruleIds(defaultClient, FEATURE_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+
+      const namespace = [
+        "import * as sdk from '@evidgate/sdk';",
+        '',
+        'export const api = sdk;',
+        '',
+      ].join('\n');
+      expect(ruleIds(namespace, SHARED_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+
+      const factories = [
+        "import { createClient, createConfig } from '@evidgate/sdk';",
+        '',
+        'export const build = [createClient, createConfig];',
+        '',
+      ].join('\n');
+      expect(ruleIds(factories, SHARED_FILE)).toEqual([HTTP_OUTSIDE_CORE, HTTP_OUTSIDE_CORE]);
+
+      const mixed = [
+        "import { type RunPage, listRuns } from '@evidgate/sdk';",
+        '',
+        'export const load = (): RunPage | undefined => listRuns;',
+        '',
+      ].join('\n');
+      expect(ruleIds(mixed, FEATURE_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+
+      const reExport = ["export { createConfig } from '@evidgate/sdk';", ''].join('\n');
+      expect(ruleIds(reExport, SHARED_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+
+      const mixedReExport = [
+        "export { type RunPage, createConfig } from '@evidgate/sdk';",
+        '',
+      ].join('\n');
+      expect(ruleIds(mixedReExport, SHARED_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+
+      const star = ["export * from '@evidgate/sdk';", ''].join('\n');
+      expect(ruleIds(star, SHARED_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+
+      const dynamic = [
+        "export const load = (): Promise<unknown> => import('@evidgate/sdk');",
+        '',
+      ].join('\n');
+      expect(ruleIds(dynamic, FEATURE_FILE)).toEqual([HTTP_OUTSIDE_CORE]);
+    });
+
+    it('allows SDK types and the error-envelope guard outside core', () => {
+      const typeImport = [
+        "import type { RunPage } from '@evidgate/sdk';",
+        '',
+        'export type Page = RunPage;',
+        '',
+      ].join('\n');
+      expect(lint(typeImport, FEATURE_FILE)).toEqual([]);
+
+      const inlineType = [
+        "import { type RunPage } from '@evidgate/sdk';",
+        '',
+        'export type Page = RunPage;',
+        '',
+      ].join('\n');
+      expect(lint(inlineType, FEATURE_FILE)).toEqual([]);
+
+      const guard = [
+        "import { isErrorEnvelope } from '@evidgate/sdk';",
+        '',
+        'export const classify = (body: unknown): boolean => isErrorEnvelope(body);',
+        '',
+      ].join('\n');
+      expect(lint(guard, SHARED_FILE)).toEqual([]);
+
+      const typeReExport = ["export type { RunPage } from '@evidgate/sdk';", ''].join('\n');
+      expect(lint(typeReExport, SHARED_FILE)).toEqual([]);
+
+      const inlineTypeReExport = ["export { type RunPage } from '@evidgate/sdk';", ''].join('\n');
+      expect(lint(inlineTypeReExport, SHARED_FILE)).toEqual([]);
+    });
+
+    it('allows every SDK value inside core/http and core/data, specs included', () => {
+      const code = [
+        "import { client, createConfig, listRuns } from '@evidgate/sdk';",
+        '',
+        'export const all = [client, createConfig, listRuns];',
+        '',
+      ].join('\n');
+      expect(lint(code, CORE_HTTP_FILE)).toEqual([]);
+      expect(lint(code, CORE_DATA_FILE)).toEqual([]);
+      expect(lint(code, 'apps/web/src/app/core/http/error-mapper.spec.ts')).toEqual([]);
+      expect(lint(code, 'apps/web/src/app/core/data/runs-data.service.spec.ts')).toEqual([]);
+      expect(ruleIds(code, 'apps/web/src/app/features/runs/runs.store.spec.ts')).toEqual([
+        HTTP_OUTSIDE_CORE,
+        HTTP_OUTSIDE_CORE,
+        HTTP_OUTSIDE_CORE,
+      ]);
+    });
+
     it('rejects fetch() outside core and allows it inside core/http', () => {
       const code = [
         'export function load(url: string): Promise<Response> {',
@@ -194,6 +339,18 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
 
       const alias = ['export type RunRowView = {', '  runId: string;', '};', ''].join('\n');
       expect(lint(alias, FEATURE_FILE)).toEqual([]);
+    });
+
+    it('does not treat an underscore-prefixed private or phantom key as a wire key', () => {
+      const code = [
+        'export interface RunRowViewModel {',
+        '  _private: string;',
+        '  __brand: never;',
+        '  runId: string;',
+        '}',
+        '',
+      ].join('\n');
+      expect(lint(code, FEATURE_FILE)).toEqual([]);
     });
 
     it('accepts an inline error-envelope value in a spec', () => {

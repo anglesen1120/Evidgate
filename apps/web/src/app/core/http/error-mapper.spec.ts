@@ -1,6 +1,8 @@
 // 09.1.1-T3.1 (00 §9.2, ADR-0008 decision (a)): pins the error table row by row. Every status
 // and code documented on 00 §9.2 line 336 is a row here, so a code that gains no row fails the
-// coverage test below and can never reach a page unclassified. No TestBed: the mapper is pure.
+// coverage test below and can never reach a page unclassified. A second table does the same for
+// the envelope-less statuses whose kind comes from the status alone. No TestBed: the mapper is
+// pure.
 
 import type { ErrorEnvelope, ErrorEnvelopeDetail } from '@evidgate/sdk';
 
@@ -250,29 +252,69 @@ describe('mapApiError — envelope fields and details', () => {
   });
 });
 
-describe('mapApiError — non-envelope failures', () => {
-  it('maps an HTML 502 to unexpected / envelope_missing and keeps it retryable', () => {
-    const mapped = mapApiError({
-      status: 502,
-      body: '<html><body><h1>502 Bad Gateway</h1></body></html>',
-    });
+interface StatusOnlyCase {
+  readonly status: number;
+  readonly kind: ApiErrorKind;
+  /** Whether the mapper offers the same-intent retry for this status. */
+  readonly retryable: boolean;
+}
 
-    expect(mapped.kind).toBe('unexpected');
-    expect(mapped.code).toBe('envelope_missing');
-    expect(mapped.status).toBe(502);
-    expect(mapped.retryable).toBe(true);
+/** An envelope-less response whose status alone is unambiguous (F4). */
+const STATUS_ONLY_CASES: readonly StatusOnlyCase[] = [
+  { status: 401, kind: 'unauthenticated', retryable: false },
+  // `csrf_failed` is the one 403 kind that needs the envelope's code; a bare 403 is forbidden.
+  { status: 403, kind: 'forbidden', retryable: false },
+  { status: 404, kind: 'not_found', retryable: false },
+  { status: 413, kind: 'payload_too_large', retryable: false },
+  { status: 429, kind: 'rate_limited', retryable: true },
+  { status: 502, kind: 'unavailable', retryable: true },
+  { status: 503, kind: 'unavailable', retryable: true },
+  { status: 504, kind: 'unavailable', retryable: true },
+];
+
+describe('mapApiError — an envelope-less response still maps by an unambiguous status', () => {
+  it.each(STATUS_ONLY_CASES)(
+    'maps $status with no envelope to $kind, retryable $retryable',
+    ({ status, kind, retryable }) => {
+      const mapped = mapApiError({ status, body: '<html><body>proxy page</body></html>' });
+
+      expect(mapped.kind).toBe(kind);
+      expect(mapped.code).toBe('envelope_missing');
+      expect(mapped.status).toBe(status);
+      expect(mapped.retryable).toBe(retryable);
+      expect(mapped.requestId).toBeNull();
+      expect(mapped.details).toEqual([]);
+    },
+  );
+
+  it.each([304, 400, 409, 412, 422, 500])(
+    'leaves a %i with no envelope as unexpected / envelope_missing, not retryable',
+    (status) => {
+      const mapped = mapApiError({ status, body: null });
+
+      expect(mapped.kind).toBe('unexpected');
+      expect(mapped.code).toBe('envelope_missing');
+      expect(mapped.retryable).toBe(false);
+    },
+  );
+
+  it('never echoes the body of a non-envelope response', () => {
+    const mapped = mapApiError({ status: 404, body: '<html>nope</html>' });
+
+    expect(mapped.message).not.toContain('nope');
     expect(mapped.requestId).toBeNull();
-    expect(mapped.details).toEqual([]);
-    expect(mapped.retryAfterSeconds).toBeNull();
   });
 
-  it('maps a 500 with a null body to unexpected / envelope_missing, not retryable', () => {
-    const mapped = mapApiError({ status: 500, body: null });
+  it('reads Retry-After in whole seconds on an envelope-less 429', () => {
+    const mapped = mapApiError({
+      status: 429,
+      body: '<html>slow down</html>',
+      headers: new Headers({ 'Retry-After': '120' }),
+    });
 
-    expect(mapped.kind).toBe('unexpected');
-    expect(mapped.code).toBe('envelope_missing');
-    expect(mapped.retryable).toBe(false);
-    expect(mapped.requestId).toBeNull();
+    expect(mapped.kind).toBe('rate_limited');
+    expect(mapped.retryable).toBe(true);
+    expect(mapped.retryAfterSeconds).toBe(120);
   });
 
   it('honours Retry-After on an envelope-less 503 and keeps it retryable', () => {
@@ -282,9 +324,19 @@ describe('mapApiError — non-envelope failures', () => {
       headers: new Headers({ 'Retry-After': '45' }),
     });
 
-    expect(mapped.kind).toBe('unexpected');
+    expect(mapped.kind).toBe('unavailable');
     expect(mapped.retryable).toBe(true);
     expect(mapped.retryAfterSeconds).toBe(45);
+  });
+
+  it('ignores a Retry-After on a status 00 §9.2 does not document it on', () => {
+    const mapped = mapApiError({
+      status: 404,
+      body: null,
+      headers: new Headers({ 'Retry-After': '120' }),
+    });
+
+    expect(mapped.retryAfterSeconds).toBeNull();
   });
 
   it('rejects a body whose details are not the 00 §9.2 shape', () => {
@@ -305,11 +357,11 @@ describe('mapApiError — non-envelope failures', () => {
     expect(mapped.code).toBe('envelope_missing');
   });
 
-  it('accepts a headers stand-in that looks names up case-sensitively', () => {
+  it('reads Retry-After through a real Headers instance, whatever the header case', () => {
     const mapped = mapApiError({
       status: 429,
       body: envelope('rate_limited'),
-      headers: { get: (name: string) => (name === 'retry-after' ? '7' : null) },
+      headers: new Headers({ 'retry-after': '7' }),
     });
 
     expect(mapped.kind).toBe('rate_limited');
@@ -358,8 +410,8 @@ describe('mapApiError — 403 and 404 keep their meaning', () => {
 });
 
 describe('mapNetworkError', () => {
-  it('maps a failed fetch to network, status 0, retryable', () => {
-    const mapped = mapNetworkError(new TypeError('Failed to fetch'));
+  it('maps a transport failure to network, status 0, retryable', () => {
+    const mapped = mapNetworkError();
 
     expect(mapped.kind).toBe('network');
     expect(mapped.status).toBe(0);
@@ -368,15 +420,6 @@ describe('mapNetworkError', () => {
     expect(mapped.requestId).toBeNull();
     expect(mapped.retryAfterSeconds).toBeNull();
     expect(mapped.details).toEqual([]);
-  });
-
-  it('names a cancellation without quoting browser text', () => {
-    const abort = new DOMException('The operation was aborted.', 'AbortError');
-    const mapped = mapNetworkError(abort);
-
-    expect(mapped.kind).toBe('network');
-    expect(mapped.status).toBe(0);
-    expect(mapped.message).not.toContain('The operation was aborted.');
   });
 
   it('maps a status below 1 given to mapApiError the same way', () => {
@@ -399,6 +442,17 @@ describe('parseRetryAfter', () => {
     expect(parseRetryAfter(header)).toBe(expected);
   });
 
+  it.each(['86400', '86401', '99999999'])(
+    'clamps the delta-seconds %s to the one-day ceiling',
+    (header) => {
+      expect(parseRetryAfter(header)).toBe(86_400);
+    },
+  );
+
+  it('clamps a digit string too long for an exact integer to the ceiling', () => {
+    expect(parseRetryAfter('9'.repeat(400))).toBe(86_400);
+  });
+
   it('reads an HTTP-date against the given clock', () => {
     const now = Date.parse('2026-10-24T10:00:00Z');
 
@@ -417,10 +471,29 @@ describe('parseRetryAfter', () => {
     expect(parseRetryAfter('Sat, 24 Oct 2026 10:02:00 GMT', now)).toBe(0);
   });
 
+  it('clamps a far-future HTTP-date to the one-day ceiling', () => {
+    const now = Date.parse('2026-10-24T10:00:00Z');
+
+    expect(parseRetryAfter('Fri, 24 Oct 2126 10:00:00 GMT', now)).toBe(86_400);
+  });
+
   it('rounds a sub-second remainder up so the client never retries early', () => {
     const now = Date.parse('2026-10-24T10:01:59.500Z');
 
     expect(parseRetryAfter('Sat, 24 Oct 2026 10:02:00 GMT', now)).toBe(1);
+  });
+
+  it.each([
+    // Not an HTTP-date: no zone, a zone that is not the exact `GMT` token, or trailing junk.
+    'Sat, 24 Oct 2026 10:02:00',
+    'Sat, 24 Oct 2026 10:02:00 gmt',
+    'Sat, 24 Oct 2026 10:02:00 UTC',
+    'Sat, 24 Oct 2026 10:02:00 +0000',
+    'Sat, 24 Oct 2026 10:02:00 GMT junk',
+    // The obsolete asctime form, which `Date.parse` accepts but RFC 9110 does not send here.
+    'Sun Nov  6 08:49:37 1994',
+  ])('rejects %s, which is not an HTTP-date ending in GMT', (value) => {
+    expect(parseRetryAfter(value, Date.parse('2026-10-24T10:00:00Z'))).toBeNull();
   });
 
   it.each([

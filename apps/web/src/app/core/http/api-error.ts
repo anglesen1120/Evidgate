@@ -32,9 +32,12 @@ export type ApiErrorKind =
   | 'rate_limited'
   /** 503: a dependency or lock was busy; `retryAfterSeconds` is the server's `Retry-After`. */
   | 'unavailable'
-  /** No HTTP response at all (offline, DNS, TLS, aborted) — not a server decision. */
+  /**
+   * No HTTP response at all (offline, DNS, TLS) — not a server decision; a cancellation is
+   * re-thrown, never mapped.
+   */
   | 'network'
-  /** Anything the table does not classify: unmapped status, missing envelope, 2xx misuse. */
+  /** Anything the table does not classify: a status whose meaning needs the body, 2xx misuse. */
   | 'unexpected';
 
 /**
@@ -64,8 +67,16 @@ export interface ApiError {
  * typed failure from `error`. Rejections that are not this type are programming errors.
  */
 export class ApiRequestError extends Error {
-  constructor(readonly error: ApiError) {
-    super(error.message);
+  /**
+   * @param error the typed failure the caller reads.
+   * @param options `cause` carries the raw exception for the `network` kind (`fetch`'s
+   *   `TypeError`), so a bug report keeps the transport detail the `ApiError` deliberately omits.
+   */
+  constructor(
+    readonly error: ApiError,
+    options?: ErrorOptions,
+  ) {
+    super(error.message, options);
     this.name = 'ApiRequestError';
   }
 }

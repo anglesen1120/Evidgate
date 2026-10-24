@@ -75,18 +75,35 @@ One SDK client, one gateway, no wire types. `src/app/core/http/api-client.ts` bu
   a 00 §9.2 envelope mapped to a typed `ApiError` (`not_found`, `csrf_failed`,
   `idempotency_conflict`, `precondition_failed` + `details`, `validation`, `rate_limited` +
   `retryAfterSeconds`, `unavailable`, …) or `kind: 'network'` for a transport failure. A 2xx
-  without a body resolves `undefined`; an `AbortError` is re-thrown untouched. A feature screen
-  never calls an SDK operation directly: it injects a data service.
+  without a body (a `202`/`204` operation) resolves the SDK's empty-data value, never
+  `undefined`; an aborted call re-throws the original `AbortError` unchanged, never an
+  `ApiRequestError`. A feature screen never calls an SDK operation directly: it injects a data
+  service.
 - **Intent.** A mutation's `Idempotency-Key` belongs to one user action: mint
   `createIntent()` when the button is pressed and pass the same `Intent` to every retry of that
   action (`service.create(projectId, body, intent)`); a new action mints a new intent. A key is
   never shared across actions. `src/app/core/data/runs-data.service.ts` is the reference data
   service every feature service copies.
+- **Boundary** (AC3, `no-http-outside-core`): UI and feature code outside `src/app/core/http` and
+  `src/app/core/data` may import from `@evidgate/sdk` only types (an `import type`) and the
+  `isErrorEnvelope` guard — calling an operation or the default `client` there is a lint error,
+  because that would bypass `HttpClient`, the interceptors, XSRF and `ApiGateway`.
 - **Header duties** (00 §5.6 W5): `X-Request-Id` + `traceparent` on every `/v1` request
-  (`requestIdInterceptor`); `Idempotency-Key` from the caller's intent, with the interceptor
-  filling only a missing key on untyped mutations and never on GET/HEAD/OPTIONS
-  (`idempotencyInterceptor`); `X-XSRF-TOKEN` from the readable `XSRF-TOKEN` cookie, added by
-  Angular's own interceptor on same-origin mutations only (T38).
+  (`requestIdInterceptor`); `Idempotency-Key` from the caller's intent, with the interceptor only
+  _filling_ a missing key on POST/PUT/PATCH/DELETE — it never adds one to GET/HEAD/OPTIONS and
+  leaves a caller-supplied header untouched (`idempotencyInterceptor`); `X-XSRF-TOKEN` from the
+  readable `XSRF-TOKEN` cookie, added by Angular's own interceptor on same-origin mutations only
+  (T38). Angular registers its XSRF interceptor ahead of the two app interceptors; only
+  same-origin `/v1` mutations carry the cookie header either way.
+- **No envelope, no invented kind.** A non-2xx response without a 00 §9.2 envelope keeps code
+  `envelope_missing` and reads the status only as far as it is unambiguous on its own: 401
+  `unauthenticated`, 403 `forbidden` (a `csrf_failed` needs the envelope's code), 404 `not_found`,
+  413 `payload_too_large`, 429 `rate_limited`, 502/503/504 `unavailable`; 429/502/503/504 stay
+  retryable, and every other status (`304`, an unlisted 4xx, `500`) stays `unexpected`. The body
+  is never read for meaning: a listed status keeps its kind when a proxy answers with an HTML
+  page, and no mapped message quotes that body. `Retry-After` is read on 429/503 only —
+  delta-seconds, or an RFC 9110 HTTP-date whose zone is the literal `GMT` (no asctime or ISO
+  form) — clamped to 24 h, with a date already past counting as 0 (`error-mapper.ts`).
 - **Contract smoke.** `src/app/core/http/contract-smoke.spec.ts` re-derives the consumed
   operations from `contracts/openapi.yaml` on every run, so the recorded fixture
   `src/app/core/http/testing/openapi-operations.fixture.json` cannot drift silently, and then

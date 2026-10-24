@@ -6,6 +6,7 @@ import type { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 
 import { isApiRequestUrl } from './api-origin';
+import { newUuid } from './random-id';
 
 const TRACE_VERSION = '00';
 const TRACE_FLAGS = '01';
@@ -43,7 +44,9 @@ export const requestIdInterceptor: HttpInterceptorFn = (request, next) => {
 
   let headers = request.headers;
   if (!headers.has('X-Request-Id')) {
-    headers = headers.set('X-Request-Id', crypto.randomUUID());
+    // `newUuid()` rather than `crypto.randomUUID()`: the latter is missing on a non-secure
+    // context (plain http outside localhost) and would throw before the request leaves.
+    headers = headers.set('X-Request-Id', newUuid());
   }
   if (!headers.has('traceparent')) {
     headers = headers.set('traceparent', createTraceparent());

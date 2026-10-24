@@ -6,6 +6,7 @@ import type { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 
 import { isApiRequestUrl } from './api-origin';
+import { newUuid } from './random-id';
 
 const MUTATION_METHODS: Readonly<Record<string, true>> = {
   POST: true,
@@ -25,7 +26,7 @@ export const idempotencyInterceptor: HttpInterceptorFn = (request, next) => {
   if (request.headers.has('Idempotency-Key')) {
     return next(request);
   }
-  return next(
-    request.clone({ headers: request.headers.set('Idempotency-Key', crypto.randomUUID()) }),
-  );
+  // A fresh key per request, and only for a mutation no caller intent covered; `newUuid()`
+  // keeps working where `crypto.randomUUID` is absent (non-secure context).
+  return next(request.clone({ headers: request.headers.set('Idempotency-Key', newUuid()) }));
 };
