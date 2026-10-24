@@ -1,0 +1,81 @@
+:host {
+  display: block;
+  min-width: 0;
+  color: var(--eg-text);
+  background: var(--eg-bg);
+  font-family: var(--eg-font-body);
+  font-size: var(--eg-text-md);
+  line-height: var(--eg-leading-md);
+}
+
+.gallery,
+.stack {
+  display: grid;
+  gap: var(--eg-space-7);
+}
+
+.gallery {
+  padding: var(--eg-space-7);
+}
+
+section {
+  min-width: 0;
+  padding-block: var(--eg-space-7);
+  border-top: var(--eg-border-width) solid var(--eg-border);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-block: var(--eg-space-0) var(--eg-space-5);
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--eg-font-display);
+  font-weight: var(--eg-weight-semibold);
+}
+
+h1 {
+  font-size: var(--eg-text-2xl);
+  line-height: var(--eg-leading-2xl);
+}
+
+h2 {
+  font-size: var(--eg-text-xl);
+  line-height: var(--eg-leading-xl);
+}
+
+h3 {
+  font-size: var(--eg-text-lg);
+  line-height: var(--eg-leading-lg);
+}
+
+p {
+  color: var(--eg-text-muted);
+}
+
+.specimens,
+.evaluation-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--eg-space-5);
+}
+
+.specimens > *,
+.evaluation-grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.evaluation-grid > article {
+  flex: 1 1 var(--eg-rail-width);
+  padding: var(--eg-space-5);
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-surface);
+}

@@ -1,0 +1,30 @@
+:host {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.identity-chip {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--eg-space-1);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: var(--eg-space-1) var(--eg-space-3);
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-sm);
+  background: var(--eg-surface-raised);
+  color: var(--eg-text);
+  font-family: var(--eg-font-mono);
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
+}
+
+.identity-chip__label,
+.identity-chip__value {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

@@ -574,6 +574,24 @@ These are source/implementation gaps, not permission to redesign the frozen mock
 | Spec links       | **09.1.1-T7/T8**, T11.4 done-when: future component specs must link the anchors above.                                                                                                                         | Actual spec-header links once components exist; this sheet alone does not satisfy that future-file condition.                                                                                      |
 | Dense-table demo | **09.1.1-T7**, re-handed from T11.4 (S62, D-S62-Q2); the receiving rows in [layout.md](layout.md#open-points--hand-overs) name T7. | Real token-styled CDK table checks for sticky header, numeric alignment, truncation/tooltip, mutation tagging and >200-row virtual scroll. This sheet does not claim that demo exists. |
 
+## T7 resolutions (09.1.1-T7, S64)
+
+The Angular components now exist under `apps/web/src/app/shared/ui/` (`verdict/`, `chips/`, `annotations/`, `data-table/`, `gallery/`). Answers to the open questions above; each cites the spec that proves it.
+
+| Id | Resolution | Evidence |
+| --- | --- | --- |
+| O1 | Components take local string-literal unions from 00 §8.5 (`complete`/`incomplete`; `all_passed`/`has_failures`/`no_results`; `PASS`/`FAIL`/`INCONCLUSIVE`/`pending`), not SDK types: the SDK has only a `Decision` schema and no completeness/outcome. Run lifecycle tones (`run-state-tone.ts`): created/queued/canceled neutral, running/collecting info, complete success (collection complete, not a verdict), incomplete warning. | `verdict-separation.spec.ts` (all 210 input combinations rendered), `run-state-pill.component.spec.ts` |
+| O2 | Badge vertical inset is `--eg-space-1` with `min-height: var(--eg-space-6)`; no new token. | `evidence-badge.component.spec.ts`, `verdict.css` |
+| O3 | Absent/unknown values render explicit unavailable copy or the `pending` palette; `no_results` is neutral; an incomplete or unavailable input never gets a success tone or icon; empty reason list has its own copy. | `evidence-badge`/`outcome-pill`/`decision-chip` specs (table-driven), `missing-reason-list.component.spec.ts` |
+| O4 | Hash chip shows the first 12 characters plus an ellipsis, the full value is the accessible text and `data-full-value`; links exist only where a real `href` is supplied. | `hash-chip.component.spec.ts`, `revision-chip.component.spec.ts` |
+| O5 | Waiver: active neutral, expired warning, revoked danger; leading stripe uses `--eg-space-2`; dates render in the active `LOCALE_ID`, UTC, with a machine-readable `datetime` and a visible raw UTC value; the browser clock never infers state. | `waiver-banner.component.spec.ts` |
+| O6 | Flaky is warning, healed is info; original failure and candidate hash (shadow/official) are separate blocks; neither carries a success tone or a verdict. | `label-chip.component.spec.ts` |
+| O8 | Existing tokens only; table `border-spacing: var(--eg-space-0)`; coarse pointers keep the default density for touch targets. | `data-table.component.spec.ts` R8, `style-tokens` lint |
+| Spec links | Every state-sheet component spec begins with `// State sheet: docs/design/web/state-sheet.md#<anchor>`; the two table specs link `layout.md` instead (the table is not a state-sheet component). | `grep -L "state-sheet.md#"` over `shared/ui/**/*.spec.ts` lists only those and `i18n-catalog.spec.ts` |
+| Dense-table demo | Delivered with the gallery and `data-table` specs R1–R8; real-browser parts re-handed to 09.1.1-T4 (STATUS §6). | `layout.md` rows 125–130 |
+
+O7 and O9 stay with 09.1.1-T8.
+
 ## Evidence and limits
 
 Graph tools used: list_projects, search_graph, get_file_outline and check_index_coverage. The assigned worktree is not indexed; coverage reported its absolute paths outside the main-project index and README outline had no nodes. Sources were therefore read from the assigned worktree through exact heading/range reads and literal searches, not assumed identical to main. No files under web-ui/output were changed.

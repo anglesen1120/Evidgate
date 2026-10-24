@@ -1,0 +1,108 @@
+<p class="caption" [id]="captionId">{{ caption() }}</p>
+<span #tokenProbe class="token-probe" aria-hidden="true"></span>
+<div
+  #scrollElement
+  class="scroll"
+  [attr.tabindex]="horizontalScrolls() ? 0 : null"
+  [attr.role]="horizontalScrolls() ? 'region' : null"
+  [attr.aria-labelledby]="horizontalScrolls() ? captionId : null"
+>
+  <div
+    class="table-semantics"
+    role="table"
+    [attr.aria-labelledby]="captionId"
+    [attr.aria-rowcount]="rows().length + 1"
+    [attr.aria-colcount]="columns().length"
+  >
+    <table
+      cdk-table
+      role="presentation"
+      class="table header-table"
+      [dataSource]="emptyData"
+      [fixedLayout]="true"
+    >
+      @for (column of columns(); track column.id; let index = $index) {
+        <ng-container [cdkColumnDef]="column.id">
+          <th
+            cdk-header-cell
+            *cdkHeaderCellDef
+            role="columnheader"
+            scope="col"
+            class="cell"
+            [class.numeric]="column.align === 'end'"
+            [attr.aria-colindex]="index + 1"
+            [attr.data-eg-mutate]="column.mutates ? '' : null"
+          >
+            {{ column.header }}
+          </th>
+        </ng-container>
+      }
+      <tr cdk-header-row *cdkHeaderRowDef="columnIds()" role="row" aria-rowindex="1"></tr>
+    </table>
+    <!-- The viewport stays neutral: CDK already supplies tbody[role=rowgroup]
+       under .table-semantics; a second rowgroup would be invalid nesting. -->
+    @if (virtual()) {
+      <cdk-virtual-scroll-viewport
+        [itemSize]="itemSize()"
+        [minBufferPx]="itemSize() * 4"
+        [maxBufferPx]="itemSize() * 8"
+        [attr.tabindex]="viewportScrolls() ? 0 : null"
+        [attr.aria-labelledby]="viewportScrolls() ? captionId : null"
+        class="viewport"
+      >
+        <ng-container [ngTemplateOutlet]="bodyTable" />
+      </cdk-virtual-scroll-viewport>
+    } @else {
+      <ng-container [ngTemplateOutlet]="bodyTable" />
+    }
+  </div>
+</div>
+
+<ng-template #bodyTable>
+  <table
+    cdk-table
+    role="presentation"
+    class="table body-table"
+    [dataSource]="dataSource"
+    [trackBy]="trackRow"
+    [fixedLayout]="true"
+  >
+    @for (column of columns(); track column.id; let index = $index) {
+      <ng-container [cdkColumnDef]="column.id">
+        <td
+          cdk-cell
+          *cdkCellDef="let row"
+          role="cell"
+          class="cell"
+          [class.numeric]="column.align === 'end'"
+          [attr.aria-colindex]="index + 1"
+          [attr.data-eg-mutate]="column.mutates ? '' : null"
+        >
+          <app-data-table-value [value]="column.cell(row)" [truncate]="column.truncate ?? false" />
+        </td>
+      </ng-container>
+    }
+    <tr
+      cdk-row
+      *cdkRowDef="let row; columns: columnIds(); let index = index"
+      role="row"
+      [attr.aria-rowindex]="windowStart() + index + 2"
+      [attr.data-row-id]="rowId()(row)"
+    ></tr>
+  </table>
+  @if (rows().length === 0) {
+    <!-- The empty message is not a data record: rowcount remains one header row. -->
+    <table class="table empty-table" role="presentation">
+      <tr role="presentation">
+        <td
+          role="presentation"
+          class="cell"
+          [attr.colspan]="columns().length || 1"
+          i18n="@@shared.data-table.no-rows"
+        >
+          No rows
+        </td>
+      </tr>
+    </table>
+  }
+</ng-template>

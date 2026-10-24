@@ -176,7 +176,9 @@ module.exports = tseslint.config(
           checkId: true,
           checkDuplicateId: true,
           requireDescription: false,
-          ignoreAttributes: ['data-testid'],
+          // `popover`/`scope` are HTML enumerations and `aria-labelledby`/`data-demo` id references / hooks,
+          // none of them visible text (09.1.1-T7).
+          ignoreAttributes: ['data-testid', 'data-demo', 'aria-labelledby', 'popover', 'scope'],
         },
       ],
       // 09.1.1-T6.1 (D3): `{{ 'literal' }}` is visible English the i18n rule above cannot see —
