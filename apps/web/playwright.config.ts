@@ -49,9 +49,10 @@ export default defineConfig({
     // pipes through, so a stale dist is a loud failure rather than a 30 s timeout).
     command: 'node e2e/static-server.mjs',
     url: `${baseURL}/`,
-    // On CI the job must serve its own bundle, so a process already answering on this port
-    // would hide a broken command; locally a hot re-run may reuse it.
-    reuseExistingServer: !process.env['CI'],
+    // Never reuse a process that already answers on this port: the gate must serve the bundle
+    // this run's `dist/browser` holds, and a server left over from an earlier build is exactly
+    // the stale-bundle failure this workspace exists to catch.
+    reuseExistingServer: false,
     timeout: 30_000,
   },
 });

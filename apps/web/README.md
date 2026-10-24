@@ -10,12 +10,12 @@ land in 09.1.1-T4 and 09.2.1+.
 
 Run from the repository root (npm workspaces) or from `apps/web`:
 
-| Command                     | What it does                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------- |
-| `npm run start -w apps/web` | `ng serve` — the dev server with the `development` configuration (no optimization, source maps)   |
-| `npm run build -w apps/web` | `ng build` (production) into `apps/web/dist/browser`, then `node scripts/check-bundle-budget.mjs` |
-| `npm run test -w apps/web`  | `ng test --watch=false` — component/unit specs, writes `apps/web/test-results/junit.xml`          |
-| `npm run e2e -w apps/web`   | `npx playwright test` against the **built** bundle (see [E2E](#e2e-playwright)); build first      |
+| Command                     | What it does                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `npm run start -w apps/web` | `ng serve` — the dev server with the `development` configuration (no optimization, source maps)              |
+| `npm run build -w apps/web` | `ng build` (production) into `apps/web/dist/browser`, then `node scripts/check-bundle-budget.mjs`            |
+| `npm run test -w apps/web`  | `ng test --watch=false` — component/unit specs, writes `apps/web/test-results/junit.xml`                     |
+| `npm run e2e -w apps/web`   | `npm run build && playwright test` — builds, then runs E2E against the built bundle ([E2E](#e2e-playwright)) |
 
 Build output and reports are git-ignored: `apps/web/dist/`, `apps/web/.angular/` (build cache),
 `apps/web/test-results/` (JUnit XML, traces) and `apps/web/playwright-report/`.
@@ -45,6 +45,13 @@ enforce it, and only one of them is `angular.json`:
   targets (initial 900 kB error / 600 kB warning, `anyScript` 450/300 kB, component style
   12/6 kB), which still makes AC1's threshold test — lowering a budget below the current output
   size fails the build — hold for that backstop.
+
+The production configuration sets `optimization.styles.inlineCritical=false` (scripts and style
+minification stay on), so `dist/browser/index.html` carries no inline `<script>` or `<style>` and
+can be served under a strict CSP without `unsafe-inline` in 09.1.1-T10.
+
+`@evidgate/sdk` is declared as the workspace link `"*"` for 09.1.1-T3; nothing in this app imports
+it yet.
 
 ### Zoneless change detection
 
@@ -90,8 +97,8 @@ through `EVIDGATE_WEB_E2E_PORT`, so parallel worktrees never share 4200/8080/876
 some other page.
 
 ```sh
-npm run build -w apps/web   # the E2E suite tests this output
-npm run e2e -w apps/web     # or: npx playwright test, with apps/web as the working directory
+npm run e2e -w apps/web   # builds first (`npm run build`), then runs Playwright
+npx playwright test       # inside apps/web: skips the build, needs an existing dist/browser
 ```
 
 Locally the first run needs the pinned browser build once:
@@ -114,18 +121,15 @@ Consumed by 01.7.1-T1.3 (`ci.yml`, job wired **non-blocking** — `continue-on-e
 09 has screens). No workflow file lives in this workspace.
 
 - **Job:** `e2e`, `runs-on: ubuntu-24.04` (pinned per 01.7.1-T1: `ubuntu-latest` moves to
-  Ubuntu 26 on 2026-10-19 — matches the .NET jobs' pin), independent of the .NET jobs. Steps: checkout →
-  Node 26 setup → `npm ci` → `npx playwright install --with-deps chromium` → `npm run e2e -w apps/web`.
+  Ubuntu 26 on 2026-10-19 — matches the .NET jobs' pin), independent of the .NET jobs, 20-minute
+  timeout. Steps: checkout → Node from `.nvmrc` (26) with npm cache → `npm ci --ignore-scripts` →
+  `npx playwright install --with-deps chromium` → `npm run e2e -w apps/web`.
   Keep the browser cache step before the install so a cache hit makes `install` a no-op.
-- **Build before the test run:** the job above has no build step and the suite serves
-  `dist/browser`, so `npm run e2e -w apps/web` must build first. Recommended
-  `apps/web/package.json`: `"e2e": "npm run build && playwright test"` — `npm run build` inside
-  the workspace is `ng build` plus the W7 budget gate, so the E2E job also proves the bundle is
-  inside budget. Hand-over to 01.7.1-T1.3: either adopt that script line (then `ci.yml` needs no
-  extra step) or add `npm run build -w apps/web` before `npm run e2e -w apps/web` and keep the
-  script as `playwright test` — not both. 09.1.1-T1 does not edit `package.json`, and
-  `playwright.config.ts` deliberately does not build, so a missing bundle stays a loud failure
-  instead of a hidden rebuild.
+- **Build before the test run:** the job runs only `npm run e2e -w apps/web`, and that script is
+  `npm run build && playwright test`, so `ci.yml` needs no separate build step. `npm run build`
+  inside the workspace is `ng build` plus the W7 budget gate, so the E2E job also proves the
+  bundle is inside budget. `playwright.config.ts` deliberately does not build, so a bundle
+  missing from `dist/browser` stays a loud failure instead of a hidden rebuild.
 - **Browser cache:** the default cache directory on Linux is `~/.cache/ms-playwright`; set
   `PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright` on the job so the path is explicit.
 

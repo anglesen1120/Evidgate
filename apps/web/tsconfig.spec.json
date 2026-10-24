@@ -9,12 +9,7 @@
     "noEmit": true,
     // The builder's Vitest runner sets `globals: true` (describe/it/expect without imports);
     // `node` is needed by playwright.config.ts (`process.env`).
-    "types": ["vitest/globals", "node"],
-    // The application project bans `process.env.CI`-style dotted reads of an index signature
-    // (tsconfig.json). playwright.config.ts still uses `process.env.CI` and belongs to the
-    // E2E port (01.6.1-T5 / its 09.1.1 follow-up), not to this project; re-enable here once
-    // that file reads `process.env['CI']`.
-    "noPropertyAccessFromIndexSignature": false
+    "types": ["vitest/globals", "node"]
   },
   // tsconfig.json excludes specs from the application project; this project exists to
   // type-check exactly those, so the inherited `exclude` must not apply here.
