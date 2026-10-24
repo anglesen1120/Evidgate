@@ -15,6 +15,9 @@
     "types": ["@angular/localize"],
     // The builder emits through its own pipeline; `tsc` must never write next to the sources.
     "noEmit": true,
+    // 09.1.1-T12.1: the dev fixture catalog imports `fixtures/web-api/<name>/input.json` directly
+    // (the 01.6.1-T3 corpus is the only copy — no generated duplicate), so JSON must be a module.
+    "resolveJsonModule": true,
     "isolatedModules": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,

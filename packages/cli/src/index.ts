@@ -1,5 +1,6 @@
 export * from './canonical.js';
 export * from './validate.js';
+export * from './openapiResponse.js';
 // 04.2.1-T2.1/T2.2: the CLI skeleton surface 04.2.2/04.2.3 build on.
 export * from './exitCodes.js';
 export * from './errors.js';

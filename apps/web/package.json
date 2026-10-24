@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "scripts": {
     "start": "ng serve",
-    "build": "ng build && node scripts/check-bundle-budget.mjs",
+    "start:fixtures": "ng serve --configuration fixtures",
+    "build": "ng build && node scripts/check-bundle-budget.mjs && node scripts/check-no-fixture-code.mjs",
     "test": "ng test --watch=false && vitest run --config eslint-rules/vitest.config.mts && node --test scripts/",
     "i18n:extract": "ng extract-i18n",
     "i18n:check": "node scripts/check-i18n-keys.mjs",
@@ -26,6 +27,8 @@
     "@angular/build": "22.2.0",
     "@angular/cli": "22.2.0",
     "@angular/compiler-cli": "22.2.0",
+    "@evidgate/cli": "*",
+    "@evidgate/test-fixtures": "*",
     "@playwright/test": "1.63.0",
     "angular-eslint": "22.5.0",
     "axe-core": "4.14.0",

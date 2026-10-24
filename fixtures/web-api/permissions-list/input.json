@@ -1,0 +1,158 @@
+{
+  "operation_id": "listPermissions",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000a1"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "code": "agent_pool:read",
+        "resource": "agent_pool",
+        "action": "read",
+        "description": "Read agent pool definitions and their capability match (V2, 05.7.3).",
+        "sensitive": false,
+        "reserved": true,
+        "tenant_assignable": true
+      },
+      {
+        "code": "agent_pool:write",
+        "resource": "agent_pool",
+        "action": "write",
+        "description": "Create or change an agent pool (V2, 05.7.3).",
+        "sensitive": false,
+        "reserved": true,
+        "tenant_assignable": true
+      },
+      {
+        "code": "ai_draft:request",
+        "resource": "ai_draft",
+        "action": "request",
+        "description": "Request an AI-generated case/suite draft (V2, 03.6.x). The draft is never gate-eligible.",
+        "sensitive": false,
+        "reserved": true,
+        "tenant_assignable": true
+      },
+      {
+        "code": "artifact:read",
+        "resource": "artifact",
+        "action": "read",
+        "description": "Read artifact metadata and obtain a short-lived download URL (00 §9.3).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "artifact:read_sensitive",
+        "resource": "artifact",
+        "action": "read_sensitive",
+        "description": "Read artifact content classified `sensitive` (traces, DOM/a11y snapshots) on every path that can return it; each issuance is audited (00 §7, 06.2.1).",
+        "sensitive": true,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "artifact:write",
+        "resource": "artifact",
+        "action": "write",
+        "description": "Request an upload URL and complete an upload for a run/attempt (00 §9.3).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "audit:read",
+        "resource": "audit",
+        "action": "read",
+        "description": "Read and export the tenant audit log, support-grant actions included (00 §9.3, 02.7.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "authoring:generate",
+        "resource": "authoring",
+        "action": "generate",
+        "description": "Generate authoring content — feature nodes, checklist items and manual test cases — from an imported or AI-drafted source (13.3.1). Generation spends AI credits (08.5.5), so it is its own code.",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "authoring:read",
+        "resource": "authoring",
+        "action": "read",
+        "description": "Read the feature tree, its checklist items and its manual test cases (00 §2, 13.1.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "authoring:write",
+        "resource": "authoring",
+        "action": "write",
+        "description": "Create, change, reorder, move, retire and delete feature nodes, checklist items and manual test cases (00 §2, 13.1.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "billing:read",
+        "resource": "billing",
+        "action": "read",
+        "description": "Read the usage ledger and invoice data across tenants (staff only, every read audited; 00 §2, 12).",
+        "sensitive": true,
+        "reserved": false,
+        "tenant_assignable": false
+      },
+      {
+        "code": "billing:write",
+        "resource": "billing",
+        "action": "write",
+        "description": "Load price cards, adjust the ledger and issue statements on the operator ingress; adjustments and statements are two-person (12, T69).",
+        "sensitive": true,
+        "reserved": false,
+        "tenant_assignable": false
+      },
+      {
+        "code": "case:read",
+        "resource": "case",
+        "action": "read",
+        "description": "Read the case catalog and case revisions (00 §9.3, 03).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "case:write",
+        "resource": "case",
+        "action": "write",
+        "description": "Write case revisions in the catalog (03 §4.5).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "ci_binding:write",
+        "resource": "ci_binding",
+        "action": "write",
+        "description": "Create, change or disable a project CI binding, including the one-time repository challenge (02.4.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "decision:read",
+        "resource": "decision",
+        "action": "read",
+        "description": "Read a run's or release's exact evaluation revision and its reasons (00 §9.3, 07).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      }
+    ],
+    "next_cursor": "decision:read"
+  }
+}

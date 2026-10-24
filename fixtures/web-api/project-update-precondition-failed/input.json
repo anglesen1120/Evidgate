@@ -1,0 +1,27 @@
+{
+  "operation_id": "updateProject",
+  "variant": "precondition_failed",
+  "status": 412,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000a7"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "precondition_failed",
+      "message": "the project changed since it was read (current version 3)",
+      "request_id": "018f0000-0000-7000-8000-0000000000a7",
+      "retryable": false,
+      "details": [
+        {
+          "path": "If-Match",
+          "reason": "stale"
+        },
+        {
+          "path": "version",
+          "reason": "3"
+        }
+      ]
+    }
+  }
+}
