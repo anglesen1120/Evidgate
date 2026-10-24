@@ -125,11 +125,11 @@ with `Accept: application/vnd.docker.distribution.manifest.list.v2+json` and rea
 the `Docker-Content-Digest` header; the per-platform manifests and their configs
 then come from `/manifests/<digest>` and `/blobs/<config digest>`):
 
-| Role                     | Tag + digest (the Dockerfile's `FROM`)                                                                                                             | Per-platform manifests (amd64 / arm64)  |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Builder                  | `mcr.microsoft.com/dotnet/sdk:10.0.100@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71`                                     | `sha256:b84b696e…` / `sha256:4c85fffe…` |
-| Runtime (`api`)          | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra@sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd`               | `sha256:69c87e30…` / `sha256:c4b3500d…` |
-| Runtime (`worker`, `migrator`) | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02`               | `sha256:0053105f…` / `sha256:46587ed1…` |
+| Role                           | Tag + digest (the Dockerfile's `FROM`)                                                                                                 | Per-platform manifests (amd64 / arm64)  |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Builder                        | `mcr.microsoft.com/dotnet/sdk:10.0.100@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71`                        | `sha256:b84b696e…` / `sha256:4c85fffe…` |
+| Runtime (`api`)                | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra@sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd` | `sha256:69c87e30…` / `sha256:c4b3500d…` |
+| Runtime (`worker`, `migrator`) | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02`       | `sha256:0053105f…` / `sha256:46587ed1…` |
 
 - The builder tag equals `global.json`'s `sdk.version` — the SDK CI installs — so
   the image and the test build compile with one toolchain. `--check-pins` fails
@@ -142,7 +142,7 @@ then come from `/manifests/<digest>` and `/blobs/<config digest>`):
   plain chiseled base is globalization-invariant by construction: it sets
   `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true` and ships no `libicu` and no
   `zoneinfo`. Authoring text must be stored composed (13.1.1 AC14) and
-  `string.Normalize(FormC)` is a *silent no-op* in invariant mode, so the Api
+  `string.Normalize(FormC)` is a _silent no-op_ in invariant mode, so the Api
   cannot run that base: `Directory.Build.props` keeps `InvariantGlobalization`
   for `Evidgate.Worker` only, and `Dockerfile.api` pins the `-extra` image.
   `-extra` is the same distroless chiseled image plus `icu` and `tzdata`
