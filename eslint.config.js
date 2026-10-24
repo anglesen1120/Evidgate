@@ -103,6 +103,43 @@ module.exports = tseslint.config(
         'error',
         { type: 'attribute', prefix: 'app', style: 'camelCase' },
       ],
+      // 09.1.1-T6.1 (plans/features/09-web-ui §10 T6.1): a TypeScript message has exactly one
+      // shape — $localize`:@@area.name:text`, optionally
+      // $localize`:meaning|description@@area.name:text`. The call form takes no id at all, and a
+      // tagged template without the leading `:`+`@@id` metadata would be extracted under its own
+      // English source text as the key, which the translation catalog and the
+      // key-completeness check cannot key on. The tagged selectors test only the FIRST template
+      // element: the metadata lives there, while later elements hold the literal text around
+      // `${…}` and must stay untested.
+      //
+      // Two forms per shape, because `$localize` is reached both as a bare identifier and as a
+      // member of a global object (`globalThis.$localize`, `window.$localize`,
+      // `self.$localize`); a `tag.name` / `callee.name` selector only ever sees the first.
+      // The id part of the metadata regex is `@@[a-z]`, mirroring the id grammar the catalog
+      // check enforces (`^[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*)+$`): at least one id character is
+      // required, so an empty id (`@@:text`) is reported rather than extracted under ``.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.name='$localize'], " +
+            "CallExpression[callee.type='MemberExpression'][callee.property.name='$localize']",
+          message:
+            'Use $localize`:@@area.name:text` — the call form carries no custom @@id ' +
+            '(09.1.1-T6.1).',
+        },
+        {
+          selector:
+            "TaggedTemplateExpression[tag.name='$localize'] > TemplateLiteral > " +
+            'TemplateElement:first-child:not([value.raw=/^:[^:@]*@@[a-z]/]), ' +
+            "TaggedTemplateExpression[tag.type='MemberExpression'][tag.property.name='$localize']" +
+            ' > TemplateLiteral > ' +
+            'TemplateElement:first-child:not([value.raw=/^:[^:@]*@@[a-z]/])',
+          message:
+            'Give the message a custom id: $localize`:@@area.name:text` or ' +
+            '$localize`:meaning|description@@area.name:text` (09.1.1-T6.1).',
+        },
+      ],
     },
   },
   {
@@ -119,6 +156,65 @@ module.exports = tseslint.config(
       '@angular-eslint/template/prefer-control-flow': 'error',
       '@angular-eslint/template/no-any': 'error',
       '@angular-eslint/template/eqeqeq': 'error',
+      // 09.1.1-T6.1 (plans/features/09-web-ui §10 T6.1): every user-visible template string —
+      // a text node, a text attribute, or a bound text holding literal letters — must carry an
+      // `i18n` marker with an explicit custom id. The id is what `ng extract-i18n` writes into
+      // src/locale/messages.xlf and messages.vi.xlf, and the `vi` build and its gzip budget are
+      // keyed on that catalog, so an unmarked string silently ships English in `vi`.
+      // `checkId` is what forces the `@@area.name` form: the rule only sees a custom id when
+      // the marker starts with `@@`, so a bare `i18n` or `i18n="caption"` is reported.
+      // `ignoreAttributes` ADDS to the rule's shipped non-visible set (`class`, `href`, `src`,
+      // `id`, `role`, `type`, `value`, …) — the rule merges both lists, it does not replace
+      // them. `data-testid` is an E2E hook and is never rendered. An interpolation-only text
+      // node (`{{ expr }}`) is deliberately not flagged: a `BoundText` without literal letters
+      // is allowed by the rule's default `boundTextAllowedPattern`, while `Hello {{ expr }}` is.
+      '@angular-eslint/template/i18n': [
+        'error',
+        {
+          checkText: true,
+          checkAttributes: true,
+          checkId: true,
+          checkDuplicateId: true,
+          requireDescription: false,
+          ignoreAttributes: ['data-testid'],
+        },
+      ],
+      // 09.1.1-T6.1 (D3): `{{ 'literal' }}` is visible English the i18n rule above cannot see —
+      // a `BoundText` whose literal parts are empty passes its `boundTextAllowedPattern`, while
+      // the text is hidden inside the expression as a string literal. The Angular template
+      // rules ship no restricted-syntax rule, so the core rule is pointed at the template AST:
+      // a `LiteralPrimitive` that is a DIRECT child of an `Interpolation` (the text-interpolation
+      // expression list) or of a `Conditional` that is itself a direct child of that list.
+      // Anchoring on `BoundText > ASTWithSource` is what keeps attribute interpolations
+      // (`title="{{ 'x' }}"`, a `BoundAttribute`) and `@if`/`@for` expressions out of scope,
+      // where the literal is a condition or a key rather than rendered text; anchoring on the
+      // child position keeps pipe arguments (`{{ x | slice: 'a' }}`) and call arguments
+      // (`{{ fn('a') }}`) out of scope as well. Documented limit: a literal nested deeper than
+      // that (e.g. `{{ 'a' + 'b' }}`) is not reported — the visible-text cases are the ones
+      // above, and a broader selector starts flagging keys, format patterns and test ids.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'BoundText > ASTWithSource > Interpolation > LiteralPrimitive[value=/[A-Za-z]/], ' +
+            'BoundText > ASTWithSource > Interpolation > Conditional > ' +
+            'LiteralPrimitive[value=/[A-Za-z]/]',
+          message:
+            'Move the literal out of the interpolation and translate it in the template: ' +
+            '<p i18n="@@area.name">Text</p> (09.1.1-T6.1).',
+        },
+      ],
+    },
+  },
+  {
+    // 09.1.1-T6.1: `src/index.html` is the builder's shell. Angular never compiles it as a
+    // template and `ng extract-i18n` cannot extract from it, so an `i18n` marker demanded
+    // there could never be translated (the `<title>` text and `<meta content>` are the
+    // offenders). Only the i18n rule is off for the shell; every other template rule still
+    // applies to it.
+    files: ['apps/web/src/index.html'],
+    rules: {
+      '@angular-eslint/template/i18n': 'off',
     },
   },
   {

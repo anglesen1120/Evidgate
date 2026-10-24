@@ -10,12 +10,14 @@ land in 09.1.1-T4 and 09.2.1+.
 
 Run from the repository root (npm workspaces) or from `apps/web`:
 
-| Command                     | What it does                                                                                                 |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `npm run start -w apps/web` | `ng serve` — the dev server with the `development` configuration (no optimization, source maps)              |
-| `npm run build -w apps/web` | `ng build` (production) into `apps/web/dist/browser`, then `node scripts/check-bundle-budget.mjs`            |
-| `npm run test -w apps/web`  | `ng test --watch=false` — component/unit specs, writes `apps/web/test-results/junit.xml`                     |
-| `npm run e2e -w apps/web`   | `npm run build && playwright test` — builds, then runs E2E against the built bundle ([E2E](#e2e-playwright)) |
+| Command                            | What it does                                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `npm run start -w apps/web`        | `ng serve` — the dev server with the `development` configuration (no optimization, source maps, vi locale)   |
+| `npm run build -w apps/web`        | `ng build` (production) into `apps/web/dist/browser/<locale>/`, then `node scripts/check-bundle-budget.mjs`  |
+| `npm run test -w apps/web`         | `ng test --watch=false`, then `node --test scripts/` for the node scripts' own specs; writes `test-results/` |
+| `npm run i18n:extract -w apps/web` | `ng extract-i18n` — regenerates `apps/web/src/locale/messages.xlf` from the templates                        |
+| `npm run i18n:check -w apps/web`   | `node scripts/check-i18n-keys.mjs` — fails when a message is missing from a locale catalog                   |
+| `npm run e2e -w apps/web`          | `npm run build && playwright test` — builds, then runs E2E against the built bundle ([E2E](#e2e-playwright)) |
 
 Build output and reports are git-ignored: `apps/web/dist/`, `apps/web/.angular/` (build cache),
 `apps/web/test-results/` (JUnit XML, traces) and `apps/web/playwright-report/`.
@@ -37,8 +39,8 @@ W7 allows **300 kB gzip** for the initial JS and **150 kB gzip** for any lazy ch
 enforce it, and only one of them is `angular.json`:
 
 - `apps/web/scripts/check-bundle-budget.mjs` is the W7 gate. It gzips the emitted scripts, takes
-  the initial set from the `<script>`/`modulepreload` tags of `dist/browser/index.html`, and fails
-  the build on a breach. Chained after `ng build` by `npm run build -w apps/web`.
+  the initial set from the `<script>`/`modulepreload` tags of each locale's `index.html`, and
+  fails the build on a breach. Chained after `ng build` by `npm run build -w apps/web`.
 - The `budgets` block of `angular.json` is a **raw-size backstop**, not the gzip numbers of W7:
   the installed `@angular/build` compares `budgets` against on-disk asset bytes and never gzips,
   so it cannot express W7 as written (the AC1 wording gap). Its thresholds sit at 3× the gzip
@@ -46,9 +48,16 @@ enforce it, and only one of them is `angular.json`:
   12/6 kB), which still makes AC1's threshold test — lowering a budget below the current output
   size fails the build — hold for that backstop.
 
-The production configuration sets `optimization.styles.inlineCritical=false` (scripts and style
-minification stay on), so `dist/browser/index.html` carries no inline `<script>` or `<style>` and
-can be served under a strict CSP without `unsafe-inline` in 09.1.1-T10.
+The production build is localized ([i18n](#i18n)), so its output is one bundle per locale —
+`dist/browser/en/` and `dist/browser/vi/`, each with its own `index.html` and chunks — and the
+gzip gate measures **every** locale on its own against the same two W7 limits, prefixing each
+row with the locale. A dist that holds `index.html` directly (a build without `localize`) is
+checked as the single layout it is.
+
+The production configuration also sets `optimization.styles.inlineCritical=false` (scripts and
+style minification stay on), so no locale's `index.html` carries an inline `<script>` or
+`<style>` and the bundle can be served under a strict CSP without `unsafe-inline` in
+09.1.1-T10.
 
 `@evidgate/sdk` is the workspace link `"*"` and is consumed through [Data access](#data-access-0911-t3)
 below — nothing in this app calls it outside `src/app/core`.
@@ -120,6 +129,46 @@ One SDK client, one gateway, no wire types. `src/app/core/http/api-client.ts` bu
   is added in three places: the recorder's `RECORDED_OPERATION_IDS`, the smoke's
   `OPERATION_DRIVERS`, and the re-recorded fixture.
 
+## i18n
+
+Angular's built-in i18n (`@angular/localize` 22.2.0, ADR-0008 row f) is the only translation
+mechanism in this app. `angular.json` → `projects.web.i18n` declares `sourceLocale: "en"` and one
+translation, `vi`:
+
+| File                         | Role                                                       |
+| ---------------------------- | ---------------------------------------------------------- |
+| `src/locale/messages.xlf`    | Source catalog — generated by `ng extract-i18n`, committed |
+| `src/locale/messages.vi.xlf` | Vietnamese translation — hand-maintained                   |
+
+Conventions:
+
+- every message has an explicit custom id `@@<area>.<name>` (today `@@app.title`). The id is the
+  contract: rewording the English text must not orphan a translation, and the checks below match
+  ids, not text;
+- template text is marked in place — `<h1 i18n="@@app.title">Evidgate</h1>` — and ESLint fails a
+  visible template string without such a marker (`@angular-eslint/template/i18n`, custom ids
+  required);
+- TypeScript uses the tagged form `` $localize`:@@area.name:text` ``; ESLint fails the call form
+  `$localize(...)`, which carries no id, and a tagged message without an `@@id`;
+- `@angular/localize/init` is configured as a build **polyfill** (`angular.json` build
+  `options.polyfills`), never imported from the sources: templates with `i18n` attributes compile
+  to `$localize` calls in every profile, translated or not (ADR-0008 rule 5). The unit-test
+  builder inherits the build target's polyfills and additionally injects
+  `@angular/localize/init` into its TestBed init file, so `ng test` needs no polyfill of its own;
+- `i18nMissingTranslation: "error"`: a `trans-unit` missing from `messages.vi.xlf` fails
+  `ng build` instead of shipping English text to a Vietnamese user.
+
+Locales: **vi is the product's default language, en is the source locale.** The production
+configuration localizes both (`"localize": ["en", "vi"]` → `dist/browser/en/` and
+`dist/browser/vi/`), the development configuration serves `vi` only (`"localize": ["vi"]`), and
+the E2E static server redirects `/` to `/vi/` ([E2E](#e2e-playwright)). Each locale bundle is held
+to the W7 gzip budget on its own (see _Build budgets_ above).
+
+Adding a message: mark it with a new id, run `npm run i18n:extract -w apps/web` to regenerate
+`src/locale/messages.xlf`, add the `<target>` to `src/locale/messages.vi.xlf`, then
+`npm run i18n:check -w apps/web` — it exits 1 while any locale is missing an id, has an empty
+`<target>`, or drops a placeholder the source message has.
+
 ## Design reference — Web UI v2 (S50)
 
 The screens this app implements are mocked up as static HTML in [`docs/design/web-ui/output/`](../../docs/design/web-ui/output/). Open `index.html` there for the page list, `00-components/` for the component gallery, and [`NAV.md`](../../docs/design/web-ui/output/NAV.md) for every page with its CR-D-2 phase (G1–G4). How the pages were generated and reviewed is in [`RUNS.md`](../../docs/design/web-ui/output/RUNS.md). The mockups are a reference, not code to copy: owner approval of the CR-D-2 screens (gate B2 in [`prompts-crd2/00-README.md`](../../docs/design/web-ui/prompts-crd2/00-README.md)) and the 09.1.1-T11 design tasks still come before feature screens.
@@ -146,13 +195,18 @@ is set (0 locally), `forbidOnly` on CI, `trace: 'retain-on-failure'`,
 01.10.1-T1.1 dogfooding).
 
 The suite runs against the **built** application, never `ng serve`: the `webServer` block starts
-`e2e/static-server.mjs`, a dependency-free Node http server over `apps/web/dist/browser`, with SPA
-fallback to `index.html` for client routes, correct content types for the emitted assets, no
-directory listing, and a traversal guard so no request can read outside `dist/browser`. The server
-picks an **ephemeral** high port (chosen once per run in `playwright.config.ts` and passed on
-through `EVIDGATE_WEB_E2E_PORT`, so parallel worktrees never share 4200/8080/8765 or a fixed
-4173), and it exits with a "run `npm run build -w apps/web`" message when
-`dist/browser/index.html` is missing — a stale dist is a loud failure, not a silent fallback to
+`e2e/static-server.mjs`, a dependency-free Node http server over `apps/web/dist/browser`, with
+correct content types for the emitted assets, no directory listing, and a traversal guard so no
+request can read outside `dist/browser`. That dist is localized ([i18n](#i18n)), so the server
+routes on the first path segment: `/` answers a 302 to `/vi/` (the default language), `/en/…` and
+`/vi/…` resolve inside that locale's directory with SPA fallback to that locale's `index.html`,
+and a first segment that is no locale directory is an ordinary SPA path answered by the default
+locale's page — the root of a localized build holds no page of its own. A dist whose root holds
+`index.html` (a build without `localize`) is served as that single layout, with no redirect. The
+server picks an **ephemeral** high port (chosen once per run in `playwright.config.ts` and passed
+on through `EVIDGATE_WEB_E2E_PORT`, so parallel worktrees never share 4200/8080/8765 or a fixed
+4173), and it exits with a "run `npm run build -w apps/web`" message when the dist holds neither
+a locale directory nor `index.html` — a stale dist is a loud failure, not a silent fallback to
 some other page.
 
 ```sh
@@ -166,9 +220,11 @@ Locally the first run needs the pinned browser build once:
 npx playwright install chromium
 ```
 
-Specs: `e2e/smoke.spec.ts` (AC2 — the built bundle bootstraps: page title `Evidgate`, the
-`app-root` heading from `src/app/app.html`, and no console or page errors during load) and
-`e2e/static-server.spec.ts` (SPA fallback and the traversal guard of the server itself).
+Specs: `e2e/smoke.spec.ts` (AC2 — the built bundle bootstraps at `/`, which redirects to `/vi/`
+and renders `<html lang="vi">`, and at `/en/` which renders `lang="en"`: page title `Evidgate`,
+the `app-root` heading from `src/app/app.html`, and no page or console errors during load) and
+`e2e/static-server.spec.ts` (locale routing, SPA fallback, and the traversal, symlink and
+bad-request guards of the server itself).
 
 Vitest owns `src/**/*.spec.ts` through the Angular builder and never collects these `*.spec.ts`
 files: the root `vitest.config.ts` lists only `packages/*` as projects, so `npx vitest run` stays
