@@ -59,16 +59,75 @@ style minification stay on), so no locale's `index.html` carries an inline `<scr
 `<style>` and the bundle can be served under a strict CSP without `unsafe-inline` in
 09.1.1-T10.
 
-`@evidgate/sdk` is declared as the workspace link `"*"` for 09.1.1-T3; nothing in this app imports
-it yet.
+`@evidgate/sdk` is the workspace link `"*"` and is consumed through [Data access](#data-access-0911-t3)
+below — nothing in this app calls it outside `src/app/core`.
 
 ### Zoneless change detection
 
 `src/app/app.config.ts` provides zoneless change detection and `zone.js` is not a dependency.
-The 09.1.1-T2 integration-fit spike answered W3 in
-[`docs/adr/0008-web-integration-fit.md`](../../docs/adr/0008-web-integration-fit.md): zoneless is
-stable, so `provideZonelessChangeDetection()` stays explicit, `zone.js` is absent from both
-`package.json` and `angular.json` polyfills, and components stay `OnPush`.
+ADR-0008 (`docs/adr/0008-web-integration-fit.md`, 09.1.1-T2) confirmed zoneless as stable for this
+app (00 §5.6 W3 is ✅); its fallbacks are recorded there rather than silently in code. The same ADR
+settled the API integration shape described in [Data access](#data-access-0911-t3).
+
+## Data access (09.1.1-T3)
+
+One SDK client, one gateway, no wire types. `src/app/core/http/api-client.ts` builds the single
+`@evidgate/sdk` client on top of Angular `HttpClient` (ADR-0008 shape A):
+
+- **Client.** `createClient(createConfig({ baseUrl: '/v1', credentials: 'same-origin', fetch: createHttpClientFetch(inject(HttpClient)) }))`,
+  provided as the `API_CLIENT` token by `provideApi()`. `provideApi()` also installs
+  `provideHttpClient(withInterceptors([requestIdInterceptor, idempotencyInterceptor]), withXsrfConfiguration({ cookieName: 'XSRF-TOKEN', headerName: 'X-XSRF-TOKEN' }))`,
+  and `app.config.ts` adds it to the app providers. The API must stay on the page origin under
+  `/v1` (ADR-0008 rule 1): a foreign origin or a non-`/v1` path never receives an API header.
+- **Gateway.** `ApiGateway.call((client) => listRuns({ client, path: { p } }))` resolves the SDK's
+  2xx body with the operation's own inferred type and throws `ApiRequestError` for anything else —
+  a 00 §9.2 envelope mapped to a typed `ApiError` (`not_found`, `csrf_failed`,
+  `idempotency_conflict`, `precondition_failed` + `details`, `validation`, `rate_limited` +
+  `retryAfterSeconds`, `unavailable`, …) or `kind: 'network'` for a transport failure. A 2xx
+  without a body (a `202`/`204` operation) resolves the SDK's empty-data value, never
+  `undefined`; an aborted call re-throws the original `AbortError` unchanged, never an
+  `ApiRequestError`. A feature screen never calls an SDK operation directly: it injects a data
+  service.
+- **Intent.** A mutation's `Idempotency-Key` belongs to one user action: mint
+  `createIntent()` when the button is pressed and pass the same `Intent` to every retry of that
+  action (`service.create(projectId, body, intent)`); a new action mints a new intent. A key is
+  never shared across actions. `src/app/core/data/runs-data.service.ts` is the reference data
+  service every feature service copies.
+- **Boundary** (AC3, `no-http-outside-core`): UI and feature code outside `src/app/core/http` and
+  `src/app/core/data` may import from `@evidgate/sdk` only types (an `import type`) and the
+  `isErrorEnvelope` guard — calling an operation or the default `client` there is a lint error,
+  because that would bypass `HttpClient`, the interceptors, XSRF and `ApiGateway`.
+- **Header duties** (00 §5.6 W5): `X-Request-Id` + `traceparent` on every `/v1` request
+  (`requestIdInterceptor`); `Idempotency-Key` from the caller's intent, with the interceptor only
+  _filling_ a missing key on POST/PUT/PATCH/DELETE — it never adds one to GET/HEAD/OPTIONS and
+  leaves a caller-supplied header untouched (`idempotencyInterceptor`); `X-XSRF-TOKEN` from the
+  readable `XSRF-TOKEN` cookie, added by Angular's own interceptor on same-origin mutations only
+  (T38). Angular registers its XSRF interceptor ahead of the two app interceptors; only
+  same-origin `/v1` mutations carry the cookie header either way.
+- **No envelope, no invented kind.** A non-2xx response without a 00 §9.2 envelope keeps code
+  `envelope_missing` and reads the status only as far as it is unambiguous on its own: 401
+  `unauthenticated`, 403 `forbidden` (a `csrf_failed` needs the envelope's code), 404 `not_found`,
+  413 `payload_too_large`, 429 `rate_limited`, 502/503/504 `unavailable`; 429/502/503/504 stay
+  retryable, and every other status (`304`, an unlisted 4xx, `500`) stays `unexpected`. The body
+  is never read for meaning: a listed status keeps its kind when a proxy answers with an HTML
+  page, and no mapped message quotes that body. `Retry-After` is read on 429/503 only —
+  delta-seconds, or an RFC 9110 HTTP-date whose zone is the literal `GMT` (no asctime or ISO
+  form) — clamped to 24 h, with a date already past counting as 0 (`error-mapper.ts`).
+- **Contract smoke.** `src/app/core/http/contract-smoke.spec.ts` re-derives the consumed
+  operations from `contracts/openapi.yaml` on every run, so the recorded fixture
+  `src/app/core/http/testing/openapi-operations.fixture.json` cannot drift silently, and then
+  drives each recorded operation through the real stack (SDK function → gateway → adapter →
+  `HttpClient`) to assert the method and `/v1` URL on the wire. Re-record after a contract or SDK
+  change, from the repository root:
+
+  ```sh
+  node apps/web/scripts/record-openapi-fixture.mjs           # rewrite the fixture
+  node apps/web/scripts/record-openapi-fixture.mjs --check   # diff summary, exit 1 on drift
+  ```
+
+  The recorder reads `contracts/openapi.yaml` with the root `yaml` devDependency. A new operation
+  is added in three places: the recorder's `RECORDED_OPERATION_IDS`, the smoke's
+  `OPERATION_DRIVERS`, and the re-recorded fixture.
 
 ## i18n
 

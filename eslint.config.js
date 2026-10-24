@@ -5,13 +5,15 @@
 // ESLint — this config covers apps/web and packages/* TypeScript only (00 §5.6).
 // 09.1.1-T1: apps/web is an Angular 22 application, so its TypeScript is linted with
 // angular-eslint (00 §5.6 W2: standalone + OnPush, no `any`, built-in control flow, `app`
-// selector prefix) and its templates with @angular-eslint/template. Two rules the story
-// still owes are deliberately NOT wired here: AC3's ban on hand-written wire DTOs and on
-// `HttpClient`/fetch outside core data services (plan §2 AC3), and the W1 feature→feature
-// import boundary (plan §8 T47). §10 assigns only T1.2 to this config, so nothing in this
-// plan owns them — they remain open for 09.1.1 AC3.
+// selector prefix) and its templates with @angular-eslint/template. The AC3 and W1 rules
+// the story also names — no hand-written wire DTO, no `HttpClient`/`fetch` outside core
+// (plan §2 AC3), and no feature→feature import (plan §8 T47) — are wired below from
+// apps/web/lint/boundaries.cjs (09.1.1-T3).
 const tseslint = require('typescript-eslint');
 const angular = require('angular-eslint');
+// 09.1.1-T3: AC3 and W1 as flat-config blocks; the rule logic lives in apps/web/lint so
+// this file stays a list of blocks.
+const appsWebBoundaries = require('./apps/web/lint/boundaries.cjs');
 // 09.1.1-T11.4 (AC9): @eslint/css is ESM-only, so its default export arrives through
 // `require()` as `.default` (Node's require(esm), available since 22.12 — this repo pins
 // Node 26 in .nvmrc, and the package's own engines are ^20.19 || ^22.13 || >=24).
@@ -26,7 +28,8 @@ const angularTsRecommended = [...angular.configs.tsRecommended];
 
 // AC3: floating promises and `any` are hard errors (npm run lint also uses
 // --max-warnings 0, so a warning is already a failure; these are pinned as
-// errors so the severity is explicit).
+// errors so the severity is explicit). The rest of AC3 — no hand-written wire DTO,
+// no HttpClient/fetch outside core — is the apps/web/lint blocks spread at the end.
 const typescriptRules = {
   '@typescript-eslint/no-floating-promises': 'error',
   '@typescript-eslint/no-explicit-any': 'error',
@@ -289,4 +292,7 @@ module.exports = tseslint.config(
       '@angular-eslint/directive-selector': 'off',
     },
   },
+  // 09.1.1-T3 (plan §2 AC3, §8 T47): the apps/web-specific rules, spread after the typed
+  // blocks so they add rules without touching a parser or the project service.
+  ...appsWebBoundaries,
 );
