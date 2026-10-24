@@ -674,6 +674,226 @@
           <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shared.conflict.title" datatype="html">
+        <source>Review conflict</source>
+        <target>Xem xét xung đột</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.description" datatype="html">
+        <source> Reload is explicit. Your draft is not merged or resubmitted automatically. </source>
+        <target> Chỉ tải lại khi bạn yêu cầu. Bản nháp không tự động được hợp nhất hoặc gửi lại. </target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.close" datatype="html">
+        <source> Close </source>
+        <target> Đóng </target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.current-revision" datatype="html">
+        <source>Current revision</source>
+        <target>Bản sửa đổi hiện tại</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.revision-unavailable" datatype="html">
+        <source>Revision unavailable</source>
+        <target>Chưa có bản sửa đổi</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.comparison-unavailable" datatype="html">
+        <source> The current version could not be compared </source>
+        <target> Chưa thể so sánh phiên bản hiện tại </target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.same" datatype="html">
+        <source>Same</source>
+        <target>Giống nhau</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.changed" datatype="html">
+        <source>Changed</source>
+        <target>Đã thay đổi</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.not-compared" datatype="html">
+        <source>Not compared</source>
+        <target>Chưa so sánh</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.local" datatype="html">
+        <source>Your draft</source>
+        <target>Bản nháp của bạn</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.local-unavailable" datatype="html">
+        <source>Draft value unavailable</source>
+        <target>Chưa có giá trị bản nháp</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.server" datatype="html">
+        <source>Current server value</source>
+        <target>Giá trị hiện tại trên máy chủ</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.server-unavailable" datatype="html">
+        <source>Server value unavailable</source>
+        <target>Chưa có giá trị trên máy chủ</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.reload-error" datatype="html">
+        <source>The current version could not be reloaded</source>
+        <target>Không thể tải lại phiên bản hiện tại</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.error-code" datatype="html">
+        <source>Error code</source>
+        <target>Mã lỗi</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.request-id" datatype="html">
+        <source>Request id</source>
+        <target>Mã yêu cầu</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.reloading" datatype="html">
+        <source>Reloading…</source>
+        <target>Đang tải lại…</target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.keep-editing" datatype="html">
+        <source> Keep editing </source>
+        <target> Tiếp tục chỉnh sửa </target>
+      </trans-unit>
+      <trans-unit id="shared.conflict.reload" datatype="html">
+        <source> Reload current </source>
+        <target> Tải lại bản hiện tại </target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.unavailable-title" datatype="html">
+        <source>503 · Service unavailable</source>
+        <target>503 · Dịch vụ không khả dụng</target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.title" datatype="html">
+        <source>429 · Rate limited</source>
+        <target>429 · Giới hạn yêu cầu</target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.interval" datatype="html">
+        <source>Retry after: <x id="INTERPOLATION" equiv-text="{{ seconds }}"/> s</source>
+        <target>Thử lại sau: <x id="INTERPOLATION" equiv-text="{{ seconds }}"/> giây</target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.interval-unavailable" datatype="html">
+        <source> The server did not say how long to wait </source>
+        <target> Máy chủ chưa cho biết thời gian cần chờ </target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.eligible" datatype="html">
+        <source>You can retry now.</source>
+        <target>Bạn có thể thử lại ngay.</target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.waiting" datatype="html">
+        <source>Retry available after the wait</source>
+        <target>Có thể thử lại sau khi chờ</target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.error-code" datatype="html">
+        <source>Error code</source>
+        <target>Mã lỗi</target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.request-id" datatype="html">
+        <source>Request id</source>
+        <target>Mã yêu cầu</target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.retrying" datatype="html">
+        <source>Retrying…</source>
+        <target>Đang thử lại…</target>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.retry" datatype="html">
+        <source>Retry</source>
+        <target>Thử lại</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.request-patterns" datatype="html">
+        <source> Request state replacements </source>
+        <target> Các trạng thái thay thế nội dung yêu cầu </target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict" datatype="html">
+        <source>412 conflict comparison</source>
+        <target>So sánh xung đột 412</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-explanation" datatype="html">
+        <source> The draft stays local. Reload current compares a loaded example, not a live request. </source>
+        <target> Bản nháp được giữ trên máy. Tải lại bản hiện tại sẽ so sánh với ví dụ đã có, không gửi yêu cầu thực. </target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-open" datatype="html">
+        <source> Review conflict example </source>
+        <target> Xem ví dụ xung đột </target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.retry-after" datatype="html">
+        <source>Retry eligibility</source>
+        <target>Điều kiện thử lại</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.retry-count" datatype="html">
+        <source> Explicit retry requests in this example: <x id="INTERPOLATION" equiv-text="{{ retryCount() }}"/> </source>
+        <target> Số lần chủ động yêu cầu thử lại trong ví dụ: <x id="INTERPOLATION" equiv-text="{{ retryCount() }}"/> </target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.request-host" datatype="html">
+        <source>Route-level request host</source>
+        <target>Vùng trạng thái yêu cầu của trang</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.projected-content" datatype="html">
+        <source> Current content appears only after a nonempty successful read. </source>
+        <target> Nội dung hiện tại chỉ xuất hiện khi đọc thành công và có dữ liệu. </target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-field" datatype="html">
+        <source>Requirement title</source>
+        <target>Tiêu đề yêu cầu</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-draft" datatype="html">
+        <source>Checkout requires a verified email</source>
+        <target>Thanh toán yêu cầu email đã xác minh</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-server" datatype="html">
+        <source>Checkout requires email verification</source>
+        <target>Thanh toán yêu cầu xác minh email</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.empty-title" datatype="html">
+        <source>No evidence yet</source>
+        <target>Chưa có bằng chứng</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.empty-description" datatype="html">
+        <source>Open the feature tree to inspect the cases awaiting evidence.</source>
+        <target>Mở cây tính năng để xem các ca đang chờ bằng chứng.</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.empty-action" datatype="html">
+        <source>Open feature tree</source>
+        <target>Mở cây tính năng</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.network-message" datatype="html">
+        <source>The request could not reach the server. Your evidence has not been replaced.</source>
+        <target>Yêu cầu không kết nối được với máy chủ. Bằng chứng của bạn chưa bị thay thế.</target>
+      </trans-unit>
+      <trans-unit id="shared.states.error.request-id" datatype="html">
+        <source> Request ID: <x id="INTERPOLATION" equiv-text="{{ requestId }}"/> </source>
+        <target> Mã yêu cầu: <x id="INTERPOLATION" equiv-text="{{ requestId }}"/> </target>
+      </trans-unit>
+      <trans-unit id="shared.states.error.retry" datatype="html">
+        <source> Retry </source>
+        <target> Thử lại </target>
+      </trans-unit>
+      <trans-unit id="shared.states.error.network" datatype="html">
+        <source>Network unavailable</source>
+        <target>Không có kết nối mạng</target>
+      </trans-unit>
+      <trans-unit id="shared.states.error.timeout" datatype="html">
+        <source>Request timed out</source>
+        <target>Yêu cầu đã hết thời gian chờ</target>
+      </trans-unit>
+      <trans-unit id="shared.states.error.unavailable" datatype="html">
+        <source>Service unavailable</source>
+        <target>Dịch vụ không khả dụng</target>
+      </trans-unit>
+      <trans-unit id="shared.states.error.heading" datatype="html">
+        <source>Something went wrong</source>
+        <target>Đã xảy ra lỗi</target>
+      </trans-unit>
+      <trans-unit id="shared.states.forbidden.heading" datatype="html">
+        <source>Not authorized</source>
+        <target>Không có quyền truy cập</target>
+      </trans-unit>
+      <trans-unit id="shared.states.forbidden.description" datatype="html">
+        <source> Ask a project administrator for access to this workspace. </source>
+        <target> Hãy liên hệ quản trị viên dự án để được cấp quyền truy cập không gian làm việc này. </target>
+      </trans-unit>
+      <trans-unit id="shared.states.loading.label" datatype="html">
+        <source>Loading evidence</source>
+        <target>Đang tải bằng chứng</target>
+      </trans-unit>
+      <trans-unit id="shared.states.not-found.heading" datatype="html">
+        <source>Not found</source>
+        <target>Không tìm thấy</target>
+      </trans-unit>
+      <trans-unit id="shared.states.not-found.description" datatype="html">
+        <source> This page does not exist or you do not have access to it. </source>
+        <target> Trang này không tồn tại hoặc bạn không có quyền truy cập. </target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

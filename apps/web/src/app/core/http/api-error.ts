@@ -37,6 +37,13 @@ export type ApiErrorKind =
    * re-thrown, never mapped.
    */
   | 'network'
+  /**
+   * No HTTP response within the request deadline (`DEFAULT_REQUEST_TIMEOUT_MS`, 09.1.1-T8). The
+   * request may have reached the server, or it may never have left, so it is neither a server
+   * decision nor proof that nothing happened: a retry is only safe with the same
+   * `Idempotency-Key` as the original attempt.
+   */
+  | 'timeout'
   /** Anything the table does not classify: a status whose meaning needs the body, 2xx misuse. */
   | 'unexpected';
 

@@ -14,7 +14,7 @@ import type { Client } from '@evidgate/sdk';
 
 import { ApiRequestError } from './api-error';
 import { API_CLIENT } from './api-client';
-import { mapApiError, mapNetworkError } from './error-mapper';
+import { mapApiError, mapNetworkError, mapTimeoutError } from './error-mapper';
 
 /**
  * The SDK's resolve-not-throw result (`RequestResult<…, false>`): a 2xx carries `data`, a refusal
@@ -51,6 +51,31 @@ function isAbortError(value: unknown): boolean {
   );
 }
 
+/**
+ * True for the adapter's deadline rejection (`http-client-fetch.ts`), on either path it can
+ * arrive by: the operation rejects with it, or the SDK hands it back as `result.error` when the
+ * deadline fires before any response. Duck-typed for the same reason as {@link isAbortError}.
+ * It is never a server outcome, so it becomes the typed `timeout` failure instead of a status
+ * mapping.
+ */
+function isTimeoutError(value: unknown): boolean {
+  return (
+    typeof value === 'object' && value !== null && 'name' in value && value.name === 'TimeoutError'
+  );
+}
+
+/**
+ * The value a re-throw hands to the caller, typed as `Error` so the cancellation and the
+ * programming-error path can `throw` it under `@typescript-eslint/only-throw-error`. The runtime
+ * value is untouched: an abort must reach the caller as the exact object it arrived as (a caller
+ * compares it by identity or with `instanceof`), and an unexpected error must stay the value the
+ * operation produced. Only the static type is narrowed - nothing here claims the value is an
+ * `Error` beyond what the throw itself needs.
+ */
+function asThrown(value: unknown): Error {
+  return value as Error;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiGateway {
   /** The configured SDK client; operations receive it as `{ client: gateway.client }`. */
@@ -59,17 +84,24 @@ export class ApiGateway {
   /**
    * Runs one SDK operation and resolves its 2xx body.
    *
+   * - an `AbortError` — rejected by the operation or handed back as `result.error` — is
+   *   re-thrown unchanged, because the caller aborted it on purpose; never an `ApiRequestError`.
+   *   This applies even when `result` also carries a response: an abort during the SDK's body
+   *   read leaves a partial body, so the cancellation wins over the success check;
+   * - a `TimeoutError` (the adapter's deadline, `http-client-fetch.ts`) throws `ApiRequestError`
+   *   from `mapTimeoutError`, i.e. `kind: 'timeout'`, `status: 0`, retryable only with the same
+   *   `Idempotency-Key`, carrying the underlying error as its `cause`;
    * - a non-2xx result, or any result whose `error` is set, throws `ApiRequestError` built from
    *   `mapApiError` (status, `00 §9.2` body, response headers) — a 403/404/412/429 is never
    *   turned into a success value;
    * - a result with no `response` (the SDK caught what `fetch` rejected with) throws
    *   `ApiRequestError` from `mapNetworkError`, i.e. `kind: 'network'`, `status: 0`, carrying the
-   *   underlying error as its `cause`;
-   * - a rejected operation with a `TypeError` (the shape `fetch` and the adapter reject a
-   *   transport failure with) throws the same `network` error; any other non-abort rejection is
-   *   a programming error and is re-thrown unchanged;
-   * - an `AbortError` — rejected by the operation or handed back as `result.error` — is re-thrown
-   *   unchanged, because the caller aborted it on purpose; never an `ApiRequestError`;
+   *   underlying error as its `cause`, but only when that error is a `TypeError` (the shape
+   *   `fetch` and the adapter reject a transport failure with). Any other value that arrives as
+   *   `result.error` without a response — a plain `Error` thrown by `newUuid`, say — is a
+   *   programming error and is re-thrown unchanged;
+   * - a rejected operation with a `TypeError` throws the same `network` error; any other
+   *   non-abort, non-timeout rejection is a programming error and is re-thrown unchanged;
    * - a 2xx without a body (a `202`/`204` operation) resolves the SDK's empty-data value, `{}`
    *   for a JSON response — never `undefined`.
    */
@@ -82,7 +114,12 @@ export class ApiGateway {
     } catch (cause) {
       // A DOM `AbortError` is cancellation, not a failed call: it is re-thrown as it arrived.
       if (isAbortError(cause)) {
-        throw cause;
+        throw asThrown(cause);
+      }
+      // The adapter's deadline is a typed outcome, not a server or network decision: the caller
+      // learns that no answer arrived in time and may retry the same intent.
+      if (isTimeoutError(cause)) {
+        throw new ApiRequestError(mapTimeoutError(), { cause });
       }
       // `fetch` rejects a request that never reached the server with a `TypeError`, and the
       // adapter keeps that shape. Anything else that escapes an operation is a programming
@@ -90,18 +127,30 @@ export class ApiGateway {
       if (cause instanceof TypeError) {
         throw new ApiRequestError(mapNetworkError(), { cause });
       }
-      throw cause;
+      throw asThrown(cause);
+    }
+
+    // A cancellation wins over every other outcome, the success check included: an abort that
+    // fires while the SDK reads the body leaves a response with a partial body, and reporting
+    // that as a success (or as `unexpected`) would hide the cancellation.
+    if (isAbortError(result.error)) {
+      throw asThrown(result.error);
+    }
+    if (isTimeoutError(result.error)) {
+      throw new ApiRequestError(mapTimeoutError(), { cause: result.error });
     }
 
     const { response } = result;
     if (response === undefined) {
-      // No HTTP response: the SDK caught a rejection (an abort or a transport failure) and
-      // resolved it as `error`. An abort stays cancellation; everything else is a network
-      // failure, never a success value and never a status-based mapping.
-      if (isAbortError(result.error)) {
-        throw result.error;
+      // No HTTP response: the SDK caught a rejection (a transport failure) and resolved it as
+      // `error`. An absent `error` cannot be classified either, so it takes the same transport
+      // failure rather than being thrown as `undefined`.
+      if (result.error === undefined || result.error instanceof TypeError) {
+        throw new ApiRequestError(mapNetworkError(), { cause: result.error });
       }
-      throw new ApiRequestError(mapNetworkError(), { cause: result.error });
+      // Anything else is not a transport failure the UI has a state for: re-throw it unchanged
+      // instead of mislabelling a programming error as a retryable `network` failure.
+      throw asThrown(result.error);
     }
 
     const isSuccess = result.error === undefined && response.status >= 200 && response.status < 300;

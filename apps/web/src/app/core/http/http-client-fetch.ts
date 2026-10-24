@@ -10,12 +10,26 @@
 // resolves against the page origin in a browser only; Node's `Request` needs an absolute URL,
 // so specs always build URLs from an absolute origin.
 //
-// The body is forwarded as text, so this adapter supports JSON and text payloads only: it reads
-// `request.text()`, which decodes the bytes as UTF-8 and loses a binary body. A `Blob`,
-// `FormData`/multipart or other non-text body is therefore rejected before the request leaves
-// the app (a `TypeError`, the shape `fetch` uses for a request it cannot perform) instead of
-// arriving truncated. Uploads do not travel through this adapter: 06.1.2 hands the client
-// presigned URLs and the browser PUTs the bytes itself.
+// Request bodies: the body is forwarded as text, so this adapter supports JSON and text
+// payloads only. It reads `request.text()`, which decodes the bytes as UTF-8 and loses a binary
+// body. A `Blob`, `FormData`/multipart or other non-text body is therefore rejected before the
+// request leaves the app (a `TypeError`, the shape `fetch` uses for a request it cannot
+// perform) instead of arriving truncated. Uploads do not travel through this adapter: 06.1.2
+// hands the client presigned URLs and the browser PUTs the bytes itself.
+//
+// Response bodies: every response is read as text (`responseType: 'text'`), so a JSON or
+// textual body reaches the SDK as the exact characters the server sent — no `Blob`, no parse
+// step, no binary. An error status keeps its body whatever its `Content-Type`, because the SDK
+// parses the 00 §9.2 envelope (or reports the raw text) from those characters. A 2xx with a
+// non-textual `Content-Type` (`application/octet-stream`, `image/png`, …) cannot be handed to
+// the caller truthfully as text: it is refused with a `TypeError`, the transport-failure shape
+// the gateway maps to `network`, rather than returned as a corrupted success body.
+//
+// 09.1.1-T8: every call runs under a deadline (`DEFAULT_REQUEST_TIMEOUT_MS`, 30 s, configurable
+// for a caller and for specs). On expiry the adapter unsubscribes the `HttpClient` request
+// (which cancels it) and rejects with `new DOMException('The request timed out.',
+// 'TimeoutError')`, the shape `AbortSignal.timeout` produces; a caller abort still rejects with
+// `AbortError` and wins when both happen.
 //
 // This module and `api-client.ts` are the only places that touch `HttpClient`; the global
 // `fetch` is never read or replaced.
@@ -26,18 +40,35 @@ import {
   type HttpHeaders,
   type HttpResponse,
 } from '@angular/common/http';
-import { EmptyError, firstValueFrom, fromEvent, takeUntil } from 'rxjs';
+import { EmptyError, firstValueFrom, from, fromEvent, NEVER, takeUntil } from 'rxjs';
 
 /** The `fetch` shape the generated client resolves and calls. */
 export type HttpClientFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+/** Tunables of one adapter instance; every member has a production default. */
+export interface HttpClientFetchOptions {
+  /**
+   * Deadline for one whole call in milliseconds: the request body read, the request itself and
+   * the response. Defaults to {@link DEFAULT_REQUEST_TIMEOUT_MS}; a non-finite or non-positive
+   * value disables the deadline (the browser's own timeout is then the only bound).
+   */
+  readonly timeoutMs?: number;
+}
+
+/**
+ * The production deadline for one API call. A stalled connection must become a typed `timeout`
+ * failure the UI can report and retry, not a spinner that never resolves; 30 s is longer than
+ * every 09.1.1 read, and shorter than the browser's own HTTP timeout.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 // Statuses whose fetch `Response` must not carry a body (its constructor rejects one). Every
 // other status keeps the body. A status below 200 cannot become a `Response` at all — not even
 // a bodyless one — so it is rejected before conversion instead of being listed here.
 const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([204, 205, 304]);
 
-// Mime types the adapter forwards byte-for-byte through `request.text()`: a JSON body (what the
-// generated SDK sends, `application/json` from its default headers) and textual bodies.
+// Mime types whose characters the adapter can forward truthfully: a JSON body (what the
+// generated SDK sends and receives, `application/json`) and textual bodies.
 // `application/x-www-form-urlencoded` is textual even though it does not start with `text/`.
 const JSON_MIME_TYPE = 'application/json';
 const FORM_MIME_TYPE = 'application/x-www-form-urlencoded';
@@ -54,17 +85,24 @@ const TEXT_MIME_TYPE_PREFIX = 'text/';
  * the body, status and headers; any `HttpErrorResponse` with an error status becomes a
  * `Response` carrying the error body, so the SDK parses the 00 §9.2 envelope itself.
  *
- * Three failures reject instead, always in `fetch`'s network-error shape (a `TypeError` with the
- * original as `cause`): status `0` (a transport failure), a response status the `Response`
- * constructor cannot represent — a 101 upgrade acknowledgement, say, or anything outside
- * 200-599 — and an `HttpErrorResponse` carrying a 2xx status, which `HttpClient` only produces
- * when it could not read a successful body and which must never become a success value. An
- * aborted `request.signal` cancels the request and rejects with a `DOMException` named
- * `AbortError`. A request body that is neither JSON nor text is refused with a `TypeError`
- * before it is sent, because the adapter can only forward the body as text; see the module
- * comment.
+ * Four failures reject instead, always in `fetch`'s network-error shape (a `TypeError` with the
+ * original as `cause`): status `0` (a transport failure), a 2xx whose `Content-Type` is not
+ * text, a response status the `Response` constructor cannot represent — a 101 upgrade
+ * acknowledgement, say, or anything outside 200-599 — and an `HttpErrorResponse` carrying a 2xx
+ * status, which `HttpClient` only produces when it could not read a successful body and which
+ * must never become a success value. An aborted `request.signal` cancels the request and
+ * rejects with a `DOMException` named `AbortError`. A call that outlives `timeoutMs` (default
+ * {@link DEFAULT_REQUEST_TIMEOUT_MS}) is cancelled and rejects with a `DOMException` named
+ * `TimeoutError`; an abort that arrives in the same turn wins and stays an `AbortError`. A
+ * request body that is neither JSON nor text is refused with a `TypeError` before it is sent,
+ * because the adapter can only forward the body as text; see the module comment.
  */
-export function createHttpClientFetch(http: HttpClient): HttpClientFetch {
+export function createHttpClientFetch(
+  http: HttpClient,
+  options: HttpClientFetchOptions = {},
+): HttpClientFetch {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+
   return async (input, init) => {
     const request =
       init === undefined && input instanceof Request ? input : new Request(input, init);
@@ -73,68 +111,141 @@ export function createHttpClientFetch(http: HttpClient): HttpClientFetch {
       throw abortError();
     }
 
-    const method = request.method.toUpperCase();
-    const text = method === 'GET' || method === 'HEAD' ? '' : await request.text();
-    // Reading the body awaits, so the signal may have been aborted since the check above; a
-    // listener added to an already-fired signal never runs, so the abort must be caught here.
-    if (request.signal.aborted) {
-      throw abortError();
-    }
-    assertTextRequestBody(request.headers.get('Content-Type'), text);
-    const pending = http.request(method, request.url, {
-      body: text.length === 0 ? null : text,
-      headers: Object.fromEntries(request.headers),
-      observe: 'response',
-      responseType: 'blob',
-      withCredentials: request.credentials === 'include',
-    });
-
-    let response: HttpResponse<Blob>;
+    const deadline = createDeadline(timeoutMs);
     try {
-      // `observe: 'response'` emits exactly once. An abort completes the stream through
-      // `takeUntil`, which unsubscribes (and so cancels) the request and leaves no value, so
-      // `firstValueFrom` rejects with `EmptyError` — that is the abort path below.
-      response = await firstValueFrom(pending.pipe(takeUntil(fromEvent(request.signal, 'abort'))));
-    } catch (error: unknown) {
-      if (request.signal.aborted && error instanceof EmptyError) {
+      const text = await readRequestBody(request, deadline);
+      // Reading the body awaits, so the signal may have been aborted since the check above; a
+      // listener added to an already-fired signal never runs, so the abort must be caught here.
+      if (request.signal.aborted) {
         throw abortError();
       }
-      if (!(error instanceof HttpErrorResponse)) {
-        throw error;
+      assertTextRequestBody(request.headers.get('Content-Type'), text);
+      const pending = http.request(request.method.toUpperCase(), request.url, {
+        body: text.length === 0 ? null : text,
+        headers: Object.fromEntries(request.headers),
+        observe: 'response',
+        responseType: 'text',
+        withCredentials: request.credentials === 'include',
+      });
+
+      let response: HttpResponse<string>;
+      try {
+        // `observe: 'response'` emits exactly once. An abort completes the stream through
+        // `takeUntil`, which unsubscribes (and so cancels) the request and leaves no value, so
+        // `firstValueFrom` rejects with `EmptyError` — that is the abort path below. The
+        // deadline does the same by erroring the stream with its `TimeoutError`, which the
+        // catch re-throws once the abort check has had its say.
+        response = await firstValueFrom(
+          pending.pipe(
+            takeUntil(fromEvent(request.signal, 'abort')),
+            takeUntil(deadline === null ? NEVER : from(deadline.expiration)),
+          ),
+        );
+      } catch (error: unknown) {
+        // A caller abort wins over the deadline when both arrive in the same turn: it stays an
+        // `AbortError` and never becomes a typed `timeout` failure.
+        if (request.signal.aborted && (error instanceof EmptyError || isTimeoutError(error))) {
+          throw abortError();
+        }
+        if (isTimeoutError(error)) {
+          throw error;
+        }
+        if (!(error instanceof HttpErrorResponse)) {
+          throw error;
+        }
+        if (error.status === 0) {
+          // `fetch` rejects a request that never reached the server with a `TypeError`; the SDK
+          // depends on that to tell a transport failure from an HTTP error envelope.
+          throw new TypeError('Network request failed', { cause: error });
+        }
+        if (error.status >= 200 && error.status <= 299) {
+          // `HttpClient` reports a 2xx as an error only when it could not read the successful
+          // body (a parse failure). That is not an error response the SDK may parse — handing
+          // it back would turn a failure into a success value — so it takes the
+          // transport-failure shape and the gateway maps it to `network`.
+          throw new TypeError('The HTTP client reported a success status as a failure', {
+            cause: error,
+          });
+        }
+        // `HttpErrorResponse.error` is `any`: with `responseType: 'text'` Angular hands over the
+        // response text (or `null` for a bodyless error), and the assertion is what keeps the
+        // adapter's `string | null` contract honest without an `any` reaching `toResponse`.
+        const body: string | null = error.error as string | null;
+        return toResponse(error.status, error.statusText, error.headers, body, error);
       }
-      if (error.status === 0) {
-        // `fetch` rejects a request that never reached the server with a `TypeError`; the SDK
-        // depends on that to tell a transport failure from an HTTP error envelope.
-        throw new TypeError('Network request failed', { cause: error });
-      }
-      if (error.status >= 200 && error.status <= 299) {
-        // `HttpClient` reports a 2xx as an error only when it could not read the successful
-        // body (a parse failure). That is not an error response the SDK may parse — handing it
-        // back would turn a failure into a success value — so it takes the transport-failure
-        // shape and the gateway maps it to `network`.
-        throw new TypeError('The HTTP client reported a success status as a failure', {
-          cause: error,
-        });
-      }
-      return await toResponse(error.status, error.statusText, error.headers, error.error, error);
+      return toResponse(
+        response.status,
+        response.statusText,
+        response.headers,
+        response.body,
+        response,
+      );
+    } finally {
+      deadline?.cancel();
     }
-    return toResponse(
-      response.status,
-      response.statusText,
-      response.headers,
-      response.body,
-      response,
-    );
   };
 }
 
-async function toResponse(
+/** One call's deadline: a promise that never resolves and rejects once, plus its timer. */
+interface Deadline {
+  /** Rejects with the deadline's `TimeoutError` when the deadline passes; never resolves. */
+  readonly expiration: Promise<never>;
+  /** Stops the timer, so a finished call leaves nothing scheduled behind. */
+  readonly cancel: () => void;
+}
+
+function createDeadline(timeoutMs: number): Deadline | null {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return null;
+  }
+  // `Promise.withResolvers` is ES2024; this project compiles against the ES2022 lib, so the
+  // executor form is the only way to get the reject handle out of the promise.
+  let rejectDeadline: (reason: unknown) => void = () => undefined;
+  const expiration = new Promise<never>((_resolve, reject) => {
+    rejectDeadline = reject;
+  });
+  // The executor above runs synchronously, so the timer is armed with the reject handle already
+  // stored.
+  const timer = setTimeout(() => rejectDeadline(timeoutError()), timeoutMs);
+  // The deadline is raced against two paths (the body read and the request); whichever path
+  // loses the race leaves this promise unobserved, and its rejection must not surface as an
+  // unhandled rejection. The consumers still see every rejection.
+  void expiration.catch(() => undefined);
+  return {
+    expiration,
+    cancel: () => clearTimeout(timer),
+  };
+}
+
+/**
+ * Reads the request body under the same deadline as the request. A body that never finishes
+ * arriving (a stalled upload, a caller-owned stream) must not hold the call open past the
+ * deadline; the deadline's rejection wins and no request is sent.
+ */
+async function readRequestBody(request: Request, deadline: Deadline | null): Promise<string> {
+  const method = request.method.toUpperCase();
+  if (method === 'GET' || method === 'HEAD') {
+    return '';
+  }
+  const body = request.text();
+  try {
+    return await (deadline === null ? body : Promise.race([body, deadline.expiration]));
+  } catch (error: unknown) {
+    // An abort the caller asked for wins over a deadline that fired at the same moment.
+    if (request.signal.aborted) {
+      throw abortError();
+    }
+    throw error;
+  }
+}
+
+function toResponse(
   status: number,
   statusText: string,
   headers: HttpHeaders,
-  body: unknown,
-  source: HttpResponse<Blob> | HttpErrorResponse,
-): Promise<Response> {
+  body: string | null,
+  source: HttpResponse<string> | HttpErrorResponse,
+): Response {
   if (status < 200 || status > 599) {
     // `Response` accepts 200-599 only; anything else (a 101 upgrade acknowledgement, say) would
     // make its constructor throw a `RangeError` the SDK does not know, and `fetch` has no way to
@@ -144,7 +255,14 @@ async function toResponse(
       cause: source,
     });
   }
-  const responseBody = NULL_BODY_STATUSES.has(status) ? null : await toFetchBody(body);
+  if (status >= 200 && status <= 299 && !isTextualContentType(headers.get('Content-Type'))) {
+    // Responses are read as text, so a binary success body has already been decoded — lossily —
+    // by `HttpClient`. Handing it back would be a success value with corrupted content (a
+    // downloaded archive, an image) and no way to notice. Refuse it in the transport-failure
+    // shape instead: the gateway maps that `TypeError` to `network`, never to a success.
+    throw new TypeError('The HTTP client returned a non-text success response', { cause: source });
+  }
+  const responseBody = NULL_BODY_STATUSES.has(status) ? null : toFetchBody(body);
   return new Response(responseBody, {
     status,
     statusText,
@@ -164,6 +282,9 @@ function assertTextRequestBody(contentType: string | null, text: string): void {
   throw new TypeError('Unsupported request body type for the HttpClient fetch adapter');
 }
 
+// Whether the characters `HttpClient` handed over are the bytes on the wire. `null` (no
+// `Content-Type`) is accepted: a bodyless response has none, and a body a server sends without
+// one is still plain text.
 function isTextualContentType(contentType: string | null): boolean {
   if (contentType === null) {
     return true;
@@ -185,6 +306,19 @@ function abortError(): DOMException {
   return new DOMException('The request was aborted.', 'AbortError');
 }
 
+// The deadline's rejection, in the shape `AbortSignal.timeout` produces.
+function timeoutError(): DOMException {
+  return new DOMException('The request timed out.', 'TimeoutError');
+}
+
+// Duck-typed like `isAbortError` in the gateway: the class is per-realm and the value may be
+// this realm's `DOMException` or a foreign one.
+function isTimeoutError(value: unknown): boolean {
+  return (
+    typeof value === 'object' && value !== null && 'name' in value && value.name === 'TimeoutError'
+  );
+}
+
 function toFetchResponseHeaders(headers: HttpHeaders): Record<string, string> {
   const result: Record<string, string> = {};
   for (const name of headers.keys()) {
@@ -201,36 +335,11 @@ function toFetchResponseHeaders(headers: HttpHeaders): Record<string, string> {
   return result;
 }
 
-async function toFetchBody(body: unknown): Promise<BodyInit | null> {
-  if (body === null || body === undefined) {
+// `responseType: 'text'` hands the decoded body over as a string; `null` is a bodyless
+// response and `''` an empty body, and both reach the SDK as no body at all.
+function toFetchBody(body: string | null): string | null {
+  if (body === null || body === '') {
     return null;
   }
-  if (isBlobLike(body)) {
-    // A `Blob` from a realm without `stream()` (jsdom in the unit tests, older polyfills) is
-    // stringified by the `Response` constructor; hand its bytes over instead (ADR-0008
-    // adapter gotcha). A same-realm `Blob` is passed through without a copy.
-    return typeof body.stream === 'function' ? body : await body.arrayBuffer();
-  }
-  if (body instanceof ArrayBuffer) {
-    return body;
-  }
-  if (typeof body === 'string') {
-    return body;
-  }
-  // An error body Angular already parsed (JSON response type) is re-encoded as JSON text.
-  return JSON.stringify(body);
-}
-
-// Realm-agnostic `Blob` detection: `instanceof Blob` fails across realms (Node's `Response`
-// receives a jsdom `Blob` in specs), while a native browser `Blob` is passed through.
-function isBlobLike(value: unknown): value is Blob {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  const candidate = value as Partial<Blob>;
-  return (
-    typeof candidate.arrayBuffer === 'function' &&
-    typeof candidate.size === 'number' &&
-    typeof candidate.type === 'string'
-  );
+  return body;
 }

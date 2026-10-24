@@ -7,7 +7,7 @@
 import type { ErrorEnvelope, ErrorEnvelopeDetail } from '@evidgate/sdk';
 
 import { ApiRequestError, isApiRequestError, type ApiError, type ApiErrorKind } from './api-error';
-import { mapApiError, mapNetworkError, parseRetryAfter } from './error-mapper';
+import { mapApiError, mapNetworkError, mapTimeoutError, parseRetryAfter } from './error-mapper';
 
 /** A 00 §9.2 envelope with the defaults a server response would carry. */
 function envelope(
@@ -409,7 +409,45 @@ describe('mapApiError — 403 and 404 keep their meaning', () => {
   });
 });
 
-describe('mapNetworkError', () => {
+interface TransportCase {
+  readonly map: () => ApiError;
+  readonly kind: ApiErrorKind;
+  readonly code: string;
+}
+
+describe('mapNetworkError and mapTimeoutError — the two no-response outcomes', () => {
+  // The transport table is exhaustive by construction: every mapper that builds an `ApiError`
+  // for a request that never produced a server answer has exactly one row here, so a third
+  // no-response kind cannot ship without a row (and the union member a row names is checked by
+  // the compiler).
+  const TRANSPORT_CASES: readonly TransportCase[] = [
+    { map: mapNetworkError, kind: 'network', code: 'network' },
+    { map: mapTimeoutError, kind: 'timeout', code: 'request_timeout' },
+  ];
+
+  it.each(TRANSPORT_CASES)(
+    '$kind is a status-0, retryable kind with no interval',
+    ({ map, kind, code }) => {
+      const mapped = map();
+
+      expect(mapped.kind).toBe(kind);
+      expect(mapped.status).toBe(0);
+      expect(mapped.code).toBe(code);
+      expect(mapped.retryable).toBe(true);
+      // No response ever arrived, so there is no envelope request id, no server details and no
+      // `Retry-After` to echo: the UI must not invent an interval for either kind.
+      expect(mapped.requestId).toBeNull();
+      expect(mapped.details).toEqual([]);
+      expect(mapped.retryAfterSeconds).toBeNull();
+      expect(mapped.message.length).toBeGreaterThan(0);
+    },
+  );
+
+  it('keeps timeout and network distinguishable', () => {
+    expect(mapTimeoutError().kind).not.toBe(mapNetworkError().kind);
+    expect(mapTimeoutError().code).not.toBe(mapNetworkError().code);
+  });
+
   it('maps a transport failure to network, status 0, retryable', () => {
     const mapped = mapNetworkError();
 

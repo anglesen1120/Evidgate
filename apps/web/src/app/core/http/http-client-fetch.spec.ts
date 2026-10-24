@@ -1,9 +1,11 @@
-// 09.1.1-T3.2 (ADR-0008 decision row a + adapter gotchas): specs for the `fetch` adapter that
-// puts the generated SDK behind Angular `HttpClient`. They pin what the interceptors see
-// (method, absolute URL, forwarded headers, exact text body, withCredentials) and what the SDK
-// gets back (a fetch `Response` for 2xx and for 00 §9.2 error statuses, `TypeError` for status 0,
-// for a status a `Response` cannot carry, for a 2xx `HttpErrorResponse` and for a non-text
-// request body, `AbortError` on abort).
+// 09.1.1-T3.2 (ADR-0008 decision row a + adapter gotchas), extended by 09.1.1-T8: specs for the
+// `fetch` adapter that puts the generated SDK behind Angular `HttpClient`. They pin what the
+// interceptors see (method, absolute URL, forwarded headers, exact text body, withCredentials),
+// what the SDK gets back (a fetch `Response` for 2xx and for 00 §9.2 error statuses, `TypeError`
+// for status 0, for a non-text 2xx body, for a status a `Response` cannot carry, for a 2xx
+// `HttpErrorResponse` and for a non-text request body), what the deadline does (a `TimeoutError`
+// rejection with the request cancelled, while a caller abort keeps winning) and that responses
+// are read as text, never as a `Blob`.
 
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
 import {
@@ -21,7 +23,11 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { ErrorEnvelope } from '@evidgate/sdk';
 
-import { createHttpClientFetch, type HttpClientFetch } from './http-client-fetch';
+import {
+  createHttpClientFetch,
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  type HttpClientFetch,
+} from './http-client-fetch';
 
 const API_ORIGIN = 'http://localhost';
 
@@ -29,10 +35,6 @@ const API_ORIGIN = 'http://localhost';
 // page origin in a browser; the specs therefore use the absolute form of the same URL.
 function apiUrl(path: string): string {
   return `${API_ORIGIN}/v1${path}`;
-}
-
-function jsonBlob(value: unknown): Blob {
-  return new Blob([JSON.stringify(value)], { type: 'application/json' });
 }
 
 // The adapter awaits `request.text()` before subscribing, so the request reaches the testing
@@ -83,7 +85,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     expect(body).toBeNull();
     expect(testRequest.request.headers.get('X-Request-Id')).toBe('req-1');
 
-    testRequest.flush(jsonBlob({ items: [], next_cursor: null }), {
+    testRequest.flush(JSON.stringify({ items: [], next_cursor: null }), {
       status: 200,
       statusText: 'OK',
       headers: { 'Content-Type': 'application/json' },
@@ -105,7 +107,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     const body: unknown = testRequest.request.body;
     expect(body).toBe(text);
 
-    testRequest.flush(jsonBlob({ name: 'nightly' }), {
+    testRequest.flush(JSON.stringify({ name: 'nightly' }), {
       status: 201,
       statusText: 'Created',
       headers: { 'Content-Type': 'application/json' },
@@ -129,7 +131,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     expect(body).toBe(text);
     expect(testRequest.request.headers.get('Content-Type')).toBe('application/json');
 
-    testRequest.flush(jsonBlob({ name: 'nightly' }), {
+    testRequest.flush(JSON.stringify({ name: 'nightly' }), {
       status: 200,
       statusText: 'OK',
       headers: { 'Content-Type': 'application/json' },
@@ -167,7 +169,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     const body: unknown = testRequest.request.body;
     expect(body).toBe(text);
 
-    testRequest.flush(jsonBlob({ access_token: 'token-1' }), {
+    testRequest.flush(JSON.stringify({ access_token: 'token-1' }), {
       status: 200,
       statusText: 'OK',
       headers: { 'Content-Type': 'application/json' },
@@ -177,11 +179,11 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     expect(response.status).toBe(200);
   });
 
-  it('converts a 200 JSON blob into a Response with the payload, status and headers', async () => {
+  it('converts a 200 JSON text body into a Response with body, status, headers', async () => {
     const payload = { items: [{ id: 'run-1' }], next_cursor: null };
     const pending = adapter(new Request(apiUrl('/runs')));
 
-    (await nextRequest(httpMock, apiUrl('/runs'))).flush(jsonBlob(payload), {
+    (await nextRequest(httpMock, apiUrl('/runs'))).flush(JSON.stringify(payload), {
       status: 200,
       statusText: 'OK',
       headers: { 'Content-Type': 'application/json', 'X-Request-Id': 'rid-1' },
@@ -220,7 +222,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     };
     const pending = adapter(new Request(apiUrl('/runs'), { method: 'POST' }));
 
-    (await nextRequest(httpMock, apiUrl('/runs'))).flush(jsonBlob(envelope), {
+    (await nextRequest(httpMock, apiUrl('/runs'))).flush(JSON.stringify(envelope), {
       status: 403,
       statusText: 'Forbidden',
       headers: { 'Content-Type': 'application/json' },
@@ -244,7 +246,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     };
     const pending = adapter(new Request(apiUrl('/runs')));
 
-    (await nextRequest(httpMock, apiUrl('/runs'))).flush(jsonBlob(envelope), {
+    (await nextRequest(httpMock, apiUrl('/runs'))).flush(JSON.stringify(envelope), {
       status: 429,
       statusText: 'Too Many Requests',
       headers: { 'Content-Type': 'application/json', 'Retry-After': '120' },
@@ -258,7 +260,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
   it('joins a repeated response header instead of dropping a value', async () => {
     const pending = adapter(new Request(apiUrl('/runs')));
 
-    (await nextRequest(httpMock, apiUrl('/runs'))).flush(jsonBlob({ items: [] }), {
+    (await nextRequest(httpMock, apiUrl('/runs'))).flush(JSON.stringify({ items: [] }), {
       status: 200,
       statusText: 'OK',
       headers: { 'Content-Type': 'application/json', 'X-Trace-Id': ['span-1', 'span-2'] },
@@ -272,7 +274,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     const html = '<html><body>Bad Gateway</body></html>';
     const pending = adapter(new Request(apiUrl('/runs')));
 
-    (await nextRequest(httpMock, apiUrl('/runs'))).flush(new Blob([html], { type: 'text/html' }), {
+    (await nextRequest(httpMock, apiUrl('/runs'))).flush(html, {
       status: 502,
       statusText: 'Bad Gateway',
       headers: { 'Content-Type': 'text/html' },
@@ -299,7 +301,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
 
     // A non-2xx status reaches the adapter as an `HttpErrorResponse`; 101 cannot become a fetch
     // `Response` (its constructor only accepts 200-599).
-    (await nextRequest(httpMock, apiUrl('/runs'))).flush(new Blob(['']), {
+    (await nextRequest(httpMock, apiUrl('/runs'))).flush('', {
       status: 101,
       statusText: 'Switching Protocols',
     });
@@ -374,7 +376,7 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     const testRequest = await nextRequest(httpMock, apiUrl('/runs'));
     expect(testRequest.request.withCredentials).toBe(true);
 
-    testRequest.flush(jsonBlob({ items: [], next_cursor: null }), {
+    testRequest.flush(JSON.stringify({ items: [], next_cursor: null }), {
       status: 200,
       statusText: 'OK',
       headers: { 'Content-Type': 'application/json' },
@@ -405,12 +407,252 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
     const testRequest = await nextRequest(httpMock, apiUrl('/runs'));
     expect(testRequest.request.headers.get('Idempotency-Key')).toBe('intent-42');
 
-    testRequest.flush(jsonBlob({ name: 'nightly' }), {
+    testRequest.flush(JSON.stringify({ name: 'nightly' }), {
       status: 200,
       statusText: 'OK',
       headers: { 'Content-Type': 'application/json' },
     });
 
     await pending;
+  });
+
+  // 09.1.1-T8 deadline specs. The clock is faked for `setTimeout`/`clearTimeout` only, so the
+  // microtask pipeline (`request.text()`, rxjs and the testing backend) keeps running normally.
+  // Requests are taken by draining microtasks instead of `vi.waitFor`, because `waitFor` owns
+  // the timers that these specs advance.
+  describe('09.1.1-T8 deadline', () => {
+    async function takeRequest(url: string): Promise<TestRequest> {
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const [request] = httpMock.match(url);
+        if (request !== undefined) {
+          return request;
+        }
+        await Promise.resolve();
+      }
+      throw new Error(`The adapter has not issued ${url} yet.`);
+    }
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('rejects with a TimeoutError and cancels the request', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs: 1_000 });
+
+      const pending = adapter(new Request(apiUrl('/runs')));
+      const settlement = pending.then(
+        () => 'resolved',
+        (reason: unknown) => reason,
+      );
+      const testRequest = await takeRequest(apiUrl('/runs'));
+
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      const error = await settlement;
+      expect(error).toBeInstanceOf(DOMException);
+      expect((error as DOMException).name).toBe('TimeoutError');
+      // The timeout unsubscribed the request, so a slow server cannot deliver a late success.
+      expect(testRequest.cancelled).toBe(true);
+    });
+
+    it('leaves a response that arrives before the deadline untouched', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs: 1_000 });
+
+      const pending = adapter(new Request(apiUrl('/runs')));
+      const testRequest = await takeRequest(apiUrl('/runs'));
+      await vi.advanceTimersByTimeAsync(999);
+      testRequest.flush(JSON.stringify({ items: [] }), {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const response = await pending;
+      expect(response.status).toBe(200);
+      // The finished call leaves no deadline behind: advancing past it changes nothing.
+      await vi.advanceTimersByTimeAsync(10_000);
+      await expect(response.text()).resolves.toBe(JSON.stringify({ items: [] }));
+    });
+
+    it('keeps a caller abort as an AbortError when the deadline also passes', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs: 1_000 });
+      const controller = new AbortController();
+
+      const pending = adapter(new Request(apiUrl('/runs'), { signal: controller.signal }));
+      const settlement = pending.then(
+        () => 'resolved',
+        (reason: unknown) => reason,
+      );
+      const testRequest = await takeRequest(apiUrl('/runs'));
+
+      // The abort fires before the deadline, in the same advance that reaches 1000 ms.
+      setTimeout(() => controller.abort(), 500);
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      const error = await settlement;
+      expect(error).toBeInstanceOf(DOMException);
+      expect((error as DOMException).name).toBe('AbortError');
+      expect(testRequest.cancelled).toBe(true);
+    });
+
+    it('rejects with a TimeoutError while the request body is still being read', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs: 1_000 });
+
+      // A stalled upload: the platform body read never settles, so only the deadline can end
+      // the call. `Request.text()` is the one read the adapter performs on a request body.
+      const request = new Request(apiUrl('/runs'), {
+        method: 'POST',
+        body: '{"name":"nightly"}',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      vi.spyOn(request, 'text').mockReturnValue(new Promise<string>(() => undefined));
+
+      const settlement = adapter(request).then(
+        () => 'resolved',
+        (reason: unknown) => reason,
+      );
+
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      const error = await settlement;
+      expect(error).toBeInstanceOf(DOMException);
+      expect((error as DOMException).name).toBe('TimeoutError');
+      // The deadline ends the call before anything is sent, so no half-read body reaches the API.
+      httpMock.expectNone(apiUrl('/runs'));
+    });
+
+    it('does not start a deadline when the caller disables it', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs: 0 });
+
+      const pending = adapter(new Request(apiUrl('/runs')));
+      const testRequest = await takeRequest(apiUrl('/runs'));
+      await vi.advanceTimersByTimeAsync(DEFAULT_REQUEST_TIMEOUT_MS * 2);
+
+      testRequest.flush(JSON.stringify({ items: [] }), {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      await expect(pending).resolves.toHaveProperty('status', 200);
+    });
+  });
+
+  // 09.1.1-T8: responses travel as text. These rows are the round-trip proof for every body
+  // shape the SDK parses, plus the refusal that keeps a binary 2xx from becoming a success.
+  describe('09.1.1-T8 text responses', () => {
+    it('keeps a 412 envelope with details parseable through the text body', async () => {
+      const envelope: ErrorEnvelope = {
+        error: {
+          code: 'precondition_failed',
+          message: 'The row changed since it was read.',
+          request_id: 'req-412',
+          retryable: false,
+          details: [{ path: '/revision_id', reason: 'stale' }],
+        },
+      };
+      const pending = adapter(new Request(apiUrl('/runs'), { method: 'POST' }));
+
+      (await nextRequest(httpMock, apiUrl('/runs'))).flush(JSON.stringify(envelope), {
+        status: 412,
+        statusText: 'Precondition Failed',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const response = await pending;
+      expect(response.status).toBe(412);
+      expect(response.ok).toBe(false);
+      const body: unknown = await response.json();
+      expect(body).toEqual(envelope);
+    });
+
+    it('passes a non-JSON text error body through unchanged', async () => {
+      const text = 'upstream worker crashed';
+      const pending = adapter(new Request(apiUrl('/runs')));
+
+      (await nextRequest(httpMock, apiUrl('/runs'))).flush(text, {
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+
+      const response = await pending;
+      expect(response.status).toBe(500);
+      await expect(response.text()).resolves.toBe(text);
+    });
+
+    it('keeps a non-text error body as text, because the SDK reports it verbatim', async () => {
+      const text = '\u0000\u0001 worker trace';
+      const pending = adapter(new Request(apiUrl('/runs')));
+
+      (await nextRequest(httpMock, apiUrl('/runs'))).flush(text, {
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: { 'Content-Type': 'application/octet-stream' },
+      });
+
+      const response = await pending;
+      expect(response.status).toBe(500);
+      await expect(response.text()).resolves.toBe(text);
+    });
+
+    it('returns an empty body for an empty 200 without inventing content', async () => {
+      const pending = adapter(new Request(apiUrl('/runs')));
+
+      (await nextRequest(httpMock, apiUrl('/runs'))).flush('', {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const response = await pending;
+      expect(response.status).toBe(200);
+      await expect(response.text()).resolves.toBe('');
+      await expect(response.json()).rejects.toBeInstanceOf(Error);
+    });
+
+    it.each(['image/png', 'application/octet-stream'])(
+      'refuses a 2xx whose Content-Type is %s instead of a corrupted success',
+      async (contentType) => {
+        const binary = '\u0089PNG\r\n\u001a\n';
+        const pending = adapter(new Request(apiUrl('/artifacts/a-1/download')));
+
+        (await nextRequest(httpMock, apiUrl('/artifacts/a-1/download'))).flush(binary, {
+          status: 200,
+          statusText: 'OK',
+          headers: { 'Content-Type': contentType },
+        });
+
+        const error: unknown = await pending.catch((reason: unknown) => reason);
+        expect(error).toBeInstanceOf(TypeError);
+        expect((error as TypeError).message).toContain('non-text');
+      },
+    );
+
+    it('keeps a JSON 2xx parseable and a 204 bodyless', async () => {
+      const created = adapter(new Request(apiUrl('/runs'), { method: 'POST' }));
+      (await nextRequest(httpMock, apiUrl('/runs'))).flush(JSON.stringify({ run_id: 'run-1' }), {
+        status: 201,
+        statusText: 'Created',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const createdResponse = await created;
+      expect(createdResponse.status).toBe(201);
+      const body: unknown = await createdResponse.json();
+      expect(body).toEqual({ run_id: 'run-1' });
+
+      const acked = adapter(new Request(apiUrl('/runs/run-1'), { method: 'DELETE' }));
+      (await nextRequest(httpMock, apiUrl('/runs/run-1'))).flush(null, {
+        status: 204,
+        statusText: 'No Content',
+      });
+      const ackedResponse = await acked;
+      expect(ackedResponse.status).toBe(204);
+      expect(ackedResponse.body).toBeNull();
+    });
   });
 });
