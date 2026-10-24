@@ -376,7 +376,7 @@ and the traversal, symlink and bad-request guards of the server itself).
 the 404 that never confirms a foreign resource, keyboard and drawer focus, the scope switcher, the
 theme choice, session states, axe with `color-contrast` on the shell, the 403/404 patterns and the
 dev-only `/dev/ui-gallery`, and the T7/T8 real-browser checks (360px overflow, sticky table,
-popover top layer, conflict dialog). It needs the dev fixture backend, so it runs against a
+popover top layer, conflict dialog) and `adversarial.spec.ts` (URL tampering, `returnUrl`, cross-org ids, boot failures). It needs the dev fixture backend, so it runs against a
 `fixtures` build, not the production bundle:
 
 ```sh

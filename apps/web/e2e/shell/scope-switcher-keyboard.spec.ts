@@ -5,7 +5,7 @@
 // WCAG 3.2.2 On Input. jsdom dispatches no `change` for a key press, so only a real browser can
 // reproduce the behaviour this spec pins.
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import {
   LIMITED_GRANTS,
@@ -32,6 +32,22 @@ async function settle(page: Page): Promise<void> {
   );
 }
 
+/**
+ * Reproduces what Chromium and Firefox on Windows and Linux do for ArrowDown on a focused, closed
+ * select: a `keydown` followed by `input` and `change` with the stepped value. macOS opens the
+ * picker instead, so a real key press would not step there; dispatching the event sequence keeps
+ * the spec platform independent while the Enter and Tab that follow stay real key presses.
+ */
+async function stepWithArrow(select: Locator, value: string): Promise<void> {
+  await select.evaluate((element: HTMLSelectElement, next: string) => {
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    element.value = next;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  }, value);
+  await expect(select).toHaveValue(value);
+}
+
 test.describe('scope switcher keyboard commit (AC4)', () => {
   test('an arrow-key step does not navigate; Enter commits the stepped project', async ({
     page,
@@ -44,10 +60,8 @@ test.describe('scope switcher keyboard commit (AC4)', () => {
     const before = new URL(page.url()).pathname;
 
     await projectSelect.focus();
-    await page.keyboard.press('ArrowDown');
-    // The browser applied the step to the control itself ...
-    await expect(projectSelect).toHaveValue(PROJECT_CHECKOUT);
-    // ... but the shell held it: the address must still name the previous project.
+    await stepWithArrow(projectSelect, PROJECT_CHECKOUT);
+    // The shell holds the step: the address must still name the previous project.
     await settle(page);
     expect(new URL(page.url()).pathname).toBe(before);
 
@@ -64,8 +78,7 @@ test.describe('scope switcher keyboard commit (AC4)', () => {
     const before = new URL(page.url()).pathname;
 
     await projectSelect.focus();
-    await page.keyboard.press('ArrowDown');
-    await expect(projectSelect).toHaveValue(PROJECT_CHECKOUT);
+    await stepWithArrow(projectSelect, PROJECT_CHECKOUT);
     await settle(page);
     expect(new URL(page.url()).pathname).toBe(before);
 

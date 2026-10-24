@@ -63,6 +63,10 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // The static server now sends the app-origin CSP (09.1.1-T10: nonce, Trusted Types), which
+    // refuses the inline script `axeScan` injects. CSP itself is covered by `e2e/csp.spec.ts` on
+    // the production suite; this suite drives the shell, so the policy is not enforced here.
+    bypassCSP: true,
   },
   projects: [
     {
