@@ -25,6 +25,7 @@ const NO_DETAILS: readonly ErrorEnvelopeDetail[] = [];
 const CODE_ENVELOPE_MISSING = 'envelope_missing';
 const CODE_UNEXPECTED_STATUS = 'unexpected_status';
 const CODE_NETWORK = 'network';
+const CODE_TIMEOUT = 'request_timeout';
 
 /** `delta-seconds` of RFC 9110 §10.2.3: digits only, no sign, no fraction. */
 const DELTA_SECONDS = /^\d+$/;
@@ -168,6 +169,28 @@ export function mapNetworkError(): ApiError {
     status: 0,
     code: CODE_NETWORK,
     message: 'The request did not reach the API; no response was received.',
+    requestId: null,
+    retryable: true,
+    details: NO_DETAILS,
+    retryAfterSeconds: null,
+  };
+}
+
+/**
+ * A call the adapter's deadline stopped (09.1.1-T8) before any HTTP response arrived. Status is
+ * `0` like {@link mapNetworkError}, but the two are not the same fact: a timeout says nothing
+ * about whether the server saw the request, so the copy claims no outcome and a retry is only
+ * safe with the original `Idempotency-Key` (00 §9.2). No interval is invented — there is no
+ * `Retry-After` to echo — and a cancellation never arrives here: the gateway re-throws the
+ * `AbortError` untouched, because the caller asked for it.
+ */
+export function mapTimeoutError(): ApiError {
+  return {
+    kind: 'timeout',
+    status: 0,
+    code: CODE_TIMEOUT,
+    message:
+      'The API did not answer within the request deadline; the request may or may not have reached the server.',
     requestId: null,
     retryable: true,
     details: NO_DETAILS,

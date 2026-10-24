@@ -208,6 +208,12 @@ No reduced-motion component rule is added here. V2 already handles it in its uti
 lines 4465–4479, including its indeterminate progress fallback. A component port must retain that
 behaviour rather than assuming the token file alone disables animations.
 
+`--eg-duration-fast` and `--eg-duration-standard` are the only durations a component may write:
+the lint rule reports a non-zero `ms`/`s` time in `transition`/`animation` as `rawDuration`
+("Lint rule `style-tokens`" below). `--eg-ease` is a review convention, **not** an enforced
+literal: a timing function (`cubic-bezier(...)`, `steps(...)`, `ease`/`linear`) carries no unit the
+scanner can key on, so neither rule reports one (see "Deliberately not checked").
+
 ### Z-index
 
 | Token | Light and dark |
@@ -385,10 +391,10 @@ would not have been a faithful v2 port.
 ## Rules for components
 
 - Use the existing token names for colours, font families, type, spacing, borders, radius,
-  dimensions, elevation and stacking. Do not introduce raw hex colours or raw pixel values outside
-  `tokens.css` in component styles. This is enforced by the `style-tokens` ESLint rule of
-  **09.1.1-T11.4**, documented in § Lint rule `style-tokens` below; the documented literal
-  media-query boundaries are its only syntax exception.
+  dimensions, elevation, stacking and motion. Do not introduce raw hex colours, raw pixel values or
+  raw `ms`/`s` durations outside `tokens.css` in component styles. This is enforced by the
+  `style-tokens` ESLint rule of **09.1.1-T11.4**, documented in § Lint rule `style-tokens` below;
+  the documented literal media-query boundaries are its only syntax exception.
 - Use `--eg-border-control` for a boundary needed to identify an input/control; `--eg-border` is
   decorative. Keep focus visible using the focus colour, width and offset tokens.
 - Pair text with the backgrounds recorded above. Use `--eg-on-accent` on solid accent buttons;
@@ -435,26 +441,30 @@ the inside of `calc()` included):
 | `rgb()`, `rgba()`, `hsl()`, `hsla()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` | `rawColourFunction` | any property |
 | CSS named colour (`red`, `rebeccapurple`, …) | `rawNamedColour` | colour-bearing properties (`color`, `background*`, `border*`, `outline*`, `column-rule*`, `text-decoration*`, `text-emphasis*`, `fill`, `stroke*`, `box-shadow`, `text-shadow`, `caret-color`, `accent-color`, `scrollbar-color`, `filter`) and every custom property |
 | non-zero `px`/`rem`/`em` length | `rawLength` | spacing (`margin*`, `padding*`, `gap`, `row-gap`, `column-gap`, `inset*`, `top`/`right`/`bottom`/`left`), scroll spacing (`scroll-margin*`, `scroll-padding*`, all longhands and logical forms), radius (`border-radius`, corner radii), border/outline width (including the `border`/`outline` shorthands), `outline-offset`, `font`, `font-size`, `line-height`, `box-shadow`, `text-shadow`, and **every custom property** |
+| non-zero `ms`/`s` duration | `rawDuration` | `transition`, `transition-duration`, `transition-delay`, `animation`, `animation-duration`, `animation-delay`, and **every custom property** |
 
 `--eg-border-width: 1px` exists, so a `1px` hairline is **not** an exception: write
 `border: var(--eg-border-width) solid var(--eg-border)`. The same applies to the `--eg-focus-width`
 outline.
 
-**Custom properties are checked for lengths as well as colours.** A local `--local-gap: 8px`
-copies a raw length exactly like `gap: 8px` does, so `--local-gap: 8px` fails with `rawLength` in
-a component stylesheet and in an inline `styles` entry. `tokens.css` keeps declaring the raw
-scale because that file is exempt at config level. Literal-free custom properties still pass:
+**Custom properties are checked for lengths and durations as well as colours.** A local
+`--local-gap: 8px` copies a raw length exactly like `gap: 8px` does, so it fails with `rawLength`;
+`--local-fade: 120ms` copies a motion duration exactly like `transition: opacity 120ms` does, so it
+fails with `rawDuration` — in a component stylesheet and in an inline `styles` entry alike.
+`tokens.css` keeps declaring the raw scale because that file is exempt at config level.
+Literal-free custom properties still pass:
 
 | Declaration | Why it passes |
 | --- | --- |
-| `--x: 0` | the zero exemption (`0px`/`0rem` too) |
+| `--x: 0` | the zero exemption (`0px`/`0rem`/`0s`/`0ms` too) |
 | `--x: 1.5` | unitless number |
 | `--x: 100%` | percentage |
 | `--x: var(--eg-space-4)` | token reference |
 | `--x: calc(var(--eg-space-2) * 2)` | `calc()` over a token reference only |
 
-**Deliberately not checked.** The unit regex covers `px`, `rem` and `em` only, and the property
-list above is the whole contract. Four groups stay out on purpose:
+**Deliberately not checked.** The length regex covers `px`, `rem` and `em` and the duration regex
+covers `ms` and `s`; the property lists above are the whole contract. Five groups stay out on
+purpose:
 
 - Sizing — `width`, `height`, `min-*`, `max-*`: only shell dimensions have tokens, and the 360px
   no-horizontal-scroll requirement ([layout.md](layout.md)) needs literal min/max widths.
@@ -463,9 +473,13 @@ list above is the whole contract. Four groups stay out on purpose:
 - `letter-spacing`, `word-spacing`, `text-indent`: the type scale has size and line-height tokens
   but no tracking token, so any numeric value here has no token to reference.
 - `border-spacing`: no token exists for table cell gaps, and no component rule has yet chosen one.
+- Timing functions — `cubic-bezier(...)`, `steps(...)`, `ease`/`linear`: `--eg-ease` exists, but
+  none of these carries a unit a literal scanner can key on, and the keywords are legitimate CSS.
+  Using the token here is a review convention, not a lint verdict.
 
-Adding a token for any of these is the prerequisite for checking them: the rule reports only what
-a token can replace.
+Adding a token for any of these is the prerequisite for checking them, but a token alone is not
+sufficient: the rule matches literals by unit, which is why the motion durations are reported and
+`--eg-ease` is not.
 
 **CSS system colour keywords pass.** `Canvas`, `CanvasText`, `ButtonText`, `LinkText` and the rest
 are not CSS named colours, so they never match the named-colour check. That is intended: a system
@@ -476,11 +490,11 @@ keep text and control boundaries readable under `forced-colors: active` (the WCA
 
 **Allowed everywhere:** `var(--*)` references (a local alias such as
 `--local-gap: var(--eg-space-4)` is safe, because the literal check runs on each declaration and a
-`var()` reference never matches), `0`, `0px`/`0rem`, unitless numbers (`line-height: 1.5`,
-`font-weight: 600`), percentages (`100%`), `transparent`, `currentcolor`, `inherit`, `initial`,
-`unset`, `revert`, `revert-layer`, `none` and `auto`, quoted strings, `url(...)` payloads, and
-`color-mix()` whose operands contain no literal (its operands are checked, so
-`color-mix(in srgb, #fff 10%, red)` fails twice).
+`var()` reference never matches), `0`, `0px`/`0rem`, `0s`/`0ms`, unitless numbers
+(`line-height: 1.5`, `font-weight: 600`), percentages (`100%`), `transparent`, `currentcolor`,
+`inherit`, `initial`, `unset`, `revert`, `revert-layer`, `none` and `auto`, quoted strings,
+`url(...)` payloads, and `color-mix()` whose operands contain no literal (its operands are checked,
+so `color-mix(in srgb, #fff 10%, red)` fails twice).
 
 **Media-query exception.** `@media`, `@container` and `@supports` PRELUDES are never checked,
 because CSS cannot read a custom property inside a condition — `--eg-bp-tablet: 768px` and
@@ -497,14 +511,16 @@ declaration text out of the string or template literal:
 
 - A plain string entry and a template entry without interpolation are scanned exactly like a
   stylesheet, so every literal above fails at its real line and column in the `.ts` file.
-- An interpolation immediately followed by a raw unit — `${space}px`, `${space}rem`, `${space}em`
-  — fails with `rawLength` and the value `${space}px` **in a checked property only**: the
-  interpolation holds a JavaScript number, so the unit is what turns it into a literal length.
-  `padding: ${space}px` and `--local-gap: ${space}rem` fail; `padding: ${space}%`,
-  `gap: ${token}`, and `width: ${size}px` / `transform: translateY(${offset}px)` pass, the last two
-  for the same reason their static forms pass — sizing and transform are outside the contract.
+- An interpolation immediately followed by a raw unit — `${space}px`, `${space}rem`,
+  `${space}em`, `${duration}ms`, `${duration}s` — fails with `rawLength` or `rawDuration` and the
+  value `${space}px` **in a checked property only**: the interpolation holds a JavaScript number,
+  so the unit is what turns it into a literal length or time.
+  `padding: ${space}px`, `--local-gap: ${space}rem` and `transition-duration: ${duration}ms` fail;
+  `padding: ${space}%`, `gap: ${token}`, and `width: ${size}px` /
+  `transform: translateY(${offset}px)` pass, the last two for the same reason their static forms
+  pass — sizing and transform are outside the contract.
 - `${...}` expression source is masked before the entry is read as a stylesheet, so a JavaScript
-  expression is never itself scanned for colours or lengths.
+  expression is never itself scanned for colours, lengths or durations.
 - `styles: [NAME]` where `NAME` is a module-level `const NAME = '...'` or `` const NAME = `...` ``
   in the same file is resolved and checked, so hoisting a stylesheet into a const does not bypass
   the rule.
@@ -522,22 +538,19 @@ declaration text out of the string or template literal:
   convention) or the styles in that metadata are unchecked.
 - `styles` inside a `*.spec.ts`: the `apps/web/**/*.ts` config block ignores specs, so a test host
   component's inline styles are not linted.
-- Motion durations (`transition`/`animation`) are not checked although `--eg-duration-fast`/
-  `--eg-duration-standard` exist: the two tokens cover 150ms and 200ms only, and no component rule
-  has yet decided what a spinner or skeleton needs, so the check would be guesswork. Add a duration
-  pattern when that rule exists.
 
 **Disposition of each limitation (S62 send-back on PR #138).** Nothing above is left unowned:
 
 | Limitation or review nit | Disposition |
 | --- | --- |
-| Template `style="…"` attributes and `[style.x]` bindings | Handed to 09.1.1-T7 (plan `09.1.1-app-scaffold-and-build-acceptance-npm.md:187`, STATUS §6 row "09.1.1-T7 `style-tokens` coverage gaps") |
-| Motion durations (`transition`/`animation`) | Handed to 09.1.1-T7 (same note and row; the loading/skeleton pattern decides) |
+| Template `style="…"` attributes and `[style.x]` bindings | Handed to 09.1.1-T7 (plan `09.1.1-app-scaffold-and-build-acceptance-npm.md:179`, STATUS §6 row "09.1.1-T7 `style-tokens` coverage gaps") |
+| Motion durations (`transition`/`animation`) | Closed in 09.1.1-T8: `rawDuration` now reports a non-zero `ms`/`s` time in the six duration properties, in every custom property and in an interpolated `${duration}ms`/`${duration}s` (this section). T7's hand-over note said the T8 patterns animate nothing, so the lint rule and this contract are the pattern the hand-over owed |
 | `border-spacing` | Handed to 09.1.1-T7 (same note and row; the shared list table picks the gap) |
 | Style string imported, built by a function, or held in `let`/`var` | Accepted by design, not handed over: resolving it needs whole-program analysis and would guess runtime values; code review is the net |
 | `@core.Component` namespace form | Accepted by design, not handed over: the project convention imports `Component` directly |
 | `styles` in `*.spec.ts` | Accepted by design, not handed over: test host components are never shipped |
 | Sizing, `transform`/`translate`, `letter-spacing`/`word-spacing`/`text-indent` | Accepted by design, not handed over: no numeric token exists to replace them (see "Deliberately not checked") |
+| Timing functions (`cubic-bezier(...)`, `steps(...)`, `ease`/`linear`) | Accepted by design, not handed over: `--eg-ease` is a review convention only, because a timing function has no unit for the literal scanner to key on and the keywords are legitimate CSS (see "Deliberately not checked") |
 | CSS system colour keywords | Accepted by design, not handed over: they carry no brand value and are the forced-colors pattern |
 | `.scss`/`.sass` files not matched | Accepted by design, not handed over: `apps/web/angular.json` sets `style: css` and no SCSS file exists |
 | Review nit: one `const` used by two components reports twice at the const's location | Accepted by design, not handed over: duplicate message only, never a missed or false verdict |

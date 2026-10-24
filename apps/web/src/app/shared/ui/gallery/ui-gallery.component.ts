@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 
+import type { ApiError } from '../../../core/http/api-error';
 import { LabelChip, MissingReasonList, WaiverBanner, type MissingReason } from '../annotations';
 import {
   HashChipComponent,
@@ -15,9 +16,18 @@ import {
   dataTableFixtureRows,
   type DataTableFixtureRow,
 } from '../data-table/data-table.fixture';
+import { ConflictDialogComponent, RetryAfterComponent, type ConflictField } from '../conflict';
+import {
+  EmptyPatternComponent,
+  ErrorPatternComponent,
+  ForbiddenPatternComponent,
+  LoadingPatternComponent,
+  NotFoundPatternComponent,
+  RequestStateComponent,
+} from '../states';
 import { DecisionChipComponent, EvidenceBadgeComponent, OutcomePillComponent } from '../verdict';
 
-/** Render-only specimens. T4 owns mounting this page on a dev-only route. */
+/** Isolated specimens; only explicit commands change local demo state. No API calls. */
 @Component({
   selector: 'app-ui-gallery',
   standalone: true,
@@ -33,12 +43,65 @@ import { DecisionChipComponent, EvidenceBadgeComponent, OutcomePillComponent } f
     MissingReasonList,
     WaiverBanner,
     DataTableComponent,
+    LoadingPatternComponent,
+    EmptyPatternComponent,
+    ErrorPatternComponent,
+    ForbiddenPatternComponent,
+    NotFoundPatternComponent,
+    ConflictDialogComponent,
+    RetryAfterComponent,
+    RequestStateComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ui-gallery.component.html',
   styleUrl: './ui-gallery.component.css',
 })
 export class UiGalleryComponent {
+  protected readonly conflictOpen = signal(false);
+  protected readonly conflictFields: readonly ConflictField[] = [
+    {
+      id: 'title',
+      label: $localize`:@@shared.gallery.conflict-field:Requirement title`,
+      local: $localize`:@@shared.gallery.conflict-draft:Checkout requires a verified email`,
+      server: null,
+    },
+  ];
+  protected readonly reloadedFields: readonly ConflictField[] = [
+    {
+      ...this.conflictFields[0]!,
+      server: $localize`:@@shared.gallery.conflict-server:Checkout requires email verification`,
+    },
+  ];
+  protected readonly comparedFields = signal(this.conflictFields);
+  protected readonly emptyTitle = $localize`:@@shared.gallery.empty-title:No evidence yet`;
+  protected readonly emptyDescription = $localize`:@@shared.gallery.empty-description:Open the feature tree to inspect the cases awaiting evidence.`;
+  protected readonly emptyActionLabel = $localize`:@@shared.gallery.empty-action:Open feature tree`;
+  protected readonly networkError: ApiError = {
+    kind: 'network',
+    status: 0,
+    code: 'network_error',
+    message: $localize`:@@shared.gallery.network-message:The request could not reach the server. Your evidence has not been replaced.`,
+    requestId: null,
+    retryable: true,
+    details: [],
+    retryAfterSeconds: null,
+  };
+  protected readonly retryCount = signal(0);
+
+  protected openConflict(): void {
+    this.comparedFields.set(this.conflictFields);
+    this.conflictOpen.set(true);
+  }
+
+  protected compareReloadedExample(): void {
+    // Explicitly requested, already-loaded fixture; never pretend a network reload succeeded.
+    this.comparedFields.set(this.reloadedFields);
+  }
+
+  protected recordRetry(): void {
+    this.retryCount.update((count) => count + 1);
+  }
+
   protected readonly runStates: readonly RunState[] = [
     'created',
     'queued',

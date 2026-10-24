@@ -18,10 +18,15 @@
 // - non-zero `px`/`rem`/`em` lengths in spacing, radius, border-width, type-size and
 //   shadow-offset properties, and in EVERY custom property (a local `--local-gap: 8px`
 //   copies a raw length exactly like `gap: 8px` does) — the categories that have numeric
-//   tokens.
-// Allowed everywhere: `var(--*)` references, `0`, unitless numbers, percentages, and the
-// keywords below. `@media`/`@container`/`@supports` PRELUDES are never scanned — CSS cannot
-// read custom properties there, so `--eg-bp-tablet`/`--eg-bp-desktop` have literal mirrors.
+//   tokens;
+// - non-zero `ms`/`s` times in `transition`/`animation` (the shorthands, `-duration` and
+//   `-delay`), and in EVERY custom property: `--eg-duration-fast` and
+//   `--eg-duration-standard` are the tokens for a motion duration, so `transition: opacity
+//   200ms ease` hard-codes the scale exactly as `gap: 8px` hard-codes a spacing step.
+// Allowed everywhere: `var(--*)` references, `0`, unitless numbers, `0s`/`0ms`, percentages,
+// and the keywords below. `@media`/`@container`/`@supports` PRELUDES are never scanned — CSS
+// cannot read custom properties there, so `--eg-bp-tablet`/`--eg-bp-desktop` have literal
+// mirrors.
 
 /** CSS Color Module Level 4 named colours: a named colour is a raw literal like any other. */
 const NAMED_COLOURS = new Set(
@@ -205,7 +210,16 @@ const HEX_COLOUR_RE =
 /** A non-zero absolute length in a token-backed unit. A unitless `0` never matches. */
 const DIMENSION_RE = /(?<![a-zA-Z0-9_.-])-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em)(?![a-zA-Z0-9-])/giu;
 
-/** The bare number of a dimension match, for the `0px`/`0rem` exemption. */
+/**
+ * A non-zero time in a token-backed unit. `ms` is tried before `s`, so `200ms` is one match
+ * and not `200m` plus a stray unit; the lookahead keeps `1st`/`2sp` from matching.
+ */
+const DURATION_RE = /(?<![a-zA-Z0-9_.-])-?(?:\d+(?:\.\d+)?|\.\d+)(?:ms|s)(?![a-zA-Z0-9-])/giu;
+
+/**
+ * The bare number at the start of a dimension or duration match, for the
+ * `0px`/`0rem`/`0s`/`0ms` exemption.
+ */
 const DIMENSION_NUMBER_RE = /^-?(?:\d+(?:\.\d+)?|\.\d+)/u;
 
 /** An identifier candidate for the named-colour check. */
@@ -243,6 +257,17 @@ const LENGTH_PROPERTY_PATTERNS = [
   /^line-height$/u,
   /^box-shadow$/u,
   /^text-shadow$/u,
+];
+
+/**
+ * The properties whose value is a motion duration. `--eg-duration-fast` (150ms) and
+ * `--eg-duration-standard` (200ms) are the tokens for them, so a raw time here is a raw
+ * literal like a raw length. The shorthands carry the duration in a value list
+ * (`transition: opacity 200ms ease`), the longhands carry it as the whole value.
+ */
+const DURATION_PROPERTY_PATTERNS = [
+  /^transition(-duration|-delay)?$/u,
+  /^animation(-duration|-delay)?$/u,
 ];
 
 /**
@@ -284,7 +309,8 @@ function isColourProperty(property) {
  *
  * Deliberately excluded, because no token covers them and a literal is the honest value:
  * `width`/`height`/`min-*`/`max-*` and inset-free sizing, `letter-spacing`, `transform`
- * offsets, `translate`, and the transition/animation durations.
+ * offsets and `translate`. Motion durations are not a length at all: `isDurationProperty`
+ * is the separate gate for `transition`/`animation` times.
  *
  * @param {string} property lower-cased property name
  * @returns {boolean} whether a `px`/`rem`/`em` literal in this value is a raw literal
@@ -294,7 +320,17 @@ function isLengthProperty(property) {
 }
 
 /**
- * Blanks out the spans of a declaration value that cannot contain a colour or length:
+ * Property names whose value is a motion duration in the token-backed 150ms/200ms scale.
+ *
+ * @param {string} property lower-cased property name
+ * @returns {boolean} whether a `ms`/`s` time in this value is a raw literal
+ */
+function isDurationProperty(property) {
+  return DURATION_PROPERTY_PATTERNS.some((pattern) => pattern.test(property));
+}
+
+/**
+ * Blanks out the spans of a declaration value that cannot contain a colour, length or duration:
  * comments, quoted strings (a font family or `content` string) and `url(...)` payloads
  * (an SVG fragment id is not a hex colour). Every blanked character becomes a space, so an
  * index into the returned string is still an index into the original value.
@@ -395,7 +431,7 @@ function advanceLoc(text, start, offset) {
 }
 
 /**
- * Finds the raw colour and raw length literals of one declaration value.
+ * Finds the raw colour, raw length and raw duration literals of one declaration value.
  *
  * Findings carry `index`/`length` offsets into `valueText`; the caller turns those into
  * locations because only it knows where the value starts in the file.
@@ -469,6 +505,26 @@ function findRawLiterals(property, valueText) {
     }
   }
 
+  // A motion duration is token-backed exactly like a length: `transition: opacity 200ms ease`
+  // hard-codes what `var(--eg-duration-fast)` declares, and a local `--local-fade: 120ms`
+  // copies it just as `--local-gap: 8px` copies a spacing step. The token form
+  // (`transition: opacity var(--eg-duration-fast) var(--eg-ease)`) never matches, and
+  // `0s`/`0ms` are exempt like `0px`.
+  if (isDurationProperty(normalisedProperty) || normalisedProperty.startsWith('--')) {
+    for (const match of masked.matchAll(DURATION_RE)) {
+      const numberMatch = DIMENSION_NUMBER_RE.exec(match[0]);
+      if (numberMatch && Number.parseFloat(numberMatch[0]) === 0) {
+        continue;
+      }
+      findings.push({
+        index: match.index,
+        length: match[0].length,
+        messageId: 'rawDuration',
+        data: { value: valueText.slice(match.index, match.index + match[0].length) },
+      });
+    }
+  }
+
   return findings.sort((left, right) => left.index - right.index);
 }
 
@@ -513,6 +569,7 @@ module.exports = {
   findDeclarations,
   findRawLiterals,
   isColourProperty,
+  isDurationProperty,
   isLengthProperty,
   maskNonCode,
 };

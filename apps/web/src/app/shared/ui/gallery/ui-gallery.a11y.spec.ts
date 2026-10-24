@@ -73,9 +73,50 @@ describe('UiGalleryComponent axe acceptance (AC8 / AC9)', () => {
         expect(document.body.contains(root)).toBe(true);
         expect(root.querySelectorAll('app-data-table')).toHaveLength(3);
         expect(root.querySelector('app-waiver-banner time')).not.toBeNull();
+        for (const selector of [
+          'app-loading-pattern',
+          'app-empty-pattern',
+          'app-error-pattern',
+          'app-forbidden-pattern',
+          'app-not-found-pattern',
+          'app-retry-after[data-demo="retry-after-waiting"]',
+          'app-retry-after[data-demo="retry-after-eligible"]',
+          'app-request-state',
+          'app-conflict-dialog',
+        ]) {
+          expect(root.querySelector(selector), selector).not.toBeNull();
+        }
         const result = await axe.run(root, axeOptions);
         expect(
           result.violations.map(({ id, nodes }) => ({
+            id,
+            targets: nodes.map((node) => node.target),
+            summaries: nodes.map((node) => node.failureSummary),
+          })),
+        ).toEqual([]);
+        const dialog = root.querySelector('dialog')!;
+        // jsdom lacks native top-layer methods; retain the component's opening and copy logic.
+        Object.defineProperties(dialog, {
+          showModal: {
+            configurable: true,
+            value: () => {
+              dialog.open = true;
+            },
+          },
+          close: {
+            configurable: true,
+            value: () => {
+              dialog.open = false;
+            },
+          },
+        });
+        root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]')?.click();
+        await fixture.whenStable();
+        expect(dialog.open).toBe(true);
+        expect(dialog.textContent).toContain('Not compared');
+        const dialogResult = await axe.run(dialog, axeOptions);
+        expect(
+          dialogResult.violations.map(({ id, nodes }) => ({
             id,
             targets: nodes.map((node) => node.target),
             summaries: nodes.map((node) => node.failureSummary),

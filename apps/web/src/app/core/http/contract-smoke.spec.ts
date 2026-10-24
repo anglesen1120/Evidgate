@@ -380,7 +380,7 @@ describe('OpenAPI contract smoke (09.1.1-T3.2)', () => {
         expect(idempotencyKey).toBeNull();
       }
 
-      request.flush(new Blob(['{}'], { type: 'application/json' }), {
+      request.flush('{}', {
         status: successStatus,
         statusText: '',
         headers: { 'Content-Type': 'application/json' },
@@ -400,7 +400,7 @@ describe('OpenAPI contract smoke (09.1.1-T3.2)', () => {
       }),
     );
     (await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/runs`)).flush(
-      new Blob([JSON.stringify(example)], { type: 'application/json' }),
+      JSON.stringify(example),
       { status: 403, statusText: '', headers: { 'Content-Type': 'application/json' } },
     );
 

@@ -83,14 +83,14 @@
         <source> No missing evidence reasons reported </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/missing-reason-list.component.ts</context>
-          <context context-type="linenumber">34,40</context>
+          <context context-type="linenumber">36,42</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.missing-reason-list.label" datatype="html">
         <source>Missing evidence reasons</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/missing-reason-list.component.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">45</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.label" datatype="html">
@@ -268,6 +268,213 @@
           <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shared.conflict.title" datatype="html">
+        <source>Review conflict</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">34,36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.description" datatype="html">
+        <source> Reload is explicit. Your draft is not merged or resubmitted automatically. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">36,39</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.close" datatype="html">
+        <source> Close </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">40,43</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.current-revision" datatype="html">
+        <source>Current revision</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">45,48</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.revision-unavailable" datatype="html">
+        <source>Revision unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">50,55</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.comparison-unavailable" datatype="html">
+        <source> The current version could not be compared </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">56,60</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.same" datatype="html">
+        <source>Same</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">66,68</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.changed" datatype="html">
+        <source>Changed</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">68,71</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.not-compared" datatype="html">
+        <source>Not compared</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">71,75</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.local" datatype="html">
+        <source>Your draft</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">76,78</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.local-unavailable" datatype="html">
+        <source>Draft value unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">81,86</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.server" datatype="html">
+        <source>Current server value</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">86,88</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.server-unavailable" datatype="html">
+        <source>Server value unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">91,96</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.reload-error" datatype="html">
+        <source>The current version could not be reloaded</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">101,105</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.error-code" datatype="html">
+        <source>Error code</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">105,108</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.request-id" datatype="html">
+        <source>Request id</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">110,114</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.reloading" datatype="html">
+        <source>Reloading…</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">120,124</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.keep-editing" datatype="html">
+        <source> Keep editing </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">125,130</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.conflict.reload" datatype="html">
+        <source> Reload current </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
+          <context context-type="linenumber">134,140</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.unavailable-title" datatype="html">
+        <source>503 · Service unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">11,15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.title" datatype="html">
+        <source>429 · Rate limited</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">13,16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.interval" datatype="html">
+        <source>Retry after: <x id="INTERPOLATION" equiv-text="{{ seconds }}"/> s</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">17,18</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.interval-unavailable" datatype="html">
+        <source> The server did not say how long to wait </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">20,24</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.eligible" datatype="html">
+        <source>You can retry now.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">24,26</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.waiting" datatype="html">
+        <source>Retry available after the wait</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">26,32</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">47,51</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.error-code" datatype="html">
+        <source>Error code</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">32,36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.request-id" datatype="html">
+        <source>Request id</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">38,43</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.retrying" datatype="html">
+        <source>Retrying…</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">45,47</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.retry-after.retry" datatype="html">
+        <source>Retry</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/conflict/retry-after.component.ts</context>
+          <context context-type="linenumber">49,56</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="shared.data-table.no-rows" datatype="html">
         <source> No rows </source>
         <context-group purpose="location">
@@ -387,123 +594,305 @@
           <context context-type="linenumber">138,140</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shared.gallery.request-patterns" datatype="html">
+        <source> Request state replacements </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">159,163</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict" datatype="html">
+        <source>412 conflict comparison</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">181,183</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-explanation" datatype="html">
+        <source> The draft stays local. Reload current compares a loaded example, not a live request. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">183,189</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-open" datatype="html">
+        <source> Review conflict example </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">192,196</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.retry-after" datatype="html">
+        <source>Retry eligibility</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">205,209</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.retry-count" datatype="html">
+        <source> Explicit retry requests in this example: <x id="INTERPOLATION" equiv-text="{{ retryCount() }}"/> </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">225,227</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.request-host" datatype="html">
+        <source>Route-level request host</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">230,234</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.projected-content" datatype="html">
+        <source> Current content appears only after a nonempty successful read. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">241,247</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="shared.gallery.tables" datatype="html">
         <source>Read-only data tables</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
-          <context context-type="linenumber">158,162</context>
+          <context context-type="linenumber">247,251</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-field" datatype="html">
+        <source>Requirement title</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">64</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-draft" datatype="html">
+        <source>Checkout requires a verified email</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">65</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.conflict-server" datatype="html">
+        <source>Checkout requires email verification</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">72</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.empty-title" datatype="html">
+        <source>No evidence yet</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">76</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.empty-description" datatype="html">
+        <source>Open the feature tree to inspect the cases awaiting evidence.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">77</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.empty-action" datatype="html">
+        <source>Open feature tree</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">78</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.network-message" datatype="html">
+        <source>The request could not reach the server. Your evidence has not been replaced.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">83</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.status-success" datatype="html">
         <source>Available</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">52</context>
+          <context context-type="linenumber">115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.status-info" datatype="html">
         <source>Processing</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">53</context>
+          <context context-type="linenumber">116</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.status-warning" datatype="html">
         <source>Needs attention</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">54</context>
+          <context context-type="linenumber">117</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.status-danger" datatype="html">
         <source>Blocked</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">55</context>
+          <context context-type="linenumber">118</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.status-neutral" datatype="html">
         <source>Not started</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">56</context>
+          <context context-type="linenumber">119</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.status-dimension" datatype="html">
         <source>Example status</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">58</context>
+          <context context-type="linenumber">121</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.original-failure" datatype="html">
         <source>Attempt #1: the checkout button could not be found.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">61</context>
+          <context context-type="linenumber">124</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.reason-linked" datatype="html">
         <source>Review the missing artifact example</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">65</context>
+          <context context-type="linenumber">128</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.reason-plain" datatype="html">
         <source>The declared producer has not supplied evidence.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">70</context>
+          <context context-type="linenumber">133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.table-small" datatype="html">
         <source>Evidence examples: 12 rows, default density</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">82</context>
+          <context context-type="linenumber">145</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.table-virtual" datatype="html">
         <source>Evidence examples: 250 rows, virtual scrolling</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">83</context>
+          <context context-type="linenumber">146</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.table-empty" datatype="html">
         <source>No evidence examples, compact density</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">84</context>
+          <context context-type="linenumber">147</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.column-hash" datatype="html">
         <source>Evidence identity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">89</context>
+          <context context-type="linenumber">152</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.column-note" datatype="html">
         <source>Context</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">91</context>
+          <context context-type="linenumber">154</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.column-attempts" datatype="html">
         <source>Attempts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">93</context>
+          <context context-type="linenumber">156</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.column-mutation" datatype="html">
         <source>Mutation</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
-          <context context-type="linenumber">95</context>
+          <context context-type="linenumber">158</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.error.request-id" datatype="html">
+        <source> Request ID: <x id="INTERPOLATION" equiv-text="{{ requestId }}"/> </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/error-pattern.component.ts</context>
+          <context context-type="linenumber">22,24</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.error.retry" datatype="html">
+        <source> Retry </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/error-pattern.component.ts</context>
+          <context context-type="linenumber">33,40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.error.network" datatype="html">
+        <source>Network unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/error-pattern.component.ts</context>
+          <context context-type="linenumber">55</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.error.timeout" datatype="html">
+        <source>Request timed out</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/error-pattern.component.ts</context>
+          <context context-type="linenumber">57</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.error.unavailable" datatype="html">
+        <source>Service unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/error-pattern.component.ts</context>
+          <context context-type="linenumber">59</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.error.heading" datatype="html">
+        <source>Something went wrong</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/error-pattern.component.ts</context>
+          <context context-type="linenumber">61</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.forbidden.heading" datatype="html">
+        <source>Not authorized</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/forbidden-pattern.component.ts</context>
+          <context context-type="linenumber">10,12</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.forbidden.description" datatype="html">
+        <source> Ask a project administrator for access to this workspace. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/forbidden-pattern.component.ts</context>
+          <context context-type="linenumber">12,18</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.loading.label" datatype="html">
+        <source>Loading evidence</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/loading-pattern.component.ts</context>
+          <context context-type="linenumber">15,22</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.not-found.heading" datatype="html">
+        <source>Not found</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/not-found-pattern.component.ts</context>
+          <context context-type="linenumber">10,12</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.states.not-found.description" datatype="html">
+        <source> This page does not exist or you do not have access to it. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/not-found-pattern.component.ts</context>
+          <context context-type="linenumber">12,18</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.decision-chip.dimension" datatype="html">
