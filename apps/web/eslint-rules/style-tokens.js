@@ -10,9 +10,9 @@
 // - `no-raw-literals-inline` lints the `styles: [...]` entries of an `@Component`, because
 //   an Angular component style may be a string instead of a .css file. A template-literal
 //   entry is scanned as a stylesheet AND each interpolation followed by a raw unit
-//   (`${space}px`) is reported, since the unit makes the value a literal length. A
-//   `styles: [NAME]` reference to a module-level `const NAME = '...'` of the same file is
-//   resolved and checked.
+//   (`${space}px`, `${duration}ms`) is reported, since the unit makes the value a literal
+//   length or time. A `styles: [NAME]` reference to a module-level `const NAME = '...'` of
+//   the same file is resolved and checked.
 //
 // NOT covered (documented limitation): template `style="..."` attributes and `[style.x]`
 // bindings. They are template input rather than a stylesheet literal and Angular writes
@@ -25,6 +25,7 @@ const {
   advanceLoc,
   findDeclarations,
   findRawLiterals,
+  isDurationProperty,
   isLengthProperty,
 } = require('./raw-literal-detector.js');
 
@@ -53,14 +54,20 @@ const MESSAGES = {
     "Raw named colour '{{value}}' in a component style: use an --eg-* token (tokens.css is the only file allowed raw values).",
   rawLength:
     "Raw length '{{value}}' in a component style: use an --eg-* spacing, radius, border-width or type token.",
+  rawDuration:
+    "Raw duration '{{value}}' in a component style: use var(--eg-duration-fast) or var(--eg-duration-standard).",
 };
 
 /**
- * A raw unit directly after a template interpolation: `${space}px`. The interpolation holds a
- * JavaScript number, so the unit turns it into a CSS length even though no digit appears in
- * the stylesheet text; scanning the text alone would never see it.
+ * A raw unit directly after a template interpolation: `${space}px`, `${duration}ms`. The
+ * interpolation holds a JavaScript number, so the unit turns it into a CSS length or time
+ * even though no digit appears in the stylesheet text; scanning the text alone would never
+ * see it. `ms` is listed before `s` so one match, not two, is produced for a time.
  */
-const INTERPOLATED_UNIT_RE = /^(px|rem|em)(?![a-zA-Z0-9-])/iu;
+const INTERPOLATED_UNIT_RE = /^(px|rem|em|ms|s)(?![a-zA-Z0-9-])/iu;
+
+/** The `INTERPOLATED_UNIT_RE` units that build a length; the others build a duration. */
+const INTERPOLATED_LENGTH_UNITS = new Set(['px', 'rem', 'em']);
 
 /**
  * Reports every finding of one scanned value text, translating the detector's character
@@ -118,7 +125,7 @@ const noRawLiterals = {
     type: 'problem',
     docs: {
       description:
-        'Disallow raw colour and length literals in component styles; use the --eg-* design tokens.',
+        'Disallow raw colour, length and motion-duration literals in component styles; use the --eg-* design tokens.',
       recommended: false,
       url: 'docs/design/web/tokens.md#lint-rule-style-tokens',
     },
@@ -213,7 +220,7 @@ const noRawLiteralsInline = {
     type: 'problem',
     docs: {
       description:
-        'Disallow raw colour and length literals in the inline `styles` of an Angular component.',
+        'Disallow raw colour, length and motion-duration literals in the inline `styles` of an Angular component.',
       recommended: false,
       url: 'docs/design/web/tokens.md#lint-rule-style-tokens',
     },
@@ -224,14 +231,14 @@ const noRawLiteralsInline = {
     const text = sourceCode.text;
 
     /**
-     * Reports `${space}px`, `${space}rem` and `${space}em`: an interpolation immediately
-     * followed by a raw unit builds a literal length at runtime, which is exactly what the
-     * token contract forbids. The report covers the unit and names the interpolation in
-     * `value`.
+     * Reports `${space}px`, `${space}rem`, `${space}em`, `${duration}ms` and `${duration}s`:
+     * an interpolation immediately followed by a raw unit builds a literal length or time at
+     * runtime, which is exactly what the token contract forbids. The report covers the unit
+     * and names the interpolation in `value`.
      *
-     * Only a declaration whose static value would be checked qualifies (a length property or a
-     * custom property), so `width: ${n}px` is not reported for the same reason `width: 8px`
-     * is not: sizing is deliberately outside the contract.
+     * Only a declaration whose static value would be checked qualifies (a length property, a
+     * duration property or a custom property), so `width: ${n}px` is not reported for the
+     * same reason `width: 8px` is not: sizing is deliberately outside the contract.
      *
      * @param {object} expression a template interpolation's ESTree expression node
      * @param {Array<{ property: string, valueStart: number, valueText: string }>} declarations
@@ -267,7 +274,12 @@ const noRawLiteralsInline = {
         return;
       }
       const property = declaration.property.toLowerCase();
-      if (!isLengthProperty(property) && !property.startsWith('--')) {
+      const unit = unitMatch[1].toLowerCase();
+      const isLengthUnit = INTERPOLATED_LENGTH_UNITS.has(unit);
+      const checked =
+        property.startsWith('--') ||
+        (isLengthUnit ? isLengthProperty(property) : isDurationProperty(property));
+      if (!checked) {
         return;
       }
 
@@ -284,7 +296,7 @@ const noRawLiteralsInline = {
           {
             index: unitStart,
             length: unitMatch[1].length,
-            messageId: 'rawLength',
+            messageId: isLengthUnit ? 'rawLength' : 'rawDuration',
             data: { value: `${interpolation}${unitMatch[1]}` },
           },
         ],
