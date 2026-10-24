@@ -50,8 +50,8 @@ async function openDialog(page: Page): Promise<void> {
 
 /**
  * Where focus is, relative to the dialog, after one Tab or Shift+Tab: `inside:<text>`,
- * `outside:<text>` for a page control, or `body` — Chromium's own stop between the last control of
- * a modal dialog and the first one, where nothing in the document is focused.
+ * `outside:<text>` for a page control, or `body` when nothing in the document is focused (the
+ * stop Chromium puts between a modal dialog's last and first control unless the dialog wraps).
  */
 async function focusAfterKey(page: Page, key: 'Tab' | 'Shift+Tab'): Promise<string> {
   await page.keyboard.press(key);
@@ -70,8 +70,8 @@ for (const locale of LOCALES) {
       await openGallery(page, locale, 'light');
       await openDialog(page);
 
-      // The component relies entirely on the platform for containment, so this walks well past the
-      // three focusable controls (Close, Keep editing, Reload current) in both directions.
+      // Walks well past the three focusable controls (Close, Keep editing, Reload current) in both
+      // directions, so each direction crosses the wrap at least once.
       const forward: string[] = [];
       for (let index = 0; index < 5; index += 1) forward.push(await focusAfterKey(page, 'Tab'));
       const backward: string[] = [];
@@ -82,24 +82,13 @@ for (const locale of LOCALES) {
       const outside = (steps: string[]) => steps.filter((step) => step.startsWith('outside'));
       const bodyStops = (steps: string[]) => steps.filter((step) => step === 'body');
 
-      // Containment: no page control is reachable in either direction. Chromium lets one Tab leave
-      // a modal dialog for a stop where `document.activeElement` is `body` — the page is inert and
-      // cannot take focus, so nothing behind the dialog becomes reachable — and the next Tab
-      // re-enters. The sequences are asserted as measured, not idealised; that stop is the
-      // platform's and is in the hand-over notes.
+      // Containment: no page control and no `body` stop is reachable in either direction. The
+      // platform alone leaves one `body` stop between the last and the first control; the
+      // component's `wrapFocus` removes it, so the cycle goes straight from edge to edge.
       expect(outside(forward), forward.join(' | ')).toEqual([]);
       expect(outside(backward), backward.join(' | ')).toEqual([]);
-      expect(bodyStops(forward).length, forward.join(' | ')).toBeLessThanOrEqual(1);
-      expect(bodyStops(backward).length, backward.join(' | ')).toBeLessThanOrEqual(1);
-      for (const steps of [forward, backward]) {
-        steps.forEach((step, index) => {
-          if (step !== 'body' || index === steps.length - 1) return;
-          expect(
-            steps[index + 1],
-            `the Tab after the body stop re-enters: ${steps.join(' | ')}`,
-          ).toMatch(/^inside:/);
-        });
-      }
+      expect(bodyStops(forward), forward.join(' | ')).toEqual([]);
+      expect(bodyStops(backward), backward.join(' | ')).toEqual([]);
       // Containment is not the same as a stuck focus ring: the cycle really visits the dialog's
       // controls, and it visits the same set in both directions.
       expect(new Set(inside(forward)).size, forward.join(' | ')).toBeGreaterThan(1);

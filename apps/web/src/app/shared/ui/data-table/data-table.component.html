@@ -39,10 +39,13 @@
       }
       <tr cdk-header-row *cdkHeaderRowDef="columnIds()" role="row" aria-rowindex="1"></tr>
     </table>
-    <!-- The viewport stays neutral: CDK already supplies tbody[role=rowgroup]
-       under .table-semantics; a second rowgroup would be invalid nesting. -->
+    <!-- Virtual mode: the viewport is the body rowgroup. `role="table"` may own only rows and
+       rowgroups, and the viewport is focusable when it scrolls (it is also the focus-restore
+       target), so it cannot stay a neutral element in between. The CDK body tbody inside it is
+       demoted to presentation in the component, so rowgroups never nest. -->
     @if (virtual()) {
       <cdk-virtual-scroll-viewport
+        role="rowgroup"
         [itemSize]="itemSize()"
         [minBufferPx]="itemSize() * 4"
         [maxBufferPx]="itemSize() * 8"

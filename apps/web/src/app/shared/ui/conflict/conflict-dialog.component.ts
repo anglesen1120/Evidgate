@@ -29,6 +29,8 @@ let nextDialogId = 0;
       [attr.aria-labelledby]="titleId"
       (cancel)="cancel($event)"
       (keydown.escape)="cancel($event)"
+      (keydown.tab)="wrapFocus($event)"
+      (keydown.shift.tab)="wrapFocus($event)"
       (click)="backdropClick($event)"
     >
       <header>
@@ -174,7 +176,8 @@ export class ConflictDialogComponent {
   private opener: HTMLElement | null = null;
 
   constructor() {
-    // Native showModal supplies top-layer semantics and Tab/Shift+Tab containment.
+    // Native showModal supplies top-layer semantics and makes the page inert; Tab wrapping at
+    // the dialog's edges is wrapFocus (Chromium otherwise stops once on `body` between them).
     afterRenderEffect(() => {
       const dialog = this.dialog()?.nativeElement;
       if (!dialog) return;
@@ -196,6 +199,36 @@ export class ConflictDialogComponent {
   protected cancel(event: Event): void {
     event.preventDefault();
     this.dismiss();
+  }
+
+  /**
+   * Keeps Tab/Shift+Tab cycling inside the dialog. A native modal dialog leaves one Tab stop
+   * outside itself (`document.activeElement` becomes `body`) between its last and first
+   * control; wrapping here removes that stop. Only the edges are handled: every other Tab is
+   * left to the browser's own order.
+   */
+  protected wrapFocus(event: Event): void {
+    const dialog = this.dialog()?.nativeElement;
+    if (!dialog?.open || !(event instanceof KeyboardEvent)) return;
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter(
+      (element) =>
+        !element.matches(':disabled') && element.getClientRects().length > 0 && !element.inert,
+    );
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (!first || !last) return;
+    const active = dialog.ownerDocument.activeElement;
+    if (event.shiftKey && (active === first || active === dialog)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   protected backdropClick(event: MouseEvent): void {

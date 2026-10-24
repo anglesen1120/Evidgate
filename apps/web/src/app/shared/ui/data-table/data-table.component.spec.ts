@@ -68,17 +68,24 @@ describe('DataTableComponent', () => {
     );
   });
 
-  it('R1: keeps the virtual viewport neutral around CDK native rowgroups', async () => {
+  it('R1: makes the virtual viewport the body rowgroup, with no nested rowgroup inside it', async () => {
     fixture.componentRef.setInput('rows', dataTableFixtureRows(201));
     await fixture.whenStable();
     const viewport = root.querySelector('cdk-virtual-scroll-viewport') as HTMLElement;
-    expect(viewport.hasAttribute('role')).toBe(false);
+    expect(viewport.getAttribute('role')).toBe('rowgroup');
+    // CDK's own body sections inside the viewport are demoted, so rowgroups never nest.
+    expect(viewport.querySelectorAll('[role="rowgroup"]').length).toBe(0);
+    expect(viewport.querySelectorAll('[role="row"]').length).toBeGreaterThan(0);
+    // Every rowgroup (header thead + viewport) is owned directly by the table semantics.
     const rowgroups = root.querySelectorAll('[role="rowgroup"]');
-    expect(rowgroups.length).toBeGreaterThan(0);
+    expect(rowgroups.length).toBeGreaterThan(1);
     for (const rowgroup of rowgroups) {
       const semanticParent = rowgroup.parentElement?.closest('[role]:not([role="presentation"])');
       expect(semanticParent).toBe(table);
     }
+    // A body row's nearest semantic ancestor is the viewport's group.
+    const row = viewport.querySelector('[role="row"]');
+    expect(row?.parentElement?.closest('[role]:not([role="presentation"])')).toBe(viewport);
   });
 
   it('R1: only genuinely overflowing scroll containers become named tab stops', async () => {
