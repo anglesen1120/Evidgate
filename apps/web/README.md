@@ -50,16 +50,58 @@ The production configuration sets `optimization.styles.inlineCritical=false` (sc
 minification stay on), so `dist/browser/index.html` carries no inline `<script>` or `<style>` and
 can be served under a strict CSP without `unsafe-inline` in 09.1.1-T10.
 
-`@evidgate/sdk` is declared as the workspace link `"*"` for 09.1.1-T3; nothing in this app imports
-it yet.
+`@evidgate/sdk` is the workspace link `"*"` and is consumed through [Data access](#data-access-0911-t3)
+below — nothing in this app calls it outside `src/app/core`.
 
 ### Zoneless change detection
 
 `src/app/app.config.ts` provides zoneless change detection and `zone.js` is not a dependency.
-W3 keeps that decision at ⚠️ until the 09.1.1-T2 integration-fit spike ADR answers the fit
-questions: the plan numbers that ADR `docs/adr/0007-web-integration-fit.md` (T2.2). It does not
-exist yet, so this README does not link it; if the spike finds a blocker, the fallback is recorded
-there rather than silently in code.
+ADR-0008 (`docs/adr/0008-web-integration-fit.md`, 09.1.1-T2) confirmed zoneless as stable for this
+app (00 §5.6 W3 is ✅); its fallbacks are recorded there rather than silently in code. The same ADR
+settled the API integration shape described in [Data access](#data-access-0911-t3).
+
+## Data access (09.1.1-T3)
+
+One SDK client, one gateway, no wire types. `src/app/core/http/api-client.ts` builds the single
+`@evidgate/sdk` client on top of Angular `HttpClient` (ADR-0008 shape A):
+
+- **Client.** `createClient(createConfig({ baseUrl: '/v1', credentials: 'same-origin', fetch: createHttpClientFetch(inject(HttpClient)) }))`,
+  provided as the `API_CLIENT` token by `provideApi()`. `provideApi()` also installs
+  `provideHttpClient(withInterceptors([requestIdInterceptor, idempotencyInterceptor]), withXsrfConfiguration({ cookieName: 'XSRF-TOKEN', headerName: 'X-XSRF-TOKEN' }))`,
+  and `app.config.ts` adds it to the app providers. The API must stay on the page origin under
+  `/v1` (ADR-0008 rule 1): a foreign origin or a non-`/v1` path never receives an API header.
+- **Gateway.** `ApiGateway.call((client) => listRuns({ client, path: { p } }))` resolves the SDK's
+  2xx body with the operation's own inferred type and throws `ApiRequestError` for anything else —
+  a 00 §9.2 envelope mapped to a typed `ApiError` (`not_found`, `csrf_failed`,
+  `idempotency_conflict`, `precondition_failed` + `details`, `validation`, `rate_limited` +
+  `retryAfterSeconds`, `unavailable`, …) or `kind: 'network'` for a transport failure. A 2xx
+  without a body resolves `undefined`; an `AbortError` is re-thrown untouched. A feature screen
+  never calls an SDK operation directly: it injects a data service.
+- **Intent.** A mutation's `Idempotency-Key` belongs to one user action: mint
+  `createIntent()` when the button is pressed and pass the same `Intent` to every retry of that
+  action (`service.create(projectId, body, intent)`); a new action mints a new intent. A key is
+  never shared across actions. `src/app/core/data/runs-data.service.ts` is the reference data
+  service every feature service copies.
+- **Header duties** (00 §5.6 W5): `X-Request-Id` + `traceparent` on every `/v1` request
+  (`requestIdInterceptor`); `Idempotency-Key` from the caller's intent, with the interceptor
+  filling only a missing key on untyped mutations and never on GET/HEAD/OPTIONS
+  (`idempotencyInterceptor`); `X-XSRF-TOKEN` from the readable `XSRF-TOKEN` cookie, added by
+  Angular's own interceptor on same-origin mutations only (T38).
+- **Contract smoke.** `src/app/core/http/contract-smoke.spec.ts` re-derives the consumed
+  operations from `contracts/openapi.yaml` on every run, so the recorded fixture
+  `src/app/core/http/testing/openapi-operations.fixture.json` cannot drift silently, and then
+  drives each recorded operation through the real stack (SDK function → gateway → adapter →
+  `HttpClient`) to assert the method and `/v1` URL on the wire. Re-record after a contract or SDK
+  change, from the repository root:
+
+  ```sh
+  node apps/web/scripts/record-openapi-fixture.mjs           # rewrite the fixture
+  node apps/web/scripts/record-openapi-fixture.mjs --check   # diff summary, exit 1 on drift
+  ```
+
+  The recorder reads `contracts/openapi.yaml` with the root `yaml` devDependency. A new operation
+  is added in three places: the recorder's `RECORDED_OPERATION_IDS`, the smoke's
+  `OPERATION_DRIVERS`, and the re-recorded fixture.
 
 ## Design reference — Web UI v2 (S50)
 
