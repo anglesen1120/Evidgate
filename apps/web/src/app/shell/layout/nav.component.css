@@ -1,0 +1,90 @@
+:host {
+  display: block;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--eg-space-2) var(--eg-space-3) var(--eg-space-5);
+  scrollbar-width: thin;
+}
+
+.nav-group {
+  padding-block: var(--eg-space-3);
+  border-top: var(--eg-border-width) solid var(--eg-border);
+}
+.nav-group:first-child {
+  border-top: 0;
+}
+h2 {
+  margin: 0;
+  padding: var(--eg-space-2) var(--eg-space-3);
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
+  font-weight: var(--eg-weight-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+ul {
+  display: grid;
+  gap: var(--eg-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+a {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-space-3);
+  min-width: 0;
+  min-height: var(--eg-control-touch);
+  padding: var(--eg-space-1) var(--eg-space-3);
+  border-radius: var(--eg-radius-sm);
+  color: var(--eg-text);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+  font-weight: var(--eg-weight-medium);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: background-color var(--eg-duration-fast) var(--eg-ease);
+}
+app-shell-icon {
+  color: var(--eg-text-muted);
+}
+a:hover,
+a:active {
+  background: var(--eg-surface-raised);
+}
+a.active {
+  color: var(--eg-accent);
+  background: var(--eg-accent-soft);
+  font-weight: var(--eg-weight-semibold);
+}
+a.active app-shell-icon {
+  color: var(--eg-accent);
+}
+a:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: calc(-1 * var(--eg-focus-offset));
+}
+:host(.rail) {
+  padding-inline: var(--eg-space-2);
+}
+:host(.rail) h2,
+:host(.rail) a span {
+  position: absolute;
+  width: var(--eg-border-width);
+  height: var(--eg-border-width);
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+:host(.rail) a {
+  justify-content: center;
+  padding-inline: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  a {
+    transition: none;
+  }
+}

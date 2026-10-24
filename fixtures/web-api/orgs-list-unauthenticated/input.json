@@ -1,0 +1,18 @@
+{
+  "operation_id": "listMyOrganizations",
+  "variant": "unauthenticated",
+  "status": 401,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000a9"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "unauthenticated",
+      "message": "no usable session for this request",
+      "request_id": "018f0000-0000-7000-8000-0000000000a9",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

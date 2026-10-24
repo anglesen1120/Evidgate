@@ -499,10 +499,28 @@ npx playwright install chromium
 ```
 
 Specs: `e2e/smoke.spec.ts` (AC2 — the built bundle bootstraps at `/`, which redirects to `/vi/`
-and renders `<html lang="vi">`, and at `/en/` which renders `lang="en"`: page title `Evidgate`,
-the `app-root` heading from `src/app/app.html`, and no page or console errors during load) and
-`e2e/static-server.spec.ts` (locale routing, SPA fallback, and the traversal, symlink and
-bad-request guards of the server itself).
+and renders `<html lang="vi">`, and at `/en/` which renders `lang="en"`: page title ending in `Evidgate`,
+the app shell (`app-root app-shell`) with a non-empty page heading — the production bundle has no
+fixture backend, so the bootstrap reads fail and the shell shows its `/unavailable` page — and no
+page or console errors during load) and `e2e/static-server.spec.ts` (locale routing, SPA fallback,
+and the traversal, symlink and bad-request guards of the server itself).
+
+### Shell suite on the fixtures build (09.1.1-T4)
+
+`e2e/shell/*.spec.ts` is the shell's real-browser suite: navigation by permission, guard redirects,
+the 404 that never confirms a foreign resource, keyboard and drawer focus, the scope switcher, the
+theme choice, session states, axe with `color-contrast` on the shell, the 403/404 patterns and the
+dev-only `/dev/ui-gallery`, and the T7/T8 real-browser checks (360px overflow, sticky table,
+popover top layer, conflict dialog) and `adversarial.spec.ts` (URL tampering, `returnUrl`, cross-org ids, boot failures). It needs the dev fixture backend, so it runs against a
+`fixtures` build, not the production bundle:
+
+```sh
+npm run e2e:fixtures -w apps/web   # playwright.fixtures.config.ts: builds dist/fixtures, serves it
+                                   # on an ephemeral port with e2e/static-server.mjs
+```
+
+`playwright.config.ts` ignores `e2e/shell/**`, so `npm run e2e` stays the production smoke. The
+fixtures suite is not a `verify.sh` stage or a CI job (STATUS §6 "Shell e2e suite is not in CI").
 
 Vitest owns `src/**/*.spec.ts` through the Angular builder and never collects these `*.spec.ts`
 files: the root `vitest.config.ts` lists only `packages/*` as projects, so `npx vitest run` stays

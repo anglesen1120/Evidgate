@@ -24,6 +24,8 @@ coverage/
 .local/
 artifacts/
 playwright-report/
+# 09.1.1-T4.4: the fixtures-build shell suite writes its own report (playwright.fixtures.config.ts).
+playwright-report-fixtures/
 test-results/
 blob-report/
 
