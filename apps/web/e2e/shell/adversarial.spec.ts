@@ -130,7 +130,9 @@ test.describe('AC4 — every guarded G1 route against both corpus grant sets', (
       const errors = watchPageErrors(page);
       for (const entry of G1_ENTRIES) {
         const path = entryPath(entry.scope, entry.segment);
-        await page.goto(variant === '' ? localePath('en', path) : withVariant(localePath('en', path), variant));
+        await page.goto(
+          variant === '' ? localePath('en', path) : withVariant(localePath('en', path), variant),
+        );
 
         const rendered = await outcome(page);
         const granted = (codes as readonly string[]).includes(entry.permission);
@@ -144,9 +146,10 @@ test.describe('AC4 — every guarded G1 route against both corpus grant sets', (
           expect(rendered.heading.length, `${entry.segment} has no h1`).toBeGreaterThan(0);
         } else {
           // Refused: the 403 pattern, at /forbidden, with the attempt not echoed.
-          expect(rendered.pathname, `${entry.segment} (${entry.permission}) should be refused`).toBe(
-            '/en/forbidden',
-          );
+          expect(
+            rendered.pathname,
+            `${entry.segment} (${entry.permission}) should be refused`,
+          ).toBe('/en/forbidden');
           expect(rendered.forbidden, `${entry.segment} did not render the 403 pattern`).toBe(1);
           expect(rendered.search, `${entry.segment} kept a query on the refusal`).toBe('');
           expect(rendered.text).not.toContain(path);
@@ -178,10 +181,7 @@ test.describe('AC4 — a listed project id under the wrong organization', () => 
     // The corpus lists org 2 but only org 1's projects; project STOREFRONT carries org_id = org 1.
     // This is the `candidate.org_id === orgId` check, which the lane's e2e never exercises (it only
     // tries a project id that exists nowhere).
-    const path = localePath(
-      'en',
-      `/orgs/${ORG_LUMEN}/projects/${PROJECT_STOREFRONT}/overview`,
-    );
+    const path = localePath('en', `/orgs/${ORG_LUMEN}/projects/${PROJECT_STOREFRONT}/overview`);
     await page.goto(withVariant(path, LIMITED_GRANTS));
 
     const rendered = await outcome(page);
@@ -316,12 +316,12 @@ test.describe('returnUrl is never an open redirect', () => {
       expect(offOrigin).toEqual([]);
       expect(errors).toEqual([]);
       // The parameter is not reflected as a link target or as markup.
-      const hrefs = await page.locator('a').evaluateAll((links) =>
-        links.map((link) => link.getAttribute('href') ?? ''),
-      );
-      expect(hrefs.filter((href) => href.includes('evil') || href.startsWith('javascript'))).toEqual(
-        [],
-      );
+      const hrefs = await page
+        .locator('a')
+        .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+      expect(
+        hrefs.filter((href) => href.includes('evil') || href.startsWith('javascript')),
+      ).toEqual([]);
       expect(await page.locator('main').innerText()).not.toContain('evil.example');
     });
   }
@@ -331,7 +331,12 @@ test.describe('scope switching under load', () => {
   test('two rapid organization switches settle on the last choice, with no stale scope', async ({
     page,
   }) => {
-    await page.goto(withVariant(localePath('en', `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/overview`), `${LIMITED_GRANTS}&fixture.latency=400`));
+    await page.goto(
+      withVariant(
+        localePath('en', `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/overview`),
+        `${LIMITED_GRANTS}&fixture.latency=400`,
+      ),
+    );
     await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
 
     const orgSelect = page.locator('app-scope-switcher select').first();
@@ -363,7 +368,10 @@ test.describe('scope switching under load', () => {
     page,
   }) => {
     await page.goto(
-      withVariant(localePath('en', `/orgs/${ORG_ACME}/audit`), `${LIMITED_GRANTS}&fixture.latency=600`),
+      withVariant(
+        localePath('en', `/orgs/${ORG_ACME}/audit`),
+        `${LIMITED_GRANTS}&fixture.latency=600`,
+      ),
     );
     await expect(page.locator('#main-content h1')).toBeVisible();
 
@@ -371,10 +379,7 @@ test.describe('scope switching under load', () => {
     await orgSelect.selectOption(ORG_LUMEN);
     // While the project list is still in flight, the store must already have dropped org 1's scope.
     await page.waitForTimeout(150);
-    const href = await page
-      .locator('app-shell-nav nav a')
-      .first()
-      .getAttribute('href');
+    const href = await page.locator('app-shell-nav nav a').first().getAttribute('href');
     expect(href ?? '').not.toContain(ORG_ACME);
   });
 });
@@ -475,7 +480,10 @@ test.describe('URL tampering', () => {
     page,
   }) => {
     await page.goto(
-      withVariant(localePath('en', `/orgs/${ORG_ACME};x=1/projects/${PROJECT_STOREFRONT}/authoring`), LIMITED_GRANTS),
+      withVariant(
+        localePath('en', `/orgs/${ORG_ACME};x=1/projects/${PROJECT_STOREFRONT}/authoring`),
+        LIMITED_GRANTS,
+      ),
     );
     await expect(page.locator('#main-content h1')).toBeVisible();
     const hrefs = await page
