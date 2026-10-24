@@ -245,4 +245,3 @@ public sealed class DtoContractTests
     internal static JsonSerializerOptions SnakeCase { get; } =
         new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 }
-

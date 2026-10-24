@@ -152,4 +152,3 @@ internal static class AuthoringErrors
     /// <summary>The writer's own prefix for a member of the change at <c>index</c> of a batch.</summary>
     private const string ContentPrefix = "/changes/0/content/";
 }
-
