@@ -279,6 +279,7 @@ only the shared `--eg-` prefix. This table and the three summary lines reproduce
 | light | text-muted / surface | text | 6.14 | 4.5 | PASS |
 | light | text-muted / surface-raised | text | 5.76 | 4.5 | PASS |
 | light | text-muted / accent-soft | text | 5.49 | 4.5 | PASS |
+| light | text-muted / neutral-bg | disabled action text | 5.50 | 4.5 | PASS |
 | light | accent / bg | link text | 5.98 | 4.5 | PASS |
 | light | accent / surface | link text | 6.37 | 4.5 | PASS |
 | light | on-accent / accent | button label | 6.37 | 4.5 | PASS |
@@ -313,6 +314,7 @@ only the shared `--eg-` prefix. This table and the three summary lines reproduce
 | dark | text-muted / surface | text | 8.04 | 4.5 | PASS |
 | dark | text-muted / surface-raised | text | 7.12 | 4.5 | PASS |
 | dark | text-muted / accent-soft | text | 5.96 | 4.5 | PASS |
+| dark | text-muted / neutral-bg | disabled action text | 6.07 | 4.5 | PASS |
 | dark | accent / bg | link text | 9.86 | 4.5 | PASS |
 | dark | accent / surface | link text | 9.52 | 4.5 | PASS |
 | dark | on-accent / accent | button label | 9.86 | 4.5 | PASS |
@@ -343,7 +345,7 @@ only the shared `--eg-` prefix. This table and the three summary lines reproduce
 ```text
 Dark declaration blocks: PASS (identical property names and values).
 Excluded: --eg-scrim (#RRGGBBAA); backdrop alpha is not a text pair.
-Result: 68/68 pairs PASS; 0 FAIL.
+Result: 70/70 pairs PASS; 0 FAIL.
 ```
 
 ## Failures and fixes
@@ -384,9 +386,9 @@ would not have been a faithful v2 port.
 
 - Use the existing token names for colours, font families, type, spacing, borders, radius,
   dimensions, elevation and stacking. Do not introduce raw hex colours or raw pixel values outside
-  `tokens.css` in component styles. The planned enforcement rule belongs to **09.1.1-T11.4** and
-  is not claimed implemented here. The documented literal media-query boundaries are necessary
-  syntax exceptions; any further lint exceptions require an explicit contract in T11.4.
+  `tokens.css` in component styles. This is enforced by the `style-tokens` ESLint rule of
+  **09.1.1-T11.4**, documented in § Lint rule `style-tokens` below; the documented literal
+  media-query boundaries are its only syntax exception.
 - Use `--eg-border-control` for a boundary needed to identify an input/control; `--eg-border` is
   decorative. Keep focus visible using the focus colour, width and offset tokens.
 - Pair text with the backgrounds recorded above. Use `--eg-on-accent` on solid accent buttons;
@@ -404,6 +406,142 @@ would not have been a faithful v2 port.
   shell work, not these three files. The lane replacing `apps/web` must import `tokens.css`,
   preserve stored explicit light/dark choices, and leave `data-theme` unset when no choice exists
   if OS preference is to apply. No integrated-theme behaviour is claimed by this token-only slice.
-- [OPEN] T11.4 must implement the raw-literal lint rule, define its media-query syntax exception,
-  and record any additional real component foreground/background pairs. The token checker is not
-  a substitute for component state, focus geometry or whole-screen accessibility checks.
+- [CLOSED 09.1.1-T11.4] The raw-literal lint rule is implemented and its media-query syntax
+  exception is recorded in § Lint rule `style-tokens` below.
+- [OPEN] Any further real component foreground/background pair stays with the component tasks
+  (09.1.1-T7/T8): add the pair to `pairs()` in [contrast.py](contrast.py), regenerate the table
+  and only then use it. 09.1.1-T11.4 added `--eg-text-muted` on `--eg-neutral-bg` (the v2
+  disabled-action recipe used by the [state sheet](state-sheet.md)). The token checker is not a
+  substitute for component state, focus geometry or whole-screen accessibility checks.
+
+## Lint rule `style-tokens`
+
+Enforcement of the rules above is the `style-tokens` ESLint plugin in
+[`apps/web/eslint-rules/`](../../../apps/web/eslint-rules/) (`style-tokens.js` plus one shared
+detector, `raw-literal-detector.js`). It is wired in the root [`eslint.config.js`](../../../eslint.config.js)
+and runs under `npm run lint`, so a raw literal fails the gate. Two rules share one detector:
+
+| Rule | Applies to | Contract |
+| --- | --- | --- |
+| `style-tokens/no-raw-literals` | `apps/web/**/*.css` through the `css/css` language of `@eslint/css` 2.0.1, except `apps/web/src/styles/tokens.css` | a component stylesheet may only reference tokens |
+| `style-tokens/no-raw-literals-inline` | `apps/web/**/*.ts`, non-spec | the same contract for the `styles: [...]` strings of an `@Component` |
+
+**Checked in every declaration value** (custom properties, `var(--x, <fallback>)` fallbacks and
+the inside of `calc()` included):
+
+| Literal | Message id | Where |
+| --- | --- | --- |
+| hex colour, 3/4/6/8 digits | `rawHexColour` | any property |
+| `rgb()`, `rgba()`, `hsl()`, `hsla()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` | `rawColourFunction` | any property |
+| CSS named colour (`red`, `rebeccapurple`, …) | `rawNamedColour` | colour-bearing properties (`color`, `background*`, `border*`, `outline*`, `column-rule*`, `text-decoration*`, `text-emphasis*`, `fill`, `stroke*`, `box-shadow`, `text-shadow`, `caret-color`, `accent-color`, `scrollbar-color`, `filter`) and every custom property |
+| non-zero `px`/`rem`/`em` length | `rawLength` | spacing (`margin*`, `padding*`, `gap`, `row-gap`, `column-gap`, `inset*`, `top`/`right`/`bottom`/`left`), scroll spacing (`scroll-margin*`, `scroll-padding*`, all longhands and logical forms), radius (`border-radius`, corner radii), border/outline width (including the `border`/`outline` shorthands), `outline-offset`, `font`, `font-size`, `line-height`, `box-shadow`, `text-shadow`, and **every custom property** |
+
+`--eg-border-width: 1px` exists, so a `1px` hairline is **not** an exception: write
+`border: var(--eg-border-width) solid var(--eg-border)`. The same applies to the `--eg-focus-width`
+outline.
+
+**Custom properties are checked for lengths as well as colours.** A local `--local-gap: 8px`
+copies a raw length exactly like `gap: 8px` does, so `--local-gap: 8px` fails with `rawLength` in
+a component stylesheet and in an inline `styles` entry. `tokens.css` keeps declaring the raw
+scale because that file is exempt at config level. Literal-free custom properties still pass:
+
+| Declaration | Why it passes |
+| --- | --- |
+| `--x: 0` | the zero exemption (`0px`/`0rem` too) |
+| `--x: 1.5` | unitless number |
+| `--x: 100%` | percentage |
+| `--x: var(--eg-space-4)` | token reference |
+| `--x: calc(var(--eg-space-2) * 2)` | `calc()` over a token reference only |
+
+**Deliberately not checked.** The unit regex covers `px`, `rem` and `em` only, and the property
+list above is the whole contract. Four groups stay out on purpose:
+
+- Sizing — `width`, `height`, `min-*`, `max-*`: only shell dimensions have tokens, and the 360px
+  no-horizontal-scroll requirement ([layout.md](layout.md)) needs literal min/max widths.
+- `transform` and `translate`: motion and offset values are viewport- or element-relative
+  geometry, not a spacing scale; there is no numeric token for `translateY(-2px)`.
+- `letter-spacing`, `word-spacing`, `text-indent`: the type scale has size and line-height tokens
+  but no tracking token, so any numeric value here has no token to reference.
+- `border-spacing`: no token exists for table cell gaps, and no component rule has yet chosen one.
+
+Adding a token for any of these is the prerequisite for checking them: the rule reports only what
+a token can replace.
+
+**CSS system colour keywords pass.** `Canvas`, `CanvasText`, `ButtonText`, `LinkText` and the rest
+are not CSS named colours, so they never match the named-colour check. That is intended: a system
+colour resolves to the user's own OS colour, carries no brand value, and is the recommended way to
+keep text and control boundaries readable under `forced-colors: active` (the WCAG 2.2 system-colour
+/ non-text contrast guidance). A spec case proves `color: CanvasText`, `background-color: Canvas`,
+`border-color: ButtonText` and `outline-color: LinkText` all pass.
+
+**Allowed everywhere:** `var(--*)` references (a local alias such as
+`--local-gap: var(--eg-space-4)` is safe, because the literal check runs on each declaration and a
+`var()` reference never matches), `0`, `0px`/`0rem`, unitless numbers (`line-height: 1.5`,
+`font-weight: 600`), percentages (`100%`), `transparent`, `currentcolor`, `inherit`, `initial`,
+`unset`, `revert`, `revert-layer`, `none` and `auto`, quoted strings, `url(...)` payloads, and
+`color-mix()` whose operands contain no literal (its operands are checked, so
+`color-mix(in srgb, #fff 10%, red)` fails twice).
+
+**Media-query exception.** `@media`, `@container` and `@supports` PRELUDES are never checked,
+because CSS cannot read a custom property inside a condition — `--eg-bp-tablet: 768px` and
+`--eg-bp-desktop: 1280px` are documented mirrors only ([layout.md](layout.md), "Breakpoints and
+navigation"). Declarations INSIDE those at-rules are still checked, so
+`@media (min-width: 768px) { .a { padding: var(--eg-space-4); } }` passes while the same block with
+`padding: 16px` fails.
+
+**The `tokens.css` exemption** is a config-level `ignores` on the CSS rule: raw values are allowed
+in `apps/web/src/styles/tokens.css` only, which is where the light and dark palettes live.
+
+**Inline `styles: [...]` in an `@Component`** is checked by the second rule, which reads the
+declaration text out of the string or template literal:
+
+- A plain string entry and a template entry without interpolation are scanned exactly like a
+  stylesheet, so every literal above fails at its real line and column in the `.ts` file.
+- An interpolation immediately followed by a raw unit — `${space}px`, `${space}rem`, `${space}em`
+  — fails with `rawLength` and the value `${space}px` **in a checked property only**: the
+  interpolation holds a JavaScript number, so the unit is what turns it into a literal length.
+  `padding: ${space}px` and `--local-gap: ${space}rem` fail; `padding: ${space}%`,
+  `gap: ${token}`, and `width: ${size}px` / `transform: translateY(${offset}px)` pass, the last two
+  for the same reason their static forms pass — sizing and transform are outside the contract.
+- `${...}` expression source is masked before the entry is read as a stylesheet, so a JavaScript
+  expression is never itself scanned for colours or lengths.
+- `styles: [NAME]` where `NAME` is a module-level `const NAME = '...'` or `` const NAME = `...` ``
+  in the same file is resolved and checked, so hoisting a stylesheet into a const does not bypass
+  the rule.
+
+**Known limitations.** These are the shapes the rules deliberately do not claim to cover:
+
+- Template `style="…"` attributes and `[style.x]` bindings: template input rather than a
+  stylesheet literal, and neither rule has a template AST.
+- A style string built elsewhere or imported (`styles: [sharedStyles]` from another module,
+  `styles: [buildStyles()]`, or a `let`/`var` binding): only a module-level `const` string or
+  template literal in the same file is resolved; chasing other shapes would need whole-program
+  analysis and would guess at runtime values.
+- The `@core.Component({...})` namespace form: the inline rule matches a bare `Component`
+  identifier callee, so `core.Component` is not checked. Import `Component` directly (the project
+  convention) or the styles in that metadata are unchecked.
+- `styles` inside a `*.spec.ts`: the `apps/web/**/*.ts` config block ignores specs, so a test host
+  component's inline styles are not linted.
+- Motion durations (`transition`/`animation`) are not checked although `--eg-duration-fast`/
+  `--eg-duration-standard` exist: the two tokens cover 150ms and 200ms only, and no component rule
+  has yet decided what a spinner or skeleton needs, so the check would be guesswork. Add a duration
+  pattern when that rule exists.
+
+**Disposition of each limitation (S62 send-back on PR #138).** Nothing above is left unowned:
+
+| Limitation or review nit | Disposition |
+| --- | --- |
+| Template `style="…"` attributes and `[style.x]` bindings | Handed to 09.1.1-T7 (plan `09.1.1-app-scaffold-and-build-acceptance-npm.md:177`, STATUS §6 row "09.1.1-T7 `style-tokens` coverage gaps") |
+| Motion durations (`transition`/`animation`) | Handed to 09.1.1-T7 (same note and row; the loading/skeleton pattern decides) |
+| `border-spacing` | Handed to 09.1.1-T7 (same note and row; the shared list table picks the gap) |
+| Style string imported, built by a function, or held in `let`/`var` | Accepted by design, not handed over: resolving it needs whole-program analysis and would guess runtime values; code review is the net |
+| `@core.Component` namespace form | Accepted by design, not handed over: the project convention imports `Component` directly |
+| `styles` in `*.spec.ts` | Accepted by design, not handed over: test host components are never shipped |
+| Sizing, `transform`/`translate`, `letter-spacing`/`word-spacing`/`text-indent` | Accepted by design, not handed over: no numeric token exists to replace them (see "Deliberately not checked") |
+| CSS system colour keywords | Accepted by design, not handed over: they carry no brand value and are the forced-colors pattern |
+| `.scss`/`.sass` files not matched | Accepted by design, not handed over: `apps/web/angular.json` sets `style: css` and no SCSS file exists |
+| Review nit: one `const` used by two components reports twice at the const's location | Accepted by design, not handed over: duplicate message only, never a missed or false verdict |
+| Review nit: `${n}px` inside a comment within a template literal can be reported | Accepted by design, not handed over: an extra report on an unrealistic input, fixed by deleting the comment |
+
+A new component foreground/background pair still has to be added to `contrast.py` and regenerated
+into the table above — the lint rule checks spelling, not contrast.

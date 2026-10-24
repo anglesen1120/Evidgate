@@ -5,7 +5,7 @@
   "scripts": {
     "start": "ng serve",
     "build": "ng build && node scripts/check-bundle-budget.mjs",
-    "test": "ng test --watch=false && node --test scripts/",
+    "test": "ng test --watch=false && vitest run --config eslint-rules/vitest.config.mts && node --test scripts/",
     "i18n:extract": "ng extract-i18n",
     "i18n:check": "node scripts/check-i18n-keys.mjs",
     "e2e": "npm run build && playwright test"
