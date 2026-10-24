@@ -142,7 +142,7 @@ of the five exactly, wherever it appears — a key held in a `const`,
 folded and its inner literals are reported instead. A bypass call written inside an inline
 `template:` string is template source rather than AST, so the rule scans that property's value and
 reports it once per property; a `templateUrl` file is outside its scope, because the Angular
-template rules that run over `.html` do not look for a bypass call. The rule's single allow-list is
+template rules that run over `.html` do not look for a bypass call. A name assembled only at run time (`'bypassSecurity'.concat('TrustHtml')`, `[...].join('')`, a template literal with a runtime part) is not detectable: lint is defence in depth, and the Trusted Types refusal at the DOM sink is the backstop. The rule's single allow-list is
 a directory named exactly `artifact-viewer-bridge` at any depth below `apps/web/src/app`: the segment
 must match exactly (an `artifact-viewer-bridge-notes.ts` file or a `not-artifact-viewer-bridge/`
 directory stays reportable), `..` is resolved before the check so a path cannot leave the bridge, and

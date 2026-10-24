@@ -230,6 +230,9 @@ test('parseConnectSrc splits comma and whitespace separated allowlists', () => {
     'wss://b.example.com',
   ]);
   assert.deepEqual(parseConnectSrc(''), []);
+  // Scheme and host are emitted lower-case: CSP matches them case-insensitively, one spelling
+  // keeps the header (and the dedupe) stable.
+  assert.deepEqual(parseConnectSrc('HTTPS://A.Example.com'), ['https://a.example.com']);
   assert.deepEqual(parseConnectSrc(undefined), []);
   assert.deepEqual(parseConnectSrc(null), []);
 
@@ -298,6 +301,13 @@ test('assertStrictPolicy requires Trusted Types to stay enforced', () => {
     () => assertStrictPolicy(`${base}; require-trusted-types-for 'style'`),
     /require-trusted-types-for/,
   );
+  // The list is pinned to exactly `angular` (D-S66-Q1): extra names are refused even when benign.
+  for (const extra of ['angular default', 'angular angular#bundler', 'default']) {
+    assert.throws(
+      () => assertStrictPolicy(`${base}${requireScript}; trusted-types ${extra}`),
+      /exactly `angular`/,
+    );
+  }
   const complete = `${base}${requireScript}; trusted-types angular`;
   assert.equal(assertStrictPolicy(complete), complete);
 });

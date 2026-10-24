@@ -179,6 +179,11 @@ function assertTrustedTypesPolicy(directives) {
       'the CSP policy must declare a trusted-types directive, or every policy name is free',
     );
   }
+  // D-S66-Q1: `angular` is the only policy name the app may create. A hand edit that adds
+  // `default`, `angular#bundler` or the bypass name would silently widen the list.
+  if (allowed.sources.length !== 1 || allowed.sources[0] !== 'angular') {
+    throw new Error('the CSP trusted-types directive must list exactly `angular`');
+  }
 }
 
 /**

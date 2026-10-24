@@ -20,8 +20,9 @@
 //     `import { bypassSecurityTrustHtml as bind } from './sanitize';`
 //   - any other constant that spells one of the five names: `const k = 'bypassSecurityTrustHtml';
 //     sanitizer[k](html)`, `Reflect.get(sanitizer, 'bypassSecurityTrustHtml')`, an interpolated
-//     template literal used as a key. A key this rule cannot evaluate has to hold the name as a
-//     constant somewhere, and that constant is what the catch-all visitors report;
+//     template literal used as a key. A name that is only assembled at run time (`'bypassSecurity'.concat('TrustHtml')`,
+//     `[...].join('')`, a template literal with a runtime part) is not detectable; lint is
+//     defence in depth and the Trusted Types refusal at the DOM sink is the backstop;
 //   - a bypass call written inside an inline `template:` string, which no AST visitor can look
 //     into: `<div [innerHTML]="sanitizer.bypassSecurityTrustHtml(html)"></div>`. That value is
 //     scanned by content. A `templateUrl` file is outside this rule's scope: the Angular
