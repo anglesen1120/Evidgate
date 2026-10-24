@@ -87,6 +87,31 @@ module.exports = tseslint.config(
         'error',
         { type: 'attribute', prefix: 'app', style: 'camelCase' },
       ],
+      // 09.1.1-T6.1 (plans/features/09-web-ui §10 T6.1): a TypeScript message has exactly one
+      // shape — $localize`:@@area.name:text`, optionally
+      // $localize`:meaning|description@@area.name:text`. The call form takes no id at all, and a
+      // tagged template without the leading `:`+`@@id` metadata would be extracted under its own
+      // English source text as the key, which the translation catalog and the
+      // key-completeness check cannot key on. The second selector tests only the FIRST template
+      // element: the metadata lives there, while later elements hold the literal text around
+      // `${…}` and must stay untested.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.name='$localize']",
+          message:
+            'Use $localize`:@@area.name:text` — the call form carries no custom @@id ' +
+            '(09.1.1-T6.1).',
+        },
+        {
+          selector:
+            "TaggedTemplateExpression[tag.name='$localize'] > TemplateLiteral > " +
+            'TemplateElement:first-child:not([value.raw=/^:[^:@]*@@/])',
+          message:
+            'Give the message a custom id: $localize`:@@area.name:text` or ' +
+            '$localize`:meaning|description@@area.name:text` (09.1.1-T6.1).',
+        },
+      ],
     },
   },
   {
@@ -103,6 +128,40 @@ module.exports = tseslint.config(
       '@angular-eslint/template/prefer-control-flow': 'error',
       '@angular-eslint/template/no-any': 'error',
       '@angular-eslint/template/eqeqeq': 'error',
+      // 09.1.1-T6.1 (plans/features/09-web-ui §10 T6.1): every user-visible template string —
+      // a text node, a text attribute, or a bound text holding literal letters — must carry an
+      // `i18n` marker with an explicit custom id. The id is what `ng extract-i18n` writes into
+      // src/locale/messages.xlf and messages.vi.xlf, and the `vi` build and its gzip budget are
+      // keyed on that catalog, so an unmarked string silently ships English in `vi`.
+      // `checkId` is what forces the `@@area.name` form: the rule only sees a custom id when
+      // the marker starts with `@@`, so a bare `i18n` or `i18n="caption"` is reported.
+      // `ignoreAttributes` ADDS to the rule's shipped non-visible set (`class`, `href`, `src`,
+      // `id`, `role`, `type`, `value`, …) — the rule merges both lists, it does not replace
+      // them. `data-testid` is an E2E hook and is never rendered. An interpolation-only text
+      // node (`{{ expr }}`) is deliberately not flagged: a `BoundText` without literal letters
+      // is allowed by the rule's default `boundTextAllowedPattern`, while `Hello {{ expr }}` is.
+      '@angular-eslint/template/i18n': [
+        'error',
+        {
+          checkText: true,
+          checkAttributes: true,
+          checkId: true,
+          checkDuplicateId: true,
+          requireDescription: false,
+          ignoreAttributes: ['data-testid'],
+        },
+      ],
+    },
+  },
+  {
+    // 09.1.1-T6.1: `src/index.html` is the builder's shell. Angular never compiles it as a
+    // template and `ng extract-i18n` cannot extract from it, so an `i18n` marker demanded
+    // there could never be translated (the `<title>` text and `<meta content>` are the
+    // offenders). Only the i18n rule is off for the shell; every other template rule still
+    // applies to it.
+    files: ['apps/web/src/index.html'],
+    rules: {
+      '@angular-eslint/template/i18n': 'off',
     },
   },
   {

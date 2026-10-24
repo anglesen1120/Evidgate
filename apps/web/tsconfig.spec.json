@@ -8,8 +8,9 @@
   "compilerOptions": {
     "noEmit": true,
     // The builder's Vitest runner sets `globals: true` (describe/it/expect without imports);
-    // `node` is needed by playwright.config.ts (`process.env`).
-    "types": ["vitest/globals", "node"]
+    // `node` is needed by playwright.config.ts (`process.env`). 09.1.1-T6.1: the spec project
+    // compiles the same `i18n` templates, so it needs the ambient `$localize` global too.
+    "types": ["vitest/globals", "node", "@angular/localize"]
   },
   // tsconfig.json excludes specs from the application project; this project exists to
   // type-check exactly those, so the inherited `exclude` must not apply here.

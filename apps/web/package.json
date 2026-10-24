@@ -5,13 +5,16 @@
   "scripts": {
     "start": "ng serve",
     "build": "ng build && node scripts/check-bundle-budget.mjs",
-    "test": "ng test --watch=false",
+    "test": "ng test --watch=false && node --test scripts/",
+    "i18n:extract": "ng extract-i18n",
+    "i18n:check": "node scripts/check-i18n-keys.mjs",
     "e2e": "npm run build && playwright test"
   },
   "dependencies": {
     "@angular/common": "22.2.0",
     "@angular/compiler": "22.2.0",
     "@angular/core": "22.2.0",
+    "@angular/localize": "22.2.0",
     "@angular/platform-browser": "22.2.0",
     "@evidgate/sdk": "*",
     "rxjs": "7.8.2",

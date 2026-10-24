@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // 09.1.1-T1.2 — 00 §5.6 W7 / AC1: initial JS ≤ 300 kB gzip, every lazy chunk ≤ 150 kB gzip.
+// 09.1.1-T6.1: the check is PER LOCALE, because `ng build` now emits one bundle per locale.
 //
 // Measurement finding (AC1 wording gap, read from the installed @angular/build 22.2.0):
 // `angular.json` `budgets` are checked against RAW on-disk asset bytes, not transfer size.
@@ -13,18 +14,26 @@
 // fs/zlib/url/path only) so `npm ci --ignore-scripts` on CI needs nothing extra. Budget
 // numbers live in the two constants below and nowhere else.
 //
+// Layout: with `localize` (angular.json build configurations) `@angular/build:application`
+// writes one directory per locale — `dist/browser/en/`, `dist/browser/vi/` — each holding its
+// own index.html and chunks, and no root index.html; a build without `localize` (and every
+// synthetic dist this gate's own proofs create) puts index.html at the root of
+// `dist/browser`. Every locale directory found is checked on its own against the same two
+// limits, and the report prefixes each row with the locale. A dist with neither layout fails
+// closed instead of reporting "0 kB".
+//
 // The dist directory is resolved from this file's own location
 // (`apps/web/dist/browser`, the same way `e2e/static-server.mjs` does it), so the check
 // reports the same thing whatever the caller's cwd is. `EVIDGATE_WEB_DIST_DIR` overrides it
 // ONLY to run the synthetic-output proofs of this gate; it is not a build knob.
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 // `@angular/build:application` with the default static output mode writes the deployable
-// assets into `<outputPath>/browser` (angular.json: outputPath "dist"), so index.html and
-// every emitted script sit there.
+// assets into `<outputPath>/browser` (angular.json: outputPath "dist"), so the locale
+// directories (or index.html, unlocalized) sit there.
 const DIST_DIR = process.env.EVIDGATE_WEB_DIST_DIR
   ? resolve(process.env.EVIDGATE_WEB_DIST_DIR)
   : resolve(fileURLToPath(new URL('../dist/browser/', import.meta.url)));
@@ -36,6 +45,15 @@ const LAZY_CHUNK_GZIP_LIMIT_BYTES = 150 * 1000;
 function fail(message) {
   console.error(`bundle budget: ${message}`);
   process.exit(1);
+}
+
+/** `true` for a regular file; a missing path and a directory of that name both answer `false`. */
+function isFile(path) {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /** Every `.js` file below `dir`, as POSIX paths relative to `dir`. */
@@ -94,69 +112,109 @@ function formatKiB(bytes) {
   return `${(bytes / 1000).toFixed(1)} kB`;
 }
 
-const indexPath = join(DIST_DIR, 'index.html');
-const shownIndexPath = relative(process.cwd(), indexPath).startsWith('..')
-  ? indexPath
-  : relative(process.cwd(), indexPath);
-let indexHtml;
-try {
-  indexHtml = readFileSync(indexPath, 'utf8');
-} catch {
-  fail(`no ${indexPath} — run \`ng build\` first (this check reads the production output).`);
+function showPath(path) {
+  const shown = relative(process.cwd(), path);
+  return shown.startsWith('..') ? path : shown;
 }
 
-const scripts = listScripts(DIST_DIR);
-if (scripts.length === 0) {
-  fail(`no JavaScript in ${DIST_DIR}/ — the production output is missing.`);
-}
-
-const referenced = initialScriptsFromIndex(indexHtml);
-if (referenced.size === 0) {
-  // Fail closed: an index.html that names no initial script means the parse or the build is
-  // wrong, and silently measuring "0 kB initial" would pass the gate for the wrong reason.
+/**
+ * The bundle layouts to check, as `{ label, dir }`. A localized build emits one directory per
+ * locale, each with its own index.html; locale directories win when they exist, because that
+ * is what `localize` produces and a leftover root index.html would double-count their chunks.
+ * Otherwise the root layout (index.html directly in the dist directory) is the single layout.
+ */
+function findLayouts(distDir) {
+  let entries;
+  try {
+    entries = readdirSync(distDir, { withFileTypes: true });
+  } catch {
+    fail(`no ${distDir}/ — run \`ng build\` first (this check reads the production output).`);
+  }
+  const locales = entries
+    .filter((entry) => entry.isDirectory() && isFile(join(distDir, entry.name, 'index.html')))
+    .map((entry) => entry.name)
+    .sort();
+  if (locales.length > 0) {
+    return locales.map((locale) => ({ label: locale, dir: join(distDir, locale) }));
+  }
+  if (isFile(join(distDir, 'index.html'))) {
+    return [{ label: '', dir: distDir }];
+  }
+  // Fail closed: with neither a locale directory nor a root index.html there is nothing to
+  // measure, and reporting "0 kB initial" would pass the gate for the wrong reason.
   fail(
-    `no initial <script src> or <link rel="modulepreload"> .js reference found in ${shownIndexPath} — ` +
-      'this check cannot tell initial from lazy chunks without it.',
+    `no locale directory (<locale>/index.html) and no ${join(distDir, 'index.html')} — ` +
+      'run `ng build` first (this check reads the production output).',
   );
 }
 
-const scriptSet = new Set(scripts);
-const missing = [...referenced].filter(([path]) => !scriptSet.has(path));
-if (missing.length > 0) {
-  for (const [path, url] of missing) {
-    console.error(
-      `bundle budget: ${shownIndexPath} references ${url} (${path}), absent from ${DIST_DIR}`,
+/** The W7 rows for one layout: the gzip size of every script, split into initial and lazy. */
+function measureLayout({ label, dir }) {
+  const rowPrefix = label === '' ? '' : `${label} `;
+  const indexPath = join(dir, 'index.html');
+  const shownIndexPath = showPath(indexPath);
+  const indexHtml = readFileSync(indexPath, 'utf8');
+
+  const scripts = listScripts(dir);
+  if (scripts.length === 0) {
+    fail(`${rowPrefix}no JavaScript in ${dir}/ — the production output is missing.`);
+  }
+
+  const referenced = initialScriptsFromIndex(indexHtml);
+  if (referenced.size === 0) {
+    // Fail closed: an index.html that names no initial script means the parse or the build is
+    // wrong, and silently measuring "0 kB initial" would pass the gate for the wrong reason.
+    fail(
+      `${rowPrefix}no initial <script src> or <link rel="modulepreload"> .js reference found in ` +
+        `${shownIndexPath} — this check cannot tell initial from lazy chunks without it.`,
     );
   }
-  fail(`${missing.length} referenced script(s) missing from the build output.`);
+
+  const scriptSet = new Set(scripts);
+  const missing = [...referenced].filter(([path]) => !scriptSet.has(path));
+  if (missing.length > 0) {
+    for (const [path, url] of missing) {
+      console.error(
+        `bundle budget: ${shownIndexPath} references ${url} (${path}), absent from ${dir}`,
+      );
+    }
+    fail(`${rowPrefix}${missing.length} referenced script(s) missing from the build output.`);
+  }
+
+  const initial = [];
+  const lazy = [];
+  for (const script of scripts) {
+    const size = gzipBytes(join(dir, ...script.split('/')));
+    (referenced.has(script) ? initial : lazy).push({ script, size });
+  }
+
+  const initialTotal = initial.reduce((total, chunk) => total + chunk.size, 0);
+  return {
+    shownIndexPath,
+    rows: [
+      {
+        label: `${rowPrefix}initial JS (${initial.length} chunk(s))`,
+        size: initialTotal,
+        limit: INITIAL_JS_GZIP_LIMIT_BYTES,
+      },
+      ...lazy.map((chunk) => ({
+        label: `${rowPrefix}lazy chunk ${chunk.script}`,
+        size: chunk.size,
+        limit: LAZY_CHUNK_GZIP_LIMIT_BYTES,
+      })),
+    ],
+  };
 }
 
-const initial = [];
-const lazy = [];
-for (const script of scripts) {
-  const size = gzipBytes(join(DIST_DIR, ...script.split('/')));
-  (referenced.has(script) ? initial : lazy).push({ script, size });
-}
-
-const initialTotal = initial.reduce((total, chunk) => total + chunk.size, 0);
-const rows = [
-  {
-    label: `initial JS (${initial.length} chunk(s))`,
-    size: initialTotal,
-    limit: INITIAL_JS_GZIP_LIMIT_BYTES,
-  },
-  ...lazy.map((chunk) => ({
-    label: `lazy chunk ${chunk.script}`,
-    size: chunk.size,
-    limit: LAZY_CHUNK_GZIP_LIMIT_BYTES,
-  })),
-];
+const layouts = findLayouts(DIST_DIR);
+const measured = layouts.map(measureLayout);
 
 console.log('bundle budget (gzip, 1000 bytes per kB) — 00 §5.6 W7');
+const rows = measured.flatMap((result) => result.rows);
 for (const row of rows) {
   const verdict = row.size > row.limit ? 'FAIL' : 'ok';
   console.log(
-    `  ${verdict.padEnd(4)} ${row.label.padEnd(44)} ${formatKiB(row.size).padStart(10)} / ${formatKiB(row.limit)}`,
+    `  ${verdict.padEnd(4)} ${row.label.padEnd(52)} ${formatKiB(row.size).padStart(10)} / ${formatKiB(row.limit)}`,
   );
 }
 
@@ -170,4 +228,5 @@ if (overBudget.length > 0) {
   fail(`${overBudget.length} budget(s) exceeded.`);
 }
 
-console.log(`bundle budget: ${shownIndexPath} checked, all budgets met.`);
+const checked = measured.map((result) => result.shownIndexPath).join(', ');
+console.log(`bundle budget: ${checked} checked, all budgets met.`);
