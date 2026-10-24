@@ -65,6 +65,8 @@ tags:
     description: Runner job claim and heartbeat (V2, 04/05)
   - name: policy
     description: Waivers and quarantine lifecycles (07)
+  - name: authoring
+    description: Feature tree, checklist items and manual test cases (13.1.1)
 paths:
   /ci/token:
     post:
@@ -7166,7 +7168,7 @@ components:
         path:
           oneOf:
             [
-              { type: array, items: { $ref: '#/components/schemas/AuthoringNodePathEntry' } },
+              { type: array, items: { $ref: '#/components/schemas/NodePathEntry' } },
               { type: 'null' },
             ]
     CreateNodeRequest:
