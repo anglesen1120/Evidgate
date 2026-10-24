@@ -7,7 +7,7 @@ The application token source is [`tokens.css`](../../../apps/web/src/styles/toke
 The reference is the read-only [v2 stylesheet](../web-ui/output/assets/evidgate.css): layer order at
 line 1; light tokens at lines 4–91; dark overrides at lines 93–117; token layer ends at line 118.
 The [task contract](../../../plans/features/09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md),
-§10, line 197, requires colour, type, spacing, radius, elevation, both themes and recorded contrast.
+§10, line 221, requires colour, type, spacing, radius, elevation, both themes and recorded contrast.
 
 Every one of the 79 v2 custom-property names is retained. The 22 v2 dark overrides are retained.
 All values are unchanged; font-family quoting is normalized from double to single quotes without

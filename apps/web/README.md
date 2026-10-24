@@ -56,8 +56,8 @@ checked as the single layout it is.
 
 The production configuration also sets `optimization.styles.inlineCritical=false` (scripts and
 style minification stay on), so no locale's `index.html` carries an inline `<script>` or
-`<style>` and the bundle can be served under a strict CSP without `unsafe-inline` in
-09.1.1-T10.
+`<style>` and the bundle can be served under a strict CSP without `unsafe-inline`
+([App-origin CSP and Trusted Types](#app-origin-csp-and-trusted-types-0911-t10)).
 
 `@evidgate/sdk` is the workspace link `"*"` and is consumed through [Data access](#data-access-0911-t3)
 below — nothing in this app calls it outside `src/app/core`.
@@ -68,6 +68,99 @@ below — nothing in this app calls it outside `src/app/core`.
 ADR-0008 (`docs/adr/0008-web-integration-fit.md`, 09.1.1-T2) confirmed zoneless as stable for this
 app (00 §5.6 W3 is ✅); its fallbacks are recorded there rather than silently in code. The same ADR
 settled the API integration shape described in [Data access](#data-access-0911-t3).
+
+## App-origin CSP and Trusted Types (09.1.1-T10)
+
+The app origin serves a nonce CSP with Trusted Types (AC7; ADR-0008 rule 4 as amended on 2026-10-24,
+D-S66-Q1; 00 §5.6 W6). One policy source feeds the preview server, the E2E suite and, later, the
+production edge of 10.2.1-T1.4 — nothing hand-copies a policy string:
+
+| File                          | Role                                                                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/app-origin-csp.json` | The policy: directives, the `__CSP_NONCE__` placeholder name and the `{nonce}` marker                                                               |
+| `scripts/csp.mjs`             | `buildCsp`, `buildSecurityHeaders`, `injectNonce`, `generateNonce`/`isValidNonce` (a 16-byte base64 nonce), `parseConnectSrc`, `assertStrictPolicy` |
+| `scripts/csp.test.mjs`        | Unit tests for the above, run by `npm run test -w apps/web`                                                                                         |
+| `e2e/static-server.mjs`       | The preview server: header and nonce on every response, locale pages injected                                                                       |
+| `e2e/csp.spec.ts`             | The Playwright AC7 proof, run on both locales                                                                                                       |
+
+The policy itself — `trusted-types` is `angular` only, so the `angular#unsafe-bypass` entry of the
+ADR-0008 spike is deliberately not shipped and a `bypassSecurityTrust*` value is refused when it
+reaches a DOM sink:
+
+| Directive                   | Value                                 | What it does                                                                |
+| --------------------------- | ------------------------------------- | --------------------------------------------------------------------------- |
+| `default-src`               | `'none'`                              | nothing loads unless a directive below allows it                            |
+| `script-src`                | `'self'`                              | bundled scripts only; no inline script, no `unsafe-inline` or `unsafe-eval` |
+| `style-src`                 | `'self'` `'nonce-<nonce>'`            | component CSS is a runtime `<style>` element carrying the response nonce    |
+| `connect-src`               | `'self'` + `EVIDGATE_WEB_CONNECT_SRC` | `/v1` calls plus the declared telemetry origins                             |
+| `img-src`                   | `'self'` `data:`                      | bundled images and inline `data:` URIs                                      |
+| `font-src`                  | `'self'`                              | bundled fonts only                                                          |
+| `base-uri`                  | `'self'`                              | an injected `<base>` cannot move the origin                                 |
+| `form-action`               | `'self'`                              | a form never posts anywhere else                                            |
+| `frame-ancestors`           | `'none'`                              | the app is never framed                                                     |
+| `object-src`                | `'none'`                              | no plugin or embedded object content                                        |
+| `require-trusted-types-for` | `'script'`                            | DOM script sinks accept Trusted Types only                                  |
+| `trusted-types`             | `angular`                             | the only policy name the app may create — no `angular#unsafe-bypass`        |
+
+**No script nonce.** `script-src` is `'self'` alone: the application builder copies the nonce onto
+its own `<script>` tags (`nonce="__CSP_NONCE__"` in the emitted `index.html`), but with no
+`'nonce-…'` source in `script-src` those attributes are inert — the scripts load because they are
+same-origin, not because of the nonce — so they are never a reason to add the nonce to
+`script-src`: `assertStrictPolicy` compares that directive whole against `'self'` and rejects a
+policy whose nonce appears anywhere but `style-src`.
+
+**`EVIDGATE_WEB_CONNECT_SRC`** is the one environment input: a space- or comma-separated list of
+`https:`/`wss:` origins appended to `connect-src` (`parseConnectSrc` validates each one and fails
+closed on anything else, and empty or unset adds nothing). It is **empty by default**, so a
+collector, object store or IdP origin a later task talks to stays unreachable until it is declared
+here; the web telemetry of 09.1.1-T9 adds its collector origin this way or amends
+`scripts/app-origin-csp.json`.
+
+**Nonce rules.** The server generates a fresh 16-byte base64 nonce per response and writes it into
+both the header and every `__CSP_NONCE__` occurrence of the served locale `index.html`, so `/en/` and
+`/vi/` each get their own nonce on each request — no shared, cached or build-time value. The header
+goes on **every** response, pages and assets alike, including the `/` redirect and the
+400/403/404/405/500 paths, because an error page served unprotected is the page an attacker can often
+steer. HTML is `cache-control: no-store`, so a nonce is never reused from a cache, and an asset
+body never receives a nonce (its response still carries the policy header, whose fresh nonce
+that body does not use). The production edge repeats exactly this contract
+(`e2e/static-server.mjs` is its reference): it consumes the JSON, never edits a built JS/CSS file,
+and its acceptance check is `csp.spec.ts` run against the edge preview.
+
+**Trusted Types ban.** Because the policy lists `angular` only, a `bypassSecurityTrust*` value is
+refused when it reaches a DOM sink: the app-origin policy has no `angular#unsafe-bypass` policy that
+could hand the sink a value, so the refusal happens at the sink, not as a throw from the call. The
+lint rule `evidgate/no-bypass-security-trust` (`lint/rules/no-bypass-security-trust.cjs`) reports
+the same mistake earlier, where the author still sees the line: under `src/` every use of
+`DomSanitizer.bypassSecurityTrust{Html,Style,Script,Url,ResourceUrl}` is reported — a plain or
+optional-chained member access or call; a computed member name that is constant, i.e. a string
+literal, a template literal or a `+` chain of those; a bare identifier call; a destructuring,
+computed key included; an import of the name, aliased or not; and any other constant that spells one
+of the five exactly, wherever it appears — a key held in a `const`,
+`Reflect.get(sanitizer, 'bypassSecurityTrustHtml')`, and the inner literal of
+``sanitizer[`${'bypassSecurityTrustHtml'}`]``, because a template literal with expressions is not
+folded and its inner literals are reported instead. A bypass call written inside an inline
+`template:` string is template source rather than AST, so the rule scans that property's value and
+reports it once per property; a `templateUrl` file is outside its scope, because the Angular
+template rules that run over `.html` do not look for a bypass call. A name assembled only at run time (`'bypassSecurity'.concat('TrustHtml')`, `[...].join('')`, a template literal with a runtime part) is not detectable: lint is defence in depth, and the Trusted Types refusal at the DOM sink is the backstop. The same holds for an inline `template:` string that is a template literal with `${}` expressions (the rule only scans a constant string) and for an optional call (`sanitizer.bypassSecurityTrustHtml?.(x)` in an inline template, because the scan looks for the name followed by `(`). The rule's single allow-list is
+a directory named exactly `artifact-viewer-bridge` at any depth below `apps/web/src/app`: the segment
+must match exactly (an `artifact-viewer-bridge-notes.ts` file or a `not-artifact-viewer-bridge/`
+directory stays reportable), `..` is resolved before the check so a path cannot leave the bridge, and
+a path outside `apps/web/src/app/` is never exempt. The allow-list is a lint exemption only, not a
+policy grant: whether the bridge may itself render is the isolated viewer origin's own policy
+question (06.3.3 / 09.4.1-T5, open there). Bind the text with interpolation or `[innerText]` instead.
+
+**Style attributes.** `style-src` has no `unsafe-inline`, so a static `style="…"` attribute in a
+template is blocked by the browser: the declaration is dropped and a `securitypolicyviolation` is
+reported. Write a class in the component stylesheet or a binding such as `[style.width.px]` (CSSOM
+writes are allowed) — the same rule the `style-tokens` lint applies to component styles. Read a
+nonce from the IDL property (`style.nonce`), never `getAttribute('nonce')`, which returns `""` by
+design.
+
+```sh
+npm run e2e -w apps/web    # builds first, then runs Playwright incl. e2e/csp.spec.ts
+npm run test -w apps/web   # unit tests incl. scripts/csp.test.mjs
+```
 
 ## Data access (09.1.1-T3)
 
