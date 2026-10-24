@@ -1,5 +1,5 @@
-/* 09.1.1-T11 adds `@import './styles/tokens.css';` at the top of this file; the scaffold
-   keeps only the two document-level rules that must exist before any token does. */
+@import './styles/tokens.css';
+
 html,
 body {
   margin: 0;

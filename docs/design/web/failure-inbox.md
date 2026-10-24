@@ -1,0 +1,108 @@
+# Failure inbox
+
+Owner approval: pending (B2 / 09.1.1-T11.1)
+
+Flow id: `failure-inbox`
+
+CR-D-2 phase: **G3** ([NAV.md:19–21](../web-ui/output/NAV.md)).
+
+Feature tasks: **09.4.1-T1–T7** (inbox, incident detail, triage, investigation, isolated artifacts, insufficient evidence and restricted artifacts); **13.8.2-T2** adds failure-label/drift-class presentation. Verified in [09.4.1 §10](../../../plans/features/09-web-ui/09.4.1-triage-without-losing-the-original-failure.md) and [plan 13:208–219](../../../plans/13-product-phases.md). Plan 13:76 places 09.4 in G3; the feature header's old M3 is not a different phase.
+
+This is a specification of the existing Web UI v2 mockups, not a replacement wireframe. Screenshot links export the primary page at 1280×800, phase G4, in each requested state/theme/locale. They are review evidence, not proof of owner approval or of a live API integration.
+
+## v2 pages
+
+The phase column comes from NAV.md:19–21; state lists come directly from each page's `data-eg-states` attribute. Source citations below use the linked filename and its source line, not a DOM anchor.
+
+| Page | Role | Phase | Valid `?state=` values |
+| --- | --- | --- | --- |
+| [08 — failure inbox](../web-ui/output/08-failure-inbox/evidgate-failure-inbox.html) | **Primary**: filters, selectable incident rows, read-only preview | G3 | `default`, `loading`, `empty`, `no-match`, `error`, `403`, `401`, `429`, `412`, `stale-review` (evidgate-failure-inbox.html:87) |
+| [09 — incident detail and triage](../web-ui/output/09-failure-detail-triage/evidgate-incident-detail.html) | Original failure, chronology, artifacts, human classification/assignment/close form | G3 | `default`, `loading`, `empty`, `no-match`, `error`, `403`, `401`, `429`, `412`, `saved`, `stale-review` (evidgate-incident-detail.html:49) |
+| [10 — case history](../web-ui/output/10-investigation-history/evidgate-case-history.html) | Revision comparison, immutable attempts, rerun comparison | G3 | `default`, `loading`, `empty`, `error`, `403`, `404`, `401`, `429`, `412` (evidgate-case-history.html:52) |
+
+Shared behavior: [evidgate.js:378–411,530–572,2250–2259](../web-ui/output/assets/evidgate.js) builds review controls, applies `data-eg-show-state`/`data-eg-hide-state`, and accepts only declared query-state names. Locale strings come from `data-vi`/`data-en` (JS:427–432). Preview controls are not product navigation or API actions (JS:403–409).
+
+## Regions
+
+Reading order follows the primary HTML, not a newly drawn layout.
+
+| Order | Region and implementation | Existing component precedent |
+| --- | --- | --- |
+| 1 | Skip link → `.eg-shell`, `[data-eg-nav]`, `.eg-topbar`; project scope, navigation search, phase badge and account menu (evidgate-failure-inbox.html:12–46) | [00-components](../web-ui/output/00-components/evidgate-components.html): shell/nav/topbar sections, lines 151–224 |
+| 2 | `.eg-breadcrumbs`, narrow-view `.eg-banner--desktop`, `.eg-page-header`; primary link is “Triage next incident”, secondary is repair proposals (HTML:49–85) | Gallery `#breadcrumbs`, `#page-header`, `#btn` |
+| 3 | `[data-eg-review]` followed by the five-label/two-drift-class info banner and separate stale-review banner (HTML:87–104) | Gallery `#state` and feedback banners; review selector is shared JS |
+| 4 | Loading skeleton and `.eg-state` panels, before the normal-data stack (HTML:106–155) | Gallery `#state`; `.eg-skeleton` from feedback examples |
+| 5 | `#inbox-filters-title` card; `#incident-filters.eg-toolbar--filters` with search, status, owner, severity, flaky, label and drift selectors; `[data-eg-drift-scope]` temporarily scopes labels to `test_drift`; separate filter no-match panel (HTML:156–180) | Gallery `#toolbar`, fields/selects, `#badge` |
+| 6 | `#incident-results[data-eg-master-detail]` → `#incident-table.eg-table--compact.eg-table--workbench`; columns are incident, outcome, severity, failure label, drift class, owner, context and resulting outcome (HTML:182–267) | Gallery `#table`: compact workbench table, row selection, badges/chips |
+| 7 | `#selected-preview-title` card with `[data-eg-detail-panel="inc-91"…"inc-96"]`; default panel is `inc-92`. `.eg-classification` separates label/source, drift, evidence revision, readiness, reason and proposed next step (HTML:270–380) | Gallery `#classification-title`, `#badge`, `#cards` |
+| 8 | `.eg-pagination`; both Previous/Next disabled in this six-row fixture; illustrative-data footer and keyboard-shortcuts dialog (HTML:384–404) | Gallery `#table`, overlays |
+
+Related flow: page 09 separates original failure, bounded logs, events, artifacts and attempt history from human triage (evidgate-incident-detail.html:66–179). Page 10 separates original failure, evidence-revision changes and passing retry results (evidgate-case-history.html:71–152). Those screens are not additional inbox preview panels.
+
+## States
+
+HTTP meanings are the product contract, not responses generated by these static pages: [00-overview §9.2:330–336](../../../plans/00-overview.md) defines 403 forbidden, 404 not found **also for other-tenant ids**, and 412 precondition failed. A 412 is an ETag/`If-Match` failure on a mutation, never a new incident lifecycle status ([09.4.1:59–60](../../../plans/features/09-web-ui/09.4.1-triage-without-losing-the-original-failure.md)).
+
+State panels use shared [CSS:3063–3139](../web-ui/output/assets/evidgate.css): neutral empty icon, danger error/permission/not-found icon, warning conflict/no-match icon; titles and descriptions wrap. No status is conveyed by color alone: each has text and an icon.
+
+| State | What the primary mockup shows | Available actions | HTTP / problem meaning | Screenshot row: light-vi · dark-vi · light-en · dark-en |
+| --- | --- | --- | --- | --- |
+| default | Filter card, six supplied incidents and selected `inc-92` preview; original FAIL and `ev-3` stay separate from partial context and locator drift (evidgate-failure-inbox.html:155–200,294–309). | Filter/reset, select an incident, open detail/run or repair proposal. Pagination controls remain disabled (HTML:384–386). | Successful supplied-list presentation; not a release decision and not proof that every incident has complete evidence. | ![failure-inbox default light vi](images/failure-inbox/default-light-vi.png) ![failure-inbox default dark vi](images/failure-inbox/default-dark-vi.png) ![failure-inbox default light en](images/failure-inbox/default-light-en.png) ![failure-inbox default dark en](images/failure-inbox/default-dark-en.png) |
+| loading | Card-shaped skeleton, `aria-busy="true"` and screen-reader loading status; normal filters/results hidden (HTML:106–112,155). | Shell/navigation and review controls remain; no list-specific retry or result selection. Header navigation links are still authored above the loading region (HTML:81–84). | Request in flight, no verdict inferred. This is not a server status code. | ![failure-inbox loading light vi](images/failure-inbox/loading-light-vi.png) ![failure-inbox loading dark vi](images/failure-inbox/loading-dark-vi.png) ![failure-inbox loading light en](images/failure-inbox/loading-light-en.png) ![failure-inbox loading dark en](images/failure-inbox/loading-dark-en.png) |
+| empty | “No incidents in this fixture”; neutral empty panel explicitly says an empty inbox is not a release decision; normal list hidden (HTML:115–119,155). | No empty-panel CTA; existing header/shell navigation remains. | Successful empty collection, not an unknown/foreign-id response, not PASS. | ![failure-inbox empty light vi](images/failure-inbox/empty-light-vi.png) ![failure-inbox empty dark vi](images/failure-inbox/empty-dark-vi.png) ![failure-inbox empty light en](images/failure-inbox/empty-light-en.png) ![failure-inbox empty dark en](images/failure-inbox/empty-dark-en.png) |
+| error | “The failure inbox could not be loaded”; copy retains filters and states nothing was classified/linked/changed; list hidden (HTML:126–131,155). | “Retry” switches the local specimen to default; no real request or automatic retry is demonstrated (HTML:130; JS:1709–1711). | Load failure. No particular 5xx/error code is supplied by this specimen; render the real error envelope rather than inventing one. | ![failure-inbox error light vi](images/failure-inbox/error-light-vi.png) ![failure-inbox error dark vi](images/failure-inbox/error-dark-vi.png) ![failure-inbox error light en](images/failure-inbox/error-light-en.png) ![failure-inbox error dark en](images/failure-inbox/error-dark-en.png) |
+| 403 | Permission panel: “You cannot read incidents in this project”; metadata, outcomes and previews hidden by the data-stack gate (HTML:132–136,155). | Ask a project owner for access (instruction, not a rendered request-access button). Header navigation remains; no list triage form appears. | Forbidden: required permission missing. The plan's permission is `healing:triage`, not a new `incident-read` permission. Related triage mutation elements are hidden by shared read-only CSS; where an authored disabled control is used, preserve it as disabled, not an enabled control followed by a toast (see Open points). Foreign-tenant ids instead use 404. | ![failure-inbox 403 light vi](images/failure-inbox/403-light-vi.png) ![failure-inbox 403 dark vi](images/failure-inbox/403-dark-vi.png) ![failure-inbox 403 light en](images/failure-inbox/403-light-en.png) ![failure-inbox 403 dark en](images/failure-inbox/403-dark-en.png) |
+| 412 | Conflict panel says triage changed; reason draft retained, no auto-merge or overwrite, normal list hidden (HTML:147–155). | “Reload current triage” explicitly switches to default (HTML:151); no automatic resubmission. | Stale ETag/`If-Match` precondition on linked label/close mutation, not a GET-list response and not a tenant-disclosure error. | ![failure-inbox 412 light vi](images/failure-inbox/412-light-vi.png) ![failure-inbox 412 dark vi](images/failure-inbox/412-dark-vi.png) ![failure-inbox 412 light en](images/failure-inbox/412-light-en.png) ![failure-inbox 412 dark en](images/failure-inbox/412-dark-en.png) |
+
+Additional declared primary-page states:
+
+- `no-match`: filters remain; results/preview hidden, with “Show supplied incidents” reset-to-default action; live filter no-match has its own “Clear filters” control (HTML:120–125,173–177,182).
+- `401`: session-expired panel; copy retains filters/selection and requests sign-in; no automatic classification (HTML:137–141).
+- `429`: explicit rate-limit message with retained filters and no classification changes; no inline retry button in this panel (HTML:142–146); the real interval is server `Retry-After` (00 §9.2).
+- `stale-review`: extra retained-reason warning plus the normal inbox, pointing reviewers to the shared 412 rule (HTML:98–104,155).
+
+Foreign-id review is on page 10's declared `404` specimen (evidgate-case-history.html:64), not `?state=404` on the primary page: undeclared query states are ignored by JS:2257–2259.
+
+Screenshot method: the coordinated capture slice enters states through the shared `[data-eg-review-state]` selector, not the query-string entry path. This preserves the actual inbox header. [OPEN] Query entry is not equivalent: `?state=empty` globally rewrites title/breadcrumb/description/meta to unrelated “New manual case” draft copy ([JS:2260–2305](../web-ui/output/assets/evidgate.js)). That is a read-only-reference defect, not an inbox requirement; the images retain the selector-path source behavior.
+
+## Copy length (vi vs en)
+
+Measured by a throwaway Python `HTMLParser` extraction of the primary HTML: decode entities, strip tags, select localized descendants of `h1`–`h6`, `button`, `th`, `.eg-btn` and `.eg-badge`, include hidden specimens, deduplicate identical vi/en pairs, count Unicode code points with `len`, sort by descending vi length (source order breaks ties). Body descriptions, field labels and script-generated shell copy are outside this sample. Ratio = vi count / en count; this is text length, not rendered width.
+
+| Source line | Longest vi string | vi chars | Matching en string | en chars | vi/en |
+| --- | --- | --- | --- | --- | --- |
+| 297 | “inc-92 · Hết thời gian bộ định vị địa chỉ giao hàng bắt buộc” | 60 | “inc-92 · Required delivery address locator timeout” | 50 | 1.200 |
+| 315 | “inc-93 · Tương tác trường mã giảm giá đã thay đổi” | 49 | “inc-93 · Discount field interaction changed” | 43 | 1.140 |
+| 367 | “inc-96 · Đang chờ so sánh ngôn ngữ trên di động” | 47 | “inc-96 · Mobile locale comparison pending” | 41 | 1.146 |
+| 333 | “inc-94 · Người dùng mồi không khả dụng” | 38 | “inc-94 · Seed user unavailable” | 30 | 1.267 |
+| 350 | “inc-95 · Ảnh chụp đơn hàng không khớp” | 37 | “inc-95 · Order snapshot mismatch” | 32 | 1.156 |
+
+These are preview headings, including hidden selections, not five simultaneously visible labels. The mockup uses natural heading wrapping, `.eg-page-header__title { overflow-wrap: anywhere }`, wrapping badge labels, and wrapping classification values ([CSS:613–618,1066–1069,3910–3920](../web-ui/output/assets/evidgate.css)). Buttons and table headers stay `nowrap` (CSS:992–996,2893–2899); the workbench table scrolls **inside** its wrapper above mobile (CSS:2849–2873). There is no primary-page ellipsis/tooltip contract on these five headings; do not truncate them into inaccessible clipped text. [INFERENCE] Character ratios alone cannot establish overflow at a particular viewport.
+
+## Responsive notes
+
+- **1280 and wider:** expanded navigation is the default shell mode; the inbox itself remains vertically stacked filters → table → preview (`.eg-stack`, HTML:155,182), not a newly invented side-by-side master-detail layout. The table's `900px` minimum may use local horizontal scrolling. Row hover/selected/focus feedback is shared (CSS:2871–2873,2914–2931).
+- **768–1279:** icon-rail navigation; content padding changes to `--eg-space-6` (CSS:4029–4032). Inbox reading order remains stacked. Keep local table overflow bounded, not page-wide.
+- **Below 768:** drawer navigation; the desktop-required/read-only banner appears. Page header stacks, actions retain intrinsic sizing, topbar scope hides, search moves to its own row, controls use touch-target sizing (CSS:4143–4219). Filters and the read-only preview remain inspectable as the banner promises (HTML:61–65). Tables become labeled block rows; headers hide, `td::before` uses localized `data-label`, and table minimum width is removed (CSS:4266–4355). Classification facts become two columns, then one at ≤420px (CSS:3970–4002). Mutation elements hide (CSS:4200–4202); this does not turn list filtering into a mutation.
+- **360px requirement:** preserve no page-level horizontal scroll. These are source-defined rules, not an exercised viewport pass; long nonwrapping header links and all locale/state combinations still need the orchestrator's visual check. Shared JS sets nav mode, not this document.
+
+## Invariants
+
+- **Original failure is never overwritten:** the preview retains FAIL/run/evidence identifiers while changing selection/classification context (HTML:185–186,294–309); page 09 keeps original and retry separate (HTML:120–125); page 10 keeps raw failed history beside passing retry results (HTML:80–89,134–152). This implements [DECISIONS §5.3](../../../DECISIONS.md) and 09.4.1 AC4, not a promise that the static fixture writes to storage.
+- **Completeness ≠ outcome ≠ release decision:** context readiness and test outcome occupy distinct cells/facts, and the banner explicitly forbids a release verdict (primary HTML:89–95,193–200,300–304). Empty inbox is never PASS (HTML:117–118).
+- **Labels and drift classes remain distinct:** only `test_drift` can branch to locator repair or manual-case review; product/environment/data/unknown do not gain fabricated repair links (HTML:92–93,168–169,364–377).
+- **Missing context is not permission to heal:** missing last-green comparison remains unknown with no repair (HTML:369–377). Pending must be verdict-free and neutral; the current pending-color mismatch is recorded below, not silently endorsed.
+- **Artifacts remain access-gated:** related page 09 supplies restricted DOM and metadata-only trace rows without open controls, versus a ready artifact's viewer link (HTML:111–117). Production isolation and absence of download requests require the integration checks, not this same-origin static link.
+
+## Open points
+
+- [OPEN] **09.4.1 AC1 / T1:** the primary fixture exposes client-side filtering and disabled cursor-page-1 navigation (HTML:162–177,384–386); URL-persisted filters/cursor and large-list virtualization are not demonstrated. The application must implement the plan, not treat the fixture as proof of persistence.
+- [OPEN] **AC2 / T2:** page 09 provides a root-assertion block and specimen chronology/logs (evidgate-incident-detail.html:78–108), but no separately named infrastructure-error block or infra-only specimen. Keep root and infrastructure errors separate and never invent root content.
+- [OPEN] **AC3 / AC4 / T3:** page 09's single local “Save triage” form combines label, assignee and optional close selection (HTML:154–170). It does not demonstrate the distinct label/close SDK calls, required close reason, open→close 409 “label first”, or persisted immutable failure after each write. These are specified by 09.4.1:59–60, not new contracts to infer from form layout.
+- [OPEN] **AC5 / T4:** page 10 depicts per-case status/message/artifact differences and separate retry rows (HTML:92–151), but real revision selection and the exact `#attempt-<execution_key>-<n>` deep-link navigation are not evidenced by its static links. Preserve this distinction when implementing.
+- [OPEN] **AC6 / AC9 / T5/T7:** page 09's restricted row says no preview/fetch but does not name `artifact:read_sensitive` or show a distinct scan-pending row (HTML:115–116). Isolated-origin bridge, metadata-driven `content_gated`, zero download-url calls, URL-expiry refresh and download fallback are integration obligations; same-origin mockup links do not prove them.
+- [OPEN] **AC7 / T6:** unknown/missing-comparison and partial-context specimens exist, but named unknown-status/missing-artifact/stale-epoch branches with a fix action per reason are not all present. Do not collapse them into empty or PASS.
+- [OPEN] **AC8 / permission presentation:** primary 403 copy calls access “incident-read” while 09.4.1:35,52–60 uses `healing:triage`. Page 09's 403 copy promises readable evidence (HTML:60), but its parent hides the entire detail at 403 (HTML:66). Shared CSS hides mutation elements (CSS:3715–3717); 09.4.1 §8/§11 specifically expects disabled controls for unauthorized roles. Resolve read denial versus read-only mutation denial and disabled-versus-hidden presentation before implementation; do not invent a permission or copy the contradiction.
+- [OPEN] **Pending neutrality:** primary `inc-96` uses warning color for “Comparison pending” (HTML:366); the missing-evidence outcome stays non-PASS, but the requested neutral pending palette is not consistently used. Preserve the reference screenshot and resolve the token-role mismatch rather than redesigning it here.
+- [OPEN] **404 coverage:** the primary list's `empty` is a real empty collection; page 09 declares no `404` review state (HTML:49), while page 10 does. The implemented foreign-tenant detail route must use the same not-found pattern as an unknown id, never 403 or an empty inbox.
+- [OPEN] Owner B2 approval remains pending; this file records source evidence and gaps, not approval. Visual, keyboard and screen-reader acceptance is not claimed: the screenshots are static captures of the v2 mockup; approval of the flow is the owner action recorded in the header.
