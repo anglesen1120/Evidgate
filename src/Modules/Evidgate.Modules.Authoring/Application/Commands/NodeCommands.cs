@@ -83,7 +83,10 @@ internal sealed class CreateNodeCommandValidator : AbstractValidator<CreateNodeC
 /// advisory lock (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>), and a renumber of that group takes the same
 /// lock before it locks the sibling rows. Two concurrent creates therefore append one after the other instead of both
 /// sending the same number — the loser used to answer <c>422 position_taken</c> for a position it never sent — and a
-/// renumber can never park a moved row onto the value this insert is about to take.
+/// renumber can never park a moved row onto the value this insert is about to take. A writer that does not take the group
+/// lock (a position-only <c>PATCH</c> of the same group) can still commit the append position first: the refusal then
+/// names <c>/position</c>, which this request never sent, so it answers the retryable <c>503 unavailable</c> instead
+/// (review NEW-2).
 /// </remarks>
 [AuditedAction("authoring.node.create")]
 [Permission(Permissions.Authoring.Write)]
@@ -155,6 +158,7 @@ internal sealed class CreateNodeCommandHandler(
             return Result.Failure<CreateNodeResponse>(NodeLimits.Refusal());
         }
 
+        var positionWasDefaulted = command.Position is null;
         var position = command.Position ?? group?.NextPosition ?? 0;
 
         if (position is < 0 or > AuthoringVersionWriter.MaximumSiblingPosition)
@@ -183,7 +187,15 @@ internal sealed class CreateNodeCommandHandler(
         {
             // §5 route 2 names `/position` (AC2) and AC1 names `/parent_id`: the writer reports one change's members under
             // its batch envelope, so the single-change prefix is dropped at this edge.
-            return Result.Failure<CreateNodeResponse>(AuthoringErrors.RequestFacing(written.Error!));
+            var refusal = AuthoringErrors.RequestFacing(written.Error!);
+
+            // This handler chose the position itself (an append after the group's maximum). A writer that commits that
+            // number anyway — a position-only PATCH of the same group takes no group lock (review NEW-2) — refuses a
+            // member the caller never sent, so the answer is the retryable 503 of §5, not a 422 of the request.
+            return Result.Failure<CreateNodeResponse>(
+                positionWasDefaulted && AuthoringErrors.IsPositionTaken(refusal)
+                    ? AuthoringErrors.Unavailable()
+                    : refusal);
         }
 
         var version = written.Value.Versions.Count > 0 ? written.Value.Versions[0].VersionNo : 1;
@@ -348,14 +360,15 @@ internal sealed class UpdateNodeCommandHandler(
         // spurious `position_taken` for a number the caller never chose. The append position is read under the target
         // group's lock of this call, so it cannot meet a renumber's parked value.
         var parentId = command.ParentId ?? stored.ParentId;
-        int position;
+        var moves = parentId != stored.ParentId;
+        int? appendedPosition = null;
 
-        if (command.Position is { } explicitPosition)
+        if (moves)
         {
-            position = explicitPosition;
-        }
-        else if (parentId != stored.ParentId)
-        {
+            // The cap belongs to the target group, not to the position: a move-in at an explicit position grows the
+            // group exactly like an append does (review N1), and a group past the cap could never be renumbered again
+            // because the reorder refuses more than NodeLimits.MaximumSiblingsPerGroup ids. A same-group PATCH therefore
+            // never reaches this read.
             var group = await db.QuerySingleOrDefaultAsync<AuthoringSql.NodeGroupRow>(
                 AuthoringSql.NodeGroupSummary(parentId is null),
                 new { org_id = orgId, project_id = command.ProjectId, parent_id = parentId },
@@ -366,12 +379,13 @@ internal sealed class UpdateNodeCommandHandler(
                 return Result.Failure<AuthoringChangeResponse>(NodeLimits.Refusal());
             }
 
-            position = group?.NextPosition ?? 0;
+            appendedPosition = group?.NextPosition ?? 0;
         }
-        else
-        {
-            position = stored.Position;
-        }
+
+        // True when this handler picked the number: the append position of a move-in. A same-group PATCH never does — it
+        // keeps the row's own position unless the caller sends one.
+        var positionWasDefaulted = moves && command.Position is null;
+        var position = command.Position ?? appendedPosition ?? stored.Position;
 
         if (position is < 0 or > AuthoringVersionWriter.MaximumSiblingPosition)
         {
@@ -396,7 +410,16 @@ internal sealed class UpdateNodeCommandHandler(
         {
             // Route 3's members are `/title`, `/parent_id` and `/position`; the writer's `/changes/0/content/` prefix is
             // its batch envelope, not this route's request.
-            return Result.Failure<AuthoringChangeResponse>(AuthoringErrors.RequestFacing(outcome.Error!));
+            var refusal = AuthoringErrors.RequestFacing(outcome.Error!);
+
+            // A move-in without a position appends at the number this handler read under the target group's lock; a
+            // position-only PATCH of that group takes no group lock (review NEW-2), so it can commit the number in
+            // between and make the writer refuse `/position` — a member this caller never sent. That is the retryable
+            // 503 of §5, not a 422 of the request.
+            return Result.Failure<AuthoringChangeResponse>(
+                positionWasDefaulted && AuthoringErrors.IsPositionTaken(refusal)
+                    ? AuthoringErrors.Unavailable()
+                    : refusal);
         }
 
         if (outcome.Value.Versions.Count == 0)

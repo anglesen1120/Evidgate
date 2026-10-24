@@ -56,12 +56,32 @@ internal static class AuthoringErrors
         ApiErrorCode.QuotaExceeded,
         "this project has used every manual case code it can allocate");
 
-    /// <summary>503 <c>unavailable</c>: the counter lock was held past the 5 s <c>lock_timeout</c> (§4).</summary>
+    /// <summary>
+    /// 503 <c>unavailable</c>: another writer held what this request needed past the 5 s <c>lock_timeout</c> (§4) — the
+    /// manual case code counter, a sibling group's advisory lock, a row this command had to lock, or a deadlock between
+    /// any of them — so the answer names the contention, not one particular resource.
+    /// </summary>
     internal static Error Unavailable() => new(
         ApiErrorCode.Unavailable,
-        "the code counter is being changed by another request; retry shortly",
+        "the resource is being changed by another request; retry shortly",
         503,
         Retryable: true);
+
+    /// <summary>
+    /// True when a request-facing writer failure is AC2's <c>position_taken</c> on the route's own <c>/position</c>
+    /// member: the one refusal that can be a lost race rather than a fault of the request, when the handler chose the
+    /// position instead of the caller (review NEW-2).
+    /// </summary>
+    /// <param name="error">A failure already rebased by <c>RequestFacing</c>.</param>
+    internal static bool IsPositionTaken(Error error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+
+        return string.Equals(error.Code, ApiErrorCode.RequestInvalid, StringComparison.Ordinal)
+            && error.Details is { Count: > 0 } details
+            && details.Any(detail => string.Equals(detail.Path, "/position", StringComparison.Ordinal)
+                && string.Equals(detail.Reason, "position_taken", StringComparison.Ordinal));
+    }
 
     /// <summary>404 for an entity that is gone or belongs to another project (AC10's indistinguishability).</summary>
     /// <param name="kind">Which entity was addressed.</param>

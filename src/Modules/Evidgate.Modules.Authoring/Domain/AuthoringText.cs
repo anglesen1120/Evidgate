@@ -151,8 +151,11 @@ internal static class AuthoringText
     /// <returns>The name unchanged when it fits, the clipped form otherwise.</returns>
     public static string Brief(string text, int limit = MaximumEchoedNameLength)
     {
+        // The clip is decided here, not from the builder's length: an astral Format rune becomes one "?" (two UTF-16
+        // units → one), so a builder that shrank does not mean anything was dropped (review N4).
+        var clipped = text.Length > limit;
         var builder = new StringBuilder(Math.Min(text.Length, limit));
-        foreach (var rune in (text.Length <= limit ? text : Truncate(text, limit)).EnumerateRunes())
+        foreach (var rune in (clipped ? Truncate(text, limit) : text).EnumerateRunes())
         {
             var echoable = Rune.IsControl(rune) || Rune.GetUnicodeCategory(rune) == UnicodeCategory.Format
                 ? "?"
@@ -160,7 +163,7 @@ internal static class AuthoringText
             builder.Append(echoable);
         }
 
-        return builder.Length < text.Length ? builder + "…" : builder.ToString();
+        return clipped ? builder.Append('…').ToString() : builder.ToString();
     }
 
     /// <summary>The longest prefix of <paramref name="text"/> with at most <paramref name="maxChars"/> UTF-16 units that ends on a rune boundary.</summary>

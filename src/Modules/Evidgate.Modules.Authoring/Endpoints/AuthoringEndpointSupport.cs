@@ -27,6 +27,9 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// <b>The contract the three route files may rely on</b> (do not add a member without updating this block):
 /// <list type="bullet">
 /// <item><c>internal const int BodyCap = 64 * 1024</c> — the route-body cap of 13.1.1 §8/AC16.</item>
+/// <item><c>internal const int InitialUndeclaredBodyBytes = 4 * 1024</c> — the buffer a body of undeclared length (a
+/// chunked body, or a bodiless request that sends no <c>Content-Length</c>) starts at; the read grows it as chunks
+/// arrive, never past the cap.</item>
 /// <item><c>internal const int DefaultLimit = 50</c> / <c>MaxLimit = 200</c> — the list default and bound (00 §9.1).</item>
 /// <item><c>AuthoringText.MaximumEchoedNameLength = 64</c> — the longest caller-supplied name that reaches a
 /// <c>details[].path</c> segment; every echo goes through <c>AuthoringText.Brief</c>, which clips a longer name with an
@@ -65,6 +68,13 @@ internal static class AuthoringEndpointSupport
 {
     /// <summary>The route-body cap of 13.1.1 §8 (AC16): every authoring route body is at most 64 KiB.</summary>
     internal const int BodyCap = 64 * 1024;
+
+    /// <summary>
+    /// The buffer a body of undeclared length starts at (review N2): a chunked body, or a request with no body at all —
+    /// a bodiless <c>DELETE</c> sends no <c>Content-Length</c> either — grows the stream as chunks arrive instead of
+    /// presizing it to <see cref="BodyCap"/> before a single byte is read.
+    /// </summary>
+    internal const int InitialUndeclaredBodyBytes = 4 * 1024;
 
     /// <summary>The list default (00 §9.1, the <c>CatalogEndpoints.DefaultLimit</c> value).</summary>
     internal const int DefaultLimit = 50;
@@ -358,16 +368,16 @@ internal static class AuthoringEndpointSupport
             return (default, TooLarge(maxBytes));
         }
 
-        // The buffer is sized up front to the body it may hold (the declared length, or the cap for a chunked body),
-        // and every chunk is measured BEFORE it is written: a streamed body of any size therefore never allocates more
-        // than the cap, while `MemoryStream`'s own doubling would reach 128 KiB — a large-object-heap buffer — for a
-        // body of a few bytes over 64 KiB before the old post-write check could refuse it.
-        var capacity = maxBytes;
+        // A declared length is the body's exact size (a longer one was refused above, so it never exceeds the cap), so the
+        // buffer is sized up front and a within-cap body never grows the stream. A body of undeclared length — a chunked
+        // body, or a request that sends no `Content-Length` at all, e.g. a bodiless DELETE — starts small and grows as
+        // chunks arrive, because every chunk is measured BEFORE it is written: the stream never writes past the cap, and
+        // with 8 KiB chunks its doubling tops out at the 64 KiB cap itself, never at the 128 KiB large-object-heap buffer
+        // the old post-write check let a body a few bytes over the cap reach.
+        var capacity = Math.Min(maxBytes, InitialUndeclaredBodyBytes);
         if (context.Request.ContentLength is { } declaredLength)
         {
-            // A declared length is the body's exact size (a longer one was refused above, so it never exceeds the cap):
-            // sizing the buffer to it means a within-cap body never grows the stream, and a bodiless request allocates
-            // nothing. Only a chunked request, whose length is unknown, may hold the cap.
+            // A declared length of 0 is a bodiless request, which then allocates nothing.
             capacity = declaredLength <= 0 ? 0 : (int)declaredLength;
         }
 

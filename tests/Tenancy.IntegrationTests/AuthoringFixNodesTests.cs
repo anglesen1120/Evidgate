@@ -180,9 +180,10 @@ public sealed class AuthoringFixNodesTests
     }
 
     /// <summary>
-    /// AC2/review F5-perf F9: the reorder refuses more than 1 000 ids, so a group must never grow past 1 000 — the create
-    /// and the move-in answer <c>422 request_invalid</c>, <c>details[].path = /parent_id</c>,
-    /// <c>details[].reason = children_limit_exceeded</c>, and the group is left as it was.
+    /// AC2/review F5-perf F9/N1: the reorder refuses more than 1 000 ids, so a group must never grow past 1 000 — the
+    /// create and the move-in (with or without an explicit <c>position</c>) answer <c>422 request_invalid</c>,
+    /// <c>details[].path = /parent_id</c>, <c>details[].reason = children_limit_exceeded</c>, and the group is left as it
+    /// was.
     /// </summary>
     [Fact]
     public async Task GroupAtSiblingCap_RefusesCreateAndMoveIn()
@@ -228,6 +229,21 @@ public sealed class AuthoringFixNodesTests
         moveIn.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         moveIn.Paths().ShouldContain("/parent_id");
         moveIn.Reasons().ShouldContain("children_limit_exceeded");
+
+        // Review N1: the cap belongs to the target group, not to the position the request happens to carry, so a move-in
+        // at an explicit position is refused the same way — otherwise a caller could push a group past 1 000 with a
+        // `PATCH {parent_id, position}`, and the reorder of that group would then refuse the whole set forever.
+        var moveInAtPosition = await AuthoringCalls.SendAsync(
+            world.Client,
+            world.As,
+            HttpMethod.Patch,
+            world.NodeUrl(mover),
+            JsonSerializer.Serialize(new { parent_id = full, position = 5 }),
+            ifMatch: "\"1\"");
+        moveInAtPosition.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        moveInAtPosition.Body!.Value.GetProperty("error").GetProperty("code").GetString().ShouldBe("request_invalid");
+        moveInAtPosition.Paths().ShouldContain("/parent_id");
+        moveInAtPosition.Reasons().ShouldContain("children_limit_exceeded");
 
         // Nothing moved: the group still holds exactly the seeded rows and the mover still sits under `other`.
         (await AuthoringCalls.TreeAsync(world.Client, world.As, world.Project, nodeId: full))
@@ -445,5 +461,71 @@ public sealed class AuthoringFixNodesTests
         var error = refused.Body!.Value.GetProperty("error");
         error.GetProperty("code").GetString().ShouldBe("unavailable");
         error.GetProperty("retryable").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// AC2/review F1/N5: the sibling group's advisory lock is the serialisation a create and a renumber of one group
+    /// share, and a holder that never commits must answer the retryable <c>503 unavailable</c> of §5 instead of parking
+    /// the request. A second connection takes
+    /// <c>pg_advisory_xact_lock(hashtextextended('authoring_group:&lt;project&gt;:root', 0))</c> — the exact key
+    /// <c>AuthoringLockGuard.SiblingGroupKey</c> builds for the root group — so both requests wait the real 5 s
+    /// <c>lock_timeout</c> out; nothing here depends on a race landing. Once the holder rolls back, the same request
+    /// succeeds, which also proves the answer was the lock and not a broken route.
+    /// </summary>
+    [Fact]
+    public async Task GroupAdvisoryLock_HeldByAnotherWriter_CreateAndReorderAnswer503()
+    {
+        await using var world = await StartAsync();
+
+        var first = await CreateAsync(world, null, "module", "First");
+        var second = await CreateAsync(world, null, "module", "Second");
+        var tree = await AuthoringCalls.TreeAsync(world.Client, world.As, world.Project);
+        tree.Status.ShouldBe(HttpStatusCode.OK);
+
+        // A second, superuser connection holds the root group's advisory lock for the whole of both requests.
+        await using var holder = await _fixture.OpenSuperuserAsync(world.Database);
+        await using var locking = await holder.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        await using (var take = holder.CreateCommand())
+        {
+            take.Transaction = locking;
+            // `pg_advisory_xact_lock` is void, and Npgsql maps a void result to CLR null, so the lock is taken through
+            // a subquery and read as `count(*)` (bigint, never null): a count of 1 proves the statement ran — it cannot
+            // have waited, because this connection is the one taking the key.
+            take.CommandText = "select count(*) from (select pg_advisory_xact_lock(hashtextextended('authoring_group:"
+                + world.Project.ToString("D", CultureInfo.InvariantCulture)
+                + ":root', 0))) as held";
+            Convert.ToInt64(
+                    await take.ExecuteScalarAsync(TestContext.Current.CancellationToken),
+                    CultureInfo.InvariantCulture)
+                .ShouldBe(1L);
+        }
+
+        // Both keys of that one lock: a create of the root group and the reorder of it. Neither is given a way out early,
+        // so the bounded wait decides each answer.
+        var create = AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, null, "module", "Blocked");
+        var reorder = AuthoringCalls.SendAsync(
+            world.Client,
+            world.As,
+            HttpMethod.Post,
+            world.ReorderUrl(first),
+            JsonSerializer.Serialize(new { ordered_ids = new[] { second, first } }),
+            ifMatch: tree.ETag);
+
+        var answers = await Task.WhenAll(create, reorder)
+            .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        await locking.RollbackAsync(TestContext.Current.CancellationToken);
+
+        foreach (var refused in answers)
+        {
+            refused.Status.ShouldBe(HttpStatusCode.ServiceUnavailable);
+            var error = refused.Body!.Value.GetProperty("error");
+            error.GetProperty("code").GetString().ShouldBe("unavailable");
+            error.GetProperty("retryable").GetBoolean().ShouldBeTrue();
+        }
+
+        // The lock is released: the refused create now lands, so the 503 was the holder and nothing else.
+        var retried = await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, null, "module", "Blocked");
+        retried.Status.ShouldBe(HttpStatusCode.Created);
     }
 }
