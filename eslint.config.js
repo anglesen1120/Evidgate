@@ -12,6 +12,13 @@
 // plan owns them — they remain open for 09.1.1 AC3.
 const tseslint = require('typescript-eslint');
 const angular = require('angular-eslint');
+// 09.1.1-T11.4 (AC9): @eslint/css is ESM-only, so its default export arrives through
+// `require()` as `.default` (Node's require(esm), available since 22.12 — this repo pins
+// Node 26 in .nvmrc, and the package's own engines are ^20.19 || ^22.13 || >=24).
+const css = require('@eslint/css').default;
+// The local `style-tokens` plugin: `no-raw-literals` for component .css files and
+// `no-raw-literals-inline` for the `styles: [...]` strings of an `@Component`.
+const styleTokens = require('./apps/web/eslint-rules/style-tokens.js');
 
 // 09.1.1-T1: the Angular TypeScript rule set, shared by the application sources and the
 // spec project below so a TestBed host component is held to the same rules as the app.
@@ -56,6 +63,10 @@ module.exports = tseslint.config(
     // against the no-emit tsconfig.spec.json projects instead.
     ignores: ['**/*.test.ts', '**/*.spec.ts', '**/vitest.config.ts', '**/playwright.config.ts'],
     extends: [tseslint.configs.recommendedTypeChecked, ...angularTsRecommended],
+    // 09.1.1-T11.4 (AC9): a component style may live inline in `styles: [...]` instead of a
+    // .css file, so the same raw-literal contract is enforced on those strings here. See
+    // the CSS block below for the stylesheet half of the rule.
+    plugins: { 'style-tokens': styleTokens },
     // 09.1.1-T1: component templates written inline in `@Component` are extracted so the
     // angular template rules (the `*/deprecated-*` and control-flow checks) see them too.
     processor: angular.processInlineTemplates,
@@ -67,6 +78,8 @@ module.exports = tseslint.config(
     },
     rules: {
       ...typescriptRules,
+      // AC9: no raw colour/spacing literal in an inline component style.
+      'style-tokens/no-raw-literals-inline': 'error',
       // W2: standalone components/directives/pipes only, no empty lifecycle hook left behind
       // by a schematic, and no component opting out of OnPush. Since Angular 22 the default
       // strategy *is* OnPush (`ChangeDetectionStrategy.Default` was renamed `Eager`), so the
@@ -106,6 +119,24 @@ module.exports = tseslint.config(
     },
   },
   {
+    // 09.1.1-T11.4 (AC9): component styles may reference the design tokens only. `tokens.css`
+    // is the single file allowed to hold raw colour/spacing values, so it is exempt; every
+    // other stylesheet under apps/web is checked by the local `style-tokens` plugin. The
+    // @eslint/css language parses the file, no built-in css/* rule is enabled (the contract
+    // names only this rule, and enabling more would fail unrelated CSS).
+    // `@media` / `@container` / `@supports` PRELUDES are never checked by the rule: CSS
+    // cannot read a custom property in a condition, so `--eg-bp-tablet`/`--eg-bp-desktop`
+    // are documented literal mirrors (docs/design/web/layout.md). Declarations inside those
+    // blocks are still checked.
+    files: ['apps/web/**/*.css'],
+    ignores: ['apps/web/src/styles/tokens.css'],
+    plugins: { css, 'style-tokens': styleTokens },
+    language: 'css/css',
+    rules: {
+      'style-tokens/no-raw-literals': 'error',
+    },
+  },
+  {
     files: ['packages/**/*.{ts,tsx}'],
     // 01.6.1-T1.2 / 01.6.1-T5.1: the same spec/config exclusion as the apps/web block above.
     ignores: ['**/*.test.ts', '**/*.spec.ts', '**/vitest.config.ts', '**/playwright.config.ts'],
@@ -130,6 +161,7 @@ module.exports = tseslint.config(
     files: [
       'vitest.config.ts',
       'vitest.config.base.mts',
+      'apps/web/eslint-rules/vitest.config.mts',
       '**/*.test.ts',
       '**/*.spec.ts',
       '**/vitest.config.ts',
