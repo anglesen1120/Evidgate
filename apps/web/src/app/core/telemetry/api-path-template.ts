@@ -3,12 +3,11 @@
 //
 // A concrete API URL names a customer's project, run or artifact in its path, so it can never
 // leave the app as an attribute. `apiPathTemplate` maps the URL onto the shape of the route
-// the server actually served: the static words of the recorded contract are kept, every
-// other segment becomes `:id`. `KNOWN_API_SEGMENTS` is that set of static words, taken from
-// `core/http/testing/openapi-operations.fixture.json` (recorded from `contracts/openapi.yaml`
-// by `apps/web/scripts/record-openapi-fixture.mjs`, paths relative to `/v1`); the spec reads
-// that fixture and fails when a new operation introduces a static word this set lacks, so an
-// API addition cannot silently turn a whole path into `:id`s or leak a real word.
+// the server actually served: the static words of the contract are kept, every other segment
+// becomes `:id`. `KNOWN_API_SEGMENTS` is that set of static words; the spec reads
+// `contracts/openapi.yaml` and fails when a path introduces a static word this set lacks, or the
+// set keeps a word the contract no longer has, so an API addition cannot silently turn a whole
+// path into `:id`s or leak a real word.
 import { API_BASE_PATH } from '../http/api-origin';
 
 /** The segment every non-static API path segment becomes. */
@@ -18,18 +17,81 @@ const ID_SEGMENT = ':id';
 export const UNPARSED_API_PATH = `${API_BASE_PATH}/unparsed`;
 
 /**
- * Static words of the recorded API surface (fixture paths are relative to `/v1`):
- * `/projects/{p}/runs`, `/projects/{p}/manifests`, `/runs/{r}`, `/runs/{r}/cancel`,
- * `/artifacts/{a}/complete`. Hand-maintained; the drift check in `api-path-template.spec.ts`
- * is what keeps it honest.
+ * Static words of the whole API surface in `contracts/openapi.yaml` (paths relative to `/v1`):
+ * `/orgs/{o}/projects`, `/projects/{p}/runs`, `/runs/{r}/cancel`, `/permissions`, … The shell
+ * calls the identity routes (`orgs`, `permissions`, `projects`) as well as the run routes, so the
+ * set is the contract's, not only the six operations the web fixture records. Hand-maintained;
+ * the drift check in `api-path-template.spec.ts` compares it with the contract in both directions.
  */
 export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
+  'agents',
+  'approve',
   'artifacts',
+  'audit',
+  'authoring',
   'cancel',
+  'candidates',
+  'cases',
+  'checklist-items',
+  'ci',
+  'ci-bindings',
+  'claim',
+  'comparison',
   'complete',
+  'decision',
+  'diff',
+  'download-url',
+  'drafts',
+  'dry-run',
+  'environment-revisions',
+  'environments',
+  'events',
+  'export',
+  'finalize',
+  'github',
+  'healing',
+  'heartbeat',
+  'incidents',
+  'ingest-tokens',
+  'item',
+  'jobs',
+  'label',
+  'ledger',
   'manifests',
+  'manual-cases',
+  'memberships',
+  'nodes',
+  'orgs',
+  'permissions',
+  'policies',
+  'policy-activation',
   'projects',
+  'pull-request',
+  'quarantine',
+  'reject',
+  'releases',
+  'reorder',
+  'reports',
+  'reprocess',
+  'rerun',
+  'revisions',
+  'revoke',
+  'roles',
+  'rotate',
   'runs',
+  'security-events',
+  'state',
+  'suite-revisions',
+  'suites',
+  'summary',
+  'support-grants',
+  'switch',
+  'token',
+  'tree',
+  'upload-url',
+  'usage',
+  'waivers',
+  'webhooks',
 ]);
 
 /**

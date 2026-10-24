@@ -100,6 +100,9 @@ function scrubbedEvents(events: readonly TimedEvent[]): TimedEvent[] {
   return events.filter((event) => EVENT_NAMES.has(event.name)).map(scrubbedEvent);
 }
 
+/** A build version (`1.2.3`, `2.0.0-rc.1+abc`); anything else on a scope is content, not a version. */
+const SCOPE_VERSION = /^[0-9A-Za-z.+-]{1,32}$/;
+
 /**
  * The export copy of one span. Contexts are captured as values (`spanContext` is a function
  * on the SDK's span, so the copy closes over the result rather than re-entering the original
@@ -113,7 +116,8 @@ function scrubbedEvents(events: readonly TimedEvent[]): TimedEvent[] {
 function toScrubbedSpan(span: ReadableSpan): ReadableSpan {
   const spanContext = span.spanContext();
   const { parentSpanContext, instrumentationScope } = span;
-  const { version: scopeVersion } = instrumentationScope;
+  const { version: recordedVersion } = instrumentationScope;
+  const scopeVersion = SCOPE_VERSION.test(recordedVersion ?? '') ? recordedVersion : undefined;
   return {
     name: SPAN_NAMES.has(span.name) ? span.name : UNKNOWN_SPAN_NAME,
     kind: span.kind,

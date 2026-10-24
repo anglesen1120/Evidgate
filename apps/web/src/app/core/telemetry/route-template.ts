@@ -10,31 +10,34 @@
 import type { ActivatedRouteSnapshot } from '@angular/router';
 
 /**
- * Reported instead of a template when no route matched (the router has no `routeConfig`).
- * A consumer that sees it knows the value is a placeholder, not a route.
+ * Reported instead of a template when no route matched: no snapshot of the chain carries a
+ * `routeConfig`. A consumer that sees it knows the value is a placeholder, not a route.
  */
 export const UNKNOWN_ROUTE = '/unknown';
 
 /**
- * The matched route template of `root`, segments joined with `/`: the root route alone is
- * `/`, a wildcard match is `/**`, and a chain of componentless parents contributes only the
- * paths it actually has.
+ * The matched route template of the router's root snapshot, segments joined with `/`: a chain
+ * that matched only empty paths is `/`, a wildcard match is `/**`, and a componentless parent
+ * contributes only the paths it actually has. Angular's own root snapshot never has a
+ * `routeConfig` (it is the router state's root, not a configured route), so the walk starts there
+ * and only the descendants decide whether anything matched.
  */
 export function routeTemplate(root: ActivatedRouteSnapshot): string {
-  if (!root.routeConfig) {
-    return UNKNOWN_ROUTE;
-  }
   const segments: string[] = [];
+  let matched = false;
   for (let node: ActivatedRouteSnapshot | null = root; node !== null; node = node.firstChild) {
-    const path = node.routeConfig?.path;
-    if (!path) {
+    if (!node.routeConfig) {
       continue;
     }
-    for (const segment of path.split('/')) {
+    matched = true;
+    for (const segment of (node.routeConfig.path ?? '').split('/')) {
       if (segment !== '') {
         segments.push(segment);
       }
     }
+  }
+  if (!matched) {
+    return UNKNOWN_ROUTE;
   }
   return segments.length === 0 ? '/' : `/${segments.join('/')}`;
 }

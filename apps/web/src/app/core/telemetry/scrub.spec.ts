@@ -720,4 +720,21 @@ describe('scrubText on pathological input', () => {
     expect(scrubText('a'.repeat(200_000))).toBe(':id');
     expect(scrubText(`http://${'a'.repeat(100_000)}`)).toBe('/');
   });
+
+  it.each([
+    ['a base64-like secret', ['Ab', 'Cd', 'Ef', 'Gh', 'Ij', 'Kl', 'Mn', 'Op', 'Qr', 'St'].join('')],
+    [
+      'an e-mail address',
+      ['julia', 'moreau'].join('.') + '@' + ['acme', 'corp'].join('-') + '.test',
+    ],
+  ])('does not let the cut end of the window leak %s once earlier URLs shrink', (_, secret) => {
+    // 78 × 10 characters of `http://a/ ` shrink to `/ ` each, so the 800-character window cut
+    // lands inside the secret and the surviving tail would reach the 200-character output.
+    const input = `${'http://a/ '.repeat(78)}${secret}${'x'.repeat(40)}`;
+
+    const text = scrubText(input);
+
+    expect(text).not.toContain(secret.slice(0, 8));
+    expect(text).not.toMatch(/julia|acme|AbCdEf/);
+  });
 });

@@ -357,10 +357,24 @@ function routeTemplateValue(value: string): string | undefined {
 }
 
 /**
+ * The window without its last, possibly cut, whitespace-delimited token. A window with no
+ * whitespace at all is one token and stays whole: the rules reduce a run like that to `:id`.
+ */
+function withoutCutToken(window: string): string {
+  let end = window.length;
+  while (end > 0 && /\s/.test(window.charAt(end - 1)) === false) {
+    end -= 1;
+  }
+  return end === 0 ? window : window.slice(0, end);
+}
+
+/**
  * Removes credentials, identifiers, URL query strings and the ids in URLs and API paths from
  * one line of free text, and truncates the result to `maxLength` (default 200) characters. The
  * input is cut to a bounded window before any rule runs, so the cost is a function of
- * `maxLength`, never of the input length. Pure and non-throwing: any input produces a string.
+ * `maxLength`, never of the input length; the token the window cuts in half is dropped, because
+ * half a secret can be too short for any rule to recognise (the tail would then reach the output
+ * once earlier URLs and ids shrink). Pure and non-throwing: any input produces a string.
  */
 export function scrubText(value: string, maxLength: number = DEFAULT_MAX_TEXT_LENGTH): string {
   const limit = Number.isFinite(maxLength)
@@ -370,7 +384,7 @@ export function scrubText(value: string, maxLength: number = DEFAULT_MAX_TEXT_LE
     Math.max(limit * SCAN_LENGTH_FACTOR, MIN_SCAN_LENGTH),
     MAX_SCAN_LENGTH,
   );
-  let text = value.length > scanLength ? value.slice(0, scanLength) : value;
+  let text = value.length > scanLength ? withoutCutToken(value.slice(0, scanLength)) : value;
   for (const rule of TEXT_RULES) {
     text = rule.apply(text);
   }

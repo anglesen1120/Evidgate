@@ -480,16 +480,16 @@ export function startTelemetrySdk(
     }
   }
 
-  /**
-   * Points the processor at the no-op exporter. Whatever the batch queue still holds leaves it
-   * now (and is dropped), so no POST to a blocked origin is retried; the sampler, the span ids and
-   * `traceparentOf` are untouched, which is what keeps the server-side trace continuing.
-   */
   /** Exports the queue now; a rejected flush stays inside the exporter. */
   function forceFlush(): void {
     void processor.forceFlush().catch(() => undefined);
   }
 
+  /**
+   * Points the processor at the no-op exporter. Whatever the batch queue still holds leaves it
+   * now (and is dropped), so no POST to a blocked origin is retried; the sampler, the span ids and
+   * `traceparentOf` are untouched, which is what keeps the server-side trace continuing.
+   */
   function disableExport(): void {
     if (exportDisabled) {
       return;

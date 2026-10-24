@@ -273,6 +273,15 @@ describe('ScrubbingSpanExporter', () => {
     expect('version' in output.instrumentationScope).toBe(false);
   });
 
+  it('omits a scope version that is free text instead of a version', () => {
+    const { output } = exportOne(
+      hostileSpan({ instrumentationScope: { name: INSTRUMENTATION_NAME, version: EMAIL } }),
+    );
+
+    expect(output.instrumentationScope).toEqual({ name: INSTRUMENTATION_NAME });
+    expect(JSON.stringify(output)).not.toContain(EMAIL);
+  });
+
   it('keeps only allowlisted attribute keys and no identifier anywhere', () => {
     const { output } = exportOne(hostileSpan());
 

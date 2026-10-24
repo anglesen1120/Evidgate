@@ -54,6 +54,21 @@ describe('routeTemplate', () => {
     expect(UNKNOWN_ROUTE).toBe('/unknown');
   });
 
+  it('walks from the configless root snapshot Angular always hands over', () => {
+    // `router.routerState.snapshot.root` is the router state's own root: `routeConfig === null`,
+    // the configured routes are its descendants. The app's route table starts with a pathless
+    // layout route, then `orgs/:orgId`, then `projects/:projectId`, then the page.
+    expect(routeTemplate(snapshot([null, '', 'orgs/:orgId', 'projects/:projectId', 'runs']))).toBe(
+      '/orgs/:orgId/projects/:projectId/runs',
+    );
+    expect(routeTemplate(snapshot([null, 'login']))).toBe('/login');
+    expect(routeTemplate(snapshot([null, '', '**']))).toBe('/**');
+  });
+
+  it('reports a configless root with only pathless descendants as a slash', () => {
+    expect(routeTemplate(snapshot([null, '']))).toBe('/');
+  });
+
   it('ignores parameter values and URL segments of the real navigation', () => {
     const root = {
       routeConfig: { path: '' },

@@ -4,12 +4,13 @@
 // words that survive and the segments that become `:id` — plus every input the function has to
 // refuse.
 //
-// The last test is the drift check: it reads the recorded contract fixture (the same file
-// `core/http/contract-smoke.spec.ts` compares against `contracts/openapi.yaml`) and fails when
-// an operation carries a static word `KNOWN_API_SEGMENTS` does not have, so adding an API
-// route cannot silently turn its words into `:id`s.
+// The last tests are the drift check: they read `contracts/openapi.yaml` (the file
+// `core/http/contract-smoke.spec.ts` compares the recorded fixture against) and fail when a path
+// carries a static word `KNOWN_API_SEGMENTS` does not have or the set keeps one the contract
+// lost, so adding an API route cannot silently turn its words into `:id`s.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 
 import { apiPathTemplate, KNOWN_API_SEGMENTS, UNPARSED_API_PATH } from './api-path-template';
 
@@ -17,19 +18,11 @@ const PAGE = 'https://app.example.test/shell';
 const RUN_ID = ['3f2b9d54', '0d7e', '4c1a', '9a2e', '6b0f5c7d81c4'].join('-');
 
 /** `ng test` runs with `apps/web` as the working directory (see `core/http/contract-smoke.spec.ts`). */
-const FIXTURE_PATH = resolve(
-  process.cwd(),
-  'src/app/core/http/testing/openapi-operations.fixture.json',
-);
+const CONTRACT_PATH = resolve(process.cwd(), '../../contracts/openapi.yaml');
 
-const RE_RECORD =
-  'the recorded API surface changed — re-record with ' +
-  '`node apps/web/scripts/record-openapi-fixture.mjs` from the repository root and add the new ' +
-  'static words to KNOWN_API_SEGMENTS';
-
-interface RecordedFixture {
-  readonly operations: readonly { readonly path: string }[];
-}
+const RE_SYNC =
+  'contracts/openapi.yaml and KNOWN_API_SEGMENTS disagree — add the new static words to (or ' +
+  'remove the stale ones from) KNOWN_API_SEGMENTS in api-path-template.ts';
 
 interface TemplateRow {
   /** What this row proves; also the `it.each` title. */
@@ -139,29 +132,34 @@ describe('apiPathTemplate', () => {
   });
 });
 
-describe('KNOWN_API_SEGMENTS against the recorded contract fixture', () => {
-  it('names every static segment of every recorded operation', () => {
-    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as RecordedFixture;
-    expect(fixture.operations.length).toBeGreaterThan(0);
+describe('KNOWN_API_SEGMENTS against contracts/openapi.yaml', () => {
+  function contractPaths(): string[] {
+    const spec: unknown = parseYaml(readFileSync(CONTRACT_PATH, 'utf8'));
+    const paths = (spec as { paths?: Record<string, unknown> } | null)?.paths;
+    expect(paths, 'contracts/openapi.yaml has no paths object').toBeTypeOf('object');
+    return Object.keys(paths ?? {});
+  }
 
+  it('names every static segment of every contract path, and no word the contract lost', () => {
     const staticSegments = new Set<string>();
-    for (const operation of fixture.operations) {
-      for (const segment of operation.path.split('/')) {
+    for (const path of contractPaths()) {
+      for (const segment of path.split('/')) {
         if (segment !== '' && segment.startsWith('{') === false) {
           staticSegments.add(segment);
         }
       }
     }
+    expect(staticSegments.size).toBeGreaterThan(0);
 
     const missing = [...staticSegments].filter((segment) => !KNOWN_API_SEGMENTS.has(segment));
-    expect(missing, `${RE_RECORD} (missing: ${missing.join(', ')})`).toEqual([]);
+    const stale = [...KNOWN_API_SEGMENTS].filter((segment) => !staticSegments.has(segment));
+    expect(missing, `${RE_SYNC} (missing: ${missing.join(', ')})`).toEqual([]);
+    expect(stale, `${RE_SYNC} (no longer in the contract: ${stale.join(', ')})`).toEqual([]);
   });
 
-  it('templates every recorded operation into the shape the fixture declares', () => {
-    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as RecordedFixture;
-
-    for (const { path } of fixture.operations) {
-      // The fixture writes ids as `{p}`/`{r}`; the template writes `:id`.
+  it('templates every contract path into its own shape with the ids as :id', () => {
+    for (const path of contractPaths()) {
+      // The contract writes ids as `{p}`/`{r}`; the template writes `:id`.
       const expected = `/v1${path.replace(/\{[^}]+\}/g, ':id')}`;
       expect(apiPathTemplate(`/v1${path.replace(/\{[^}]+\}/g, 'a-1')}`, PAGE)).toBe(expected);
     }
