@@ -26,9 +26,11 @@ namespace Evidgate.Modules.Authoring.Application;
 /// </para>
 /// <para>
 /// <b>Invariant: this call needs a second pooled connection.</b> The caller's scope holds one for the whole request, so
-/// the data source's pool must be able to hand out one more than the caller's concurrency (the Api/Worker
-/// <c>Maximum Pool Size</c> does). Both the pool acquire and the counter's row lock are bounded by 5 s, and either
-/// bound expiring is the retryable <c>503 unavailable</c>, never a hang.
+/// the data source must be able to hand out one more than the caller's concurrency. No <c>Maximum Pool Size</c> is
+/// configured anywhere in Api or Worker today: the pool is Npgsql's default of 100 connections per data source, which is
+/// what this call relies on. Both the pool acquire and the counter's row lock are bounded by 5 s, and either bound
+/// expiring is the retryable <c>503 unavailable</c>, never a hang (OI-13-108 tracks the sizing question and stays open
+/// with its receiver 10.6.1-T3).
 /// </para>
 /// </remarks>
 internal sealed class AuthoringCodeAllocator(NpgsqlDataSource dataSource, ITenantScopeAccessor scopes)
@@ -37,9 +39,10 @@ internal sealed class AuthoringCodeAllocator(NpgsqlDataSource dataSource, ITenan
 
     /// <summary>
     /// The bound on the pool acquire, the same 5 s as the row lock: the allocator needs a <b>second</b> pooled connection
-    /// while the caller still holds its own on the ambient scope, so the data source's pool must be able to hand out one
-    /// more than the caller's concurrency (the Api/Worker <c>Maximum Pool Size</c> covers it). A pool of one would block
-    /// on itself, and this bound turns that into the retryable <c>503 unavailable</c> instead of a hang.
+    /// while the caller still holds its own on the ambient scope. The pool it draws from is Npgsql's default of 100
+    /// connections — no <c>Maximum Pool Size</c> is configured (OI-13-108, receiver 10.6.1-T3) — so this bound does not
+    /// guard a small pool today; it guards the case where every connection is busy, turning that wait into the retryable
+    /// <c>503 unavailable</c> instead of a request that hangs on the data source's own timeout.
     /// </summary>
     private static readonly TimeSpan AcquireTimeout = TimeSpan.FromSeconds(5);
 

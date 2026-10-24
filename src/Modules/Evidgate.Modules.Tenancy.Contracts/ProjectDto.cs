@@ -20,6 +20,11 @@ namespace Evidgate.Modules.Tenancy.Contracts;
 /// <param name="Version">Optimistic concurrency token (ETag source, 00 §9.1).</param>
 /// <param name="RetentionDays">Overrides the org's <c>retention_default_days</c>; null = inherit (02.1.1-T3).</param>
 /// <param name="MonthlyRunQuota">Runs per calendar month; null = no limit (02.1.1-T3, enforced by plan 12).</param>
+/// <param name="CasePrefix">
+/// The stored case-code prefix (<c>&lt;PREFIX&gt;-&lt;n&gt;</c> of every manual test case, 13.1.1 AC4/OI-13-101), filled by
+/// the <c>project_case_prefix_default</c> trigger on insert and changed only through <c>PATCH /v1/projects/{p}</c> by a
+/// <c>tenant_admin</c>. A change never rewrites an existing case code.
+/// </param>
 public sealed record ProjectDto(
     Guid Id,
     Guid OrgId,
@@ -31,4 +36,5 @@ public sealed record ProjectDto(
     DateTimeOffset UpdatedAt,
     int Version,
     int? RetentionDays,
-    int? MonthlyRunQuota);
+    int? MonthlyRunQuota,
+    string CasePrefix);

@@ -19,11 +19,12 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// <para>
 /// The helper needs ICU: with <c>InvariantGlobalization=true</c> (00 §5.7 P7, which
-/// <c>Evidgate.Api</c> and <c>Evidgate.Worker</c> set) .NET's <c>string.Normalize</c> is a no-op, so
-/// <see cref="AuthoringText.Normalize"/> refuses instead of storing decomposed text. This suite
-/// runs with ICU, so it pins the behaviour the API is supposed to have and records the host setting
-/// the deployment has to reconcile (see the yield of 13.1.1-T1.2 and
-/// <see cref="AuthoringText.NfcUnavailableMessage"/>).
+/// <c>Evidgate.Worker</c> keeps) .NET's <c>string.Normalize</c> is a no-op, so
+/// <see cref="AuthoringText.Normalize"/> refuses instead of storing decomposed text. The Api
+/// composes this module, so 13.1.1-T2 (D-S55-Q1) leaves that setting off for
+/// <c>Evidgate.Api</c> and runs its image on the <c>-extra</c> chiseled base that ships ICU.
+/// This suite runs with ICU too, so it pins the working half and the refusal half side by side
+/// (see <see cref="AuthoringText.NfcUnavailableMessage"/>).
 /// </para>
 /// </remarks>
 public sealed partial class AuthoringUnitTests
@@ -110,13 +111,14 @@ public sealed partial class AuthoringUnitTests
     }
 
     /// <summary>
-    /// The P7 half of the probe: <c>Evidgate.Api</c> ships with <c>InvariantGlobalization=true</c>,
-    /// where <c>string.Normalize(FormC)</c> returns its input unchanged — measured on .NET 10 with
-    /// <c>DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1</c>: <c>"e\u0301"</c> stays two code points. A silent
-    /// no-op would store decomposed text and break AC14 while every test passed, so
-    /// <see cref="AuthoringText.Normalize"/> refuses with a message naming the setting instead.
-    /// This test pins that the refusal exists and names the conflict; the reconciliation itself (keep
-    /// ICU for the authoring hosts, or record that NFC is deferred) is a P7 decision, not a code one.
+    /// The P7 half of the probe: globalization-invariant mode makes <c>string.Normalize(FormC)</c>
+    /// return its input unchanged — measured on .NET 10 with <c>DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1</c>:
+    /// <c>"e\u0301"</c> stays two code points. A silent no-op would store decomposed text and break AC14
+    /// while every test passed, so <see cref="AuthoringText.Normalize"/> refuses with a message naming the
+    /// setting instead. Since 13.1.1-T2 (D-S55-Q1) the reconciliation is recorded in the build itself:
+    /// <c>Evidgate.Worker</c>, which hosts no authoring write path, keeps <c>InvariantGlobalization=true</c>,
+    /// while <c>Evidgate.Api</c> — the host that composes this module — declares <c>false</c> and runs the
+    /// <c>-extra</c> chiseled base that ships ICU. This test pins both halves so neither can drift silently.
     /// </summary>
     [Fact]
     public void TextNormalisation_InvariantHostIsRefusedNotIgnored()
@@ -125,32 +127,30 @@ public sealed partial class AuthoringUnitTests
         AuthoringText.NfcUnavailableMessage.ShouldContain("NFC");
         AuthoringText.NfcUnavailableMessage.ShouldContain("13.1.1", Case.Insensitive);
 
-        // The setting the shipped host really runs with is declared in the build, so the premise is read
+        // The setting the shipped hosts really run with is declared in the build, so the premise is read
         // from there rather than from a copied runtimeconfig.json: one is the source of truth and cannot
         // drift with output layout, the other is a build artifact whose presence depends on packaging.
         var props = Path.Combine(RepositoryRoot(), "Directory.Build.props");
         File.Exists(props).ShouldBeTrue($"'{props}' is the source of the P7 process settings");
 
-        var invariant = XDocument.Load(props).Descendants("PropertyGroup")
-            .Where(group => ((string?)group.Attribute("Condition"))?.Contains("Evidgate.Api", StringComparison.Ordinal) == true)
-            .SelectMany(group => group.Elements("InvariantGlobalization"))
-            .Any(element => string.Equals(element.Value, "true", StringComparison.OrdinalIgnoreCase));
+        var build = XDocument.Load(props);
 
-        // Whether the Api still declares invariant is the owner's P7 call; either way the helper must
-        // not pretend. Measured: invariant mode makes Normalize a no-op, which is why the refusal path
-        // exists at all — so while the Api is invariant, the refusal is the only correct behaviour and
-        // the gap cannot be seen from this (ICU) suite, which is the point of the probe.
-        if (invariant)
-        {
-            AuthoringText.IsNfcSupported.ShouldBeTrue(
-                "this suite has ICU while the Api does not; if the suite itself were invariant the "
-                + "production gap would be invisible rather than documented");
-        }
-        else
-        {
-            // The reconciliation landed: the Api keeps ICU, so Normalize composes in production too.
-            AuthoringText.NfcUnavailableMessage.ShouldNotBeNullOrWhiteSpace();
-        }
+        bool Declares(string project, string value) => build.Descendants("PropertyGroup")
+            .Where(group => ((string?)group.Attribute("Condition"))?.Contains(project, StringComparison.Ordinal) == true)
+            .SelectMany(group => group.Elements("InvariantGlobalization"))
+            .Any(element => string.Equals(element.Value, value, StringComparison.OrdinalIgnoreCase));
+
+        // The Api composes this module, so it must keep ICU: an invariant Api would make NFC a silent
+        // no-op instead of the refusal above (13.1.1-T2, D-S55-Q1; its image runs the `-extra` base).
+        Declares("Evidgate.Api", "false").ShouldBeTrue(
+            "Evidgate.Api must not declare InvariantGlobalization=true while it composes the authoring module");
+        Declares("Evidgate.Worker", "true").ShouldBeTrue(
+            "Evidgate.Worker hosts no authoring write path and keeps the 00 §5.7 P7 invariant setting");
+
+        // The refusal path exists for hosts that are not this pair (a test host, a future entry point),
+        // so the suite must be able to demonstrate the working half as well.
+        AuthoringText.IsNfcSupported.ShouldBeTrue(
+            "this suite has ICU; were it invariant the working half of the probe would be invisible");
     }
 
     /// <summary>The repository root, found from the test output upwards by its solution file.</summary>

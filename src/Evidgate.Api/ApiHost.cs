@@ -11,6 +11,8 @@ using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
+using Evidgate.Modules.Authoring;
+using Evidgate.Modules.Authoring.Endpoints;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Identity;
@@ -81,6 +83,9 @@ public static partial class ApiHost
         // Mediator's source generator registered the handlers themselves.
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
+        // 13.1.1-T2.1 (D-S55-Q1): the authoring module — the feature tree's EF write model, the one version
+        // writer, the code allocator and the steps validator. Api only: nothing in the Worker authors content.
+        builder.Services.AddAuthoringModule();
         builder.Services.AddOrchestratorModule();
         // 06.1.1-T1: the evidence module — the artifact and kind-policy write model.
         builder.Services.AddEvidenceModule();
@@ -144,6 +149,8 @@ public static partial class ApiHost
         // 02.1.1-T2.2 (00 §5.5 C8): the org/project registry routes, same filter.
         app.MapTenancyEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         app.MapCatalogEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // 13.1.1-T2 (00 §5.5 C8): the authoring tree, checklist-item and manual-case routes, same two filters.
+        app.MapAuthoringEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 05.1.1/05.1.2: manifests and environment revisions, same filters.
         app.MapOrchestratorEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 06.1.2-T1: the artifact upload-url route, same filters.

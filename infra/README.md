@@ -106,8 +106,10 @@ The checks it runs are the acceptance criteria, not a rerun of the build:
 `docker inspect` says `Config.User=1654` (non-root, AC1); the built image's first
 layers are the pinned runtime base's layers for _both_ platforms (AC1 — the
 comparison target is read from the registry manifest, because a local multi-arch
-pin resolves to one platform image); the published `runtimeconfig.json` carries
-`System.Globalization.Invariant` + `System.GC.Server` and the main assembly has a
+pin resolves to one platform image; the Api is compared against its `-extra`
+base and Worker/Migrator against theirs); the published `runtimeconfig.json`
+carries `System.GC.Server` plus the per-image `System.Globalization.Invariant`
+(`true` for Worker, `false`/absent for the Api) and the main assembly has a
 ReadyToRun header (00 §5.7 P7); the baked expected-migration-head is the
 repository's head (01.1.2-T1.3); and `docker run <migrator> --help` prints the
 01.4.1 §5 CLI (AC5). `--with-db` adds a throwaway PostgreSQL 18 (the
@@ -117,35 +119,65 @@ again, then the Api answering `/internal/health/live` and `/ready`.
 ## Pins
 
 Base images are pinned to mcr.microsoft.com **manifest-list digests**, resolved on
-2026-09-27 (reproducible: `GET https://mcr.microsoft.com/v2/<repo>/manifests/<tag>`
+2026-09-27 and — for the Api's `-extra` runtime base — on 2026-10-23
+(reproducible: `GET https://mcr.microsoft.com/v2/<repo>/manifests/<tag>`
 with `Accept: application/vnd.docker.distribution.manifest.list.v2+json` and read
 the `Docker-Content-Digest` header; the per-platform manifests and their configs
 then come from `/manifests/<digest>` and `/blobs/<config digest>`):
 
-| Role    | Tag + digest (the Dockerfile's `FROM`)                                                                                           | Per-platform manifests (amd64 / arm64)  |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Builder | `mcr.microsoft.com/dotnet/sdk:10.0.100@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71`                  | `sha256:b84b696e…` / `sha256:4c85fffe…` |
-| Runtime | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02` | `sha256:0053105f…` / `sha256:46587ed1…` |
+| Role                           | Tag + digest (the Dockerfile's `FROM`)                                                                                                 | Per-platform manifests (amd64 / arm64)  |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Builder                        | `mcr.microsoft.com/dotnet/sdk:10.0.100@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71`                        | `sha256:b84b696e…` / `sha256:4c85fffe…` |
+| Runtime (`api`)                | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra@sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd` | `sha256:69c87e30…` / `sha256:c4b3500d…` |
+| Runtime (`worker`, `migrator`) | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02`       | `sha256:0053105f…` / `sha256:46587ed1…` |
 
 - The builder tag equals `global.json`'s `sdk.version` — the SDK CI installs — so
   the image and the test build compile with one toolchain. `--check-pins` fails
   when the two drift; `--check-registry` reports when upstream publishes a new
   patch under the same tag (informational: the digest is the pin).
-- The runtime is the chiseled variant: no shell, no package manager, and
+- Both runtime bases are chiseled: no shell, no package manager, and
   `Config.User=1654` (the base's `APP_UID`), which the Dockerfiles re-assert with
   `USER $APP_UID` so the contract survives a base swap.
+- **The Api runs the `-extra` variant and Worker/Migrator the plain one.** The
+  plain chiseled base is globalization-invariant by construction: it sets
+  `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true` and ships no `libicu` and no
+  `zoneinfo`. Authoring text must be stored composed (13.1.1 AC14) and
+  `string.Normalize(FormC)` is a _silent no-op_ in invariant mode, so the Api
+  cannot run that base: `Directory.Build.props` keeps `InvariantGlobalization`
+  for `Evidgate.Worker` only, and `Dockerfile.api` pins the `-extra` image.
+  `-extra` is the same distroless chiseled image plus `icu` and `tzdata`
+  ([dotnet-docker image variants: "`extra` images contain everything that the
+  default images do, plus `icu` and `tzdata`"][variants]); measured 2026-10-23 by
+  exporting both arm64 filesystems, the plain base has 0 `libicu` / 0 `zoneinfo`
+  entries and the `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true` variable, while
+  `-extra` has the 12 ICU shared objects (`libicu{data,i18n,io,test,tu,uc}.so.74`)
+  and 1 246 `zoneinfo` entries and sets no such variable.
+  `scripts/build-images.sh --check-pins` fails if the Api base stops being the
+  `-extra` sibling of the Worker/Migrator tag, and the P7 check fails if the
+  Api's runtimeconfig or image environment is invariant.
 - Licence: the .NET container images are MIT — [dotnet/dotnet-docker `LICENSE`]
   (MIT, © .NET Foundation) — with the container legal notice in the README's
   [License section] (`aka.ms/mcr/osslegalnotice`) and the Linux image contents
   under their own licences ([image-artifact-details.md]). The Ubuntu 24.04
-  ("noble") packages inside the chiseled base are covered by that same OSS notice.
+  ("noble") packages inside both chiseled bases are covered by that same OSS
+  notice; the two library sets `-extra` adds carry their own terms, read from the
+  image itself (`usr/share/doc/<package>/copyright`): **ICU** (`libicu74`) under
+  the **Unicode License V3** (SPDX `Unicode-3.0`, MIT-style — the Ubuntu package
+  states `License: MIT`, © 1991-2022 Unicode, Inc.; [upstream `LICENSE`][unicode-licence])
+  and **tzdata** in the public domain (`License: public-domain`, © IANA,
+  `https://www.iana.org/time-zones`).
 - `10.0.12-noble-chiseled` and (at resolution time) `10.0-noble-chiseled`
   resolved to the same digest `sha256:9651fa59…`; the versioned form is pinned so
-  a runtime patch bump is a deliberate edit.
+  a runtime patch bump is a deliberate edit. The `-extra` pin follows the same
+  rule: `10.0.12-noble-chiseled-extra` is pinned by its index digest
+  `sha256:00e0ad6a…` (amd64 `sha256:69c87e30…`, arm64 `sha256:c4b3500d…`,
+  arm/v7 `sha256:330dedb6…`), and a bump moves both bases together.
 
 [dotnet/dotnet-docker `LICENSE`]: https://github.com/dotnet/dotnet-docker/blob/main/LICENSE
 [License section]: https://github.com/dotnet/dotnet-docker/blob/main/README.md#license
 [image-artifact-details.md]: https://github.com/dotnet/dotnet-docker/blob/main/documentation/image-artifact-details.md
+[variants]: https://github.com/dotnet/dotnet-docker/blob/main/documentation/image-variants.md
+[unicode-licence]: https://github.com/unicode-org/icu/blob/main/LICENSE
 
 ## Build inputs the context must keep
 
@@ -195,13 +227,16 @@ Error: libgssapi_krb5.so.2: cannot open shared object file: No such file or dire
 ```
 
 That is Npgsql probing for the optional Kerberos native library at driver
-initialisation; the chiseled base does not ship `libgssapi-krb5-2`. Password
-authentication is unaffected — measured on the built images 2026-09-27: the
-Migrator applied the whole migration set (eleven files at that measurement) and
-the Api reported `{"status":"ready","journal_head":"0011_identity_membership.sql"}`
-with the same session in which those lines appear. It is log noise, not a failure
-path; if 10.3.1's log review wants it gone, the options are the `-extra` chiseled
-variant or copying the Kerberos runtime libraries into the runtime stage.
+initialisation; neither chiseled base ships `libgssapi-krb5-2` — the Api's
+`-extra` base adds ICU + tzdata only (measured 2026-10-23: no `libgssapi`/`libkrb5`
+file in either image), so **the Api now runs `-extra` and still logs these two
+lines**; `-extra` is not a remedy for them. Password authentication is unaffected
+— measured on the built images 2026-09-27 (plain base): the Migrator applied the
+whole migration set (eleven files at that measurement) and the Api reported
+`{"status":"ready","journal_head":"0011_identity_membership.sql"}` with the same
+session in which those lines appear. It is log noise, not a failure path; if
+10.3.1's log review wants it gone, the only option is copying the Kerberos runtime
+libraries into the runtime stage.
 
 ## Worker Node runtime (ruling T36) — carried
 

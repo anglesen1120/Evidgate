@@ -19,13 +19,14 @@ namespace Evidgate.Modules.Authoring.Domain;
 /// (13.2.1 §4 "char_length vs the UI counter").
 /// </para>
 /// <para>
-/// <b>Normalisation needs ICU.</b> <c>Evidgate.Api</c> and <c>Evidgate.Worker</c> run with
-/// <c>InvariantGlobalization=true</c> (00 §5.7 P7, <c>Directory.Build.props</c>), and in that mode
-/// .NET's <see cref="string.Normalize(NormalizationForm)"/> is a no-op: it returns the input
-/// unchanged instead of composing it. A silent no-op would store decomposed text and break AC14
-/// while every test passes, so <see cref="Normalize"/> and <see cref="EnsureNfcSupported"/> refuse
-/// instead of pretending. <see cref="IsNfcSupported"/> is the runtime probe;
-/// <see cref="NfcUnavailableMessage"/> names the conflict so a host that cannot normalize fails
+/// <b>Normalisation needs ICU.</b> Globalization-invariant mode (00 §5.7 P7) makes
+/// <see cref="string.Normalize(NormalizationForm)"/> a no-op: it returns the input unchanged instead of
+/// composing it. <c>Evidgate.Worker</c> runs that mode (it hosts no authoring write path); <c>Evidgate.Api</c>
+/// must keep ICU — <c>Directory.Build.props</c> leaves <c>InvariantGlobalization</c> off for it and its image
+/// runs the <c>-extra</c> chiseled base that ships ICU (13.1.1-T2, D-S55-Q1). A silent no-op would store
+/// decomposed text and break AC14 while every test passes, so <see cref="Normalize"/> and
+/// <see cref="EnsureNfcSupported"/> refuse instead of pretending. <see cref="IsNfcSupported"/> is the runtime
+/// probe; <see cref="NfcUnavailableMessage"/> names the conflict so a host that cannot normalize fails
 /// at composition instead of at the first write.
 /// </para>
 /// </remarks>
@@ -39,14 +40,15 @@ internal static class AuthoringText
 
     /// <summary>
     /// The failure message of <see cref="Normalize"/> and <see cref="EnsureNfcSupported"/>: why the
-    /// text cannot be composed and which two settings resolve it. Never a user-facing message.
+    /// text cannot be composed and how a host resolves it. Never a user-facing message.
     /// </summary>
     public const string NfcUnavailableMessage =
         "Unicode NFC normalisation is unavailable in this process: it runs with globalization-invariant mode " +
         "(`InvariantGlobalization`, 00 §5.7 P7), where string.Normalize(FormC) returns the input unchanged. " +
-        "Authorship text must be stored composed (13.1.1 AC14), so either the host keeps ICU " +
-        "(`InvariantGlobalization=true` removed for Evidgate.Api/Evidgate.Worker in Directory.Build.props, " +
-        "which needs the P7 decision recorded) or the authoring write path is not enabled on this host.";
+        "Authorship text must be stored composed (13.1.1 AC14), so a host that composes the authoring module " +
+        "must keep ICU: `InvariantGlobalization` is off for Evidgate.Api in Directory.Build.props and its image " +
+        "runs the `-extra` chiseled base that ships ICU (13.1.1-T2, D-S55-Q1). " +
+        "Either run the authoring write path on such a host or do not enable it on this one.";
 
     /// <summary>
     /// True when this process can compose text, i.e. when <see cref="Normalize"/> actually
@@ -128,6 +130,67 @@ internal static class AuthoringText
 
         return length;
     }
+
+    /// <summary>
+    /// The longest caller-supplied name echoed in an error (the catalog's <c>TextRules.Brief</c> bound): an unknown
+    /// member name or a path segment is clipped to this many characters plus an ellipsis, so a caller cannot inflate a
+    /// <c>details[].path</c> with a 4 096-character name (security S-8). One bound for the edge
+    /// (<c>AuthoringEndpointSupport</c>) and the content parser, so both report the same name the same way.
+    /// </summary>
+    public const int MaximumEchoedNameLength = 64;
+
+    /// <summary>
+    /// A short, single-line rendering of a caller-supplied name for an error echo (the catalog's <c>TextRules.Brief</c>
+    /// rule, mirrored locally): at most <see cref="MaximumEchoedNameLength"/> UTF-16 units on a rune boundary, control
+    /// and format runes shown as <c>?</c>, and an ellipsis when anything was dropped. Clipping at a raw index could cut a
+    /// surrogate pair in half and put an unpaired surrogate into <c>details[].path</c> — the one thing this surface's
+    /// placeholder exists to keep out of an answer — while a raw newline or a U+202E would reorder the rendered line.
+    /// </summary>
+    /// <param name="text">The name to shorten.</param>
+    /// <param name="limit">The longest accepted answer, in UTF-16 units.</param>
+    /// <returns>The name unchanged when it fits, the clipped form otherwise.</returns>
+    public static string Brief(string text, int limit = MaximumEchoedNameLength)
+    {
+        // The clip is decided here, not from the builder's length: an astral Format rune becomes one "?" (two UTF-16
+        // units → one), so a builder that shrank does not mean anything was dropped (review N4).
+        var clipped = text.Length > limit;
+        var builder = new StringBuilder(Math.Min(text.Length, limit));
+        foreach (var rune in (clipped ? Truncate(text, limit) : text).EnumerateRunes())
+        {
+            var echoable = Rune.IsControl(rune) || Rune.GetUnicodeCategory(rune) == UnicodeCategory.Format
+                ? "?"
+                : rune.ToString();
+            builder.Append(echoable);
+        }
+
+        return clipped ? builder.Append('…').ToString() : builder.ToString();
+    }
+
+    /// <summary>The longest prefix of <paramref name="text"/> with at most <paramref name="maxChars"/> UTF-16 units that ends on a rune boundary.</summary>
+    /// <param name="text">The text.</param>
+    /// <param name="maxChars">The limit.</param>
+    /// <returns>The prefix, never splitting a surrogate pair.</returns>
+    private static string Truncate(string text, int maxChars)
+    {
+        var end = maxChars;
+        if (end > 0 && end < text.Length && char.IsHighSurrogate(text[end - 1]))
+        {
+            end--;
+        }
+
+        return text[..end];
+    }
+
+    /// <summary>
+    /// True when <paramref name="value"/> carries U+0000 — the one character PostgreSQL refuses in both a <c>text</c>
+    /// column (<c>22021 invalid byte sequence for encoding "UTF8": 0x00</c>) and a <c>jsonb</c> document
+    /// (<c>22P05</c>), so text holding it is not storable by this module at all. Every authoring write and read
+    /// parameter passes a guard that calls this before it reaches a statement, so a caller's own byte is a 422 rather
+    /// than a 500 (the rule <c>Ingestion</c>'s <c>UnstorableText</c> states for its own surface).
+    /// </summary>
+    /// <param name="value">The text; <c>null</c> is storable.</param>
+    /// <returns><c>true</c> when the value contains a NUL.</returns>
+    public static bool ContainsNul(string? value) => value is not null && value.Contains('\0');
 
     /// <summary>True when <paramref name="value"/> is at most <paramref name="maxCodePoints"/> code points long.</summary>
     /// <param name="value">The text.</param>

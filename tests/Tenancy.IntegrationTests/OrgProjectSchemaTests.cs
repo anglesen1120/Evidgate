@@ -231,23 +231,17 @@ public sealed class OrgProjectSchemaTests
             .Order(StringComparer.Ordinal)
             .ShouldBe(FieldNames<OrganizationDto>().Order(StringComparer.Ordinal));
 
-        // `project.case_prefix` (0039 / OI-13-101) is deliberately not a wire field: the migration is
-        // additive and changes no route (13.1.1:471); exposing it through `PATCH /v1/projects/{p}` —
-        // `ProjectDto`, `contracts/openapi.yaml`, the generated SDK — is 13.1.1-T2's hand-over
-        // (13.1.1:517). The authoring module reads the stored value through `AuthoringSql.ReadCasePrefix`.
-        // Every other column stays an exact comparison, so a real drift still fails here.
+        // `project.case_prefix` (0039 / OI-13-101, 13.1.1:516) is a wire field now: the migration is additive
+        // and changed no route (13.1.1:471), and 13.1.1-T2 closed the hand-over (13.1.1:518) by exposing it
+        // through `PATCH /v1/projects/{p}` — `UpdateProjectRequest.CasePrefix` / `ProjectDto.CasePrefix`,
+        // `contracts/openapi.yaml` and the generated SDK — while the authoring module keeps reading the stored
+        // value through `AuthoringSql.ReadCasePrefix`. Every column stays an exact comparison, so a column
+        // without a wire field, or a wire field without a column, fails here.
         (await _fixture.ColumnsAsync(database, "project"))
             .Select(column => column.Split(':')[0])
-            .Where(column => !ProjectWireExclusions.Contains(column))
             .Order(StringComparer.Ordinal)
             .ShouldBe(FieldNames<ProjectDto>().Order(StringComparer.Ordinal));
     }
-
-    /// <summary>
-    /// Columns of <c>project</c> that are not on the project wire contract: <c>case_prefix</c> is read
-    /// by the authoring module only until 13.1.1-T2 exposes it (13.1.1:471, :517).
-    /// </summary>
-    private static readonly string[] ProjectWireExclusions = ["case_prefix"];
 
     /// <summary>The DTO's wire field names, snake_case (00 §7), for the schema cross-check.</summary>
     private static List<string> FieldNames<T>() =>

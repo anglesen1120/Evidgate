@@ -24,7 +24,7 @@ namespace Tenancy.IntegrationTests;
 /// </remarks>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class AuthoringVersionTests
+public sealed partial class AuthoringVersionTests
 {
     private readonly PostgresTenancyFixture _fixture;
 

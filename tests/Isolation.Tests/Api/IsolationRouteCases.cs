@@ -235,6 +235,15 @@ public static class IsolationRouteCases
                 Fixed(bp.WaiverIds), aAdmin, $"/v1/projects/{ap.Id}/waivers?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/quarantine"), $"org B project {bp.Slug} quarantine entries", bAdmin, $"/v1/projects/{bp.Id}/quarantine?limit=1", "id",
                 Fixed(bp.QuarantineIds), aAdmin, $"/v1/projects/{ap.Id}/quarantine?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/authoring/tree"), $"org B project {bp.Slug} authoring roots", bAdmin,
+                $"/v1/projects/{bp.Id}/authoring/tree?limit=1", "node_id",
+                Fixed([bp.AuthoringRootNodeId, bp.AuthoringSecondRootNodeId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/tree?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/authoring/checklist-items"), $"org B project {bp.Slug} checklist items", bAdmin,
+                $"/v1/projects/{bp.Id}/authoring/checklist-items?limit=1", "item_id",
+                Fixed([bp.AuthoringItemId, bp.AuthoringSecondItemId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/checklist-items?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/authoring/manual-cases"), $"org B project {bp.Slug} manual cases", bAdmin,
+                $"/v1/projects/{bp.Id}/authoring/manual-cases?limit=1", "case_id",
+                Fixed([bp.AuthoringManualCaseId, bp.AuthoringSecondManualCaseId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/manual-cases?limit=1"));
             // The run-create case below is a positive control: it proves that org B's own
             // `POST /v1/projects/{p}/runs` is accepted, so org B's first project can hold one run more than the
             // seed recorded, and whether it does depends on which test of the suite runs first (nothing resets
@@ -292,6 +301,58 @@ public static class IsolationRouteCases
         OrgCase("GET", "/v1/orgs/{o}/projects", o => new(HttpMethod.Get, $"/v1/orgs/{o}/projects")),
         ProjectCase("GET", "/v1/projects/{p}", p => new(HttpMethod.Get, $"/v1/projects/{p}"), ownControl: true),
         ProjectCase("PATCH", "/v1/projects/{p}", p => new(HttpMethod.Patch, $"/v1/projects/{p}", new JsonObject { ["name"] = "intruder" }, "\"1\"")),
+
+        // ---- Authoring (Authoring endpoints, 13.1.1-T2) ------------------------------------------------------
+        // The feature tree is project-scoped and the authoring module's own gate answers 403
+        // `project_scope_mismatch` for a credential scoped to a sibling project of the same org (a hole RLS alone
+        // does not close, because the authoring tables are org-scoped). Every mutation needs `Idempotency-Key`
+        // and the PATCH/DELETE/reorder/state/item routes additionally carry `If-Match`.
+        ProjectCase("GET", "/v1/projects/{p}/authoring/tree", p => new(HttpMethod.Get, $"/v1/projects/{p}/authoring/tree?limit=1"),
+            list: true, ownControl: true),
+        ProjectCase("POST", "/v1/projects/{p}/authoring/nodes", p => new(HttpMethod.Post, $"/v1/projects/{p}/authoring/nodes",
+            new JsonObject { ["kind"] = "module", ["title"] = "intruder module" })),
+        ObjectCaseWith("PATCH", "/v1/projects/{p}/authoring/nodes/{n}", p => [("node", p.AuthoringChildNodeId)],
+            (id, p) => new(HttpMethod.Patch, $"/v1/projects/{p.Id}/authoring/nodes/{id}",
+                new JsonObject { ["title"] = "intruder" }, "\"1\""), (_, _) => []),
+        ObjectCaseWith("DELETE", "/v1/projects/{p}/authoring/nodes/{n}", p => [("node", p.AuthoringChildNodeId)],
+            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/nodes/{id}", null, "\"1\""), (_, _) => []),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/nodes/{n}/reorder", p => [("node", p.AuthoringChildNodeId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/nodes/{id}/reorder",
+                new JsonObject { ["ordered_ids"] = new JsonArray { id } }, "\"order:sha256:" + new string('0', 64) + "\""), (_, _) => []),
+        ProjectCase("GET", "/v1/projects/{p}/authoring/checklist-items", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/authoring/checklist-items?limit=1"), list: true, ownControl: true),
+        ProjectCase("POST", "/v1/projects/{p}/authoring/checklist-items", p => new(HttpMethod.Post,
+            $"/v1/projects/{p}/authoring/checklist-items",
+            new JsonObject { ["node_id"] = p, ["title"] = "intruder item", ["priority"] = "high" })),
+        ObjectCaseWith("PATCH", "/v1/projects/{p}/authoring/checklist-items/{i}", p => [("item", p.AuthoringItemId)],
+            (id, p) => new(HttpMethod.Patch, $"/v1/projects/{p.Id}/authoring/checklist-items/{id}",
+                new JsonObject { ["title"] = "intruder" }, "\"1\""), (_, _) => []),
+        ObjectCaseWith("DELETE", "/v1/projects/{p}/authoring/checklist-items/{i}", p => [("item", p.AuthoringItemId)],
+            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/checklist-items/{id}", null, "\"1\""), (_, _) => []),
+        ProjectCase("GET", "/v1/projects/{p}/authoring/manual-cases", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/authoring/manual-cases?limit=1"), list: true, ownControl: true),
+        ProjectCase("POST", "/v1/projects/{p}/authoring/manual-cases", p => new(HttpMethod.Post,
+            $"/v1/projects/{p}/authoring/manual-cases", new JsonObject
+            {
+                ["checklist_item_id"] = p,
+                ["title"] = "intruder case",
+                ["steps"] = new JsonArray { new JsonObject { ["no"] = 1, ["action"] = "open", ["expected"] = "shown" } },
+                ["priority"] = "high",
+            })),
+        ObjectCaseWith("GET", "/v1/projects/{p}/authoring/manual-cases/{m}", p => [("case", p.AuthoringManualCaseId)],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}"), (_, _) => [],
+            own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/manual-cases/{p.AuthoringManualCaseId}")),
+        ObjectCaseWith("PATCH", "/v1/projects/{p}/authoring/manual-cases/{m}", p => [("case", p.AuthoringManualCaseId)],
+            (id, p) => new(HttpMethod.Patch, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}",
+                new JsonObject { ["title"] = "intruder" }, "\"1\""), (_, _) => []),
+        ObjectCaseWith("DELETE", "/v1/projects/{p}/authoring/manual-cases/{m}", p => [("case", p.AuthoringManualCaseId)],
+            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}", null, "\"1\""), (_, _) => []),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/state", p => [("case", p.AuthoringManualCaseId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}/state",
+                new JsonObject { ["state"] = "approved" }, "\"1\""), (_, _) => []),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/item", p => [("case", p.AuthoringManualCaseId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}/item",
+                new JsonObject { ["checklist_item_id"] = p.AuthoringItemId }, "\"1\""), (_, _) => []),
 
         // ---- Membership (MembershipEndpoints.cs:49-75) ---------------------------------------------------------
         OrgCase("POST", "/v1/orgs/{o}/memberships", o => new(HttpMethod.Post, $"/v1/orgs/{o}/memberships", Invite())),
