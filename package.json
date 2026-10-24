@@ -10,7 +10,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -b tsconfig.json",
+    "build": "tsc -b tsconfig.json && npm run build -w apps/web",
     "lint": "eslint . --max-warnings 0",
     "test": "npm run test --workspaces --if-present",
     "e2e": "npm run e2e --workspaces --if-present",
@@ -21,6 +21,10 @@
   },
   "lint-staged": {
     "{apps/web,packages}/**/*.{ts,tsx}": [
+      "prettier --check",
+      "eslint --max-warnings 0 --no-warn-ignored"
+    ],
+    "apps/web/**/*.html": [
       "prettier --check",
       "eslint --max-warnings 0 --no-warn-ignored"
     ],

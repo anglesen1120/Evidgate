@@ -1,0 +1,6 @@
+/* 09.1.1-T11 owns the design tokens (src/styles/tokens.css); the shell only sets the
+   document-level typography every later component inherits. */
+.app-title {
+  margin: 0;
+  font: inherit;
+}
