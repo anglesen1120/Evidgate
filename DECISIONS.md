@@ -77,13 +77,13 @@ Owner direction 2026-09-25: web on **Angular**, backend on the **latest .NET** w
 
 | Layer | Choice | Evidence | Note |
 |---|---|---|---|
-| Framework | **Angular 22.2** (`@angular/core`, `@angular/cli`, `@angular/build`, `@angular/cdk`) | 22.2.0 MIT, published 2026-09-23, `engines.node ^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0` ✅ ([registry](https://registry.npmjs.org/@angular/core/22.2.0)) | Standalone components, signals, zoneless change detection ⚠️ (stable status confirmed in 09.1.1-T2), `OnPush`, built-in control flow, lazy routes per feature |
+| Framework | **Angular 22.2** (`@angular/core`, `@angular/cli`, `@angular/build`, `@angular/cdk`) | 22.2.0 MIT, published 2026-09-23, `engines.node ^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0` ✅ ([registry](https://registry.npmjs.org/@angular/core/22.2.0)) | Standalone components, signals, zoneless change detection ✅ (stable, `@publicApi`; no-zone.js run in [ADR-0008](docs/adr/0008-web-integration-fit.md)), `OnPush`, built-in control flow, lazy routes per feature |
 | Language | **TypeScript 6.0.x** | `@angular/build` 22.2.0 peer `typescript >=6.0 <6.1` ✅ ([registry](https://registry.npmjs.org/@angular/build/22.2.0)); npm `typescript` latest 7.0.2 ✅ | Same pin as customer-side packages; TS 7 only when Angular's peer range allows it |
 | State | **`@ngrx/signals` 22** (SignalStore) for feature state; plain signals for local state | 22.0.1 MIT ✅ ([registry](https://registry.npmjs.org/@ngrx/signals/22.0.1)) | No global Redux store |
-| API client | SDK generated from `contracts/openapi.yaml` by `@hey-api/openapi-ts` 0.99 | 0.99.0 MIT ✅ | Shared with the CLI (`packages/sdk`); Angular wraps it behind `HttpClient` interceptors ⚠️ (plugin fit checked in 09.1.1-T2) |
-| i18n | **`@angular/localize`** (first-party), vi + en builds | MIT, same release line ⚠️ | Runtime switch = locale-prefixed builds (`/vi/`, `/en/`) |
+| API client | SDK generated from `contracts/openapi.yaml` by `@hey-api/openapi-ts` 0.99 | 0.99.0 MIT ✅ | Shared with the CLI (`packages/sdk`); Angular wraps it behind `HttpClient` interceptors ✅ through a `fetch` adapter ([ADR-0008](docs/adr/0008-web-integration-fit.md); fallback `@hey-api/client-angular`) |
+| i18n | **`@angular/localize`** (first-party), vi + en builds | 22.2.0 MIT, same release line (exact `@angular/compiler` peers) ✅ ([registry](https://registry.npmjs.org/@angular/localize/22.2.0)); `ng build --localize` emits `/en/` and `/vi/` ([ADR-0008](docs/adr/0008-web-integration-fit.md)) | Runtime switch = locale-prefixed builds (`/vi/`, `/en/`) |
 | Lint | `angular-eslint` 22.5 | 22.5.0 MIT ✅ ([registry](https://registry.npmjs.org/@angular-eslint/eslint-plugin/22.5.0)) | |
-| Tests (web) | **Vitest 5** unit tests; **Playwright 1.63** E2E | vitest 5.0.1 MIT ✅; @playwright/test 1.63.0 Apache-2.0 ✅ | Angular unit-test builder with Vitest ⚠️ (confirmed in 09.1.1-T2) |
+| Tests (web) | **Vitest 5** unit tests; **Playwright 1.63** E2E | vitest 5.0.1 MIT ✅; @playwright/test 1.63.0 Apache-2.0 ✅ | Angular unit-test builder with Vitest ✅ (`@angular/build:unit-test`, JUnit reporter; [ADR-0008](docs/adr/0008-web-integration-fit.md)) |
 
 ### 4.3 Customer-side packages (unchanged language: Node + TypeScript)
 
