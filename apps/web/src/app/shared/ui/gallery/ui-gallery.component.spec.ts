@@ -1,19 +1,20 @@
 // State sheet: docs/design/web/state-sheet.md#how-the-specs-link-here
 // 09.1.1-T7 AC8: independent verdict fields; AC9: zoneless gallery regression coverage.
 import { provideZonelessChangeDetection } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { UiGalleryComponent } from './ui-gallery.component';
 
 describe('UiGalleryComponent (AC8 / AC9)', () => {
   let root: HTMLElement;
+  let fixture: ComponentFixture<UiGalleryComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [UiGalleryComponent],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
-    const fixture = TestBed.createComponent(UiGalleryComponent);
+    fixture = TestBed.createComponent(UiGalleryComponent);
     await fixture.whenStable();
     root = fixture.nativeElement as HTMLElement;
   });
@@ -57,7 +58,7 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
 
   it('renders every component group and both regular and virtual typed table fixtures', () => {
     expect(root.querySelectorAll('h1')).toHaveLength(1);
-    expect(root.querySelectorAll('h2')).toHaveLength(12);
+    expect(root.querySelectorAll('main > section > h2')).toHaveLength(16);
     expect(root.querySelectorAll('app-run-state-pill')).toHaveLength(8);
     expect(
       root
@@ -80,5 +81,35 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
         .querySelector('[data-demo=\"table-empty\"] [role=\"table\"]')
         ?.getAttribute('aria-rowcount'),
     ).toBe('1');
+  });
+
+  it('includes every request pattern and both native retry eligibility states', async () => {
+    for (const selector of [
+      'app-loading-pattern',
+      'app-empty-pattern',
+      'app-error-pattern',
+      'app-forbidden-pattern',
+      'app-not-found-pattern',
+      'app-conflict-dialog',
+      'app-request-state app-empty-pattern',
+    ]) {
+      expect(root.querySelector(selector), selector).not.toBeNull();
+    }
+    expect(
+      root.querySelector<HTMLButtonElement>('[data-demo="retry-after-waiting"] button')?.disabled,
+    ).toBe(true);
+    expect(
+      root.querySelector<HTMLButtonElement>('[data-demo="retry-after-eligible"] button')?.disabled,
+    ).toBe(false);
+    expect(root.querySelector('app-request-state')?.textContent).not.toContain('Current content');
+    const status = root.querySelector('[data-demo="retry-count"]');
+    expect(status?.textContent).toContain('0');
+    root.querySelector<HTMLButtonElement>('[data-demo="retry-after-eligible"] button')?.click();
+    await fixture.whenStable();
+    expect(status?.textContent).toContain('1');
+    // Local example event only; it does not issue an API call.
+    expect(
+      root.querySelector('[data-demo="retry-after-waiting"] button')?.hasAttribute('disabled'),
+    ).toBe(true);
   });
 });

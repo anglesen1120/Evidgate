@@ -33,6 +33,7 @@ import { isApiRequestError, type ApiError } from './api-error';
 import { provideApi } from './api-client';
 import { ApiGateway, type SdkResult } from './api-gateway';
 import { API_BASE_PATH } from './api-origin';
+import { DEFAULT_REQUEST_TIMEOUT_MS } from './http-client-fetch';
 import { createIntent, intentHeaders, type Intent } from './intent';
 
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
@@ -62,11 +63,12 @@ interface FlushOptions {
 }
 
 /**
- * Answer a pending request with a JSON body. The adapter issues `responseType: 'blob'`, so the
- * body is a `Blob` (never a plain object) and the content type is what the SDK parses by.
+ * Answer a pending request with a JSON body. The adapter issues `responseType: 'text'`, so the
+ * body is the exact response text the server would send and the content type is what the SDK
+ * parses by.
  */
 function flushJson(request: TestRequest, body: unknown, options: FlushOptions = {}): void {
-  request.flush(new Blob([JSON.stringify(body)], { type: 'application/json' }), {
+  request.flush(JSON.stringify(body), {
     status: options.status ?? 200,
     // `flush` requires an explicit status text once a custom status is set.
     statusText: '',
@@ -280,7 +282,7 @@ describe('API client stack (09.1.1-T3.2)', () => {
 
   it('reports an HTML 502 without an envelope as unavailable/envelope_missing', async () => {
     const page = gateway.call((sdk) => listRuns({ client: sdk, path: { p: 'p-1' } }));
-    const html = new Blob(['<html><body>Bad Gateway</body></html>'], { type: 'text/html' });
+    const html = '<html><body>Bad Gateway</body></html>';
     (await takeRequest(httpMock, RUNS_URL)).flush(html, {
       status: 502,
       statusText: '',
@@ -353,6 +355,53 @@ describe('API client stack (09.1.1-T3.2)', () => {
     const bug = new RangeError('the operation misused the SDK');
     const rejection = await captureRejection(gateway.call<SdkResult>(() => Promise.reject(bug)));
     expect(rejection).toBe(bug);
+  });
+
+  // 09.1.1-T8: the deadline and the non-text refusal are proven through the whole stack, so a
+  // regression in either mapping (adapter, SDK error path, gateway) fails here.
+  it('reports a stalled call as a typed timeout once the 30 s deadline passes', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const page = gateway.call((sdk) => listRuns({ client: sdk, path: { p: 'p-1' } }));
+      const settlement = page.then(
+        () => 'resolved',
+        (reason: unknown) => reason,
+      );
+      const request = await takeRequest(httpMock, RUNS_URL);
+
+      await vi.advanceTimersByTimeAsync(DEFAULT_REQUEST_TIMEOUT_MS);
+
+      const rejection = await settlement;
+      if (!isApiRequestError(rejection)) {
+        throw rejection;
+      }
+      expect(rejection.error.kind).toBe('timeout');
+      expect(rejection.error.status).toBe(0);
+      expect(rejection.error.retryable).toBe(true);
+      expect(rejection.error.retryAfterSeconds).toBeNull();
+      expect(rejection.cause).toBeInstanceOf(DOMException);
+      expect(rejection.cause).toHaveProperty('name', 'TimeoutError');
+      // The deadline unsubscribed the request, so no late 200 can turn into a success value.
+      expect(request.cancelled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('maps a 2xx with a non-text body to network, never to a success value', async () => {
+    const page = gateway.call((sdk) => listRuns({ client: sdk, path: { p: 'p-1' } }));
+    (await takeRequest(httpMock, RUNS_URL)).flush('\u0089PNG\r\n\u001a\n', {
+      status: 200,
+      statusText: '',
+      headers: { 'Content-Type': 'image/png' },
+    });
+    const rejection = await captureRejection(page);
+    if (!isApiRequestError(rejection)) {
+      throw rejection;
+    }
+    expect(rejection.error.kind).toBe('network');
+    expect(rejection.error.status).toBe(0);
+    expect(rejection.cause).toBeInstanceOf(TypeError);
   });
 
   it('leaves a foreign-origin request untouched by all three API headers', async () => {
