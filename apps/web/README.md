@@ -2,6 +2,23 @@
 
 Placeholder npm workspace for the Angular SPA. Owned by story 09.1.1-T1, which replaces this package.json with the real Angular 22 application (plans/09-web-ui.md, 00 §5.2).
 
+## Design reference — Web UI v2 (S50)
+
+The screens this app implements are mocked up as static HTML in [`docs/design/web-ui/output/`](../../docs/design/web-ui/output/). Open `index.html` there for the page list, `00-components/` for the component gallery, and [`NAV.md`](../../docs/design/web-ui/output/NAV.md) for every page with its CR-D-2 phase (G1–G4). How the pages were generated and reviewed is in [`RUNS.md`](../../docs/design/web-ui/output/RUNS.md). The mockups are a reference, not code to copy: owner approval of the CR-D-2 screens (gate B2 in [`prompts-crd2/00-README.md`](../../docs/design/web-ui/prompts-crd2/00-README.md)) and the 09.1.1-T11 design tasks still come before feature screens.
+
+What the mockups fix, and where it lands in this app:
+
+| Mockup                                             | Content                                                                                                                                                                                                                          | Target in `apps/web`                                                  |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `assets/evidgate.css`, `@layer tokens`             | `--eg-*` custom properties: colour roles (surface, text, border, accent, success/danger/warning/info/neutral fg+bg), type scale 12–28 px, weights, spacing, radius; dark values under `[data-theme="dark"]`                      | `src/styles/tokens.css` (09.1.1-T11.2)                                |
+| `assets/evidgate.css`, `@layer layout, components` | Shell (`eg-shell`, `eg-topbar`, `eg-nav`), and components such as `eg-btn`, `eg-badge`, `eg-table`, `eg-toolbar`, `eg-dialog`, `eg-drawer`, `eg-tabs`, `eg-state`, `eg-banner`, `eg-tree`, `eg-editor`, `eg-diff`, `eg-timeline` | Shared components of 09.1.1-T7/T8 and the state sheet of 09.1.1-T11.4 |
+| Nav breakpoints in `assets/evidgate.js`            | Sidebar expanded at ≥ 1280 px, icon rail at 768–1279 px, drawer below 768 px                                                                                                                                                     | Layout rules of 09.1.1-T11.3                                          |
+| Nav registry in `assets/evidgate.js`               | One list of routes with label (vi + en), group, phase and parent; the sidebar is generated from it and hides routes of a later phase                                                                                             | Route table and menu config, one source for both                      |
+| Locale and theme toggles                           | vi default, en; light and dark; the choice is persisted (`evidgate-locale`, `evidgate-theme`)                                                                                                                                    | i18n setup and the theme toggle of 09.1.1-T11.2                       |
+| State switch on each page                          | default, loading, empty, error, 403, 412 where the page saves, and page-specific states, shown in place                                                                                                                          | The state each component and screen must render                       |
+
+Rules the mockups keep and the app keeps too: completeness, outcome and decision are separate fields; a missing or pending result never renders as PASS; healing is proposed as a PR and never applied from the UI; controls in one row share a height, action labels do not wrap, and nothing scrolls sideways at 360 px.
+
 ## E2E (Playwright) — 01.6.1-T5
 
 `playwright.config.ts` is the web E2E workspace: one `chromium` project, retries 2 when `CI` is

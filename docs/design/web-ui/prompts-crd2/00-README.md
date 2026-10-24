@@ -1,6 +1,6 @@
 # CR-D-2 UI update: review, plan and OpenDesign prompts
 
-This folder holds the work to bring the Web UI mockups (`../output/`, 39 pages) in line with CR-D-2 direction (a). The product's centre moves from release evidence to authoring and repair. Source of truth for scope:
+This folder holds the work to bring the Web UI mockups (`../output/`; the S44 v1 set had 39 pages, since replaced by the S50 v2 redesign with 47 pages plus a component gallery, see `../output/NAV.md`) in line with CR-D-2 direction (a). The product's centre moves from release evidence to authoring and repair. Source of truth for scope:
 
 - [plan 13](../../../../plans/13-product-phases.md)
 - [CR-D-2](../../../../docs/decisions/CR-D-2-direction-a.md)

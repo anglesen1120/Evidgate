@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="vi" data-theme="light" data-nav="authoring" data-phase-min="G1">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Cây chức năng · Evidgate</title>
+  <link rel="stylesheet" href="../assets/evidgate.css">
+  <script src="../assets/evidgate.js" defer></script>
+</head>
+<body>
+  <a class="eg-skip-link" href="#main"><span data-en="Skip to main content" data-vi="Bỏ qua đến nội dung chính">Bỏ qua đến nội dung chính</span></a>
+  <div class="eg-shell">
+    <aside class="eg-nav" id="eg-primary-nav" data-eg-nav aria-label="Điều hướng sản phẩm"></aside>
+    <div class="eg-shell__main">
+      <header class="eg-topbar">
+        <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-nav-toggle aria-expanded="true" aria-controls="eg-primary-nav" aria-label="Mở hoặc thu gọn điều hướng">
+          <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-menu"></use></svg>
+        </button>
+        <div class="eg-topbar__scope">
+          <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Project" data-vi="Dự án">Dự án</span></span>
+          <span><strong>storefront-web</strong> · Lotus Commerce</span>
+        </div>
+        <div class="eg-topbar__search">
+          <label class="eg-visually-hidden" for="nav-search">Tìm mục điều hướng</label>
+          <input class="eg-input eg-input--search" id="nav-search" type="search" data-eg-nav-search data-placeholder-en="Search navigation" data-placeholder-vi="Tìm mục điều hướng" placeholder="Tìm mục điều hướng">
+        </div>
+        <div class="eg-topbar__actions">
+          <span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Author</span></span>
+          <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-open="shortcuts-dialog" aria-haspopup="dialog" aria-label="Phím tắt">
+            <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-book"></use></svg>
+          </button>
+          <div class="eg-menu">
+            <button class="eg-btn eg-btn--ghost eg-btn--sm eg-menu__trigger" type="button" aria-expanded="false" aria-controls="account-menu">
+              <span>LN</span>
+              <span class="eg-btn__label">Linh Nguyễn</span>
+              <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg>
+            </button>
+            <div class="eg-menu__panel" id="account-menu" hidden>
+              <p><strong>Linh Nguyễn</strong><br><span data-en="QA engineer · Lotus Commerce" data-vi="Kỹ sư QA · Lotus Commerce">Kỹ sư QA · Lotus Commerce</span></p>
+              <a class="eg-menu__item" href="../27-settings-shell/evidgate-settings.html" data-en="Workspace settings" data-vi="Cài đặt không gian làm việc">Cài đặt không gian làm việc</a>
+              <a class="eg-menu__item" href="../44-ai-settings/evidgate-ai-settings.html" data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</a>
+              <a class="eg-menu__item" href="../02-login/evidgate-sign-in.html" data-en="Sign out" data-vi="Đăng xuất">Đăng xuất</a>
+            </div>
+          </div>
+        </div>
+      </header>
+      <main tabindex="-1" class="eg-shell__content" id="main">
+        <nav class="eg-breadcrumbs" aria-label="Đường dẫn">
+          <ol>
+            <li class="eg-breadcrumbs__item"><a href="../index.html" data-en="Design index" data-vi="Hồ sơ thiết kế">Hồ sơ thiết kế</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item"><a href="../24-project-connection/evidgate-project-overview.html">storefront-web</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item" aria-current="page" data-en="Feature tree" data-vi="Cây chức năng">Cây chức năng</li>
+          </ol>
+        </nav>
+
+        <div class="eg-banner eg-banner--desktop">
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong data-en="Desktop required for changes" data-vi="Cần máy tính để thay đổi">Cần máy tính để thay đổi</strong>
+            <p data-en="This narrow view is read-only. Open the tree on a desktop to create cases or change selection." data-vi="Chế độ hẹp này là chỉ đọc. Mở cây trên máy tính để tạo ca hoặc thay đổi lựa chọn.">Chế độ hẹp này là chỉ đọc. Mở cây trên máy tính để tạo ca hoặc thay đổi lựa chọn.</p>
+          </div>
+        </div>
+
+        <header class="eg-page-header">
+          <div>
+            <p class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Authoring</span></p>
+            <h1 class="eg-page-header__title" data-en="Feature tree" data-vi="Cây chức năng">Cây chức năng</h1>
+            <p class="eg-page-header__description" data-en="Browse the project hierarchy, then find manual cases by priority, authoring status, source, coverage and owner. Coverage means linked automated test-case identities, not an execution verdict." data-vi="Duyệt cây phân cấp của dự án, sau đó tìm ca thủ công theo mức ưu tiên, trạng thái soạn, nguồn, mức tự động hoá và người phụ trách. Mức tự động hoá là liên kết tới danh tính ca tự động, không phải kết luận thực thi.">Duyệt cây phân cấp của dự án, sau đó tìm ca thủ công theo mức ưu tiên, trạng thái soạn, nguồn, mức tự động hoá và người phụ trách. Mức tự động hoá là liên kết tới danh tính ca tự động, không phải kết luận thực thi.</p>
+            <p class="eg-page-header__meta">
+              <span>storefront-web · SHOP</span>
+              <span aria-hidden="true">·</span>
+              <span data-en="12 checklist items" data-vi="12 danh mục kiểm tra">12 danh mục kiểm tra</span>
+              <span aria-hidden="true">·</span>
+              <span data-en="38 manual cases" data-vi="38 ca thủ công">38 ca thủ công</span>
+              <span aria-hidden="true">·</span>
+              <span>ais-3</span>
+            </p>
+          </div>
+          <div class="eg-page-header__actions">
+            <a class="eg-btn eg-btn--primary" href="../41-test-case-editor/evidgate-test-case-editor.html?state=new-case" data-eg-mutate><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-plus"></use></svg><span class="eg-btn__label" data-en="New test case" data-vi="Ca kiểm thử mới">Ca kiểm thử mới</span></a>
+            <a class="eg-btn eg-btn--secondary" href="../43-generation/evidgate-generation.html"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-sparkle"></use></svg><span class="eg-btn__label" data-en="Generate tests" data-vi="Tạo kiểm thử">Tạo kiểm thử</span></a>
+            <a class="eg-btn eg-btn--secondary" href="../45-import-export/evidgate-import-export.html"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-file"></use></svg><span class="eg-btn__label" data-en="Import / export" data-vi="Nhập / xuất">Nhập / xuất</span></a>
+          </div>
+        </header>
+
+        <div data-eg-review data-eg-states="default,loading,empty,no-match,error,403,404,401,429,412"></div>
+
+        <div data-eg-show-state="loading" hidden aria-busy="true">
+          <div class="eg-split-pane">
+            <section class="eg-card" aria-hidden="true">
+              <div class="eg-card__header"><span class="eg-skeleton eg-skeleton--title"></span><span class="eg-skeleton eg-skeleton--control"></span></div>
+              <div class="eg-card__body"><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span><span class="eg-skeleton eg-skeleton--row"></span></div>
+            </section>
+            <section class="eg-card" aria-hidden="true">
+              <div class="eg-card__header"><span class="eg-skeleton eg-skeleton--title"></span><span class="eg-skeleton eg-skeleton--control"></span></div>
+              <div class="eg-card__body"><span class="eg-skeleton eg-skeleton--block"></span><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span><span class="eg-skeleton eg-skeleton--row"></span></div>
+            </section>
+          </div>
+          <span class="eg-visually-hidden" role="status" data-en="Loading the feature tree and manual cases" data-vi="Đang tải cây chức năng và ca thủ công">Đang tải cây chức năng và ca thủ công</span>
+        </div>
+
+        <div class="eg-stack" data-gap="4">
+          <div class="eg-state eg-state--empty" data-eg-show-state="empty" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-tree"></use></svg></span>
+            <span class="eg-state__title" data-en="No checklist items yet" data-vi="Chưa có danh mục kiểm tra">Chưa có danh mục kiểm tra</span>
+            <span class="eg-state__description" data-en="Import a requirement or create the first manual case to start authoring." data-vi="Nhập yêu cầu hoặc tạo ca thủ công đầu tiên để bắt đầu soạn.">Nhập yêu cầu hoặc tạo ca thủ công đầu tiên để bắt đầu soạn.</span>
+            <span class="eg-state__actions"><a class="eg-btn eg-btn--primary eg-btn--sm" href="../45-import-export/evidgate-import-export.html"><span class="eg-btn__label" data-en="Import cases" data-vi="Nhập ca kiểm thử">Nhập ca kiểm thử</span></a><a class="eg-btn eg-btn--secondary eg-btn--sm" href="../41-test-case-editor/evidgate-test-case-editor.html?state=new-case"><span class="eg-btn__label" data-en="New test case" data-vi="Ca kiểm thử mới">Ca kiểm thử mới</span></a></span>
+          </div>
+          <div class="eg-state eg-state--no-match" data-eg-show-state="no-match" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-search"></use></svg></span>
+            <span class="eg-state__title" data-en="No cases match these filters" data-vi="Không có ca nào khớp bộ lọc">Không có ca nào khớp bộ lọc</span>
+            <span class="eg-state__description" data-en="The selected checklist item and scope stay visible. Clear the filters to see its cases again." data-vi="Danh mục kiểm tra và phạm vi đã chọn vẫn hiển thị. Xoá bộ lọc để xem lại các ca của mục này.">Danh mục kiểm tra và phạm vi đã chọn vẫn hiển thị. Xoá bộ lọc để xem lại các ca của mục này.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-filter-reset="#case-filters"><span class="eg-btn__label" data-en="Clear filters" data-vi="Xoá bộ lọc">Xoá bộ lọc</span></button></span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="error" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="The feature tree could not be loaded" data-vi="Không thể tải cây chức năng">Không thể tải cây chức năng</span>
+            <span class="eg-state__description" data-en="Retry keeps the current project and selected node. No case or filter is changed." data-vi="Thử lại giữ nguyên dự án và nút đã chọn. Không ca hay bộ lọc nào bị thay đổi.">Thử lại giữ nguyên dự án và nút đã chọn. Không ca hay bộ lọc nào bị thay đổi.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Retry" data-vi="Thử lại">Thử lại</span></button></span>
+          </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="403" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+            <span class="eg-state__title" data-en="You do not have access to this project" data-vi="Bạn không có quyền truy cập dự án này">Bạn không có quyền truy cập dự án này</span>
+            <span class="eg-state__description" data-en="Authoring write permission is not granted, so creation and selection are unavailable. Ask a project owner for access." data-vi="Chưa được cấp quyền ghi khi soạn, nên không thể tạo hoặc chọn. Yêu cầu chủ dự án cấp quyền.">Chưa được cấp quyền ghi khi soạn, nên không thể tạo hoặc chọn. Yêu cầu chủ dự án cấp quyền.</span>
+          </div>
+          <div class="eg-state eg-state--not-found" data-eg-show-state="404" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-search"></use></svg></span>
+            <span class="eg-state__title" data-en="Checklist item not found" data-vi="Không tìm thấy danh mục kiểm tra">Không tìm thấy danh mục kiểm tra</span>
+            <span class="eg-state__description" data-en="The item may have moved, or you may not have access. Existence details are not disclosed." data-vi="Mục có thể đã di chuyển hoặc bạn không có quyền. Không tiết lộ thông tin về sự tồn tại.">Mục có thể đã di chuyển hoặc bạn không có quyền. Không tiết lộ thông tin về sự tồn tại.</span>
+          </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="401" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+            <span class="eg-state__title" data-en="Your session expired" data-vi="Phiên đăng nhập đã hết hạn">Phiên đăng nhập đã hết hạn</span>
+            <span class="eg-state__description" data-en="Sign in again. The selected node and table filters are not submitted automatically." data-vi="Đăng nhập lại. Nút đã chọn và bộ lọc bảng không được tự động gửi.">Đăng nhập lại. Nút đã chọn và bộ lọc bảng không được tự động gửi.</span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="429" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+            <span class="eg-state__title" data-en="Too many requests" data-vi="Quá nhiều yêu cầu">Quá nhiều yêu cầu</span>
+            <span class="eg-state__description" data-en="The server asked the client to wait. Nothing is retried automatically and the current table stays unchanged." data-vi="Máy chủ yêu cầu chờ. Không có yêu cầu nào được tự động thử lại và bảng hiện tại không đổi.">Máy chủ yêu cầu chờ. Không có yêu cầu nào được tự động thử lại và bảng hiện tại không đổi.</span>
+          </div>
+          <div class="eg-state eg-state--conflict" data-eg-show-state="412" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-shield-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="The tree changed while you were working" data-vi="Cây đã thay đổi trong khi bạn đang làm việc">Cây đã thay đổi trong khi bạn đang làm việc</span>
+            <span class="eg-state__description" data-en="The displayed queue is based on av-12 and the current authoring version is av-13. Your selected node and filters are retained; reloading the base is explicit." data-vi="Hàng đợi đang hiển thị dựa trên av-12 và phiên bản soạn hiện tại là av-13. Nút đã chọn và bộ lọc được giữ lại; tải lại giá trị gốc là thao tác rõ ràng.">Hàng đợi đang hiển thị dựa trên av-12 và phiên bản soạn hiện tại là av-13. Nút đã chọn và bộ lọc được giữ lại; tải lại giá trị gốc là thao tác rõ ràng.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Reload current tree" data-vi="Tải lại cây hiện tại">Tải lại cây hiện tại</span></button></span>
+          </div>
+        </div>
+
+        <div class="eg-stack" data-gap="6" data-eg-hide-state="loading,empty,no-match,error,403,404,401,429,412">
+          <nav class="eg-breadcrumbs" aria-label="Vị trí trong cây chức năng">
+            <ol>
+              <li class="eg-breadcrumbs__item"><a href="../24-project-connection/evidgate-project-overview.html">storefront-web</a></li>
+              <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+              <li class="eg-breadcrumbs__item"><span data-en="Checkout" data-vi="Thanh toán">Thanh toán</span></li>
+              <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+              <li class="eg-breadcrumbs__item"><span data-en="Order review" data-vi="Xem lại đơn hàng">Xem lại đơn hàng</span></li>
+              <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+              <li class="eg-breadcrumbs__item"><span data-en="Validation" data-vi="Kiểm tra tính hợp lệ">Kiểm tra tính hợp lệ</span></li>
+              <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+              <li class="eg-breadcrumbs__item" aria-current="page">SHOP-CL-0017</li>
+            </ol>
+          </nav>
+
+          <div class="eg-split-pane eg-split-pane--tree-rail">
+            <section class="eg-card" aria-labelledby="tree-title">
+              <header class="eg-card__header">
+                <div>
+                  <h2 id="tree-title" data-en="Hierarchy · storefront-web" data-vi="Cây phân cấp · storefront-web">Cây phân cấp · storefront-web</h2>
+                  <p data-en="Module → feature → category → checklist item → manual case. The project node is not counted as a domain level." data-vi="Mô-đun → chức năng → danh mục → danh mục kiểm tra → ca thủ công. Nút dự án không tính là một cấp miền.">Mô-đun → chức năng → danh mục → danh mục kiểm tra → ca thủ công. Nút dự án không tính là một cấp miền.</p>
+                </div>
+                <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="SHOP" data-vi="SHOP">SHOP</span></span>
+              </header>
+              <div class="eg-card__body">
+                <ul class="eg-tree" data-eg-tree aria-label="Cây chức năng và ca thủ công">
+                  <li class="eg-tree__item">
+                      <div class="eg-tree__row">
+                    <button class="eg-tree__toggle" type="button" data-eg-disclosure aria-controls="tree-checkout" data-aria-en="Checkout" data-aria-vi="Thanh toán" aria-expanded="true"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg></button>
+                    <span class="eg-tree__label" data-en="Checkout" data-vi="Thanh toán">Thanh toán</span>
+                    <span class="eg-tree__meta">3</span>
+                    </div>
+                    <ul class="eg-tree__children" id="tree-checkout">
+                      <li class="eg-tree__item">
+                      <div class="eg-tree__row">
+                        <button class="eg-tree__toggle" type="button" data-eg-disclosure aria-controls="tree-order-review" data-aria-en="Order review" data-aria-vi="Xem lại đơn hàng" aria-expanded="true"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg></button>
+                        <span class="eg-tree__label" data-en="Order review" data-vi="Xem lại đơn hàng">Xem lại đơn hàng</span>
+                        <span class="eg-tree__meta">2</span>
+                        </div>
+                    <ul class="eg-tree__children" id="tree-order-review">
+                          <li class="eg-tree__item">
+                      <div class="eg-tree__row">
+                            <button class="eg-tree__toggle" type="button" data-eg-disclosure aria-controls="tree-validation" data-aria-en="Validation" data-aria-vi="Kiểm tra tính hợp lệ" aria-expanded="true"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg></button>
+                            <span class="eg-tree__label" data-en="Validation" data-vi="Kiểm tra tính hợp lệ">Kiểm tra tính hợp lệ</span>
+                            <span class="eg-tree__meta">3</span>
+                            </div>
+                    <ul class="eg-tree__children" id="tree-validation">
+                              <li class="eg-tree__item" data-eg-selected="true">
+                      <div class="eg-tree__row">
+                                <button class="eg-tree__toggle" type="button" data-eg-disclosure aria-controls="tree-cl-0017" data-aria-en="Checklist · SHOP-CL-0017 · Show the order total" data-aria-vi="Danh mục kiểm · SHOP-CL-0017 · Hiển thị tổng đơn hàng" aria-expanded="true"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg></button>
+                                <span class="eg-tree__label"><span data-en="Checklist · SHOP-CL-0017 · Show the order total" data-vi="Danh mục kiểm · SHOP-CL-0017 · Hiển thị tổng đơn hàng">Danh mục kiểm · SHOP-CL-0017 · Hiển thị tổng đơn hàng</span></span>
+                                <span class="eg-tree__meta"><span data-en="1 case" data-vi="1 ca">1 ca</span></span>
+                                </div>
+                    <ul class="eg-tree__children" id="tree-cl-0017">
+                                  <li class="eg-tree__item">
+                      <div class="eg-tree__row">
+                                    <span class="eg-tree__toggle" aria-hidden="true"></span>
+                                    <a class="eg-tree__label" href="../41-test-case-editor/evidgate-test-case-editor.html"><span data-en="Manual case · SHOP-TC-0042 v5 · Confirm order shows the total" data-vi="Ca thủ công · SHOP-TC-0042 v5 · Xác nhận đơn hàng hiển thị tổng tiền">Ca thủ công · SHOP-TC-0042 v5 · Xác nhận đơn hàng hiển thị tổng tiền</span></a>
+                                    <span class="eg-tree__meta">v5</span>
+                                  </div>
+                    </li>
+                                </ul>
+                              </li>
+                              <li class="eg-tree__item">
+                      <div class="eg-tree__row">
+                                <span class="eg-tree__toggle" aria-hidden="true"></span>
+                                <span class="eg-tree__label" data-en="Checklist · SHOP-CL-0018 · Required delivery address" data-vi="Danh mục kiểm · SHOP-CL-0018 · Địa chỉ giao hàng bắt buộc">Danh mục kiểm · SHOP-CL-0018 · Địa chỉ giao hàng bắt buộc</span>
+                                <span class="eg-tree__meta"><span data-en="1 case" data-vi="1 ca">1 ca</span></span>
+                              </div>
+                    </li>
+                              <li class="eg-tree__item">
+                      <div class="eg-tree__row">
+                                <span class="eg-tree__toggle" aria-hidden="true"></span>
+                                <span class="eg-tree__label" data-en="Checklist · SHOP-CL-0019 · Apply a discount code" data-vi="Danh mục kiểm · SHOP-CL-0019 · Áp dụng mã giảm giá">Danh mục kiểm · SHOP-CL-0019 · Áp dụng mã giảm giá</span>
+                                <span class="eg-tree__meta"><span data-en="1 case" data-vi="1 ca">1 ca</span></span>
+                              </div>
+                    </li>
+                            </ul>
+                          </li>
+                          <li class="eg-tree__item">
+                      <div class="eg-tree__row">
+                            <span class="eg-tree__toggle" aria-hidden="true"></span>
+                            <span class="eg-tree__label" data-en="Category · Delivery options and address validation in restricted markets" data-vi="Danh mục · Tuỳ chọn giao hàng và kiểm tra địa chỉ tại các thị trường bị hạn chế">Danh mục · Tuỳ chọn giao hàng và kiểm tra địa chỉ tại các thị trường bị hạn chế</span>
+                            <span class="eg-tree__meta">0</span>
+                          </div>
+                    </li>
+                        </ul>
+                      </li>
+                      <li class="eg-tree__item">
+                      <div class="eg-tree__row">
+                        <span class="eg-tree__toggle" aria-hidden="true"></span>
+                        <span class="eg-tree__label" data-en="Payment" data-vi="Thanh toán">Thanh toán</span>
+                        <span class="eg-tree__meta">0</span>
+                      </div>
+                    </li>
+                    </ul>
+                  </li>
+                  <li class="eg-tree__item">
+                      <div class="eg-tree__row">
+                    <button class="eg-tree__toggle" type="button" data-eg-disclosure aria-controls="tree-account" data-aria-en="Account" data-aria-vi="Tài khoản" aria-expanded="false"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg></button>
+                    <span class="eg-tree__label" data-en="Account" data-vi="Tài khoản">Tài khoản</span>
+                    <span class="eg-tree__meta">6</span>
+                    </div>
+                    <ul class="eg-tree__children" id="tree-account" hidden aria-hidden="true">
+                      <li class="eg-tree__item">
+                      <div class="eg-tree__row"><span class="eg-tree__toggle" aria-hidden="true"></span><span class="eg-tree__label" data-en="Sign in" data-vi="Đăng nhập">Đăng nhập</span><span class="eg-tree__meta">6</span></div>
+                    </li>
+                    </ul>
+                  </li>
+                </ul>
+                <p class="eg-kpi__context" data-en="The selected checklist item stays visible when filters change. Empty categories remain browsable; no case is created implicitly." data-vi="Danh mục kiểm tra đã chọn vẫn hiển thị khi bộ lọc thay đổi. Danh mục trống vẫn duyệt được; không ca nào được tạo ngầm.">Danh mục kiểm tra đã chọn vẫn hiển thị khi bộ lọc thay đổi. Danh mục trống vẫn duyệt được; không ca nào được tạo ngầm.</p>
+              </div>
+            </section>
+
+            <section class="eg-card" aria-labelledby="cases-title">
+              <header class="eg-card__header">
+                <div>
+                  <h2 id="cases-title" data-en="Manual cases · Validation category" data-vi="Ca thủ công · Danh mục Kiểm tra tính hợp lệ">Ca thủ công · Danh mục Kiểm tra tính hợp lệ</h2>
+                  <p data-en="Table scope is the enclosing Validation category (3 cases). The selected checklist SHOP-CL-0017 has 1 case. Each row opens the manual-case editor; zero coverage links means uncovered, never failed." data-vi="Phạm vi bảng là danh mục Kiểm tra tính hợp lệ bao ngoài (3 ca). Danh mục được chọn SHOP-CL-0017 có 1 ca. Mỗi dòng mở trình soạn ca thủ công; không có liên kết tự động hoá nghĩa là chưa tự động hoá, không phải thất bại.">Phạm vi bảng là danh mục Kiểm tra tính hợp lệ bao ngoài (3 ca). Danh mục được chọn SHOP-CL-0017 có 1 ca. Mỗi dòng mở trình soạn ca thủ công; không có liên kết tự động hoá nghĩa là chưa tự động hoá, không phải thất bại.</p>
+                </div>
+                <span class="eg-badge eg-badge--info"><span class="eg-badge__label" data-en="Visible rows only" data-vi="Chỉ dòng hiển thị">Chỉ dòng hiển thị</span></span>
+              </header>
+              <div class="eg-card__body">
+                <div class="eg-toolbar eg-toolbar--filters" id="case-filters" data-eg-filter-table="#case-table" aria-label="Bộ lọc ca thủ công">
+                  <div class="eg-field"><label class="eg-field__label" for="filter-priority" data-en="Priority" data-vi="Mức ưu tiên">Mức ưu tiên</label><select class="eg-select" id="filter-priority" data-eg-filter="priority"><option value="" data-en="All priorities" data-vi="Mọi mức ưu tiên">Mọi mức ưu tiên</option><option value="Critical" data-en="Critical" data-vi="Nghiêm trọng">Nghiêm trọng</option><option value="High" data-en="High" data-vi="Cao">Cao</option><option value="Medium" data-en="Medium" data-vi="Trung bình">Trung bình</option><option value="Low" data-en="Low" data-vi="Thấp">Thấp</option></select></div>
+                  <div class="eg-field"><label class="eg-field__label" for="filter-status" data-en="Status" data-vi="Trạng thái">Trạng thái</label><select class="eg-select" id="filter-status" data-eg-filter="status"><option value="" data-en="All statuses" data-vi="Mọi trạng thái">Mọi trạng thái</option><option value="Draft" data-en="Draft" data-vi="Bản nháp">Bản nháp</option><option value="In review" data-en="In review" data-vi="Đang duyệt">Đang duyệt</option><option value="Approved" data-en="Approved" data-vi="Đã duyệt">Đã duyệt</option></select></div>
+                  <div class="eg-field"><label class="eg-field__label" for="filter-source" data-en="Source" data-vi="Nguồn">Nguồn</label><select class="eg-select" id="filter-source" data-eg-filter="source"><option value="" data-en="All sources" data-vi="Mọi nguồn">Mọi nguồn</option><option value="Manual" data-en="Manual" data-vi="Thủ công">Thủ công</option><option value="AI" data-en="AI" data-vi="AI">AI</option><option value="Import" data-en="Import" data-vi="Nhập">Nhập</option></select></div>
+                  <div class="eg-field"><label class="eg-field__label" for="filter-coverage" data-en="Coverage" data-vi="Mức tự động hoá">Mức tự động hoá</label><select class="eg-select" id="filter-coverage" data-eg-filter="coverage"><option value="" data-en="All coverage" data-vi="Mọi mức tự động hoá">Mọi mức tự động hoá</option><option value="Covered" data-en="Covered" data-vi="Đã tự động hoá">Đã tự động hoá</option><option value="Uncovered" data-en="Uncovered" data-vi="Chưa tự động hoá">Chưa tự động hoá</option></select></div>
+                  <div class="eg-field"><label class="eg-field__label" for="filter-owner" data-en="Owner" data-vi="Người phụ trách">Người phụ trách</label><select class="eg-select" id="filter-owner" data-eg-filter="owner"><option value="" data-en="Anyone" data-vi="Bất kỳ ai">Bất kỳ ai</option><option value="Linh Nguyễn">Linh Nguyễn</option><option value="Unassigned" data-en="Unassigned" data-vi="Chưa gán">Chưa gán</option></select></div>
+                  <button class="eg-btn eg-btn--ghost" type="button" data-eg-filter-reset><span class="eg-btn__label" data-en="Reset" data-vi="Đặt lại">Đặt lại</span></button>
+                </div>
+
+                <div class="eg-table__wrap">
+                  <table class="eg-table eg-table--compact eg-table--selectable eg-table--workbench" id="case-table" data-eg-table aria-label="Danh sách ca thủ công">
+                    <caption class="eg-table__caption" data-en="Illustrative fixture. Selection covers visible rows only; there is no cross-page or hidden-row selection." data-vi="Dữ liệu minh hoạ. Lựa chọn chỉ áp dụng cho các dòng đang hiển thị; không chọn xuyên trang hay chọn dòng ẩn.">Dữ liệu minh hoạ. Lựa chọn chỉ áp dụng cho các dòng đang hiển thị; không chọn xuyên trang hay chọn dòng ẩn.</caption>
+                    <thead>
+                      <tr>
+                        <th class="eg-table__select" scope="col"><input type="checkbox" data-eg-select-all aria-label="Chọn các dòng đang hiển thị"></th>
+                        <th scope="col"><span data-en="Case" data-vi="Ca">Ca</span></th>
+                        <th scope="col"><span data-en="Title" data-vi="Tiêu đề">Tiêu đề</span></th>
+                        <th scope="col"><span data-en="Checklist parent" data-vi="Danh mục cha">Danh mục cha</span></th>
+                        <th scope="col"><span data-en="Priority" data-vi="Mức ưu tiên">Mức ưu tiên</span></th>
+                        <th scope="col"><span data-en="Status" data-vi="Trạng thái">Trạng thái</span></th>
+                        <th scope="col"><span data-en="Source" data-vi="Nguồn">Nguồn</span></th>
+                        <th scope="col"><span data-en="Coverage" data-vi="Mức tự động hoá">Mức tự động hoá</span></th>
+                        <th scope="col"><span data-en="Owner" data-vi="Người phụ trách">Người phụ trách</span></th>
+                        <th scope="col"><span data-en="Version" data-vi="Phiên bản">Phiên bản</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="eg-table__row" aria-selected="false" data-eg-priority="High" data-eg-status="In review" data-eg-source="Manual" data-eg-coverage="Covered" data-eg-owner="Linh Nguyễn">
+                        <td class="eg-table__select"><input type="checkbox" data-eg-select-row aria-label="Chọn SHOP-TC-0042"></td>
+                        <td class="eg-table__cell" data-label-en="Case" data-label-vi="Ca" data-label="Ca"><a href="../41-test-case-editor/evidgate-test-case-editor.html"><code>SHOP-TC-0042</code></a></td>
+                        <td class="eg-table__cell" data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề"><span data-en="Confirm order shows the total" data-vi="Xác nhận đơn hàng hiển thị tổng tiền">Xác nhận đơn hàng hiển thị tổng tiền</span></td>
+                        <td class="eg-table__cell" data-label-en="Checklist parent" data-label-vi="Danh mục cha" data-label="Danh mục cha"><code>SHOP-CL-0017</code></td>
+                        <td class="eg-table__cell" data-label-en="Priority" data-label-vi="Mức ưu tiên" data-label="Mức ưu tiên"><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="High" data-vi="Cao">Cao</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--info"><span class="eg-badge__label" data-en="In review" data-vi="Đang duyệt">Đang duyệt</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn"><span data-en="Manual" data-vi="Thủ công">Thủ công</span></td>
+                        <td class="eg-table__cell" data-label-en="Coverage" data-label-vi="Mức tự động hoá" data-label="Mức tự động hoá"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Covered · tc-77" data-vi="Đã tự động hoá · tc-77">Đã tự động hoá · tc-77</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Owner" data-label-vi="Người phụ trách" data-label="Người phụ trách">Linh Nguyễn</td>
+                        <td class="eg-table__cell" data-label-en="Version" data-label-vi="Phiên bản" data-label="Phiên bản"><span class="eg-chip eg-chip--revision"><span class="eg-chip__label">v5</span></span></td>
+                      </tr>
+                      <tr class="eg-table__row" aria-selected="false" data-eg-priority="High" data-eg-status="Draft" data-eg-source="Import" data-eg-coverage="Uncovered" data-eg-owner="Linh Nguyễn">
+                        <td class="eg-table__select"><input type="checkbox" data-eg-select-row aria-label="Chọn SHOP-TC-0043"></td>
+                        <td class="eg-table__cell" data-label-en="Case" data-label-vi="Ca" data-label="Ca"><a href="../41-test-case-editor/evidgate-test-case-editor.html"><code>SHOP-TC-0043</code></a></td>
+                        <td class="eg-table__cell" data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề"><span data-en="Required delivery address" data-vi="Địa chỉ giao hàng bắt buộc">Địa chỉ giao hàng bắt buộc</span></td>
+                        <td class="eg-table__cell" data-label-en="Checklist parent" data-label-vi="Danh mục cha" data-label="Danh mục cha"><code>SHOP-CL-0018</code></td>
+                        <td class="eg-table__cell" data-label-en="Priority" data-label-vi="Mức ưu tiên" data-label="Mức ưu tiên"><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="High" data-vi="Cao">Cao</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Draft" data-vi="Bản nháp">Bản nháp</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn"><span data-en="Import" data-vi="Nhập">Nhập</span></td>
+                        <td class="eg-table__cell" data-label-en="Coverage" data-label-vi="Mức tự động hoá" data-label="Mức tự động hoá"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Uncovered" data-vi="Chưa tự động hoá">Chưa tự động hoá</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Owner" data-label-vi="Người phụ trách" data-label="Người phụ trách">Linh Nguyễn</td>
+                        <td class="eg-table__cell" data-label-en="Version" data-label-vi="Phiên bản" data-label="Phiên bản"><span class="eg-chip eg-chip--revision"><span class="eg-chip__label">v2</span></span></td>
+                      </tr>
+                      <tr class="eg-table__row" aria-selected="false" data-eg-priority="High" data-eg-status="In review" data-eg-source="AI" data-eg-coverage="Covered" data-eg-owner="Unassigned">
+                        <td class="eg-table__select"><input type="checkbox" data-eg-select-row aria-label="Chọn SHOP-TC-0051"></td>
+                        <td class="eg-table__cell" data-label-en="Case" data-label-vi="Ca" data-label="Ca"><a href="../41-test-case-editor/evidgate-test-case-editor.html"><code>SHOP-TC-0051</code></a></td>
+                        <td class="eg-table__cell" data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề"><span data-en="Apply a discount code" data-vi="Áp dụng mã giảm giá">Áp dụng mã giảm giá</span></td>
+                        <td class="eg-table__cell" data-label-en="Checklist parent" data-label-vi="Danh mục cha" data-label="Danh mục cha"><code>SHOP-CL-0019</code></td>
+                        <td class="eg-table__cell" data-label-en="Priority" data-label-vi="Mức ưu tiên" data-label="Mức ưu tiên"><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="High" data-vi="Cao">Cao</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--info"><span class="eg-badge__label" data-en="In review" data-vi="Đang duyệt">Đang duyệt</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">AI · model-small</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Coverage" data-label-vi="Mức tự động hoá" data-label="Mức tự động hoá"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Covered · tc-91" data-vi="Đã tự động hoá · tc-91">Đã tự động hoá · tc-91</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Owner" data-label-vi="Người phụ trách" data-label="Người phụ trách"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Unassigned" data-vi="Chưa gán">Chưa gán</span></span></td>
+                        <td class="eg-table__cell" data-label-en="Version" data-label-vi="Phiên bản" data-label="Phiên bản"><span class="eg-chip eg-chip--revision"><span class="eg-chip__label">v3</span></span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="eg-toolbar eg-toolbar--actions" data-eg-mutate>
+                  <span class="eg-kpi__context"><strong data-eg-select-count>0</strong> <span data-en="selected · visible rows only" data-vi="đã chọn · chỉ dòng hiển thị">đã chọn · chỉ dòng hiển thị</span></span>
+                  <a class="eg-btn eg-btn--secondary eg-btn--sm" href="../45-import-export/evidgate-import-export.html"><span class="eg-btn__label" data-en="Export selected" data-vi="Xuất mục đã chọn">Xuất mục đã chọn</span></a>
+                </div>
+
+                <div class="eg-pagination">
+                  <span class="eg-pagination__summary" data-en="Showing 3 of 3 visible cases · page 1 · 2 pending review" data-vi="Hiển thị 3 trên 3 ca đang thấy · trang 1 · 2 chờ duyệt">Hiển thị 3 trên 3 ca đang thấy · trang 1 · 2 chờ duyệt</span>
+                  <div class="eg-pagination__controls">
+                    <button class="eg-btn eg-btn--ghost eg-btn--sm" type="button" disabled aria-label="Trang trước">‹</button>
+                    <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" aria-current="page">1</button>
+                    <button class="eg-btn eg-btn--ghost eg-btn--sm" type="button" disabled aria-label="Trang sau">›</button>
+                    <a class="eg-btn eg-btn--secondary eg-btn--sm" href="../42-pending-changes/evidgate-pending-changes.html"><span class="eg-btn__label" data-en="Pending changes · 2" data-vi="Thay đổi chờ áp dụng · 2">Thay đổi chờ áp dụng · 2</span></a>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="eg-card" aria-labelledby="other-states-title">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="other-states-title" data-en="Other fixture states" data-vi="Các trạng thái minh hoạ khác">Các trạng thái minh hoạ khác</h2>
+                <p data-en="Independent tree and table states, mixed coverage, no owner and read-only grants. These are static specimens; the shared review control changes the whole page." data-vi="Trạng thái cây và bảng độc lập, mức tự động hoá hỗn hợp, chưa gán người và quyền chỉ đọc. Đây là mẫu tĩnh; điều khiển xem xét chung thay đổi toàn trang.">Trạng thái cây và bảng độc lập, mức tự động hoá hỗn hợp, chưa gán người và quyền chỉ đọc. Đây là mẫu tĩnh; điều khiển xem xét chung thay đổi toàn trang.</p>
+              </div>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-grid" data-cols="3" data-gap="4">
+                <div class="eg-card"><div class="eg-card__body">
+                  <h3 data-en="Tree loading" data-vi="Cây đang tải">Cây đang tải</h3>
+                  <ul class="eg-tree" aria-label="Cây đang tải" aria-busy="true"><li class="eg-tree__item"><div class="eg-tree__row"><span class="eg-tree__toggle" aria-hidden="true"></span><span class="eg-skeleton eg-skeleton--row"></span></div></li><li class="eg-tree__item"><div class="eg-tree__row"><span class="eg-tree__toggle" aria-hidden="true"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span></div></li></ul>
+                </div></div>
+                <div class="eg-card"><div class="eg-card__body">
+                  <h3 data-en="Tree error" data-vi="Lỗi cây">Lỗi cây</h3>
+                  <div class="eg-banner eg-banner--danger"><div class="eg-banner__body"><p data-en="The hierarchy could not be read. The table below keeps its own result." data-vi="Không đọc được cây phân cấp. Bảng bên dưới giữ kết quả riêng.">Không đọc được cây phân cấp. Bảng bên dưới giữ kết quả riêng.</p></div></div>
+                  <div class="eg-toolbar"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button"><span class="eg-btn__label" data-en="Retry tree" data-vi="Thử lại cây">Thử lại cây</span></button></div>
+                </div></div>
+                <div class="eg-card"><div class="eg-card__body">
+                  <h3 data-en="Category without cases" data-vi="Danh mục chưa có ca">Danh mục chưa có ca</h3>
+                  <p data-en="Delivery options has no manual cases. The empty category remains in the hierarchy." data-vi="Tuỳ chọn giao hàng chưa có ca thủ công. Danh mục trống vẫn nằm trong cây.">Tuỳ chọn giao hàng chưa có ca thủ công. Danh mục trống vẫn nằm trong cây.</p>
+                  <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="0 cases" data-vi="0 ca">0 ca</span></span>
+                </div></div>
+                <div class="eg-card"><div class="eg-card__body">
+                  <h3 data-en="Table loading" data-vi="Bảng đang tải">Bảng đang tải</h3>
+                  <div aria-busy="true"><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span></div>
+                </div></div>
+                <div class="eg-card"><div class="eg-card__body">
+                  <h3 data-en="Table error" data-vi="Lỗi bảng">Lỗi bảng</h3>
+                  <div class="eg-banner eg-banner--danger"><div class="eg-banner__body"><p data-en="Rows could not be loaded; the hierarchy stays usable." data-vi="Không tải được các dòng; cây phân cấp vẫn dùng được.">Không tải được các dòng; cây phân cấp vẫn dùng được.</p></div></div>
+                  <div class="eg-toolbar"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button"><span class="eg-btn__label" data-en="Retry table" data-vi="Thử lại bảng">Thử lại bảng</span></button></div>
+                </div></div>
+                <div class="eg-card"><div class="eg-card__body">
+                  <h3 data-en="Read-only authoring grant" data-vi="Quyền soạn chỉ đọc">Quyền soạn chỉ đọc</h3>
+                  <p data-en="Creation and selection are unavailable without authoring write permission. Existing rows stay readable." data-vi="Không thể tạo hoặc chọn khi thiếu quyền ghi soạn. Các dòng hiện có vẫn đọc được.">Không thể tạo hoặc chọn khi thiếu quyền ghi soạn. Các dòng hiện có vẫn đọc được.</p>
+                  <div class="eg-toolbar"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" disabled><span class="eg-btn__label" data-en="New test case" data-vi="Ca kiểm thử mới">Ca kiểm thử mới</span></button><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Grant required" data-vi="Cần cấp quyền">Cần cấp quyền</span></span></div>
+                </div></div>
+              </div>
+            </div>
+          </section>
+
+          <p class="eg-kpi__context" data-en="Illustrative fixture · storefront-web · SHOP · ais-3 · selected node SHOP-CL-0017 · owner Linh Nguyễn. No execution verdict or script route is shown in G1." data-vi="Dữ liệu minh hoạ · storefront-web · SHOP · ais-3 · nút đã chọn SHOP-CL-0017 · người phụ trách Linh Nguyễn. G1 không hiển thị kết luận thực thi hay tuyến kịch bản.">Dữ liệu minh hoạ · storefront-web · SHOP · ais-3 · nút đã chọn SHOP-CL-0017 · người phụ trách Linh Nguyễn. G1 không hiển thị kết luận thực thi hay tuyến kịch bản.</p>
+        </div>
+
+        <footer>
+          <hr>
+          <p><span data-en="Evidgate · G1 authoring fixture · Illustrative values, not live data" data-vi="Evidgate · Dữ liệu soạn G1 · Giá trị minh hoạ, không phải dữ liệu thực">Evidgate · Dữ liệu soạn G1 · Giá trị minh hoạ, không phải dữ liệu thực</span></p>
+        </footer>
+      </main>
+    </div>
+  </div>
+  <dialog class="eg-dialog eg-dialog--wide" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <header class="eg-dialog__header">
+      <div><h2 id="shortcuts-title" data-en="Keyboard shortcuts" data-vi="Phím tắt">Phím tắt</h2><p data-en="Available in this review fixture." data-vi="Khả dụng trong bản xem xét này.">Khả dụng trong bản xem xét này.</p></div>
+      <button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng hộp thoại"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button>
+    </header>
+    <div class="eg-dialog__body"><div class="eg-stack" data-gap="2"><p><kbd>Tab</kbd> · <span data-en="Move between controls" data-vi="Di chuyển giữa các điều khiển">Di chuyển giữa các điều khiển</span></p><p><kbd>↑</kbd> <kbd>↓</kbd> · <span data-en="Move inside the tree" data-vi="Di chuyển trong cây">Di chuyển trong cây</span></p><p><kbd>←</kbd> <kbd>→</kbd> · <span data-en="Collapse or expand a branch" data-vi="Thu gọn hoặc mở rộng nhánh">Thu gọn hoặc mở rộng nhánh</span></p><p><kbd>Esc</kbd> · <span data-en="Close a dialog" data-vi="Đóng hộp thoại">Đóng hộp thoại</span></p></div></div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Close" data-vi="Đóng">Đóng</span></button></footer>
+  </dialog>
+</body>
+</html>
