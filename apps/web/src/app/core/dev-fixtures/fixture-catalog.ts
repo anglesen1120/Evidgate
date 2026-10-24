@@ -18,7 +18,9 @@
 // Dev-only, like the rest of `core/dev-fixtures`: see the module comment of `fixture-toggles.ts`.
 
 import orgsList from '../../../../../../fixtures/web-api/orgs-list/input.json';
+import orgsListUnauthenticated from '../../../../../../fixtures/web-api/orgs-list-unauthenticated/input.json';
 import permissionsList from '../../../../../../fixtures/web-api/permissions-list/input.json';
+import permissionsListLimited from '../../../../../../fixtures/web-api/permissions-list-limited/input.json';
 import projectUpdatePreconditionFailed from '../../../../../../fixtures/web-api/project-update-precondition-failed/input.json';
 import projectsList from '../../../../../../fixtures/web-api/projects-list/input.json';
 import rolesList from '../../../../../../fixtures/web-api/roles-list/input.json';
@@ -57,13 +59,25 @@ export interface FixtureDocument {
 /**
  * Every document the dev backend can answer, by fixture directory name. Alphabetical by name so a
  * diff of this list is a diff of the corpus.
+ *
+ * 09.1.1-T4 added two rows for the shell: `permissions-list-limited` (the shell with a trimmed
+ * grant set — `?fixture.variant.listPermissions=limited`) and `orgs-list-unauthenticated` (the
+ * boot's 401 — `?fixture.variant.listMyOrganizations=unauthenticated`). The limited subset holds
+ * `audit:read`, `authoring:read`, `membership:read`, `project:read` and `role:read`, copied verbatim
+ * from `contracts/permissions.json` (only `authoring:read` is on the first page of
+ * `permissions-list/`). It deliberately leaves `organization:read` out: that row's `resource` value
+ * is the production bundle's own `organization:read` registry literal, and the T12 leak gate
+ * (`scripts/check-no-fixture-code.mjs`) rejects every corpus string of 12+ characters that survives
+ * into the output — a corpus row would fail the build for a word production needs.
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
   readonly document: FixtureDocument;
 }[] = [
   { name: 'orgs-list', document: orgsList },
+  { name: 'orgs-list-unauthenticated', document: orgsListUnauthenticated },
   { name: 'permissions-list', document: permissionsList },
+  { name: 'permissions-list-limited', document: permissionsListLimited },
   { name: 'project-update-precondition-failed', document: projectUpdatePreconditionFailed },
   { name: 'projects-list', document: projectsList },
   { name: 'roles-list', document: rolesList },

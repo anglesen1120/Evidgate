@@ -1,0 +1,25 @@
+<nav [attr.aria-label]="navigationLabel">
+  @for (group of groups(); track group.id) {
+    @if (group.items.length > 0) {
+      <section [attr.aria-labelledby]="'nav-group-' + group.id">
+        <h2 [id]="'nav-group-' + group.id">{{ group.label }}</h2>
+        <ul>
+          @for (item of group.items; track item.id) {
+            <li>
+              <a
+                [routerLink]="item.link"
+                [routerLinkActive]="'active'"
+                [ariaCurrentWhenActive]="'page'"
+                [attr.aria-label]="item.label"
+                (click)="itemSelected.emit()"
+              >
+                <app-shell-icon [name]="item.icon" />
+                <span>{{ item.label }}</span>
+              </a>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  }
+</nav>

@@ -1,6 +1,7 @@
-/* 09.1.1-T11 owns the design tokens (src/styles/tokens.css); the shell only sets the
-   document-level typography every later component inherits. */
-.app-title {
-  margin: 0;
-  font: inherit;
+/* 09.1.1-T4.1: the root is a router host, so it only has to be a block box that fills the page.
+   Document-level typography and the design tokens live in `src/styles.css` and
+   `src/styles/tokens.css`; the shell (`shell/layout/shell.component.css`) owns the frame. */
+:host {
+  display: block;
+  min-height: 100%;
 }

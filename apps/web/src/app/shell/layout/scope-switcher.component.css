@@ -1,0 +1,38 @@
+:host {
+  display: grid;
+  gap: var(--eg-space-3);
+  min-width: 0;
+}
+label {
+  display: grid;
+  gap: var(--eg-space-1);
+  min-width: 0;
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
+  overflow-wrap: anywhere;
+}
+select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--eg-control-touch);
+  padding: var(--eg-space-2);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-sm);
+  color: var(--eg-text);
+  background: var(--eg-surface);
+  font: inherit;
+  font-size: var(--eg-text-sm);
+}
+select:hover:not(:disabled) {
+  border-color: var(--eg-accent);
+}
+select:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+select:disabled {
+  color: var(--eg-text-muted);
+  background: var(--eg-neutral-bg);
+}

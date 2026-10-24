@@ -1,0 +1,34 @@
+<label>
+  <span i18n="@@shell.switcher.organization">Organization</span>
+  <select
+    #org
+    [value]="currentOrg()?.id ?? ''"
+    [disabled]="organizations().length === 0"
+    (change)="orgSelected.emit(org.value)"
+  >
+    <option value="" disabled i18n="@@shell.switcher.choose-organization">
+      Choose an organization
+    </option>
+    @for (organization of organizations(); track organization.id) {
+      <option [value]="organization.id">{{ organization.name }}</option>
+    }
+  </select>
+</label>
+<label>
+  <span i18n="@@shell.switcher.project">Project</span>
+  <select
+    #project
+    [value]="currentProject()?.id ?? ''"
+    [disabled]="projects().length === 0 || !currentOrg()"
+    (change)="projectSelected.emit(project.value)"
+  >
+    @if (projects().length === 0) {
+      <option value="" disabled i18n="@@shell.switcher.no-projects">No projects</option>
+    } @else {
+      <option value="" disabled i18n="@@shell.switcher.choose-project">Choose a project</option>
+    }
+    @for (item of projects(); track item.id) {
+      <option [value]="item.id">{{ item.name }}</option>
+    }
+  </select>
+</label>

@@ -1,5 +1,7 @@
 import { type ApplicationConfig, provideZonelessChangeDetection } from '@angular/core';
+import { provideRouter } from '@angular/router';
 
+import { routes } from './app.routes';
 import { provideDevBackend } from './core/dev-fixtures/dev-backend';
 import { provideApi } from './core/http/api-client';
 
@@ -13,6 +15,16 @@ import { provideApi } from './core/http/api-client';
 // last provider of a token wins. In a production build this module is `dev-backend.ts` and the call
 // adds nothing; the `fixtures` configuration swaps in `dev-backend.fixtures.ts`, which answers from
 // `fixtures/web-api/` through the same `HttpClient`, interceptors and `ApiGateway` as the real API.
+// 09.1.1-T4.1: `provideRouter(routes)` is the only addition of the shell story. The route table
+// itself is `app.routes.ts`; the guards it names read the session through `SessionStore`, which is
+// load-bearing here and not in `provideRouter`'s options: no `withRouterConfig`, no
+// `withInMemoryScrolling`, because the shell owns focus and scroll restoration per navigation
+// (`shell/layout/shell.component.ts`) and a second mechanism would fight it.
 export const appConfig: ApplicationConfig = {
-  providers: [provideZonelessChangeDetection(), provideApi(), provideDevBackend()],
+  providers: [
+    provideZonelessChangeDetection(),
+    provideApi(),
+    provideDevBackend(),
+    provideRouter(routes),
+  ],
 };

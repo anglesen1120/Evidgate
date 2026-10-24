@@ -153,6 +153,6 @@
         "tenant_assignable": true
       }
     ],
-    "next_cursor": "decision:read"
+    "next_cursor": null
   }
 }

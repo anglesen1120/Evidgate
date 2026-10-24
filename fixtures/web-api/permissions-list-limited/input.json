@@ -1,0 +1,59 @@
+{
+  "operation_id": "listPermissions",
+  "variant": "limited",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000a8"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "code": "audit:read",
+        "resource": "audit",
+        "action": "read",
+        "description": "Read and export the tenant audit log, support-grant actions included (00 §9.3, 02.7.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "authoring:read",
+        "resource": "authoring",
+        "action": "read",
+        "description": "Read the feature tree, its checklist items and its manual test cases (00 §2, 13.1.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "membership:read",
+        "resource": "membership",
+        "action": "read",
+        "description": "Read org memberships and pending invites (02 §4.2, T59).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "project:read",
+        "resource": "project",
+        "action": "read",
+        "description": "Read project settings such as retention and capture options (T21: every member role).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "role:read",
+        "resource": "role",
+        "action": "read",
+        "description": "Read the permission catalogue and the built-in roles (any member; 02.2.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      }
+    ],
+    "next_cursor": null
+  }
+}

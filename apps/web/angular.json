@@ -78,7 +78,13 @@
               "optimization": false,
               "sourceMap": true,
               "extractLicenses": false,
-              "localize": ["vi"]
+              "localize": ["vi"],
+              "fileReplacements": [
+                {
+                  "replace": "src/app/core/dev-routes/dev-routes.ts",
+                  "with": "src/app/core/dev-routes/dev-routes.fixtures.ts"
+                }
+              ]
             },
             "fixtures": {
               "optimization": false,
@@ -89,6 +95,10 @@
                 {
                   "replace": "src/app/core/dev-fixtures/dev-backend.ts",
                   "with": "src/app/core/dev-fixtures/dev-backend.fixtures.ts"
+                },
+                {
+                  "replace": "src/app/core/dev-routes/dev-routes.ts",
+                  "with": "src/app/core/dev-routes/dev-routes.fixtures.ts"
                 }
               ]
             }
