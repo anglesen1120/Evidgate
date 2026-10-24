@@ -1,20 +1,15 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { NotFoundPatternComponent } from '../../shared/ui/states';
 
 /** Identical, input-free copy for unmatched routes and every unresolved organization/project. */
 @Component({
   selector: 'app-not-found-page',
-  imports: [RouterLink],
+  imports: [NotFoundPatternComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: '../layout/shell-page.css',
-  template: `<section>
-    <h1>{{ heading }}</h1>
-    <p>{{ explanation }}</p>
-    <a routerLink="/">{{ action }}</a>
-  </section>`,
+  styleUrl: '../layout/route-pattern-page.css',
+  template: `
+    <h1 i18n="@@shared.states.not-found.heading">Not found</h1>
+    <app-not-found-pattern />
+  `,
 })
-export class NotFoundPage {
-  readonly heading = $localize`:@@shell.page.not-found.heading:Page not found`;
-  readonly explanation = $localize`:@@shell.page.not-found.explanation:Check the address or return to your workspace.`;
-  readonly action = $localize`:@@shell.page.not-found.action:Back to workspace`;
-}
+export class NotFoundPage {}

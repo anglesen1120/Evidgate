@@ -169,7 +169,7 @@ describe('ShellComponent', () => {
     await router.navigateByUrl('/second');
     await fixture.whenStable();
     expect(document.activeElement).toBe(root.querySelector('main'));
-    expect(document.title).toContain('Page not found');
+    expect(document.title).toContain('Not found');
   });
 
   it('passes the shell structure/ARIA axe checks (jsdom cannot measure contrast)', async () => {

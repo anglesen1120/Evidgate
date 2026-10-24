@@ -28,12 +28,7 @@ const PERMISSIONS_URL = `${API_BASE_URL}/permissions`;
 const ORGANIZATIONS_URL = `${API_BASE_URL}/orgs`;
 const PROJECTS_URL = `${API_BASE_URL}/orgs/o-1/projects`;
 
-/** A JSON body as the adapter delivers it (the SDK parses a `Response`, and the adapter reads a blob). */
-function jsonBlob(value: unknown): Blob {
-  return new Blob([JSON.stringify(value)], { type: 'application/json' });
-}
-
-/** The served media type, which `flush` does not derive from the blob (`parseAs: 'auto'`). */
+/** The served media type: the adapter reads bodies as text and `flush` does not derive it (`parseAs: 'auto'`). */
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 function permission(code: string, tenantAssignable = true): PermissionView {
@@ -98,7 +93,7 @@ async function takeRequest(
 
 /** Answers one page with a body, so the SDK's parser sees the served media type. */
 function flushPage(request: TestRequest, body: unknown, status = 200): void {
-  request.flush(jsonBlob(body), { status, statusText: '', headers: JSON_HEADERS });
+  request.flush(JSON.stringify(body), { status, statusText: '', headers: JSON_HEADERS });
 }
 
 describe('IdentityDataService (09.1.1-T4.1)', () => {

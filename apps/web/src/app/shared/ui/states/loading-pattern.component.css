@@ -1,0 +1,13 @@
+:host {
+  display: block;
+}
+
+/* Static decorative skeleton: no continuous motion, including under reduced motion. */
+.loading-pattern__skeleton {
+  display: block;
+  inline-size: var(--eg-control-touch);
+  block-size: var(--eg-control-touch);
+  border: var(--eg-border-width) solid var(--eg-info-fg);
+  border-radius: var(--eg-radius-pill);
+  background: var(--eg-info-bg);
+}

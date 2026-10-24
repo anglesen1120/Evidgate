@@ -154,6 +154,96 @@
     </div>
   </section>
 
+  <section aria-labelledby="gallery-request-patterns">
+    <h2 id="gallery-request-patterns" i18n="@@shared.gallery.request-patterns">
+      Request state replacements
+    </h2>
+    <div class="stack">
+      <app-loading-pattern data-demo="loading" />
+      <app-empty-pattern
+        [title]="emptyTitle"
+        [description]="emptyDescription"
+        [actionLabel]="emptyActionLabel"
+        [actionHref]="'#gallery-evidence'"
+        data-demo="empty"
+      />
+      <app-error-pattern [error]="networkError" (retry)="recordRetry()" data-demo="error" />
+      <app-forbidden-pattern data-demo="forbidden" />
+      <app-not-found-pattern data-demo="not-found" />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-conflict">
+    <h2 id="gallery-conflict" i18n="@@shared.gallery.conflict">412 conflict comparison</h2>
+    <p i18n="@@shared.gallery.conflict-explanation">
+      The draft stays local. Reload current compares a loaded example, not a live request.
+    </p>
+    <button
+      class="gallery-action"
+      type="button"
+      (click)="openConflict()"
+      data-demo="conflict-opener"
+      i18n="@@shared.gallery.conflict-open"
+    >
+      Review conflict example
+    </button>
+    <app-conflict-dialog
+      [open]="conflictOpen()"
+      [fields]="comparedFields()"
+      [currentRevision]="'requirement-r19'"
+      (reload)="compareReloadedExample()"
+      (keepEditing)="conflictOpen.set(false)"
+      data-demo="conflict"
+    />
+  </section>
+
+  <section aria-labelledby="gallery-retry-after">
+    <h2 id="gallery-retry-after" i18n="@@shared.gallery.retry-after">Retry eligibility</h2>
+    <div class="stack">
+      <app-retry-after
+        [retryAfterSeconds]="30"
+        [retryEligible]="false"
+        [code]="'rate_limited'"
+        [requestId]="'req-gallery-waiting'"
+        (retry)="recordRetry()"
+        data-demo="retry-after-waiting"
+      />
+      <app-retry-after
+        [retryAfterSeconds]="30"
+        [retryEligible]="true"
+        [code]="'rate_limited'"
+        [requestId]="'req-gallery-eligible'"
+        (retry)="recordRetry()"
+        data-demo="retry-after-eligible"
+      />
+    </div>
+    <p
+      role="status"
+      [attr.aria-live]="'polite'"
+      data-demo="retry-count"
+      i18n="@@shared.gallery.retry-count"
+    >
+      Explicit retry requests in this example: {{ retryCount() }}
+    </p>
+  </section>
+
+  <section aria-labelledby="gallery-request-host">
+    <h2 id="gallery-request-host" i18n="@@shared.gallery.request-host">Route-level request host</h2>
+    <app-request-state
+      [status]="'ready'"
+      [empty]="true"
+      [emptyTitle]="emptyTitle"
+      [emptyDescription]="emptyDescription"
+      [emptyActionLabel]="emptyActionLabel"
+      [emptyActionHref]="'#gallery-evidence'"
+      data-demo="request-state"
+    >
+      <p i18n="@@shared.gallery.projected-content">
+        Current content appears only after a nonempty successful read.
+      </p>
+    </app-request-state>
+  </section>
+
   <section aria-labelledby="gallery-tables">
     <h2 id="gallery-tables" i18n="@@shared.gallery.tables">Read-only data tables</h2>
     <div class="stack">

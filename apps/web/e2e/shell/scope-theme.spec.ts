@@ -78,7 +78,7 @@ test.describe('scope switcher (AC4)', () => {
     await expect
       .poll(() => new URL(page.url()).pathname)
       .toBe(`/en/orgs/${ORG_LUMEN}/projects/${PROJECT_STOREFRONT}/overview`);
-    await expect(page.locator('#main-content h1')).toHaveText('Page not found');
+    await expect(page.locator('#main-content h1')).toHaveText('Not found');
   });
 });
 

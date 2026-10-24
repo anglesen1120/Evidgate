@@ -23,13 +23,18 @@ describe('NotFoundPage', () => {
       await fixture.whenStable();
       const root = fixture.nativeElement as HTMLElement;
       expect(root.querySelectorAll('h1')).toHaveLength(1);
-      expect(root.querySelectorAll('a')).toHaveLength(1);
-      expect(root.querySelector('a')?.getAttribute('href')).toBe('/');
+      expect(root.querySelector('h1')?.textContent).toBe('Not found');
+      expect(root.querySelectorAll('app-not-found-pattern')).toHaveLength(1);
+      expect(root.querySelector('app-not-found-pattern h2')?.textContent).toBe('Not found');
+      expect(root.querySelector('app-not-found-pattern p')?.textContent?.trim()).toBe(
+        'This page does not exist or you do not have access to it.',
+      );
+      expect(root.querySelector('a')).toBeNull();
       expect(root.textContent).not.toMatch(/foreign|unknown|another|permission|organization/i);
       texts.push(root.textContent ?? '');
       fixture.destroy();
     }
     expect(new Set(texts).size).toBe(1);
-    expect(texts[0]).toContain('Page not found');
+    expect(texts[0]).toContain('Not found');
   });
 });

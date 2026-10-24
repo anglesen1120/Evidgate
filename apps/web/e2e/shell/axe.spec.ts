@@ -54,7 +54,7 @@ test.describe('the shell is WCAG 2.2 AA clean (AC6)', () => {
 
   test('the not-found pattern is clean', async ({ page }) => {
     await page.goto(localePath('en', `/orgs/${ORG_LUMEN}/not-a-page`));
-    await expect(page.locator('#main-content h1')).toHaveText('Page not found');
+    await expect(page.locator('#main-content h1')).toHaveText('Not found');
     await expectNoA11yViolations(page, 'not-found en/light');
   });
 });

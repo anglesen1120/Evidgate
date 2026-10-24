@@ -327,6 +327,54 @@ describe('style-tokens/no-raw-literals (apps/web/**/*.css)', () => {
     });
   });
 
+  describe('raw motion durations fail', () => {
+    it('fails on a ms duration in a transition shorthand', async () => {
+      const findings = await lintComponentStyle(ruleBlock('transition: opacity 200ms ease;'));
+      expect(findings).toEqual([cssFinding('rawDuration', 2, 21)]);
+    });
+
+    it('fails on a decimal-second duration in animation-duration', async () => {
+      const findings = await lintComponentStyle(ruleBlock('animation-duration: .3s;'));
+      expect(findings).toEqual([cssFinding('rawDuration', 2, 21)]);
+    });
+
+    it('fails on a duration in a transition-delay', async () => {
+      const findings = await lintComponentStyle(ruleBlock('transition-delay: 100ms;'));
+      expect(findings).toEqual([cssFinding('rawDuration', 2, 19)]);
+    });
+
+    it('fails on every duration of an animation shorthand', async () => {
+      const findings = await lintComponentStyle(ruleBlock('animation: fade 1.5s ease-in 200ms;'));
+      expect(findings).toEqual([
+        cssFinding('rawDuration', 2, 17),
+        cssFinding('rawDuration', 2, 30),
+      ]);
+    });
+
+    it('fails on a duration in a custom property', async () => {
+      const findings = await lintComponentStyle(ruleBlock('--local-fade: 120ms;'));
+      expect(findings).toEqual([cssFinding('rawDuration', 2, 15)]);
+    });
+
+    it('fails on a duration in a var() fallback', async () => {
+      // A fallback is ordinary value text, exactly as it is for a colour.
+      const findings = await lintComponentStyle(
+        ruleBlock('transition: opacity var(--local-fade, 200ms) var(--eg-ease);'),
+      );
+      expect(findings).toEqual([cssFinding('rawDuration', 2, 39)]);
+    });
+
+    it('reports the raw value in the message', async () => {
+      const findings = await lintDetailed(
+        ruleBlock('transition: opacity 200ms ease;'),
+        COMPONENT_STYLE_PATH,
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain("'200ms'");
+      expect(findings[0]?.message).toContain('var(--eg-duration-fast)');
+    });
+  });
+
   describe('token references and literal-free values pass', () => {
     it('passes a stylesheet that only references tokens and zero/auto/percentage values', async () => {
       const findings = await lintComponentStyle(
@@ -352,6 +400,10 @@ describe('style-tokens/no-raw-literals (apps/web/**/*.css)', () => {
           '--local-calc: calc(var(--eg-space-2) * 2);',
           'scroll-margin: var(--eg-space-2);',
           'outline-offset: var(--eg-focus-offset);',
+          'transition: opacity var(--eg-duration-fast) var(--eg-ease);',
+          'transition-duration: 0s;',
+          'animation-delay: 0ms;',
+          '--local-fade: var(--eg-duration-standard);',
         ),
       );
       expect(findings).toEqual([]);
@@ -432,6 +484,15 @@ describe('style-tokens/no-raw-literals (apps/web/**/*.css)', () => {
       );
       expect(findings).toEqual([cssFinding('rawLength', 3, 6)]);
     });
+
+    it('passes a reduced-motion block that disables the transition', async () => {
+      // The media query, not the rule, is where the duration decision lives: `none` inside
+      // the block carries no time, so nothing is reported.
+      const findings = await lintComponentStyle(
+        '@media (prefers-reduced-motion: reduce) {\n.example {\ntransition: none;\n}\n}\n',
+      );
+      expect(findings).toEqual([]);
+    });
   });
 
   describe('tokens.css is the only file allowed raw values', () => {
@@ -477,6 +538,32 @@ describe('style-tokens/no-raw-literals-inline (inline @Component styles)', () =>
     expect(findings).toEqual([inlineFinding('rawLength', 8, 10)]);
   });
 
+  it('fails on a raw duration in a transition of an inline style', async () => {
+    const findings = await lintInlineStyles(
+      inlineComponent('.example {', 'transition: opacity 200ms ease;', '}'),
+    );
+    expect(findings).toEqual([inlineFinding('rawDuration', 8, 21)]);
+  });
+
+  it('fails on a raw decimal-second duration in an inline style', async () => {
+    const findings = await lintInlineStyles(
+      inlineComponent('.example {', 'animation-duration: .3s;', '}'),
+    );
+    expect(findings).toEqual([inlineFinding('rawDuration', 8, 21)]);
+  });
+
+  it('passes token references and zero durations in inline styles', async () => {
+    const findings = await lintInlineStyles(
+      inlineComponent(
+        '.example {',
+        'transition: opacity var(--eg-duration-fast) var(--eg-ease);',
+        'transition-duration: 0s;',
+        '}',
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+
   it('fails on a raw named colour in a single-line template entry', async () => {
     const findings = await lintInlineStyles(inlineComponent('.example { color: red; }'));
     expect(findings).toEqual([inlineFinding('rawNamedColour', 7, 19)]);
@@ -519,11 +606,34 @@ describe('style-tokens/no-raw-literals-inline (inline @Component styles)', () =>
     expect(findings).toEqual([]);
   });
 
+  it('passes a reduced-motion block inside inline styles', async () => {
+    const findings = await lintInlineStyles(
+      inlineComponent(
+        '@media (prefers-reduced-motion: reduce) {',
+        '.example { transition: none; }',
+        '}',
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+
   it('fails on a raw length in a custom property of an inline style', async () => {
     const findings = await lintInlineStyles(
       inlineComponent('.example {', '--local-gap: 8px;', 'padding: var(--local-gap);', '}'),
     );
     expect(findings).toEqual([inlineFinding('rawLength', 8, 14)]);
+  });
+
+  it('fails on a raw duration in a custom property of an inline style', async () => {
+    const findings = await lintInlineStyles(
+      inlineComponent(
+        '.example {',
+        '--local-fade: 120ms;',
+        'transition: opacity var(--local-fade);',
+        '}',
+      ),
+    );
+    expect(findings).toEqual([inlineFinding('rawDuration', 8, 15)]);
   });
 
   it('fails on an interpolation immediately followed by a raw unit', async () => {
@@ -568,6 +678,29 @@ describe('style-tokens/no-raw-literals-inline (inline @Component styles)', () =>
       ].join('\n'),
     );
     expect(findings).toEqual([inlineFinding('rawLength', 9, 36)]);
+  });
+
+  it('fails on an interpolation immediately followed by a time unit', async () => {
+    const findings = await lintInlineStylesDetailed(
+      [
+        "import { Component } from '@angular/core';",
+        '',
+        'const duration = 200;',
+        '',
+        '@Component({',
+        "  selector: 'app-example',",
+        "  template: '',",
+        '  styles: [',
+        '    `.example { transition-duration: ${duration}ms; }`',
+        '  ],',
+        '})',
+        'export class ExampleComponent {}',
+        '',
+      ].join('\n'),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject(inlineFinding('rawDuration', 9, 49));
+    expect(findings[0]?.message).toContain("'${duration}ms'");
   });
 
   it('passes an interpolation followed by a percentage or used through var()', async () => {

@@ -4,7 +4,7 @@ import { Router, provideRouter } from '@angular/router';
 import { ForbiddenPage } from './forbidden.page';
 
 describe('ForbiddenPage', () => {
-  it('has one heading and one home link; never echoes the attempted URL', async () => {
+  it('composes the shared pattern with one page heading; never echoes the attempted URL', async () => {
     await TestBed.configureTestingModule({
       imports: [ForbiddenPage],
       providers: [
@@ -17,9 +17,13 @@ describe('ForbiddenPage', () => {
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelectorAll('h1')).toHaveLength(1);
-    expect(root.querySelector('h1')?.textContent).toBe('You do not have access to this page');
-    expect(root.querySelectorAll('a')).toHaveLength(1);
-    expect(root.querySelector('a')?.getAttribute('href')).toBe('/');
+    expect(root.querySelector('h1')?.textContent).toBe('Not authorized');
+    expect(root.querySelectorAll('app-forbidden-pattern')).toHaveLength(1);
+    expect(root.querySelector('app-forbidden-pattern h2')?.textContent).toBe('Not authorized');
+    expect(root.querySelector('app-forbidden-pattern p')?.textContent?.trim()).toBe(
+      'Ask a project administrator for access to this workspace.',
+    );
+    expect(root.querySelector('a')).toBeNull();
     expect(root.textContent).not.toContain('private-value');
     expect(root.textContent).not.toContain('not-for-display');
   });

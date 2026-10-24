@@ -1,20 +1,15 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { ForbiddenPatternComponent } from '../../shared/ui/states';
 
-/** Shell-local convenience pattern; API authorization remains authoritative (T8 owns patterns). */
+/** Route structure only; the shared T8 pattern owns the visible refusal copy and presentation. */
 @Component({
   selector: 'app-forbidden-page',
-  imports: [RouterLink],
+  imports: [ForbiddenPatternComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: '../layout/shell-page.css',
-  template: `<section>
-    <h1>{{ heading }}</h1>
-    <p>{{ explanation }}</p>
-    <a routerLink="/">{{ action }}</a>
-  </section>`,
+  styleUrl: '../layout/route-pattern-page.css',
+  template: `
+    <h1 i18n="@@shared.states.forbidden.heading">Not authorized</h1>
+    <app-forbidden-pattern />
+  `,
 })
-export class ForbiddenPage {
-  readonly heading = $localize`:@@shell.page.forbidden.heading:You do not have access to this page`;
-  readonly explanation = $localize`:@@shell.page.forbidden.explanation:Return to your workspace to continue.`;
-  readonly action = $localize`:@@shell.page.forbidden.action:Back to workspace`;
-}
+export class ForbiddenPage {}

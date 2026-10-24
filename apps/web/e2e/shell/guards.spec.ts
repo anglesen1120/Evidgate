@@ -43,13 +43,12 @@ test.describe('a missing permission (AC4)', () => {
       await expect.poll(() => new URL(page.url()).pathname).toBe('/en/forbidden');
       expect(new URL(page.url()).search).toBe('');
 
-      await expect(page.locator('#main-content h1')).toHaveText(
-        'You do not have access to this page',
-      );
+      await expect(page.locator('#main-content h1')).toHaveText('Not authorized');
+      await expect(page.locator('app-forbidden-pattern h2')).toHaveText('Not authorized');
       await expect(page.locator('#main-content')).not.toContainText(path);
       // Still inside the shell: a refusal is a page, not an ejection.
       await expect(page.locator('app-shell')).toHaveCount(1);
-      await expect(page.locator('#main-content a')).toHaveAttribute('href', '/en/');
+      await expect(page.locator('app-forbidden-pattern')).toHaveCount(1);
     });
   }
 
@@ -57,9 +56,8 @@ test.describe('a missing permission (AC4)', () => {
     await page.goto(localePath('vi', `/orgs/${ORG_ACME}/settings`));
     await expect.poll(() => new URL(page.url()).pathname).toBe('/vi/forbidden');
     await expect(page.locator('html')).toHaveAttribute('lang', 'vi');
-    await expect(page.locator('#main-content h1')).toHaveText(
-      'Bạn không có quyền truy cập trang này',
-    );
+    await expect(page.locator('#main-content h1')).toHaveText('Không có quyền truy cập');
+    await expect(page.locator('app-forbidden-pattern h2')).toHaveText('Không có quyền truy cập');
   });
 });
 
@@ -91,7 +89,8 @@ test.describe('an address that resolves to nothing (AC4, 00 §9.2)', () => {
     for (const attempted of attempts) {
       const address = new URL(attempted, 'http://127.0.0.1');
       await page.goto(attempted);
-      await expect(page.locator('#main-content h1')).toHaveText('Page not found');
+      await expect(page.locator('#main-content h1')).toHaveText('Not found');
+      await expect(page.locator('app-not-found-pattern h2')).toHaveText('Not found');
       rendered.push({
         pathname: address.pathname,
         url: page.url(),
@@ -107,20 +106,20 @@ test.describe('an address that resolves to nothing (AC4, 00 §9.2)', () => {
       expect(new URL(entry.url).pathname, `attempt ${index} kept its path`).toBe(entry.pathname);
     }
 
-    // 2. One heading, one explanation, one action, one document title: the four addresses cannot be
+    // 2. One page heading, shared pattern and document title: the four addresses cannot be
     //    told apart from what the page says. This is the property that keeps a foreign organization
     //    id from confirming that the id exists somewhere else.
     expect(new Set(rendered.map((entry) => entry.heading)).size).toBe(1);
     expect(new Set(rendered.map((entry) => entry.text)).size).toBe(1);
     expect(new Set(rendered.map((entry) => entry.title)).size).toBe(1);
-    expect(rendered[0]?.text).toBe(
-      'Page not found Check the address or return to your workspace. Back to workspace',
+    expect(rendered[0]?.text).toContain(
+      'This page does not exist or you do not have access to it.',
     );
-    expect(rendered[0]?.title).toBe('Page not found · Evidgate');
+    expect(rendered[0]?.title).toBe('Not found · Evidgate');
 
     // 3. And the not-found page is not the forbidden page: a refusal that leaked into the 404 copy
     //    would tell a visitor that the resource exists.
-    expect(rendered[0]?.text).not.toContain('You do not have access');
+    expect(rendered[0]?.text).not.toContain('Not authorized');
     // The shell is around it, with the navigation the session is allowed to use.
     await expect(page.locator('app-shell')).toHaveCount(1);
     // The corpus lists two organizations; a foreign id never renames the session's own scope.
@@ -134,7 +133,8 @@ test.describe('an address that resolves to nothing (AC4, 00 §9.2)', () => {
     page,
   }) => {
     await page.goto(localePath('vi', `/orgs/${ORG_ACME}/not-a-page`));
-    await expect(page.locator('#main-content h1')).toHaveText('Không tìm thấy trang');
+    await expect(page.locator('#main-content h1')).toHaveText('Không tìm thấy');
+    await expect(page.locator('app-not-found-pattern h2')).toHaveText('Không tìm thấy');
     await expect(page.locator('html')).toHaveAttribute('lang', 'vi');
   });
 });
