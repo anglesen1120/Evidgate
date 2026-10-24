@@ -217,6 +217,26 @@ describe('no-fixture-code gate', () => {
     expect(leaked.stderr).toContain(description);
   });
 
+  it('still_scans_resource_and_action_outside_a_permission_row', async () => {
+    const ws = await workspace();
+    // `action`/`resource` are common field names; the skip applies only where `code` is exactly
+    // `<resource>:<action>`. Here they are ordinary fixture data and must stay needles.
+    const action = 'archive-the-staging-suite';
+    await ws.fixture('audit-events', {
+      operation_id: 'listAuditEvents',
+      variant: 'default',
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      latency_ms: 0,
+      body: { items: [{ code: 'evt-1', resource: 'suite', action }] },
+    });
+    await ws.output('main-ABC123.js', `const a=${JSON.stringify(action)};`);
+
+    const leaked = ws.run();
+    expect(leaked.status).toBe(1);
+    expect(leaked.stderr).toContain(action);
+  });
+
   for (const marker of MARKERS) {
     const slug = marker.toLowerCase().replace(/[^a-z0-9]+/g, '_');
     it(`fails_on_the_fixture_backend_marker_${slug}`, async () => {

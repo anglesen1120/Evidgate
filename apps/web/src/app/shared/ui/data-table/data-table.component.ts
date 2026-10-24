@@ -189,9 +189,9 @@ export class DataTableComponent<T> {
       // Virtual mode: the viewport carries role="rowgroup". CDK's native-table template
       // hard-codes `<tbody role="rowgroup">` (and thead/tfoot) on the body table inside it,
       // which would nest a rowgroup in a rowgroup; demote those sections so the rows are owned
-      // by the viewport's group. Non-virtual tables keep CDK's rowgroup untouched.
+      // by the viewport's group. CDK creates those sections once per table, so this runs again
+      // only when the viewport itself appears. Non-virtual tables keep CDK's rowgroup untouched.
       const viewport = this.viewport();
-      this.rows();
       if (!viewport) return;
       for (const section of viewport.elementRef.nativeElement.querySelectorAll(
         'thead[role="rowgroup"], tbody[role="rowgroup"], tfoot[role="rowgroup"]',

@@ -61,7 +61,7 @@ for (const locale of LOCALES) {
     await installViolationProbe(page);
 
     const response = await page.goto(overviewPath(locale));
-    // The policy is really in force: the document answer carries it.
+    // The policy is sent: the document answer carries it.
     expect(response?.headers()['content-security-policy'] ?? '').toContain(
       "require-trusted-types-for 'script'",
     );
@@ -74,8 +74,23 @@ for (const locale of LOCALES) {
     await target.click();
     await expect.poll(() => new URL(page.url()).pathname).toBe(href);
     await expect(page.locator('#main-content h1')).toBeVisible();
-    await page.waitForLoadState('networkidle');
 
     expect(await violations(page)).toEqual([]);
+
+    // Negative control: the policy is ENFORCED, not just sent. A raw string written into a
+    // script sink must be refused by Trusted Types and reach the probe; with `bypassCSP` on, the
+    // write would succeed silently and this step would fail.
+    const refused = await page.evaluate(() => {
+      try {
+        document.createElement('script').textContent = 'void 0';
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    expect(refused, 'Trusted Types refuses a raw script write').toBe(true);
+    await expect
+      .poll(async () => (await violations(page)).map((violation) => violation.directive))
+      .toEqual(['require-trusted-types-for']);
   });
 }

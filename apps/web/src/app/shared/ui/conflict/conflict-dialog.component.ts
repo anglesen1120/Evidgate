@@ -212,11 +212,14 @@ export class ConflictDialogComponent {
     if (!dialog?.open || !(event instanceof KeyboardEvent)) return;
     const focusables = Array.from(
       dialog.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        'button, [href], input, select, textarea, summary, [contenteditable], [tabindex]:not([tabindex="-1"])',
       ),
     ).filter(
       (element) =>
-        !element.matches(':disabled') && element.getClientRects().length > 0 && !element.inert,
+        !element.matches(':disabled') &&
+        // `visibilityProperty` also drops `visibility: hidden`, which keeps its client rects.
+        element.checkVisibility({ visibilityProperty: true }) &&
+        element.closest('[inert]') === null,
     );
     const first = focusables[0];
     const last = focusables[focusables.length - 1];

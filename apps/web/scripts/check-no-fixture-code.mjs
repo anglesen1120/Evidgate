@@ -98,9 +98,7 @@ const MIN_FIXTURE_STRING_LENGTH = 12;
  * (`content-type`/`application/json`, the SDK operation ids, the `precondition_failed`-style codes
  * of `apps/web/src/app/core/http/api-error.ts`, and the navigation registry's permission literals
  * such as `organization:read`), so scanning them would report a leak on every build without saying
- * anything about the fixtures. `resource`/`action` are the halves of the permission `code`
- * (`contracts/permissions.json`): a catalogue row whose `resource` is `organization` would
- * otherwise fail the build for a word production needs.
+ * anything about the fixtures.
  *
  * The code markers of `MARKERS` are the primary leak detector: the fixture backend cannot
  * reach a production bundle without at least one of them, and they are matched in every scanned
@@ -109,14 +107,24 @@ const MIN_FIXTURE_STRING_LENGTH = 12;
  * never carries), so a leaked response body is caught without the noise the vocabulary would add
  * on every build.
  */
-const PROTOCOL_MEMBERS = new Set([
-  'headers',
-  'operation_id',
-  'variant',
-  'code',
-  'resource',
-  'action',
-]);
+const PROTOCOL_MEMBERS = new Set(['headers', 'operation_id', 'variant', 'code']);
+
+/**
+ * `resource`/`action` are the halves of a permission `code` (`contracts/permissions.json`): a
+ * catalogue row whose `resource` is `organization` would otherwise fail the build for a word
+ * production needs. They are common field names, so they are skipped ONLY on a permission row —
+ * an object whose `code` is exactly `<resource>:<action>` — and scanned everywhere else.
+ */
+const PERMISSION_HALVES = ['resource', 'action'];
+
+function isPermissionRow(value) {
+  return (
+    typeof value.code === 'string' &&
+    typeof value.resource === 'string' &&
+    typeof value.action === 'string' &&
+    value.code === `${value.resource}:${value.action}`
+  );
+}
 
 function fail(message) {
   console.error(`fixture code: ${message}`);
@@ -181,8 +189,9 @@ function collectFixtureStrings(value, name, strings) {
     return;
   }
   if (value !== null && typeof value === 'object') {
+    const permissionRow = isPermissionRow(value);
     for (const [key, child] of Object.entries(value)) {
-      if (PROTOCOL_MEMBERS.has(key)) {
+      if (PROTOCOL_MEMBERS.has(key) || (permissionRow && PERMISSION_HALVES.includes(key))) {
         continue;
       }
       collectFixtureStrings(child, name, strings);
