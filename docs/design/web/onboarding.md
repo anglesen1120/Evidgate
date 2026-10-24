@@ -63,7 +63,7 @@ Related AI-settings-only states, not aliases for primary-page exports: `submitti
 
 ## Copy length (vi vs en)
 
-Measured from the primary HTML with a throwaway read-only Python `HTMLParser` script in `/tmp/evidgate-t11-onboarding-run-copy.py`. Scope: localized `data-vi` / `data-en` strings in headings (`h1`–`h6`), buttons / `.eg-btn` links, table headers and badges, including inactive tab bodies. HTML is decoded, tags stripped, whitespace collapsed and duplicate translation pairs removed; counts are Unicode code points without normalization, not pixels or grapheme clusters. Injected review-control labels, paragraphs, field hints and select options are outside this specific measurement. Ratio = vi count / matching en count.
+Measured from the primary HTML with a throwaway read-only Python `HTMLParser` pass. Scope: localized `data-vi` / `data-en` strings in headings (`h1`–`h6`), buttons / `.eg-btn` links, table headers and badges, including inactive tab bodies. HTML is decoded, tags stripped, whitespace collapsed and duplicate translation pairs removed; counts are Unicode code points without normalization, not pixels or grapheme clusters. Injected review-control labels, paragraphs, field hints and select options are outside this specific measurement. Ratio = vi count / matching en count.
 
 | Source line | Longest Vietnamese strings (quoted mockup copy) | vi chars | Matching English | en chars | vi / en |
 | --- | --- | --- | --- | --- | --- |

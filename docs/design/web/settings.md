@@ -60,7 +60,7 @@ Additional primary-page states ([S]:74):
 
 ## Copy length (vi vs en)
 
-Measured with the throwaway Python HTMLParser script `/tmp/evidgate-settings-release-copy.py`, reading only the primary HTML. Scope: bilingual `data-vi`/`data-en` text within actual `h1`–`h6`, buttons (including `.eg-btn` links), table headers and `.eg-badge` elements, including hidden panels/dialogs. Strip tags, decode entities, collapse whitespace, deduplicate by Vietnamese string (first source occurrence), count Unicode code points with `len`, sort descending; ratio = vi/en. State-title spans, descriptions, hints and injected shared-shell controls are not silently counted as headings. Both attribute values drive locale text through [JS]:430–432.
+Measured with a throwaway read-only Python HTMLParser pass over the primary HTML only. Scope: bilingual `data-vi`/`data-en` text within actual `h1`–`h6`, buttons (including `.eg-btn` links), table headers and `.eg-badge` elements, including hidden panels/dialogs. Strip tags, decode entities, collapse whitespace, deduplicate by Vietnamese string (first source occurrence), count Unicode code points with `len`, sort descending; ratio = vi/en. State-title spans, descriptions, hints and injected shared-shell controls are not silently counted as headings. Both attribute values drive locale text through [JS]:430–432.
 
 | Vietnamese string | vi chars | Matching English | en chars | vi/en | Primary source |
 | --- | ---: | --- | ---: | ---: | --- |
@@ -104,7 +104,7 @@ These gaps are not approval or permission to redesign the read-only reference.
 | [OPEN] AC9–AC11 / T9/T8/T10: security events, webhook settings, support grants/banner | These are not primary destination tabs ([S]:158–174); the audited support row is not a support-grant administration screen or persistent response-header banner. Map their phase/permission-aware entry points before those feature tasks; do not add speculative tabs to this port. |
 | [OPEN] AC12 / T11: shell quota badge from warned/blocked timestamps | Page 31 has resource-state specimens ([usage]:235–295), but the primary topbar has no summary-driven warn/block quota link ([S]:20–29). Missing-summary suppression and response-driven shell state remain application acceptance. |
 | [OPEN] Primary state completeness | `no-project` and `no-tabs` are declared without distinct specimens; 412 has copy but no actionable reload. The G2/G4 mobile destinations are also absent from the select. These source gaps must not be described as implemented behavior. |
-| [OPEN] Approval and export evidence | This file does not record owner approval, assert screenshots already exist, or replace the future W8/W9 accessibility/i18n checks. Locale routing is `/vi/` and `/en/` with profile preference ([binding rulings]:97), not the mockup's attribute/localStorage implementation. |
+| [OPEN] Approval and export evidence | This file does not record owner approval or replace the future W8/W9 accessibility/i18n checks. Visual, keyboard and screen-reader acceptance is not claimed: the screenshots are static captures of the v2 mockup; approval of the flow is the owner action recorded in the header. Locale routing is `/vi/` and `/en/` with profile preference ([binding rulings]:97), not the mockup's attribute/localStorage implementation. |
 
 [S]: ../web-ui/output/27-settings-shell/evidgate-settings.html
 [members]: ../web-ui/output/28-members-roles/evidgate-members-roles.html

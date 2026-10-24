@@ -10,7 +10,7 @@ Design foundation for `apps/web`: flow specifications, design tokens, themes, la
 | T11.1 | [`healing-shadow-review.md`](healing-shadow-review.md) | Healing shadow review flow |
 | T11.1 | [`settings.md`](settings.md) | Settings flow |
 | T11.1 | [`release-view.md`](release-view.md) | Release view flow (phase G4) |
-| T11.2 | [`tokens.md`](tokens.md), [`../../../apps/web/src/styles/tokens.css`](../../../apps/web/src/styles/tokens.css) | Token inventory, themes, contrast table; `contrast.py` recomputes the table |
+| T11.2 | [`tokens.md`](tokens.md), [`../../../apps/web/src/styles/tokens.css`](../../../apps/web/src/styles/tokens.css) | Token inventory, themes, contrast table; [`contrast.py`](contrast.py) recomputes the table |
 | T11.3 | [`layout.md`](layout.md) | Grid, breakpoints (≥ 1280 / 768–1279 / < 768), dense-table density rules |
 
 ## Screenshots

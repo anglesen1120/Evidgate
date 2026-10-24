@@ -132,7 +132,7 @@ The capture slice supplies these images from the failure inbox, default state, l
 
 ## Evidence scope
 
-Graph tools used: `list_projects`, `get_file_outline`, `search_graph`, `check_index_coverage`. The worktree was not present in the returned index listing; plan headings were located against the main repository's index, then all source reads used the assigned worktree. Coverage returned `no_recorded_issue / metadata_match` for the reference CSS/JS/HTML and contract paths checked, but no CSS outline nodes or JS function search matches were returned. Static source analysis therefore used exact source ranges and literal searches; the new layout file had no indexed source. No build, test, lint, formatter or screenshot verification was run by this slice.
+This specification is derived from reading the v2 mockup sources: the reference stylesheet [evidgate.css](../web-ui/output/assets/evidgate.css) and script [evidgate.js](../web-ui/output/assets/evidgate.js), with the failure-inbox page cited above. The five layout screenshots are static captures of that failure-inbox mockup at 1440/1280/1024/768/390px. Browser behaviour beyond those captures — keyboard interaction, screen-reader output and virtual scroll — is not claimed here and is tracked in the Open points table above.
 
 [box-sizing]: ../web-ui/output/assets/evidgate.css#L120-L125
 [spacing]: ../web-ui/output/assets/evidgate.css#L51-L63
