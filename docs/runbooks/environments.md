@@ -61,6 +61,26 @@ CI-tooling switches are outside the matrix by design: `EVIDGATE_S3PARITY__*`,
 `EVIDGATE_ISOLATION__*` and `EVIDGATE_VERIFY_SKIP_DOCKER` configure one test run or one CI job, not an
 environment.
 
+A second input is outside the matrix for the same reason — no .NET host reads it: the `apps/web`
+static host's CSP allowlist. **`EVIDGATE_WEB_CONNECT_SRC`** is consumed by the edge that emits the
+app-origin `Content-Security-Policy` (`apps/web/scripts/csp.mjs`, `parseConnectSrc`), never by an
+`EVIDGATE_*` option, so it has no matrix row and `scripts/check-env-matrix.mjs` never sees it.
+
+| Input | Value rule | Pairing | When it is wrong |
+|---|---|---|---|
+| `EVIDGATE_WEB_CONNECT_SRC` | space- or comma-separated bare `https:` (or `wss:`) origins with an optional port 1–65535; a path, `http:`, a wildcard or an empty entry fails the deploy in `parseConnectSrc` | must contain the **origin of the `evidgate-otlp-endpoint`** URL the same edge injects into `index.html` — that `meta` tag is 10.2.1-T1.4's and is `https:` only (`https://otlp.example.com` for `https://otlp.example.com/v1/traces`); the collector origin itself is **10.3.1-T2 [OPEN]** | missing origin: the browser blocks the export as a `connect-src` violation and the app disables its exporter (one `console.warn`), while tracing and `traceparent` keep working; extra origins: the policy is wider than the endpoint needs |
+
+The committed policy (`apps/web/scripts/app-origin-csp.json`) keeps `connect-src 'self'` and carries
+no collector origin. From the hosting side the same rule is in
+[`../../infra/README.md`](../../infra/README.md), "Web bundle hosting: CSP and the telemetry
+pairing".
+
+The collector must also allow the web app's origin by CORS: the browser exporter POSTs
+`Content-Type: application/json` cross-origin, so the collector (or the edge in front of it) answers the
+`OPTIONS` preflight and sends `Access-Control-Allow-Origin` for the app origin and
+`Access-Control-Allow-Headers: content-type`. A missing header blocks every export silently (the app
+detects CSP violations only). Owners: 10.2.1-T1.4 (edge), 10.3.1-T2 (collector) **[OPEN]**.
+
 `requiredAtBoot` in the matrix means the process exits **non-zero, naming the key** when the value is
 missing or malformed — the validated-options mechanism of 01.1.2-T1 (`IOptions` +
 `ValidateDataAnnotations` + `ValidateOnStart`, and `MigratorOptions.FromEnvironment` for the migration

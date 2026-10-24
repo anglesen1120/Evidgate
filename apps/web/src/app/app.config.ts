@@ -9,6 +9,7 @@ import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import { provideDevBackend } from './core/dev-fixtures/dev-backend';
 import { provideApi } from './core/http/api-client';
+import { provideTelemetry } from './core/telemetry/provide-telemetry';
 import { ThemeService } from './shell/layout/theme.service';
 
 // ADR-0008 settled both integration questions this file used to leave open: change detection is
@@ -21,6 +22,13 @@ import { ThemeService } from './shell/layout/theme.service';
 // last provider of a token wins. In a production build this module is `dev-backend.ts` and the call
 // adds nothing; the `fixtures` configuration swaps in `dev-backend.fixtures.ts`, which answers from
 // `fixtures/web-api/` through the same `HttpClient`, interceptors and `ApiGateway` as the real API.
+//
+// 09.1.1-T9.1: `provideTelemetry()` replaces the `ErrorHandler` (records `client.error` spans) and
+// starts the lazy telemetry chunk from an app initializer that never blocks bootstrap. It reads the
+// OTLP endpoint and the sampling ratio from `index.html`'s meta tags; with neither tag present it
+// traces locally against a no-op exporter and makes no network call, and the app behaves exactly
+// as before if the chunk itself never loads.
+//
 // 09.1.1-T4.1: `provideRouter(routes)` is the addition of the shell story. The route table
 // itself is `app.routes.ts`; the guards it names read the session through `SessionStore`, which is
 // load-bearing here and not in `provideRouter`'s options: no `withRouterConfig`, no
@@ -38,6 +46,7 @@ export const appConfig: ApplicationConfig = {
     provideApi(),
     provideDevBackend(),
     provideRouter(routes),
+    provideTelemetry(),
     provideAppInitializer(() => {
       inject(ThemeService);
     }),

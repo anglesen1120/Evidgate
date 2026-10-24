@@ -22,6 +22,7 @@ import {
 } from '@angular/core';
 import { createClient, createConfig, type Client } from '@evidgate/sdk';
 
+import { telemetryInterceptor } from '../telemetry/trace.interceptor';
 import { API_BASE_PATH } from './api-origin';
 import { createHttpClientFetch } from './http-client-fetch';
 import { idempotencyInterceptor } from './idempotency.interceptor';
@@ -52,6 +53,11 @@ export const API_CLIENT = new InjectionToken<Client>('evidgate.api-client');
  * origin that is not the page's, so only same-origin `/v1` mutations gain `X-XSRF-TOKEN`. A spec
  * adds `provideHttpClientTesting()` after this call to reach the real stack.
  *
+ * 09.1.1-T9.1 put `telemetryInterceptor` first of the three so the W3C `traceparent` it writes is
+ * the header `requestIdInterceptor` finds and therefore keeps: one trace id per route change,
+ * continued on the server. Telemetry appends nothing else — with the chunk unloaded it hands
+ * `next` the same request and the random traceparent T3 writes is the one that leaves.
+ *
  * `baseUrl` stays `/v1` in the application (the API shares the page origin, rule 1) and exists as
  * a parameter only because the SDK builds `new Request(baseUrl + path)`: a browser resolves the
  * relative URL against the document base, while Node's `Request` — the one `ng test` runs on —
@@ -61,7 +67,7 @@ export const API_CLIENT = new InjectionToken<Client>('evidgate.api-client');
 export function provideApi(baseUrl: string = API_BASE_PATH): EnvironmentProviders {
   return makeEnvironmentProviders([
     provideHttpClient(
-      withInterceptors([requestIdInterceptor, idempotencyInterceptor]),
+      withInterceptors([telemetryInterceptor, requestIdInterceptor, idempotencyInterceptor]),
       withXsrfConfiguration({ cookieName: XSRF_COOKIE_NAME, headerName: XSRF_HEADER_NAME }),
     ),
     {

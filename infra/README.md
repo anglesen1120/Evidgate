@@ -179,6 +179,41 @@ then come from `/manifests/<digest>` and `/blobs/<config digest>`):
 [variants]: https://github.com/dotnet/dotnet-docker/blob/main/documentation/image-variants.md
 [unicode-licence]: https://github.com/unicode-org/icu/blob/main/LICENSE
 
+## Web bundle hosting: CSP and the telemetry pairing (10.2.1-T1.4)
+
+`apps/web` is not an image: it is the static bundle on object storage + CDN noted at
+the top of the images section above (AC6, carried by 10.2.1-T1.4), so its deploy
+inputs live in the edge rather than in a Dockerfile. Two of them belong together —
+the app-origin CSP and the telemetry exporter's origin:
+
+| Input                                  | Consumed by                                                                                   | Value rule                                                                                                                                                                                   |
+| -------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/scripts/app-origin-csp.json` | the edge's header emission (its reference implementation is `apps/web/e2e/static-server.mjs`) | deployed as committed: `connect-src` is `'self'` and carries **no** collector origin                                                                                                         |
+| `EVIDGATE_WEB_CONNECT_SRC`             | the edge, through `parseConnectSrc` (`apps/web/scripts/csp.mjs`)                              | space- or comma-separated bare `https:`/`wss:` origins with an optional port 1–65535; a path, `http:`, a wildcard or an empty entry throws and fails the deploy; empty or unset adds nothing |
+
+**The pairing.** Set `EVIDGATE_WEB_CONNECT_SRC` to the **origin of the
+`evidgate-otlp-endpoint`** URL the same edge injects into `index.html` — a `meta` tag
+owned by 10.2.1-T1.4 and `https:` only, so `https://otlp.example.com/v1/traces` pairs
+with `https://otlp.example.com`. The collector and its origin are **10.3.1-T2
+[OPEN]**: until that origin exists, leave both the variable and the tag out and the
+web exporter stays a no-op.
+
+**CORS on the collector.** The collector is cross-origin and the browser exporter POSTs
+`Content-Type: application/json`, so the collector (or the edge in front of it) must
+answer the `OPTIONS` preflight and send `Access-Control-Allow-Origin` for the app origin
+and `Access-Control-Allow-Headers: content-type`. Without them the browser blocks every
+export and the app cannot tell (it only detects CSP violations): the loss is silent.
+Edge half 10.2.1-T1.4, collector half 10.3.1-T2 **[OPEN]**.
+
+When the two diverge the browser refuses the export as a `connect-src` violation and
+the app disables its exporter on that `securitypolicyviolation` (one `console.warn`)
+while tracing and the `traceparent` propagation keep working — a lost export, never a
+broken app. A list wider than the endpoint needs is the opposite error: it weakens the
+policy for every request of that origin. Neither input is a .NET option, so neither
+appears in `infra/config-matrix.json` (`scripts/check-env-matrix.mjs` validates the
+`EVIDGATE_*` options surface only); `docs/runbooks/environments.md` §2 carries the same
+rule from the environment side.
+
 ## Build inputs the context must keep
 
 `Dockerfile.<name>.dockerignore` trims the repository-root context. Three inputs
