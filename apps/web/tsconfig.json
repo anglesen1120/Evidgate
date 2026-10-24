@@ -10,7 +10,9 @@
     "moduleResolution": "bundler",
     "target": "ES2022",
     "lib": ["ES2022", "dom"],
-    "types": [],
+    // 09.1.1-T6.1: ambient global `$localize` (ADR-0008 rule 5). Templates with `i18n`
+    // attributes and `$localize` tagged strings compile in every build, translated or not.
+    "types": ["@angular/localize"],
     // The builder emits through its own pipeline; `tsc` must never write next to the sources.
     "noEmit": true,
     // 09.1.1-T12.1: the dev fixture catalog imports `fixtures/web-api/<name>/input.json` directly

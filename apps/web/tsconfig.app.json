@@ -5,7 +5,9 @@
   // the bundle itself, so `tsc -p` on this project never writes next to the sources.
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": []
+    // 09.1.1-T6.1: the override replaces the inherited list, so the ambient `$localize`
+    // global must be repeated here or the application project loses it.
+    "types": ["@angular/localize"]
   },
   "files": ["src/main.ts"],
   "include": ["src/**/*.d.ts"]

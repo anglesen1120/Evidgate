@@ -6,17 +6,55 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // 09.1.1-T1.2: the static server has routing logic of its own, so it is tested directly and
-// not only through the browser. The first two requests go to the `webServer` Playwright starts
-// from playwright.config.ts over the real `apps/web/dist/browser`; the rest start the SAME
-// `e2e/static-server.mjs` on a port of their own over a temporary dist, because their fixtures
-// — an unreadable file, a symlink leading out of the bundle — must never exist in a build.
+// not only through the browser. 09.1.1-T6.1: the real dist is a localized bundle — one
+// directory per locale and no root page — so the first four requests go to the `webServer`
+// Playwright starts from playwright.config.ts over `apps/web/dist/browser` and cover the
+// locale routing; the rest start the SAME `e2e/static-server.mjs` on a port of their own over
+// a temporary dist, because their fixtures — an unreadable file, a symlink leading out of the
+// bundle — must never exist in a build. Those temporary dists keep the single layout
+// (index.html directly in the served root), which must stay supported: it is what a build
+// without `localize` emits.
 
-test('serves index.html for an unknown client route (SPA fallback)', async ({ request }) => {
-  const response = await request.get('/runs/2f1c9d3e-0b7a-4c55-9a12-6d0f4b8e1a77');
+test('redirects / to the default locale (vi)', async ({ request }) => {
+  const response = await request.get('/', { maxRedirects: 0 });
+
+  expect(response.status()).toBe(302);
+  expect(response.headers()['location']).toBe('/vi/');
+});
+
+test('serves the vi index.html for a client route under /vi (SPA fallback)', async ({
+  request,
+}) => {
+  const response = await request.get('/vi/runs/2f1c9d3e-0b7a-4c55-9a12-6d0f4b8e1a77');
 
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toContain('text/html');
-  expect(await response.text()).toContain('<app-root></app-root>');
+  const html = await response.text();
+  expect(html).toContain('<app-root></app-root>');
+  // The locale bundle carries its own document language, so the fallback is that locale's page.
+  expect(html).toContain('lang="vi"');
+});
+
+test('serves the en index.html for a client route under /en (SPA fallback)', async ({
+  request,
+}) => {
+  const response = await request.get('/en/runs/2f1c9d3e-0b7a-4c55-9a12-6d0f4b8e1a77');
+
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toContain('text/html');
+  const html = await response.text();
+  expect(html).toContain('<app-root></app-root>');
+  expect(html).toContain('lang="en"');
+});
+
+test('treats a first segment that is no locale as an ordinary SPA path', async ({ request }) => {
+  // Documented behaviour of the locale layout: only the directories the bundle actually has
+  // are locales, and the root holds no page, so such a path falls back to the default locale.
+  const response = await request.get('/zz/runs/2f1c9d3e-0b7a-4c55-9a12-6d0f4b8e1a77');
+
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toContain('text/html');
+  expect(await response.text()).toContain('lang="vi"');
 });
 
 test('rejects a traversal path instead of reading outside dist/browser', async ({ request }) => {
@@ -239,6 +277,29 @@ test('refuses to start when index.html is a link out of the bundle', async () =>
 
     // The fallback page is the one file every client route answers with, so an escaping link
     // there is a refused bundle rather than a served file.
+    expect(code).toBe(1);
+    expect(stderr).toContain('does not resolve to a file inside');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('refuses to start when a locale index.html is a link out of the bundle', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'evidgate-web-e2e-'));
+  try {
+    const distDir = join(tempDir, 'dist', 'browser');
+    mkdirSync(join(distDir, 'vi'), { recursive: true });
+    const outsidePage = join(tempDir, 'outside-index.html');
+    writeFileSync(outsidePage, '<!doctype html><html><body>outside the bundle</body></html>');
+    symlinkSync(outsidePage, join(distDir, 'vi', 'index.html'));
+
+    const child = spawn(process.execPath, [SERVER_FILE, String(await freePort())], {
+      env: { ...process.env, [ROOT_ENV]: distDir },
+    });
+    const { code, stderr } = await runToExit(child);
+
+    // Every client route of that locale answers with this file, so it is checked the same way
+    // as the single-layout index.html above.
     expect(code).toBe(1);
     expect(stderr).toContain('does not resolve to a file inside');
   } finally {

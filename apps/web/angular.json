@@ -8,6 +8,14 @@
       "root": "",
       "sourceRoot": "src",
       "prefix": "app",
+      "i18n": {
+        "sourceLocale": "en",
+        "locales": {
+          "vi": {
+            "translation": "src/locale/messages.vi.xlf"
+          }
+        }
+      },
       "schematics": {
         "@schematics/angular:component": {
           "changeDetection": "OnPush",
@@ -28,10 +36,11 @@
             "browser": "src/main.ts",
             "index": "src/index.html",
             "tsConfig": "tsconfig.app.json",
-            "polyfills": [],
+            "polyfills": ["@angular/localize/init"],
             "styles": ["src/styles.css"],
             "assets": [],
-            "outputPath": "dist"
+            "outputPath": "dist",
+            "i18nMissingTranslation": "error"
           },
           "configurations": {
             "production": {
@@ -62,17 +71,20 @@
               },
               "outputHashing": "all",
               "sourceMap": false,
-              "extractLicenses": true
+              "extractLicenses": true,
+              "localize": ["en", "vi"]
             },
             "development": {
               "optimization": false,
               "sourceMap": true,
-              "extractLicenses": false
+              "extractLicenses": false,
+              "localize": ["vi"]
             },
             "fixtures": {
               "optimization": false,
               "sourceMap": true,
               "extractLicenses": false,
+              "localize": ["vi"],
               "fileReplacements": [
                 {
                   "replace": "src/app/core/dev-fixtures/dev-backend.ts",
@@ -82,6 +94,14 @@
             }
           },
           "defaultConfiguration": "production"
+        },
+        "extract-i18n": {
+          "builder": "@angular/build:extract-i18n",
+          "options": {
+            "buildTarget": "web:build:development",
+            "format": "xlf",
+            "outputPath": "src/locale"
+          }
         },
         "serve": {
           "builder": "@angular/build:dev-server",
@@ -101,6 +121,7 @@
         "test": {
           "builder": "@angular/build:unit-test",
           "options": {
+            "buildTarget": "web:build:development",
             "runner": "vitest",
             "tsConfig": "tsconfig.spec.json",
             "include": ["src/**/*.spec.ts"],
