@@ -338,6 +338,21 @@ test('40,000 unclosed <trans-unit> entries are scanned in under a second', () =>
   assert.ok(elapsed < 1000, `parsing took ${elapsed.toFixed(0)} ms, expected under 1000 ms`);
 });
 
+test('one unit holding 500,000 unclosed <source> tags is scanned in under a second', () => {
+  const units =
+    '      <trans-unit id="app.title" datatype="html">\n' +
+    '<source>'.repeat(500_000) +
+    '\n      </trans-unit>';
+  const dir = fixture({ source: SOURCE_UNITS });
+  writeRaw(dir, VI_CATALOG, rawCatalog(units));
+
+  const started = performance.now();
+  const result = run(dir);
+  const elapsed = performance.now() - started;
+  assert.match(text(result), /app\.title.*has no <target> element/);
+  assert.ok(elapsed < 1000, `parsing took ${elapsed.toFixed(0)} ms, expected under 1000 ms`);
+});
+
 test('a second locale missing one key fails naming that locale', () => {
   const dir = fixture({
     source: SOURCE_UNITS,
