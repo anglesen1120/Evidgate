@@ -1,0 +1,56 @@
+{
+  "operation_id": "listProjects",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000a4"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-000000000011",
+        "org_id": "018f0000-0000-7000-8000-000000000001",
+        "name": "Storefront web",
+        "slug": "storefront-web",
+        "status": "active",
+        "default_environment_id": null,
+        "created_at": "2026-10-02T09:00:00Z",
+        "updated_at": "2026-10-18T11:20:00Z",
+        "version": 3,
+        "retention_days": null,
+        "monthly_run_quota": 5000,
+        "case_prefix": "STOR"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000012",
+        "org_id": "018f0000-0000-7000-8000-000000000001",
+        "name": "Checkout API",
+        "slug": "checkout-api",
+        "status": "active",
+        "default_environment_id": null,
+        "created_at": "2026-10-02T09:05:00Z",
+        "updated_at": "2026-10-05T14:30:00Z",
+        "version": 2,
+        "retention_days": 30,
+        "monthly_run_quota": null,
+        "case_prefix": "CHEC"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000013",
+        "org_id": "018f0000-0000-7000-8000-000000000001",
+        "name": "Mobile app",
+        "slug": "mobile-app",
+        "status": "active",
+        "default_environment_id": null,
+        "created_at": "2026-10-03T08:15:00Z",
+        "updated_at": "2026-10-03T08:15:00Z",
+        "version": 1,
+        "retention_days": null,
+        "monthly_run_quota": 2000,
+        "case_prefix": "MOBI"
+      }
+    ],
+    "next_cursor": null
+  }
+}

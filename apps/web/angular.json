@@ -80,6 +80,18 @@
               "sourceMap": true,
               "extractLicenses": false,
               "localize": ["vi"]
+            },
+            "fixtures": {
+              "optimization": false,
+              "sourceMap": true,
+              "extractLicenses": false,
+              "localize": ["vi"],
+              "fileReplacements": [
+                {
+                  "replace": "src/app/core/dev-fixtures/dev-backend.ts",
+                  "with": "src/app/core/dev-fixtures/dev-backend.fixtures.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -100,6 +112,9 @@
             },
             "development": {
               "buildTarget": "web:build:development"
+            },
+            "fixtures": {
+              "buildTarget": "web:build:fixtures"
             }
           },
           "defaultConfiguration": "development"

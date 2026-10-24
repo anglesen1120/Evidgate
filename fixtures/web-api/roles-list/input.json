@@ -1,0 +1,95 @@
+{
+  "operation_id": "listRoles",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000a2"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-000000000031",
+        "org_id": null,
+        "code": "viewer",
+        "name": "Viewer",
+        "is_builtin": true,
+        "created_at": "2026-10-01T00:00:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000032",
+        "org_id": null,
+        "code": "qa_engineer",
+        "name": "QA engineer",
+        "is_builtin": true,
+        "created_at": "2026-10-01T00:00:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000033",
+        "org_id": null,
+        "code": "test_maintainer",
+        "name": "Test maintainer",
+        "is_builtin": true,
+        "created_at": "2026-10-01T00:00:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000034",
+        "org_id": null,
+        "code": "release_approver",
+        "name": "Release approver",
+        "is_builtin": true,
+        "created_at": "2026-10-01T00:00:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000035",
+        "org_id": null,
+        "code": "tenant_admin",
+        "name": "Tenant admin",
+        "is_builtin": true,
+        "created_at": "2026-10-01T00:00:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000036",
+        "org_id": null,
+        "code": "ci_producer",
+        "name": "CI producer",
+        "is_builtin": true,
+        "created_at": "2026-10-01T00:00:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000037",
+        "org_id": null,
+        "code": "agent",
+        "name": "Agent",
+        "is_builtin": true,
+        "created_at": "2026-10-01T00:00:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000038",
+        "org_id": null,
+        "code": "platform_operator",
+        "name": "Platform operator",
+        "is_builtin": true,
+        "created_at": "2026-10-01T00:00:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000039",
+        "org_id": null,
+        "code": "billing_operator",
+        "name": "Billing operator",
+        "is_builtin": true,
+        "created_at": "2026-10-01T00:00:00Z",
+        "version": 1
+      }
+    ],
+    "next_cursor": null
+  }
+}

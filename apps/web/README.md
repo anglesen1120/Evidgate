@@ -222,6 +222,56 @@ One SDK client, one gateway, no wire types. `src/app/core/http/api-client.ts` bu
   is added in three places: the recorder's `RECORDED_OPERATION_IDS`, the smoke's
   `OPERATION_DRIVERS`, and the re-recorded fixture.
 
+## Fixture backend (09.1.1-T12.1)
+
+`npm run start:fixtures -w apps/web` (`ng serve --configuration fixtures`) serves the app with **no
+API**: an Angular `HttpBackend` in `src/app/core/dev-fixtures/fixture-backend.ts` answers every SDK
+call from the fixture corpus `fixtures/web-api/<name>/` (01.6.1-T3 shape: `input.json` +
+`meta.json`, synthetic data only).
+
+- **Placement.** It replaces `HttpBackend` — the last link of `HttpClient`'s chain — not an
+  interceptor, so a fixture answer still passes the `X-Request-Id`/`traceparent` and
+  `Idempotency-Key` interceptors, the blob adapter of `http-client-fetch.ts` and `ApiGateway`'s
+  error mapper. A 403 or a 412 fixture raises the same typed `ApiRequestError` a real server would,
+  which is what makes it usable for state review. Every answer carries
+  `X-Evidgate-Fixture: <fixture name>`, so the network panel names the corpus directory that
+  answered.
+- **Requests → fixtures.** `fixture-routes.ts` is the closed list of servable operations (the
+  `operationId`s of `contracts/openapi.yaml` with their method and `/v1`-relative path template);
+  `fixture-catalog.ts` imports each `input.json` with an explicit `import`, so the bundle carries
+  the corpus itself and nothing is generated. A request that matches no route, or an operation whose
+  selected variant no document carries, is `501` with a 00 §9.2 `fixture_not_found` envelope — never
+  a plausible empty page.
+- **Toggles.** Loading and error states come from a variant or a delay, set by a review-only state
+  switcher that injects `FixtureToggles` or from the page URL
+  (`?fixture.variant.<operationId>=<variant>`, `?fixture.latency=<ms>`):
+
+  ```ts
+  inject(FixtureToggles).setVariant('listRuns', 'forbidden'); // the 403 fixture
+  inject(FixtureToggles).setLatency('listRuns', 800); // a slow answer; '*' for every operation
+  ```
+
+  A latency is a whole, non-negative number of milliseconds clamped to 600 000, by the same rule
+  from the URL and from `setLatency`; a value that is not one (`abc`, `-5`, `1e3`, `1.5`, empty) is
+  ignored. `'*'` is a wildcard for latency only: the backend asks for the matched route's operation
+  id, so `fixture.variant.*=x` is stored but never consulted and changes no answer — unlike
+  `setLatency('*', …)`, which delays every operation.
+  Today the corpus carries `ok` for every servable operation, `forbidden` for `listRuns` and
+  `precondition_failed` for `updateProject`; an unknown variant is the 501 above. A fixture's own
+  `latency_ms` applies when no toggle overrides it.
+
+- **Dev-only, and checked.** `app.config.ts` provides `provideDevBackend()` from
+  `dev-backend.ts`, which is an empty provider set — that is what a production build contains. The
+  `fixtures` configuration in `angular.json` replaces that file with `dev-backend.fixtures.ts`
+  (→ `provideFixtureBackend()`) through `fileReplacements`, so no production module imports the
+  fixture backend, catalog or routes. `npm run build -w apps/web` runs
+  `node scripts/check-no-fixture-code.mjs` after the bundle-budget gate: it greps `dist/browser` for
+  the backend's marker strings and for every ≥ 12-character string value in
+  `fixtures/web-api/*/input.json`, and fails closed when the corpus or the build output is missing.
+- **Contract check.** `src/app/core/dev-fixtures/fixture-contract.spec.ts` (09.1.1-T12.2) validates
+  every fixture body against `contracts/openapi.yaml` with the `@evidgate/cli` Ajv validator inside
+  `npm run test -w apps/web`, so a fixture that lost a required member fails the suite.
+
 ## i18n
 
 Angular's built-in i18n (`@angular/localize` 22.2.0, ADR-0008 row f) is the only translation
