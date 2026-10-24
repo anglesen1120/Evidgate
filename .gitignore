@@ -17,6 +17,9 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Angular CLI build cache (09.1.1-T1: apps/web is an Angular workspace)
+.angular/
+
 # Local data and test output
 .local/
 artifacts/

@@ -1,0 +1,12 @@
+{
+  // 09.1.1-T1.1: the compile project the `@angular/build:application` builder receives
+  // (`angular.json` → build.options.tsConfig). It adds only the browser entry point and the
+  // ambient declarations on top of tsconfig.json. `noEmit` is inherited: the builder emits
+  // the bundle itself, so `tsc -p` on this project never writes next to the sources.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": []
+  },
+  "files": ["src/main.ts"],
+  "include": ["src/**/*.d.ts"]
+}

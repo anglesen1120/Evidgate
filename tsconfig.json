@@ -1,11 +1,14 @@
 {
+  // 09.1.1-T1.1: `apps/web` left the tsc -b reference graph — it is an Angular application
+  // built by the Angular CLI (`@angular/build:application`), not a composite TS library.
+  // Its type-checking lives in apps/web/tsconfig.json (source) and apps/web/tsconfig.spec.json
+  // (specs, run by verify.sh's tsc-spec stage); the root `build` script chains `ng build`.
   "files": [],
   "references": [
     { "path": "packages/sdk" },
     { "path": "packages/cli" },
     { "path": "packages/adapter-playwright" },
     { "path": "packages/test-fixtures" },
-    { "path": "packages/adapter-junit" },
-    { "path": "apps/web" }
+    { "path": "packages/adapter-junit" }
   ]
 }
