@@ -56,9 +56,10 @@ test.describe('skip link and focus handoff (AC6)', () => {
     await expect(navigation).toHaveCount(1);
     await expect(navigation).toHaveAccessibleName('Primary navigation');
 
-    // Every rendered group is a section named by its own heading, so a screen reader can announce
-    // "Design, navigation" instead of one undifferentiated list.
-    const groups = await page.locator('app-shell-nav nav section').evaluateAll((sections) =>
+    // Every rendered group is a labelled `role="group"` (not a `<section>`, which would add a
+    // `region` landmark per group, review L5), so a screen reader can announce "Design, group"
+    // instead of one undifferentiated list.
+    const groups = await page.locator('app-shell-nav nav [role="group"]').evaluateAll((sections) =>
       sections.map((section) => {
         const labelledBy = section.getAttribute('aria-labelledby') ?? '';
         const heading = labelledBy === '' ? null : section.querySelector('h2');

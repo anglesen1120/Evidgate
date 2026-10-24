@@ -32,7 +32,12 @@ test.describe('no usable session (AC5)', () => {
     await expect(page.getByRole('navigation')).toHaveCount(0);
     await expect(page.locator('#main-content')).toHaveCount(0);
     await expect(page.locator('main h1')).toHaveText('Sign in required');
-    await expect(page.locator('main a').last()).toHaveAttribute('href', '/en/');
+    await expect(page.locator('main p')).toHaveText(
+      'Sign-in is not available in this workspace yet.',
+    );
+    // The placeholder offers no action: every route an anonymous visitor can reach ends back here
+    // (the `/` landing redirect), so a link would loop. T5 ships the real sign-in form (review D2).
+    await expect(page.locator('main a')).toHaveCount(0);
   });
 
   test('the workspace root goes to /login without a returnUrl', async ({ page }) => {

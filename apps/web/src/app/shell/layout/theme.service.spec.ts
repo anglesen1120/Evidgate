@@ -1,4 +1,6 @@
+import { ApplicationInitStatus, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { appConfig } from '../../app.config';
 import { ThemeService } from './theme.service';
 
 describe('ThemeService', () => {
@@ -53,6 +55,21 @@ describe('ThemeService', () => {
     expect(localStorage.getItem('evidgate-theme')).toBeNull();
     service.toggle();
     expect(localStorage.getItem('evidgate-theme')).toBe('light');
+  });
+
+  it('is constructed by the app initializer, so a stored theme applies with no shell', async () => {
+    localStorage.setItem('evidgate-theme', 'dark');
+    // The wiring under test is `appConfig`, not this service: `/login` and `/unavailable` sit
+    // outside `ShellComponent`, which used to be the only injection site (review L3).
+    TestBed.configureTestingModule({
+      providers: [provideZonelessChangeDetection(), ...appConfig.providers],
+    });
+
+    const init = TestBed.inject(ApplicationInitStatus);
+    await init.donePromise;
+
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(TestBed.inject(ThemeService).isDark()).toBe(true);
   });
 
   it('ignores invalid storage and remains usable if storage throws', () => {

@@ -58,7 +58,7 @@ test.describe('scope switcher (AC4)', () => {
       .toBe(`/en/orgs/${ORG_ACME}/projects/${PROJECT_CHECKOUT}/overview`);
   });
 
-  test('choosing an organization moves the URL into that organization', async ({ page }) => {
+  test('choosing an organization moves the session into that organization', async ({ page }) => {
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
 
     const orgSelect = page.locator('app-scope-switcher select').first();
@@ -70,15 +70,18 @@ test.describe('scope switcher (AC4)', () => {
     await orgSelect.selectOption(ORG_LUMEN);
 
     // What the switcher owns is the attempt: the address now names the organization that was
-    // chosen. (The corpus lists org 1's projects only, so org 2's landing resolves an organization
-    // with a project list whose ids carry another `org_id`; the project check refuses that pair and
-    // the shell renders its not-found pattern — a fixture shape, not a shell decision.)
-    // The address settles on the landing redirect's target, not on bare `/orgs/<org>`:
-    // `orgLandingGuard` resolves the organization's first project in the same navigation.
-    await expect
-      .poll(() => new URL(page.url()).pathname)
-      .toBe(`/en/orgs/${ORG_LUMEN}/projects/${PROJECT_STOREFRONT}/overview`);
-    await expect(page.locator('#main-content h1')).toHaveText('Not found');
+    // chosen. The landing address is the org's own: the store publishes only the project rows the
+    // server attributed to that org, and the corpus answers org 2's project request with org 1's
+    // rows, so org 2 has no project and `orgLandingGuard` sends it to its onboarding step — never
+    // to a project of another organization, which is what used to make this a 404 dead end.
+    // Onboarding is guarded for `project:create`, which this trimmed grant set does not hold, so
+    // `permissionGuard` (a `CanMatchFn`) refuses the entry and the documented destination is the
+    // 403 pattern. The scope itself did move, which is what this case is about.
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/en/forbidden');
+    await expect(page.locator('#main-content h1')).toHaveText('Not authorized');
+    await expect(orgSelect).toHaveValue(ORG_LUMEN);
+    // No project of another organization is offered for this org.
+    expect(await page.locator('app-scope-switcher select').nth(1).isDisabled()).toBe(true);
   });
 });
 

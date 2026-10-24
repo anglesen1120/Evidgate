@@ -4,7 +4,10 @@
     #org
     [value]="currentOrg()?.id ?? ''"
     [disabled]="organizations().length === 0"
-    (change)="orgSelected.emit(org.value)"
+    (keydown)="onKeydown('org', org.value, $event)"
+    (change)="onChange('org', org.value)"
+    (blur)="onBlur('org', org.value)"
+    (pointerdown)="onPointerDown()"
   >
     <option value="" disabled i18n="@@shell.switcher.choose-organization">
       Choose an organization
@@ -20,7 +23,10 @@
     #project
     [value]="currentProject()?.id ?? ''"
     [disabled]="projects().length === 0 || !currentOrg()"
-    (change)="projectSelected.emit(project.value)"
+    (keydown)="onKeydown('project', project.value, $event)"
+    (change)="onChange('project', project.value)"
+    (blur)="onBlur('project', project.value)"
+    (pointerdown)="onPointerDown()"
   >
     @if (projects().length === 0) {
       <option value="" disabled i18n="@@shell.switcher.no-projects">No projects</option>

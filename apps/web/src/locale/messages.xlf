@@ -1001,6 +1001,13 @@
           <context context-type="linenumber">19</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shell.layout.navigation-drawer" datatype="html">
+        <source>Navigation drawer</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell.component.ts</context>
+          <context context-type="linenumber">67</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="shell.switcher.organization" datatype="html">
         <source>Organization</source>
         <context-group purpose="location">
@@ -1411,21 +1418,14 @@
         <source>Sign in required</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/pages/sign-in-required.page.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.page.sign-in.explanation" datatype="html">
         <source>Sign-in is not available in this workspace yet.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/pages/sign-in-required.page.ts</context>
-          <context context-type="linenumber">34</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="shell.page.sign-in.action" datatype="html">
-        <source>Back to workspace</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/pages/sign-in-required.page.ts</context>
-          <context context-type="linenumber">35</context>
+          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.stub.eyebrow" datatype="html">

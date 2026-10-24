@@ -223,10 +223,12 @@ describe('NavViewService (09.1.1-T4.1)', () => {
   });
 
   it('recomputes when the resolved project changes', async () => {
+    // Both projects are listed before the scope resolves, so the case holds whether the store
+    // answers a same-org switch from its cache or re-reads the list.
+    identity.projectsByOrg.set('o-1', [PROJECT, project('p-2', 'o-1')]);
     await authenticatedWithProject();
     expect(linkOf(view, 'authoring')).toEqual(['/orgs', 'o-1', 'projects', 'p-1', 'authoring']);
 
-    identity.projectsByOrg.set('o-1', [PROJECT, project('p-2', 'o-1')]);
     await session.resolveScope(ORG.id, 'p-2');
 
     expect(linkOf(view, 'authoring')).toEqual(['/orgs', 'o-1', 'projects', 'p-2', 'authoring']);

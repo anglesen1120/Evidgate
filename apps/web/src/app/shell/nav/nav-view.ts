@@ -21,23 +21,10 @@ import type { NavEntry, NavGroupView, NavItemView } from './nav.models';
 import { NAV_ENTRIES, NAV_GROUPS } from './nav-registry';
 import { isPhaseActive } from './product-phase';
 
-/**
- * The router commands of one entry: `/orgs/:orgId/<segment>` for an org-scope entry,
- * `/orgs/:orgId/projects/:projectId/<segment>` for a project-scope one (D-S68-Q4 — the URL mirrors
- * the API path).
- *
- * `projectId` is never null for a project-scope entry that reached the view; the fallback to the
- * org landing keeps the function total for a caller that renders an entry outside the filter.
- */
-function linkFor(entry: NavEntry, orgId: string, projectId: string | null): readonly string[] {
-  if (entry.scope === 'org') {
-    return ['/orgs', orgId, entry.segment];
-  }
-  if (projectId === null) {
-    // Unreachable through `groups`: the filter already required a project for this scope.
-    return ['/orgs', orgId];
-  }
-  return ['/orgs', orgId, 'projects', projectId, entry.segment];
+/** One entry that survived the filters, with the router commands it renders (D-S68-Q4). */
+interface VisibleEntry {
+  readonly entry: NavEntry;
+  readonly link: readonly string[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -48,32 +35,40 @@ export class NavViewService {
    * The groups the sidebar renders for the current session and scope, groups in journey order and
    * items in registry order. Empty until an org is resolved — the shell shows the workspace
    * switcher and the landing guard picks the destination.
+   *
+   * Each entry is filtered and linked in one pass, so the link is built only where its ids are
+   * known: a project-scope entry gets its `/orgs/:orgId/projects/:projectId/<segment>` commands
+   * from the resolved project, and the org-scope form from the resolved org.
    */
   readonly groups: Signal<readonly NavGroupView[]> = computed(() => {
     const org = this.session.currentOrg();
-    const project = this.session.currentProject();
     if (org === null) {
       return [];
     }
-    const projectId = project?.id ?? null;
+    const projectId = this.session.currentProject()?.id ?? null;
 
-    const visible = NAV_ENTRIES.filter(
-      (entry) =>
-        isPhaseActive(entry.phase) &&
-        this.session.has(entry.permission) &&
-        (entry.scope === 'org' || projectId !== null),
-    );
+    const visible = NAV_ENTRIES.flatMap((entry): VisibleEntry[] => {
+      if (!isPhaseActive(entry.phase) || !this.session.has(entry.permission)) {
+        return [];
+      }
+      if (entry.scope === 'org') {
+        return [{ entry, link: ['/orgs', org.id, entry.segment] }];
+      }
+      return projectId === null
+        ? []
+        : [{ entry, link: ['/orgs', org.id, 'projects', projectId, entry.segment] }];
+    });
 
     const groups: NavGroupView[] = [];
     for (const group of NAV_GROUPS) {
       const items: NavItemView[] = visible
-        .filter((entry) => entry.group === group.id)
-        .sort((left, right) => left.order - right.order)
-        .map((entry) => ({
+        .filter(({ entry }) => entry.group === group.id)
+        .sort((left, right) => left.entry.order - right.entry.order)
+        .map(({ entry, link }) => ({
           id: entry.id,
           label: entry.label,
           icon: entry.icon,
-          link: linkFor(entry, org.id, projectId),
+          link,
         }));
       if (items.length > 0) {
         groups.push({ id: group.id, label: group.label, items });

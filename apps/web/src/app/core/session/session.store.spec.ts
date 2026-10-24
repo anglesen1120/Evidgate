@@ -8,6 +8,7 @@
 //   org's own list *and* carry the same `org_id`, otherwise `not-found` and no scope at all;
 // - `has()` reads only the loaded set, so an empty set grants nothing.
 
+import { effect } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { OrganizationSummaryDto, ProjectDto } from '@evidgate/sdk';
 
@@ -80,12 +81,21 @@ class FakeIdentityDataService {
   projectsFailure: Error | null = null;
   /** When true, `listProjects` answers only when the test settles {@link pending}. */
   manualProjects = false;
+  /** When true, `listMyOrganizations` answers only when the test settles {@link pendingOrgs}. */
+  manualOrganizations = false;
   organizationCalls = 0;
   projectOrgIds: string[] = [];
   readonly pending: PendingProjects[] = [];
+  readonly pendingOrgs: Array<(organizations: readonly OrganizationSummaryDto[]) => void> = [];
 
   listMyOrganizations(): Promise<readonly OrganizationSummaryDto[]> {
     this.organizationCalls += 1;
+    if (this.manualOrganizations) {
+      // `Promise.withResolvers` is not in this project's lib target (ES2022).
+      return new Promise<readonly OrganizationSummaryDto[]>((resolve) => {
+        this.pendingOrgs.push(resolve);
+      });
+    }
     return this.organizationFailure === null
       ? Promise.resolve(this.organizations)
       : Promise.reject(this.organizationFailure);
@@ -145,7 +155,7 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
   });
 
   describe('bootstrap', () => {
-    it('reads organizations then the permission set and becomes authenticated', async () => {
+    it('reads the organization list and the permission set, then becomes authenticated', async () => {
       identity.organizations = [ORG_ONE, ORG_TWO];
       source.granted = new Set(['run:read', 'authoring:read']);
 
@@ -161,13 +171,48 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
 
     it('treats a 401 as an anonymous session with no grants', async () => {
       identity.organizationFailure = apiError('unauthenticated', 401);
+      source.granted = new Set(['run:read']);
 
       await store.bootstrap();
 
       expect(store.sessionState()).toBe('anonymous');
       expect(store.permissions().size).toBe(0);
       expect(store.has('run:read')).toBe(false);
-      expect(source.calls).toBe(0);
+      // The catalogue is read in the same round trip (P2), and its answer is discarded: an
+      // anonymous session publishes no grants even when the permission source succeeded.
+      expect(source.calls).toBe(1);
+      expect(source.granted.has('run:read')).toBe(true);
+    });
+
+    it('treats a 401 from the permission read as anonymous, whichever read refused', async () => {
+      identity.organizations = [ORG_ONE];
+      source.failure = apiError('unauthenticated', 401);
+
+      await store.bootstrap();
+
+      expect(store.sessionState()).toBe('anonymous');
+      expect(store.organizations()).toEqual([]);
+      expect(store.permissions().size).toBe(0);
+    });
+
+    it('prefers a 401 from either read over the other read failing', async () => {
+      identity.organizationFailure = apiError('unavailable', 503);
+      source.failure = apiError('unauthenticated', 401);
+
+      await store.bootstrap();
+
+      expect(store.sessionState()).toBe('anonymous');
+    });
+
+    it('treats both reads failing as unavailable, not as an empty workspace', async () => {
+      identity.organizationFailure = apiError('unavailable', 503);
+      source.failure = apiError('unavailable', 503);
+
+      await store.bootstrap();
+
+      expect(store.sessionState()).toBe('unavailable');
+      expect(store.organizations()).toEqual([]);
+      expect(store.permissions().size).toBe(0);
     });
 
     it('treats a 5xx as unavailable, not as an empty workspace', async () => {
@@ -205,6 +250,28 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(identity.organizationCalls).toBe(1);
       expect(source.calls).toBe(1);
       expect(store.sessionState()).toBe('authenticated');
+    });
+
+    it('asks the permission source without waiting for the organization list', async () => {
+      identity.manualOrganizations = true;
+      identity.organizations = [ORG_ONE];
+
+      const booting = store.bootstrap();
+      await settle();
+
+      // Independent reads: the catalogue (up to twenty cursor pages) must not sit behind orgs.
+      expect(source.calls).toBe(1);
+
+      const first = identity.pendingOrgs[0];
+      if (first === undefined) {
+        throw new Error('the organization read must have reached the fake');
+      }
+      first([ORG_ONE]);
+      await booting;
+
+      expect(store.sessionState()).toBe('authenticated');
+      expect(store.organizations()).toEqual([ORG_ONE]);
+      expect(store.permissions()).toBe(source.granted);
     });
 
     it('does not read again once the state is settled', async () => {
@@ -401,13 +468,126 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       }
       newest.resolve([PROJECT_Q1]);
       expect(await second).toBe('ok');
-      // The stale answer arrives last and must change nothing.
+      // The stale answer arrives last and must change nothing — and it must not claim that the
+      // valid org it was asked about is unknown.
       older.resolve([PROJECT_P1, PROJECT_P2]);
-      expect(await first).toBe('not-found');
+      expect(await first).toBe('superseded');
 
       expect(store.currentOrg()).toEqual(ORG_TWO);
       expect(store.currentProject()).toEqual(PROJECT_Q1);
       expect(store.projects()).toEqual([PROJECT_Q1]);
+    });
+
+    it('publishes only the rows the server attributed to the resolved org', async () => {
+      // The fixture corpus answers any org's project request with org 1's rows, and a server that
+      // leaks another org's row must not make the switcher or a landing address use it.
+      identity.projectsByOrg.set('o-2', [PROJECT_P1, PROJECT_Q1]);
+
+      const resolution = await store.resolveScope('o-2', null);
+
+      expect(resolution).toBe('ok');
+      expect(store.currentOrg()).toEqual(ORG_TWO);
+      expect(store.projects()).toEqual([PROJECT_Q1]);
+      // The explicit-id branch refuses the same foreign row, so one answer never contradicts the
+      // other: the row is not a project of this org either way.
+      expect(await store.resolveScope('o-2', PROJECT_P1.id)).toBe('not-found');
+    });
+
+    describe('inside the org already resolved', () => {
+      /**
+       * Records every value the two scope signals settle on: a same-org navigation must not pass
+       * through a state where the sidebar has no org (or no projects) to render.
+       */
+      function recordScope(): Array<{
+        readonly org: string | null;
+        readonly projects: number;
+        readonly project: string | null;
+      }> {
+        const seen: Array<{ org: string | null; projects: number; project: string | null }> = [];
+        TestBed.runInInjectionContext(() => {
+          effect(() => {
+            seen.push({
+              org: store.currentOrg()?.id ?? null,
+              projects: store.projects().length,
+              project: store.currentProject()?.id ?? null,
+            });
+          });
+        });
+        return seen;
+      }
+
+      it('reads the project list once for the whole navigation and never blanks the scope', async () => {
+        const seen = recordScope();
+        // The first run records the state before any resolve; later runs record each settle.
+        TestBed.tick();
+
+        // `/orgs/o-1/projects/p-1/<segment>`: the org guard, then the project guard.
+        await store.resolveScope('o-1', null);
+        TestBed.tick();
+        await store.resolveScope('o-1', 'p-1');
+        TestBed.tick();
+
+        expect(identity.projectOrgIds).toEqual(['o-1']);
+        expect(seen).toEqual([
+          { org: null, projects: 0, project: null },
+          { org: 'o-1', projects: 2, project: null },
+          { org: 'o-1', projects: 2, project: 'p-1' },
+        ]);
+      });
+
+      it('answers a second navigation inside the org from the loaded list, without a read', async () => {
+        await store.resolveScope('o-1', 'p-1');
+
+        expect(await store.resolveScope('o-1', 'p-2')).toBe('ok');
+
+        expect(identity.projectOrgIds).toEqual(['o-1']);
+        expect(store.currentProject()).toEqual(PROJECT_P2);
+        expect(store.projects()).toEqual([PROJECT_P1, PROJECT_P2]);
+      });
+
+      it('refuses a project that is not in the loaded list without reading it again', async () => {
+        await store.resolveScope('o-1', 'p-1');
+
+        expect(await store.resolveScope('o-1', 'p-unknown')).toBe('not-found');
+
+        expect(identity.projectOrgIds).toEqual(['o-1']);
+        expect(store.currentOrg()).toBeNull();
+      });
+
+      it('re-reads the project list when the org really changes', async () => {
+        await store.resolveScope('o-1', 'p-1');
+
+        expect(await store.resolveScope('o-2', 'q-1')).toBe('ok');
+
+        expect(identity.projectOrgIds).toEqual(['o-1', 'o-2']);
+        expect(store.currentOrg()).toEqual(ORG_TWO);
+        expect(store.projects()).toEqual([PROJECT_Q1]);
+      });
+
+      it('drops the cache so reload() reads the list again', async () => {
+        await store.resolveScope('o-1', null);
+
+        await store.reload();
+        await store.resolveScope('o-1', null);
+
+        expect(identity.projectOrgIds).toEqual(['o-1', 'o-1']);
+      });
+
+      it('re-reads the list after a reload that recovered from a failed session read', async () => {
+        await store.resolveScope('o-1', null);
+        identity.organizationFailure = apiError('unavailable', 503);
+
+        await expect(store.reload()).rejects.toThrow('still unavailable');
+        expect(store.sessionState()).toBe('unavailable');
+
+        identity.organizationFailure = null;
+        await store.reload();
+
+        expect(await store.resolveScope('o-1', null)).toBe('ok');
+        // The failed generation and the recovered one both read the list: nothing from the old
+        // session may survive into the new one.
+        expect(identity.projectOrgIds).toEqual(['o-1', 'o-1']);
+      });
     });
   });
 

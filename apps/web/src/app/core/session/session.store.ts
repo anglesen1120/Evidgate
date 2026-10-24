@@ -41,6 +41,12 @@ export type ScopeResolution =
   | 'ok'
   /** Unknown, foreign, or not listed for this caller — deliberately one answer (00 §9.2). */
   | 'not-found'
+  /**
+   * A newer `resolveScope` (or a `reload()`) took the scope while this one awaited. The answer
+   * describes a request nobody is waiting for any more, so it is neither a match nor a claim that
+   * the id is unknown: the guard that receives it cancels instead of rendering the 404 pattern.
+   */
+  | 'superseded'
   /** The check itself could not be completed (transport, `5xx`, rate limit, programming error). */
   | 'unavailable';
 
@@ -48,6 +54,23 @@ export type ScopeResolution =
 const NO_PERMISSIONS: ReadonlySet<string> = new Set<string>();
 const NO_ORGANIZATIONS: readonly OrganizationSummaryDto[] = [];
 const NO_PROJECTS: readonly ProjectDto[] = [];
+
+/** One side of the concurrent session read: its value, or the failure it answered with. */
+type SettledRead<T> =
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: unknown };
+
+/**
+ * Settles one independent session read. `readSession` runs the organization list and the
+ * permission source side by side, and each has to fail on its own so the other one's `401` can
+ * still be seen: `Promise.all` would surface only the first rejection.
+ */
+async function settledRead<T>(read: () => Promise<T>): Promise<SettledRead<T>> {
+  try {
+    return { ok: true, value: await read() };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
 
 @Injectable({ providedIn: 'root' })
 export class SessionStore {
@@ -82,6 +105,15 @@ export class SessionStore {
   /** The project the route resolved to, or `null` for an org-scope route. */
   readonly currentProject = this.projectSignal.asReadonly();
 
+  /**
+   * The project list already read for the org it belongs to, published only for `org_id`s the
+   * server attributed to that org. `resolveScope` answers from here when the route asks for the
+   * org that is already current, so a navigation inside an org reads nothing and blanks nothing.
+   * A real org change drops it before reading the new org, and `clearScope` drops it on every
+   * failure, every `not-found` and `reload()`, so it never outlives the session it was read under.
+   */
+  private readonly projectsByOrg = new Map<string, readonly ProjectDto[]>();
+
   /** The single in-flight bootstrap, so a burst of guards awaits one read instead of N. */
   private inFlight: Promise<void> | null = null;
   /** Bumped by `reload()`; a bootstrap of an older generation never writes state. */
@@ -93,8 +125,9 @@ export class SessionStore {
    * Reads the session once (00 §8.9). Idempotent: a settled state is returned as-is and concurrent
    * callers share one in-flight read, so every guard may await it unconditionally.
    *
-   * Order matters: organizations first — a `401` there is the only signal that the caller has no
-   * session — then the permission source, because the catalogue operation itself needs a session.
+   * The two reads are independent — the organization list is not a prerequisite of the permission
+   * catalogue — so they run together, and a `401` from EITHER of them is the one refusal that means
+   * the caller has no session (`readSession` maps a pair of failures accordingly).
    */
   bootstrap(): Promise<void> {
     if (this.inFlight !== null) {
@@ -136,6 +169,19 @@ export class SessionStore {
    * Resolves the URL's org/project pair against what the server listed and makes it the current
    * scope. Never trusts an id: a foreign or unknown org, a project of another org, or a project the
    * server did not list is `not-found`, and the scope is cleared so nothing stale stays rendered.
+   *
+   * A route chain asks more than once per navigation (`orgScopeGuard`, then `projectScopeGuard`,
+   * then the landing guard), and every sidebar click is another navigation inside the org already
+   * resolved. So the project list read for an org is cached: when the target org is the current one
+   * and its list is already loaded, neither the signals nor the network are touched, and the
+   * project is answered from the cache. That keeps `currentOrg()`/`projects()` populated for the
+   * whole navigation — the sidebar and the project switcher never blink empty — and keeps one
+   * project-list read per navigation instead of one per guard. A real org change, a failure and
+   * `reload()` all drop the cache and read again.
+   *
+   * A resolution that a newer one (or a `reload()`) overtook while it awaited answers
+   * `superseded`, not `not-found`: the id was never shown to be unknown, and the guard that
+   * receives it must cancel rather than render the 404 pattern.
    */
   async resolveScope(orgId: string, projectId: string | null): Promise<ScopeResolution> {
     await this.bootstrap();
@@ -155,8 +201,30 @@ export class SessionStore {
       return 'not-found';
     }
 
-    // The previous scope is dropped before the await: a slow project list must not keep the old
-    // org's projects (and therefore the old org's navigation links) on screen.
+    // The org is already current and its list is loaded: answer from the cache. `undefined` means
+    // this org's list was never read, or a failure dropped it.
+    const cached = this.orgSignal()?.id === orgId ? this.projectsByOrg.get(orgId) : undefined;
+    if (cached !== undefined) {
+      const project =
+        projectId === null
+          ? null
+          : cached.find((candidate) => candidate.id === projectId && candidate.org_id === orgId);
+      if (projectId !== null && project === undefined) {
+        this.clearScope();
+        return 'not-found';
+      }
+      this.projectSignal.set(project ?? null);
+      return 'ok';
+    }
+
+    // A real org change: the previous org's list is not this one's, and refilling it is one read.
+    if (this.orgSignal()?.id !== orgId) {
+      this.projectsByOrg.clear();
+    }
+
+    // The first resolve of this org, a real org change, or a retry after a failure. The previous
+    // scope is dropped before the await: a slow project list must not keep the old org's projects
+    // (and therefore the old org's navigation links) on screen.
     this.orgSignal.set(org);
     this.projectSignal.set(null);
     this.projectsSignal.set(NO_PROJECTS);
@@ -171,23 +239,26 @@ export class SessionStore {
       return scopeFailure(error);
     }
     if (revision !== this.scopeRevision) {
-      // A newer navigation owns the scope by now; this answer is stale.
-      return 'not-found';
+      // A newer navigation owns the scope by now; this answer is about a request nobody waits for.
+      return 'superseded';
     }
+
+    // Only the rows the server attributed to THIS org. The endpoint is asked per org, but the
+    // published list is what the switcher offers and what a landing address is built from, so a
+    // row carrying another `org_id` must never reach it — the explicit-id branch below refuses the
+    // same row, and one answer must not contradict the other.
+    const owned = projects.filter((candidate) => candidate.org_id === orgId);
+    this.projectsByOrg.set(orgId, owned);
+    this.projectsSignal.set(owned);
 
     if (projectId === null) {
-      this.projectsSignal.set(projects);
       return 'ok';
     }
-
-    const project = projects.find(
-      (candidate) => candidate.id === projectId && candidate.org_id === orgId,
-    );
+    const project = owned.find((candidate) => candidate.id === projectId);
     if (project === undefined) {
       this.clearScope();
       return 'not-found';
     }
-    this.projectsSignal.set(projects);
     this.projectSignal.set(project);
     return 'ok';
   }
@@ -197,33 +268,41 @@ export class SessionStore {
     return this.permissionsSignal().has(code);
   }
 
-  /** One read of organizations then permissions; a stale generation writes nothing. */
+  /**
+   * One round trip of organizations and permissions; a stale generation writes nothing.
+   *
+   * The two reads are independent (only the caller's session joins them), so they run together: the
+   * catalogue is up to twenty cursor pages and must not sit behind the organization list.
+   *
+   * A `401` from EITHER read is the one refusal with a UI state of its own (`anonymous`) and wins
+   * over the other read's failure — an expired session is an answer, not an outage. Everything else
+   * — a `5xx`, a dropped connection, a broken cursor loop, a missing provider — means "could not
+   * read", which the shell renders as unavailable rather than as an empty, silently degraded
+   * workspace. Any failure also drops the cached project lists, so a later resolve cannot publish
+   * a list read under a session that is no longer confirmed.
+   */
   private async readSession(revision: number): Promise<void> {
-    try {
-      const organizations = await this.identity.listMyOrganizations();
-      if (revision !== this.sessionRevision) {
-        return;
-      }
-      const permissions = await this.permissionsSource.load();
-      if (revision !== this.sessionRevision) {
-        return;
-      }
-      this.organizationsSignal.set(organizations);
-      this.permissionsSignal.set(permissions);
-      this.sessionSignal.set('authenticated');
-    } catch (error) {
-      if (revision !== this.sessionRevision) {
-        return;
-      }
-      // A 401 is the one refusal with a UI state of its own; everything else — a 5xx, a dropped
-      // connection, a broken cursor loop, a missing provider — means "could not read", which the
-      // shell renders as unavailable rather than as an empty, silently degraded workspace.
-      this.sessionSignal.set(
-        isApiRequestError(error) && error.error.kind === 'unauthenticated'
-          ? 'anonymous'
-          : 'unavailable',
-      );
+    const [organizations, permissions] = await Promise.all([
+      settledRead(() => this.identity.listMyOrganizations()),
+      settledRead(() => this.permissionsSource.load()),
+    ]);
+    if (revision !== this.sessionRevision) {
+      return;
     }
+    if (!organizations.ok || !permissions.ok) {
+      const failures = [organizations, permissions].flatMap((read) =>
+        read.ok ? [] : [read.error],
+      );
+      this.projectsByOrg.clear();
+      const sessionGone = failures.some(
+        (error) => isApiRequestError(error) && error.error.kind === 'unauthenticated',
+      );
+      this.sessionSignal.set(sessionGone ? 'anonymous' : 'unavailable');
+      return;
+    }
+    this.organizationsSignal.set(organizations.value);
+    this.permissionsSignal.set(permissions.value);
+    this.sessionSignal.set('authenticated');
   }
 
   /** Forgets everything a `reload()` must not keep. */
@@ -233,12 +312,13 @@ export class SessionStore {
     this.clearScope();
   }
 
-  /** Forgets the resolved pair and its project list. */
+  /** Forgets the resolved pair, its project list, and every cached project list. */
   private clearScope(): void {
     this.scopeRevision += 1;
     this.orgSignal.set(null);
     this.projectSignal.set(null);
     this.projectsSignal.set(NO_PROJECTS);
+    this.projectsByOrg.clear();
   }
 }
 

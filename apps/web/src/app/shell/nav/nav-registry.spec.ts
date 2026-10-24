@@ -170,7 +170,7 @@ describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
   });
 
   it('shows ten entries in the G1 build and starts no later-phase group', () => {
-    const visible = NAV_ENTRIES.filter((entry) => isPhaseActive(entry.phase, ACTIVE_PHASE));
+    const visible = NAV_ENTRIES.filter((entry) => isPhaseActive(entry.phase));
 
     expect(ACTIVE_PHASE).toBe('G1');
     expect(visible).toHaveLength(10);

@@ -158,6 +158,12 @@ describe('landingRedirectGuard (09.1.1-T4.1)', () => {
 
     expect(await run()).toBe(false);
   });
+
+  it('cancels, without rendering the 404, when a newer navigation took the scope', async () => {
+    session.resolution = 'superseded';
+
+    expect(await run()).toBe(false);
+  });
 });
 
 describe('orgLandingGuard (09.1.1-T4.2)', () => {
@@ -194,15 +200,15 @@ describe('orgLandingGuard (09.1.1-T4.2)', () => {
     expect(urlOf(router, await run('o-2'))).toBe('/orgs/o-2/onboarding');
   });
 
-  it('keeps the attempted deep link for an anonymous caller', async () => {
-    session.state = 'anonymous';
+  it('cancels, without rendering the 404, when a newer navigation took the scope', async () => {
+    session.resolution = 'superseded';
 
     const result = await run('o-2');
 
-    if (!(result instanceof UrlTree)) {
-      throw new Error('an anonymous session must not activate');
-    }
-    expect(result.queryParams['returnUrl']).toBe('/orgs/o-2');
+    // A `canActivate` `false` cancels the activation: nothing is mounted and the wildcard never
+    // matches, so a valid org is not shown as not-found because another resolve overtook this one.
+    expect(result).toBe(false);
+    expect(result).not.toBeInstanceOf(UrlTree);
   });
 
   it('does not activate a route without an org id', async () => {

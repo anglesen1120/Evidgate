@@ -3,7 +3,7 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { ComponentFixture } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
+import { NavigationEnd, Router, provideRouter } from '@angular/router';
 import axe from 'axe-core';
 import { SessionStore } from '../../core/session/session.store';
 import { NavViewService } from '../nav/nav-view';
@@ -98,6 +98,10 @@ describe('ShellComponent', () => {
     expect(document.activeElement).toBe(close);
     expect(aside.getAttribute('role')).toBe('dialog');
     expect(aside.getAttribute('aria-modal')).toBe('true');
+    // The dialog and the `<nav>` inside it carry different names: two landmarks with the same name
+    // are announced twice with no way to tell them apart (review L5).
+    expect(aside.getAttribute('aria-label')).toBe('Navigation drawer');
+    expect(aside.querySelector('nav')?.getAttribute('aria-label')).toBe('Primary navigation');
     expect(root.querySelector('.main-stack')?.hasAttribute('inert')).toBe(true);
     const last = Array.from(aside.querySelectorAll<HTMLAnchorElement>('a')).at(-1)!;
     close.dispatchEvent(
@@ -137,7 +141,7 @@ describe('ShellComponent', () => {
     await fixture.whenStable();
   });
 
-  it('replaces only the project id, preserving the remaining path, query and fragment', async () => {
+  it('replaces the project id, keeping the entry segment, query and fragment', async () => {
     const router = TestBed.inject(Router);
     await router.navigateByUrl(
       '/orgs/org-one/projects/project-one/authoring/node;view=tree?filter=x#details',
@@ -145,10 +149,33 @@ describe('ShellComponent', () => {
     await fixture.whenStable();
     fixture.componentInstance.selectProject('project-two');
     await fixture.whenStable();
-    expect(router.url).toBe(
-      '/orgs/org-one/projects/project-two/authoring/node;view=tree?filter=x#details',
-    );
+    expect(router.url).toBe('/orgs/org-one/projects/project-two/authoring?filter=x#details');
     expect(session.currentProject().id).toBe('project-one');
+  });
+
+  it('drops the deep tail of the previous project (a run id belongs to that project)', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/orgs/org-one/projects/project-one/runs/run-42?filter=x#details');
+    await fixture.whenStable();
+    fixture.componentInstance.selectProject('project-two');
+    await fixture.whenStable();
+    expect(router.url).toBe('/orgs/org-one/projects/project-two/runs?filter=x#details');
+  });
+
+  it('drops the query on an organization switch but keeps it on a project switch', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/orgs/org-one/projects/project-one/audit?filter=x#details');
+    await fixture.whenStable();
+
+    fixture.componentInstance.selectOrganization('org-two');
+    await fixture.whenStable();
+    // The other organization has no such project, page, query or fragment: the whole scope is new.
+    expect(router.url).toBe('/orgs/org-two');
+
+    await router.navigateByUrl('/orgs/org-one/projects/project-one/audit?filter=x#details');
+    fixture.componentInstance.selectProject('project-two');
+    await fixture.whenStable();
+    expect(router.url).toBe('/orgs/org-one/projects/project-two/audit?filter=x#details');
   });
 
   it('uses overview when selecting a project from an org-only route', async () => {
@@ -170,6 +197,30 @@ describe('ShellComponent', () => {
     await fixture.whenStable();
     expect(document.activeElement).toBe(root.querySelector('main'));
     expect(document.title).toContain('Not found');
+  });
+
+  it('keeps focus for a query-only or fragment-only navigation, moves it on a path change', async () => {
+    const router = TestBed.inject(Router);
+    const navigations: string[] = [];
+    router.events.subscribe((event) => {
+      if (event instanceof NavigationEnd) navigations.push(event.urlAfterRedirects);
+    });
+    const toggle = root.querySelector<HTMLButtonElement>('.nav-toggle')!;
+    toggle.focus();
+    await router.navigateByUrl('/first');
+    await fixture.whenStable();
+    await router.navigateByUrl('/first?page=2');
+    await fixture.whenStable();
+    // The query-only navigation really happened, so the focus assertion below is not vacuous.
+    expect(navigations).toContain('/first?page=2');
+    expect(document.activeElement).toBe(toggle);
+    await router.navigateByUrl('/first?page=2#section');
+    await fixture.whenStable();
+    expect(navigations).toContain('/first?page=2#section');
+    expect(document.activeElement).toBe(toggle);
+    await router.navigateByUrl('/second');
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(root.querySelector('main'));
   });
 
   it('passes the shell structure/ARIA axe checks (jsdom cannot measure contrast)', async () => {

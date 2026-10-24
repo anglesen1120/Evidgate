@@ -1,9 +1,15 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
 
+/**
+ * The sign-in placeholder until 09.1.1-T5 ships the real form.
+ *
+ * It carries no action on purpose (review D2). Its only audience is an anonymous visitor, and
+ * `landing.guard.ts` sends that visitor here from `/`, so every link back to the workspace would
+ * land on this same page — the QA repro followed "Back to workspace" to `/` and back to `/login`.
+ * T5 owns the action, because only a real sign-in can move the visitor forward.
+ */
 @Component({
   selector: 'app-sign-in-required-page',
-  imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../layout/shell-page.css'],
   styles: `
@@ -25,12 +31,10 @@ import { RouterLink } from '@angular/router';
     <section>
       <h1>{{ heading }}</h1>
       <p>{{ explanation }}</p>
-      <a routerLink="/">{{ action }}</a>
     </section>
   </main>`,
 })
 export class SignInRequiredPage {
   readonly heading = $localize`:@@shell.page.sign-in.heading:Sign in required`;
   readonly explanation = $localize`:@@shell.page.sign-in.explanation:Sign-in is not available in this workspace yet.`;
-  readonly action = $localize`:@@shell.page.sign-in.action:Back to workspace`;
 }

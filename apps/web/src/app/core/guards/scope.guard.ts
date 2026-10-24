@@ -6,6 +6,18 @@
 // not match, so the wildcard route takes the URL and renders the SAME 404 page an unmatched route
 // gets. That is the point — a foreign id must be indistinguishable from a URL that never existed,
 // never a 403 that confirms the id belongs to someone else (00 §9.2, D-S68-Q3).
+//
+// `superseded` is also a `false`, but it is not a refusal: the store answered it because a newer
+// navigation (or the retry button's `reload()`) took the scope while this guard awaited, and the
+// router has already abandoned this transition. `NavigationTransitions` pipes every navigation
+// through one `switchMap`, so a later navigation unsubscribes the older guard chain and the value
+// this guard returns is discarded — it can never become the wildcard's 404. Cancelling is still the
+// right answer for the one case the router did not cancel (a `reload()` overtaking a navigation):
+// matching would mount a route whose scope now belongs to somebody else's request.
+//
+// Both guards resolve through the store only: `orgScopeGuard` reads the org and its project list
+// once, and `projectScopeGuard` then answers from that loaded list (`resolveScope` sees the org is
+// already current), so one navigation performs one project-list read however many guards it runs.
 
 import { inject } from '@angular/core';
 import { Router, type CanMatchFn } from '@angular/router';
@@ -19,8 +31,9 @@ const UNAVAILABLE_URL = '/unavailable';
 /**
  * Matches `orgs/:orgId` for an org the server listed for this caller.
  *
- * The id is `segments[1]`: `CanMatchFn` receives the segments this route still has to consume, so
- * `['orgs', '<orgId>']` arrives here and nothing else does.
+ * The id is `segments[1]`: `CanMatchFn` receives every URL segment this route still has to consume,
+ * which for `orgs/:orgId/projects/:projectId/<segment>` is the whole tail
+ * (`['orgs', '<orgId>', 'projects', '<projectId>', '<segment>']`), so only index 1 is the org.
  */
 export const orgScopeGuard: CanMatchFn = async (_route, segments) => {
   const session = inject(SessionStore);
@@ -46,6 +59,10 @@ export const orgScopeGuard: CanMatchFn = async (_route, segments) => {
       return router.createUrlTree([UNAVAILABLE_URL]);
     case 'not-found':
       return false;
+    case 'superseded':
+      // Not a refusal: a newer navigation owns the scope and the router has dropped this one (see
+      // the file comment). `false` is fail-closed for the case the router kept it alive.
+      return false;
   }
 };
 
@@ -54,6 +71,10 @@ export const orgScopeGuard: CanMatchFn = async (_route, segments) => {
  * resolved. The org is `currentOrg` — the parent route's `orgScopeGuard` put it there — so this
  * guard checks the project belongs to *that* org, which is what makes a project id from another
  * organization a `not-found` rather than a cross-tenant read.
+ *
+ * The parent already read the org's project list, so this call is answered from the store's cache:
+ * it resolves the project for the shell (and for `NavViewService`) without a second read. The id is
+ * `segments[1]` of the segments this route still has to consume (`['projects', '<projectId>', …]`).
  */
 export const projectScopeGuard: CanMatchFn = async (_route, segments) => {
   const session = inject(SessionStore);
@@ -80,6 +101,10 @@ export const projectScopeGuard: CanMatchFn = async (_route, segments) => {
     case 'unavailable':
       return router.createUrlTree([UNAVAILABLE_URL]);
     case 'not-found':
+      return false;
+    case 'superseded':
+      // As in `orgScopeGuard`: the router has already dropped this transition, and matching a
+      // scope a newer navigation owns would render the wrong org's screen.
       return false;
   }
 };

@@ -52,11 +52,12 @@ export const authGuard: CanMatchFn = async (_route, segments) => {
       return true;
     case 'unavailable':
       return router.createUrlTree([UNAVAILABLE_URL]);
+    // `unknown` shares the anonymous branch rather than getting one of its own: it cannot be
+    // reached (`bootstrap()` settles the state before it returns) and both answers are the same
+    // fail-closed redirect. The label stays for exhaustiveness, so a state added to `SessionState`
+    // later is a type error here instead of a silent `undefined` match decision.
     case 'anonymous':
-      return signInTree(router, segments);
     case 'unknown':
-      // `bootstrap()` settles the state, so this is unreachable; treating it as anonymous keeps
-      // the guard fail-closed if a future store change ever leaves it unsettled.
       return signInTree(router, segments);
   }
 };

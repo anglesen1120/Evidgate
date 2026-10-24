@@ -84,6 +84,17 @@ describe('orgScopeGuard (09.1.1-T4.1)', () => {
     expect(result).not.toBeInstanceOf(UrlTree);
   });
 
+  it('cancels, without redirecting, when a newer navigation took the scope', async () => {
+    session.resolution = 'superseded';
+
+    const result = await run([new UrlSegment('orgs', {}), new UrlSegment('o-1', {})]);
+
+    // A superseded resolve is not a refusal: the router has already unsubscribed this navigation,
+    // so the `false` is discarded with it. No `UrlTree` means no redirect was invented either.
+    expect(result).toBe(false);
+    expect(result).not.toBeInstanceOf(UrlTree);
+  });
+
   it('redirects to the retry page when the scope cannot be read', async () => {
     session.resolution = 'unavailable';
 
@@ -144,11 +155,26 @@ describe('projectScopeGuard (09.1.1-T4.1/T4.2)', () => {
     );
   }
 
-  it('matches a project of the resolved org', async () => {
-    const result = await run([new UrlSegment('projects', {}), new UrlSegment('p-1', {})]);
+  it('matches a project of the resolved org, with the id at index 1 of the remaining segments', async () => {
+    const result = await run([
+      new UrlSegment('projects', {}),
+      new UrlSegment('p-1', {}),
+      new UrlSegment('overview', {}),
+    ]);
 
     expect(result).toBe(true);
+    // One call, one pair: the store already holds the org and its project list, so the project
+    // guard never triggers a read of its own (asserted end to end in `session.store.spec.ts`).
     expect(session.calls).toEqual([{ orgId: 'o-1', projectId: 'p-1' }]);
+  });
+
+  it('cancels, without redirecting, when a newer navigation took the scope', async () => {
+    session.resolution = 'superseded';
+
+    const result = await run([new UrlSegment('projects', {}), new UrlSegment('p-1', {})]);
+
+    expect(result).toBe(false);
+    expect(result).not.toBeInstanceOf(UrlTree);
   });
 
   it('does not match a project the org does not have', async () => {

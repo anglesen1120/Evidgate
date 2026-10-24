@@ -31,7 +31,13 @@ describe('NavComponent', () => {
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe('Primary navigation');
-    expect(root.querySelectorAll('section')).toHaveLength(1);
+    // The groups are named `role="group"` containers, not `<section>`s: a named section is a
+    // `region` landmark, and five of them inside this navigation is landmark noise (review L5).
+    expect(root.querySelectorAll('section')).toHaveLength(0);
+    expect(root.querySelectorAll('[role="group"]')).toHaveLength(1);
+    const renderedGroup = root.querySelector('[role="group"]');
+    expect(renderedGroup?.getAttribute('aria-labelledby')).toBe('nav-group-design');
+    expect(renderedGroup?.querySelector('h2')?.getAttribute('id')).toBe('nav-group-design');
     expect(root.textContent).toContain('Test design');
     expect(root.textContent).not.toContain('Settings');
     expect(root.querySelectorAll('a')).toHaveLength(1);

@@ -20,7 +20,11 @@ export const ACTIVE_PHASE: ProductPhase = 'G1';
 /**
  * `true` when `phase` is at most the active phase, i.e. when the phase has already been reached.
  * An entry of a later phase answers `false` and is therefore both hidden and unmatched.
+ *
+ * The active phase is the build's `ACTIVE_PHASE` and never a call argument (review L5): a caller
+ * that could pass one would turn the registry's visibility and the route table's match set into
+ * two independent decisions on the same navigation.
  */
-export function isPhaseActive(phase: ProductPhase, active: ProductPhase = ACTIVE_PHASE): boolean {
-  return PHASE_ORDER.indexOf(phase) <= PHASE_ORDER.indexOf(active);
+export function isPhaseActive(phase: ProductPhase): boolean {
+  return PHASE_ORDER.indexOf(phase) <= PHASE_ORDER.indexOf(ACTIVE_PHASE);
 }

@@ -28,7 +28,7 @@
     tabindex="-1"
     [attr.role]="mobile() && drawerOpen() ? 'dialog' : null"
     [attr.aria-modal]="mobile() && drawerOpen() ? true : null"
-    [attr.aria-label]="mobile() ? navLabel.navigationLabel : null"
+    [attr.aria-label]="mobile() ? navigationDrawerLabel : null"
     [attr.inert]="mobile() && !drawerOpen() ? '' : null"
     (keydown)="onDrawerKeydown($event)"
   >
@@ -56,7 +56,6 @@
       </div>
     }
     <app-shell-nav
-      #navLabel
       [groups]="nav.groups()"
       [collapsed]="collapsed()"
       (itemSelected)="mobile() && closeDrawer()"

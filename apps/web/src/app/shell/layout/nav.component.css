@@ -5,11 +5,12 @@
   padding: var(--eg-space-2) var(--eg-space-3) var(--eg-space-5);
   scrollbar-width: thin;
 }
-section {
+
+.nav-group {
   padding-block: var(--eg-space-3);
   border-top: var(--eg-border-width) solid var(--eg-border);
 }
-section:first-child {
+.nav-group:first-child {
   border-top: 0;
 }
 h2 {

@@ -19,17 +19,7 @@ describe('product phase (09.1.1-T4.1)', () => {
     expect(isPhaseActive('G4')).toBe(false);
   });
 
-  it('keeps earlier phases when a later one is active', () => {
-    expect(isPhaseActive('G1', 'G3')).toBe(true);
-    expect(isPhaseActive('G2', 'G3')).toBe(true);
-    expect(isPhaseActive('G3', 'G3')).toBe(true);
-    expect(isPhaseActive('G4', 'G3')).toBe(false);
-  });
-
-  it('serves every phase when the last one is active', () => {
-    expect(isPhaseActive('G1', 'G4')).toBe(true);
-    expect(isPhaseActive('G2', 'G4')).toBe(true);
-    expect(isPhaseActive('G3', 'G4')).toBe(true);
-    expect(isPhaseActive('G4', 'G4')).toBe(true);
-  });
+  // The ordering itself (`PHASE_ORDER`) becomes observable only once `ACTIVE_PHASE` moves past G1;
+  // with a fixed G1 build, "G1 is served, later phases are not" is the whole contract. The case
+  // that pins "a later build keeps the earlier phases" belongs here when that build exists.
 });

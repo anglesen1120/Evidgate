@@ -59,17 +59,29 @@ export class ShellComponent {
   readonly collapseLabel = $localize`:@@shell.layout.collapse-navigation:Collapse navigation`;
   readonly expandLabel = $localize`:@@shell.layout.expand-navigation:Expand navigation`;
   readonly darkLabel = $localize`:@@shell.theme.dark-mode:Dark mode`;
+  /**
+   * The drawer's own accessible name. The `<nav>` inside it already carries
+   * `shell.layout.primary-navigation`, so the dialog must not repeat it: two landmarks with the
+   * same name are announced twice with no way to tell them apart.
+   */
+  readonly navigationDrawerLabel = $localize`:@@shell.layout.navigation-drawer:Navigation drawer`;
   private hasNavigated = this.router.navigated;
+  /** Path (no query, no fragment) of the previous NavigationEnd, for the focus handoff. */
+  private lastPath: string | null = null;
 
   constructor() {
     this.router.events
       .pipe(
-        filter((event) => event instanceof NavigationEnd),
+        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe(() => {
-        const moveFocus = this.hasNavigated;
+      .subscribe((event) => {
+        // A query-only or fragment-only change (a filter, a page, a tab) leaves the visitor where
+        // they were, so moving focus to <main> would steal it from the control they just used.
+        const path = this.pathOf(event.urlAfterRedirects);
+        const moveFocus = this.hasNavigated && path !== this.lastPath;
         this.hasNavigated = true;
+        this.lastPath = path;
         this.drawerOpen.set(false);
         afterNextRender(
           () => {
@@ -81,6 +93,12 @@ export class ShellComponent {
           { injector: this.injector },
         );
       });
+  }
+
+  /** The URL's path only — query string and fragment removed, matrix parameters kept. */
+  private pathOf(url: string): string {
+    const primary = this.router.parseUrl(url).root.children[PRIMARY_OUTLET];
+    return primary?.segments.map((segment) => segment.toString()).join('/') ?? '';
   }
 
   /**
@@ -168,10 +186,19 @@ export class ShellComponent {
     }
   }
 
+  /**
+   * An organization change replaces the whole scope: the previous organization's project, page and
+   * query string do not exist there, so only the new org id is kept (pinned in the spec).
+   */
   selectOrganization(id: string): void {
     void this.router.navigate(['/orgs', id]);
   }
 
+  /**
+   * A project change stays inside the same organization, so the entry screen, its query string and
+   * its fragment stay; only the project id is replaced. Deeper segments belong to the previous
+   * project's data (a run id, a node id), so they are dropped instead of carried over.
+   */
   selectProject(id: string): void {
     const org = this.session.currentOrg();
     if (!org) return;
@@ -181,10 +208,13 @@ export class ShellComponent {
       primary?.segments.findIndex((segment) => segment.path === 'projects') ?? -1;
     const previous = primary?.segments[projectIndex + 1];
     if (primary && projectIndex >= 0 && previous) {
-      primary.segments[projectIndex + 1] = new UrlSegment(id, previous.parameters);
-      if (primary.segments.length === projectIndex + 2) {
-        primary.segments.push(new UrlSegment('overview', {}));
-      }
+      const entry = primary.segments[projectIndex + 2] ?? new UrlSegment('overview', {});
+      primary.segments.splice(
+        projectIndex + 1,
+        primary.segments.length - projectIndex - 1,
+        new UrlSegment(id, previous.parameters),
+        entry,
+      );
       void this.router.navigateByUrl(tree);
     } else {
       void this.router.navigate(['/orgs', org.id, 'projects', id, 'overview'], {
