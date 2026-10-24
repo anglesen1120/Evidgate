@@ -95,6 +95,7 @@ public sealed record RequiredArtifactSpec(string ExecutionKey, string Kind, stri
 /// <param name="Ready">
 /// The <c>ready</c> artifacts whose <c>(execution_key, attempt_no)</c> resolved to a <c>case_attempt</c>, ordered by
 /// <c>(execution_key, attempt_no, kind, artifact id)</c> so the artifacts of one attempt are adjacent (the grouping 06.5.1 AC1 names).
+/// <c>execution_key</c>, <c>kind</c> and the lower-case <c>D</c> text of the id compare ordinally, <c>attempt_no</c> numerically.
 /// </param>
 /// <param name="Orphans">
 /// The <c>ready</c> artifacts whose pair has no <c>case_attempt</c> (ruling T17), same order. Each contributes one

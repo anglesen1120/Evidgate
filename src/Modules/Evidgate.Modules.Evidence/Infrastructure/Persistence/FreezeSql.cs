@@ -63,7 +63,7 @@ internal static class FreezeSql
     /// in the batch, and the <c>public.run</c> join repeats the run's project filter (F9).
     /// <para>
     /// <b>The lock order is a property of this statement (F7).</b> <c>batch</c> is
-    /// <c>as materialized</c> on purpose: the rows are locked by <c>for update of a</c> in <c>order by a.id</c>
+    /// <c>as materialized</c> on purpose: the rows are locked by <c>for no key update of a</c> in <c>order by a.id</c>
     /// order before the outer <c>UPDATE</c> runs, so two concurrent freezes of one run walk the same rows in the
     /// same order and cannot deadlock; the materialization keeps a planner from folding the locking scan (and its
     /// ordering) into the outer <c>UPDATE … FROM</c>. The statement returns the number of rows it actually updated,
@@ -87,7 +87,7 @@ internal static class FreezeSql
                and a.state = 'ready'
                and a.attempt_id is null
              order by a.id
-               for update of a
+               for no key update of a
         )
         update public.artifact as a
            set attempt_id = b.resolved_attempt_id
