@@ -1,0 +1,55 @@
+{
+  "errorEnvelopeExample": {
+    "error": {
+      "code": "csrf_failed",
+      "message": "The X-XSRF-TOKEN header is missing or does not match the XSRF-TOKEN cookie (00 §9.1, T38).",
+      "request_id": "3f2b9d54-0d7e-4c1a-9a2e-6b0f5c7d81c4",
+      "retryable": false
+    }
+  },
+  "generatedBy": "node apps/web/scripts/record-openapi-fixture.mjs",
+  "operations": [
+    {
+      "idempotencyKeyRequired": false,
+      "method": "GET",
+      "operationId": "listRuns",
+      "path": "/projects/{p}/runs",
+      "responseStatuses": [200, 401, 403, 404, 422, 429, 503]
+    },
+    {
+      "idempotencyKeyRequired": false,
+      "method": "GET",
+      "operationId": "getRun",
+      "path": "/runs/{r}",
+      "responseStatuses": [200, 401, 403, 404, 429, 503]
+    },
+    {
+      "idempotencyKeyRequired": true,
+      "method": "POST",
+      "operationId": "createRun",
+      "path": "/projects/{p}/runs",
+      "responseStatuses": [201, 401, 403, 404, 409, 413, 422, 429, 503]
+    },
+    {
+      "idempotencyKeyRequired": true,
+      "method": "POST",
+      "operationId": "cancelRun",
+      "path": "/runs/{r}/cancel",
+      "responseStatuses": [202, 401, 403, 404, 409, 429, 503]
+    },
+    {
+      "idempotencyKeyRequired": true,
+      "method": "POST",
+      "operationId": "createManifest",
+      "path": "/projects/{p}/manifests",
+      "responseStatuses": [201, 401, 403, 404, 409, 413, 422, 429, 503]
+    },
+    {
+      "idempotencyKeyRequired": true,
+      "method": "POST",
+      "operationId": "completeArtifact",
+      "path": "/artifacts/{a}/complete",
+      "responseStatuses": [200, 401, 403, 404, 409, 422, 429, 503]
+    }
+  ]
+}
