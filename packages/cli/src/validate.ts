@@ -24,6 +24,21 @@ import type { ErrorObject, ValidateFunction } from 'ajv/dist/2020.js';
 // shape both Node's interop and TS's CJS modelling agree on).
 import ajvFormats from 'ajv-formats';
 
+/**
+ * The one Ajv configuration every Evidgate schema check shares: the
+ * 2020-12 meta-schema with `ajv-formats` installed (format assertions on, like
+ * the server's `alwaysAssertFormat`) and `strict: false`, so OpenAPI 3.1
+ * documents carrying `x-*` keywords and JSON-Schema-2020-12-only constructs
+ * compile. `loadContractSchemas` and the OpenAPI response validator
+ * (`createOpenApiResponseValidator`) both build their engine here — never a
+ * second configuration.
+ */
+export function createContractAjv(): Ajv2020 {
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  ajvFormats.default(ajv);
+  return ajv;
+}
+
 const eventsMember = 'events';
 
 /** Reason token for a body over the schema's `x-max-bytes` cap (00 §9.3). */
@@ -187,35 +202,8 @@ export class ContractSchemaSet {
    * pair (capability document).
    */
   private validateDocument(schema: ContractSchema, document: unknown): ContractValidationResult {
-    // Ordered row collection + O(1) membership for the mapped triples: dedupe
-    // on index|path|reason and hard-cap at `maxDetailErrors` — a further
-    // distinct row appends the terminal 'truncated' marker and stops the
-    // collection (the identical rule the server applies).
-    const errors: ContractValidationError[] = [];
-    const seen = new Set<string>();
-    let truncated = false;
-    const add = (error: ContractValidationError): boolean => {
-      if (truncated) {
-        return false;
-      }
-
-      const key = `${error.index ?? ''}|${error.path}|${error.reason}`;
-      if (seen.has(key)) {
-        return true;
-      }
-
-      seen.add(key);
-      if (errors.length >= maxDetailErrors) {
-        const marker = { index: null, path: '', reason: truncatedReason };
-        errors.push(marker);
-        seen.add(`|${marker.path}|${marker.reason}`);
-        truncated = true;
-        return false;
-      }
-
-      errors.push(error);
-      return true;
-    };
+    const sink = createErrorSink();
+    const add = sink.add;
 
     if (
       schema.envelope !== undefined &&
@@ -227,17 +215,61 @@ export class ContractSchemaSet {
     ) {
       collect(schema.envelope, document, null, '', add);
       const events = (document as Record<string, unknown>)[eventsMember];
-      if (errors.length === 0 && Array.isArray(events)) {
+      if (sink.errors.length === 0 && Array.isArray(events)) {
         events.forEach((item, index) => {
           collect(schema.item!, item, index, `/events/${index}`, add);
         });
       }
-      return { errors };
+      return { errors: sink.errors };
     }
 
     collect(schema.item ?? schema.root, document, null, '', add);
-    return { errors };
+    return { errors: sink.errors };
   }
+}
+
+/** One collected `details[]` list and the ordered, de-duplicated sink feeding it. */
+interface ErrorSink {
+  readonly errors: ContractValidationError[];
+  readonly add: (error: ContractValidationError) => boolean;
+}
+
+/**
+ * Ordered row collection + O(1) membership for the mapped triples: dedupe on
+ * index|path|reason and hard-cap at `maxDetailErrors` — a further distinct row
+ * appends the terminal 'truncated' marker and stops the collection (the
+ * identical rule the server applies). Shared by `validateDocument` and the
+ * exported `collectValidationErrors` so a consumer holding its own compiled
+ * validator (the OpenAPI response validator) produces byte-identical rows.
+ */
+function createErrorSink(): ErrorSink {
+  const errors: ContractValidationError[] = [];
+  const seen = new Set<string>();
+  let truncated = false;
+  const add = (error: ContractValidationError): boolean => {
+    if (truncated) {
+      return false;
+    }
+
+    const key = `${error.index ?? ''}|${error.path}|${error.reason}`;
+    if (seen.has(key)) {
+      return true;
+    }
+
+    seen.add(key);
+    if (errors.length >= maxDetailErrors) {
+      const marker = { index: null, path: '', reason: truncatedReason };
+      errors.push(marker);
+      seen.add(`|${marker.path}|${marker.reason}`);
+      truncated = true;
+      return false;
+    }
+
+    errors.push(error);
+    return true;
+  };
+
+  return { errors, add };
 }
 
 /**
@@ -333,6 +365,25 @@ function mapError(
 }
 
 /**
+ * The shared Ajv-to-row mapping over one already-parsed document: exactly the
+ * collector `ContractSchemaSet.validateDocument` runs (same dedupe, same
+ * `maxDetailErrors` cap and 'truncated' marker), exported for consumers that
+ * hold their own compiled validator — the web fixture backend's OpenAPI
+ * response validator (`openapiResponse.ts`) is one. `prefix` re-anchors
+ * item-relative pointers under `/events/<i>`, as in the batch path.
+ */
+export function collectValidationErrors(
+  validate: ValidateFunction,
+  instance: unknown,
+  index: number | null = null,
+  prefix = '',
+): readonly ContractValidationError[] {
+  const sink = createErrorSink();
+  collect(validate, instance, index, prefix, sink.add);
+  return sink.errors;
+}
+
+/**
  * The canonical URI a schema is addressed by — in a sibling document's `$ref`
  * and in Ajv's registry alike: `urn:evidgate:contract:<key>`. Mirrors
  * `ContractSchemaSet.CanonicalUri` on the server.
@@ -417,8 +468,7 @@ function listJsonFiles(directory: string): string[] {
  * system or the network.
  */
 export function loadContractSchemas(contractsDirectory: string): ContractSchemaSet {
-  const ajv = new Ajv2020({ allErrors: true, strict: false });
-  ajvFormats.default(ajv);
+  const ajv = createContractAjv();
 
   const documents = collectSchemaDocuments(contractsDirectory);
 

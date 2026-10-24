@@ -56,3 +56,23 @@ Duplicate member names are refused by both loaders, in either JSON file, so a do
 | `reports/junit/sample/` | JUnit XML → normalised events; loaded by `FixtureLoaderTests` (.NET) and `loadFixture.test.ts` (TS); both pin `expected.json` at `sha256:722cd0645ed9bc4ee524514cf4856c8e718c21beb23a2941393efacd7ee2090d` |
 
 Fixture review checklist (per 00 §5.7 S3): synthetic ids/emails only; provenance recorded in `meta.source`; `expected.json` regenerated through the canonicalizer, never hand-prettified.
+
+## `web-api/` — the dev fixture backend corpus (09.1.1-T12)
+
+`web-api/<name>/` is an ordinary `<domain>/<name>/` corpus (exactly `input.json` + `meta.json`, `kind: api-response`, no `expected.json`), whose `input.json` is one recorded `/v1` response the web app can serve before the API exists (AC10):
+
+- `operation_id` — an `operationId` of `contracts/openapi.yaml`. The directory name, not the operation, is the fixture's identity: a second response of the same operation is a second directory.
+- `variant` — which response of that operation it is. `ok` is the answer the backend serves when no toggle is set, pinned at most once per operation; every other name is reached only through `FixtureToggles`. An operation may pin error states alone (`updateProject` has only its 412), in which case the un-pinned request answers 501 `fixture_not_found` rather than a fabricated success body.
+- `status` — the status the backend answers (200, 403, 412 here), the body of every non-2xx row being the 00 §9.2 envelope.
+- `headers` — the headers the backend sets before its own `Content-Type: application/json`; `X-Request-Id` only, and the error bodies echo that value as `error.request_id`.
+- `latency_ms` — the delay before the answer, so loading states are reachable with no proxy and no throttle.
+- `body` — the response body, and the part `apps/web/src/app/core/dev-fixtures/fixture-contract.spec.ts` validates against the response schema that `contracts/openapi.yaml` declares for (`operation_id`, `status`), so a fixture that drifts from the contract fails `npm run test -w apps/web`.
+
+The client side of the corpus lives in `apps/web/src/app/core/dev-fixtures/`: `FIXTURE_ROUTES` maps method + path template to an `operationId`, `FIXTURE_CATALOG` imports every `input.json` by directory name, and `provideFixtureBackend()` answers SDK calls behind `provideApi()`'s interceptors in the `fixtures` build configuration only (`dev-backend.fixtures.ts` replaces `dev-backend.ts` there). A request that matches no route, or a variant with no document, answers 501 `fixture_not_found`. An injectable `FixtureToggles` (seeded from the `fixture.variant.<operationId>=<variant>` and `fixture.latency=<ms>` query parameters) overrides the variant and the per-document latency at runtime.
+
+Synthetic data only (00 §5.7 S3): ids are fixed UUIDv7-shaped values (`018f0000-0000-7000-8000-0000000000NN`), timestamps are RFC 3339 UTC, and no value is JWT-like, key-like or credential-shaped (`scripts/check-no-secret-literals.sh`). No body value may exist as a string literal in the app or the generated SDK either, because `apps/web/scripts/check-no-fixture-code.mjs` greps the production bundle for every string value of 12+ characters outside the protocol slots (`headers`, `operation_id`, `variant`, `code`).
+
+Two shapes are deliberate:
+
+- `permissions-list/` is a 16-row catalogue page ordered by `code`, so its `next_cursor` is the last code of the page (the schema reserves `null` for the last page). `roles-list/`, `projects-list/` and `orgs-list/` are complete pages and carry `null`; `orgs-list/` has no cursor member at all. Role rows mirror `RoleView` and therefore carry no permission grants: `GET /v1/roles` never serves them, and the bundle probe above would otherwise grep every grant code.
+- `runs-list/` is the canonical "missing shard + failure" UI fixture set of `plans/09-web-ui.md` §7: a `complete` + `PASS` run, the failing run as `incomplete` + `FAIL` (collection completeness and decision are independent fields, so a run with missing evidence is never `PASS`), a `collecting` run with a `pending` decision, a `canceled` run that never becomes complete, a `failed_subset` rerun of the failing run that is `INCONCLUSIVE`, and a `queued` fork PR run. Its `next_cursor` uses the `<utc ticks in hex>-<uuid>` form `KeysetCursor` issues, so the cursor pager has a second page to fetch: the fixture backend answers the document whatever `limit` the caller sends.

@@ -1,0 +1,25 @@
+{
+  "operation_id": "listMyOrganizations",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000a3"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-000000000001",
+        "slug": "acme-robotics",
+        "name": "Acme Robotics",
+        "status": "active"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000002",
+        "slug": "lumen-labs",
+        "name": "Lumen Labs",
+        "status": "suspended"
+      }
+    ]
+  }
+}

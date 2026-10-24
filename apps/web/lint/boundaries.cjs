@@ -33,7 +33,14 @@ const plugin = {
 const APPLICATION_FILES = ['apps/web/src/**/*.ts'];
 
 /** Directories that own HTTP; every other file must go through them. */
-const HTTP_OWNERS = ['apps/web/src/app/core/data/**/*.ts', 'apps/web/src/app/core/http/**/*.ts'];
+const HTTP_OWNERS = [
+  'apps/web/src/app/core/data/**/*.ts',
+  'apps/web/src/app/core/http/**/*.ts',
+  // 09.1.1-T12.1: the dev-only fixture backend provides `HttpBackend` itself (see the rule's
+  // `EXEMPT_DIRECTORIES`), so the block must not apply to it either. Nothing here is built into a
+  // production bundle: `angular.json`'s `fixtures` configuration is the only place it is imported.
+  'apps/web/src/app/core/dev-fixtures/**/*.ts',
+];
 
 /** Added by ESLint's own globals rule after "Unexpected use of '<name>'." */
 const HTTP_GLOBAL_MESSAGE = 'Call a data service (or the ApiGateway) instead: core owns HTTP.';
