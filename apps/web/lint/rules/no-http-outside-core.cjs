@@ -33,7 +33,15 @@ const HTTP_PACKAGE = '@angular/common/http';
 const SDK_PACKAGE = '@evidgate/sdk';
 
 /** Directories that own HTTP: the adapter + interceptors, and the data services. */
-const EXEMPT_DIRECTORIES = ['apps/web/src/app/core/data/', 'apps/web/src/app/core/http/'];
+const EXEMPT_DIRECTORIES = [
+  'apps/web/src/app/core/data/',
+  'apps/web/src/app/core/http/',
+  // 09.1.1-T12.1: the dev-only fixture backend *is* an `HttpBackend` — it replaces the XHR/fetch
+  // backend under the real `HttpClient`, which is how a fixture answer still passes every
+  // interceptor — so it imports `@angular/common/http` for the same reason `core/http` does. It
+  // ships in no production build: `dev-backend.ts` is the empty seam production compiles.
+  'apps/web/src/app/core/dev-fixtures/',
+];
 
 /**
  * The only `@angular/common/http` symbols a file outside core may import: the view types

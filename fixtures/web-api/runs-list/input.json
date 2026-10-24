@@ -1,0 +1,128 @@
+{
+  "operation_id": "listRuns",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000a5"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "run_id": "018f0000-0000-7000-8000-000000000021",
+        "state": "complete",
+        "created_at": "2026-10-20T08:00:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "main",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS",
+        "parent_run_id": null,
+        "rerun_label": null,
+        "reprocess_label": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000000022",
+        "state": "incomplete",
+        "created_at": "2026-10-20T09:15:00Z",
+        "ref": {
+          "kind": "pull_request",
+          "name": "feature/checkout-retry",
+          "pr_number": 42,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "pull_request",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": "FAIL",
+        "parent_run_id": null,
+        "rerun_label": null,
+        "reprocess_label": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000000023",
+        "state": "collecting",
+        "created_at": "2026-10-20T10:02:30Z",
+        "ref": {
+          "kind": "branch",
+          "name": "release/2026.10",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000002",
+          "base_sha": "018f000000000000000000000000000000000003",
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": null,
+        "rerun_label": null,
+        "reprocess_label": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000000024",
+        "state": "canceled",
+        "created_at": "2026-10-20T10:30:00Z",
+        "ref": {
+          "kind": null,
+          "name": null,
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "manual",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": null,
+        "rerun_label": null,
+        "reprocess_label": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000000025",
+        "state": "complete",
+        "created_at": "2026-10-21T07:45:00Z",
+        "ref": {
+          "kind": "pull_request",
+          "name": "feature/checkout-retry",
+          "pr_number": 42,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "dispatch",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": "INCONCLUSIVE",
+        "parent_run_id": "018f0000-0000-7000-8000-000000000022",
+        "rerun_label": "failed_subset",
+        "reprocess_label": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000000026",
+        "state": "queued",
+        "created_at": "2026-10-21T08:10:00Z",
+        "ref": {
+          "kind": "pull_request",
+          "name": "feature/nav-polish",
+          "pr_number": 77,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "pull_request",
+          "is_fork": true
+        },
+        "unverified_ref": true,
+        "decision": null,
+        "parent_run_id": null,
+        "rerun_label": null,
+        "reprocess_label": null
+      }
+    ],
+    "next_cursor": "08df2f4ab3c4bc00-018f0000-0000-7000-8000-000000000026"
+  }
+}
