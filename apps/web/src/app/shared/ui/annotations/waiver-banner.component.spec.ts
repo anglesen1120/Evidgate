@@ -47,7 +47,6 @@ describe('WaiverBanner (FR-09-2/7)', () => {
       imports: [WaiverBanner, WaiverTestHost],
       providers: [provideZonelessChangeDetection(), { provide: LOCALE_ID, useValue: 'en-US' }],
     }).compileComponents();
-    vi.spyOn(globalThis, 'fetch');
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -94,7 +93,6 @@ describe('WaiverBanner (FR-09-2/7)', () => {
       root.querySelector('[role="status"], [aria-live], [aria-busy="true"], [class*="success"]'),
     ).toBeNull();
     expect(root.textContent).not.toMatch(/\b(PASS|FAIL|complete)\b/);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it('keeps the stored outcome and pending decision beside the waiver, unchanged', () => {

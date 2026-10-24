@@ -6,6 +6,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DataTableComponent } from './data-table.component';
 import { DATA_TABLE_FIXTURE_COLUMNS, dataTableFixtureRows } from './data-table.fixture';
 import type { DataTableFixtureRow } from './data-table.fixture';
+import type { Mock } from 'vitest';
 
 function tableStyles(): string {
   // Read Angular's compiled, encapsulated CSS rather than duplicating the source.
@@ -20,6 +21,13 @@ function specificity(selector: string): number {
   // This regression compares class/attribute-only component selectors, not a
   // general-purpose specificity parser (no :is(), ids or pseudo-elements).
   return (selector.match(/\.[\w-]+|\[[^\]]+\]/g) ?? []).length;
+}
+
+/** The `ResizeObserver` surface the lifecycle spec records, as plain spies (no `this` binding). */
+interface ObserverSpies {
+  observe: Mock;
+  unobserve: Mock;
+  disconnect: Mock;
 }
 
 describe('DataTableComponent', () => {
@@ -195,9 +203,9 @@ describe('DataTableComponent', () => {
   });
 
   it('R6: remeasures refreshed rows and columns without recreating the resize observer', async () => {
-    const observers: ResizeObserver[] = [];
+    const observers: ObserverSpies[] = [];
     const ResizeObserverMock = vi.fn(function () {
-      const observer = { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+      const observer: ObserverSpies = { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
       observers.push(observer);
       return observer;
     });
@@ -211,7 +219,7 @@ describe('DataTableComponent', () => {
       expect(creations).toBeGreaterThan(0);
       const scroll = root.querySelector('.scroll') as HTMLElement;
       const tableObserver = observers.find((observer) =>
-        vi.mocked(observer.observe).mock.calls.some(([element]) => element === scroll),
+        observer.observe.mock.calls.some(([element]) => element === scroll),
       )!;
       expect(tableObserver).toBeDefined();
       expect(tableObserver.observe).toHaveBeenCalledWith(

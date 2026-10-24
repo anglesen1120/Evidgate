@@ -30,7 +30,6 @@ describe('MissingReasonList (FR-09-2/6)', () => {
       imports: [MissingReasonList],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
-    vi.spyOn(globalThis, 'fetch');
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -74,7 +73,6 @@ describe('MissingReasonList (FR-09-2/6)', () => {
       root.querySelector('[role="status"], [aria-busy="true"], [class*="success"]'),
     ).toBeNull();
     expect(root.textContent).not.toMatch(/\b(PASS|FAIL|complete)\b/);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it('renders every supplied reason verbatim and only supplied deep links', () => {

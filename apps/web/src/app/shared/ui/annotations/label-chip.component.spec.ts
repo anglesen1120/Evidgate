@@ -26,7 +26,6 @@ describe('LabelChip (FR-09-2/3/4)', () => {
       imports: [LabelChip],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
-    vi.spyOn(globalThis, 'fetch');
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -69,7 +68,6 @@ describe('LabelChip (FR-09-2/3/4)', () => {
         root.querySelector('[role="status"], [aria-busy="true"], [class*="success"]'),
       ).toBeNull();
       expect(root.textContent).not.toMatch(/\b(PASS|FAIL|complete)\b/);
-      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
   });
 

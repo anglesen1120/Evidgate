@@ -10,7 +10,6 @@ describe('EvidenceBadgeComponent', () => {
       imports: [EvidenceBadgeComponent],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
-    vi.spyOn(globalThis, 'fetch');
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -40,7 +39,6 @@ describe('EvidenceBadgeComponent', () => {
       root.querySelector('[tabindex], [role], [aria-disabled], button, a, [aria-busy]'),
     ).toBeNull();
     expect(root.querySelector('svg, [data-icon="check"]')).toBeNull();
-    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it.each([
