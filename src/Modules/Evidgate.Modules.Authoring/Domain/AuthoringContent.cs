@@ -197,7 +197,8 @@ internal static class AuthoringContent
         // with an ASCII member, so a name such as `{"k\ud800d":1}` throws the reader's InvalidOperationException even when
         // the candidate member exists. One unstorable name is therefore answered immediately, with the stable placeholder
         // path and nothing echoed (OI-13-116); the rest of the object is not read, because no later probe on that
-        // document can be trusted.
+        // document can be trusted. A name carrying U+0000 is answered the same way (security S-1/S-2): PostgreSQL refuses
+        // the character in `text` and `jsonb` alike, so no row could ever store that member name.
         foreach (var property in content.EnumerateObject())
         {
             if (!TryName(property, out var name))
@@ -206,9 +207,18 @@ internal static class AuthoringContent
                 return false;
             }
 
+            if (AuthoringText.ContainsNul(name))
+            {
+                // A name carrying U+0000 is refused like an unreadable one: it is not a member of the snapshot, and it is
+                // not echoed into a pointer either (the same placeholder the lone-surrogate case answers).
+                details = [(InvalidMemberNamePath, "invalid_text")];
+                return false;
+            }
+
             if (!members.Contains(name, StringComparer.Ordinal))
             {
-                problems.Add(("/content/" + name, "unknown_member"));
+                // Clipped, so an unknown member of any length answers a bounded path rather than echoing 4 096 characters.
+                problems.Add(("/content/" + AuthoringText.Brief(name), "unknown_member"));
             }
         }
 
@@ -332,8 +342,9 @@ internal static class AuthoringContent
 
     /// <summary>
     /// NFC-normalises one caller string, answering the single caller-error shape as a problem row instead of a 500: a
-    /// string that is not valid UTF-16 (an unpaired surrogate) makes both the reader and the normaliser throw. NFC
-    /// support itself is asserted once per parse (<see cref="Parse"/>), so nothing here can hide that fault.
+    /// string that is not valid UTF-16 (an unpaired surrogate) makes both the reader and the normaliser throw, and a
+    /// string carrying U+0000 is text neither a <c>text</c> column nor a <c>jsonb</c> document accepts. NFC support
+    /// itself is asserted once per parse (<see cref="Parse"/>), so nothing here can hide that fault.
     /// </summary>
     /// <param name="value">The JSON string value.</param>
     /// <param name="path">The member path, without the <c>/content/</c> prefix.</param>
@@ -343,7 +354,17 @@ internal static class AuthoringContent
     {
         try
         {
-            return AuthoringText.Normalize(value.GetString());
+            var text = value.GetString();
+
+            if (AuthoringText.ContainsNul(text))
+            {
+                // `text` (22021) and `jsonb` (22P05) both refuse U+0000, so a caller's NUL is the same problem row as an
+                // unpaired surrogate: the writer answers one 422 instead of a 500 from the statement (security S-1/S-2).
+                problems.Add(("/content/" + path, "invalid_text"));
+                return null;
+            }
+
+            return AuthoringText.Normalize(text);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
         {
@@ -523,6 +544,15 @@ internal static class AuthoringContent
             return raw;
         }
 
+        if (ContainsNul(node))
+        {
+            // A NUL inside a step (its text, a `data` member or a member name) is refused here for the same reason as a
+            // value of the case itself: the `jsonb` column cannot store it (22P05), so it must be a caller error now
+            // rather than a 500 at the insert (security S-1/S-2).
+            problems.Add(("/content/steps", "invalid_text"));
+            return null;
+        }
+
         // Every string leaf is NFC-normalised before the document is stored, so the composed and the decomposed spelling
         // of one step are one stored document, one content_hash and one version (AC14). The tree is normalised in place,
         // which keeps member order, so the serialised text is stable.
@@ -591,6 +621,57 @@ internal static class AuthoringContent
 
             default:
                 break;
+        }
+    }
+
+    /// <summary>
+    /// True when any member name or string leaf of <paramref name="node"/> carries U+0000 — the character a
+    /// <c>text</c> column (22021) and a <c>jsonb</c> document (22P05) both refuse, so a document holding one cannot be
+    /// stored (see <see cref="Compose"/>). Non-string leaves and numbers are not inspected.
+    /// </summary>
+    /// <param name="node">The document or subtree.</param>
+    /// <returns><c>true</c> when the subtree is unstorable.</returns>
+    private static bool ContainsNul(JsonNode node)
+    {
+        switch (node)
+        {
+            case JsonObject jsonObject:
+                foreach (var property in jsonObject)
+                {
+                    if (AuthoringText.ContainsNul(property.Key)
+                        || (property.Value is { } value && ContainsNul(value)))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+
+            case JsonArray jsonArray:
+                foreach (var item in jsonArray)
+                {
+                    if (item is { } element && ContainsNul(element))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+
+            case JsonValue jsonValue:
+                try
+                {
+                    return jsonValue.TryGetValue<string>(out var text) && AuthoringText.ContainsNul(text);
+                }
+                catch (InvalidOperationException)
+                {
+                    // An unpaired surrogate makes the reader throw when the leaf is read. That leaf is not a NUL
+                    // finding: the NFC pass that follows answers it as the same invalid_text problem row it always did.
+                    return false;
+                }
+
+            default:
+                return false;
         }
     }
 

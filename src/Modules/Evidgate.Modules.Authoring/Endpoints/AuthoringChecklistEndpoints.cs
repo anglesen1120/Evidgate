@@ -71,7 +71,7 @@ internal static class AuthoringChecklistEndpoints
             if (!AuthoringEndpointSupport.TryParseGuid(rawNodeId, out var parsed))
             {
                 return Result.Failure<ChecklistItemListResponse>(
-                    Error.Invalid("node_id must be the id of a node", [new ErrorDetail("node_id", "invalid")]));
+                    Error.Invalid("node_id must be the id of a node", [new ErrorDetail("/node_id", "invalid")]));
             }
 
             nodeId = parsed;

@@ -47,9 +47,12 @@ internal static class AuthoringRequestScope
     }
 
     /// <summary>
-    /// 412 <c>precondition_failed</c> for a stale <c>If-Match</c> (AC19): the same code, status and details the
+    /// 412 <c>precondition_failed</c> for a stale <c>If-Match</c> (AC19): the same code, status and shape the
     /// catalog's <c>CatalogErrors.Stale</c> answers, so one client rule covers both modules. The current version
-    /// travels in <c>error.details</c> so a retry needs no extra GET.
+    /// travels in <c>error.details</c> so a retry needs no extra GET. The path is the JSON-pointer spelling
+    /// <c>/If-Match</c> — the one <c>AuthoringEndpointSupport.IfMatchVersion</c> and <c>IfMatchOrder</c> already answer
+    /// for the absent and malformed cases, so every authoring precondition detail names the header identically (the
+    /// catalog's unrooted <c>If-Match</c> is its own surface's spelling).
     /// </summary>
     /// <param name="what">The entity kind, e.g. <c>checklist item</c>.</param>
     /// <param name="currentVersion">The row's version now.</param>
@@ -61,7 +64,7 @@ internal static class AuthoringRequestScope
         Retryable: false,
         Details:
         [
-            new ErrorDetail("If-Match", "stale"),
+            new ErrorDetail("/If-Match", "stale"),
             new ErrorDetail("version", currentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
         ]);
 }

@@ -1137,7 +1137,7 @@ export type UpdateNodeRequest = {
 };
 
 /**
- * Body of route 4 (13.1.1-T2): the complete live sibling set of the node's parent, each id exactly once, the addressed node included.
+ * Body of route 4 (13.1.1-T2): the complete live sibling set of the node's parent, each id exactly once, the addressed node included, at most 1000 ids — the same cap a create or a move-in meets.
  */
 export type ReorderNodesRequest = {
     ordered_ids: Array<string>;
@@ -1151,7 +1151,7 @@ export type ReorderNodesResponse = {
 };
 
 /**
- * The whole body of a delete route is optional (13.1.1-T2); the only member is the reason recorded on the `SoftDelete` version row.
+ * The whole body of a delete route is optional (13.1.1-T2); the only member is the reason recorded on the `SoftDelete` version row. A reason is 1..500 code points — `maxLength` counts code points, so the schema, the column CHECK and the validator agree — and a whitespace-only reason is accepted, the rule every authoring reason follows.
  */
 export type DeleteAuthoringRequest = {
     reason?: string | null;
@@ -1768,7 +1768,7 @@ export type AuthoringCaseStateFilter = 'draft' | 'approved' | 'retired';
 export type AuthoringPriorityFilter = 'critical' | 'high' | 'medium' | 'low';
 
 /**
- * Case-insensitive title substring, at most 200 characters; `%`, `_` and `\` are escaped so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
+ * Case-insensitive title substring, at most 200 code points; `%`, `_` and `\` are escaped so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
  */
 export type AuthoringQuery = string;
 
@@ -7590,7 +7590,7 @@ export type ListManualCasesData = {
          */
         priority?: 'critical' | 'high' | 'medium' | 'low';
         /**
-         * Case-insensitive title substring, at most 200 characters; `%`, `_` and `\` are escaped so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
+         * Case-insensitive title substring, at most 200 code points; `%`, `_` and `\` are escaped so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
          */
         q?: string;
         /**

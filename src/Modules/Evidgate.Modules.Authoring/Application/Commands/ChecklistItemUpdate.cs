@@ -74,6 +74,15 @@ internal sealed class UpdateChecklistItemCommandHandler(
         }
 
         var orgId = scopes.Require().OrgId;
+
+        // AC10: a soft-deleted project hides everything under it. Without this probe the item row is still found (the
+        // project id matches) and an edit of a deleted project's item would version it.
+        if (await AuthoringProjectProbe.MissingAsync(db, orgId, command.ProjectId, cancellationToken).ConfigureAwait(false)
+            is { } missingProject)
+        {
+            return Result.Failure<AuthoringChangeResponse>(missingProject);
+        }
+
         var (locked, lockError) = await ChecklistItemLock
             .LockAsync(db, orgId, command.ProjectId, command.ItemId, cancellationToken)
             .ConfigureAwait(false);

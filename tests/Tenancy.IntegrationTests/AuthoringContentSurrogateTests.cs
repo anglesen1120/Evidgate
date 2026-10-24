@@ -80,6 +80,46 @@ public sealed class AuthoringContentSurrogateTests
     }
 
     /// <summary>
+    /// U+0000 in a text member is the same problem row as an unpaired surrogate: <c>text</c> (22021) and <c>jsonb</c>
+    /// (22P05) both refuse the character, so <c>Compose</c> turns the caller's NUL into <c>invalid_text</c> instead of
+    /// letting the insert answer a 500 (security S-1/S-2).
+    /// </summary>
+    [Fact]
+    public void ContentParse_RefusesNulInATextMember()
+    {
+        var details = Refuse(
+            "{\"kind\":\"module\",\"title\":\"Shop\\u0000now\",\"position\":0,\"parent_id\":null}",
+            AuthoringEntityKind.FeatureNode);
+
+        details.ShouldHaveSingleItem().ShouldBe(("/content/title", "invalid_text"));
+    }
+
+    /// <summary>A member name carrying U+0000 is refused at the placeholder, never echoed into a path.</summary>
+    [Fact]
+    public void ContentParse_RefusesNulMemberName()
+    {
+        Refuse(
+            "{\"kind\":\"module\",\"title\":\"Shop\",\"position\":0,\"parent_id\":null,\"ti\\u0000tle\":1}",
+            AuthoringEntityKind.FeatureNode)
+            .ShouldHaveSingleItem().ShouldBe((AuthoringContent.InvalidMemberNamePath, "invalid_text"));
+    }
+
+    /// <summary>U+0000 inside a step — in a value or in a member name — is refused at the <c>steps</c> path.</summary>
+    [Fact]
+    public void ContentParse_RefusesNulInsideSteps()
+    {
+        Refuse(
+            StepsCase("{\"steps\":[{\"no\":1,\"action\":\"Open\\u0000now\",\"expected\":\"Shown\"}]}"),
+            AuthoringEntityKind.ManualTestCase)
+            .ShouldContain(("/content/steps", "invalid_text"));
+
+        Refuse(
+            StepsCase("{\"steps\":[{\"no\":1,\"action\":\"Open\",\"expe\\u0000cted\":\"Shown\"}]}"),
+            AuthoringEntityKind.ManualTestCase)
+            .ShouldContain(("/content/steps", "invalid_text"));
+    }
+
+    /// <summary>
     /// The 422 the writer builds from those problem rows: <c>request_invalid</c>, status 422, one detail under the change
     /// path — the shape 13.1.1-T2's routes and the import surface, with no 500 anywhere.
     /// </summary>

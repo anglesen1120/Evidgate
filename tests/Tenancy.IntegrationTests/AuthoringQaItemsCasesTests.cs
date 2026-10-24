@@ -433,7 +433,7 @@ public sealed class AuthoringQaItemsCasesTests
         // The node filter is a uuid or it is refused — never a silently unfiltered page.
         var badNode = await world.Client.SendAsync(HttpMethod.Get, $"{world.Items}?node_id=not-a-uuid", world.As);
         badNode.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        Details(badNode).ShouldContain(detail => detail.Path == "node_id");
+        Details(badNode).ShouldContain(detail => detail.Path == "/node_id");
     }
 
     /// <summary>

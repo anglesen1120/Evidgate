@@ -4,15 +4,17 @@ using Evidgate.Modules.Authoring.Contracts;
 namespace Evidgate.Modules.Authoring.Infrastructure.Persistence;
 
 /// <summary>
-/// The statements and Dapper rows of the manual test case read surface (13.1.1 §5 routes 12 and 14) and of the two
-/// preconditions a case write needs (<c>If-Match</c> on the case row, the target item lock of AC22).
+/// The statements and Dapper rows of the manual test case read surface (13.1.1 §5 routes 12 and 14) and of the four
+/// guards a case route takes before its writer: the project-liveness probe (<see cref="ProjectExists"/>, AC10), the
+/// caller's membership, the create's target item probe (<see cref="CaseParent"/>, AC4), and the two locks (the case's
+/// <c>If-Match</c> precondition of AC19 and the move's target item of AC22).
 /// </summary>
 /// <remarks>
 /// <para>
-/// One statement per method: the list is one keyset page (+ the project probe) and the detail is one row (+ the same
-/// probe is unnecessary because the filter carries the project), so the C5 statement bounds hold. Every statement
-/// filters on <c>org_id</c> <em>and</em> the project of the URL, so a case of another project of the same tenant is
-/// indistinguishable from a missing one (404, AC10) instead of being readable by id.
+/// One statement per method: the list is one keyset page (+ the project probe), and the detail is one row whose own
+/// <c>exists</c> subquery carries the project's liveness — no second round trip, and no case of a soft-deleted project
+/// is ever served. Every statement filters on <c>org_id</c> <em>and</em> the project of the URL, so a case of another
+/// project of the same tenant is indistinguishable from a missing one (404, AC10) instead of being readable by id.
 /// </para>
 /// <para>
 /// The rows are mutable classes with settable properties: Dapper binds them through
@@ -22,8 +24,49 @@ namespace Evidgate.Modules.Authoring.Infrastructure.Persistence;
 /// </remarks>
 internal static class AuthoringManualCaseReadSql
 {
-    /// <summary>The project probe of the list (the catalog's own statement, 03.1.2).</summary>
-    internal const string ProjectExists = "select 1 from public.project where id = @project_id and status <> 'deleted'";
+    /// <summary>
+    /// The project probe of the list (the catalog's own statement, 03.1.2), with the tenant made explicit rather than
+    /// left to row level security.
+    /// </summary>
+    /// <remarks>
+    /// The predicate is the policy form itself — <c>org_id = evidgate.current_org_id()</c>, the helper of migration
+    /// 0002:30-44 that the policies must use instead of raw <c>current_setting</c> (0003:22-24, TL T2; the project
+    /// policy at 0005:69-70) — so the row must belong to the organization the connection runs as and an unset tenant
+    /// setting answers "no project" instead of every project. The <c>status</c> clause is the part a row level policy
+    /// does not express, which is where the defence in depth lives (security S-10). It takes no <c>@org_id</c>
+    /// parameter on purpose: the statement is shared with the case list's handler and with the item and case routes'
+    /// probe, and a binding the caller could forget is a worse guard than one the scope always sets.
+    /// </remarks>
+    internal const string ProjectExists = """
+        select 1
+          from public.project p
+         where p.id = @project_id
+           and p.status <> 'deleted'
+           and p.org_id = evidgate.current_org_id()
+        """;
+
+    /// <summary>
+    /// The create's placement probe (AC4): the checklist item a new case names, as the writer's own
+    /// <c>CheckCaseParentAsync</c> reads it, answered as one word — <c>live</c>, <c>deleted</c>, <c>retired</c> — or
+    /// nothing at all when this project holds no such item (another project's item is indistinguishable, AC10).
+    /// </summary>
+    /// <remarks>
+    /// It exists so a create the writer would refuse burns no code: the allocator commits on its own connection, so its
+    /// number is spent even when the caller's transaction rolls back (§4). The verdict is the writer's, not a second
+    /// rule — <c>ManualCaseCommands.CaseParentRefusalAsync</c> maps each word to the writer's own code, reason and
+    /// member path, and the writer still decides again under its locks.
+    /// </remarks>
+    internal const string CaseParent = """
+        select case
+                 when i.deleted_at is not null then 'deleted'
+                 when i.state = 'retired' then 'retired'
+                 else 'live'
+               end
+          from public.checklist_item i
+         where i.org_id = @org_id
+           and i.project_id = @project_id
+           and i.id = @item_id
+        """;
 
     /// <summary>
     /// The authoring member behind the caller's user id, or nothing when the caller is not a member of the tenant.
@@ -104,6 +147,11 @@ internal static class AuthoringManualCaseReadSql
         """;
 
     /// <summary>One live case of the project with everything route 14 answers and route 15 needs to rebuild the snapshot.</summary>
+    /// <remarks>
+    /// The project's liveness is part of the same statement (AC10): route 14 has no separate probe, and a case of a
+    /// soft-deleted project would otherwise stay readable — its row is still stored and the project id still matches.
+    /// The clause is the list route's own predicate, so a deleted project answers the same 404 to both reads.
+    /// </remarks>
     internal const string CaseDetail = """
         select m.id as case_id, m.code, m.checklist_item_id, i.feature_node_id as node_id,
                m.title, m.description, m.precondition, m.steps::text as steps,
@@ -117,6 +165,11 @@ internal static class AuthoringManualCaseReadSql
            and m.project_id = @project_id
            and m.id = @case_id
            and m.deleted_at is null
+           and exists (select 1
+                         from public.project p
+                        where p.id = m.project_id
+                          and p.org_id = m.org_id
+                          and p.status <> 'deleted')
         """;
 
     /// <summary>

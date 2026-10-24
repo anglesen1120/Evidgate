@@ -131,6 +131,64 @@ internal static class AuthoringText
         return length;
     }
 
+    /// <summary>
+    /// The longest caller-supplied name echoed in an error (the catalog's <c>TextRules.Brief</c> bound): an unknown
+    /// member name or a path segment is clipped to this many characters plus an ellipsis, so a caller cannot inflate a
+    /// <c>details[].path</c> with a 4 096-character name (security S-8). One bound for the edge
+    /// (<c>AuthoringEndpointSupport</c>) and the content parser, so both report the same name the same way.
+    /// </summary>
+    public const int MaximumEchoedNameLength = 64;
+
+    /// <summary>
+    /// A short, single-line rendering of a caller-supplied name for an error echo (the catalog's <c>TextRules.Brief</c>
+    /// rule, mirrored locally): at most <see cref="MaximumEchoedNameLength"/> UTF-16 units on a rune boundary, control
+    /// and format runes shown as <c>?</c>, and an ellipsis when anything was dropped. Clipping at a raw index could cut a
+    /// surrogate pair in half and put an unpaired surrogate into <c>details[].path</c> — the one thing this surface's
+    /// placeholder exists to keep out of an answer — while a raw newline or a U+202E would reorder the rendered line.
+    /// </summary>
+    /// <param name="text">The name to shorten.</param>
+    /// <param name="limit">The longest accepted answer, in UTF-16 units.</param>
+    /// <returns>The name unchanged when it fits, the clipped form otherwise.</returns>
+    public static string Brief(string text, int limit = MaximumEchoedNameLength)
+    {
+        var builder = new StringBuilder(Math.Min(text.Length, limit));
+        foreach (var rune in (text.Length <= limit ? text : Truncate(text, limit)).EnumerateRunes())
+        {
+            var echoable = Rune.IsControl(rune) || Rune.GetUnicodeCategory(rune) == UnicodeCategory.Format
+                ? "?"
+                : rune.ToString();
+            builder.Append(echoable);
+        }
+
+        return builder.Length < text.Length ? builder + "…" : builder.ToString();
+    }
+
+    /// <summary>The longest prefix of <paramref name="text"/> with at most <paramref name="maxChars"/> UTF-16 units that ends on a rune boundary.</summary>
+    /// <param name="text">The text.</param>
+    /// <param name="maxChars">The limit.</param>
+    /// <returns>The prefix, never splitting a surrogate pair.</returns>
+    private static string Truncate(string text, int maxChars)
+    {
+        var end = maxChars;
+        if (end > 0 && end < text.Length && char.IsHighSurrogate(text[end - 1]))
+        {
+            end--;
+        }
+
+        return text[..end];
+    }
+
+    /// <summary>
+    /// True when <paramref name="value"/> carries U+0000 — the one character PostgreSQL refuses in both a <c>text</c>
+    /// column (<c>22021 invalid byte sequence for encoding "UTF8": 0x00</c>) and a <c>jsonb</c> document
+    /// (<c>22P05</c>), so text holding it is not storable by this module at all. Every authoring write and read
+    /// parameter passes a guard that calls this before it reaches a statement, so a caller's own byte is a 422 rather
+    /// than a 500 (the rule <c>Ingestion</c>'s <c>UnstorableText</c> states for its own surface).
+    /// </summary>
+    /// <param name="value">The text; <c>null</c> is storable.</param>
+    /// <returns><c>true</c> when the value contains a NUL.</returns>
+    public static bool ContainsNul(string? value) => value is not null && value.Contains('\0');
+
     /// <summary>True when <paramref name="value"/> is at most <paramref name="maxCodePoints"/> code points long.</summary>
     /// <param name="value">The text.</param>
     /// <param name="maxCodePoints">The inclusive limit.</param>

@@ -34,7 +34,8 @@ internal static class IsolationProbeSql
                updated_at,
                version,
                retention_days,
-               monthly_run_quota
+               monthly_run_quota,
+               case_prefix
           from public.project
          where id = @project_id
         """;

@@ -237,13 +237,13 @@ public static class IsolationRouteCases
                 Fixed(bp.QuarantineIds), aAdmin, $"/v1/projects/{ap.Id}/quarantine?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/authoring/tree"), $"org B project {bp.Slug} authoring roots", bAdmin,
                 $"/v1/projects/{bp.Id}/authoring/tree?limit=1", "node_id",
-                Fixed([bp.AuthoringRootNodeId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/tree?limit=1"));
+                Fixed([bp.AuthoringRootNodeId, bp.AuthoringSecondRootNodeId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/tree?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/authoring/checklist-items"), $"org B project {bp.Slug} checklist items", bAdmin,
                 $"/v1/projects/{bp.Id}/authoring/checklist-items?limit=1", "item_id",
-                Fixed([bp.AuthoringItemId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/checklist-items?limit=1"));
+                Fixed([bp.AuthoringItemId, bp.AuthoringSecondItemId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/checklist-items?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/authoring/manual-cases"), $"org B project {bp.Slug} manual cases", bAdmin,
                 $"/v1/projects/{bp.Id}/authoring/manual-cases?limit=1", "case_id",
-                Fixed([bp.AuthoringManualCaseId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/manual-cases?limit=1"));
+                Fixed([bp.AuthoringManualCaseId, bp.AuthoringSecondManualCaseId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/manual-cases?limit=1"));
             // The run-create case below is a positive control: it proves that org B's own
             // `POST /v1/projects/{p}/runs` is accepted, so org B's first project can hold one run more than the
             // seed recorded, and whether it does depends on which test of the suite runs first (nothing resets
@@ -318,7 +318,7 @@ public static class IsolationRouteCases
             (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/nodes/{id}", null, "\"1\""), (_, _) => []),
         ObjectCaseWith("POST", "/v1/projects/{p}/authoring/nodes/{n}/reorder", p => [("node", p.AuthoringChildNodeId)],
             (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/nodes/{id}/reorder",
-                new JsonObject { ["ordered_ids"] = new JsonArray { id } }, "\"order:sha256:0000\""), (_, _) => []),
+                new JsonObject { ["ordered_ids"] = new JsonArray { id } }, "\"order:sha256:" + new string('0', 64) + "\""), (_, _) => []),
         ProjectCase("GET", "/v1/projects/{p}/authoring/checklist-items", p => new(HttpMethod.Get,
             $"/v1/projects/{p}/authoring/checklist-items?limit=1"), list: true, ownControl: true),
         ProjectCase("POST", "/v1/projects/{p}/authoring/checklist-items", p => new(HttpMethod.Post,

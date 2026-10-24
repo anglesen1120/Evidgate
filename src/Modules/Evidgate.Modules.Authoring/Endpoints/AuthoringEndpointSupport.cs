@@ -28,6 +28,9 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// <list type="bullet">
 /// <item><c>internal const int BodyCap = 64 * 1024</c> — the route-body cap of 13.1.1 §8/AC16.</item>
 /// <item><c>internal const int DefaultLimit = 50</c> / <c>MaxLimit = 200</c> — the list default and bound (00 §9.1).</item>
+/// <item><c>AuthoringText.MaximumEchoedNameLength = 64</c> — the longest caller-supplied name that reaches a
+/// <c>details[].path</c> segment; every echo goes through <c>AuthoringText.Brief</c>, which clips a longer name with an
+/// ellipsis (unknown member, pointer segment).</item>
 /// <item><c>internal static readonly JsonSerializerOptions RequestJson</c> — snake_case, unmapped members disallowed;
 /// the documented request DTOs are deserialised with it.</item>
 /// <item><c>internal const string InvalidMemberNamePath = "/&lt;invalid-member-name&gt;"</c> — the stable
@@ -42,8 +45,8 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// (the exact <c>AuthoringHashes.OrderHash</c> string, quotes stripped); absent/malformed → 422 <c>/If-Match</c>.</item>
 /// <item><c>static Task&lt;(JsonElement Body, Error? Error)&gt; ReadBodyAsync(HttpContext context, CancellationToken
 /// cancellationToken)</c> and its <c>(context, int maxBytes, cancellationToken)</c> overload — a strict, capped JSON
-/// <b>object</b>: over the cap → 413 <c>payload_too_large</c>; unparsable, duplicate member or lone surrogate → 422
-/// <c>request_invalid</c> (reasons <c>invalid_json</c> / <c>invalid_text</c>).</item>
+/// <b>object</b>: over the cap → 413 <c>payload_too_large</c>; unparsable, duplicate member, lone surrogate or U+0000
+/// (in a value or a member name) → 422 <c>request_invalid</c> (reasons <c>invalid_json</c> / <c>invalid_text</c>).</item>
 /// <item><c>static Task&lt;(JsonElement Body, Error? Error)&gt; ReadOptionalBodyAsync(HttpContext context, CancellationToken
 /// cancellationToken)</c> — the same, answering <c>JsonValueKind.Undefined</c> for a bodiless request (the optional
 /// <c>{reason?}</c> of a DELETE).</item>
@@ -242,8 +245,8 @@ internal static class AuthoringEndpointSupport
             if (!allowed.Contains(name, StringComparer.Ordinal))
             {
                 return Error.Invalid(
-                    $"'{Brief(name)}' is not a field of a {what}",
-                    [new ErrorDetail("/" + Brief(name), "unknown_field")]);
+                    $"'{Domain.AuthoringText.Brief(name)}' is not a field of a {what}",
+                    [new ErrorDetail("/" + Domain.AuthoringText.Brief(name), "unknown_field")]);
             }
         }
 
@@ -319,12 +322,6 @@ internal static class AuthoringEndpointSupport
     /// <param name="refusal">The refusal to map.</param>
     internal static Result<T> Failure<T>(AuthoringRefusal refusal) => Result.Failure<T>(ToError(refusal));
 
-    /// <summary>Truncates a caller-supplied name to a short, echoable form (the catalog's <c>TextRules.Brief</c> bound).</summary>
-    /// <param name="text">The text to shorten.</param>
-    /// <param name="limit">The longest accepted answer.</param>
-    private static string Brief(string text, int limit = 64) =>
-        text.Length <= limit ? text : text[..limit] + "…";
-
     /// <summary>Strips a weak prefix and the surrounding quotes from an <c>If-Match</c> value.</summary>
     /// <param name="raw">The header value.</param>
     private static string Unquote(string raw)
@@ -340,8 +337,9 @@ internal static class AuthoringEndpointSupport
     }
 
     /// <summary>
-    /// The strict, capped body read shared by both entry points: a JSON <b>object</b> only, its tree proven readable
-    /// (no lone surrogate in a name or a string value) before a handler can touch it.
+    /// The strict, capped body read shared by both entry points: a JSON <b>object</b> only, its tree proven storable (no
+    /// text PostgreSQL would refuse — a lone surrogate or U+0000 — in a name or a string value) before a handler can
+    /// touch it.
     /// </summary>
     /// <param name="context">The request.</param>
     /// <param name="maxBytes">The byte cap.</param>
@@ -360,16 +358,30 @@ internal static class AuthoringEndpointSupport
             return (default, TooLarge(maxBytes));
         }
 
-        using var buffer = new MemoryStream();
+        // The buffer is sized up front to the body it may hold (the declared length, or the cap for a chunked body),
+        // and every chunk is measured BEFORE it is written: a streamed body of any size therefore never allocates more
+        // than the cap, while `MemoryStream`'s own doubling would reach 128 KiB — a large-object-heap buffer — for a
+        // body of a few bytes over 64 KiB before the old post-write check could refuse it.
+        var capacity = maxBytes;
+        if (context.Request.ContentLength is { } declaredLength)
+        {
+            // A declared length is the body's exact size (a longer one was refused above, so it never exceeds the cap):
+            // sizing the buffer to it means a within-cap body never grows the stream, and a bodiless request allocates
+            // nothing. Only a chunked request, whose length is unknown, may hold the cap.
+            capacity = declaredLength <= 0 ? 0 : (int)declaredLength;
+        }
+
+        using var buffer = new MemoryStream(capacity);
         var chunk = new byte[8 * 1024];
         int read;
         while ((read = await context.Request.Body.ReadAsync(chunk.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
         {
-            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-            if (buffer.Length > maxBytes)
+            if (buffer.Length + read > maxBytes)
             {
                 return (default, TooLarge(maxBytes));
             }
+
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
         }
 
         if (buffer.Length == 0)
@@ -384,8 +396,10 @@ internal static class AuthoringEndpointSupport
         {
             // AllowDuplicateProperties = false (10.0) is what makes a duplicate member a caller error: without it the
             // reader keeps the last value silently, and the idempotency hash of AC18 would not describe the body.
+            // The parsed memory is the stream's own buffer (the stream is public and ours, so no UnauthorizedAccess
+            // path exists): `Parse` copies the bytes it keeps, so `ToArray` would be a second, avoidable copy.
             document = JsonDocument.Parse(
-                buffer.ToArray(),
+                buffer.GetBuffer().AsMemory(0, (int)buffer.Length),
                 new JsonDocumentOptions { AllowDuplicateProperties = false });
         }
         catch (JsonException)
@@ -424,12 +438,14 @@ internal static class AuthoringEndpointSupport
         StatusCodes.Status413PayloadTooLarge);
 
     /// <summary>
-    /// Walks the parsed body once and answers the first string value or member name that is not valid UTF-16 (a lone
-    /// surrogate, e.g. <c>{"title":"\ud800"}</c>). Refusing it here means no handler ever renders a 500 for a caller's
-    /// own bytes (OI-13-116); the walk is bounded by the reader's depth limit and the 64 KiB cap.
+    /// Walks the parsed body once and answers the first string value or member name that PostgreSQL cannot store: text
+    /// that is not valid UTF-16 (a lone surrogate, e.g. <c>{"title":"\ud800"}</c>), or text carrying U+0000, which
+    /// <c>text</c> (22021) and <c>jsonb</c> (22P05) both refuse. Refusing it here means no handler ever renders a 500
+    /// for a caller's own bytes (OI-13-116, security S-1/S-2); the walk is bounded by the reader's depth limit and the
+    /// 64 KiB cap.
     /// </summary>
     /// <param name="element">The element to inspect.</param>
-    /// <param name="path">The JSON path of that element, e.g. <c>/steps</c>.</param>
+    /// <param name="path">The JSON pointer of that element, e.g. <c>/steps/0/action</c>.</param>
     private static Error? UnstorableText(JsonElement element, string path)
     {
         switch (element.ValueKind)
@@ -449,7 +465,18 @@ internal static class AuthoringEndpointSupport
                             [new ErrorDetail(InvalidMemberNamePath, "invalid_text")]);
                     }
 
-                    if (UnstorableText(member.Value, path + "/" + name) is { } nested)
+                    if (Domain.AuthoringText.ContainsNul(name))
+                    {
+                        // A name that carries a control character is not echoed into a pointer either: the placeholder
+                        // is the one path an unrepresentable name answers everywhere in this module.
+                        return Error.Invalid(
+                            "the body carries a member name with a NUL (U+0000) character, which PostgreSQL cannot store",
+                            [new ErrorDetail(InvalidMemberNamePath, "invalid_text")]);
+                    }
+
+                    // The pointer segment is clipped to the same 64 characters every echoed caller name is (Brief), so a
+                    // 4 096-character member name never becomes a 4 096-character detail path.
+                    if (UnstorableText(member.Value, path + "/" + Domain.AuthoringText.Brief(name)) is { } nested)
                     {
                         return nested;
                     }
@@ -472,11 +499,10 @@ internal static class AuthoringEndpointSupport
                 return null;
 
             case JsonValueKind.String:
+                string text;
                 try
                 {
-                    _ = element.GetString();
-
-                    return null;
+                    text = element.GetString()!;
                 }
                 catch (InvalidOperationException)
                 {
@@ -484,6 +510,12 @@ internal static class AuthoringEndpointSupport
                         "the body carries text that is not valid UTF-16",
                         [new ErrorDetail(path, "invalid_text")]);
                 }
+
+                return Domain.AuthoringText.ContainsNul(text)
+                    ? Error.Invalid(
+                        "the body carries text with a NUL (U+0000) character, which PostgreSQL cannot store",
+                        [new ErrorDetail(path, "invalid_text")])
+                    : null;
 
             default:
                 return null;

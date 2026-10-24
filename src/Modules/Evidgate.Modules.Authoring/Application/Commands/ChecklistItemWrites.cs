@@ -376,7 +376,9 @@ internal static class ChecklistItemFields
 
 /// <summary>
 /// The item row an edit or a delete takes before it writes, in the writer's own lock order (node, then item) so a
-/// concurrent batch that touches a node and one of its items can never deadlock against this command.
+/// concurrent batch that touches a node and one of its items can never deadlock against this command. Both locks are
+/// bounded by the writer's own 5 s <c>lock_timeout</c> (<see cref="AuthoringLockGuard"/>), so a row another request holds
+/// answers the retryable <c>503 unavailable</c> instead of waiting for that holder's transaction to end.
 /// </summary>
 internal static class ChecklistItemLock
 {
@@ -411,6 +413,10 @@ internal static class ChecklistItemLock
 
         try
         {
+            // The 5 s lock_timeout before the first lock of the edit/delete pair; the writer sets its own inside the
+            // append, which starts only after these two locks, so without this the wait here would be unbounded.
+            await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
+
             await db.QuerySingleOrDefaultAsync<int>(
                 AuthoringChecklistReadSql.LockParentShare,
                 new { org_id = orgId, project_id = projectId, node_id = peek.NodeId },
@@ -425,12 +431,47 @@ internal static class ChecklistItemLock
                 ? (null, AuthoringErrors.EntityNotFound(AuthoringEntityKind.ChecklistItem))
                 : (locked, null);
         }
-        catch (PostgresException exception) when (
-            exception.SqlState is PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.LockNotAvailable)
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
         {
             // The writer maps the same two SQLSTATEs of its own statements; a lock this command takes first must answer
             // the same retryable 503 rather than surface as a 500 (13.1.1 §5, 00 §9.2).
             return (null, AuthoringErrors.Unavailable());
         }
+    }
+}
+
+/// <summary>
+/// The project-liveness probe the checklist item <b>and</b> manual case routes of 13.1.1 §5 share (AC10): an unknown
+/// project, another tenant's project and a <b>soft-deleted</b> one answer the same 404 before any row is read, so no
+/// route confirms that a deleted project still holds items or cases.
+/// </summary>
+/// <remarks>
+/// One statement, one predicate: <see cref="AuthoringNodeReadSql.ProjectExists"/> is the node routes' own probe, so an
+/// item write, a case write and a node write cannot drift on what "this project is live in this tenant" means. The
+/// probe precedes the row locks deliberately — a deleted project's rows are still stored and would otherwise be found,
+/// edited and versioned (the 404 of a row the tenant cannot see is a different answer, and it only fires once the
+/// project itself is live).
+/// </remarks>
+internal static class AuthoringProjectProbe
+{
+    /// <summary>Null when the project is live in the tenant, else the 404 to return unchanged.</summary>
+    /// <param name="db">The tenant-bound database of the open scope.</param>
+    /// <param name="orgId">The organization of the open scope.</param>
+    /// <param name="projectId">The project from the route.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal static async ValueTask<Error?> MissingAsync(
+        ITenantDb db,
+        Guid orgId,
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+
+        var live = await db.ScalarAsync<int?>(
+            AuthoringNodeReadSql.ProjectExists,
+            new { org_id = orgId, project_id = projectId },
+            cancellationToken).ConfigureAwait(false);
+
+        return live is null ? AuthoringRules.ProjectNotFound : null;
     }
 }

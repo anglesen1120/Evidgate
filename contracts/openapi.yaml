@@ -4060,8 +4060,11 @@ paths:
         other-project parent, a self-parent and a placement deeper than the four-level ladder are
         422 `authoring_parent_invalid` with `details[].reason` ∈ `parent_not_found`,
         `parent_kind_invalid`, `parent_deleted`, `depth_exceeded`, `cycle`. `title` is 1..200
-        characters. An omitted `position` appends the node at `max(live sibling position) + 1`; a
-        taken live position is 422 `request_invalid` with `details[].path = /position` and
+        code points. A parent whose live sibling group already holds 1000 nodes is 422
+        `request_invalid` with `details[].path = /parent_id` and
+        `reason = children_limit_exceeded` (renumber or move some of them first); an omitted
+        `position` appends the node at `max(live sibling position) + 1`; a taken live position
+        is 422 `request_invalid` with `details[].path = /position` and
         `reason = position_taken`. An unknown body member is 422 `request_invalid`
         (`details[].path` names it), a body over 64 KiB 413 `payload_too_large` (AC16), a missing
         `Idempotency-Key` 400 `request_invalid` (00 §9.1), and a replay of the same key with the
@@ -4119,7 +4122,10 @@ paths:
         13.1.1 §5 route 3 (`authoring:write`). Omitted members are unchanged; `parent_id: null`
         moves the node to the root level. A `parent_id` change re-applies the kind ladder and
         cycle guards (422 `authoring_parent_invalid` with its `details[].reason`, as on create),
-        and a re-parent renumbers the target siblings. `If-Match` carries the node's `version`
+        and a re-parent renumbers the target siblings. A `parent_id` move into a group that
+        already holds 1000 live siblings is 422 `request_invalid` with
+        `details[].path = /parent_id` and `reason = children_limit_exceeded` (the create
+        refusal). `If-Match` carries the node's `version`
         (ETag); absent or malformed is 422 `request_invalid` with `details[].path = /If-Match`
         and `reason` `required` / `invalid`; stale is 412 `precondition_failed` with the
         current `version` in `error.details` and nothing written (no version row, no audit row,
@@ -4180,9 +4186,10 @@ paths:
       description: >-
         13.1.1 §5 route 5 (`authoring:write`). The node is soft-deleted (`deleted_at`), so it
         disappears from the tree and from every list, and the delete is recorded as one
-        `SoftDelete` version row with the optional `reason` (1..500 characters; no body at all
-        is allowed). A node that still holds a live child node or a live checklist item is 409
-        `authoring_not_empty` with `details[].reason` `node_has_children` / `node_has_items`,
+        `SoftDelete` version row with the optional `reason` (1..500 code points; a
+        whitespace-only reason is accepted, the rule every authoring reason follows; no body at
+        all is allowed). A node that still holds a live child node or a live checklist item is
+        409 `authoring_not_empty` with `details[].reason` `node_has_children` / `node_has_items`,
         and nothing is written (AC7). `If-Match` is the node's `version` (absent/malformed 422
         with `details[].path = /If-Match`; stale 412 `precondition_failed` with the current
         `version` in `error.details`, no write, AC19). An unknown or already soft-deleted node
@@ -4244,8 +4251,10 @@ paths:
         malformed is 422 `request_invalid` with `details[].path = /If-Match` (`required` /
         `invalid`). An `ordered_ids` that is not exactly the live sibling set (missing, extra,
         duplicate or a foreign id) is 422 `request_invalid` with `details[].path =
-        /ordered_ids`. The renumber is two statements in one transaction (AC2); a lock timeout
-        is 503 `unavailable` with `Retry-After`. The answer is `{changed}`, and `changed: false`
+        /ordered_ids`; a list longer than 1000 — the same cap a create or a move-in meets — is
+        422 with `details[].path = /ordered_ids` and `reason = too_many`. The renumber is two
+        statements in one transaction (AC2); a lock timeout is 503 `unavailable` with
+        `Retry-After`. The answer is `{changed}`, and `changed: false`
         when the request reproduces the stored order.
       x-permission: authoring:write
       x-version: v1
@@ -4346,7 +4355,7 @@ paths:
         13.1.1 §5 route 8 (`authoring:write`). The parent node must exist in the project and be
         a `category` or `sub_category` node, else 422 `authoring_parent_invalid` (`details[].
         reason` `parent_not_found`, `parent_kind_invalid` or `parent_deleted`). `title` is 1..500
-        characters, `description` at most 4000, `priority` is `critical`, `high`, `medium` or
+        code points, `description` at most 4000, `priority` is `critical`, `high`, `medium` or
         `low`; a manual create starts `active` (13.1.1 §6, CR-13-1) and `source` is `manual`. An
         omitted `position` appends at `max(live sibling position) + 1` and a taken live position
         is 422 `request_invalid` with `details[].path = /position` and `reason =
@@ -4406,7 +4415,7 @@ paths:
         13.1.1 §6 (`draft` → `active`, `active` → `retired`, `draft` → `retired`; `retired` is
         terminal for edits, its only way back is the restore route of 13.1.1-T3), so any other
         move is 409 `invalid_transition`. Moving to `retired` requires the body member `reason`
-        (1..500 characters; absent is 422 `request_invalid` with `details[].path = /reason`).
+        (1..500 code points; absent is 422 `request_invalid` with `details[].path = /reason`).
         `If-Match` is the item's `version` (absent/malformed 422 with `details[].path =
         /If-Match`, stale 412 `precondition_failed` with the current `version` in
         `error.details` and nothing written, AC19). A no-op answers 200 `changed: false` with no
@@ -4465,7 +4474,7 @@ paths:
       summary: Soft-delete a checklist item; an item that still holds cases is 409 (13.1.1-T2)
       description: >-
         13.1.1 §5 route 10 (`authoring:write`). Soft-deletes the item and appends one
-        `SoftDelete` version row with the optional `reason` (1..500 characters). An item that
+        `SoftDelete` version row with the optional `reason` (1..500 code points). An item that
         still holds a live manual test case is 409 `authoring_not_empty` with
         `details[].reason = item_has_cases`, and nothing is written (AC7). `If-Match` is the
         item's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412
@@ -4523,7 +4532,7 @@ paths:
         13.1.1-T4's and are absent here). Live cases in `(code, id)` order, optionally narrowed
         by the exact `node_id` and `item_id` filters, by `state` (`draft`, `approved`,
         `retired`), by `priority` (`critical`, `high`, `medium`, `low`) and by `q` — a
-        case-insensitive title substring of at most 200 characters, with `%`, `_` and `\`
+        case-insensitive title substring of at most 200 code points, with `%`, `_` and `\`
         escaped so a caller cannot inject a LIKE wildcard. A present but invalid filter value,
         a `limit` outside 1..200 or a garbled `cursor` is 422 `request_invalid` with
         `details[].path` naming the parameter. Another tenant's project is 404 `not_found`; a
@@ -4569,7 +4578,7 @@ paths:
         13.1.1 §5 route 13 (`authoring:write`). The item must exist in the project, else 422
         `authoring_parent_invalid` (`details[].reason` `parent_not_found` / `parent_deleted`).
         `steps` is validated against `contracts/schemas/authoring-steps.v1.json` — 1..100 steps,
-        each with `no` (1..1000), `action` and `expected` (≤ 2000 characters) and an optional
+        each with `no` (1..1000), `action` and `expected` (≤ 2000 code points) and an optional
         `data` string, unknown members refused at the document level and inside a step — and a
         violation is 422 `request_invalid` with one `details[]` entry per problem, its `path`
         rebased under `/steps`. `code` is server-allocated as `<project case_prefix>-<n>` (the
@@ -4727,7 +4736,7 @@ paths:
       summary: Soft-delete a manual test case (13.1.1-T2)
       description: >-
         13.1.1 §5 route 16 (`authoring:write`). Soft-deletes the case and appends one
-        `SoftDelete` version row with the optional `reason` (1..500 characters). `If-Match` is
+        `SoftDelete` version row with the optional `reason` (1..500 code points). `If-Match` is
         the case's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412
         `precondition_failed` with the current `version` in `error.details`, no write, AC19).
         Unknown or already soft-deleted 404 `not_found`, body over 64 KiB 413
@@ -4782,7 +4791,7 @@ paths:
         13.1.1 §5 route 17 (`authoring:write`). `state` is `draft`, `approved` or `retired`, and
         the moves of 13.1.1 §6 are `draft → approved`, `draft → retired` and `approved →
         retired`; every other pair, including a move of a `retired` case, is 409
-        `invalid_transition` and writes nothing. `retired` requires `reason` (1..500 characters;
+        `invalid_transition` and writes nothing. `retired` requires `reason` (1..500 code points;
         absent is 422 `request_invalid` with `details[].path = /reason`); the reason is optional
         on `draft → approved` (AC21). `If-Match` is the case's `version` (absent/malformed 422
         with `details[].path = /If-Match`, stale 412 `precondition_failed` with the current
@@ -4846,7 +4855,7 @@ paths:
         13.1.1 §5 route 19 (`authoring:write`). Re-parents one case to a checklist item of the
         same project through `AuthoringVersionWriter.MoveManualTestCaseAsync`, which keeps
         `code`, bumps `version` and appends one `update` version row carrying the new
-        `checklist_item_id` and the given `reason` (≤ 500 characters). The target must exist in
+        `checklist_item_id` and the given `reason` (≤ 500 code points). The target must exist in
         the project and not be soft-deleted, else 422 `authoring_parent_invalid`
         (`details[].reason` `parent_not_found` / `parent_deleted`); a `retired` case or a
         `retired` target is 409 `invalid_transition`; a move onto the item that already holds
@@ -5357,7 +5366,7 @@ components:
       in: query
       required: false
       description: >-
-        Case-insensitive title substring, at most 200 characters; `%`, `_` and `\` are escaped
+        Case-insensitive title substring, at most 200 code points; `%`, `_` and `\` are escaped
         so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
       schema:
         type: string
@@ -7193,7 +7202,8 @@ components:
       type: object
       description: >-
         Body of route 4 (13.1.1-T2): the complete live sibling set of the node's parent, each id
-        exactly once, the addressed node included.
+        exactly once, the addressed node included, at most 1000 ids — the same cap a create or a
+        move-in meets.
       additionalProperties: false
       required: [ordered_ids]
       properties:
@@ -7211,7 +7221,9 @@ components:
       type: object
       description: >-
         The whole body of a delete route is optional (13.1.1-T2); the only member is the reason
-        recorded on the `SoftDelete` version row.
+        recorded on the `SoftDelete` version row. A reason is 1..500 code points — `maxLength`
+        counts code points, so the schema, the column CHECK and the validator agree — and a
+        whitespace-only reason is accepted, the rule every authoring reason follows.
       additionalProperties: false
       properties:
         reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }

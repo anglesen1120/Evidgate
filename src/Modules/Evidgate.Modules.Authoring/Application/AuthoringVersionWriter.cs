@@ -41,7 +41,10 @@ namespace Evidgate.Modules.Authoring.Application;
 /// change; a move locks the target item before the case; a restore peeks its parent without a lock, takes the parent's
 /// share lock, then locks the entity, and answers <c>503</c> if the row moved to another parent in between rather than
 /// taking a parent lock after the child. A parent probe is always a share lock — it exists to block a concurrent soft
-/// delete of the parent, never to serialise siblings. Every lock of a call is bounded by one 5 s <c>lock_timeout</c>,
+/// delete of the parent, never to serialise siblings. Siblings are serialised instead by one transaction-scoped advisory
+/// lock per group (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>, the pattern <c>CaseIdentityService</c> uses for
+/// a project's sync), because a <c>for update</c> lock of the parent row would join this order and could form a cycle with
+/// a batch that locks a child before its parent. Every lock of a call is bounded by one 5 s <c>lock_timeout</c>,
 /// and a lock timeout (55P03) or a deadlock (40P01) answers the retryable <c>503 unavailable</c> of §5 rather than a
 /// 500, so even an order this comment missed degrades to a retry.
 /// </para>
@@ -1118,11 +1121,14 @@ internal sealed class AuthoringVersionWriter(
     /// batch ETag compares <c>(id, version)</c> pairs, so a sparse number is equivalent for every consumer.
     /// </para>
     /// <para>
-    /// <b>Order.</b> The anchor is <b>peeked</b> unlocked (its parent id, and whether it is still live), then the whole
-    /// group is locked <c>for update</c> in ascending id, and only then is the anchor required to be a member of the
-    /// locked set. Locking the anchor on its own first would let two reorders anchored on two different nodes of one
-    /// group deadlock (each holds one row of the group and waits for the other's), which no retry can fix; one rank with
-    /// one order cannot. The group's rows are all that is locked: a reorder never sees a parent or a child of the group.
+    /// <b>Order.</b> The anchor is <b>peeked</b> unlocked (its parent id, and whether it is still live), then the group's
+    /// advisory lock is taken (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>, the lock a create and a move-in
+    /// into that group take before they read its append position), then the whole group is locked <c>for update</c> in
+    /// ascending id, and only then is the anchor required to be a member of the locked set. Locking the anchor on its own
+    /// first would let two reorders anchored on two different nodes of one group deadlock (each holds one row of the group
+    /// and waits for the other's), which no retry can fix; one rank with one order cannot. No other <c>feature_node</c> row
+    /// is locked: a reorder never sees a parent as a row, and the advisory key is not a row at all, so it cannot take part
+    /// in the writer-wide rank-then-id order.
     /// </para>
     /// <para>
     /// <b>Refusals write nothing.</b> Every guard runs before the first <c>UPDATE</c> — the anchor, the sibling set, the
@@ -1227,6 +1233,14 @@ internal sealed class AuthoringVersionWriter(
         }
 
         var parentId = anchor.ParentId;
+
+        // AC2's group lock, taken before the sibling rows: a create or a move-in into this group takes the same lock
+        // before it reads the group's append position, so no row can enter the group between the read below and the park
+        // statement — which is the one way the partial unique index could refuse an UPDATE the caller never made.
+        await AuthoringLockGuard
+            .LockSiblingGroupAsync(db, projectId, parentId, cancellationToken)
+            .ConfigureAwait(false);
+
         var siblings = await db.QueryAsync<ReorderSiblingRow>(
             AuthoringSql.LockNodeSiblings(parentId is null),
             new { org_id = orgId, project_id = projectId, parent_id = parentId },
@@ -1273,22 +1287,36 @@ internal sealed class AuthoringVersionWriter(
 
         // AC2's two statements, in this order and no other (AuthoringSql.ReorderPark/ReorderAssign explain why the
         // parked values can never meet a final one).
-        await db.ExecuteAsync(
-            AuthoringSql.ReorderPark(parentId is null),
-            new { org_id = orgId, project_id = projectId, parent_id = parentId, offset, ids = movedIds },
-            cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await db.ExecuteAsync(
+                AuthoringSql.ReorderPark(parentId is null),
+                new { org_id = orgId, project_id = projectId, parent_id = parentId, offset, ids = movedIds },
+                cancellationToken).ConfigureAwait(false);
 
-        await db.ExecuteAsync(
-            AuthoringSql.ReorderAssign,
-            new
-            {
-                org_id = orgId,
-                project_id = projectId,
-                rows = JsonSerializer.Serialize(
-                    moved.Select(row => new ReorderTargetRow(row.Id, targets[row.Id])),
-                    VersionRowJsonOptions),
-            },
-            cancellationToken).ConfigureAwait(false);
+            await db.ExecuteAsync(
+                AuthoringSql.ReorderAssign,
+                new
+                {
+                    org_id = orgId,
+                    project_id = projectId,
+                    rows = JsonSerializer.Serialize(
+                        moved.Select(row => new ReorderTargetRow(row.Id, targets[row.Id])),
+                        VersionRowJsonOptions),
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (
+            exception.SqlState == PostgresErrorCodes.UniqueViolation
+            && string.Equals(exception.ConstraintName, SiblingPositionIndex, StringComparison.Ordinal))
+        {
+            // A writer that does not take the group's advisory lock (13.1.2's apply composes batches straight into
+            // AppendAsync) landed a row in this group between the lock of the siblings and the park. The transaction is
+            // aborted, so the retry belongs to the caller: the same retryable 503 the restore answers when its own
+            // resolved position is taken (:613), never a 500. A renumber itself now takes AuthoringLockGuard's group
+            // lock, so a racing create or move-in cannot reach this branch.
+            return AuthoringErrors.Fail<AuthoringReorderOutcome>(AuthoringErrors.Unavailable());
+        }
 
         var renumbered = await db.QueryAsync<ReorderVersionRow>(
             AuthoringSql.ReorderVersions,
@@ -1950,7 +1978,15 @@ internal sealed class AuthoringVersionWriter(
         return null;
     }
 
-    private static bool IsReasonLengthValid(string reason) => reason.Length is > 0 and <= MaximumReasonLength;
+    /// <summary>
+    /// A reason is 1..<see cref="MaximumReasonLength"/> <b>code points</b> — the unit of the column's own CHECK
+    /// (<c>char_length(reason) between 1 and 500</c>, migration 0039) and of every authoring text
+    /// (<see cref="AuthoringText"/>), so a 500-character Vietnamese or emoji reason is stored, not refused as if it were
+    /// 1 000 characters.
+    /// </summary>
+    /// <param name="reason">The candidate reason.</param>
+    private static bool IsReasonLengthValid(string reason) =>
+        AuthoringText.CodePointLength(reason) is > 0 and <= MaximumReasonLength;
 
     /// <summary>
     /// True for the two contention SQLSTATEs that mean "another writer holds what this call needs", so §5 answers them
@@ -1958,8 +1994,7 @@ internal sealed class AuthoringVersionWriter(
     /// <c>lock_timeout</c>) and a deadlock (<c>40P01</c>).
     /// </summary>
     /// <param name="exception">The database refusal.</param>
-    private static bool IsContention(PostgresException exception) =>
-        exception.SqlState is PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected;
+    private static bool IsContention(PostgresException exception) => AuthoringLockGuard.IsContention(exception);
 
     /// <summary>
     /// Takes every lock one batch can need, in the writer-wide order (rank, then id): the rows the batch mutates

@@ -59,6 +59,15 @@ internal sealed class DeleteChecklistItemCommandHandler(
         }
 
         var orgId = scopes.Require().OrgId;
+
+        // AC10: a soft-deleted project hides everything under it, so the liveness probe answers before the row lock —
+        // otherwise a delete would still find the item (the project id matches) and tombstone it.
+        if (await AuthoringProjectProbe.MissingAsync(db, orgId, command.ProjectId, cancellationToken).ConfigureAwait(false)
+            is { } missingProject)
+        {
+            return Result.Failure(missingProject);
+        }
+
         var (locked, lockError) = await ChecklistItemLock
             .LockAsync(db, orgId, command.ProjectId, command.ItemId, cancellationToken)
             .ConfigureAwait(false);

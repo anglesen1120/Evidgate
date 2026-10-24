@@ -13,6 +13,7 @@ using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 using FluentValidation;
 using Mediator;
+using Npgsql;
 
 namespace Evidgate.Modules.Authoring.Application.Commands;
 
@@ -52,7 +53,8 @@ internal sealed class CreateNodeCommandValidator : AbstractValidator<CreateNodeC
             .OverridePropertyName("/kind");
 
         RuleFor(command => command.Title)
-            .Must(title => !string.IsNullOrWhiteSpace(title) && title.Length <= AuthoringContent.MaximumNodeTitleLength)
+            .Must(title => AuthoringText.CodePointLength(title) > 0
+                && AuthoringText.Fits(title, AuthoringContent.MaximumNodeTitleLength))
             .WithErrorCode("invalid_length")
             .OverridePropertyName("/title");
 
@@ -76,10 +78,12 @@ internal sealed class CreateNodeCommandValidator : AbstractValidator<CreateNodeC
 /// the parent-existence and <c>position_taken</c> guards live there (AC1/AC2), so this handler adds none of them.
 /// </summary>
 /// <remarks>
-/// <b>The default position is a read, not a lock</b> (AC2): two concurrent creates that read the same maximum both send
-/// the same position, and the partial unique index refuses the loser with the writer's <c>422 position_taken</c> — a retry
-/// from a fresh read succeeds. Serialising creates on the group instead would turn a harmless race into a queue, and the
-/// index already makes the outcome safe.
+/// <b>The position is read under the group's lock, not next to it</b> (AC2; review F1/F6). The group's size and its
+/// append position are one read (<see cref="AuthoringSql.NodeGroupSummary"/>) taken after this command holds the group's
+/// advisory lock (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>), and a renumber of that group takes the same
+/// lock before it locks the sibling rows. Two concurrent creates therefore append one after the other instead of both
+/// sending the same number — the loser used to answer <c>422 position_taken</c> for a position it never sent — and a
+/// renumber can never park a moved row onto the value this insert is about to take.
 /// </remarks>
 [AuditedAction("authoring.node.create")]
 [Permission(Permissions.Authoring.Write)]
@@ -99,6 +103,25 @@ internal sealed class CreateNodeCommandHandler(
 
         ArgumentNullException.ThrowIfNull(command);
 
+        // The group lock is taken here, not in the writer, so the writer's own bound covers none of it: the same 5 s
+        // lock_timeout is applied first and 55P03/40P01 answer the retryable 503 instead of a 500.
+        await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return await HandleCoreAsync(command, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        {
+            return Result.Failure<CreateNodeResponse>(AuthoringErrors.Unavailable());
+        }
+    }
+
+    /// <summary>The handler body, inside the bounded wait and contention mapping of <see cref="Handle"/>.</summary>
+    private async ValueTask<Result<CreateNodeResponse>> HandleCoreAsync(
+        CreateNodeCommand command,
+        CancellationToken cancellationToken)
+    {
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } mismatch)
         {
             return Result.Failure<CreateNodeResponse>(mismatch);
@@ -116,10 +139,23 @@ internal sealed class CreateNodeCommandHandler(
 
         var actor = await AuthoringRequestScope.ActorMembershipAsync(db, orgId, principals, cancellationToken).ConfigureAwait(false);
 
-        var position = command.Position ?? (await db.ScalarAsync<int?>(
-            AuthoringSql.NodeNextPosition(command.ParentId is null),
+        // AC2's group lock: a renumber of this group and every other create (or move-in) of it queue behind it, so the
+        // count and the maximum read next are the group as it will be when this insert commits.
+        await AuthoringLockGuard
+            .LockSiblingGroupAsync(db, command.ProjectId, command.ParentId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var group = await db.QuerySingleOrDefaultAsync<AuthoringSql.NodeGroupRow>(
+            AuthoringSql.NodeGroupSummary(command.ParentId is null),
             new { org_id = orgId, project_id = command.ProjectId, parent_id = command.ParentId },
-            cancellationToken).ConfigureAwait(false) ?? 0);
+            cancellationToken).ConfigureAwait(false);
+
+        if (group is { } members && members.LiveCount >= NodeLimits.MaximumSiblingsPerGroup)
+        {
+            return Result.Failure<CreateNodeResponse>(NodeLimits.Refusal());
+        }
+
+        var position = command.Position ?? group?.NextPosition ?? 0;
 
         if (position is < 0 or > AuthoringVersionWriter.MaximumSiblingPosition)
         {
@@ -195,7 +231,8 @@ internal sealed class UpdateNodeCommandValidator : AbstractValidator<UpdateNodeC
             .OverridePropertyName("/If-Match");
 
         RuleFor(command => command.Title)
-            .Must(title => !string.IsNullOrWhiteSpace(title) && title.Length <= AuthoringContent.MaximumNodeTitleLength)
+            .Must(title => AuthoringText.CodePointLength(title) > 0
+                && AuthoringText.Fits(title, AuthoringContent.MaximumNodeTitleLength))
             .WithErrorCode("invalid_length")
             .OverridePropertyName("/title")
             .When(command => command.Title is not null);
@@ -225,6 +262,13 @@ internal sealed class UpdateNodeCommandValidator : AbstractValidator<UpdateNodeC
 /// here, then compares its own <c>If-Match</c> with the version the first writer committed and answers 412 (AC19). A check
 /// on an unlocked read would let both writers pass, and the writer's out-of-step guard cannot tell them apart (each of them
 /// appends exactly one version above the last).
+/// <para>
+/// <b>Lock order.</b> When the request names a parent, that group's advisory lock is taken <em>before</em> the node's own
+/// row — the same order the create and the renumber use (group, then rows) — so a PATCH that moves a node into a group
+/// cannot enter it while a renumber of that group is parking its siblings. A PATCH that names no parent never leaves its
+/// group and needs no group lock: the row lock below already waits for a renumber, which locks every live sibling
+/// <c>for update</c>.
+/// </para>
 /// </remarks>
 [AuditedAction("authoring.node.update")]
 [Permission(Permissions.Authoring.Write)]
@@ -244,6 +288,25 @@ internal sealed class UpdateNodeCommandHandler(
 
         ArgumentNullException.ThrowIfNull(command);
 
+        // The group lock and the <c>for update</c> read below run before the writer applies its own bound, so the same
+        // 5 s lock_timeout is applied here and 55P03/40P01 answer the retryable 503 instead of a 500.
+        await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return await HandleCoreAsync(command, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        {
+            return Result.Failure<AuthoringChangeResponse>(AuthoringErrors.Unavailable());
+        }
+    }
+
+    /// <summary>The handler body, inside the bounded wait and contention mapping of <see cref="Handle"/>.</summary>
+    private async ValueTask<Result<AuthoringChangeResponse>> HandleCoreAsync(
+        UpdateNodeCommand command,
+        CancellationToken cancellationToken)
+    {
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } mismatch)
         {
             return Result.Failure<AuthoringChangeResponse>(mismatch);
@@ -261,6 +324,13 @@ internal sealed class UpdateNodeCommandHandler(
 
         var actor = await AuthoringRequestScope.ActorMembershipAsync(db, orgId, principals, cancellationToken).ConfigureAwait(false);
 
+        if (command.ParentId is { } target)
+        {
+            await AuthoringLockGuard
+                .LockSiblingGroupAsync(db, command.ProjectId, target, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         var stored = await NodeRead.LockedAsync(db, orgId, command.ProjectId, command.NodeId, cancellationToken).ConfigureAwait(false);
         if (stored is null || stored.DeletedAt is not null)
         {
@@ -275,7 +345,8 @@ internal sealed class UpdateNodeCommandHandler(
         // An omitted member is the unchanged one. A parent change re-applies AC1 inside the writer and, when no position
         // is given, appends the node at the end of its NEW group (route 3: "parent_id change re-applies AC1 and the
         // renumber of AC2") — reusing the old group's number could hit a live sibling of the new group and answer a
-        // spurious `position_taken` for a number the caller never chose.
+        // spurious `position_taken` for a number the caller never chose. The append position is read under the target
+        // group's lock of this call, so it cannot meet a renumber's parked value.
         var parentId = command.ParentId ?? stored.ParentId;
         int position;
 
@@ -285,10 +356,17 @@ internal sealed class UpdateNodeCommandHandler(
         }
         else if (parentId != stored.ParentId)
         {
-            position = await db.ScalarAsync<int?>(
-                AuthoringSql.NodeNextPosition(parentId is null),
+            var group = await db.QuerySingleOrDefaultAsync<AuthoringSql.NodeGroupRow>(
+                AuthoringSql.NodeGroupSummary(parentId is null),
                 new { org_id = orgId, project_id = command.ProjectId, parent_id = parentId },
-                cancellationToken).ConfigureAwait(false) ?? 0;
+                cancellationToken).ConfigureAwait(false);
+
+            if (group is { } members && members.LiveCount >= NodeLimits.MaximumSiblingsPerGroup)
+            {
+                return Result.Failure<AuthoringChangeResponse>(NodeLimits.Refusal());
+            }
+
+            position = group?.NextPosition ?? 0;
         }
         else
         {
@@ -321,12 +399,28 @@ internal sealed class UpdateNodeCommandHandler(
             return Result.Failure<AuthoringChangeResponse>(AuthoringErrors.RequestFacing(outcome.Error!));
         }
 
-        var changed = outcome.Value.Versions.Count > 0;
-        var version = changed ? outcome.Value.Versions[0].VersionNo : stored.Version;
+        if (outcome.Value.Versions.Count == 0)
+        {
+            return Unchanged(stored.Version);
+        }
 
         audit.Describe(new AuditObject("feature_node", command.NodeId.ToString("D")));
 
-        return Result.Success(new AuthoringChangeResponse(version, changed));
+        return Result.Success(new AuthoringChangeResponse(outcome.Value.Versions[0].VersionNo, Changed: true));
+    }
+
+    /// <summary>
+    /// The AC5 no-op answer: the unchanged version, <c>changed: false</c>, no version row — and no audit row either,
+    /// because AC18 counts successful <em>effective</em> mutations, the rule the checklist item and manual case handlers
+    /// already apply.
+    /// </summary>
+    /// <param name="version">The version the row still holds.</param>
+    /// <returns>The 200 the caller receives.</returns>
+    private Result<AuthoringChangeResponse> Unchanged(int version)
+    {
+        audit.Suppress();
+
+        return Result.Success(new AuthoringChangeResponse(version, Changed: false));
     }
 }
 
@@ -349,8 +443,12 @@ internal sealed record ReorderNodesCommand(
 /// <summary>Shape validation of <see cref="ReorderNodesCommand"/>: the set itself is the writer's decision (AC2).</summary>
 internal sealed class ReorderNodesCommandValidator : AbstractValidator<ReorderNodesCommand>
 {
-    /// <summary>The cap of one reorder list: a group is a sibling set, not a whole project.</summary>
-    internal const int MaxOrderedIds = 1000;
+    /// <summary>
+    /// The cap of one reorder list: a group is a sibling set, not a whole project — and it is the <b>same</b> number
+    /// <see cref="NodeLimits.MaximumSiblingsPerGroup"/> refuses a create or a move-in at, so a group a caller can build is
+    /// always a group they can renumber (review F5/perf F9).
+    /// </summary>
+    internal const int MaxOrderedIds = NodeLimits.MaximumSiblingsPerGroup;
 
     /// <summary>Builds the rules; each is renamed to the member it answers (see <see cref="CreateNodeCommandValidator"/>).</summary>
     public ReorderNodesCommandValidator()
@@ -379,8 +477,9 @@ internal sealed class ReorderNodesCommandValidator : AbstractValidator<ReorderNo
 /// maps the outcome.
 /// </summary>
 /// <remarks>
-/// No row lock is taken here: the writer locks the anchor and then the whole group <c>for update</c> in id order, which
-/// is the only lock order this write needs, and taking a partial lock here would invert that order.
+/// No row lock is taken here: the writer takes the group's advisory lock (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>)
+/// and then the whole group <c>for update</c> in id order, which is the only lock order this write needs, and taking a
+/// partial lock here would invert that order.
 /// </remarks>
 [AuditedAction("authoring.node.reorder")]
 [Permission(Permissions.Authoring.Write)]
@@ -433,9 +532,19 @@ internal sealed class ReorderNodesCommandHandler(
             return Result.Failure<ReorderNodesResponse>(outcome.Error!);
         }
 
+        if (!outcome.Value.Changed)
+        {
+            // AC5's no-op rule for a renumber: the list already described the stored order, so no version row was written —
+            // and AC18 counts effective mutations only, so this one writes no audit row (the rule the item and case
+            // handlers apply through the same Suppress).
+            audit.Suppress();
+
+            return Result.Success(new ReorderNodesResponse(Changed: false));
+        }
+
         audit.Describe(new AuditObject("feature_node", command.NodeId.ToString("D")));
 
-        return Result.Success(new ReorderNodesResponse(outcome.Value.Changed));
+        return Result.Success(new ReorderNodesResponse(Changed: true));
     }
 }
 
@@ -458,7 +567,12 @@ internal sealed record DeleteNodeCommand(
 /// <summary>Shape validation of <see cref="DeleteNodeCommand"/>.</summary>
 internal sealed class DeleteNodeCommandValidator : AbstractValidator<DeleteNodeCommand>
 {
-    /// <summary>The reason bound of §5 (<c>≤500</c>), the same the writer enforces.</summary>
+    /// <summary>
+    /// The reason bound of §5 (<c>≤500</c>), the same the writer enforces, counted in code points like every other
+    /// authoring text (<see cref="AuthoringText"/>) — and with the whitespace rule of the manual case route
+    /// (<c>ManualCaseBody.OptionalReason</c>: a reason is a non-empty string, not a non-blank one), so the two entity
+    /// families refuse exactly the same reasons.
+    /// </summary>
     internal const int MaxReasonLength = 500;
 
     /// <summary>Builds the rules; each is renamed to the member it answers (see <see cref="CreateNodeCommandValidator"/>).</summary>
@@ -475,7 +589,7 @@ internal sealed class DeleteNodeCommandValidator : AbstractValidator<DeleteNodeC
             .OverridePropertyName("/If-Match");
 
         RuleFor(command => command.Reason)
-            .Must(reason => !string.IsNullOrWhiteSpace(reason) && reason.Length <= MaxReasonLength)
+            .Must(reason => AuthoringText.CodePointLength(reason) is > 0 and <= MaxReasonLength)
             .WithErrorCode("invalid_length")
             .OverridePropertyName("/reason")
             .When(command => command.Reason is not null);
@@ -505,6 +619,23 @@ internal sealed class DeleteNodeCommandHandler(
 
         ArgumentNullException.ThrowIfNull(command);
 
+        // The <c>for update</c> read below runs before the writer applies its own bound, so the same 5 s lock_timeout is
+        // applied here and 55P03/40P01 answer the retryable 503 instead of a 500.
+        await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return await HandleCoreAsync(command, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        {
+            return Result.Failure<bool>(AuthoringErrors.Unavailable());
+        }
+    }
+
+    /// <summary>The handler body, inside the bounded wait and contention mapping of <see cref="Handle"/>.</summary>
+    private async ValueTask<Result<bool>> HandleCoreAsync(DeleteNodeCommand command, CancellationToken cancellationToken)
+    {
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } mismatch)
         {
             return Result.Failure<bool>(mismatch);
@@ -553,6 +684,31 @@ internal sealed class DeleteNodeCommandHandler(
 
         return Result.Success(true);
     }
+}
+
+/// <summary>
+/// The limits of one sibling group (AC2). The reorder's list cap and the size a group may grow to live here together, so
+/// a group a caller can build is exactly a group they can renumber (review F5/perf F9: the reorder refused more than
+/// <see cref="ReorderNodesCommandValidator.MaxOrderedIds"/> ids while node create had no cap at all, which left a group
+/// past the cap that no renumber could ever order).
+/// </summary>
+internal static class NodeLimits
+{
+    /// <summary>
+    /// The most live siblings one parent group may hold — the reorder validator's list cap, because the two-phase renumber
+    /// takes the whole set in one request. A create or a move into a full group is refused with
+    /// <see cref="Refusal"/>: <c>422 request_invalid</c>, <c>details[].path = /parent_id</c>,
+    /// <c>details[].reason = children_limit_exceeded</c>.
+    /// </summary>
+    internal const int MaximumSiblingsPerGroup = 1000;
+
+    /// <summary>The <c>422</c> of a group that already holds <see cref="MaximumSiblingsPerGroup"/> live siblings.</summary>
+    internal static Error Refusal() => AuthoringErrors.Invalid(
+        "/parent_id",
+        "children_limit_exceeded",
+        "a sibling group holds at most "
+            + MaximumSiblingsPerGroup.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + " nodes; renumber or move some of them first");
 }
 
 /// <summary>

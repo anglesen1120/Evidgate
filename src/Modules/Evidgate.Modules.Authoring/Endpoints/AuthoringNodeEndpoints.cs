@@ -4,6 +4,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application.Commands;
 using Evidgate.Modules.Authoring.Application.Queries;
 using Evidgate.Modules.Authoring.Contracts;
+using Evidgate.Modules.Authoring.Domain;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -96,7 +97,7 @@ internal static class AuthoringNodeEndpoints
             if (!AuthoringEndpointSupport.TryParseGuid(rawParent, out var parsedParent))
             {
                 return Result.Failure<AuthoringTreeResponse>(
-                    Error.Invalid("parent_id must be the id of a node", [new ErrorDetail("parent_id", "invalid")]));
+                    Error.Invalid("parent_id must be the id of a node", [new ErrorDetail("/parent_id", "invalid")]));
             }
 
             parentId = parsedParent;
@@ -108,7 +109,7 @@ internal static class AuthoringNodeEndpoints
             if (!AuthoringEndpointSupport.TryParseGuid(rawNode, out var parsedNode))
             {
                 return Result.Failure<AuthoringTreeResponse>(
-                    Error.Invalid("node_id must be the id of a node", [new ErrorDetail("node_id", "invalid")]));
+                    Error.Invalid("node_id must be the id of a node", [new ErrorDetail("/node_id", "invalid")]));
             }
 
             nodeId = parsedNode;
@@ -120,7 +121,7 @@ internal static class AuthoringNodeEndpoints
             // `parent_id` a group's children), so an ambiguous request is refused instead of silently preferring one.
             return Result.Failure<AuthoringTreeResponse>(Error.Invalid(
                 "node_id and parent_id address different pages and cannot be combined",
-                [new ErrorDetail("node_id", "conflict")]));
+                [new ErrorDetail("/node_id", "conflict")]));
         }
 
         var (includePath, includeError) = ReadInclude(context.Request.Query["include"]);
@@ -378,7 +379,7 @@ internal static class AuthoringNodeEndpoints
         }
 
         var text = reason.GetString();
-        if (string.IsNullOrWhiteSpace(text) || text.Length > 500)
+        if (AuthoringText.CodePointLength(text) is not (> 0 and <= 500))
         {
             return (null, Error.Invalid(
                 "reason must be 1..500 characters",

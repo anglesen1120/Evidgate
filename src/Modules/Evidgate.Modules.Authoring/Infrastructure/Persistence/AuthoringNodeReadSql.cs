@@ -20,10 +20,11 @@ namespace Evidgate.Modules.Authoring.Infrastructure.Persistence;
 /// <c>parent_id is null</c>, which the same index serves.
 /// </para>
 /// <para>
-/// <b>Statement budget</b> (P3): a root page is three statements (project liveness, the page, the order tag); a child
-/// page four (the parent's liveness included); a <c>node_id</c> read five (node, ancestors, its children, counts, order
-/// tag). The counts are one statement for the whole page — never one per node — and the ancestors are one recursive
-/// statement over the at-most-four-level ladder.
+/// <b>Statement budget</b> (P3, upper bounds: an empty page skips the counts statement): a roots page is four statements
+/// (project liveness, the page, one counts statement for the page, the order tag); a child page five (the parent's own
+/// liveness read included); a <c>node_id</c> read five (the node, its children's page, the counts, the order tag and the
+/// project), six once <c>include=path</c> adds the recursive ancestor statement. The counts are one statement for the
+/// whole page — never one per node — and the ancestors are one recursive statement over the at-most-four-level ladder.
 /// </para>
 /// </remarks>
 internal static class AuthoringNodeReadSql

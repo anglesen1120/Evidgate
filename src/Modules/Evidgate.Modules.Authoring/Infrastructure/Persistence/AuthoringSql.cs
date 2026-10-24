@@ -273,15 +273,18 @@ internal static class AuthoringSql
             """;
 
     /// <summary>
-    /// AC2's default position of a create: <c>max(live sibling position) + 1</c>, or 0 for the first sibling. The
-    /// caller computes it before the writer sees the snapshot (the snapshot always carries an explicit position), and
-    /// the partial unique index stays the authority — two concurrent creates that both read the same maximum answer
-    /// <c>422 position_taken</c> for the loser, never a duplicate position.
+    /// One group's size and its append position in one statement: the number of live siblings and AC2's
+    /// <c>max(live sibling position) + 1</c> (0 for the first sibling). Both numbers belong together because both are
+    /// only true under the group's advisory lock (<see cref="LockSiblingGroup"/>): a create takes that lock before this
+    /// read, so the append cannot meet a parked value of a concurrent renumber, and a group at or past
+    /// <c>NodeLimits.MaximumSiblingsPerGroup</c> is refused instead of being read for a position no reorder could ever
+    /// order.
     /// </summary>
     /// <param name="root">True for the root group, false for a named parent (same branching as <see cref="NodeSiblingPosition"/>).</param>
-    internal static string NodeNextPosition(bool root) => root
+    internal static string NodeGroupSummary(bool root) => root
         ? """
-            select coalesce(max(n.position), -1) + 1
+            select count(*) as live_count,
+                   coalesce(max(n.position), -1) + 1 as next_position
               from public.feature_node n
              where n.org_id = @org_id
                and n.project_id = @project_id
@@ -289,13 +292,22 @@ internal static class AuthoringSql
                and n.deleted_at is null
             """
         : """
-            select coalesce(max(n.position), -1) + 1
+            select count(*) as live_count,
+                   coalesce(max(n.position), -1) + 1 as next_position
               from public.feature_node n
              where n.org_id = @org_id
                and n.project_id = @project_id
                and n.parent_id = @parent_id
                and n.deleted_at is null
             """;
+
+    /// <summary>
+    /// The transaction-scoped advisory lock of one sibling group (project + parent, the root group included): the
+    /// serialisation AC2 needs between a renumber of a group and every write that adds or moves a row into it
+    /// (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>). The key is one bound text parameter, built in C#, so the
+    /// root group (<c>…:root</c>) can never collide with a node id and no statement has to type a null uuid.
+    /// </summary>
+    internal const string LockSiblingGroup = "select pg_advisory_xact_lock(hashtextextended(@group_key, 0))";
 
     /// <summary>
     /// The live sibling set of one parent group, locked <c>for update</c> in id order (the writer-wide lock order: one
@@ -457,4 +469,18 @@ internal static class AuthoringSql
 
     /// <summary>The bounded wait of the counter lock (§4: <c>unavailable</c> 503 on a lock timeout, <c>SuiteCommands.cs:161</c>).</summary>
     internal const string SetLockTimeout = "select set_config('lock_timeout', '5000', true)";
+
+    /// <summary>
+    /// One row of <see cref="NodeGroupSummary"/>: the size of a sibling group and the position a new member appends at.
+    /// A mutable class with settable properties, like every other Dapper row of this module, because
+    /// <c>MatchNamesWithUnderscores</c> binds the two columns by property name.
+    /// </summary>
+    internal sealed class NodeGroupRow
+    {
+        /// <summary>The number of live siblings of the group.</summary>
+        public int LiveCount { get; set; }
+
+        /// <summary><c>max(live position) + 1</c>, or 0 for an empty group (AC2's append position).</summary>
+        public int NextPosition { get; set; }
+    }
 }

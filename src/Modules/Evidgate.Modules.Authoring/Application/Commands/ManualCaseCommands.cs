@@ -17,6 +17,7 @@ using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 using Mediator;
 using Microsoft.AspNetCore.Http;
+using Npgsql;
 
 namespace Evidgate.Modules.Authoring.Application.Commands;
 
@@ -28,7 +29,9 @@ namespace Evidgate.Modules.Authoring.Application.Commands;
 /// The order of the two writes is AC4's and is not interchangeable: the allocator commits its own connection before the
 /// request transaction ends, so a create that fails afterwards burns its number (the plan's notes at :519 accept that as
 /// the price of a lock-free counter), and a create whose steps are invalid must fail <em>before</em> the allocation so it
-/// burns none. Every refusal below therefore runs ahead of <see cref="AuthoringCodeAllocator.AllocateAsync"/>.
+/// burns none. Every refusal below therefore runs ahead of <see cref="AuthoringCodeAllocator.AllocateAsync"/>: the body
+/// shape, the steps schema and the target item's placement probe (the writer's own
+/// <c>CaseParentRefusalAsync</c> answer for an unknown, deleted or retired item).
 /// </remarks>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Body">The parsed request body; its members are validated by the handler so one bad member cannot hide another.</param>
@@ -74,9 +77,9 @@ internal sealed class CreateManualCaseCommandHandler(
 
         var orgId = scopes.Require().OrgId;
 
-        if (await ManualCaseCommands.ProjectExistsAsync(db, command.ProjectId, cancellationToken).ConfigureAwait(false) is { } missing)
+        if (await AuthoringProjectProbe.MissingAsync(db, orgId, command.ProjectId, cancellationToken).ConfigureAwait(false) is { } missingProject)
         {
-            return Result.Failure<CreateManualCaseResponse>(missing);
+            return Result.Failure<CreateManualCaseResponse>(missingProject);
         }
 
         if (ManualCaseBody.RequiredId(command.Body, "checklist_item_id", out var itemId) is { } itemError)
@@ -112,6 +115,16 @@ internal sealed class CreateManualCaseCommandHandler(
         if (ManualCaseBody.StepsFailure(steps.ValidateSteps(stepsValue)) is { } stepsError)
         {
             return Result.Failure<CreateManualCaseResponse>(stepsError);
+        }
+
+        // AC4: the target item is probed before the allocation for the same reason the steps above are — a create the
+        // writer would refuse (unknown or other-project item, deleted item, retired item) must burn no code. The
+        // refusal is the writer's own (CheckCaseParentAsync, same code, reason and member path), and the writer still
+        // decides it again under its locks, which is what makes this probe an optimisation rather than a second rule.
+        if (await ManualCaseCommands.CaseParentRefusalAsync(
+                db, orgId, command.ProjectId, itemId, cancellationToken).ConfigureAwait(false) is { } parentError)
+        {
+            return Result.Failure<CreateManualCaseResponse>(parentError);
         }
 
         var actor = await ManualCaseActor.MembershipIdAsync(db, principals, orgId, cancellationToken).ConfigureAwait(false);
@@ -202,6 +215,13 @@ internal sealed class UpdateManualCaseCommandHandler(
         }
 
         var orgId = scopes.Require().OrgId;
+
+        // AC10: the project's liveness before the immutability refusals and the row lock — a case of a soft-deleted
+        // project is 404, not an editable row (its rows are still stored, so the case lookup alone would find it).
+        if (await AuthoringProjectProbe.MissingAsync(db, orgId, command.ProjectId, cancellationToken).ConfigureAwait(false) is { } missingProject)
+        {
+            return Result.Failure<AuthoringChangeResponse>(missingProject);
+        }
 
         // The two members that would move or re-key the case: route 19 moves it (AC22) and the code is immutable (AC4),
         // so each is its own 422 with the member it names.
@@ -344,6 +364,14 @@ internal sealed class DeleteManualCaseCommandHandler(
         }
 
         var orgId = scopes.Require().OrgId;
+
+        // AC10: a soft-deleted project hides its cases, so the liveness probe answers before the case row lock and no
+        // delete of a deleted project's case is versioned.
+        if (await AuthoringProjectProbe.MissingAsync(db, orgId, command.ProjectId, cancellationToken).ConfigureAwait(false) is { } missingProject)
+        {
+            return Result.Failure(missingProject);
+        }
+
         var locked = await ManualCaseCommands.LockAsync(db, orgId, command.ProjectId, command.CaseId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -421,6 +449,13 @@ internal sealed class SetManualCaseStateCommandHandler(
         }
 
         var orgId = scopes.Require().OrgId;
+
+        // AC10: a soft-deleted project hides its cases, so a state move of one is 404 before the row lock and before
+        // its body is read.
+        if (await AuthoringProjectProbe.MissingAsync(db, orgId, command.ProjectId, cancellationToken).ConfigureAwait(false) is { } missingProject)
+        {
+            return Result.Failure<SetManualCaseStateResponse>(missingProject);
+        }
 
         if (ManualCaseBody.RequiredState(command.Body, out var state) is { } stateError)
         {
@@ -534,6 +569,12 @@ internal sealed class MoveManualTestCaseCommandHandler(
 
         var orgId = scopes.Require().OrgId;
 
+        // AC10: a soft-deleted project hides its cases and its items, so the move is 404 before either lock.
+        if (await AuthoringProjectProbe.MissingAsync(db, orgId, command.ProjectId, cancellationToken).ConfigureAwait(false) is { } missingProject)
+        {
+            return Result.Failure<MoveManualCaseResponse>(missingProject);
+        }
+
         if (ManualCaseBody.RequiredId(command.Body, "checklist_item_id", out var toItemId) is { } itemError)
         {
             return Result.Failure<MoveManualCaseResponse>(itemError);
@@ -546,11 +587,24 @@ internal sealed class MoveManualTestCaseCommandHandler(
 
         // Lock order of the writer's own move: the target item first, the case second (OI-13-127). Taking them here in
         // that order is what makes two concurrent moves deadlock-free; the version comparison under the case lock turns
-        // the loser into a 412 rather than a second version row (AC19).
-        await db.ScalarAsync<Guid?>(
-            AuthoringManualCaseReadSql.LockItem,
-            new { org_id = orgId, project_id = command.ProjectId, item_id = toItemId },
-            cancellationToken).ConfigureAwait(false);
+        // the loser into a 412 rather than a second version row (AC19). The 5 s lock_timeout is set before the first of
+        // the two locks and covers both (AuthoringLockGuard): the writer's own bound only starts inside its append, so
+        // a target row another transaction holds would otherwise wait here for as long as that holder lives.
+        await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            await db.ScalarAsync<Guid?>(
+                AuthoringManualCaseReadSql.LockItem,
+                new { org_id = orgId, project_id = command.ProjectId, item_id = toItemId },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        {
+            // The writer answers 55P03/40P01 with the same retryable 503; a lock this command takes first must not
+            // surface as a 500 instead (13.1.1 §5, 00 §9.2).
+            return Result.Failure<MoveManualCaseResponse>(AuthoringErrors.Unavailable());
+        }
 
         var locked = await ManualCaseCommands.LockAsync(db, orgId, command.ProjectId, command.CaseId, cancellationToken)
             .ConfigureAwait(false);
@@ -596,29 +650,63 @@ internal sealed class MoveManualTestCaseCommandHandler(
     }
 }
 
-/// <summary>The shared lookups of the five case commands: the project probe, the case's locked row and the stale answer.</summary>
+/// <summary>The shared lookups of the five case commands: the create's parent probe, the case's locked row and the stale answer.</summary>
 internal static class ManualCaseCommands
 {
     /// <summary>The longest reason a version row records (13.1.2's bounded reasons).</summary>
     internal const int MaximumReasonLength = 500;
 
-    /// <summary>404 when the project of the URL is not visible to the tenant (AC10).</summary>
+    /// <summary>
+    /// The refusal of a create whose <c>checklist_item_id</c> the writer would reject, worded exactly as the writer words
+    /// it (<c>AuthoringVersionWriter.CheckCaseParentAsync</c>; the same message guards the AC22 move, under a different
+    /// code). The edge answers it before the code allocation, so both call sites must read the same.
+    /// </summary>
+    internal const string RetiredItemMessage = "a retired checklist item takes no new content; restore it first";
+
+    /// <summary>
+    /// The create's placement probe (AC4): the target item's liveness and state, answered with the writer's own refusal
+    /// so a create that could never be written spends no code.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AuthoringCodeAllocator"/> commits its number on its own connection, so a create refused afterwards
+    /// burns it (§4's accepted price for a lock-free counter). This read repeats the writer's decision early; the
+    /// writer decides again under its locks, which stays authoritative.
+    /// </remarks>
     /// <param name="db">The tenant-scoped Dapper seam.</param>
+    /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="projectId">The project from the route.</param>
+    /// <param name="itemId">The <c>checklist_item_id</c> of the request.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    internal static async Task<Error?> ProjectExistsAsync(ITenantDb db, Guid projectId, CancellationToken cancellationToken)
+    /// <returns>Null when the item can take the case, else the writer's refusal.</returns>
+    internal static async Task<Error?> CaseParentRefusalAsync(
+        ITenantDb db,
+        Guid orgId,
+        Guid projectId,
+        Guid itemId,
+        CancellationToken cancellationToken)
     {
-        var found = await db.ScalarAsync<int?>(
-            AuthoringManualCaseReadSql.ProjectExists,
-            new { project_id = projectId },
+        var placement = await db.ScalarAsync<string>(
+            AuthoringManualCaseReadSql.CaseParent,
+            new { org_id = orgId, project_id = projectId, item_id = itemId },
             cancellationToken).ConfigureAwait(false);
 
-        return found is null ? AuthoringRules.ProjectNotFound : null;
+        return placement switch
+        {
+            // Another project's item and a missing one are the same answer (AC10): the statement carries the project.
+            null => AuthoringErrors.ParentInvalid(PlacementReason.ParentNotFound, "/checklist_item_id"),
+            "deleted" => AuthoringErrors.ParentInvalid(PlacementReason.ParentDeleted, "/checklist_item_id"),
+            "retired" => AuthoringErrors.InvalidTransition(RetiredItemMessage),
+            _ => null,
+        };
     }
 
     /// <summary>
     /// The case row locked <c>for update</c> with everything a command needs: the row on success, or the 404 to return.
     /// </summary>
+    /// <remarks>
+    /// The 5 s <c>lock_timeout</c> is set here, before the statement that takes the lock, so a case another request holds
+    /// answers the writer's own retryable <c>503 unavailable</c> instead of waiting for that holder's transaction to end.
+    /// </remarks>
     /// <param name="db">The tenant-scoped Dapper seam.</param>
     /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="projectId">The project from the route.</param>
@@ -631,10 +719,22 @@ internal static class ManualCaseCommands
         Guid caseId,
         CancellationToken cancellationToken)
     {
-        var rows = await db.QueryAsync<ManualCaseRow>(
-            AuthoringManualCaseReadSql.LockCase,
-            new { org_id = orgId, project_id = projectId, case_id = caseId },
-            cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<ManualCaseRow> rows;
+
+        try
+        {
+            await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
+
+            rows = await db.QueryAsync<ManualCaseRow>(
+                AuthoringManualCaseReadSql.LockCase,
+                new { org_id = orgId, project_id = projectId, case_id = caseId },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        {
+            // The writer maps 55P03/40P01 to this same refusal; a lock this command takes first must not become a 500.
+            return (null, AuthoringErrors.Unavailable());
+        }
 
         return rows.Count == 0
             ? (null, Error.NotFound("no manual test case with that id is visible to this tenant"))

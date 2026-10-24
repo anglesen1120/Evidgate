@@ -97,6 +97,15 @@ internal sealed class ListManualCasesQueryHandler(
 
         if (text is { } raw)
         {
+            if (AuthoringText.ContainsNul(raw))
+            {
+                // `q` reaches a `text` comparison, which refuses U+0000 (22021) after the statement has started: the
+                // caller's NUL is answered here instead, in the same 422 shape as any other unusable q (security S-1/S-2).
+                return Result.Failure<ManualCaseListResponse>(Error.Invalid(
+                    "q must not contain a NUL (U+0000) character",
+                    [new ErrorDetail("/q", "invalid_text")]));
+            }
+
             // The stored titles are NFC (AC14), so a decomposed query would never match one: compose it first, then
             // count code points (the unit the database's char_length and the schema's maxLength count).
             text = AuthoringText.Normalize(raw);
@@ -207,7 +216,7 @@ internal sealed class GetManualCaseQueryHandler(
 /// </summary>
 internal static class ManualCaseCursor
 {
-    /// <summary>The separator between the two members; a code cannot contain it (<c>^[A-Z][A-Z0-9]{1,7}-[0-9]{3,10}$</c>).</summary>
+    /// <summary>The separator between the two members; a code cannot contain it (see <c>AuthoringCode.FormatPattern</c>).</summary>
     private const char Separator = '\n';
 
     /// <summary>Encodes the last row of a page as the next page's cursor.</summary>
@@ -219,7 +228,12 @@ internal static class ManualCaseCursor
             .Replace('+', '-')
             .Replace('/', '_');
 
-    /// <summary>Decodes a cursor, or answers false for anything this class did not encode.</summary>
+    /// <summary>
+    /// Decodes a cursor, or answers false for anything this class did not encode. The code half is re-checked against
+    /// <c>AuthoringCode.FormatPattern</c> rather than trusted: a tampered cursor would otherwise send arbitrary
+    /// text into the keyset comparison of a <c>text</c> column, where a NUL or an unpaired surrogate is a 22021 from the
+    /// database (a 500) instead of the 422 this route answers for a cursor it never issued (security S-1/S-2).
+    /// </summary>
     /// <param name="cursor">The raw query value.</param>
     /// <param name="value">The decoded pair on success.</param>
     internal static bool TryDecode(string cursor, out (string Code, Guid Id) value)
@@ -242,12 +256,21 @@ internal static class ManualCaseCursor
         var decoded = Encoding.UTF8.GetString(bytes);
         var separator = decoded.IndexOf(Separator, StringComparison.Ordinal);
 
-        if (separator <= 0 || !Guid.TryParse(decoded[(separator + 1)..], out var id) || id == Guid.Empty)
+        if (separator <= 0)
         {
             return false;
         }
 
-        value = (decoded[..separator], id);
+        var code = decoded[..separator];
+
+        if (!AuthoringCode.TryParse(code, out _)
+            || !Guid.TryParse(decoded[(separator + 1)..], out var id)
+            || id == Guid.Empty)
+        {
+            return false;
+        }
+
+        value = (code, id);
 
         return true;
     }

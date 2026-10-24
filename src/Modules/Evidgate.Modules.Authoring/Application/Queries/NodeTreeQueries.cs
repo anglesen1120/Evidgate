@@ -45,9 +45,12 @@ internal sealed record GetAuthoringTreeQuery(
 internal sealed record AuthoringTreeView(AuthoringTreeResponse Body, string OrderHash);
 
 /// <summary>
-/// Handler of <see cref="GetAuthoringTreeQuery"/>: the project gate, then at most five statements (project liveness, the
-/// addressed node or the page, the ancestors, one counts statement for the whole page, the order tag) in a
-/// <b>read-only</b> transaction. The page itself is one keyset statement over <c>feature_node_tree_idx</c>.
+/// Handler of <see cref="GetAuthoringTreeQuery"/>: the project gate, then at most <b>six</b> statements in a
+/// <b>read-only</b> transaction — project liveness, the node the page is addressed by (the <c>node_id</c> form, which
+/// also lists that node's children, or the <c>parent_id</c> form, which reads the group's node for its existence and its
+/// breadcrumb), the page, one counts statement for the whole page, the ancestors only when <c>include=path</c> asked for
+/// them, and the order tag that becomes the <c>ETag</c>. A listing that addresses no node spends four of them.
+/// The page itself is one keyset statement over <c>feature_node_tree_idx</c>.
 /// </summary>
 /// <remarks>
 /// <b>Roots versus children, and why <c>parent_id is null</c> is not written as a parameter</b> (OI-13-112): the two
