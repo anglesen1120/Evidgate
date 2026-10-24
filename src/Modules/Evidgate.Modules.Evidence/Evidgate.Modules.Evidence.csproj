@@ -29,6 +29,8 @@
     <ProjectReference Include="..\..\BuildingBlocks\ObjectStorage\Evidgate.BuildingBlocks.ObjectStorage.csproj" />
     <!-- 06.1.2-T1: IRequestPrincipalAccessor (the caller's token identity, T9/T85). -->
     <ProjectReference Include="..\..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
+    <!-- 06.5.1-T2.2: CanonicalHash for ArtifactSetHash (RFC 8785 over the ready set, 06.5.1 §5). -->
+    <ProjectReference Include="..\..\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
   </ItemGroup>
   <!-- 01.1.2-T2.1: internal implementation, opened to the two composition roots and the tests. -->
   <ItemGroup>
