@@ -9,16 +9,18 @@
 //    `evidgate.fixture-backend` as the InjectionToken description, `fixtures/web-api` inside the
 //    501 message) plus the export name `provideFixtureBackend` and the 501 error code
 //    `fixture_not_found`; a production bundle can only contain them if the dev backend (or a
-//    catalog/route import) reached the build.
+//    catalog/route import) reached the build. Two more markers, the `dev/ui-gallery` route path
+//    and the `app-ui-gallery` selector, catch the review-only `shared/ui` gallery the same way.
 // 2. The fixture corpus data: every string value of >= `MIN_FIXTURE_STRING_LENGTH` characters in
 //    `fixtures/web-api/*/input.json`. A response body that survived into the bundle leaks the
 //    fixtures just as plainly as the backend code does. A value holding a non-ASCII character is
 //    also searched in its `\uXXXX`-escaped form, because a minifier that escapes non-ASCII text
 //    emits the escape sequence rather than the character. The protocol slots of a fixture document
-//    (`headers`, `operation_id`, `variant`, `code`) are skipped with their whole subtree: their
-//    values are vocabulary production code already carries — `content-type`/`application/json` in
-//    the HTTP client, the operation ids in the SDK, `precondition_failed`-style codes in
-//    `api-error.ts` — so scanning them would fail every build without telling anything about the
+//    (`headers`, `operation_id`, `variant`, `code`, `resource`, `action`) are skipped with their
+//    whole subtree: their values are vocabulary production code already carries —
+//    `content-type`/`application/json` in the HTTP client, the operation ids in the SDK,
+//    `precondition_failed`-style codes in `api-error.ts`, the permission literals of the navigation
+//    registry — so scanning them would fail every build without telling anything about the
 //    fixtures.
 //
 // The check fails closed: a missing/empty dist directory, or a corpus with no `input.json`, is a
@@ -64,7 +66,7 @@ const SCANNED_EXTENSIONS = [
 ];
 
 /**
- * The fixture backend's marker strings (see the header). They are matched verbatim, so a
+ * The marker strings of the dev-only code (see the header). They are matched verbatim, so a
  * production build that kept any of them fails here.
  */
 const MARKERS = [
@@ -73,6 +75,13 @@ const MARKERS = [
   'fixtures/web-api',
   'provideFixtureBackend',
   'fixture_not_found',
+  // The review-only `shared/ui` gallery (09.1.1-T4.1): `dev-routes.fixtures.ts` mounts it at this
+  // path and `UiGalleryComponent` renders this selector. The production `dev-routes.ts` adds no
+  // route, so either string in `dist/browser` means the `fileReplacements` seam regressed. The
+  // selector, not the class name, is the marker: a minified bundle renames classes but keeps
+  // selectors.
+  'dev/ui-gallery',
+  'app-ui-gallery',
 ];
 
 /**
@@ -84,19 +93,30 @@ const MIN_FIXTURE_STRING_LENGTH = 12;
 /**
  * Members of a fixture document whose values are protocol vocabulary rather than fixture data, so
  * their whole subtree is skipped: the response `headers`, the openapi `operation_id`, the toggle
- * `variant` name and the 00 §9.2 error `code`. Production code carries the same strings
+ * `variant` name, the 00 §9.2 error `code` (which is also the permission `code` of a catalogue
+ * row), and the permission row's `resource` and `action`. Production code carries the same strings
  * (`content-type`/`application/json`, the SDK operation ids, the `precondition_failed`-style codes
- * of `apps/web/src/app/core/http/api-error.ts`), so scanning them would report a leak on every
- * build without saying anything about the fixtures.
+ * of `apps/web/src/app/core/http/api-error.ts`, and the navigation registry's permission literals
+ * such as `organization:read`), so scanning them would report a leak on every build without saying
+ * anything about the fixtures. `resource`/`action` are the halves of the permission `code`
+ * (`contracts/permissions.json`): a catalogue row whose `resource` is `organization` would
+ * otherwise fail the build for a word production needs.
  *
- * The five code markers of `MARKERS` are the primary leak detector: the fixture backend cannot
+ * The code markers of `MARKERS` are the primary leak detector: the fixture backend cannot
  * reach a production bundle without at least one of them, and they are matched in every scanned
- * file for free. Skipping the `code`, `headers`, `variant` and `operation_id` members is a
- * deliberate trade-off — the corpus strings still cover the fixture *data* (`body` values, which
- * production code never carries), so a leaked response body is caught without the noise the
- * vocabulary would add on every build.
+ * file for free. Skipping these members is a deliberate trade-off — the corpus strings still
+ * cover the fixture *data* (`body` values such as names and descriptions, which production code
+ * never carries), so a leaked response body is caught without the noise the vocabulary would add
+ * on every build.
  */
-const PROTOCOL_MEMBERS = new Set(['headers', 'operation_id', 'variant', 'code']);
+const PROTOCOL_MEMBERS = new Set([
+  'headers',
+  'operation_id',
+  'variant',
+  'code',
+  'resource',
+  'action',
+]);
 
 function fail(message) {
   console.error(`fixture code: ${message}`);

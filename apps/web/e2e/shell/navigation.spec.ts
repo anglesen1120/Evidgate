@@ -1,12 +1,12 @@
 // 09.1.1-T4.4 (plan 09.1.1 §10 T4, §2 AC4; CR-D-2 navigation rule): what the sidebar shows and
 // which lazy chunk a deep link pulls — both observed in real Chromium against the fixtures build.
 //
-// The grant sets are the corpus's, and the corpus is deliberately narrow: the production bundle
-// contains the navigation registry's own permission literals, and `scripts/check-no-fixture-code.mjs`
-// refuses a corpus *value* that holds one of them — except inside the protocol members it skips
-// (`headers`, `operation_id`, `variant`, `code`). That exemption is why a `code` may name a real
-// permission while `permissions-list-limited` still leaves `organization:read` out: its `resource`
-// ("organization") is a plain data value and trips the gate. Two states are therefore reachable:
+// The grant sets are the corpus's. `scripts/check-no-fixture-code.mjs` skips the protocol members
+// of a corpus document (`headers`, `operation_id`, `variant`, `code`, `resource`, `action`), so a
+// catalogue row may name any real permission even though the production bundle carries the
+// navigation registry's own permission literals. `permissions-list-limited` leaves
+// `organization:read` out on purpose, so the limited session has a G1 route (`settings`) that
+// refuses. Two states are reachable:
 //
 //   - DEFAULT (`permissions-list`, 16 catalogue codes): `authoring:read`, `authoring:generate`,
 //     `authoring:write`, `audit:read` and the non-G1 codes → the design group's three entry rows

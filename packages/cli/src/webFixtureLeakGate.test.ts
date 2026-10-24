@@ -19,13 +19,15 @@ const GATE = fileURLToPath(
   new URL('../../../apps/web/scripts/check-no-fixture-code.mjs', import.meta.url),
 );
 
-/** The fixture backend's marker strings, matched verbatim by the gate (see its header). */
+/** The dev-only marker strings, matched verbatim by the gate (see its header). */
 const MARKERS = [
   'X-Evidgate-Fixture',
   'evidgate.fixture-backend',
   'fixtures/web-api',
   'provideFixtureBackend',
   'fixture_not_found',
+  'dev/ui-gallery',
+  'app-ui-gallery',
 ] as const;
 
 /** A corpus body string long enough to count as a leak signal, and absent from production code. */
@@ -181,9 +183,38 @@ describe('no-fixture-code gate', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('3 file(s)');
-    expect(result.stdout).toContain('5 marker(s)');
+    expect(result.stdout).toContain(`${MARKERS.length} marker(s)`);
     expect(result.stdout).toContain('fixture string(s)');
     expect(result.stderr).toBe('');
+  });
+
+  it('passes_a_permission_row_whose_resource_and_action_production_carries', async () => {
+    const ws = await workspace();
+    // A catalogue row as `permissions-list*/input.json` stores it: `organization` (12 characters)
+    // is long enough to be a corpus needle, and the navigation registry's own literal
+    // `organization:read` contains it, so only skipping `resource`/`action` lets this build pass.
+    // The row's `description` is fixture data and stays a needle.
+    const description = 'Read the organizations the caller is a member of.';
+    await ws.fixture('permissions-list-limited', {
+      operation_id: 'listPermissions',
+      variant: 'limited',
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      latency_ms: 0,
+      body: {
+        items: [
+          { code: 'organization:read', resource: 'organization', action: 'read', description },
+        ],
+      },
+    });
+    await ws.output('main-ABC123.js', 'const nav=[{permission:"organization:read"}];');
+
+    expect(ws.run().status).toBe(0);
+
+    await ws.output('main-ABC123.js', `const nav=[${JSON.stringify(description)}];`);
+    const leaked = ws.run();
+    expect(leaked.status).toBe(1);
+    expect(leaked.stderr).toContain(description);
   });
 
   for (const marker of MARKERS) {
