@@ -1,0 +1,19 @@
+{
+  "operation_id": "listMyOrganizations",
+  "variant": "unavailable",
+  "status": 503,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000aa",
+    "Retry-After": "5"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "unavailable",
+      "message": "the identity service is unavailable for this request",
+      "request_id": "018f0000-0000-7000-8000-0000000000aa",
+      "retryable": true,
+      "details": []
+    }
+  }
+}

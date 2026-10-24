@@ -83,6 +83,23 @@ export class ShellComponent {
       });
   }
 
+  /**
+   * The skip link focuses the region instead of following its fragment.
+   *
+   * The `href` stays for semantics, but a fragment-only URL resolves against the document's
+   * `<base href>`. Every localized bundle is served from its own base (`/en/`, `/vi/`), so on a real
+   * deep link the browser would treat `#main-content` as `/en/#main-content` — a different path, a
+   * full document navigation, and the whole app would boot again at the landing route instead of
+   * skipping the sidebar. Focus (with the scroll the user expects) does the job without a URL change.
+   */
+  skipToMain(event: Event): void {
+    const main = this.main()?.nativeElement;
+    if (main === undefined) return;
+    event.preventDefault();
+    main.focus();
+    main.scrollIntoView?.({ block: 'start' });
+  }
+
   onResize(): void {
     this.viewportWidth.set(this.document.defaultView?.innerWidth ?? 1280);
     if (!this.mobile() && this.drawerOpen()) this.closeDrawer();
@@ -94,13 +111,38 @@ export class ShellComponent {
       return;
     }
     this.drawerOpen.set(true);
-    afterNextRender(() => this.closeButton()?.nativeElement.focus(), { injector: this.injector });
+    this.focusWhenUnblocked('drawer');
   }
 
   closeDrawer(): void {
     this.drawerOpen.set(false);
-    // Defer until inert is removed from the opener's main-stack ancestor.
-    afterNextRender(() => this.toggleButton()?.nativeElement.focus(), { injector: this.injector });
+    this.focusWhenUnblocked('opener');
+  }
+
+  /**
+   * Moves focus once the render that flips `inert` has committed.
+   *
+   * The two focus targets sit on opposite sides of the drawer's `inert` boundary, so the browser
+   * refuses `focus()` until the attribute change is in the DOM: a real browser silently ignores it
+   * while the subtree is still inert and leaves focus on `body` — the visitor then has to tab from
+   * the top of the page, and the drawer's trap never engages. `afterNextRender` is the first attempt
+   * (it is already after change detection in the browser), and the frame retry covers the case where
+   * the attribute is still the previous one at that moment.
+   */
+  private focusWhenUnblocked(target: 'drawer' | 'opener'): void {
+    afterNextRender(
+      () => {
+        const element =
+          target === 'drawer'
+            ? this.closeButton()?.nativeElement
+            : this.toggleButton()?.nativeElement;
+        if (element === undefined) return;
+        element.focus();
+        if (this.document.activeElement === element) return;
+        this.document.defaultView?.requestAnimationFrame(() => element.focus());
+      },
+      { injector: this.injector },
+    );
   }
 
   onDrawerKeydown(event: KeyboardEvent): void {

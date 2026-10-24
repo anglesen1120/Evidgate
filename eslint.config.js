@@ -63,8 +63,20 @@ module.exports = tseslint.config(
     // 01.6.1-T1.2 / 01.6.1-T5.1: specs, the Vitest configs and the Playwright config are
     // excluded from the emitting build projects (`exclude`/`include` in every workspace
     // tsconfig.json), so the project service cannot open them. The block below types them
-    // against the no-emit tsconfig.spec.json projects instead.
-    ignores: ['**/*.test.ts', '**/*.spec.ts', '**/vitest.config.ts', '**/playwright.config.ts'],
+    // against the no-emit tsconfig.spec.json projects instead. 09.1.1-T4.4 adds the fixtures
+    // Playwright config to the same list: `**/playwright.config.ts` does not match its name, and
+    // it is a spec-project file (`apps/web/tsconfig.spec.json` includes it), not an emitting one.
+    ignores: [
+      '**/*.test.ts',
+      '**/*.spec.ts',
+      '**/vitest.config.ts',
+      '**/playwright.config.ts',
+      'apps/web/playwright.fixtures.config.ts',
+      // 09.1.1-T4.4: the shell suite's shared helper module (`e2e/shell/support.ts`) is not a spec
+      // file, so it needs its own entry: the emitting app project does not include `e2e/`, and the
+      // block below types the directory against `apps/web/tsconfig.spec.json`.
+      'apps/web/e2e/**/*.ts',
+    ],
     extends: [tseslint.configs.recommendedTypeChecked, ...angularTsRecommended],
     // 09.1.1-T11.4 (AC9): a component style may live inline in `styles: [...]` instead of a
     // .css file, so the same raw-literal contract is enforced on those strings here. See
@@ -267,6 +279,12 @@ module.exports = tseslint.config(
       '**/*.spec.ts',
       '**/vitest.config.ts',
       '**/playwright.config.ts',
+      // 09.1.1-T4.4: the shell's fixtures-build Playwright config, typed by the same no-emit
+      // spec project (`apps/web/tsconfig.spec.json`) as the suite it starts.
+      'apps/web/playwright.fixtures.config.ts',
+      // 09.1.1-T4.4: and the suite's own non-spec module (`e2e/shell/support.ts`), which the
+      // emitting app project does not include.
+      'apps/web/e2e/**/*.ts',
     ],
     extends: [tseslint.configs.recommendedTypeChecked, ...angularTsRecommended],
     // 09.1.1-T1: a spec may declare its own TestBed host component, so the inline templates

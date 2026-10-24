@@ -2,6 +2,7 @@
   class="skip-link"
   href="#main-content"
   [attr.inert]="drawerOpen() ? '' : null"
+  (click)="skipToMain($event)"
   i18n="@@shell.layout.skip-content"
   >Skip to main content</a
 >
