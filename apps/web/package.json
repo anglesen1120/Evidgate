@@ -9,7 +9,9 @@
     "test": "ng test --watch=false && vitest run --config eslint-rules/vitest.config.mts && node --test scripts/",
     "i18n:extract": "ng extract-i18n",
     "i18n:check": "node scripts/check-i18n-keys.mjs",
-    "e2e": "npm run build && playwright test"
+    "e2e": "npm run build && playwright test",
+    "build:fixtures:e2e": "ng build --configuration fixtures --localize=true --output-path dist/fixtures",
+    "e2e:fixtures": "playwright test -c playwright.fixtures.config.ts"
   },
   "dependencies": {
     "@angular/cdk": "22.2.0",
@@ -19,6 +21,7 @@
     "@angular/forms": "22.2.0",
     "@angular/localize": "22.2.0",
     "@angular/platform-browser": "22.2.0",
+    "@angular/router": "22.2.0",
     "@evidgate/sdk": "*",
     "rxjs": "7.8.2",
     "tslib": "2.8.1"

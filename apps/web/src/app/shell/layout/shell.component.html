@@ -1,0 +1,100 @@
+<a
+  class="skip-link"
+  href="#main-content"
+  [attr.inert]="drawerOpen() ? '' : null"
+  (click)="skipToMain($event)"
+  i18n="@@shell.layout.skip-content"
+  >Skip to main content</a
+>
+<div
+  class="shell"
+  [class.rail]="collapsed()"
+  [class.mobile]="mobile()"
+  [class.drawer-open]="drawerOpen()"
+>
+  @if (mobile() && drawerOpen()) {
+    <button
+      class="scrim"
+      type="button"
+      tabindex="-1"
+      [attr.aria-label]="closeLabel"
+      (click)="closeDrawer()"
+    ></button>
+  }
+  <aside
+    #navigation
+    id="shell-navigation"
+    class="navigation"
+    tabindex="-1"
+    [attr.role]="mobile() && drawerOpen() ? 'dialog' : null"
+    [attr.aria-modal]="mobile() && drawerOpen() ? true : null"
+    [attr.aria-label]="mobile() ? navigationDrawerLabel : null"
+    [attr.inert]="mobile() && !drawerOpen() ? '' : null"
+    (keydown)="onDrawerKeydown($event)"
+  >
+    @if (mobile()) {
+      <button
+        #closeButton
+        type="button"
+        class="icon-button close-button"
+        [attr.aria-label]="closeLabel"
+        (click)="closeDrawer()"
+      >
+        <app-shell-icon [name]="'close'" />
+      </button>
+    }
+    <a class="brand" routerLink="/" [attr.aria-label]="brandLabel">
+      <app-shell-icon [name]="'shield-check'" />
+      <span i18n="@@shell.layout.brand">Evidgate</span>
+    </a>
+    @if (!collapsed() && !mobile()) {
+      <div class="nav-scope">
+        <span i18n="@@shell.layout.organization">Organization</span>
+        <strong>{{ session.currentOrg()?.name }}</strong>
+        <span i18n="@@shell.layout.project">Project</span>
+        <strong>{{ session.currentProject()?.name }}</strong>
+      </div>
+    }
+    <app-shell-nav
+      [groups]="nav.groups()"
+      [collapsed]="collapsed()"
+      (itemSelected)="mobile() && closeDrawer()"
+    />
+  </aside>
+  <div class="main-stack" [attr.inert]="mobile() && drawerOpen() ? '' : null">
+    <header class="topbar">
+      <button
+        #toggleButton
+        type="button"
+        class="icon-button nav-toggle"
+        [attr.aria-controls]="'shell-navigation'"
+        [attr.aria-expanded]="mobile() ? drawerOpen() : !collapsed()"
+        [attr.aria-label]="mobile() ? openLabel : collapsed() ? expandLabel : collapseLabel"
+        (click)="toggleNavigation()"
+      >
+        <app-shell-icon [name]="'menu'" />
+      </button>
+      <app-scope-switcher
+        class="topbar-scope"
+        [organizations]="session.organizations()"
+        [projects]="session.projects()"
+        [currentOrg]="session.currentOrg()"
+        [currentProject]="session.currentProject()"
+        (orgSelected)="selectOrganization($event)"
+        (projectSelected)="selectProject($event)"
+      />
+      <button
+        type="button"
+        class="icon-button theme-toggle"
+        [attr.aria-label]="darkLabel"
+        [attr.aria-pressed]="theme.isDark()"
+        (click)="theme.toggle()"
+      >
+        <app-shell-icon [name]="theme.isDark() ? 'moon' : 'sun'" />
+      </button>
+    </header>
+    <main #mainContent id="main-content" tabindex="-1">
+      <router-outlet />
+    </main>
+  </div>
+</div>

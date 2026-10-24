@@ -1,0 +1,31 @@
+<!--
+  A group is a labelled `role="group"`, not a `<section>` (review L5): a named section is a
+  `region` landmark, so five groups inside this navigation landmark added five landmarks a screen
+  reader must cycle past to reach the content. The `<h2>` and the `<ul>` keep the structure and
+  `aria-labelledby` still names the group.
+-->
+<nav [attr.aria-label]="navigationLabel">
+  @for (group of groups(); track group.id) {
+    @if (group.items.length > 0) {
+      <div class="nav-group" role="group" [attr.aria-labelledby]="'nav-group-' + group.id">
+        <h2 [id]="'nav-group-' + group.id">{{ group.label }}</h2>
+        <ul>
+          @for (item of group.items; track item.id) {
+            <li>
+              <a
+                [routerLink]="item.link"
+                [routerLinkActive]="'active'"
+                [ariaCurrentWhenActive]="'page'"
+                [attr.aria-label]="item.label"
+                (click)="itemSelected.emit()"
+              >
+                <app-shell-icon [name]="item.icon" />
+                <span>{{ item.label }}</span>
+              </a>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  }
+</nav>

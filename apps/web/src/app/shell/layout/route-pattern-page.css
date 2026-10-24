@@ -1,0 +1,16 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+/* The shared pattern owns the visible h2. Keep the route's h1 for page structure and shell titles. */
+h1 {
+  position: absolute;
+  width: var(--eg-border-width);
+  height: var(--eg-border-width);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
