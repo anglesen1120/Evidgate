@@ -97,77 +97,84 @@
         <source>Waiver details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">17,21</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="shared.waiver-banner.details-unavailable" datatype="html">
-        <source>Waiver details unavailable</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">22,26</context>
+          <context context-type="linenumber">17,22</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.active" datatype="html">
         <source>Approved by waiver</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">26,29</context>
+          <context context-type="linenumber">23,26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.expired" datatype="html">
         <source>Waiver expired</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">29,32</context>
+          <context context-type="linenumber">26,29</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.revoked" datatype="html">
         <source>Waiver revoked</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">32,39</context>
+          <context context-type="linenumber">29,32</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.state-unavailable" datatype="html">
+        <source>Waiver state unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">32,37</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.details-unavailable" datatype="html">
+        <source>Waiver details unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">37,42</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.approver" datatype="html">
         <source>Approved by</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">39,42</context>
+          <context context-type="linenumber">41,44</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.approver-unavailable" datatype="html">
         <source>Approver unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">44,49</context>
+          <context context-type="linenumber">46,51</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.expires" datatype="html">
         <source>Expires</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">49,52</context>
+          <context context-type="linenumber">51,54</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.expiry-unavailable" datatype="html">
         <source>Expiry unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">54,60</context>
+          <context context-type="linenumber">56,62</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.utc-timestamp" datatype="html">
         <source>UTC timestamp</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">60,64</context>
+          <context context-type="linenumber">62,66</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.waiver-banner.unchanged" datatype="html">
         <source> This waiver does not change the stored outcome or decision. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
-          <context context-type="linenumber">68,74</context>
+          <context context-type="linenumber">70,76</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.hash-chip.unavailable" datatype="html">
@@ -265,7 +272,7 @@
         <source> No rows </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table.component.html</context>
-          <context context-type="linenumber">95,101</context>
+          <context context-type="linenumber">103,109</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.title" datatype="html">
@@ -370,21 +377,21 @@
         <source>Waiver metadata</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
-          <context context-type="linenumber">116,118</context>
+          <context context-type="linenumber">116,120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.labels" datatype="html">
         <source>Case labels and healing provenance</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
-          <context context-type="linenumber">126,128</context>
+          <context context-type="linenumber">138,140</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.tables" datatype="html">
         <source>Read-only data tables</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
-          <context context-type="linenumber">146,150</context>
+          <context context-type="linenumber">158,162</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.status-success" datatype="html">
@@ -503,14 +510,21 @@
         <source>Decision:</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
-          <context context-type="linenumber">11,15</context>
+          <context context-type="linenumber">11,14</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.decision-chip.unavailable" datatype="html">
+        <source> Decision unavailable </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
+          <context context-type="linenumber">16,23</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.decision-chip.pending" datatype="html">
         <source>pending</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">55</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.dimension" datatype="html">

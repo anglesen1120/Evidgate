@@ -93,6 +93,34 @@ describe('LabelChip (FR-09-2/3/4)', () => {
     },
   );
 
+  describe.each<LabelKind>(['flaky', 'healed'])('%s unavailable original failure', (kind) => {
+    it.each(['', '   ', '\t\n\r'])('does not render an empty failure block for %j', (failure) => {
+      const fixture = TestBed.createComponent(LabelChip);
+      fixture.componentRef.setInput('kind', kind);
+      fixture.componentRef.setInput('originalFailure', failure);
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.querySelector('.original-failure')).toBeNull();
+      if (kind === 'healed') {
+        expect(root.querySelector('.original-block')?.textContent).toContain(
+          'Original failure unavailable',
+        );
+      } else {
+        expect(root.querySelector('.label-flaky')?.textContent).toBe('Flaky');
+      }
+    });
+
+    it('preserves surrounding whitespace in a supplied failure', () => {
+      const fixture = TestBed.createComponent(LabelChip);
+      const failure = ` \n${originalFailure}\t `;
+      fixture.componentRef.setInput('kind', kind);
+      fixture.componentRef.setInput('originalFailure', failure);
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.querySelector('.original-failure')?.textContent).toBe(failure);
+    });
+  });
+
   it.each(['', '   '])(
     'does not invent healed metadata for an unavailable hash (%j)',
     (candidateHash) => {

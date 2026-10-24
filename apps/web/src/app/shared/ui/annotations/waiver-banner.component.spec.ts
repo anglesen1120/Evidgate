@@ -72,8 +72,9 @@ describe('WaiverBanner (FR-09-2/7)', () => {
       expect(root.textContent).toContain('Approver unavailable');
       expect(root.textContent).toContain('Expiry unavailable');
       expect(root.querySelector('time')).toBeNull();
-      expect(root.querySelector('h3')?.textContent).toContain('Waiver details unavailable');
-      expect(root.textContent).not.toContain('Approved by waiver');
+      expect(root.querySelector('h3')?.textContent?.trim()).toBe('Approved by waiver');
+      expect(root.querySelector('h3')?.textContent).not.toContain('Waiver details unavailable');
+      expect(root.querySelector('h3 + p')?.textContent?.trim()).toBe('Waiver details unavailable');
     } else {
       expect(root.querySelector('.waiver-approver')?.textContent?.trim()).toBe(
         'reviewer-001 <script>not markup</script>',
@@ -123,16 +124,100 @@ describe('WaiverBanner (FR-09-2/7)', () => {
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2099-01-01T00:00:00.000Z');
   });
 
-  it.each(['2026-10-25T00:30:00', '2026-10-25T00:30:00Z'])(
-    'renders %s in UTC independently of the device timezone',
-    (value) => {
+  it.each([
+    ['2026-10-25', '2026-10-25T00:00:00.000Z'],
+    ['2026-10-25T00:30Z', '2026-10-25T00:30:00.000Z'],
+    ['2026-10-25T00:30:00Z', '2026-10-25T00:30:00.000Z'],
+    ['2026-10-25T00:30:00.123Z', '2026-10-25T00:30:00.123Z'],
+    ['2026-10-24T17:30:00-07:00', '2026-10-25T00:30:00.000Z'],
+    ['2026-10-25T02:30:00+02:00', '2026-10-25T00:30:00.000Z'],
+    ['2026-10-25T00:30:00+02:00', '2026-10-24T22:30:00.000Z'],
+    ['2024-02-29T23:30:00-01:00', '2024-03-01T00:30:00.000Z'],
+    ['2024-02-29', '2024-02-29T00:00:00.000Z'],
+  ])('renders %s as %s independently of the device timezone', (value, expected) => {
+    const fixture = TestBed.createComponent(WaiverBanner);
+    fixture.componentRef.setInput('approver', 'Reviewer-001');
+    fixture.componentRef.setInput('expiresAt', value);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('time')?.getAttribute('datetime')).toBe(expected);
+    expect(root.querySelector('.waiver-utc')?.textContent).toBe(expected);
+    expect(root.textContent).not.toContain('Expiry unavailable');
+  });
+
+  it.each([
+    '2026-02-30T00:00Z',
+    '2026-02-30',
+    '2026-02-29T00:00:00-07:00',
+    '2026-04-31T23:00:00+02:00',
+    '2026-00-01',
+    '2026-13-01',
+    '2026-10-00',
+    '2026-10-25T24:00Z',
+    '2026-10-25T23:60Z',
+    '2026-10-25T23:59:60Z',
+    '2026-10-25T00:30+24:00',
+    '2026-10-25T00:30+00:60',
+    '2026-10-24 10:00',
+    '2026-10-24 10:00Z',
+    '2026-10-25T00:30:00',
+    '2026-10-25T00:30',
+    '10/24/2026',
+    '',
+    'not-a-date',
+    new Date(Number.NaN),
+  ])('renders unavailable expiry for invalid or ambiguous input %s', (value) => {
+    const fixture = TestBed.createComponent(WaiverBanner);
+    fixture.componentRef.setInput('approver', 'Reviewer-001');
+    fixture.componentRef.setInput('expiresAt', value);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('Expiry unavailable');
+    expect(root.querySelector('h3 + p')?.textContent?.trim()).toBe('Waiver details unavailable');
+    expect(root.querySelector('time')).toBeNull();
+    expect(root.querySelector('.waiver-utc')).toBeNull();
+  });
+
+  describe.each([
+    ['expired', 'Waiver expired'],
+    ['revoked', 'Waiver revoked'],
+  ])('preserves the explicit %s heading when metadata is unavailable', (state, heading) => {
+    it.each([
+      ['missing approver', '  ', expiry, 'Approver unavailable'],
+      ['missing expiry', 'Reviewer-001', '', 'Expiry unavailable'],
+      ['invalid expiry', 'Reviewer-001', '2026-02-30T00:00Z', 'Expiry unavailable'],
+      ['both missing', '', '', 'Approver unavailable'],
+    ])('separates %s from the state', (_label, approver, expiresAt, unavailable) => {
       const fixture = TestBed.createComponent(WaiverBanner);
-      fixture.componentRef.setInput('approver', 'Reviewer-001');
-      fixture.componentRef.setInput('expiresAt', value);
+      fixture.componentRef.setInput('approver', approver);
+      fixture.componentRef.setInput('expiresAt', expiresAt);
+      fixture.componentRef.setInput('state', state);
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
+      expect(root.querySelector('h3')?.textContent?.trim()).toBe(heading);
+      expect(root.querySelector('h3')?.textContent).not.toContain('unavailable');
+      expect(root.querySelector('h3 + p')?.textContent?.trim()).toBe('Waiver details unavailable');
+      expect(root.querySelector('dl')?.textContent).toContain(unavailable);
+      expect(root.querySelector('[class*="success"]')).toBeNull();
+    });
+  });
+
+  it.each(['unknown', '', null])(
+    'renders unknown state %s explicitly in a neutral tone',
+    (state) => {
+      const fixture = TestBed.createComponent(WaiverBanner);
+      fixture.componentRef.setInput('approver', 'Reviewer-001');
+      fixture.componentRef.setInput('expiresAt', expiry);
+      fixture.componentRef.setInput('state', state);
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.querySelector('h3')?.textContent?.trim()).toBe('Waiver state unavailable');
+      expect(root.querySelector('section')?.className).toBe('waiver');
+      expect(root.textContent).not.toContain('Approved by waiver');
+      expect(
+        root.querySelector('[class*="success"], [class*="warning"], [class*="danger"]'),
+      ).toBeNull();
       expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-25T00:30:00.000Z');
-      expect(root.querySelector('time')?.textContent).toBe('Oct 25, 2026, 12:30:00\u202fAM');
     },
   );
 

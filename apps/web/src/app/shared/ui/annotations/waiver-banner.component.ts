@@ -18,22 +18,24 @@ export type WaiverState = 'active' | 'expired' | 'revoked';
       i18n-aria-label="@@shared.waiver-banner.label"
     >
       <h3>
-        @if (!approver().trim() || !utcExpiry()) {
-          <span i18n="@@shared.waiver-banner.details-unavailable">Waiver details unavailable</span>
-        } @else {
-          @switch (state()) {
-            @case ('active') {
-              <span i18n="@@shared.waiver-banner.active">Approved by waiver</span>
-            }
-            @case ('expired') {
-              <span i18n="@@shared.waiver-banner.expired">Waiver expired</span>
-            }
-            @case ('revoked') {
-              <span i18n="@@shared.waiver-banner.revoked">Waiver revoked</span>
-            }
+        @switch (state()) {
+          @case ('active') {
+            <span i18n="@@shared.waiver-banner.active">Approved by waiver</span>
+          }
+          @case ('expired') {
+            <span i18n="@@shared.waiver-banner.expired">Waiver expired</span>
+          }
+          @case ('revoked') {
+            <span i18n="@@shared.waiver-banner.revoked">Waiver revoked</span>
+          }
+          @default {
+            <span i18n="@@shared.waiver-banner.state-unavailable">Waiver state unavailable</span>
           }
         }
       </h3>
+      @if (!approver().trim() || !utcExpiry()) {
+        <p i18n="@@shared.waiver-banner.details-unavailable">Waiver details unavailable</p>
+      }
       <dl>
         <div>
           <dt i18n="@@shared.waiver-banner.approver">Approved by</dt>
@@ -78,13 +80,46 @@ export class WaiverBanner {
   // Render metadata only: never infer active/expired state from the browser clock.
   protected readonly utcExpiry = computed(() => {
     const supplied = this.expiresAt();
-    // Offset-free ISO timestamps use UTC, not the viewer's device timezone.
-    const absolute =
-      typeof supplied === 'string' &&
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(supplied)
-        ? `${supplied}Z`
-        : supplied;
-    const date = absolute instanceof Date ? absolute : new Date(absolute);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+    if (supplied instanceof Date) {
+      return Number.isNaN(supplied.getTime()) ? null : supplied.toISOString();
+    }
+
+    // Accept date-only UTC or ISO timestamps with an explicit zone, never device-local time.
+    const parts =
+      /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?(Z|[+-]\d{2}:\d{2}))?$/.exec(
+        supplied,
+      );
+    if (!parts) return null;
+    const [
+      ,
+      year,
+      month,
+      day,
+      hour = '00',
+      minute = '00',
+      second = '00',
+      fraction = '',
+      zone = 'Z',
+    ] = parts;
+    if (Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return null;
+
+    // Check the supplied calendar day before applying its offset, which can cross UTC midnight.
+    const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}${fraction}Z`);
+    if (
+      date.getUTCFullYear() !== Number(year) ||
+      date.getUTCMonth() + 1 !== Number(month) ||
+      date.getUTCDate() !== Number(day)
+    ) {
+      return null;
+    }
+
+    if (zone !== 'Z') {
+      const offsetHours = Number(zone.slice(1, 3));
+      const offsetMinutes = Number(zone.slice(4, 6));
+      if (offsetHours > 23 || offsetMinutes > 59) return null;
+      const offset = (offsetHours * 60 + offsetMinutes) * (zone[0] === '+' ? 1 : -1);
+      date.setUTCMinutes(date.getUTCMinutes() - offset);
+    }
+    return date.toISOString();
   });
 }

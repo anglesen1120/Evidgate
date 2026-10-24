@@ -144,37 +144,45 @@ export class DataTableComponent<T> {
       });
     });
 
-    afterRenderEffect((onCleanup) => {
-      this.rowHeight();
-      this.rows();
-      this.columns();
+    const measure = () => {
       const scroll = this.scrollElement().nativeElement;
       const probe = this.tokenProbe().nativeElement;
       const viewport = this.viewport();
-      const measure = () => {
-        // CSS resolves --eg-row-* (including coarse-pointer density) into pixels.
-        // jsdom has no token/layout resolution: these fallbacks mirror tokens.css.
-        const pixels = Number.parseFloat(getComputedStyle(probe).height);
-        this.itemSize.set(pixels > 0 ? pixels : this.rowHeight() === 'compact' ? 40 : 44);
-        this.horizontalScrolls.set(
-          scroll.clientWidth > 0 &&
-            (scroll.scrollWidth > scroll.clientWidth || scroll.scrollHeight > scroll.clientHeight),
+      // CSS resolves --eg-row-* (including coarse-pointer density) into pixels.
+      // jsdom has no token/layout resolution: these fallbacks mirror tokens.css.
+      const pixels = Number.parseFloat(getComputedStyle(probe).height);
+      this.itemSize.set(pixels > 0 ? pixels : this.rowHeight() === 'compact' ? 40 : 44);
+      this.horizontalScrolls.set(
+        scroll.clientWidth > 0 &&
+          (scroll.scrollWidth > scroll.clientWidth || scroll.scrollHeight > scroll.clientHeight),
+      );
+      if (viewport) {
+        const element = viewport.elementRef.nativeElement;
+        viewport.checkViewportSize();
+        this.viewportScrolls.set(
+          element.clientHeight > 0 && element.scrollHeight > element.clientHeight,
         );
-        if (viewport) {
-          const element = viewport.elementRef.nativeElement;
-          viewport.checkViewportSize();
-          this.viewportScrolls.set(
-            element.clientHeight > 0 && element.scrollHeight > element.clientHeight,
-          );
-        }
-      };
-      measure();
+      }
+    };
+
+    afterRenderEffect((onCleanup) => {
+      // Observation follows element lifetime, not polling or column refreshes.
+      const scroll = this.scrollElement().nativeElement;
+      const probe = this.tokenProbe().nativeElement;
+      const viewport = this.viewport();
       if (typeof ResizeObserver === 'undefined') return;
       const observer = new ResizeObserver(measure);
       observer.observe(scroll);
       observer.observe(probe);
       if (viewport) observer.observe(viewport.elementRef.nativeElement);
       onCleanup(() => observer.disconnect());
+    });
+
+    afterRenderEffect(() => {
+      this.rowHeight();
+      this.rows();
+      this.columns();
+      measure();
     });
   }
 }

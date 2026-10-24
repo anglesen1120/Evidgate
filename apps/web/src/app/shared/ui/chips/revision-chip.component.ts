@@ -26,6 +26,9 @@ export class RevisionChipComponent {
 
   protected readonly hasRevision = computed(() => {
     const revision = this.revision();
+    if (typeof revision === 'number') {
+      return Number.isInteger(revision) && revision > 0;
+    }
     return revision !== null && revision !== undefined && String(revision).trim().length > 0;
   });
   // Keep the supplied identifier locale-independent; r is an identity prefix, not prose.

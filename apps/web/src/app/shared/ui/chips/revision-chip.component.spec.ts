@@ -46,17 +46,21 @@ describe('RevisionChipComponent', () => {
     }
   });
 
-  it.each([null, undefined, '', '   '])('does not invent a revision for missing %s', (revision) => {
-    const fixture = TestBed.createComponent(RevisionChipComponent);
-    fixture.componentRef.setInput('revision', revision);
-    fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
-    expect(root.textContent?.trim()).toBe('Revision unavailable');
-    expect(root.querySelector('.identity-chip__value')).toBeNull();
-  });
+  it.each([null, undefined, '', '   ', '\t\n', 0, -1, 1.5, NaN, Infinity, -Infinity])(
+    'does not invent a revision for missing or invalid %s',
+    (revision) => {
+      const fixture = TestBed.createComponent(RevisionChipComponent);
+      fixture.componentRef.setInput('revision', revision);
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.textContent?.trim()).toBe('Revision unavailable');
+      expect(root.querySelector('.identity-chip__value')).toBeNull();
+    },
+  );
 
   it.each([
-    [0, 'r0'],
+    [1, 'r1'],
+    [Number.MAX_SAFE_INTEGER, `r${Number.MAX_SAFE_INTEGER}`],
     [5, 'r5'],
     ['0005', 'r0005'],
     ['policy-0007', 'rpolicy-0007'],

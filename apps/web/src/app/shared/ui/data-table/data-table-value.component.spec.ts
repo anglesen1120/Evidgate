@@ -119,6 +119,29 @@ describe('DataTableValueComponent', () => {
     expect(hide).toHaveBeenCalled();
   });
 
+  it('R4: dismisses a recycled clipped value and resets its description and open state', async () => {
+    await clip();
+    value.dispatchEvent(new MouseEvent('click'));
+    expect(show).toHaveBeenCalledTimes(1);
+
+    fixture.componentRef.setInput('value', 'sha256:replacement-value-still-clipped');
+    await fixture.whenStable();
+    expect(hide).toHaveBeenCalledTimes(1);
+    expect(value.getAttribute('tabindex')).toBe('0');
+    const descriptionId = value.getAttribute('aria-describedby');
+    expect(descriptionId).toBe(fixture.componentInstance.descriptionId);
+    expect(root.querySelector(`#${descriptionId}`)?.textContent).toBe(
+      'sha256:replacement-value-still-clipped',
+    );
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(hide).toHaveBeenCalledTimes(1);
+
+    value.dispatchEvent(new MouseEvent('click'));
+    expect(show).toHaveBeenCalledTimes(2);
+    value.dispatchEvent(new FocusEvent('blur'));
+    expect(hide).toHaveBeenCalledTimes(2);
+  });
+
   it('R4: never opts a naturally wrapping column into tooltips even with measured overflow', async () => {
     await clip();
     fixture.componentRef.setInput('truncate', false);

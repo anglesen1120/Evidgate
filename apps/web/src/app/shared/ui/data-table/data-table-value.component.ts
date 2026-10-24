@@ -8,6 +8,7 @@ import {
   inject,
   input,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 
@@ -68,6 +69,7 @@ export class DataTableValueComponent {
     afterRenderEffect((onCleanup) => {
       // Track value changes too: CDK recycles the same cell for another row.
       this.value();
+      untracked(() => this.hide());
       if (!this.truncate()) {
         this.measuredClipped.set(false);
         this.hide();

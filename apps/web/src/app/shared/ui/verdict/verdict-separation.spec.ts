@@ -57,7 +57,7 @@ const decisionCases = [
   { value: undefined, tone: 'pending', text: 'pending' },
   { value: null, tone: 'pending', text: 'pending' },
   { value: 'pending', tone: 'pending', text: 'pending' },
-  { value: 'unknown', tone: 'pending', text: 'pending' },
+  { value: 'unknown', tone: 'neutral', text: 'Decision unavailable' },
 ] as const;
 
 const cases = completenessCases.flatMap((completeness) =>
@@ -71,7 +71,7 @@ const cases = completenessCases.flatMap((completeness) =>
   ),
 );
 
-describe('completeness, outcome and decision separation (AC8 / FR-09-2)', () => {
+describe('every combination of completeness, outcome and decision rendered side by side (210 combinations; AC8 / FR-09-2)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [VerdictSeparationTestComponent],
@@ -80,7 +80,7 @@ describe('completeness, outcome and decision separation (AC8 / FR-09-2)', () => 
   });
 
   it.each(cases)(
-    'renders $name without deriving another dimension',
+    'renders $name side by side without deriving another dimension',
     ({ completeness, outcome, decision }) => {
       const fixture = TestBed.createComponent(VerdictSeparationTestComponent);
       // Runtime unknown values intentionally cross the typed template boundary, as stale input can.
@@ -98,7 +98,7 @@ describe('completeness, outcome and decision separation (AC8 / FR-09-2)', () => 
         [testOutcome, outcome],
         [releaseDecision, decision],
       ] as const) {
-        expect(element?.querySelector('.verdict__value')?.textContent).toBe(expected.text);
+        expect(element?.querySelector('.verdict__value')?.textContent?.trim()).toBe(expected.text);
         expect(element?.querySelector('[data-tone]')?.getAttribute('data-tone')).toBe(
           expected.tone,
         );
@@ -111,28 +111,27 @@ describe('completeness, outcome and decision separation (AC8 / FR-09-2)', () => 
       expect(testOutcome?.textContent).not.toMatch(/PASS|FAIL/);
 
       if (completeness.value !== 'complete') {
-        expect(
-          evidence?.querySelector(
-            '[data-tone="success"], .success, [class*="--success"], svg, [data-icon="check"]',
-          ),
-        ).toBeNull();
+        expect(evidence?.querySelector('[data-tone]')?.getAttribute('data-tone')).not.toBe(
+          'success',
+        );
+        expect(evidence?.querySelector('[data-tone="success"]')).toBeNull();
       }
       if (outcome.value !== 'all_passed') {
-        expect(
-          testOutcome?.querySelector(
-            '[data-tone="success"], .success, [class*="--success"], [data-icon="check"]',
-          ),
-        ).toBeNull();
+        expect(testOutcome?.querySelector('[data-tone]')?.getAttribute('data-tone')).not.toBe(
+          'success',
+        );
+        expect(testOutcome?.querySelector('[data-tone="success"]')).toBeNull();
       }
       if (decision.value !== 'PASS') {
-        expect(
-          releaseDecision?.querySelector(
-            '[data-tone="success"], .success, [class*="--success"], [data-icon="check"]',
-          ),
-        ).toBeNull();
+        expect(releaseDecision?.querySelector('[data-tone]')?.getAttribute('data-tone')).not.toBe(
+          'success',
+        );
+        expect(releaseDecision?.querySelector('[data-tone="success"]')).toBeNull();
       }
-      if (decision.text === 'pending') {
-        expect(releaseDecision?.querySelector('.verdict__value')?.textContent).toBe('pending');
+      if (decision.tone === 'pending' || decision.tone === 'neutral') {
+        expect(releaseDecision?.querySelector('.verdict__value')?.textContent?.trim()).toBe(
+          decision.text,
+        );
         for (const node of releaseDecision?.querySelectorAll('*') ?? []) {
           expect(node.textContent).not.toMatch(/PASS|FAIL/);
           expect(node.getAttribute('aria-label') ?? '').not.toMatch(/PASS|FAIL/);
@@ -145,4 +144,20 @@ describe('completeness, outcome and decision separation (AC8 / FR-09-2)', () => 
       }
     },
   );
+
+  it('matches the actual success-tone selector for complete, all_passed and PASS', () => {
+    const fixture = TestBed.createComponent(VerdictSeparationTestComponent);
+    fixture.componentRef.setInput('completeness', 'complete');
+    fixture.componentRef.setInput('outcome', 'all_passed');
+    fixture.componentRef.setInput('decision', 'PASS');
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+
+    for (const selector of ['app-evidence-badge', 'app-outcome-pill', 'app-decision-chip']) {
+      const element = root.querySelector(selector);
+      expect(element?.querySelector('[data-tone]')?.getAttribute('data-tone')).toBe('success');
+      expect(element?.querySelector('[data-tone="success"]')).not.toBeNull();
+    }
+    expect(root.querySelectorAll('[data-tone="success"]')).toHaveLength(3);
+  });
 });

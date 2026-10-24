@@ -45,28 +45,27 @@ describe('DecisionChipComponent', () => {
   );
 
   it.each([
-    undefined,
-    null,
-    'pending',
-    'unknown',
-    'pass',
-    'fail',
-    'PASS ',
-    'PASS FAIL',
-    'run-123',
-    '<img src=x onerror=alert(1)>',
-    'x'.repeat(512),
-  ])('renders canonical pending without any verdict for %s', (value) => {
+    [undefined, 'pending', 'pending'],
+    [null, 'pending', 'pending'],
+    ['pending', 'pending', 'pending'],
+    ['unknown', 'neutral', 'Decision unavailable'],
+    ['pass', 'neutral', 'Decision unavailable'],
+    ['fail', 'neutral', 'Decision unavailable'],
+    ['PASS ', 'neutral', 'Decision unavailable'],
+    ['', 'neutral', 'Decision unavailable'],
+    ['PASS FAIL', 'neutral', 'Decision unavailable'],
+    ['run-123', 'neutral', 'Decision unavailable'],
+    ['<img src=x onerror=alert(1)>', 'neutral', 'Decision unavailable'],
+    ['x'.repeat(512), 'neutral', 'Decision unavailable'],
+  ])('renders %s as %s with no release verdict', (value, tone, label) => {
     const fixture = TestBed.createComponent(DecisionChipComponent);
     fixture.componentRef.setInput('decision', value);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
 
-    expect(root.querySelector('[data-tone="pending"]')).not.toBeNull();
-    expect(
-      root.querySelector('[data-tone="success"], [data-tone="danger"], .success, svg, img'),
-    ).toBeNull();
-    expect(root.querySelector('.verdict__value')?.textContent).toBe('pending');
+    expect(root.querySelector('[data-tone]')?.getAttribute('data-tone')).toBe(tone);
+    expect(root.querySelector('[data-tone="success"], [data-tone="danger"], img')).toBeNull();
+    expect(root.querySelector('.verdict__value')?.textContent?.trim()).toBe(label);
     for (const node of [root, ...root.querySelectorAll('*')]) {
       expect(node.textContent).not.toMatch(/PASS|FAIL/);
       expect(node.getAttribute('aria-label') ?? '').not.toMatch(/PASS|FAIL/);
@@ -104,6 +103,29 @@ describe('DecisionChipComponent', () => {
     expect(root.querySelector('.verdict__value')?.textContent).toBe('pending');
     expect(root.innerHTML).not.toMatch(/PASS|FAIL/);
     expect(root.querySelector('[data-tone="success"]')).toBeNull();
+  });
+
+  it('renders unavailable separately from pending and restores canonical pending', async () => {
+    const fixture = TestBed.createComponent(DecisionChipComponent);
+    fixture.componentRef.setInput('decision', 'pending');
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const pendingValue = root.querySelector('.verdict__value');
+    expect(pendingValue?.textContent).toBe('pending');
+
+    fixture.componentRef.setInput('decision', 'unknown');
+    await fixture.whenStable();
+    const unavailableValue = root.querySelector('.verdict__value');
+    expect(unavailableValue).not.toBe(pendingValue);
+    expect(unavailableValue?.textContent?.trim()).toBe('Decision unavailable');
+    expect(root.querySelector('[data-tone="neutral"]')).not.toBeNull();
+    expect(root.innerHTML).not.toMatch(/PASS|FAIL|pending/);
+
+    fixture.componentRef.setInput('decision', null);
+    await fixture.whenStable();
+    expect(root.querySelector('.verdict__value')).not.toBe(unavailableValue);
+    expect(root.querySelector('.verdict__value')?.textContent).toBe('pending');
+    expect(root.querySelector('[data-tone="pending"]')).not.toBeNull();
   });
 
   it('keeps the longest verdict whole in the wrapping value structure', () => {

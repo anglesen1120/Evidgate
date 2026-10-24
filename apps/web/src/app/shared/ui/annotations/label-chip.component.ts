@@ -14,7 +14,7 @@ export type HealingMode = 'shadow' | 'official';
       <p class="label-explanation" i18n="@@shared.label-chip.flaky-explanation">
         Flaky is a case label. It never overrides attempt #1 or the stored has_failures outcome.
       </p>
-      @if (originalFailure()) {
+      @if (originalFailure().trim()) {
         <div class="original-failure">{{ originalFailure() }}</div>
       }
     } @else if (kind() === 'healed') {

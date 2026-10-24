@@ -194,6 +194,65 @@ describe('DataTableComponent', () => {
     );
   });
 
+  it('R6: remeasures refreshed rows and columns without recreating the resize observer', async () => {
+    const observers: ResizeObserver[] = [];
+    const ResizeObserverMock = vi.fn(function () {
+      const observer = { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+      observers.push(observer);
+      return observer;
+    });
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock);
+    try {
+      const columns = DATA_TABLE_FIXTURE_COLUMNS.map((column) => ({ ...column, truncate: false }));
+      fixture.componentRef.setInput('columns', columns);
+      fixture.componentRef.setInput('rows', dataTableFixtureRows(5000));
+      await fixture.whenStable();
+      const creations = ResizeObserverMock.mock.calls.length;
+      expect(creations).toBeGreaterThan(0);
+      const scroll = root.querySelector('.scroll') as HTMLElement;
+      const tableObserver = observers.find((observer) =>
+        vi.mocked(observer.observe).mock.calls.some(([element]) => element === scroll),
+      )!;
+      expect(tableObserver).toBeDefined();
+      expect(tableObserver.observe).toHaveBeenCalledWith(
+        root.querySelector('cdk-virtual-scroll-viewport'),
+      );
+      vi.spyOn(scroll, 'clientWidth', 'get').mockReturnValue(200);
+      const width = vi.spyOn(scroll, 'scrollWidth', 'get').mockReturnValue(600);
+      const viewport = fixture.componentInstance.viewport()!;
+      vi.spyOn(viewport.elementRef.nativeElement, 'clientHeight', 'get').mockReturnValue(352);
+      const viewportMeasure = vi.spyOn(viewport, 'checkViewportSize');
+
+      for (let refresh = 0; refresh < 3; refresh++) {
+        fixture.componentRef.setInput('rows', dataTableFixtureRows(5000));
+        await fixture.whenStable();
+        expect(ResizeObserverMock).toHaveBeenCalledTimes(creations);
+        expect(tableObserver.disconnect).not.toHaveBeenCalled();
+        expect(scroll.getAttribute('tabindex')).toBe('0');
+        expect(viewport.getViewportSize()).toBe(352);
+      }
+      expect(viewportMeasure).toHaveBeenCalled();
+      width.mockReturnValue(200);
+      fixture.componentRef.setInput('columns', [...columns]);
+      await fixture.whenStable();
+      expect(ResizeObserverMock).toHaveBeenCalledTimes(creations);
+      expect(scroll.hasAttribute('tabindex')).toBe(false);
+      expect(root.querySelectorAll('.body-table [role="row"]').length).toBeLessThan(100);
+
+      fixture.componentRef.setInput('rows', dataTableFixtureRows(2));
+      await fixture.whenStable();
+      expect(tableObserver.disconnect).toHaveBeenCalledTimes(1);
+      expect(ResizeObserverMock.mock.calls.length).toBeGreaterThan(creations);
+      const replacementObserver = observers.at(-1)!;
+      expect(replacementObserver.observe).toHaveBeenCalledWith(scroll);
+      fixture.destroy();
+      expect(tableObserver.disconnect).toHaveBeenCalledTimes(1);
+      expect(replacementObserver.disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('R6: resolves fixed-size density from the CSS token probe with documented jsdom fallbacks', async () => {
     fixture.componentRef.setInput('rowHeight', 'compact');
     await fixture.whenStable();

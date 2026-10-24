@@ -119,13 +119,72 @@ describe('MissingReasonList (FR-09-2/6)', () => {
     expect(root.querySelector('a, [title]')).toBeNull();
   });
 
-  it('uses Angular URL sanitization for supplied links', () => {
+  it.each([
+    'data:text/html,<script>alert(1)</script>',
+    'javascript:alert(1)',
+    '//evil.example/artifact',
+    'ftp://evil.example/artifact',
+    'mailto:artifact@example.com',
+    ' java\tscript:alert(1)',
+    '\tjavascript:alert(1)',
+    '\njavascript:alert(1)',
+    '\u0000javascript:alert(1)',
+    'java\tscript:alert(1)',
+    '/\\evil.example/artifact',
+    '/\t/evil.example/artifact',
+    'artifacts/001',
+    'https://',
+    '',
+    '   ',
+  ])('renders rejected href %j as plain text without losing the reason', (href) => {
     const fixture = TestBed.createComponent(MissingReasonList);
-    fixture.componentRef.setInput('reasons', [
-      { code: 'artifact_missing', text: 'Unavailable artifact', href: 'javascript:alert(1)' },
-    ]);
+    const text = 'Unavailable artifact <script>untrusted</script>';
+    fixture.componentRef.setInput('reasons', [{ code: 'artifact_missing', text, href }]);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('a')?.getAttribute('href')).toBe('unsafe:javascript:alert(1)');
+    expect(root.querySelector('a')).toBeNull();
+    expect(root.querySelector('.reason-text')?.textContent).toBe(text);
+    expect(root.querySelector('code')?.textContent).toBe('artifact_missing');
+    expect(root.querySelector('script')).toBeNull();
+  });
+
+  it.each([
+    ['/', null],
+    ['/runs/run-001?attempt=2#evidence', null],
+    ['#artifact-001', null],
+    ['https://evidence.example/artifact?run=001#details', 'noopener noreferrer'],
+    ['http://evidence.example/artifact', 'noopener noreferrer'],
+    ['HTTPS://evidence.example/artifact', 'noopener noreferrer'],
+  ])('renders allowed href %j with the appropriate rel', (href, rel) => {
+    const fixture = TestBed.createComponent(MissingReasonList);
+    const text = 'Open artifact';
+    fixture.componentRef.setInput('reasons', [{ code: 'artifact_missing', text, href }]);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const anchor = root.querySelector('a');
+    expect(anchor?.getAttribute('href')).toBe(href);
+    expect(anchor?.getAttribute('rel')).toBe(rel);
+    expect(anchor?.textContent).toBe(text);
+    expect(root.querySelector('.reason-text')).toBeNull();
+  });
+
+  it('updates link safety when the supplied reasons change', async () => {
+    const fixture = TestBed.createComponent(MissingReasonList);
+    fixture.componentRef.setInput('reasons', [
+      {
+        code: 'artifact_missing',
+        text: 'Open artifact',
+        href: 'https://evidence.example/artifact',
+      },
+    ]);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+    fixture.componentRef.setInput('reasons', [
+      { code: 'artifact_missing', text: 'Unavailable artifact', href: '//evil.example/artifact' },
+    ]);
+    await fixture.whenStable();
+    expect(root.querySelector('a')).toBeNull();
+    expect(root.querySelector('.reason-text')?.textContent).toBe('Unavailable artifact');
   });
 });
