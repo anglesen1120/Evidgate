@@ -21,17 +21,6 @@ const SAMPLE_RATIO_META_NAME = 'evidgate-telemetry-sample-ratio';
 /** The ratio used when the tag is absent or unparsable: export every trace. */
 const DEFAULT_SAMPLE_RATIO = 1;
 
-/**
- * Hosts an `http:` endpoint is allowed on: a plain-HTTP collector is only acceptable on the
- * machine itself (a local OTLP sidecar), never across a network. `URL.hostname` reports IPv6
- * literals in brackets, so that is the spelling compared here.
- */
-const LOCAL_ENDPOINT_HOSTS: Readonly<Record<string, true>> = {
-  localhost: true,
-  '127.0.0.1': true,
-  '[::1]': true,
-};
-
 /** What the telemetry chunk needs: where to export, and what fraction of traces to keep. */
 export interface TelemetryConfig {
   /** The OTLP/HTTP traces URL, or `null` when export is disabled (no network call is made). */
@@ -48,10 +37,10 @@ function readMetaContent(doc: Document, name: string): string | null {
 }
 
 /**
- * The endpoint the exporter may POST to, or `null`. Accepted: an absolute URL on `https:` — or
- * on `http:` only for `localhost`/`127.0.0.1`/`[::1]` — with no userinfo, no query string and
- * no fragment. Everything else (relative URL, another scheme, another host over plain HTTP,
- * credentials in the authority) is treated as unset, not repaired: exporting to a host the
+ * The endpoint the exporter may POST to, or `null`. Accepted: an absolute `https:` URL with no
+ * userinfo, no query string and no fragment. Everything else — a relative URL, `http:` on any
+ * host (localhost included: the app CSP only ever names an `https:` origin), another scheme,
+ * credentials in the authority — is treated as unset, not repaired: exporting to a host the
  * deploy did not name would be worse than exporting nothing.
  *
  * The returned value is `URL.toString()`, so the exporter receives one canonical spelling.
@@ -66,10 +55,7 @@ export function parseOtlpEndpoint(raw: string | null): string | null {
   } catch {
     return null;
   }
-  const schemeIsPermitted =
-    url.protocol === 'https:' ||
-    (url.protocol === 'http:' && LOCAL_ENDPOINT_HOSTS[url.hostname] === true);
-  if (!schemeIsPermitted) {
+  if (url.protocol !== 'https:') {
     return null;
   }
   if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') {

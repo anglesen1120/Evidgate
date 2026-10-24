@@ -124,6 +124,12 @@ export interface TelemetryRuntime {
   reportError(report: ErrorReport): void;
   /** Emits one `web_vital` span per metric that changed since the last flush. */
   flushVitals(): void;
+  /**
+   * Stops exporting without stopping tracing: the queue is dropped and every later span goes to
+   * a no-op exporter, while span ids and the `traceparent` handed to the server keep working.
+   * Idempotent; the facade calls it when the app CSP blocks the exporter origin.
+   */
+  disableExport(): void;
   /** Flushes vitals, then shuts the provider down. */
   shutdown(): Promise<void>;
 }
@@ -224,11 +230,22 @@ export function startTelemetrySdk(
   const innerExporter =
     options.exporter ??
     (config.endpoint === null ? NOOP_EXPORTER : new OTLPTraceExporter({ url: config.endpoint }));
-  const scrubber = new ScrubbingSpanExporter(innerExporter);
+  /**
+   * Where the processor sends spans. A CSP violation can point it at the no-op exporter after the
+   * provider is built, which is the only way to stop the POSTs without ending the trace.
+   */
+  let exportTarget: SpanExporter = new ScrubbingSpanExporter(innerExporter);
+  const switchableExporter: SpanExporter = {
+    export(spans, resultCallback): void {
+      exportTarget.export(spans, resultCallback);
+    },
+    shutdown: () => exportTarget.shutdown(),
+    forceFlush: () => exportTarget.forceFlush?.() ?? Promise.resolve(),
+  };
   const processor =
     options.exporter === undefined
-      ? new BatchSpanProcessor({ exporter: scrubber })
-      : new SimpleSpanProcessor({ exporter: scrubber });
+      ? new BatchSpanProcessor({ exporter: switchableExporter })
+      : new SimpleSpanProcessor({ exporter: switchableExporter });
   const resourceAttributes: Attributes = { 'service.name': SERVICE_NAME };
   if (options.serviceVersion !== undefined) {
     resourceAttributes['service.version'] = options.serviceVersion;
@@ -252,6 +269,8 @@ export function startTelemetrySdk(
   const vitals: Record<VitalName, VitalSnapshot | null> = { LCP: null, INP: null, CLS: null };
   /** `LCP` is emitted once per page: its later `reportAllChanges` updates are dropped. */
   let lcpFlushed = false;
+  /** Set by {@link disableExport}; keeps a second call from flushing the queue twice. */
+  let exportDisabled = false;
 
   function parentContext(): Context {
     return routeSpan === null ? ROOT_CONTEXT : routeContext;
@@ -436,10 +455,32 @@ export function startTelemetrySdk(
     }
   }
 
+  /**
+   * Points the processor at the no-op exporter. Whatever the batch queue still holds leaves it
+   * now (and is dropped), so no POST to a blocked origin is retried; the sampler, the span ids and
+   * `traceparentOf` are untouched, which is what keeps the server-side trace continuing.
+   */
+  function disableExport(): void {
+    if (exportDisabled) {
+      return;
+    }
+    exportDisabled = true;
+    exportTarget = NOOP_EXPORTER;
+    void processor.forceFlush().catch(() => undefined);
+  }
+
   async function shutdown(): Promise<void> {
     flushVitals();
     await provider.shutdown();
   }
 
-  return { beginRouteChange, setRoute, startApiCall, reportError, flushVitals, shutdown };
+  return {
+    beginRouteChange,
+    setRoute,
+    startApiCall,
+    reportError,
+    flushVitals,
+    disableExport,
+    shutdown,
+  };
 }

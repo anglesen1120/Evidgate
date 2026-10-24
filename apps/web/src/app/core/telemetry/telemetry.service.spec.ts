@@ -94,6 +94,10 @@ class RuntimeDouble implements TelemetryRuntime {
     this.calls.push('flushVitals');
   }
 
+  disableExport(): void {
+    this.calls.push('disableExport');
+  }
+
   shutdown(): Promise<void> {
     this.calls.push('shutdown');
     return Promise.resolve();
@@ -190,6 +194,34 @@ function dispatchHiddenVisibilityChange(): void {
     }
   }
 }
+
+/** A configuration exporting to `origin`, so a violation has an origin to match. */
+function configFor(origin: string): TelemetryConfig {
+  return { endpoint: `${origin}/v1/traces`, sampleRatio: 1 };
+}
+
+/**
+ * Dispatches a `securitypolicyviolation` on the document. jsdom has no
+ * `SecurityPolicyViolationEvent` constructor, so the fields are defined on a plain `Event` — the
+ * same shape the browser sends, without the browser.
+ */
+function dispatchCspViolation(
+  blockedURI: string,
+  directive: string = 'connect-src',
+  disposition: string = 'enforce',
+): void {
+  const event = new Event('securitypolicyviolation') as unknown as SecurityPolicyViolationEvent;
+  Object.defineProperties(event, {
+    blockedURI: { value: blockedURI },
+    effectiveDirective: { value: directive },
+    violatedDirective: { value: directive },
+    disposition: { value: disposition },
+  });
+  document.dispatchEvent(event);
+}
+
+/** A `traceparent` a server can continue, independent of any exporter. */
+const TRACEPARENT_SHAPE = /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/;
 
 /** Lets the dynamic-import promise and the service's continuation run. */
 async function settle(): Promise<void> {
@@ -405,6 +437,81 @@ describe('TelemetryService', () => {
     dispatchHiddenVisibilityChange();
 
     expect(harness.stub?.calls.filter((call) => call === 'flushVitals')).toHaveLength(2);
+  });
+
+  it('switches export off when the CSP blocks the exporter origin, and keeps tracing', async () => {
+    const origin = 'https://otel-blocked.evidgate.example';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const harness = createHarness({ config: configFor(origin) });
+    harness.service.start();
+    await settle();
+
+    harness.service.runtime?.beginRouteChange().end('ok', '/runs');
+    expect(spansNamed(harness.exporter, 'route.change')).toHaveLength(1);
+
+    dispatchCspViolation(origin);
+
+    // Tracing continues — new spans, a usable `traceparent` — but nothing else is exported.
+    harness.service.runtime?.beginRouteChange().end('ok', '/runs');
+    const call = harness.service.startApiCall({ method: 'GET', route: '/v1/runs' });
+    call?.end({ outcome: 'ok' });
+
+    expect(harness.exporter.getFinishedSpans()).toHaveLength(1);
+    expect(call?.traceparent).toMatch(TRACEPARENT_SHAPE);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const message = String(warn.mock.calls[0]?.[0]);
+    expect(message).toContain('connect-src');
+    // The warning names the directive only: the endpoint could carry a token.
+    expect(message).not.toContain('/v1/traces');
+
+    // One warning per page, however many violations the policy reports.
+    dispatchCspViolation(origin);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('ignores a violation that blocks another origin', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const harness = createHarness({ config: configFor('https://otel-other.evidgate.example') });
+    harness.service.start();
+    await settle();
+
+    dispatchCspViolation('https://cdn.other.example/app.js');
+    harness.service.runtime?.beginRouteChange().end('ok', '/runs');
+
+    expect(spansNamed(harness.exporter, 'route.change')).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('ignores a violation of another directive on the exporter origin', async () => {
+    const origin = 'https://otel-directive.evidgate.example';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const harness = createHarness({ config: configFor(origin) });
+    harness.service.start();
+    await settle();
+
+    dispatchCspViolation(origin, 'img-src');
+    harness.service.runtime?.beginRouteChange().end('ok', '/runs');
+
+    expect(spansNamed(harness.exporter, 'route.change')).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('ignores a report-only policy, which blocks nothing', async () => {
+    const origin = 'https://otel-report.evidgate.example';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const harness = createHarness({ config: configFor(origin) });
+    harness.service.start();
+    await settle();
+
+    dispatchCspViolation(origin, 'connect-src', 'report-only');
+    harness.service.runtime?.beginRouteChange().end('ok', '/runs');
+
+    expect(spansNamed(harness.exporter, 'route.change')).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('does not flush on a visibilitychange that is still visible', async () => {

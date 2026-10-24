@@ -110,11 +110,13 @@ same-origin, not because of the nonce — so they are never a reason to add the 
 policy whose nonce appears anywhere but `style-src`.
 
 **`EVIDGATE_WEB_CONNECT_SRC`** is the one environment input: a space- or comma-separated list of
-`https:`/`wss:` origins appended to `connect-src` (`parseConnectSrc` validates each one and fails
-closed on anything else, and empty or unset adds nothing). It is **empty by default**, so a
-collector, object store or IdP origin a later task talks to stays unreachable until it is declared
-here; the web telemetry of 09.1.1-T9 adds its collector origin this way or amends
-`scripts/app-origin-csp.json`.
+`https:`/`wss:` origins appended to `connect-src` (`parseConnectSrc` validates each one — a bare
+origin with an optional port 1–65535 — and fails closed on anything else; empty or unset adds
+nothing). It is **empty by default**, and `scripts/app-origin-csp.json` keeps `connect-src 'self'`
+with **no collector origin committed**: the deploy sets this variable to the origin of the
+`evidgate-otlp-endpoint` meta tag it injects ([Telemetry](#telemetry-0911-t91)), and the collector
+origin itself is owned by 10.3.1-T2, still open. A collector, object store or IdP origin a later
+task talks to stays unreachable until it is declared here.
 
 **Nonce rules.** The server generates a fresh 16-byte base64 nonce per response and writes it into
 both the header and every `__CSP_NONCE__` occurrence of the served locale `index.html`, so `/en/` and
@@ -292,14 +294,25 @@ initializer that starts the facade.
   (`telemetry-config.ts`, exposed as `TELEMETRY_CONFIG`). This story does not edit `index.html`:
   the hosting edge injects both tags (hand-over below).
 
-  | Meta name                         | Accepted value                                                                                                                                | Anything else      |
-  | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-  | `evidgate-otlp-endpoint`          | absolute OTLP/HTTP traces URL; `https:` anywhere, `http:` only for `localhost`/`127.0.0.1`/`[::1]`; no userinfo, no query string, no fragment | treated as unset   |
-  | `evidgate-telemetry-sample-ratio` | number in `[0, 1]`                                                                                                                            | sampling ratio `1` |
+  | Meta name                         | Accepted value                                                                                                       | Anything else                              |
+  | --------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+  | `evidgate-otlp-endpoint`          | absolute `https:` OTLP/HTTP traces URL — no `http:`, not even on loopback; no userinfo, no query string, no fragment | treated as unset: the exporter is disabled |
+  | `evidgate-telemetry-sample-ratio` | number in `[0, 1]`                                                                                                   | sampling ratio `1`                         |
 
   An unset endpoint disables the exporter — **no network call is ever made** — while tracing,
   span creation and `traceparent` propagation still run against a no-op exporter. A ratio decides
   how much of the traffic is exported, never whether the app traces locally.
+
+- **CSP pairing.** `scripts/app-origin-csp.json` stays `connect-src 'self'` — no collector origin
+  is committed — so the deploy must set **`EVIDGATE_WEB_CONNECT_SRC`** to the **origin of the
+  `evidgate-otlp-endpoint`** value it injects: one URL, one origin, so
+  `https://otlp.example.com/v1/traces` pairs with `https://otlp.example.com` (`parseConnectSrc`
+  takes bare `https:`/`wss:` origins only). If the origin is missing, the browser blocks the
+  export as a `connect-src` violation; the app listens for that `securitypolicyviolation` and
+  disables the exporter (one `console.warn`), while tracing and `traceparent` keep working. The
+  same rule from the hosting side is in [`infra/README.md`](../../infra/README.md) and
+  [`docs/runbooks/environments.md`](../../docs/runbooks/environments.md); the collector origin
+  itself is owned by 10.3.1-T2 [OPEN].
 
 - **Sampling.** `ParentBasedSampler` with a root `TraceIdRatioBasedSampler(sampleRatio)`: every
   route change opens a **new root trace**, so the ratio is applied per navigation, and each
@@ -346,10 +359,12 @@ initializer that starts the facade.
   emitted once at the next `NavigationStart`, when the tab turns hidden
   (`visibilitychange`) and on `pagehide`, attributed to the route current at flush time.
 - **Deploy hand-over — 09.1.1-T10 and 10.2.1-T1.4.** The static hosting edge must (a) inject both
-  `<meta>` tags per deployment, and (b) put **exactly the exporter origin** in the app-origin CSP
-  `connect-src` — no wildcard, no `unsafe-*` anywhere. A wrong or missing origin only stops the
-  export (the browser blocks it and the app keeps working); a too-wide `connect-src` would weaken
-  the CSP for every request. Opt-out and the remaining emission wiring are 09.1.1-T9.2.
+  `<meta>` tags per deployment, the endpoint being an absolute `https:` URL, and (b) set
+  `EVIDGATE_WEB_CONNECT_SRC` to that endpoint's origin when it emits the app-origin CSP — the
+  committed policy keeps `connect-src 'self'` and no origin is committed to it (the pairing bullet
+  above). No wildcard and no `unsafe-*` anywhere: a wrong or missing origin only stops the export,
+  while a too-wide `connect-src` would weaken the CSP for every request. Opt-out and the remaining
+  emission wiring are 09.1.1-T9.2.
 
 ## i18n
 

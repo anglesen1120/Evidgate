@@ -63,6 +63,30 @@ function primarySubtag(localeId: string): string {
   return primary ?? '';
 }
 
+/** The origin of an absolute URL, or `null`; total, because an event carries whatever it carries. */
+function originOf(value: string | null): string | null {
+  if (value === null || value === '') {
+    return null;
+  }
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The members of a violation report the guard reads. Narrow on purpose: the browser sends a
+ * `SecurityPolicyViolationEvent`, but a policed page can also see a plain event, and a missing
+ * field must read as "not our block", never as a thrown error.
+ */
+interface ViolationFields {
+  readonly blockedURI?: string;
+  readonly effectiveDirective?: string;
+  readonly violatedDirective?: string;
+  readonly disposition?: string;
+}
+
 /** Route changes, API calls and client errors, traced from one facade. */
 @Injectable({ providedIn: 'root' })
 export class TelemetryService {
@@ -79,6 +103,10 @@ export class TelemetryService {
   private routeChange: RouteChange | null = null;
   /** The last route template; a cancelled navigation keeps the route it was leaving. */
   private currentRoute: string = UNKNOWN_ROUTE;
+  /** Origin of the configured exporter, compared against the URI a CSP violation blocks. */
+  private readonly endpointOrigin = originOf(this.config.endpoint);
+  /** True once a CSP violation showed that export cannot leave the page; warns exactly once. */
+  private exportDisabled = false;
 
   /** The loaded runtime, or `null` while the chunk loads and after a load failure. */
   get runtime(): TelemetryRuntime | null {
@@ -99,6 +127,9 @@ export class TelemetryService {
       return;
     }
     this.state = 'loading';
+    // Registered before the chunk loads: a block found while loading is remembered by
+    // `exportDisabled` and applied to the runtime as soon as it exists.
+    this.document.addEventListener('securitypolicyviolation', this.onSecurityPolicyViolation);
     this.load().catch(() => this.disable());
   }
 
@@ -119,6 +150,9 @@ export class TelemetryService {
     const module = await this.loader();
     this.runtimeValue = module.startTelemetrySdk(this.config, { locale: this.locale });
     this.state = 'ready';
+    if (this.exportDisabled) {
+      this.runtimeValue.disableExport();
+    }
     this.wire();
   }
 
@@ -130,6 +164,38 @@ export class TelemetryService {
     this.state = 'disabled';
     this.runtimeValue = null;
     console.warn('Telemetry is unavailable; the app continues without it.');
+  }
+
+  /**
+   * The app cannot read the CSP header, so a blocked export is learned from the violation event:
+   * the deploy allows exactly the exporter origin in `connect-src`. Only that directive and that
+   * origin switch export off, and the warning names the directive alone — the URI could carry a
+   * token in its query.
+   */
+  private readonly onSecurityPolicyViolation = (event: SecurityPolicyViolationEvent): void => {
+    const report: ViolationFields = event;
+    const directive = report.effectiveDirective ?? report.violatedDirective ?? '';
+    if (this.exportDisabled || report.disposition === 'report-only') {
+      return;
+    }
+    if (!directive.startsWith('connect-src') || !this.blocksEndpoint(report.blockedURI ?? '')) {
+      return;
+    }
+    this.exportDisabled = true;
+    this.runtimeValue?.disableExport();
+    console.warn(
+      `Telemetry export is blocked by the Content-Security-Policy ${directive} directive; ` +
+        'spans stay local.',
+    );
+  };
+
+  /** Whether the blocked resource is the configured exporter: the same URL, or the same origin. */
+  private blocksEndpoint(blockedURI: string): boolean {
+    const endpoint = this.config.endpoint;
+    if (endpoint === null || blockedURI === '') {
+      return false;
+    }
+    return blockedURI === endpoint || originOf(blockedURI) === this.endpointOrigin;
   }
 
   private wire(): void {

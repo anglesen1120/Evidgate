@@ -49,19 +49,19 @@ const ENDPOINT_CASES: readonly EndpointCase[] = [
     expected: 'https://otlp.evidgate.example/v1/traces',
   },
   {
-    label: 'keeps an http endpoint on localhost (a local collector)',
+    label: 'rejects plain http on localhost (the app CSP names an https origin)',
     raw: () => 'http://localhost:4318/v1/traces',
-    expected: 'http://localhost:4318/v1/traces',
+    expected: null,
   },
   {
-    label: 'keeps an http endpoint on 127.0.0.1',
+    label: 'rejects plain http on 127.0.0.1',
     raw: () => 'http://127.0.0.1:4318/v1/traces',
-    expected: 'http://127.0.0.1:4318/v1/traces',
+    expected: null,
   },
   {
-    label: 'keeps an http endpoint on the IPv6 loopback',
+    label: 'rejects plain http on the IPv6 loopback',
     raw: () => 'http://[::1]:4318/v1/traces',
-    expected: 'http://[::1]:4318/v1/traces',
+    expected: null,
   },
   {
     label: 'trims the surrounding whitespace of a tag value',
