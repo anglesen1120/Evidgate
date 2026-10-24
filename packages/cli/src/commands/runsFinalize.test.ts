@@ -5,11 +5,12 @@
 // `unsent_events`), the purge / `--keep-spool` pair, the flag validation that runs before
 // any token work, the 401-only cache purge and the no-token-on-disk rule
 // (04.2.3 §2, §5, §8, §9, §10; contracts/cli.md §5/§7/§11).
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -18,6 +19,7 @@ import { resolveConfig } from '../config.js';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 import { defaultSpoolMaxBytes, ProducerSpool } from '../spool.js';
+import { writerLockFileName } from '../spoolLock.js';
 
 import { deriveFinalizeIdempotencyKey } from './runsFinalize.js';
 
@@ -132,6 +134,29 @@ function finalizeWith(extra: ReadonlyArray<string> = []): string[] {
 /** A valid envelope line: the reader only requires `sequence` and an `event_id`. */
 function envelope(sequence: number): string {
   return JSON.stringify({ sequence, event_id: `evt-${sequence}`, type: 'test.finished' });
+}
+
+/** A pid that is certainly dead: a child process spawned and already waited for. */
+function exitedPid(): number {
+  const child = spawnSync(process.execPath, ['-e', ''], { stdio: 'ignore' });
+  if (child.pid === undefined) throw new Error('could not start the short-lived child');
+  return child.pid;
+}
+
+/** The whole `{ pid, started_at }` record the reporter writes into `writer.lock`. */
+function writerLockText(pid: number): string {
+  return `${JSON.stringify({ pid, started_at: '2026-01-01T00:00:00.000Z' })}\n`;
+}
+
+/** Every file under `directory` (recursive) with its bytes, for a byte-identity assertion. */
+async function snapshotTree(directory: string): Promise<Array<readonly [string, string]>> {
+  const entries = await readdir(directory, { withFileTypes: true, recursive: true });
+  const snapshot: Array<readonly [string, string]> = [];
+  for (const entry of entries.filter((candidate) => candidate.isFile())) {
+    const path = join(entry.parentPath, entry.name);
+    snapshot.push([relative(directory, path), await readFile(path, 'utf8')]);
+  }
+  return snapshot.sort((a, b) => a[0].localeCompare(b[0]));
 }
 
 describe('runs finalize', () => {
@@ -445,6 +470,91 @@ describe('runs finalize', () => {
     } finally {
       await chmod(runDirectory, 0o700);
     }
+  });
+
+  // D-S56-Q8: finalize is the destructive one, so a reporter that still holds the
+  // producer's `writer.lock` refuses the command before the cursor is read — no request,
+  // no purge, and the producer directory is byte-identical afterwards.
+  it('refuses to finalize while the reporter still writes (D-S56-Q8)', async () => {
+    const { spoolDir, producerDir } = await writeSpool({ spooled: 2, acked: 2 });
+    const shardsText = `${JSON.stringify({ producer_id: producerId, sequence_next: 3 })}\n`;
+    await writeFile(join(producerDir, 'shards.json'), shardsText);
+    const artifactId = '5e0f6a3c-8b7d-4c2e-9f10-2a3b4c5d6e7f';
+    await mkdir(join(producerDir, 'uploads'), { recursive: true, mode: 0o700 });
+    await writeFile(join(producerDir, 'uploads', `${artifactId}.json`), '{"artifact_id":"x"}\n');
+    // A live reporter: this test process's pid is alive for certain.
+    await writeFile(join(producerDir, writerLockFileName), writerLockText(process.pid), {
+      mode: 0o600,
+    });
+    const before = await snapshotTree(producerDir);
+    const stub = stubFetch(() => accepted());
+    const out = capture();
+
+    const code = await invoke(finalizeWith(), await devEnv(spoolDir), out, stub.fetchImpl);
+
+    expect(code).toBe(3);
+    expect(out.stdout.join('')).toBe('');
+    expect(out.stderr.join('')).toContain('spool_locked');
+    expect(out.stderr.join('')).toContain(String(process.pid));
+    expect(out.stderr.join('')).toContain('the reporter is still writing this producer');
+    // Nothing was declared and nothing was purged.
+    expect(stub.calls).toHaveLength(0);
+    expect(existsSync(producerDir)).toBe(true);
+    expect(await snapshotTree(producerDir)).toEqual(before);
+  });
+
+  it('finalizes and purges a producer dir that also holds shards.json, uploads/ and a dead writer.lock', async () => {
+    const { spoolDir, producerDir } = await writeSpool({ spooled: 2, acked: 2 });
+    await writeFile(
+      join(producerDir, 'shards.json'),
+      `${JSON.stringify({ producer_id: producerId, sequence_next: 3 })}\n`,
+    );
+    const artifactId = '5e0f6a3c-8b7d-4c2e-9f10-2a3b4c5d6e7f';
+    await mkdir(join(producerDir, 'uploads'), { recursive: true, mode: 0o700 });
+    await writeFile(join(producerDir, 'uploads', `${artifactId}.json`), '{"artifact_id":"x"}\n');
+    // A lock left by a reporter that died is ignored (the reporter's next start owns the
+    // takeover), so the purge still drains and removes the whole producer directory.
+    await writeFile(join(producerDir, writerLockFileName), writerLockText(exitedPid()), {
+      mode: 0o600,
+    });
+    const stub = stubFetch(() => accepted());
+    const out = capture();
+
+    const code = await invoke(finalizeWith(), await devEnv(spoolDir), out, stub.fetchImpl);
+
+    expect(code).toBe(0);
+    expect(stub.calls).toHaveLength(1);
+    expect(sentBody(stub.calls[0])).toMatchObject({
+      producer_id: producerId,
+      shard,
+      last_sequence: 2,
+      count: 2,
+    });
+    expect(out.stdout.join('')).toContain('reconcile accepted (asynchronous)');
+    expect(existsSync(producerDir)).toBe(false);
+  });
+
+  it('keeps the spool when the reporter starts writing during the finalize request', async () => {
+    const { spoolDir, producerDir } = await writeSpool({ spooled: 1, acked: 1 });
+    // The reporter claims the producer between the cursor read and the purge.
+    const stub = stubFetch(async () => {
+      await writeFile(join(producerDir, writerLockFileName), writerLockText(process.pid), {
+        mode: 0o600,
+      });
+      return accepted();
+    });
+    const out = capture();
+
+    await expect(invoke(finalizeWith(), await devEnv(spoolDir), out, stub.fetchImpl)).resolves.toBe(
+      0,
+    );
+
+    expect(out.stdout.join('')).toContain('reconcile accepted (asynchronous)');
+    expect(out.stderr.join('')).toContain('could not be purged');
+    expect(out.stderr.join('')).toContain('the reporter started writing again');
+    // The run IS finalized, but the live reporter keeps its spool.
+    expect(existsSync(join(producerDir, writerLockFileName))).toBe(true);
+    expect(existsSync(join(producerDir, '000001.jsonl'))).toBe(true);
   });
 
   // §5: every flag is validated before any token work, so a bad flag makes no request at

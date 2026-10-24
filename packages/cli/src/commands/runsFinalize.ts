@@ -18,9 +18,12 @@
 //
 // The slot is read and the spool purged under the producer's exclusive `spool.lock`
 // (D2/`spoolLock.ts`), the same lock `events send` holds, so two CLI processes can never
-// interleave an ack, a finalize or a purge. The purge runs only after a 202: a failed
-// finalize keeps every byte, and a failed purge after a 202 is a stderr warning, not an
-// error — the run IS finalized at that point.
+// interleave an ack, a finalize or a purge. A reporter that still holds `writer.lock` makes
+// the command refuse with `spool_locked` (exit 3) before the cursor is read — finalize is
+// the destructive one — and the same guard is re-checked immediately before the recursive
+// purge, so a test run that is still writing never loses its spool (D-S56-Q8). The purge
+// runs only after a 202: a failed finalize keeps every byte, and a failed purge after a 202
+// is a stderr warning, not an error — the run IS finalized at that point.
 //
 // A 403 `producer_slot_taken`, a 422 `unknown_producer`, a 422 `manifest_invalid` or a 409
 // is never retried: the command makes exactly one request and exits 3 with the server's
@@ -39,6 +42,7 @@ import { CliError } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
 import { serverErrorFromResponse, transportError } from '../serverError.js';
 import { ProducerSpool, SpoolCorruptError, spoolCursorFileName } from '../spool.js';
+import { assertNoLiveWriter } from '../spoolLock.js';
 
 import type { CommandDefinition, ParsedValues } from './index.js';
 
@@ -171,116 +175,127 @@ export const runsFinalizeCommand: CommandDefinition = {
       maxBytes: settings.spoolMaxBytes,
     });
 
-    return spool.withLock(async () => {
-      const cursor = await spool.cursor();
-      const unsent = await spool.unsentRange();
-      if (unsent !== null) {
-        throw new CliError(
-          `refusing to finalize run ${runId} producer ${producerId}: ` +
-            `unsent spooled events ${unsent.first}..${unsent.last}`,
-          {
-            code: 'unsent_events',
-            hint: `run 'evidgate events send --run ${runId}' first, then finalize`,
-          },
-        );
-      }
-      const lastSequence = cursor.lastAckedSequence;
-      const count = cursor.ackedCount;
-      // SC9: `cursor.json` is the only source of both declared values, and a count larger
-      // than the sequence it claims to cover cannot be a real ack prefix — it is
-      // corruption, not a value worth sending. `cursor()` already checked the shape and
-      // `last_acked_sequence === next_unacked_sequence - 1`; this is the remaining
-      // cross-field invariant (0 <= count <= last_sequence).
-      if (count > lastSequence) {
-        throw new SpoolCorruptError({
-          chunk: spoolCursorFileName,
-          lineNumber: 1,
-          reason: `acked_count (${count}) must not exceed last_acked_sequence (${lastSequence})`,
-        });
-      }
-      const idempotencyKey = deriveFinalizeIdempotencyKey({
-        runId,
-        producerId,
-        shard,
-        lastSequence,
-        count,
-        manifestHash,
-      });
-
-      const { token } = await getToken(config, deps);
-      const client = createApiClient(config, token, deps.fetch ?? fetch);
-      const result = await finalizeRun({
-        client,
-        path: { r: runId },
-        headers: { 'Idempotency-Key': idempotencyKey },
-        body: {
-          producer_id: producerId,
-          shard,
-          last_sequence: lastSequence,
-          count,
-          manifest_hash: manifestHash,
-        },
-        signal: AbortSignal.timeout(requestTimeoutMs),
-      });
-      const response = result.response;
-      if (response === undefined) {
-        // A network error, a timeout or a refused redirect: the SDK returns no response.
-        throw transportError(result.error);
-      }
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Best-effort: the server's error is the one that must surface (04.2.1 §6).
-          await deleteCachedToken(config).catch(() => undefined);
+    return spool.withLock(
+      async () => {
+        const cursor = await spool.cursor();
+        const unsent = await spool.unsentRange();
+        if (unsent !== null) {
+          throw new CliError(
+            `refusing to finalize run ${runId} producer ${producerId}: ` +
+              `unsent spooled events ${unsent.first}..${unsent.last}`,
+            {
+              code: 'unsent_events',
+              hint: `run 'evidgate events send --run ${runId}' first, then finalize`,
+            },
+          );
         }
-        // A 403 `producer_slot_taken`, a 422 `unknown_producer`/`manifest_invalid` and a
-        // 409 therefore reach stderr as `evidgate: error <code>` with the server's
-        // `request_id`, and exit 3. Exactly one request is made: nothing here retries,
-        // and the hint says a re-run is safe because the server arbitrates on the slot's
-        // closed marker, never on the key.
-        throw finalizeError(result.error, response);
-      }
-      if (response.status !== 202) {
-        // Only a 202 means "accepted, reconcile asynchronous"; anything else 2xx is a
-        // contract violation and must not be reported as a finalize.
-        throw new CliError('the run finalize response was not valid', {
-          code: 'request_failed',
+        const lastSequence = cursor.lastAckedSequence;
+        const count = cursor.ackedCount;
+        // SC9: `cursor.json` is the only source of both declared values, and a count larger
+        // than the sequence it claims to cover cannot be a real ack prefix — it is
+        // corruption, not a value worth sending. `cursor()` already checked the shape and
+        // `last_acked_sequence === next_unacked_sequence - 1`; this is the remaining
+        // cross-field invariant (0 <= count <= last_sequence).
+        if (count > lastSequence) {
+          throw new SpoolCorruptError({
+            chunk: spoolCursorFileName,
+            lineNumber: 1,
+            reason: `acked_count (${count}) must not exceed last_acked_sequence (${lastSequence})`,
+          });
+        }
+        const idempotencyKey = deriveFinalizeIdempotencyKey({
+          runId,
+          producerId,
+          shard,
+          lastSequence,
+          count,
+          manifestHash,
         });
-      }
 
-      if (config.json) {
-        io.stdout(
-          `${JSON.stringify({
-            run_id: runId,
+        const { token } = await getToken(config, deps);
+        const client = createApiClient(config, token, deps.fetch ?? fetch);
+        const result = await finalizeRun({
+          client,
+          path: { r: runId },
+          headers: { 'Idempotency-Key': idempotencyKey },
+          body: {
             producer_id: producerId,
             shard,
             last_sequence: lastSequence,
             count,
             manifest_hash: manifestHash,
-            state: reconcileAcceptedState,
-          })}\n`,
-        );
-      } else {
-        io.stdout(
-          `evidgate: finalized run=${runId} producer=${producerId} shard=${shard} ` +
-            `last_sequence=${lastSequence} count=${count}; ` +
-            'reconcile accepted (asynchronous)\n',
-        );
-      }
+          },
+          signal: AbortSignal.timeout(requestTimeoutMs),
+        });
+        const response = result.response;
+        if (response === undefined) {
+          // A network error, a timeout or a refused redirect: the SDK returns no response.
+          throw transportError(result.error);
+        }
+        if (!response.ok) {
+          if (response.status === 401) {
+            // Best-effort: the server's error is the one that must surface (04.2.1 §6).
+            await deleteCachedToken(config).catch(() => undefined);
+          }
+          // A 403 `producer_slot_taken`, a 422 `unknown_producer`/`manifest_invalid` and a
+          // 409 therefore reach stderr as `evidgate: error <code>` with the server's
+          // `request_id`, and exit 3. Exactly one request is made: nothing here retries,
+          // and the hint says a re-run is safe because the server arbitrates on the slot's
+          // closed marker, never on the key.
+          throw finalizeError(result.error, response);
+        }
+        if (response.status !== 202) {
+          // Only a 202 means "accepted, reconcile asynchronous"; anything else 2xx is a
+          // contract violation and must not be reported as a finalize.
+          throw new CliError('the run finalize response was not valid', {
+            code: 'request_failed',
+          });
+        }
 
-      if (!keepSpool) {
-        try {
-          await spool.purge();
-        } catch (error) {
-          // The run IS finalized; a leftover spool is only local disk. Never fail the
-          // command (exit 0) and never echo a path or the raw error text.
-          io.stderr(
-            `evidgate: warning: the run was finalized but its spool could not be purged ` +
-              `(errno ${errnoName(error)}); delete the producer directory manually\n`,
+        if (config.json) {
+          io.stdout(
+            `${JSON.stringify({
+              run_id: runId,
+              producer_id: producerId,
+              shard,
+              last_sequence: lastSequence,
+              count,
+              manifest_hash: manifestHash,
+              state: reconcileAcceptedState,
+            })}\n`,
+          );
+        } else {
+          io.stdout(
+            `evidgate: finalized run=${runId} producer=${producerId} shard=${shard} ` +
+              `last_sequence=${lastSequence} count=${count}; ` +
+              'reconcile accepted (asynchronous)\n',
           );
         }
-      }
-      return ExitCode.Ok;
-    });
+
+        if (!keepSpool) {
+          try {
+            // Re-checked immediately before the recursive remove: a reporter that started
+            // writing while the finalize request was in flight must not lose its spool
+            // (D-S56-Q8). Nothing is purged when it answers `spool_locked`.
+            await assertNoLiveWriter(spool.directory);
+            await spool.purge();
+          } catch (error) {
+            // The run IS finalized; a leftover spool is only local disk. Never fail the
+            // command (exit 0) and never echo a path or the raw error text.
+            const reason =
+              error instanceof CliError && error.code === 'spool_locked'
+                ? 'the reporter started writing again'
+                : `errno ${errnoName(error)}`;
+            io.stderr(
+              `evidgate: warning: the run was finalized but its spool could not be purged ` +
+                `(${reason}); delete the producer directory manually\n`,
+            );
+          }
+        }
+        return ExitCode.Ok;
+      },
+      { requireNoLiveWriter: true },
+    );
   },
 };
 

@@ -125,16 +125,18 @@ function npx(version: string, args: string): string {
  * job that mints the token runs only on `workflow_dispatch` or a push to the default
  * branch, inside the secretless environment `evidgate-upload`, with `contents: read` +
  * `id-token: write` so the exchange step can present the GitHub OIDC JWT.
- * `EVIDGATE_API_URL` is a repository configuration VARIABLE, the only stored setting.
- * No `secrets.` reference exists. The rules and their sources are in
- * `docs/security/customer-ci-recipe.md`.
+ * `EVIDGATE_API_URL` and `EVIDGATE_EXECUTION` are repository configuration VARIABLES —
+ * the only stored settings (`EVIDGATE_EXECUTION` is the planned execution's 64-hex
+ * digest, not a secret). No `secrets.` reference exists. The rules and their sources are
+ * in `docs/security/customer-ci-recipe.md`.
  */
 function renderGithub(project: string, version: string): string {
   return `# Evidgate quickstart — GitHub Actions workflow (rendered by \`evidgate quickstart\`).
 #
-# The only stored setting is the repository configuration VARIABLE EVIDGATE_API_URL
-# (Settings → Secrets and variables → Actions → Variables). No secret is stored: the
-# CLI exchanges the GitHub OIDC token for a short-lived Evidgate CI token.
+# The stored settings are repository configuration VARIABLES: EVIDGATE_API_URL and
+# EVIDGATE_EXECUTION (Settings → Secrets and variables → Actions → Variables; the
+# execution key is a 64-hex digest, not a secret). No secret is stored: the CLI exchanges
+# the GitHub OIDC token for a short-lived Evidgate CI token.
 #
 # Fork-safe by construction: \`test\` runs on pull_request and holds no Evidgate setting
 # and no token; \`upload\` mints the token only on a workflow_dispatch or push from the
@@ -247,8 +249,21 @@ jobs:
           MANIFEST_HASH: \${{ steps.manifest.outputs.manifest_hash }}
           EVIDGATE_SPOOL_DIR: \${{ github.workspace }}/.evidgate-spool
         run: ${npx(version, 'runs finalize --run "$RUN_ID" --producer shard-1 --shard 1 --manifest-hash "$MANIFEST_HASH"')}
-      # Not yet available — this step lands with its owning task:
-      #   artifacts upload (04.2.4-T1)
+      # Upload the evidence files this job produced (a trace, a video, the report). Each
+      # file must sit under ./test-results or ./playwright-report (or a --dir root), and
+      # its media type must be one the kind's policy accepts (an unknown extension needs
+      # --media-type). --execution-key is the planned execution this shard ran: the
+      # manifest's executions[] entry, stored as the repository VARIABLE
+      # EVIDGATE_EXECUTION (a 64-hex digest, not a secret). The command hashes the
+      # file, PUTs it to the presigned URL and verifies size and checksum at complete; a
+      # 413 means the project's cap refused it.
+      - env:
+          RUN_ID: \${{ steps.run.outputs.run_id }}
+          EVIDGATE_EXECUTION: \${{ vars.EVIDGATE_EXECUTION }}
+          EVIDGATE_SPOOL_DIR: \${{ github.workspace }}/.evidgate-spool
+        run: |
+          ${npx(version, 'artifacts upload --run "$RUN_ID" --file test-results/trace.zip --kind trace --execution-key "$EVIDGATE_EXECUTION"')}
+          ${npx(version, 'artifacts upload --run "$RUN_ID" --file playwright-report/index.html --kind raw_report --media-type text/html --execution-key "$EVIDGATE_EXECUTION"')}
 `;
 }
 
@@ -307,8 +322,14 @@ ${npx(version, 'events send --run "$run_id"')}
 # with --shard its 1-based manifest index.
 ${npx(version, 'runs finalize --run "$run_id" --producer shard-1 --shard 1 --manifest-hash "$manifest_hash"')}
 
-# Not yet available — this step lands with its owning task:
-#   artifacts upload (04.2.4-T1)
+# Upload the evidence files this run produced. Each file must sit under ./test-results or
+# ./playwright-report (or a --dir root); an extension the kind's policy does not name needs
+# --media-type. --execution-key is the planned execution this shard ran (the manifest's
+# executions[] entry), a 64-hex digest the CI provides. The command hashes the file, PUTs
+# it to the presigned URL and verifies size and checksum at complete, so a re-run never
+# creates a second artifact row for the bytes.
+: "\${EVIDGATE_EXECUTION:?set EVIDGATE_EXECUTION to the planned execution this shard ran}"
+${npx(version, 'artifacts upload --run "$run_id" --file test-results/trace.zip --kind trace --execution-key "$EVIDGATE_EXECUTION"')}
 `;
 }
 

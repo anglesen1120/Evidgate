@@ -46,5 +46,11 @@ npx --yes --package @evidgate/cli@0.0.0 -- evidgate events send --run "$run_id"
 # with --shard its 1-based manifest index.
 npx --yes --package @evidgate/cli@0.0.0 -- evidgate runs finalize --run "$run_id" --producer shard-1 --shard 1 --manifest-hash "$manifest_hash"
 
-# Not yet available — this step lands with its owning task:
-#   artifacts upload (04.2.4-T1)
+# Upload the evidence files this run produced. Each file must sit under ./test-results or
+# ./playwright-report (or a --dir root); an extension the kind's policy does not name needs
+# --media-type. --execution-key is the planned execution this shard ran (the manifest's
+# executions[] entry), a 64-hex digest the CI provides. The command hashes the file, PUTs
+# it to the presigned URL and verifies size and checksum at complete, so a re-run never
+# creates a second artifact row for the bytes.
+: "${EVIDGATE_EXECUTION:?set EVIDGATE_EXECUTION to the planned execution this shard ran}"
+npx --yes --package @evidgate/cli@0.0.0 -- evidgate artifacts upload --run "$run_id" --file test-results/trace.zip --kind trace --execution-key "$EVIDGATE_EXECUTION"

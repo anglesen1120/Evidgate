@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildEnvelope, EXT_SCHEMA, type UnsignedEnvelope } from './envelope.js';
-import { CHECKPOINT_FILE, EvidgateInvalidSpoolIdError, SpoolWriter } from './spool.js';
+import { EvidgateInvalidSpoolIdError, SHARDS_FILE, SpoolWriter } from './spool.js';
 
 const isWindows = process.platform === 'win32';
 const tempDirs: string[] = [];
@@ -57,12 +57,13 @@ function producerDir(spool: string, runId = 'run-1', producerId = 'pw-0'): strin
 }
 
 describe('spool crash consistency', () => {
-  it('does not reuse sequences when the first flush crashed mid-line (no checkpoint)', () => {
+  it('does not reuse sequences when the first flush crashed mid-line (no record)', () => {
     const spool = tempSpool();
     const dir = producerDir(spool);
     mkdirSync(dir, { recursive: true });
-    // The first flush wrote sequences 1..3 completely and was killed mid-line 4, before
-    // the checkpoint was ever written. The three complete lines are durable on disk.
+    // The first flush wrote sequences 1..3 completely and was killed mid-line 4, before the
+    // writer ever reached a rotation (so no shards.json exists at all). The three complete
+    // lines are durable on disk.
     writeFileSync(
       join(dir, '000001.jsonl'),
       chunkLine('pw-0', 1) + chunkLine('pw-0', 2) + chunkLine('pw-0', 3) + TORN_LINE,
@@ -79,7 +80,7 @@ describe('spool crash consistency', () => {
     writer.close();
   });
 
-  it('does not reuse sequences when the checkpoint is corrupt and the last line is torn', () => {
+  it('does not reuse sequences when the record is corrupt and the last line is torn', () => {
     const spool = tempSpool();
     const dir = producerDir(spool);
     mkdirSync(dir, { recursive: true });
@@ -87,14 +88,14 @@ describe('spool crash consistency', () => {
       join(dir, '000001.jsonl'),
       chunkLine('pw-0', 1) + chunkLine('pw-0', 2) + chunkLine('pw-0', 3) + TORN_LINE,
     );
-    writeFileSync(join(dir, CHECKPOINT_FILE), '{not json');
+    writeFileSync(join(dir, SHARDS_FILE), '{not json');
 
     const writer = new SpoolWriter({ spoolDir: spool, runId: 'run-1', producerId: 'pw-0' });
     expect(writer.nextSequenceNumber).toBe(4);
     writer.close();
   });
 
-  it('recovers from a corrupt checkpoint when the chunk is intact', () => {
+  it('recovers from a corrupt shards.json when the chunk is intact', () => {
     const spool = tempSpool();
     const dir = producerDir(spool);
     mkdirSync(dir, { recursive: true });
@@ -102,21 +103,21 @@ describe('spool crash consistency', () => {
       join(dir, '000001.jsonl'),
       chunkLine('pw-0', 1) + chunkLine('pw-0', 2) + chunkLine('pw-0', 3),
     );
-    writeFileSync(join(dir, CHECKPOINT_FILE), '{not json');
+    writeFileSync(join(dir, SHARDS_FILE), '{not json');
 
     const writer = new SpoolWriter({ spoolDir: spool, runId: 'run-1', producerId: 'pw-0' });
     expect(writer.nextSequenceNumber).toBe(4);
     writer.close();
   });
 
-  it('ignores a checkpoint whose next_sequence is not a positive integer', () => {
+  it('ignores a record whose sequence_next is not a positive integer', () => {
     const spool = tempSpool();
     const dir = producerDir(spool);
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, '000001.jsonl'), chunkLine('pw-0', 1) + chunkLine('pw-0', 2));
     writeFileSync(
-      join(dir, CHECKPOINT_FILE),
-      `${JSON.stringify({ producer_id: 'pw-0', next_sequence: 1.5 })}\n`,
+      join(dir, SHARDS_FILE),
+      `${JSON.stringify({ producer_id: 'pw-0', shard_index: 1, sequence_next: 1.5 })}\n`,
     );
 
     const writer = new SpoolWriter({ spoolDir: spool, runId: 'run-1', producerId: 'pw-0' });

@@ -1,59 +1,858 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Evidgate Web UI designs</title><style>body{font:16px system-ui;max-width:760px;margin:2rem auto;padding:0 1rem;color:#14233b}h1{font-size:1.5rem}h2{font-size:1.05rem;margin-top:1.6rem}li{margin:.25rem 0}a{color:#0b6e6e}small{color:#667}</style></head><body><h1>Evidgate Web UI — 39 page designs</h1><p><small>OpenDesign output, one folder per page. See NAV.md and RUNS.md.</small></p>
-<h2>Shell and access</h2><ul>
-<li><a href="01-app-shell/evidgate-workspace-shell.html">01 · app shell</a></li>
-<li><a href="02-login/evidgate-sign-in.html">02 · login</a></li>
-</ul>
-<h2>Runs and evidence</h2><ul>
-<li><a href="03-run-list/evidgate-runs.html">03 · run list</a></li>
-<li><a href="04-run-detail/evidgate-run-detail.html">04 · run detail</a></li>
-<li><a href="05-evidence-panel/evidgate-run-detail.html">05 · evidence panel</a></li>
-<li><a href="06-decision-waivers/evidgate-run-decision.html">06 · decision waivers</a></li>
-<li><a href="07-report-comparison/evidgate-report-compare.html">07 · report comparison</a></li>
-</ul>
-<h2>Failure investigation</h2><ul>
-<li><a href="08-failure-inbox/evidgate-failure-inbox.html">08 · failure inbox</a></li>
-<li><a href="09-failure-detail-triage/evidgate-incident-detail.html">09 · failure detail triage</a></li>
-<li><a href="10-investigation-history/evidgate-case-history.html">10 · investigation history</a></li>
-<li><a href="11-artifact-viewer/evidgate-artifact-viewer.html">11 · artifact viewer</a></li>
-</ul>
-<h2>Healing</h2><ul>
-<li><a href="12-healing-queue/evidgate-healing-review.html">12 · healing queue</a></li>
-<li><a href="13-healing-shadow-detail/evidgate-candidate-detail.html">13 · healing shadow detail</a></li>
-<li><a href="14-healing-approval/evidgate-candidate-detail.html">14 · healing approval</a></li>
-<li><a href="15-knowledge-revocation/evidgate-knowledge-lineage.html">15 · knowledge revocation</a></li>
-<li><a href="16-healing-availability/evidgate-healing-availability.html">16 · healing availability</a></li>
-</ul>
-<h2>Test Studio</h2><ul>
-<li><a href="17-studio-template-gallery/evidgate-test-studio.html">17 · studio template gallery</a></li>
-<li><a href="18-studio-draft-editor/evidgate-test-studio.html">18 · studio draft editor</a></li>
-<li><a href="19-studio-review-merge/evidgate-draft-review.html">19 · studio review merge</a></li>
-<li><a href="20-suite-composition/evidgate-suite-composition.html">20 · suite composition</a></li>
-</ul>
-<h2>Release and quality</h2><ul>
-<li><a href="21-release-view/evidgate-release-view.html">21 · release view</a></li>
-<li><a href="22-quality-overview/evidgate-quality-overview.html">22 · quality overview</a></li>
-</ul>
-<h2>Projects and catalog</h2><ul>
-<li><a href="23-onboarding-wizard/evidgate-onboarding.html">23 · onboarding wizard</a></li>
-<li><a href="24-project-connection/evidgate-project-overview.html">24 · project connection</a></li>
-<li><a href="25-test-catalog/evidgate-test-catalog.html">25 · test catalog</a></li>
-<li><a href="26-mapping-resolution/evidgate-mapping-resolution.html">26 · mapping resolution</a></li>
-</ul>
-<h2>Settings</h2><ul>
-<li><a href="27-settings-shell/evidgate-settings.html">27 · settings shell</a></li>
-<li><a href="28-members-roles/evidgate-members-roles.html">28 · members roles</a></li>
-<li><a href="29-secret-references/evidgate-secret-references.html">29 · secret references</a></li>
-<li><a href="30-policy-revisions/evidgate-policy-revisions.html">30 · policy revisions</a></li>
-<li><a href="31-quota-retention/evidgate-usage-retention.html">31 · quota retention</a></li>
-<li><a href="32-audit-log/evidgate-audit-log.html">32 · audit log</a></li>
-<li><a href="33-security-events/evidgate-security-events.html">33 · security events</a></li>
-<li><a href="34-agent-pools/evidgate-agents-pools.html">34 · agent pools</a></li>
-<li><a href="35-integrations-webhooks/evidgate-webhook-integrations.html">35 · integrations webhooks</a></li>
-<li><a href="36-support-access/evidgate-support-access.html">36 · support access</a></li>
-<li><a href="37-api-tokens/evidgate-api-tokens.html">37 · api tokens</a></li>
-<li><a href="38-deploy-targets/evidgate-deploy-targets.html">38 · deploy targets</a></li>
-</ul>
-<h2>Design review</h2><ul>
-<li><a href="39-locale-layout-review/evidgate-localization-review.html">39 · locale layout review</a></li>
-</ul>
-</body></html>
+<!doctype html>
+<html lang="vi" data-theme="light" data-nav="" data-phase-min="G1">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Evidgate Web UI v2 · Bản đồ thiết kế</title>
+  <link rel="stylesheet" href="assets/evidgate.css">
+  <script src="assets/evidgate.js" defer></script>
+</head>
+<body>
+  <a class="eg-skip-link" href="#main">Bỏ qua tới nội dung / Skip to content</a>
+  <main tabindex="-1" class="eg-shell__main" id="main">
+    <div class="eg-shell__content">
+      <header class="eg-page-header">
+        <div>
+          <p><span data-en="Evidgate Web UI v2" data-vi="Evidgate Web UI v2">Evidgate Web UI v2</span> · <span data-en="Design review index" data-vi="Chỉ mục xem xét thiết kế">Chỉ mục xem xét thiết kế</span></p>
+          <h1 class="eg-page-header__title" data-en="47-screen design inventory" data-vi="Bản đồ thiết kế 47 màn hình">Bản đồ thiết kế 47 màn hình</h1>
+          <p class="eg-page-header__description" data-en="Review inventory for the authoring-first workbench. All 47 routes resolve now. This page is review navigation, not product navigation." data-vi="Danh mục xem xét cho không gian làm việc ưu tiên soạn kiểm thử. Tất cả 47 tuyến đã mở được. Đây là điều hướng xem xét, không phải điều hướng sản phẩm.">Danh mục xem xét cho không gian làm việc ưu tiên soạn kiểm thử. Tất cả 47 tuyến đã mở được. Đây là điều hướng xem xét, không phải điều hướng sản phẩm.</p>
+          <p class="eg-page-header__meta">
+            <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">47 routes</span></span>
+            <span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1–G4</span></span>
+            <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">P1–P7</span></span>
+            <span data-en="Vietnamese default" data-vi="Mặc định tiếng Việt">Mặc định tiếng Việt</span>
+          </p>
+        </div>
+        <div class="eg-page-header__actions">
+          <a class="eg-btn eg-btn--primary" href="00-components/evidgate-components.html">
+            <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-grid"></use></svg>
+            <span class="eg-btn__label" data-en="Component gallery" data-vi="Thư viện thành phần">Thư viện thành phần</span>
+          </a>
+          <a class="eg-btn eg-btn--secondary" href="01-app-shell/evidgate-workspace-shell.html">
+            <span class="eg-btn__label" data-en="Open workspace" data-vi="Mở không gian làm việc">Mở không gian làm việc</span>
+          </a>
+        </div>
+      </header>
+
+      <div data-eg-review data-eg-states="default,loading,empty,no-match,error,403,404,401,412,429,success,long"></div>
+
+      <section class="eg-banner eg-banner--info" aria-labelledby="review-note-title">
+        <span class="eg-banner__icon"><svg class="eg-icon eg-icon--md" aria-hidden="true" focusable="false"><use href="#eg-i-book"></use></svg></span>
+        <div class="eg-banner__body">
+          <strong id="review-note-title" data-en="How to review P1" data-vi="Cách xem xét P1">Cách xem xét P1</strong>
+          <p data-en="Check 1280px and 360px, light and dark, Vietnamese and English. Planned paths are reserved by the shared registry and contain no fabricated content yet." data-vi="Kiểm tra ở 1280px và 360px, giao diện sáng và tối, tiếng Việt và tiếng Anh. Các đường dẫn dự kiến được giữ chỗ trong registry dùng chung và chưa có nội dung dựng sẵn.">Kiểm tra ở 1280px và 360px, giao diện sáng và tối, tiếng Việt và tiếng Anh. Các đường dẫn dự kiến được giữ chỗ trong registry dùng chung và chưa có nội dung dựng sẵn.</p>
+        </div>
+      </section>
+
+      <section class="eg-grid" aria-label="Foundation summary" data-cols="4">
+        <div class="eg-kpi">
+          <span class="eg-kpi__label" data-en="Registry routes" data-vi="Tuyến trong registry">Tuyến trong registry</span>
+          <span class="eg-kpi__value">47</span>
+          <span class="eg-kpi__context" data-en="47 built · 0 planned" data-vi="47 đã dựng · 0 dự kiến">47 đã dựng · 0 dự kiến</span>
+        </div>
+        <div class="eg-kpi">
+          <span class="eg-kpi__label" data-en="Shared assets" data-vi="Tài nguyên dùng chung">Tài nguyên dùng chung</span>
+          <span class="eg-kpi__value">2</span>
+          <span class="eg-kpi__context" data-en="One CSS file, one JS file" data-vi="Một tệp CSS, một tệp JS">Một tệp CSS, một tệp JS</span>
+        </div>
+        <div class="eg-kpi">
+          <span class="eg-kpi__label" data-en="Generation phases" data-vi="Giai đoạn sinh trang">Giai đoạn sinh trang</span>
+          <span class="eg-kpi__value">P1–P7</span>
+          <span class="eg-kpi__context" data-en="Phase gates G1–G4" data-vi="Cổng giai đoạn G1–G4">Cổng giai đoạn G1–G4</span>
+        </div>
+        <div class="eg-kpi">
+          <span class="eg-kpi__label" data-en="Navigation groups" data-vi="Nhóm điều hướng">Nhóm điều hướng</span>
+          <span class="eg-kpi__value">5</span>
+          <span class="eg-kpi__context" data-en="Test design first, Settings last" data-vi="Thiết kế kiểm thử trước, Cài đặt sau">Thiết kế kiểm thử trước, Cài đặt sau</span>
+        </div>
+      </section>
+
+      <div data-eg-hide-state="loading,empty,no-match,error,403,404,401,412,429">
+        <div class="eg-stack" data-gap="7">
+          <section class="eg-banner eg-banner--info" data-eg-show-state="success" hidden>
+            <span class="eg-banner__icon"><svg class="eg-icon eg-icon--md" aria-hidden="true" focusable="false"><use href="#eg-i-check"></use></svg></span>
+            <div class="eg-banner__body">
+              <strong data-en="Review state: success" data-vi="Trạng thái xem xét: thành công">Trạng thái xem xét: thành công</strong>
+              <p data-en="Representative server result. No live data is called." data-vi="Kết quả minh hoạ từ máy chủ. Không gọi dữ liệu thực.">Kết quả minh hoạ từ máy chủ. Không gọi dữ liệu thực.</p>
+            </div>
+          </section>
+          <section class="eg-banner eg-banner--info" data-eg-show-state="long" hidden>
+            <span class="eg-banner__icon"><svg class="eg-icon eg-icon--md" aria-hidden="true" focusable="false"><use href="#eg-i-list"></use></svg></span>
+            <div class="eg-banner__body">
+              <strong data-en="Review state: long content" data-vi="Trạng thái xem xét: nội dung dài">Trạng thái xem xét: nội dung dài</strong>
+              <p data-en="Long localized labels and paths are shown in the inventory below." data-vi="Nhãn bản địa hoá dài và đường dẫn được hiển thị trong danh mục bên dưới.">Nhãn bản địa hoá dài và đường dẫn được hiển thị trong danh mục bên dưới.</p>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="foundation-files-title">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="foundation-files-title" data-en="P1 foundation files" data-vi="Tệp nền tảng P1">Tệp nền tảng P1</h2>
+              </div>
+              <span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span>
+            </header>
+            <div class="eg-table__wrap">
+              <table class="eg-table eg-table--compact">
+                <caption class="eg-table__caption" data-en="Six P1 deliverables. Shared assets are reused by every later page." data-vi="Sáu tệp P1. Tài nguyên dùng chung được mọi trang sau tái sử dụng.">Sáu tệp P1. Tài nguyên dùng chung được mọi trang sau tái sử dụng.</caption>
+                <thead>
+                  <tr>
+                    <th scope="col"><span data-en="File" data-vi="Tệp">Tệp</span></th>
+                    <th scope="col"><span data-en="Path" data-vi="Đường dẫn">Đường dẫn</span></th>
+                    <th scope="col"><span data-en="Purpose" data-vi="Mục đích">Mục đích</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label-en="Stylesheet" data-label-vi="Bảng kiểu" data-label="Bảng kiểu"><span data-en="Stylesheet" data-vi="Bảng kiểu">Bảng kiểu</span> <code>evidgate.css</code></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>assets/evidgate.css</code></td>
+                    <td data-label-en="Purpose" data-label-vi="Mục đích" data-label="Mục đích" data-en="Layered tokens, layout and the canonical component registry" data-vi="Token theo lớp, bố cục và registry thành phần chuẩn">Token theo lớp, bố cục và registry thành phần chuẩn</td>
+                  </tr>
+                  <tr>
+                    <td data-label-en="Script" data-label-vi="Mã kịch bản" data-label="Mã kịch bản"><span data-en="Script" data-vi="Mã kịch bản">Mã kịch bản</span> <code>evidgate.js</code></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>assets/evidgate.js</code></td>
+                    <td data-label-en="Purpose" data-label-vi="Mục đích" data-label="Mục đích" data-en="Registry-driven navigation, sprite, review controls and declared interactions" data-vi="Điều hướng từ registry, sprite, điều khiển xem xét và tương tác khai báo">Điều hướng từ registry, sprite, điều khiển xem xét và tương tác khai báo</td>
+                  </tr>
+                  <tr>
+                    <td data-label-en="Index" data-label-vi="Chỉ mục" data-label="Chỉ mục"><span data-en="Index" data-vi="Chỉ mục">Chỉ mục</span> <a href="index.html">index.html</a></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>index.html</code></td>
+                    <td data-label-en="Purpose" data-label-vi="Mục đích" data-label="Mục đích" data-en="This review inventory" data-vi="Danh mục xem xét này">Danh mục xem xét này</td>
+                  </tr>
+                  <tr>
+                    <td data-label-en="Gallery" data-label-vi="Thư viện" data-label="Thư viện"><span data-en="Gallery" data-vi="Thư viện">Thư viện</span> <a href="00-components/evidgate-components.html">evidgate-components.html</a></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>00-components/evidgate-components.html</code></td>
+                    <td data-label-en="Purpose" data-label-vi="Mục đích" data-label="Mục đích" data-en="Every family, variant and state, with a coverage matrix" data-vi="Mọi họ, biến thể và trạng thái, kèm ma trận độ phủ">Mọi họ, biến thể và trạng thái, kèm ma trận độ phủ</td>
+                  </tr>
+                  <tr>
+                    <td data-label-en="Shell" data-label-vi="Khung ứng dụng" data-label="Khung ứng dụng"><span data-en="Shell" data-vi="Khung ứng dụng">Khung ứng dụng</span> <a href="01-app-shell/evidgate-workspace-shell.html">evidgate-workspace-shell.html</a></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>01-app-shell/evidgate-workspace-shell.html</code></td>
+                    <td data-label-en="Purpose" data-label-vi="Mục đích" data-label="Mục đích" data-en="Authoring-first G1 shell with Checkout tree preview" data-vi="Khung G1 ưu tiên soạn kiểm thử với cây Checkout">Khung G1 ưu tiên soạn kiểm thử với cây Checkout</td>
+                  </tr>
+                  <tr>
+                    <td data-label-en="Sign-in" data-label-vi="Đăng nhập" data-label="Đăng nhập"><span data-en="Sign-in" data-vi="Đăng nhập">Đăng nhập</span> <a href="02-login/evidgate-sign-in.html">evidgate-sign-in.html</a></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>02-login/evidgate-sign-in.html</code></td>
+                    <td data-label-en="Purpose" data-label-vi="Mục đích" data-label="Mục đích" data-en="Authentication states without invented credential fields" data-vi="Các trạng thái đăng nhập, không thêm trường thông tin đăng nhập tự chế">Các trạng thái đăng nhập, không thêm trường thông tin đăng nhập tự chế</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="p1-title">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="p1-title">P1 · <span data-en="Foundation" data-vi="Nền tảng">Nền tảng</span></h2>
+                <p data-en="Shared system, shell and sign-in. Two product routes resolve now." data-vi="Hệ thống dùng chung, khung ứng dụng và đăng nhập. Hai tuyến sản phẩm mở được ngay.">Hệ thống dùng chung, khung ứng dụng và đăng nhập. Hai tuyến sản phẩm mở được ngay.</p>
+              </div>
+              <span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="2 built" data-vi="2 đã dựng">2 đã dựng</span></span>
+            </header>
+            <div class="eg-table__wrap">
+              <table class="eg-table">
+                <caption class="eg-table__caption">P1 · <span data-en="Foundation" data-vi="Nền tảng">Nền tảng</span> · G1</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col"><span data-en="Route" data-vi="Tuyến">Tuyến</span></th>
+                    <th scope="col"><span data-en="Label" data-vi="Nhãn">Nhãn</span></th>
+                    <th scope="col"><span data-en="Path" data-vi="Đường dẫn">Đường dẫn</span></th>
+                    <th scope="col"><span data-en="Group" data-vi="Nhóm">Nhóm</span></th>
+                    <th scope="col"><span data-en="Phase" data-vi="Giai đoạn">Giai đoạn</span></th>
+                    <th scope="col"><span data-en="Status" data-vi="Trạng thái">Trạng thái</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="#" data-label-en="#" data-label-vi="#">01</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="01-app-shell/evidgate-workspace-shell.html"><code>shell</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Workspace" data-vi="Không gian làm việc">Không gian làm việc</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>01-app-shell/evidgate-workspace-shell.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">D</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td data-label="#" data-label-en="#" data-label-vi="#">02</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="02-login/evidgate-sign-in.html"><code>sign-in</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Sign in" data-vi="Đăng nhập">Đăng nhập</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>02-login/evidgate-sign-in.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">—</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="p2-title" id="p2">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="p2-title">P2 · G1 · <span data-en="Home &amp; settings" data-vi="Trang chủ và cài đặt">Trang chủ và cài đặt</span></h2>
+                <p data-en="Project overview, onboarding, settings, AI settings, members and usage." data-vi="Tổng quan dự án, bắt đầu, cài đặt, cài đặt AI, thành viên và mức sử dụng.">Tổng quan dự án, bắt đầu, cài đặt, cài đặt AI, thành viên và mức sử dụng.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">6</span></span>
+            </header>
+            <div class="eg-table__wrap">
+              <table class="eg-table">
+                <caption class="eg-table__caption">P2 · 6 <span data-en="routes" data-vi="tuyến">tuyến</span> · G1</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col"><span data-en="Route" data-vi="Tuyến">Tuyến</span></th>
+                    <th scope="col"><span data-en="Label" data-vi="Nhãn">Nhãn</span></th>
+                    <th scope="col"><span data-en="Path" data-vi="Đường dẫn">Đường dẫn</span></th>
+                    <th scope="col"><span data-en="Group" data-vi="Nhóm">Nhóm</span></th>
+                    <th scope="col"><span data-en="Phase" data-vi="Giai đoạn">Giai đoạn</span></th>
+                    <th scope="col"><span data-en="Status" data-vi="Trạng thái">Trạng thái</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>23</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="23-onboarding-wizard/evidgate-onboarding.html"><code>onboarding</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Onboarding" data-vi="Bắt đầu">Bắt đầu</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>23-onboarding-wizard/evidgate-onboarding.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">D</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>24</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="24-project-connection/evidgate-project-overview.html"><code>overview</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Overview" data-vi="Tổng quan">Tổng quan</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>24-project-connection/evidgate-project-overview.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">D</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>27</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="27-settings-shell/evidgate-settings.html"><code>settings</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="General" data-vi="Chung">Chung</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>27-settings-shell/evidgate-settings.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>28</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="28-members-roles/evidgate-members-roles.html"><code>members</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Members &amp; roles" data-vi="Thành viên và vai trò">Thành viên và vai trò</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>28-members-roles/evidgate-members-roles.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>31</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="31-quota-retention/evidgate-usage-retention.html"><code>quota</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Usage &amp; credits" data-vi="Mức sử dụng và tín dụng AI">Mức sử dụng và tín dụng AI</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>31-quota-retention/evidgate-usage-retention.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>44</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="44-ai-settings/evidgate-ai-settings.html"><code>ai-settings</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>44-ai-settings/evidgate-ai-settings.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="p3-title" id="p3">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="p3-title">P3 · G1 · <span data-en="Authoring" data-vi="Soạn thử">Soạn thử</span></h2>
+                <p data-en="Feature tree, manual editor, pending batch, generation and import/export." data-vi="Cây chức năng, soạn thủ công, lô chờ áp dụng, tạo kiểm thử và nhập/xuất.">Cây chức năng, soạn thủ công, lô chờ áp dụng, tạo kiểm thử và nhập/xuất.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">5</span></span>
+            </header>
+            <div class="eg-table__wrap">
+              <table class="eg-table">
+                <caption class="eg-table__caption">P3 · 5 <span data-en="routes" data-vi="tuyến">tuyến</span> · G1</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col"><span data-en="Route" data-vi="Tuyến">Tuyến</span></th>
+                    <th scope="col"><span data-en="Label" data-vi="Nhãn">Nhãn</span></th>
+                    <th scope="col"><span data-en="Path" data-vi="Đường dẫn">Đường dẫn</span></th>
+                    <th scope="col"><span data-en="Group" data-vi="Nhóm">Nhóm</span></th>
+                    <th scope="col"><span data-en="Phase" data-vi="Giai đoạn">Giai đoạn</span></th>
+                    <th scope="col"><span data-en="Status" data-vi="Trạng thái">Trạng thái</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>40</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="40-authoring-tree/evidgate-authoring-tree.html"><code>authoring</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Feature tree" data-vi="Cây chức năng">Cây chức năng</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>40-authoring-tree/evidgate-authoring-tree.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">D</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>41</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="41-test-case-editor/evidgate-test-case-editor.html"><code>test-case-editor</code> → <code>authoring</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Test case editor" data-vi="Soạn ca kiểm thử">Soạn ca kiểm thử</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>41-test-case-editor/evidgate-test-case-editor.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">D</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>42</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="42-pending-changes/evidgate-pending-changes.html"><code>pending-changes</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Pending changes" data-vi="Thay đổi chờ áp dụng">Thay đổi chờ áp dụng</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>42-pending-changes/evidgate-pending-changes.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">D</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>43</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="43-generation/evidgate-generation.html"><code>generation</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Generate tests" data-vi="Tạo kiểm thử">Tạo kiểm thử</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>43-generation/evidgate-generation.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">D</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>45</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="45-import-export/evidgate-import-export.html"><code>import-export</code> → <code>authoring</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Import / export" data-vi="Nhập / xuất">Nhập / xuất</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>45-import-export/evidgate-import-export.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">D</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="p4-title" id="p4">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="p4-title">P4 · G2 · <span data-en="Runs &amp; evidence" data-vi="Lượt chạy và bằng chứng">Lượt chạy và bằng chứng</span></h2>
+                <p data-en="Generated scripts, catalog, runs, evidence, comparison and artifacts." data-vi="Kịch bản đã tạo, danh mục, lượt chạy, bằng chứng, so sánh và hiện vật.">Kịch bản đã tạo, danh mục, lượt chạy, bằng chứng, so sánh và hiện vật.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">8</span></span>
+            </header>
+            <div class="eg-table__wrap">
+              <table class="eg-table">
+                <caption class="eg-table__caption">P4 · 8 <span data-en="routes" data-vi="tuyến">tuyến</span> · G2</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col"><span data-en="Route" data-vi="Tuyến">Tuyến</span></th>
+                    <th scope="col"><span data-en="Label" data-vi="Nhãn">Nhãn</span></th>
+                    <th scope="col"><span data-en="Path" data-vi="Đường dẫn">Đường dẫn</span></th>
+                    <th scope="col"><span data-en="Group" data-vi="Nhóm">Nhóm</span></th>
+                    <th scope="col"><span data-en="Phase" data-vi="Giai đoạn">Giai đoạn</span></th>
+                    <th scope="col"><span data-en="Status" data-vi="Trạng thái">Trạng thái</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>03</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="03-run-list/evidgate-runs.html"><code>runs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Runs" data-vi="Lượt chạy">Lượt chạy</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>03-run-list/evidgate-runs.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">R</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>04</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="04-run-detail/evidgate-run-detail.html"><code>run-detail</code> → <code>runs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Run detail" data-vi="Chi tiết lượt chạy">Chi tiết lượt chạy</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>04-run-detail/evidgate-run-detail.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">R</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>05</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="05-evidence-panel/evidgate-run-detail.html"><code>evidence-panel</code> → <code>runs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Evidence" data-vi="Bằng chứng">Bằng chứng</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>05-evidence-panel/evidgate-run-detail.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">R</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>07</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="07-report-comparison/evidgate-report-compare.html"><code>report-comparison</code> → <code>runs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Report comparison" data-vi="So sánh báo cáo">So sánh báo cáo</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>07-report-comparison/evidgate-report-compare.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">R</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>11</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="11-artifact-viewer/evidgate-artifact-viewer.html"><code>artifact-viewer</code> → <code>runs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Artifact viewer" data-vi="Xem hiện vật">Xem hiện vật</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>11-artifact-viewer/evidgate-artifact-viewer.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">R</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>25</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="25-test-catalog/evidgate-test-catalog.html"><code>catalog</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Test catalog" data-vi="Danh mục kiểm thử">Danh mục kiểm thử</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>25-test-catalog/evidgate-test-catalog.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">R</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>26</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="26-mapping-resolution/evidgate-mapping-resolution.html"><code>mapping</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Mapping resolution" data-vi="Ánh xạ kết quả">Ánh xạ kết quả</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>26-mapping-resolution/evidgate-mapping-resolution.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">R</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>46</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="46-generated-scripts/evidgate-generated-scripts.html"><code>scripts</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Generated scripts" data-vi="Kịch bản đã tạo">Kịch bản đã tạo</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>46-generated-scripts/evidgate-generated-scripts.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">R</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="p5-title" id="p5">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="p5-title">P5 · G3 · <span data-en="Learn &amp; repair" data-vi="Học và đề xuất sửa">Học và đề xuất sửa</span></h2>
+                <p data-en="Failure inbox, triage, history, repair proposals, review, lineage and availability." data-vi="Hộp thư lỗi, phân loại, lịch sử, đề xuất sửa, duyệt, nguồn gốc và trạng thái sửa lỗi.">Hộp thư lỗi, phân loại, lịch sử, đề xuất sửa, duyệt, nguồn gốc và trạng thái sửa lỗi.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">9</span></span>
+            </header>
+            <div class="eg-table__wrap">
+              <table class="eg-table">
+                <caption class="eg-table__caption">P5 · 9 <span data-en="routes" data-vi="tuyến">tuyến</span> · G3</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col"><span data-en="Route" data-vi="Tuyến">Tuyến</span></th>
+                    <th scope="col"><span data-en="Label" data-vi="Nhãn">Nhãn</span></th>
+                    <th scope="col"><span data-en="Path" data-vi="Đường dẫn">Đường dẫn</span></th>
+                    <th scope="col"><span data-en="Group" data-vi="Nhóm">Nhóm</span></th>
+                    <th scope="col"><span data-en="Phase" data-vi="Giai đoạn">Giai đoạn</span></th>
+                    <th scope="col"><span data-en="Status" data-vi="Trạng thái">Trạng thái</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>08</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="08-failure-inbox/evidgate-failure-inbox.html"><code>failures</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Failure Inbox" data-vi="Hộp thư lỗi">Hộp thư lỗi</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>08-failure-inbox/evidgate-failure-inbox.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">L</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>09</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="09-failure-detail-triage/evidgate-incident-detail.html"><code>failure-detail</code> → <code>failures</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Incident detail" data-vi="Chi tiết sự cố">Chi tiết sự cố</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>09-failure-detail-triage/evidgate-incident-detail.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">L</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>10</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="10-investigation-history/evidgate-case-history.html"><code>investigation-history</code> → <code>failures</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Case history" data-vi="Lịch sử ca kiểm thử">Lịch sử ca kiểm thử</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>10-investigation-history/evidgate-case-history.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">L</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>12</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="12-healing-queue/evidgate-healing-review.html"><code>repairs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Repair proposals" data-vi="Đề xuất sửa">Đề xuất sửa</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>12-healing-queue/evidgate-healing-review.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">L</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>13</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="13-healing-shadow-detail/evidgate-candidate-detail.html"><code>candidate-detail</code> → <code>repairs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Candidate detail" data-vi="Chi tiết phương án sửa">Chi tiết phương án sửa</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>13-healing-shadow-detail/evidgate-candidate-detail.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">L</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>14</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="14-healing-approval/evidgate-candidate-detail.html"><code>repair-review</code> → <code>repairs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Repair review" data-vi="Duyệt đề xuất sửa">Duyệt đề xuất sửa</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>14-healing-approval/evidgate-candidate-detail.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">L</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>15</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="15-knowledge-revocation/evidgate-knowledge-lineage.html"><code>knowledge</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Knowledge lineage" data-vi="Tri thức và thu hồi">Tri thức và thu hồi</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>15-knowledge-revocation/evidgate-knowledge-lineage.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">L</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>16</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="16-healing-availability/evidgate-healing-availability.html"><code>availability</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Availability" data-vi="Trạng thái sửa lỗi">Trạng thái sửa lỗi</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>16-healing-availability/evidgate-healing-availability.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">L</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>47</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="47-ui-change-proposal/evidgate-ui-change-proposal.html"><code>ui-change-proposal</code> → <code>repairs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="UI-change review" data-vi="Duyệt thay đổi giao diện">Duyệt thay đổi giao diện</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>47-ui-change-proposal/evidgate-ui-change-proposal.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">L</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="p6-title" id="p6">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="p6-title">P6 · G2–G3 · <span data-en="Admin &amp; locale" data-vi="Quản trị và bản địa hoá">Quản trị và bản địa hoá</span></h2>
+                <p data-en="Secret references, audit, security events, support access and localization review." data-vi="Tham chiếu bí mật, kiểm toán, sự kiện bảo mật, quyền hỗ trợ và xem xét bản địa hoá.">Tham chiếu bí mật, kiểm toán, sự kiện bảo mật, quyền hỗ trợ và xem xét bản địa hoá.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">5</span></span>
+            </header>
+            <div class="eg-table__wrap">
+              <table class="eg-table">
+                <caption class="eg-table__caption">P6 · 5 <span data-en="routes" data-vi="tuyến">tuyến</span> · G2–G3</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col"><span data-en="Route" data-vi="Tuyến">Tuyến</span></th>
+                    <th scope="col"><span data-en="Label" data-vi="Nhãn">Nhãn</span></th>
+                    <th scope="col"><span data-en="Path" data-vi="Đường dẫn">Đường dẫn</span></th>
+                    <th scope="col"><span data-en="Group" data-vi="Nhóm">Nhóm</span></th>
+                    <th scope="col"><span data-en="Phase" data-vi="Giai đoạn">Giai đoạn</span></th>
+                    <th scope="col"><span data-en="Status" data-vi="Trạng thái">Trạng thái</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>29</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="29-secret-references/evidgate-secret-references.html"><code>secrets</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Secret references" data-vi="Tham chiếu bí mật">Tham chiếu bí mật</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>29-secret-references/evidgate-secret-references.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+<td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>32</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="32-audit-log/evidgate-audit-log.html"><code>audit</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Audit log" data-vi="Nhật ký kiểm toán">Nhật ký kiểm toán</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>32-audit-log/evidgate-audit-log.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1</span></span></td>
+<td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>33</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="33-security-events/evidgate-security-events.html"><code>security</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Security events" data-vi="Sự kiện bảo mật">Sự kiện bảo mật</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>33-security-events/evidgate-security-events.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+<td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>36</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="36-support-access/evidgate-support-access.html"><code>support</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Support access" data-vi="Quyền truy cập hỗ trợ">Quyền truy cập hỗ trợ</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>36-support-access/evidgate-support-access.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G2</span></span></td>
+<td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>39</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="39-locale-layout-review/evidgate-localization-review.html"><code>locale-review</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Localization review" data-vi="Xem xét bản địa hoá">Xem xét bản địa hoá</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>39-locale-layout-review/evidgate-localization-review.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">—</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G3</span></span></td>
+<td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="p7-title" id="p7">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="p7-title">P7 · G4 · <span data-en="Expanded release" data-vi="Phát hành mở rộng">Phát hành mở rộng</span></h2>
+                <p data-en="Test Studio, suites, quality, releases, policies, deploy targets and expansion settings. Hidden until G4." data-vi="Test Studio, bộ kiểm thử, chất lượng, bản phát hành, chính sách, mục tiêu triển khai và cài đặt mở rộng. Ẩn cho đến G4.">Test Studio, bộ kiểm thử, chất lượng, bản phát hành, chính sách, mục tiêu triển khai và cài đặt mở rộng. Ẩn cho đến G4.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">12</span></span>
+            </header>
+            <div class="eg-table__wrap">
+              <table class="eg-table">
+                <caption class="eg-table__caption">P7 · 12 <span data-en="routes" data-vi="tuyến">tuyến</span> · G4</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col"><span data-en="Route" data-vi="Tuyến">Tuyến</span></th>
+                    <th scope="col"><span data-en="Label" data-vi="Nhãn">Nhãn</span></th>
+                    <th scope="col"><span data-en="Path" data-vi="Đường dẫn">Đường dẫn</span></th>
+                    <th scope="col"><span data-en="Group" data-vi="Nhóm">Nhóm</span></th>
+                    <th scope="col"><span data-en="Phase" data-vi="Giai đoạn">Giai đoạn</span></th>
+                    <th scope="col"><span data-en="Status" data-vi="Trạng thái">Trạng thái</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>06</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="06-decision-waivers/evidgate-run-decision.html"><code>decision-waivers</code> → <code>runs</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Decision &amp; waivers" data-vi="Quyết định và miễn trừ">Quyết định và miễn trừ</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>06-decision-waivers/evidgate-run-decision.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">X</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>17</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="17-studio-template-gallery/evidgate-test-studio.html"><code>studio</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Test Studio" data-vi="Test Studio">Test Studio</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>17-studio-template-gallery/evidgate-test-studio.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">X</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>18</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="18-studio-draft-editor/evidgate-test-studio.html"><code>studio-draft</code> → <code>studio</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Draft editor" data-vi="Soạn bản nháp">Soạn bản nháp</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>18-studio-draft-editor/evidgate-test-studio.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">X</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>19</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="19-studio-review-merge/evidgate-draft-review.html"><code>studio-review</code> → <code>studio</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Draft review" data-vi="Duyệt bản nháp">Duyệt bản nháp</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>19-studio-review-merge/evidgate-draft-review.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">X</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>20</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="20-suite-composition/evidgate-suite-composition.html"><code>suites</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Suite composition" data-vi="Bộ kiểm thử">Bộ kiểm thử</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>20-suite-composition/evidgate-suite-composition.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">X</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>21</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="21-release-view/evidgate-release-view.html"><code>releases</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Releases" data-vi="Bản phát hành">Bản phát hành</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>21-release-view/evidgate-release-view.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">X</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>22</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="22-quality-overview/evidgate-quality-overview.html"><code>quality</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Quality" data-vi="Chất lượng">Chất lượng</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>22-quality-overview/evidgate-quality-overview.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">X</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>30</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="30-policy-revisions/evidgate-policy-revisions.html"><code>policies</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Release policies" data-vi="Chính sách phát hành">Chính sách phát hành</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>30-policy-revisions/evidgate-policy-revisions.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">X</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>34</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="34-agent-pools/evidgate-agents-pools.html"><code>agents</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Agent pools" data-vi="Nhóm agent">Nhóm agent</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>34-agent-pools/evidgate-agents-pools.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>35</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="35-integrations-webhooks/evidgate-webhook-integrations.html"><code>integrations</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Integrations &amp; webhooks" data-vi="Tích hợp và webhook">Tích hợp và webhook</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>35-integrations-webhooks/evidgate-webhook-integrations.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>37</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="37-api-tokens/evidgate-api-tokens.html"><code>tokens</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="API tokens" data-vi="Mã truy cập API">Mã truy cập API</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>37-api-tokens/evidgate-api-tokens.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">S</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                  <tr>
+                    <td>38</td>
+                    <td data-label-en="Route" data-label-vi="Tuyến" data-label="Tuyến"><a href="38-deploy-targets/evidgate-deploy-targets.html"><code>deploy</code></a></td>
+                    <td data-label-en="Label" data-label-vi="Nhãn" data-label="Nhãn"><span data-en="Deploy targets" data-vi="Mục tiêu triển khai">Mục tiêu triển khai</span></td>
+                    <td data-label-en="Path" data-label-vi="Đường dẫn" data-label="Đường dẫn"><code>38-deploy-targets/evidgate-deploy-targets.html</code></td>
+                    <td data-label-en="Group" data-label-vi="Nhóm" data-label="Nhóm"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">X</span></span></td>
+                    <td data-label-en="Phase" data-label-vi="Giai đoạn" data-label="Giai đoạn"><span class="eg-badge eg-badge--info"><span class="eg-badge__label">G4</span></span></td>
+                    <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Built" data-vi="Đã dựng">Đã dựng</span></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="notes-title">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="notes-title" data-en="Design notes and open items" data-vi="Ghi chú thiết kế và mục còn mở">Ghi chú thiết kế và mục còn mở</h2>
+              </div>
+            </header>
+            <div class="eg-card__body">
+              <ul>
+                <li data-en="Tokens are proposed app tokens derived from the supplied direction; verify final contrast and brand approval before production." data-vi="Token là đề xuất ứng dụng dựa trên định hướng đã cung cấp; cần xác minh tương phản cuối và phê duyệt thương hiệu trước khi sản xuất.">Token là đề xuất ứng dụng dựa trên định hướng đã cung cấp; cần xác minh tương phản cuối và phê duyệt thương hiệu trước khi sản xuất.</li>
+                <li data-en="No font binaries were supplied. Manrope, Public Sans and SFMono are declared with system fallbacks; no remote font is requested." data-vi="Không có tệp font nhị phân. Manrope, Public Sans và SFMono được khai báo với font hệ thống dự phòng; không tải font từ xa.">Không có tệp font nhị phân. Manrope, Public Sans và SFMono được khai báo với font hệ thống dự phòng; không tải font từ xa.</li>
+                <li data-en="The ui-ux-pro-max file is catalog metadata only. No pattern search or template workflow was used or is claimed." data-vi="Tệp ui-ux-pro-max chỉ là siêu dữ liệu danh mục. Không sử dụng hay tuyên bố quy trình tìm mẫu hoặc mẫu dựng sẵn.">Tệp ui-ux-pro-max chỉ là siêu dữ liệu danh mục. Không sử dụng hay tuyên bố quy trình tìm mẫu hoặc mẫu dựng sẵn.</li>
+                <li data-en="All values, counts and records are illustrative fixtures. No endpoint, price, release verdict or repair auto-apply is invented." data-vi="Mọi giá trị, số đếm và bản ghi là dữ liệu minh hoạ. Không tự chế endpoint, giá, kết luận phát hành hay tự động áp dụng sửa lỗi.">Mọi giá trị, số đếm và bản ghi là dữ liệu minh hoạ. Không tự chế endpoint, giá, kết luận phát hành hay tự động áp dụng sửa lỗi.</li>
+                <li data-en="Unresolved: final font files and formal token sign-off; retained until supplied." data-vi="Còn mở: tệp font cuối và phê duyệt token chính thức; giữ nguyên cho đến khi được cung cấp.">Còn mở: tệp font cuối và phê duyệt token chính thức; giữ nguyên cho đến khi được cung cấp.</li>
+              </ul>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div data-eg-show-state="loading" hidden>
+        <section class="eg-state eg-state--loading" aria-labelledby="state-loading-title">
+          <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-scroll"></use></svg></span>
+          <h2 class="eg-state__title" id="state-loading-title" data-en="Loading inventory" data-vi="Đang tải danh mục">Đang tải danh mục</h2>
+          <p class="eg-state__description" data-en="Reserving the final layout while routes are read." data-vi="Giữ nguyên bố cục cuối trong khi đọc tuyến.">Giữ nguyên bố cục cuối trong khi đọc tuyến.</p>
+        </section>
+      </div>
+      <div data-eg-show-state="empty" hidden>
+        <section class="eg-state eg-state--empty" aria-labelledby="state-empty-title">
+          <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-layers"></use></svg></span>
+          <h2 class="eg-state__title" id="state-empty-title" data-en="No routes recorded" data-vi="Chưa có tuyến nào">Chưa có tuyến nào</h2>
+          <p class="eg-state__description" data-en="The inventory is empty. Return to the default review state." data-vi="Danh mục đang trống. Quay lại trạng thái xem xét mặc định.">Danh mục đang trống. Quay lại trạng thái xem xét mặc định.</p>
+          <div class="eg-state__actions"><button class="eg-btn eg-btn--secondary" type="button" data-eg-set-state="default" data-en="Return to default" data-vi="Về mặc định">Về mặc định</button></div>
+        </section>
+      </div>
+      <div data-eg-show-state="no-match" hidden>
+        <section class="eg-state eg-state--no-match" aria-labelledby="state-nomatch-title">
+          <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-search"></use></svg></span>
+          <h2 class="eg-state__title" id="state-nomatch-title" data-en="No route matches that filter" data-vi="Không có tuyến khớp bộ lọc">Không có tuyến khớp bộ lọc</h2>
+          <p class="eg-state__description" data-en="No routes match this filter. The inventory itself is not empty." data-vi="Không có tuyến khớp bộ lọc này. Bản thân danh mục không trống.">Không có tuyến khớp bộ lọc này. Bản thân danh mục không trống.</p>
+          <div class="eg-state__actions"><button class="eg-btn eg-btn--secondary" type="button" data-eg-set-state="default" data-en="Clear filter" data-vi="Xóa bộ lọc">Xóa bộ lọc</button></div>
+        </section>
+      </div>
+      <div data-eg-show-state="error" hidden>
+        <section class="eg-state eg-state--error" aria-labelledby="state-error-title">
+          <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+          <h2 class="eg-state__title" id="state-error-title" data-en="Inventory could not load" data-vi="Không tải được danh mục">Không tải được danh mục</h2>
+          <p class="eg-state__description" data-en="The review fixture failed safely. Retry returns to a representative inventory." data-vi="Dữ liệu xem xét lỗi an toàn. Thử lại sẽ trở về danh mục minh hoạ.">Dữ liệu xem xét lỗi an toàn. Thử lại sẽ trở về danh mục minh hoạ.</p>
+          <div class="eg-state__actions"><button class="eg-btn eg-btn--primary" type="button" data-eg-set-state="default" data-en="Retry" data-vi="Thử lại">Thử lại</button></div>
+        </section>
+      </div>
+      <div data-eg-show-state="403" hidden>
+        <section class="eg-state eg-state--permission" aria-labelledby="state-403-title">
+          <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <h2 class="eg-state__title" id="state-403-title" data-en="403 · Review access restricted" data-vi="403 · Hạn chế quyền xem xét">403 · Hạn chế quyền xem xét</h2>
+          <p class="eg-state__description" data-en="This inventory stays in scope but the role cannot open it. Ask the workspace owner to review access." data-vi="Danh mục này vẫn trong phạm vi nhưng vai trò hiện tại không mở được. Đề nghị chủ không gian làm việc xem lại quyền.">Danh mục này vẫn trong phạm vi nhưng vai trò hiện tại không mở được. Đề nghị chủ không gian làm việc xem lại quyền.</p>
+          <div class="eg-state__actions"><button class="eg-btn eg-btn--secondary" type="button" data-eg-set-state="default" data-en="Back to review" data-vi="Về màn xem xét">Về màn xem xét</button></div>
+        </section>
+      </div>
+      <div data-eg-show-state="404" hidden>
+        <section class="eg-state eg-state--not-found" aria-labelledby="state-404-title">
+          <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-compass"></use></svg></span>
+          <h2 class="eg-state__title" id="state-404-title" data-en="404 · Inventory not found" data-vi="404 · Không tìm thấy danh mục">404 · Không tìm thấy danh mục</h2>
+          <p class="eg-state__description" data-en="The address is unknown. Use the review controls to return to a known state." data-vi="Địa chỉ không xác định. Dùng điều khiển xem xét để trở về trạng thái đã biết.">Địa chỉ không xác định. Dùng điều khiển xem xét để trở về trạng thái đã biết.</p>
+          <div class="eg-state__actions"><button class="eg-btn eg-btn--secondary" type="button" data-eg-set-state="default" data-en="Return to default" data-vi="Về mặc định">Về mặc định</button></div>
+        </section>
+      </div>
+      <div data-eg-show-state="401" hidden>
+        <section class="eg-state eg-state--permission" aria-labelledby="state-401-title">
+          <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <h2 class="eg-state__title" id="state-401-title" data-en="401 · Session expired" data-vi="401 · Phiên đã hết hạn">401 · Phiên đã hết hạn</h2>
+          <p class="eg-state__description" data-en="Only a safe return route is preserved. Sign in again to resume design review." data-vi="Chỉ tuyến quay lại an toàn được giữ. Đăng nhập lại để tiếp tục xem xét thiết kế.">Chỉ tuyến quay lại an toàn được giữ. Đăng nhập lại để tiếp tục xem xét thiết kế.</p>
+          <div class="eg-state__actions"><a class="eg-btn eg-btn--primary" href="02-login/evidgate-sign-in.html" data-en="Sign in again" data-vi="Đăng nhập lại">Đăng nhập lại</a></div>
+        </section>
+      </div>
+      <div data-eg-show-state="412" hidden>
+        <section class="eg-state eg-state--conflict" aria-labelledby="state-412-title">
+          <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-layers"></use></svg></span>
+          <h2 class="eg-state__title" id="state-412-title" data-en="412 · Inventory revision changed" data-vi="412 · Phiên bản danh mục đã đổi">412 · Phiên bản danh mục đã đổi</h2>
+          <p class="eg-state__description" data-en="The review fixture keeps its draft and shows the current revision. Reload explicitly; nothing is merged." data-vi="Dữ liệu xem xét giữ bản nháp và hiển thị phiên bản hiện tại. Tải lại có chủ đích; không tự động hợp nhất.">Dữ liệu xem xét giữ bản nháp và hiển thị phiên bản hiện tại. Tải lại có chủ đích; không tự động hợp nhất.</p>
+          <div class="eg-state__actions"><button class="eg-btn eg-btn--secondary" type="button" data-eg-set-state="default" data-en="Keep draft" data-vi="Giữ bản nháp">Giữ bản nháp</button><a class="eg-btn eg-btn--primary" href="index.html" data-en="Reload inventory" data-vi="Tải lại danh mục">Tải lại danh mục</a></div>
+        </section>
+      </div>
+      <div data-eg-show-state="429" hidden>
+        <section class="eg-state eg-state--error" aria-labelledby="state-429-title">
+          <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+          <h2 class="eg-state__title" id="state-429-title" data-en="429 · Rate limited" data-vi="429 · Giới hạn yêu cầu">429 · Giới hạn yêu cầu</h2>
+          <p class="eg-state__description" data-en="Retry-After is supplied by the server, not a guessed countdown." data-vi="Retry-After do máy chủ cung cấp, không phải đếm ngược tự đoán.">Retry-After do máy chủ cung cấp, không phải đếm ngược tự đoán.</p>
+          <div class="eg-state__actions"><button class="eg-btn eg-btn--secondary" type="button" data-eg-set-state="default" data-en="Try again" data-vi="Thử lại">Thử lại</button></div>
+        </section>
+      </div>
+
+      <footer>
+        <hr>
+        <p><span data-en="Evidgate · Design review inventory · Illustrative values" data-vi="Evidgate · Danh mục xem xét thiết kế · Giá trị minh hoạ">Evidgate · Danh mục xem xét thiết kế · Giá trị minh hoạ</span></p>
+      </footer>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,190 +1,243 @@
 <!doctype html>
-<html lang="en" data-page="02">
+<html lang="vi" data-theme="light" data-nav="sign-in" data-phase-min="G1">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<title>Sign in to Evidgate</title>
-<link rel="stylesheet" href="../assets/evidgate.css">
-<script src="../assets/evidgate.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Đăng nhập Evidgate</title>
+  <link rel="stylesheet" href="../assets/evidgate.css">
+  <script src="../assets/evidgate.js" defer></script>
 </head>
 <body>
-<a class="skip-link" href="#main" data-t="skip">Skip to sign in</a>
-<header class="topbar shell" data-od-id="topbar">
-  <a class="brand" href="../01-app-shell/evidgate-workspace-shell.html" aria-label="Evidgate home" data-od-id="brand-lockup">
-    <svg class="brand-mark" viewBox="0 0 28 32" fill="none" aria-hidden="true"><path d="M14 2.4 25 6.6v8.1c0 7.1-4.5 11.8-11 15C7.5 26.5 3 21.8 3 14.7V6.6L14 2.4Z" stroke="currentColor" stroke-width="1.6"/><path d="m9.3 15.8 3.1 3.1 6.6-7.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span>Evidgate</span>
-  </a>
-  <div class="controls" aria-label="Display preferences" data-t-aria="prefs">
-    <label class="control-label" for="locale">Language</label>
-    <select class="control" id="locale" data-od-id="locale-control" aria-label="Language">
-      <option value="en">English</option><option value="vi">Tiếng Việt</option>
-    </select>
-    <button class="control icon-button" id="theme-toggle" type="button" aria-label="Switch to dark theme" data-od-id="theme-control">
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20.2 15.1A8.7 8.7 0 0 1 8.9 3.8 8.8 8.8 0 1 0 20.2 15.1Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-    </button>
-  </div>
-</header>
-<main id="main" class="shell" data-od-id="sign-in-page">
-  <section class="intro" aria-labelledby="page-title" data-od-id="page-intro">
-    <p class="eyebrow" data-t="eyebrow">Evidence-backed release workspace</p>
-    <h1 id="page-title" data-od-id="page-title" data-t="title">Sign in to Evidgate</h1>
-    <p class="intro-copy" data-t="intro">Use your organization account to continue to the workspace and route you already opened.</p>
-  </section>
-  <section class="auth-layout" aria-label="Sign-in details" data-t-aria="signInDetails" data-od-id="auth-layout">
-    <article class="panel auth-panel" data-od-id="sign-in-panel">
-      <p class="panel-kicker"><span class="kicker-dot" aria-hidden="true"></span><span data-t="orgSignIn">Organization sign-in</span></p>
-      <h2 data-t="welcome">Welcome back</h2>
-      <p class="auth-description" data-t="authDescription">Your organization manages access to Evidgate. Membership and project permissions are checked after sign-in.</p>
-      <button class="primary-button auth-button" id="sign-in" type="button" data-od-id="continue-sign-in">
-        <span data-t="continue">Continue with organization sign-in</span>
-        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <div class="session-note">
-        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.6 16.5 5v4.8c0 4.2-2.7 7-6.5 8.8-3.8-1.8-6.5-4.6-6.5-8.8V5L10 2.6Z" stroke="currentColor" stroke-width="1.3"/><path d="M7.4 10.2 9.2 12l3.7-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span data-t="sessionNote">Sign-in is handled by your organization. Evidgate does not ask you to create a local password.</span>
+  <a class="eg-skip-link" href="#main"><span data-en="Skip to sign-in" data-vi="Bỏ qua đến đăng nhập">Bỏ qua đến đăng nhập</span></a>
+  <div class="eg-login">
+    <header class="eg-login__brand">
+      <a href="../index.html" aria-label="Evidgate">
+        <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-shield-check"></use></svg>
+        <span>Evidgate</span>
+      </a>
+      <div class="eg-toolbar">
+        <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-locale-toggle aria-label="Ngôn ngữ: Tiếng Việt. Chuyển sang English.">
+          <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-globe"></use></svg>
+          <span data-eg-locale-text>VI</span>
+        </button>
+        <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-theme-toggle aria-label="Chuyển sang giao diện tối">
+          <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-moon"></use></svg>
+          <span data-eg-theme-text>Tối</span>
+        </button>
       </div>
-    </article>
-    <aside class="panel destination-panel" data-od-id="return-destination">
-      <div class="destination-heading">
-        <div><h2 data-t="returnHeading">Your return destination</h2><p data-t="returnCaption">Saved from this sign-in session</p></div>
-        <span class="fixture-tag" data-t="illustrative">Illustrative</span>
-      </div>
-      <div class="route-box" id="route-box">
-        <span class="route-label" data-t="safeRoute">Safe return destination</span>
-        <div class="route" id="known-route" aria-label="storefront-web, Runs, run-1842"><span>storefront-web</span><span class="route-sep" aria-hidden="true">/</span><span data-t="runs">Runs</span><span class="route-sep" aria-hidden="true">/</span><code class="route-code">run-1842</code></div>
-        <p class="generic-route" id="generic-route" data-t="routeGeneric" hidden>Return to your workspace</p>
-      </div>
-      <div class="context-row"><span class="context-label" data-t="orgContext">Organization context</span><span class="org">Lotus Commerce <span class="fixture-tag" data-t="illustrative">Illustrative</span></span></div>
-    </aside>
-  </section>
-  <section class="state-area" aria-label="Sign-in status" data-t-aria="signInStatus" aria-live="polite" aria-atomic="true" data-od-id="status-region">
-    <div class="state-message" id="state-message" data-tone="neutral">
-      <svg class="state-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true" id="state-icon"><circle cx="10" cy="10" r="7.3" stroke="currentColor" stroke-width="1.5"/><path d="M10 6.3v4.2m0 3.2h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <div class="state-copy"><div class="state-title" id="state-title"></div><p class="state-detail" id="state-detail"></p><button class="state-action" id="state-action" type="button" hidden></button>
-        <div class="conflict-details" id="conflict-details">
-          <p class="state-detail" data-t="conflictNote">Shared conflict-pattern demo from an editing action; this is not a sign-in or read-endpoint response.</p>
-          <div class="conflict-grid"><div class="conflict-cell"><span data-t="currentRevision">Current revision</span><strong>policy-r18</strong></div><div class="conflict-cell"><span data-t="changedField">Changed field</span><strong>requiredEvidence: 12 → 14</strong></div><div class="conflict-cell"><span data-t="unsavedDraft">Unsaved draft retained</span><strong>requiredEvidence: 12</strong></div></div>
-          <p class="draft-note" data-t="noMerge">Reload is explicit. The draft is not merged or resubmitted.</p>
+    </header>
+
+    <main tabindex="-1" class="eg-login__content" id="main">
+      <header class="eg-login__intro eg-stack" data-gap="4">
+          <p><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Organization account" data-vi="Tài khoản tổ chức">Tài khoản tổ chức</span></span></p>
+          <h1 data-en="Sign in to Evidgate" data-vi="Đăng nhập Evidgate">Đăng nhập Evidgate</h1>
+          <p data-en="Use your organization account to return to the workspace and the safe route you already opened. Human review stays in the loop." data-vi="Dùng tài khoản tổ chức để quay lại không gian làm việc và đường dẫn an toàn bạn đã mở. Luôn có người duyệt trong quy trình.">Dùng tài khoản tổ chức để quay lại không gian làm việc và đường dẫn an toàn bạn đã mở. Luôn có người duyệt trong quy trình.</p>
+      </header>
+
+      <section class="eg-login__panel" aria-labelledby="panel-title">
+        <p class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Organization sign-in" data-vi="Đăng nhập tổ chức">Đăng nhập tổ chức</span></p>
+        <h2 id="panel-title" data-en="Welcome back" data-vi="Chào mừng trở lại">Chào mừng trở lại</h2>
+        <p data-en="Your organization manages access to Evidgate. After sign-in, membership and project permissions are checked." data-vi="Tổ chức của bạn quản lý quyền truy cập Evidgate. Sau khi đăng nhập, quyền thành viên và dự án sẽ được kiểm tra.">Tổ chức của bạn quản lý quyền truy cập Evidgate. Sau khi đăng nhập, quyền thành viên và dự án sẽ được kiểm tra.</p>
+        <button class="eg-btn eg-btn--primary eg-btn--lg" type="button" data-eg-delay-state="authenticated" data-eg-delay-ms="1200">
+          <span class="eg-btn__label" data-en="Continue with SSO" data-vi="Tiếp tục với SSO">Tiếp tục với SSO</span>
+          <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-arrow-right"></use></svg>
+        </button>
+        <p class="eg-kpi__context" data-en="Sign-in is handled by your organization. Evidgate does not ask you to create a local password." data-vi="Đăng nhập do tổ chức của bạn xử lý. Evidgate không yêu cầu bạn tạo mật khẩu cục bộ.">Đăng nhập do tổ chức của bạn xử lý. Evidgate không yêu cầu bạn tạo mật khẩu cục bộ.</p>
+        <p class="eg-kpi__context" data-en="In this review fixture the button simulates the authentication states locally; no network request is made." data-vi="Trong bản xem xét này, nút mô phỏng cục bộ các trạng thái xác thực; không gửi yêu cầu mạng.">Trong bản xem xét này, nút mô phỏng cục bộ các trạng thái xác thực; không gửi yêu cầu mạng.</p>
+      </section>
+
+      <div class="eg-stack" data-gap="3" aria-label="Trạng thái đăng nhập">
+        <div class="eg-banner eg-banner--info" data-eg-show-state="loading" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Authenticating" data-vi="Đang xác thực">Đang xác thực</span></strong>
+            <p data-en="Waiting for your organization identity provider. Do not close this tab." data-vi="Đang chờ nhà cung cấp danh tính của tổ chức. Không đóng thẻ này.">Đang chờ nhà cung cấp danh tính của tổ chức. Không đóng thẻ này.</p>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--info" data-eg-show-state="callback" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Completing sign-in" data-vi="Đang hoàn tất đăng nhập">Đang hoàn tất đăng nhập</span></strong>
+            <p data-en="Exchanging the callback for a session, then checking membership." data-vi="Đang đổi callback lấy phiên, sau đó kiểm tra quyền thành viên.">Đang đổi callback lấy phiên, sau đó kiểm tra quyền thành viên.</p>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--danger" data-eg-show-state="error" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Sign-in could not complete" data-vi="Không thể hoàn tất đăng nhập">Không thể hoàn tất đăng nhập</span></strong>
+            <p data-en="The callback was invalid or expired. Start again; no credentials are stored here." data-vi="Callback không hợp lệ hoặc đã hết hạn. Hãy bắt đầu lại; trang này không lưu thông tin xác thực.">Callback không hợp lệ hoặc đã hết hạn. Hãy bắt đầu lại; trang này không lưu thông tin xác thực.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Try again" data-vi="Thử lại">Thử lại</span></button>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--danger" data-eg-show-state="403" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-shield-alert"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Permission denied" data-vi="Không có quyền truy cập">Không có quyền truy cập</span></strong>
+            <p data-en="This account cannot open this workspace. Ask a workspace administrator to check your membership." data-vi="Tài khoản này không thể mở không gian làm việc. Hãy đề nghị quản trị viên kiểm tra quyền thành viên.">Tài khoản này không thể mở không gian làm việc. Hãy đề nghị quản trị viên kiểm tra quyền thành viên.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <a class="eg-btn eg-btn--secondary eg-btn--sm" href="../index.html" data-en="Design index" data-vi="Hồ sơ thiết kế">Hồ sơ thiết kế</a>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--danger" data-eg-show-state="404" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Workspace not found" data-vi="Không tìm thấy không gian làm việc">Không tìm thấy không gian làm việc</span></strong>
+            <p data-en="Unknown and foreign workspace identifiers share this response." data-vi="Mã không gian làm việc không tồn tại và mã ngoài phạm vi đều nhận cùng phản hồi này.">Mã không gian làm việc không tồn tại và mã ngoài phạm vi đều nhận cùng phản hồi này.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <a class="eg-btn eg-btn--secondary eg-btn--sm" href="../index.html" data-en="Design index" data-vi="Hồ sơ thiết kế">Hồ sơ thiết kế</a>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--warning" data-eg-show-state="401" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="401 · Session expired" data-vi="401 · Phiên đã hết hạn">401 · Phiên đã hết hạn</span></strong>
+            <p data-en="Only the safe return route is kept. Sign in again to continue." data-vi="Chỉ tuyến trở về an toàn được giữ. Đăng nhập lại để tiếp tục.">Chỉ tuyến trở về an toàn được giữ. Đăng nhập lại để tiếp tục.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Sign in again" data-vi="Đăng nhập lại">Đăng nhập lại</span></button>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--warning" data-eg-show-state="expired" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Session expired" data-vi="Phiên đã hết hạn">Phiên đã hết hạn</span></strong>
+            <p data-en="Your return destination is still available. Re-authenticate to resume." data-vi="Đích trở về vẫn còn. Hãy xác thực lại để tiếp tục.">Đích trở về vẫn còn. Hãy xác thực lại để tiếp tục.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Re-authenticate" data-vi="Xác thực lại">Xác thực lại</span></button>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--danger" data-eg-show-state="429" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Too many requests" data-vi="Quá nhiều yêu cầu">Quá nhiều yêu cầu</span></strong>
+            <p data-en="The server supplied Retry-After: 30 seconds. No guessed countdown is shown." data-vi="Máy chủ cung cấp Retry-After: 30 giây. Không hiển thị bộ đếm tự đoán.">Máy chủ cung cấp Retry-After: 30 giây. Không hiển thị bộ đếm tự đoán.</p>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--warning" data-eg-show-state="412" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Conflict pattern from an editing action" data-vi="Mẫu xung đột từ thao tác chỉnh sửa">Mẫu xung đột từ thao tác chỉnh sửa</span></strong>
+            <p data-en="This is not a sign-in response. The draft keeps evidenceChecklist: 12 while the current revision requirement-r18 asks for 14. Nothing is merged or resubmitted." data-vi="Đây không phải phản hồi đăng nhập. Bản nháp giữ evidenceChecklist: 12 trong khi phiên bản hiện tại requirement-r18 yêu cầu 14. Không tự động hợp nhất hay gửi lại.">Đây không phải phản hồi đăng nhập. Bản nháp giữ evidenceChecklist: 12 trong khi phiên bản hiện tại requirement-r18 yêu cầu 14. Không tự động hợp nhất hay gửi lại.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <a class="eg-btn eg-btn--secondary eg-btn--sm" href="../41-test-case-editor/evidgate-test-case-editor.html" data-en="Open the editing demo" data-vi="Mở bản minh hoạ chỉnh sửa">Mở bản minh hoạ chỉnh sửa</a>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--info" data-eg-show-state="authenticated" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-check"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Authenticated · review result" data-vi="Đã xác thực · kết quả xem xét">Đã xác thực · kết quả xem xét</span></strong>
+            <p data-en="This is a design-review result only; the page has no live OIDC connection." data-vi="Đây chỉ là kết quả xem xét thiết kế; trang không có kết nối OIDC thực.">Đây chỉ là kết quả xem xét thiết kế; trang không có kết nối OIDC thực.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <a class="eg-btn eg-btn--primary eg-btn--sm" href="../01-app-shell/evidgate-workspace-shell.html" data-en="Open workspace" data-vi="Mở không gian làm việc">Mở không gian làm việc</a>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--warning" data-eg-show-state="revoked" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Signed out" data-vi="Đã đăng xuất">Đã đăng xuất</span></strong>
+            <p data-en="Your session was revoked. Sign in again to return to the saved route." data-vi="Phiên của bạn đã bị thu hồi. Đăng nhập lại để trở về đường dẫn đã lưu.">Phiên của bạn đã bị thu hồi. Đăng nhập lại để trở về đường dẫn đã lưu.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Sign in" data-vi="Đăng nhập">Đăng nhập</span></button>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--warning" data-eg-show-state="idp" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Identity provider unavailable" data-vi="Nhà cung cấp danh tính không khả dụng">Nhà cung cấp danh tính không khả dụng</span></strong>
+            <p data-en="Your organization's sign-in service is not responding. Try again shortly or contact your administrator." data-vi="Dịch vụ đăng nhập của tổ chức không phản hồi. Thử lại sau hoặc liên hệ quản trị viên.">Dịch vụ đăng nhập của tổ chức không phản hồi. Thử lại sau hoặc liên hệ quản trị viên.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Try again" data-vi="Thử lại">Thử lại</span></button>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--info" data-eg-show-state="canceled" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="Sign-in canceled" data-vi="Đã hủy đăng nhập">Đã hủy đăng nhập</span></strong>
+            <p data-en="Nothing changed. You can start again when ready." data-vi="Không có gì thay đổi. Bạn có thể bắt đầu lại khi sẵn sàng.">Không có gì thay đổi. Bạn có thể bắt đầu lại khi sẵn sàng.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Start again" data-vi="Bắt đầu lại">Bắt đầu lại</span></button>
+          </div>
+        </div>
+
+        <div class="eg-banner eg-banner--warning" data-eg-show-state="memberships" hidden>
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-users"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong><span data-en="No workspace access" data-vi="Không có quyền vào không gian làm việc">Không có quyền vào không gian làm việc</span></strong>
+            <p data-en="Sign-in succeeded, but this account belongs to no workspace you can open." data-vi="Đăng nhập thành công, nhưng tài khoản này không thuộc không gian làm việc nào bạn có thể mở.">Đăng nhập thành công, nhưng tài khoản này không thuộc không gian làm việc nào bạn có thể mở.</p>
+          </div>
+          <div class="eg-banner__actions">
+            <a class="eg-btn eg-btn--secondary eg-btn--sm" href="../index.html" data-en="Design index" data-vi="Hồ sơ thiết kế">Hồ sơ thiết kế</a>
+          </div>
         </div>
       </div>
-    </div>
-  </section>
-  <section class="review" aria-labelledby="review-heading" data-od-id="design-review-controls">
-    <div class="review-head">
-      <div><h2 id="review-heading" data-t="reviewHeading">Design review controls</h2><p data-t="reviewIntro">Change the local fixture state to inspect sign-in, callback and access outcomes. These controls are not production navigation and make no network requests.</p></div>
-      <div class="review-control"><label for="state-select" data-t="reviewSelect">Review state</label><select id="state-select" data-od-id="state-control">
-        <optgroup label="Common review states" data-review-group="common"><option value="default" data-state-label="defaultOption">Default · anonymous</option><option value="loading" data-state-label="loadingOption">Loading · authenticating</option><option value="empty" data-state-label="emptyOption">Empty · no saved destination</option><option value="error" data-state-label="errorOption">Error · callback error</option><option value="403" data-state-label="forbiddenOption">403 · permission denied</option><option value="412" data-state-label="conflictOption">412 · conflict pattern</option><option value="429" data-state-label="rateLimitOption">429 · rate limited</option></optgroup>
-        <optgroup label="OIDC and session scenarios" data-review-group="oidc"><option value="callback" data-state-label="callbackOption">Callback · completing sign-in</option><option value="authenticated" data-state-label="authenticatedOption">Authenticated · saved route</option><option value="expired" data-state-label="expiredOption">Session expired · re-auth</option><option value="revoked" data-state-label="revokedOption">Revoked / signed out</option><option value="idp" data-state-label="idpOption">Identity provider unavailable</option><option value="canceled" data-state-label="canceledOption">Sign-in canceled</option><option value="memberships" data-state-label="membershipsOption">No workspace access</option><option value="404" data-state-label="notFoundOption">404 · unknown tenant</option></optgroup>
-      </select></div>
-    </div>
-    <div class="review-note"><strong data-t="sampleLabel">Illustrative fixture values.</strong> <span data-t="reviewFoot">A successful transition appears only as a labeled design-review result; this page has no live OIDC connection.</span><span class="mobile-notice" data-t="mobileNotice">Use a desktop to make workspace changes. Sign-in and session inspection remain available here.</span></div>
-    <details class="design-notes" data-od-id="design-notes"><summary data-t="designNotesTitle">Design notes</summary><p data-t="designNotesCopy">Proposed app tokens: dark surfaces, spacing, radii and status colors. Supplied brand colors and hierarchy are preserved. Manrope and Public Sans use local fallback stacks because font files were not supplied. Unresolved contracts: OIDC provider configuration, session probe, safe-route validation, membership/tenant lookup and server-provided retry intervals.</p></details>
-  </section>
-</main>
-<footer><div class="shell footer-row"><span data-t="footerLeft">Evidgate · Evidence-first release decisions</span><span data-t="footerRight">Illustrative design artifact · no live authentication</span></div></footer>
-<script>
-(() => {
-  const dict = {
-    en: {
-      prefs:"Display preferences", signInDetails:"Sign-in details", signInStatus:"Sign-in status", commonGroup:"Common review states", oidcGroup:"OIDC and session scenarios", defaultOption:"Default · anonymous", loadingOption:"Loading · authenticating", emptyOption:"Empty · no saved destination", errorOption:"Error · callback error", forbiddenOption:"403 · permission denied", conflictOption:"412 · conflict pattern", rateLimitOption:"429 · rate limited", callbackOption:"Callback · completing sign-in", authenticatedOption:"Authenticated · saved route", expiredOption:"Session expired · re-auth", revokedOption:"Revoked / signed out", idpOption:"Identity provider unavailable", canceledOption:"Sign-in canceled", membershipsOption:"No workspace access", notFoundOption:"404 · unknown tenant", skip:"Skip to sign in", eyebrow:"Evidence-backed release workspace", title:"Sign in to Evidgate", intro:"Use your organization account to continue to the workspace and route you already opened.", orgSignIn:"Organization sign-in", welcome:"Welcome back", authDescription:"Your organization manages access to Evidgate. Membership and project permissions are checked after sign-in.", continue:"Continue with organization sign-in", sessionNote:"Sign-in is handled by your organization. Evidgate does not ask you to create a local password.", returnHeading:"Your return destination", returnCaption:"Saved from this sign-in session", illustrative:"Illustrative", safeRoute:"Safe return destination", runs:"Runs", orgContext:"Organization context", reviewHeading:"Design review controls", reviewIntro:"Change the local fixture state to inspect sign-in, callback and access outcomes. These controls are not production navigation and make no network requests.", reviewSelect:"Review state", sampleLabel:"Illustrative fixture values.", reviewFoot:"A successful transition appears only as a labeled design-review result; this page has no live OIDC connection.", mobileNotice:"Use a desktop to make workspace changes. Sign-in and session inspection remain available here.", footerLeft:"Evidgate · Evidence-first release decisions", footerRight:"Illustrative design artifact · no live authentication", conflictNote:"Shared conflict-pattern demo from an editing action; this is not a sign-in or read-endpoint response.", currentRevision:"Current revision", changedField:"Changed field", unsavedDraft:"Unsaved draft retained", noMerge:"Reload is explicit. The draft is not merged or resubmitted.", loadingTitle:"Completing sign-in", loadingDetail:"Waiting for the organization sign-in response. No request is sent in this local preview.", callbackTitle:"Completing sign-in", callbackDetail:"The callback frame is active. Credentials, codes and identity-provider URLs are never shown here.", authTitle:"Sign-in preview", authDetail:"This local artifact does not connect to an identity provider. Use the review controls to inspect the illustrative states.", emptyTitle:"No saved destination", emptyDetail:"No protected route is attached to this sign-in session. Continue to return to your workspace after access is checked.", errorTitle:"We couldn't complete sign-in", errorDetail:"Request auth-req-28 · The callback returned an error. Your safe route remains saved.", retry:"Retry", forbiddenTitle:"Not authorized", forbiddenDetail:"Request auth-req-403 · Your account is signed in, but the server has not granted access to this workspace route.", reload:"Reload", conflictTitle:"Someone else changed this", conflictDetail:"Current revision policy-r18 differs from the retained local draft.", authenticatedTitle:"Signed in", authenticatedDetail:"Illustrative server result: session established. The saved route storefront-web / Runs / run-1842 is ready to resume.", expiredTitle:"Your session expired", expiredDetail:"Sign in to continue. Your safe return destination is preserved.", revokedTitle:"Signed out", revokedDetail:"Your session is no longer active. Sign in again to continue; protected data is cleared.", idpTitle:"Organization sign-in is unavailable", idpDetail:"The identity provider did not respond. Your safe destination is preserved; try again when service returns.", canceledTitle:"Sign-in canceled", canceledDetail:"No session was created. You can restart sign-in and return to the same safe destination.", membershipsTitle:"No workspace access yet", membershipsDetail:"Access must be granted by a workspace administrator. No project data is available in this state.", notFoundTitle:"Not found", notFoundDetail:"This tenant or route could not be found.", reloadReady:"Reload the current view", retryReady:"Retry sign-in", signedOut:"Continue after sign-in", knownRoute:"Your saved route is preserved.", routeGeneric:"Return to your workspace", errorRetry:"Retry sign-in", loadingButton:"Connecting…", rateLimitTitle:"Too many sign-in attempts · 429", rateLimitDetail:"Server Retry-After: 30 seconds (illustrative fixture) · request auth-req-429. Wait for the server-provided interval before retrying.", designNotesTitle:"Design notes", designNotesCopy:"Proposed app tokens: dark surfaces, spacing, radii and status colors. Supplied brand colors and hierarchy are preserved. Manrope and Public Sans use local fallback stacks because font files were not supplied. Unresolved contracts: OIDC provider configuration, session probe, safe-route validation, membership/tenant lookup and server-provided retry intervals.", simulated:"Illustrative preview: no sign-in request was sent."
-    },
-    vi: {
-      prefs:"Tùy chọn hiển thị", signInDetails:"Chi tiết đăng nhập", signInStatus:"Trạng thái đăng nhập", commonGroup:"Trạng thái xem xét chung", oidcGroup:"Tình huống OIDC và phiên", defaultOption:"Mặc định · ẩn danh", loadingOption:"Đang tải · xác thực", emptyOption:"Trống · chưa có đích quay lại", errorOption:"Lỗi · callback lỗi", forbiddenOption:"403 · từ chối quyền", conflictOption:"412 · mẫu xung đột", rateLimitOption:"429 · giới hạn yêu cầu", callbackOption:"Callback · đang hoàn tất đăng nhập", authenticatedOption:"Đã xác thực · trang đã lưu", expiredOption:"Phiên hết hạn · xác thực lại", revokedOption:"Đã thu hồi / đăng xuất", idpOption:"Nhà cung cấp danh tính không khả dụng", canceledOption:"Đã hủy đăng nhập", membershipsOption:"Chưa có quyền không gian làm việc", notFoundOption:"404 · tenant không xác định", skip:"Chuyển đến đăng nhập", eyebrow:"Không gian làm việc phát hành có bằng chứng", title:"Đăng nhập Evidgate", intro:"Dùng tài khoản tổ chức để tiếp tục đến không gian làm việc và trang bạn đã mở.", orgSignIn:"Đăng nhập của tổ chức", welcome:"Chào mừng trở lại", authDescription:"Tổ chức của bạn quản lý quyền truy cập Evidgate. Thành viên và quyền dự án được kiểm tra sau khi đăng nhập.", continue:"Tiếp tục bằng đăng nhập của tổ chức", sessionNote:"Tổ chức của bạn xử lý đăng nhập. Evidgate không yêu cầu bạn tạo mật khẩu riêng.", returnHeading:"Trang sẽ quay lại", returnCaption:"Được lưu trong phiên đăng nhập này", illustrative:"Minh họa", safeRoute:"Đích quay lại an toàn", runs:"Lượt chạy", orgContext:"Ngữ cảnh tổ chức", reviewHeading:"Điều khiển xem xét thiết kế", reviewIntro:"Đổi trạng thái dữ liệu minh họa để xem các kết quả đăng nhập, callback và quyền truy cập. Đây không phải điều hướng sản phẩm và không gửi yêu cầu mạng.", reviewSelect:"Trạng thái xem xét", sampleLabel:"Giá trị dữ liệu minh họa.", reviewFoot:"Chuyển trạng thái thành công chỉ xuất hiện như kết quả xem xét được gắn nhãn; trang này không kết nối OIDC thật.", mobileNotice:"Dùng máy tính để thay đổi không gian làm việc. Bạn vẫn có thể đăng nhập và xem phiên tại đây.", footerLeft:"Evidgate · Quyết định phát hành có bằng chứng", footerRight:"Bản thiết kế minh họa · không xác thực thật", conflictNote:"Minh họa mẫu xung đột dùng chung từ thao tác chỉnh sửa; đây không phải phản hồi đăng nhập hay đọc dữ liệu.", currentRevision:"Phiên bản hiện tại", changedField:"Trường đã đổi", unsavedDraft:"Bản nháp chưa lưu được giữ lại", noMerge:"Tải lại là thao tác riêng. Bản nháp không được gộp hoặc gửi lại.", loadingTitle:"Đang hoàn tất đăng nhập", loadingDetail:"Đang chờ phản hồi đăng nhập của tổ chức. Bản xem trước cục bộ không gửi yêu cầu.", callbackTitle:"Đang hoàn tất đăng nhập", callbackDetail:"Khung callback đang hoạt động. Không hiển thị thông tin đăng nhập, mã xác thực hoặc URL nhà cung cấp.", authTitle:"Xem trước đăng nhập", authDetail:"Tài liệu cục bộ này không kết nối nhà cung cấp danh tính. Dùng điều khiển xem xét để xem các trạng thái minh họa.", emptyTitle:"Chưa có đích quay lại", emptyDetail:"Phiên đăng nhập này không đính kèm trang được bảo vệ. Sau khi kiểm tra quyền, bạn có thể tiếp tục vào không gian làm việc.", errorTitle:"Không thể hoàn tất đăng nhập", errorDetail:"Yêu cầu auth-req-28 · Callback trả về lỗi. Đích an toàn vẫn được lưu.", retry:"Thử lại", forbiddenTitle:"Bạn không có quyền truy cập", forbiddenDetail:"Yêu cầu auth-req-403 · Tài khoản đã đăng nhập nhưng máy chủ chưa cấp quyền vào trang không gian làm việc này.", reload:"Tải lại", conflictTitle:"Người khác đã thay đổi dữ liệu", conflictDetail:"Phiên bản policy-r18 hiện tại khác với bản nháp cục bộ được giữ lại.", authenticatedTitle:"Đã đăng nhập", authenticatedDetail:"Kết quả máy chủ minh họa: phiên đã được thiết lập. Sẵn sàng quay lại trang storefront-web / Runs / run-1842 đã lưu.", expiredTitle:"Phiên đăng nhập đã hết hạn", expiredDetail:"Đăng nhập để tiếp tục. Đích quay lại an toàn của bạn vẫn được giữ lại.", revokedTitle:"Đã đăng xuất", revokedDetail:"Phiên không còn hoạt động. Đăng nhập lại để tiếp tục; dữ liệu được bảo vệ đã bị xóa.", idpTitle:"Không thể đăng nhập qua tổ chức", idpDetail:"Nhà cung cấp danh tính chưa phản hồi. Đích an toàn vẫn được giữ lại; hãy thử lại khi dịch vụ hoạt động.", canceledTitle:"Đã hủy đăng nhập", canceledDetail:"Phiên chưa được tạo. Bạn có thể bắt đầu lại và quay về cùng đích an toàn.", membershipsTitle:"Bạn chưa có quyền truy cập không gian làm việc", membershipsDetail:"Quản trị viên không gian làm việc cần cấp quyền. Không có dữ liệu dự án trong trạng thái này.", notFoundTitle:"Không tìm thấy", notFoundDetail:"Không tìm thấy tenant hoặc trang này.", reloadReady:"Tải lại chế độ xem hiện tại", retryReady:"Thử đăng nhập lại", signedOut:"Tiếp tục sau khi đăng nhập", knownRoute:"Đích đã lưu vẫn được giữ lại.", routeGeneric:"Quay lại không gian làm việc", errorRetry:"Thử đăng nhập lại", loadingButton:"Đang kết nối…", rateLimitTitle:"Quá nhiều lần thử đăng nhập · 429", rateLimitDetail:"Retry-After từ máy chủ: 30 giây (dữ liệu minh họa) · yêu cầu auth-req-429. Hãy đợi hết khoảng thời gian do máy chủ cung cấp rồi thử lại.", designNotesTitle:"Ghi chú thiết kế", designNotesCopy:"Token ứng dụng đề xuất: bề mặt tối, khoảng cách, bo góc và màu trạng thái. Giữ nguyên màu sắc và phân cấp thương hiệu đã cung cấp. Manrope và Public Sans dùng bộ phông dự phòng cục bộ vì chưa có tệp phông. Hợp đồng còn chờ xác nhận: cấu hình OIDC, kiểm tra phiên, xác thực đích quay lại an toàn, tra cứu thành viên/tenant và khoảng chờ do máy chủ cung cấp.", simulated:"Bản xem trước minh họa: không có yêu cầu đăng nhập nào được gửi."
-    }
-  };
-  const stateData = {
-    default:{tone:"neutral",title:"authTitle",detail:"authDetail",action:"",button:false},
-    loading:{tone:"neutral",title:"loadingTitle",detail:"loadingDetail",action:"",button:true},
-    callback:{tone:"accent",title:"callbackTitle",detail:"callbackDetail",action:"",button:false},
-    empty:{tone:"neutral",title:"emptyTitle",detail:"emptyDetail",action:"",button:false},
-    error:{tone:"error",title:"errorTitle",detail:"errorDetail",action:"errorRetry",button:false},
-    "403":{tone:"error",title:"forbiddenTitle",detail:"forbiddenDetail",action:"",button:false},
-    "412":{tone:"warning",title:"conflictTitle",detail:"conflictDetail",action:"reload",button:false,conflict:true},
-    "429":{tone:"warning",title:"rateLimitTitle",detail:"rateLimitDetail",action:"",button:false},
-    authenticated:{tone:"success",title:"authenticatedTitle",detail:"authenticatedDetail",action:"",button:false},
-    expired:{tone:"warning",title:"expiredTitle",detail:"expiredDetail",action:"retry",button:false},
-    revoked:{tone:"neutral",title:"revokedTitle",detail:"revokedDetail",action:"retry",button:false},
-    idp:{tone:"error",title:"idpTitle",detail:"idpDetail",action:"retry",button:false},
-    canceled:{tone:"neutral",title:"canceledTitle",detail:"canceledDetail",action:"retry",button:false},
-    memberships:{tone:"neutral",title:"membershipsTitle",detail:"membershipsDetail",action:"",button:false},
-    "404":{tone:"neutral",title:"notFoundTitle",detail:"notFoundDetail",action:"",button:false}
-  };
-  const root = document.documentElement;
-  const locale = document.getElementById('locale');
-  const themeButton = document.getElementById('theme-toggle');
-  const stateSelect = document.getElementById('state-select');
-  const signIn = document.getElementById('sign-in');
-  const readPreference = (key, fallback) => { try { return localStorage.getItem(key) || fallback; } catch (_) { return fallback; } };
-  const savePreference = (key, value) => { try { localStorage.setItem(key, value); } catch (_) {} };
-  let currentLocale = readPreference('evidgate-locale', 'en');
-  let currentTheme = readPreference('evidgate-theme', 'light');
-  if (!dict[currentLocale]) currentLocale = 'en';
-  if (currentTheme !== 'dark' && currentTheme !== 'light') currentTheme = 'light';
-  let activeState = 'default';
-  let timer;
-  locale.value = currentLocale;
-  root.dataset.theme = currentTheme;
-  function tr(key) { return dict[currentLocale][key] || dict.en[key] || key; }
-  function renderLocale() {
-    document.documentElement.lang = currentLocale;
-    document.querySelectorAll('[data-t]').forEach(el => { const key = el.dataset.t; if (dict[currentLocale][key]) el.textContent = tr(key); });
-    document.querySelectorAll('[data-t-aria]').forEach(el => { const key = el.dataset.tAria; if (dict[currentLocale][key]) el.setAttribute('aria-label', tr(key)); });
-    document.querySelectorAll('[data-state-label]').forEach(el => { el.textContent = tr(el.dataset.stateLabel); });
-    document.querySelectorAll('[data-review-group]').forEach(el => { el.label = tr(el.dataset.reviewGroup === 'common' ? 'commonGroup' : 'oidcGroup'); });
-    themeButton.setAttribute('aria-label', currentTheme === 'light' ? (currentLocale === 'vi' ? 'Chuyển sang giao diện tối' : 'Switch to dark theme') : (currentLocale === 'vi' ? 'Chuyển sang giao diện sáng' : 'Switch to light theme'));
-    const selected = stateSelect.value;
-    renderState(selected, false);
-  }
-  function setState(key, announce=true) {
-    activeState = key;
-    stateSelect.value = key;
-    renderState(key, announce);
-  }
-  function renderState(key, announce=true) {
-    const cfg = stateData[key] || stateData.default;
-    const box = document.getElementById('state-message');
-    box.className = 'state-message active';
-    box.dataset.tone = cfg.tone;
-    const iconMarkup = {
-      success: '<circle cx="10" cy="10" r="7.3" stroke="currentColor" stroke-width="1.5"/><path d="m6.7 10.1 2.2 2.2 4.5-4.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
-      error: '<circle cx="10" cy="10" r="7.3" stroke="currentColor" stroke-width="1.5"/><path d="m7.5 7.5 5 5m0-5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-      warning: '<path d="M10 2.8 18 17H2L10 2.8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 7.3v4.3m0 2.4h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
-      neutral: '<circle cx="10" cy="10" r="7.3" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v4m0-6h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
-      accent: '<circle cx="10" cy="10" r="7.3" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 10h6m-2.5-2.5L12.5 10 10 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
-    };
-    document.getElementById('state-icon').innerHTML = iconMarkup[cfg.tone] || iconMarkup.neutral;
-    document.getElementById('state-title').textContent = tr(cfg.title);
-    document.getElementById('state-detail').textContent = tr(cfg.detail);
-    document.getElementById('state-action').hidden = !cfg.action;
-    document.getElementById('state-action').textContent = cfg.action ? tr(cfg.action) : '';
-    document.getElementById('conflict-details').classList.toggle('visible', !!cfg.conflict);
-    signIn.disabled = !!cfg.button;
-    signIn.querySelector('[data-t="continue"]').textContent = cfg.button ? tr('loadingButton') : tr('continue');
-    signIn.setAttribute('aria-busy', cfg.button ? 'true' : 'false');
-    const hideWorkspaceContext = key === 'memberships' || key === '404';
-    const hideOrganization = hideWorkspaceContext || key === 'revoked';
-    const useGenericRoute = key === 'empty' || key === 'revoked';
-    document.getElementById('route-box').hidden = hideWorkspaceContext;
-    document.getElementById('known-route').hidden = useGenericRoute;
-    document.getElementById('generic-route').hidden = !useGenericRoute;
-    document.querySelector('.context-row').hidden = hideOrganization;
-    if (announce) box.setAttribute('aria-label', `${tr(cfg.title)}. ${tr(cfg.detail)}`);
-  }
-  locale.addEventListener('change', () => { currentLocale=locale.value; savePreference('evidgate-locale',currentLocale); renderLocale(); });
-  themeButton.addEventListener('click', () => { currentTheme = currentTheme === 'light' ? 'dark' : 'light'; root.dataset.theme=currentTheme; savePreference('evidgate-theme',currentTheme); renderLocale(); });
-  stateSelect.addEventListener('change', () => { clearTimeout(timer); setState(stateSelect.value); });
-  signIn.addEventListener('click', () => {
-    clearTimeout(timer); setState('loading');
-    timer = setTimeout(() => { setState('default'); document.getElementById('state-detail').textContent = tr('simulated'); }, 1450);
-  });
-  document.getElementById('state-action').addEventListener('click', () => {
-    if (activeState === '412') setState('default');
-    else if (activeState === 'error') { setState('loading'); timer=setTimeout(()=>setState('error'),1450); }
-    else setState('default');
-  });
-  renderLocale();
-})();
-</script>
+
+      <div class="eg-login__support eg-stack" data-gap="6">
+        <div class="eg-banner eg-banner--desktop">
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong data-en="Sign-in stays available on small screens" data-vi="Đăng nhập vẫn dùng được trên màn hình nhỏ">Đăng nhập vẫn dùng được trên màn hình nhỏ</strong>
+            <p data-en="Workspace changes need a desktop. This page is read-only apart from review controls." data-vi="Thay đổi không gian làm việc cần máy tính. Trang này chỉ đọc, ngoại trừ điều khiển xem xét.">Thay đổi không gian làm việc cần máy tính. Trang này chỉ đọc, ngoại trừ điều khiển xem xét.</p>
+        </div>
+      </div>
+
+      <section class="eg-card" aria-labelledby="destination-title">
+        <header class="eg-card__header">
+          <div>
+            <h2 id="destination-title" data-en="Your return destination" data-vi="Đích trở về của bạn">Đích trở về của bạn</h2>
+            <p data-en="Saved from this sign-in session" data-vi="Đã lưu từ phiên đăng nhập này">Đã lưu từ phiên đăng nhập này</p>
+          </div>
+          <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Illustrative" data-vi="Minh hoạ">Minh hoạ</span></span>
+        </header>
+        <div class="eg-card__body">
+          <div class="eg-stack" data-gap="2" data-eg-hide-state="empty">
+            <span class="eg-kpi__label" data-en="Safe return destination" data-vi="Đích trở về an toàn">Đích trở về an toàn</span>
+            <span><a href="../01-app-shell/evidgate-workspace-shell.html">storefront-web</a> <span aria-hidden="true">/</span> <span data-en="Authoring workspace" data-vi="Không gian thiết kế kiểm thử">Không gian thiết kế kiểm thử</span></span>
+          </div>
+          <div class="eg-state eg-state--empty" data-eg-show-state="empty" hidden>
+            <span class="eg-state__title" data-en="No saved destination" data-vi="Không có đích đã lưu">Không có đích đã lưu</span>
+            <span class="eg-state__description" data-en="After sign-in you will return to the project overview." data-vi="Sau khi đăng nhập, bạn sẽ trở về tổng quan dự án.">Sau khi đăng nhập, bạn sẽ trở về tổng quan dự án.</span>
+          </div>
+          <p><span class="eg-kpi__label" data-en="Organization context" data-vi="Ngữ cảnh tổ chức">Ngữ cảnh tổ chức</span><br><span data-en="Lotus Commerce · illustrative fixture" data-vi="Lotus Commerce · dữ liệu minh hoạ">Lotus Commerce · dữ liệu minh hoạ</span></p>
+        </div>
+      </section>
+
+      <div data-eg-review data-eg-states="default,loading,empty,error,403,404,401,412,429,callback,authenticated,expired,revoked,idp,canceled,memberships"></div>
+
+
+
+      <details>
+        <summary data-en="Design notes" data-vi="Ghi chú thiết kế">Ghi chú thiết kế</summary>
+        <p data-en="Proposed app tokens, local font fallbacks and illustrative fixtures. The supplied ui-ux-pro-max file is catalog metadata only. Unresolved contracts: OIDC provider configuration, session probe, safe-route validation, membership/tenant lookup and server-provided Retry-After. This page makes no network requests and has no live authentication." data-vi="Token ứng dụng đề xuất, phông chữ dự phòng cục bộ và dữ liệu minh hoạ. Tệp ui-ux-pro-max được cung cấp chỉ là siêu dữ liệu danh mục. Hợp đồng chưa chốt: cấu hình OIDC, kiểm tra phiên, xác thực tuyến an toàn, tra cứu thành viên/tenant và Retry-After do máy chủ cung cấp. Trang này không gửi yêu cầu mạng và không có đăng nhập thật.">Token ứng dụng đề xuất, phông chữ dự phòng cục bộ và dữ liệu minh hoạ. Tệp ui-ux-pro-max được cung cấp chỉ là siêu dữ liệu danh mục. Hợp đồng chưa chốt: cấu hình OIDC, kiểm tra phiên, xác thực tuyến an toàn, tra cứu thành viên/tenant và Retry-After do máy chủ cung cấp. Trang này không gửi yêu cầu mạng và không có đăng nhập thật.</p>
+      </details>
+      </div>
+    </main>
+
+    <footer class="eg-login__footer">
+      <span data-en="Evidgate · From requirements to tests that repair themselves, under review" data-vi="Evidgate · Từ yêu cầu đến kiểm thử tự sửa, luôn có người duyệt">Evidgate · Từ yêu cầu đến kiểm thử tự sửa, luôn có người duyệt</span>
+    </footer>
+  </div>
 </body>
 </html>

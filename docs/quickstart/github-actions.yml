@@ -1,8 +1,9 @@
 # Evidgate quickstart — GitHub Actions workflow (rendered by `evidgate quickstart`).
 #
-# The only stored setting is the repository configuration VARIABLE EVIDGATE_API_URL
-# (Settings → Secrets and variables → Actions → Variables). No secret is stored: the
-# CLI exchanges the GitHub OIDC token for a short-lived Evidgate CI token.
+# The stored settings are repository configuration VARIABLES: EVIDGATE_API_URL and
+# EVIDGATE_EXECUTION (Settings → Secrets and variables → Actions → Variables; the
+# execution key is a 64-hex digest, not a secret). No secret is stored: the CLI exchanges
+# the GitHub OIDC token for a short-lived Evidgate CI token.
 #
 # Fork-safe by construction: `test` runs on pull_request and holds no Evidgate setting
 # and no token; `upload` mints the token only on a workflow_dispatch or push from the
@@ -115,5 +116,18 @@ jobs:
           MANIFEST_HASH: ${{ steps.manifest.outputs.manifest_hash }}
           EVIDGATE_SPOOL_DIR: ${{ github.workspace }}/.evidgate-spool
         run: npx --yes --package @evidgate/cli@0.0.0 -- evidgate runs finalize --run "$RUN_ID" --producer shard-1 --shard 1 --manifest-hash "$MANIFEST_HASH"
-      # Not yet available — this step lands with its owning task:
-      #   artifacts upload (04.2.4-T1)
+      # Upload the evidence files this job produced (a trace, a video, the report). Each
+      # file must sit under ./test-results or ./playwright-report (or a --dir root), and
+      # its media type must be one the kind's policy accepts (an unknown extension needs
+      # --media-type). --execution-key is the planned execution this shard ran: the
+      # manifest's executions[] entry, stored as the repository VARIABLE
+      # EVIDGATE_EXECUTION (a 64-hex digest, not a secret). The command hashes the
+      # file, PUTs it to the presigned URL and verifies size and checksum at complete; a
+      # 413 means the project's cap refused it.
+      - env:
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+          EVIDGATE_EXECUTION: ${{ vars.EVIDGATE_EXECUTION }}
+          EVIDGATE_SPOOL_DIR: ${{ github.workspace }}/.evidgate-spool
+        run: |
+          npx --yes --package @evidgate/cli@0.0.0 -- evidgate artifacts upload --run "$RUN_ID" --file test-results/trace.zip --kind trace --execution-key "$EVIDGATE_EXECUTION"
+          npx --yes --package @evidgate/cli@0.0.0 -- evidgate artifacts upload --run "$RUN_ID" --file playwright-report/index.html --kind raw_report --media-type text/html --execution-key "$EVIDGATE_EXECUTION"

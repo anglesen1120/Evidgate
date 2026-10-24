@@ -1,153 +1,498 @@
 <!doctype html>
-<html lang="en" data-theme="light" data-page="01" data-nav="runs">
+<html lang="vi" data-theme="light" data-nav="shell" data-phase-min="G1">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<title>Evidgate — Workspace</title>
-<link rel="stylesheet" href="../assets/evidgate.css">
-<script src="../assets/evidgate.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Không gian thiết kế kiểm thử · Evidgate</title>
+  <link rel="stylesheet" href="../assets/evidgate.css">
+  <script src="../assets/evidgate.js" defer></script>
 </head>
 <body>
-<a class="skip-link" href="#main-content" data-i18n="skip">Skip to main content</a>
-<div class="shell">
-<aside class="eg-nav" id="evidgateSidebar" data-eg-nav aria-label="Primary navigation"></aside>
-<div class="main" id="workspace">
-  <header class="topbar" data-od-id="workspace-header">
-    <div class="scope-control org-scope">
-      <button class="scope-trigger" id="orgTrigger" aria-expanded="false" aria-haspopup="listbox" data-od-id="organization-switcher"><span class="scope-kind" data-i18n="org">Organization</span><span class="scope-name" id="orgLabel">Lotus Commerce</span><svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg></button>
-      <div class="popover scope-pop" id="orgPopover" role="dialog" aria-label="Choose organization"><h3 data-i18n="org">Organization</h3><input class="popover-search" id="orgSearch" type="search" placeholder="Search organizations" aria-label="Search organizations"><div class="option-list" id="orgOptions" role="listbox"></div></div>
+  <a class="eg-skip-link" href="#main"><span data-en="Skip to workspace content" data-vi="Bỏ qua đến nội dung không gian làm việc">Bỏ qua đến nội dung không gian làm việc</span></a>
+  <div class="eg-shell">
+    <aside class="eg-nav" id="eg-primary-nav" data-eg-nav aria-label="Điều hướng sản phẩm"></aside>
+
+    <div class="eg-shell__main">
+      <header class="eg-topbar">
+        <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-nav-toggle aria-expanded="true" aria-controls="eg-primary-nav" aria-label="Mở hoặc thu gọn điều hướng">
+          <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-menu"></use></svg>
+        </button>
+        <div class="eg-topbar__scope">
+          <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Project" data-vi="Dự án">Dự án</span></span>
+          <span><strong>storefront-web</strong> · Lotus Commerce</span>
+        </div>
+        <div class="eg-topbar__search">
+          <label class="eg-visually-hidden" for="nav-search">Tìm mục điều hướng</label>
+          <input class="eg-input eg-input--search" id="nav-search" type="search" data-eg-nav-search data-placeholder-en="Search navigation" data-placeholder-vi="Tìm mục điều hướng" placeholder="Tìm mục điều hướng">
+        </div>
+        <div class="eg-topbar__actions">
+          <span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Author</span></span>
+          <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-open="shortcuts-dialog" aria-haspopup="dialog" aria-label="Phím tắt">
+            <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-book"></use></svg>
+          </button>
+          <div class="eg-menu">
+            <button class="eg-btn eg-btn--ghost eg-btn--sm eg-menu__trigger" type="button" aria-expanded="false" aria-controls="account-menu">
+              <span>LN</span>
+              <span class="eg-btn__label">Linh Nguyễn</span>
+              <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg>
+            </button>
+            <div class="eg-menu__panel" id="account-menu" hidden>
+              <p><strong>Linh Nguyễn</strong><br><span data-en="QA engineer · Lotus Commerce" data-vi="Kỹ sư QA · Lotus Commerce">Kỹ sư QA · Lotus Commerce</span></p>
+              <a class="eg-menu__item" href="../27-settings-shell/evidgate-settings.html" data-en="Workspace settings" data-vi="Cài đặt không gian làm việc">Cài đặt không gian làm việc</a>
+              <a class="eg-menu__item" href="../44-ai-settings/evidgate-ai-settings.html" data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</a>
+              <a class="eg-menu__item" href="../02-login/evidgate-sign-in.html" data-en="Sign out" data-vi="Đăng xuất">Đăng xuất</a>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main tabindex="-1" class="eg-shell__content" id="main">
+        <nav class="eg-breadcrumbs" aria-label="Đường dẫn">
+          <ol>
+            <li class="eg-breadcrumbs__item"><a href="../index.html" data-en="Design index" data-vi="Hồ sơ thiết kế">Hồ sơ thiết kế</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item"><a href="../24-project-connection/evidgate-project-overview.html">storefront-web</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item" aria-current="page" data-en="Authoring workspace" data-vi="Không gian thiết kế kiểm thử">Không gian thiết kế kiểm thử</li>
+          </ol>
+        </nav>
+
+        <div class="eg-banner eg-banner--desktop">
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong data-en="Desktop required for editing" data-vi="Cần máy tính để chỉnh sửa">Cần máy tính để chỉnh sửa</strong>
+            <p data-en="This narrow view is read-only. Open the workspace on a desktop to edit tests." data-vi="Chế độ hẹp này là chỉ đọc. Mở không gian làm việc trên máy tính để chỉnh sửa kiểm thử.">Chế độ hẹp này là chỉ đọc. Mở không gian làm việc trên máy tính để chỉnh sửa kiểm thử.</p>
+          </div>
+        </div>
+
+        <header class="eg-page-header">
+          <div>
+            <p class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Authoring</span></p>
+            <h1 class="eg-page-header__title" data-en="Authoring workspace" data-vi="Không gian thiết kế kiểm thử">Không gian thiết kế kiểm thử</h1>
+            <p class="eg-page-header__description" data-en="Turn Checkout requirements into reviewed test cases. The feature tree, current case and source provenance stay in one place; runs and repair proposals remain later phases." data-vi="Chuyển yêu cầu Checkout thành ca kiểm thử có người duyệt. Cây chức năng, ca hiện tại và nguồn gốc nằm cùng một chỗ; lượt chạy và đề xuất sửa thuộc giai đoạn sau.">Chuyển yêu cầu Checkout thành ca kiểm thử có người duyệt. Cây chức năng, ca hiện tại và nguồn gốc nằm cùng một chỗ; lượt chạy và đề xuất sửa thuộc giai đoạn sau.</p>
+            <p class="eg-page-header__meta">
+              <span data-en="12 features" data-vi="12 chức năng">12 chức năng</span>
+              <span aria-hidden="true">·</span>
+              <span data-en="38 test cases" data-vi="38 ca kiểm thử">38 ca kiểm thử</span>
+              <span aria-hidden="true">·</span>
+              <span data-en="Updated 21 Oct 2026" data-vi="Cập nhật 21/10/2026">Cập nhật 21/10/2026</span>
+            </p>
+          </div>
+          <div class="eg-page-header__actions">
+            <a class="eg-btn eg-btn--primary" href="../40-authoring-tree/evidgate-authoring-tree.html">
+              <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-tree"></use></svg>
+              <span class="eg-btn__label" data-en="Open feature tree" data-vi="Mở cây chức năng">Mở cây chức năng</span>
+            </a>
+            <a class="eg-btn eg-btn--secondary" href="../43-generation/evidgate-generation.html" data-eg-mutate>
+              <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-sparkle"></use></svg>
+              <span class="eg-btn__label" data-en="Generate tests" data-vi="Tạo kiểm thử">Tạo kiểm thử</span>
+            </a>
+          </div>
+        </header>
+
+        <div data-eg-review data-eg-states="default,loading,empty,no-match,error,403,412"></div>
+
+        <div class="eg-split-pane eg-split-pane--context" data-eg-show-state="loading" data-eg-skeleton-match="#shell-default-pane" hidden aria-busy="true">
+          <div class="eg-stack" data-gap="7">
+            <section class="eg-card" aria-hidden="true">
+              <div class="eg-card__header"><div class="eg-stack" data-gap="2"><span class="eg-skeleton eg-skeleton--title"></span><span class="eg-skeleton eg-skeleton--meta"></span></div><span class="eg-skeleton eg-skeleton--control"></span></div>
+              <div class="eg-card__body">
+                <span class="eg-skeleton eg-skeleton--row"></span>
+                <span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span>
+                <span class="eg-skeleton eg-skeleton--row"></span>
+                <span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span>
+                <span class="eg-skeleton eg-skeleton--row"></span>
+                <span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span>
+                <span class="eg-skeleton eg-skeleton--row"></span>
+                <span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span>
+                <span class="eg-skeleton eg-skeleton--row"></span>
+              </div>
+              <footer class="eg-card__footer"><span class="eg-skeleton eg-skeleton--meta"></span><span class="eg-skeleton eg-skeleton--tiny"></span></footer>
+            </section>
+            <section class="eg-card" aria-hidden="true">
+              <div class="eg-card__header"><div class="eg-stack" data-gap="2"><span class="eg-skeleton eg-skeleton--title"></span><span class="eg-skeleton eg-skeleton--meta"></span></div></div>
+              <div class="eg-card__body">
+                <span class="eg-skeleton eg-skeleton--block"></span>
+                <span class="eg-skeleton eg-skeleton--row"></span>
+                <span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span>
+              </div>
+            </section>
+          </div>
+          <aside class="eg-shell__context" aria-hidden="true">
+            <section class="eg-card">
+              <div class="eg-card__header"><span class="eg-skeleton eg-skeleton--title"></span><span class="eg-skeleton eg-skeleton--control"></span></div>
+              <div class="eg-card__body"><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span><span class="eg-skeleton eg-skeleton--block"></span></div>
+            </section>
+            <section class="eg-card">
+              <div class="eg-card__header"><span class="eg-skeleton eg-skeleton--title"></span></div>
+              <div class="eg-card__body"><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span></div>
+            </section>
+            <section class="eg-card">
+              <div class="eg-card__header"><span class="eg-skeleton eg-skeleton--title"></span></div>
+              <div class="eg-card__body"><span class="eg-skeleton eg-skeleton--block"></span></div>
+            </section>
+          </aside>
+          <span class="eg-visually-hidden" role="status" data-en="Loading the authoring workspace" data-vi="Đang tải không gian thiết kế kiểm thử">Đang tải không gian thiết kế kiểm thử</span>
+        </div>
+
+        <div class="eg-stack" data-gap="4">
+          <div class="eg-state eg-state--empty" data-eg-show-state="empty" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-tree"></use></svg></span>
+            <span class="eg-state__title" data-en="No features yet" data-vi="Chưa có chức năng">Chưa có chức năng</span>
+            <span class="eg-state__description" data-en="Import a requirement or create the first feature to start authoring." data-vi="Nhập yêu cầu hoặc tạo chức năng đầu tiên để bắt đầu soạn.">Nhập yêu cầu hoặc tạo chức năng đầu tiên để bắt đầu soạn.</span>
+          </div>
+          <div class="eg-state eg-state--no-match" data-eg-show-state="no-match" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-search"></use></svg></span>
+            <span class="eg-state__title" data-en="No features match this filter" data-vi="Không có chức năng khớp bộ lọc">Không có chức năng khớp bộ lọc</span>
+            <span class="eg-state__description" data-en="Clear the filter to see the Checkout tree again." data-vi="Xoá bộ lọc để xem lại cây Checkout.">Xoá bộ lọc để xem lại cây Checkout.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Clear filter" data-vi="Xoá bộ lọc">Xoá bộ lọc</span></button></span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="error" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="The workspace could not be loaded" data-vi="Không thể tải không gian làm việc">Không thể tải không gian làm việc</span>
+            <span class="eg-state__description" data-en="Retry keeps the current route; no draft is merged or resubmitted." data-vi="Thử lại giữ nguyên tuyến hiện tại; không bản nháp nào bị hợp nhất hay gửi lại.">Thử lại giữ nguyên tuyến hiện tại; không bản nháp nào bị hợp nhất hay gửi lại.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Retry" data-vi="Thử lại">Thử lại</span></button></span>
+          </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="403" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+            <span class="eg-state__title" data-en="You do not have access to this project" data-vi="Bạn không có quyền truy cập dự án này">Bạn không có quyền truy cập dự án này</span>
+            <span class="eg-state__description" data-en="Ask a project owner for access; the rest of your workspace stays unchanged." data-vi="Yêu cầu chủ dự án cấp quyền; phần còn lại của không gian làm việc không đổi.">Yêu cầu chủ dự án cấp quyền; phần còn lại của không gian làm việc không đổi.</span>
+          </div>
+          <div class="eg-state eg-state--conflict" data-eg-show-state="412" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-shield-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="Revision conflict" data-vi="Xung đột phiên bản">Xung đột phiên bản</span>
+            <span class="eg-state__description" data-en="The retained draft stays intact; Reload is explicit and nothing is auto-merged." data-vi="Bản nháp được giữ nguyên; Tải lại là thao tác rõ ràng và không tự hợp nhất.">Bản nháp được giữ nguyên; Tải lại là thao tác rõ ràng và không tự hợp nhất.</span>
+          </div>
+        </div>
+
+        <div class="eg-split-pane eg-split-pane--context" id="shell-default-pane" data-eg-hide-state="loading,empty,no-match,error,403,412">
+          <div class="eg-stack" data-gap="7">
+            <section class="eg-card" aria-labelledby="tree-preview-title">
+                          <header class="eg-card__header">
+                            <div>
+                              <h2 id="tree-preview-title" data-en="Checkout feature tree" data-vi="Cây chức năng Checkout">Cây chức năng Checkout</h2>
+                              <p data-en="Preview only. Open the full tree to add a feature or reorder checks." data-vi="Chỉ là bản xem trước. Mở cây đầy đủ để thêm chức năng hoặc sắp xếp lại bước kiểm tra.">Chỉ là bản xem trước. Mở cây đầy đủ để thêm chức năng hoặc sắp xếp lại bước kiểm tra.</p>
+                            </div>
+                            <a class="eg-btn eg-btn--ghost eg-btn--sm" href="../40-authoring-tree/evidgate-authoring-tree.html">
+                              <span class="eg-btn__label" data-en="Open full tree" data-vi="Mở cây đầy đủ">Mở cây đầy đủ</span>
+                              <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-arrow-right"></use></svg>
+                            </a>
+                          </header>
+                          <div class="eg-card__body">
+                            <ul class="eg-tree" data-eg-tree aria-label="Cây chức năng Checkout">
+                              <li class="eg-tree__item">
+                                <div class="eg-tree__row">
+                                  <button class="eg-tree__toggle" type="button" data-eg-disclosure aria-controls="shell-tree-checkout" aria-expanded="true" data-aria-en="Checkout" data-aria-vi="Checkout"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg></button>
+                                  <span class="eg-tree__label" data-en="Checkout" data-vi="Checkout">Checkout</span>
+                                  <span class="eg-tree__meta">4</span>
+                                </div>
+                                <ul class="eg-tree__children" id="shell-tree-checkout">
+                                  <li class="eg-tree__item" data-eg-selected="true">
+                                    <div class="eg-tree__row">
+                                      <button class="eg-tree__toggle" type="button" data-eg-disclosure aria-controls="shell-tree-payment" aria-expanded="true" data-aria-en="Payment" data-aria-vi="Thanh toán"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg></button>
+                                      <span class="eg-tree__label" data-en="Payment" data-vi="Thanh toán">Thanh toán</span>
+                                      <span class="eg-tree__meta">3</span>
+                                    </div>
+                                    <ul class="eg-tree__children" id="shell-tree-payment">
+                                      <li class="eg-tree__item">
+                                        <div class="eg-tree__row">
+                                          <button class="eg-tree__toggle" type="button" data-eg-disclosure aria-controls="shell-tree-card" aria-expanded="true" data-aria-en="Credit card" data-aria-vi="Thẻ tín dụng"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg></button>
+                                          <span class="eg-tree__label" data-en="Credit card" data-vi="Thẻ tín dụng">Thẻ tín dụng</span>
+                                          <span class="eg-tree__meta">3</span>
+                                        </div>
+                                        <ul class="eg-tree__children" id="shell-tree-card">
+                                          <li class="eg-tree__item"><div class="eg-tree__row"><span class="eg-tree__toggle" aria-hidden="true"></span><span class="eg-tree__label" data-en="SHOP-TC-0042 · Confirm order shows the total" data-vi="SHOP-TC-0042 · Xác nhận đơn hàng hiển thị tổng tiền">SHOP-TC-0042 · Xác nhận đơn hàng hiển thị tổng tiền</span><span class="eg-tree__meta">v5</span></div></li>
+                                          <li class="eg-tree__item"><div class="eg-tree__row"><span class="eg-tree__toggle" aria-hidden="true"></span><span class="eg-tree__label" data-en="SHOP-TC-0051 · Apply a discount code" data-vi="SHOP-TC-0051 · Áp dụng mã giảm giá">SHOP-TC-0051 · Áp dụng mã giảm giá</span><span class="eg-tree__meta">v3</span></div></li>
+                                        </ul>
+                                      </li>
+                                      <li class="eg-tree__item">
+                                        <div class="eg-tree__row">
+                                          <span class="eg-tree__toggle" aria-hidden="true"></span>
+                                          <span class="eg-tree__label" data-en="E-wallet" data-vi="Ví điện tử">Ví điện tử</span>
+                                          <span class="eg-tree__meta">2</span>
+                                        </div>
+                                      </li>
+                                      <li class="eg-tree__item">
+                                        <div class="eg-tree__row">
+                                          <span class="eg-tree__toggle" aria-hidden="true"></span>
+                                          <span class="eg-tree__label" data-en="Bank transfer" data-vi="Chuyển khoản">Chuyển khoản</span>
+                                          <span class="eg-tree__meta">1</span>
+                                        </div>
+                                      </li>
+                                    </ul>
+                                  </li>
+                                  <li class="eg-tree__item">
+                                    <div class="eg-tree__row">
+                                      <span class="eg-tree__toggle" aria-hidden="true"></span>
+                                      <span class="eg-tree__label" data-en="Cart" data-vi="Giỏ hàng">Giỏ hàng</span>
+                                      <span class="eg-tree__meta">2</span>
+                                    </div>
+                                  </li>
+                                  <li class="eg-tree__item">
+                                    <div class="eg-tree__row">
+                                      <span class="eg-tree__toggle" aria-hidden="true"></span>
+                                      <span class="eg-tree__label" data-en="Refund" data-vi="Hoàn tiền">Hoàn tiền</span>
+                                      <span class="eg-tree__meta">1</span>
+                                    </div>
+                                  </li>
+                                </ul>
+                              </li>
+                              <li class="eg-tree__item">
+                                <div class="eg-tree__row">
+                                  <button class="eg-tree__toggle" type="button" data-eg-disclosure aria-controls="shell-tree-account" aria-expanded="false" data-aria-en="Account" data-aria-vi="Tài khoản"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg></button>
+                                  <span class="eg-tree__label" data-en="Account" data-vi="Tài khoản">Tài khoản</span>
+                                  <span class="eg-tree__meta">2</span>
+                                </div>
+                                <ul class="eg-tree__children" id="shell-tree-account" hidden>
+                                  <li class="eg-tree__item">
+                                    <div class="eg-tree__row">
+                                      <span class="eg-tree__toggle" aria-hidden="true"></span>
+                                      <span class="eg-tree__label" data-en="Profile" data-vi="Hồ sơ">Hồ sơ</span>
+                                      <span class="eg-tree__meta">1</span>
+                                    </div>
+                                  </li>
+                                  <li class="eg-tree__item">
+                                    <div class="eg-tree__row">
+                                      <span class="eg-tree__toggle" aria-hidden="true"></span>
+                                      <span class="eg-tree__label" data-en="Sign in" data-vi="Đăng nhập">Đăng nhập</span>
+                                      <span class="eg-tree__meta">2</span>
+                                    </div>
+                                  </li>
+                                </ul>
+                              </li>
+                            </ul>
+                          </div>
+                          <footer class="eg-card__footer">
+                            <span data-en="4 feature branches · 3 levels deep" data-vi="4 nhánh chức năng · sâu 3 cấp">4 nhánh chức năng · sâu 3 cấp</span>
+                            <span data-en="Values illustrative" data-vi="Giá trị minh hoạ">Giá trị minh hoạ</span>
+                          </footer>
+                        </section>
+
+            <section class="eg-card" aria-labelledby="current-case-title">
+                          <header class="eg-card__header">
+                            <div>
+                              <h2 id="current-case-title" data-en="Current test case" data-vi="Ca kiểm thử hiện tại">Ca kiểm thử hiện tại</h2>
+                            </div>
+                            <span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="In progress" data-vi="Đang soạn">Đang soạn</span></span>
+                          </header>
+                          <div class="eg-card__body">
+                            <div class="eg-stack" data-gap="2">
+                              <strong><a href="../41-test-case-editor/evidgate-test-case-editor.html">SHOP-TC-0042</a></strong>
+                              <span data-en="Confirm order shows the total" data-vi="Xác nhận đơn hàng hiển thị tổng tiền">Xác nhận đơn hàng hiển thị tổng tiền</span>
+                              <span><span class="eg-chip eg-chip--revision"><span class="eg-chip__label">v5</span></span> <span class="eg-chip eg-chip--hash"><span class="eg-chip__label">0f3a…9c21</span></span></span>
+                            </div>
+                            <hr>
+                            <div class="eg-stack" data-gap="2">
+                              <span class="eg-kpi__label" data-en="Source" data-vi="Nguồn">Nguồn</span>
+                              <span data-en="Checkout requirement v3.2 · generated section reviewed by Linh Nguyễn" data-vi="Yêu cầu Checkout v3.2 · phần do AI tạo đã được Linh Nguyễn duyệt">Yêu cầu Checkout v3.2 · phần do AI tạo đã được Linh Nguyễn duyệt</span>
+                              <span class="eg-kpi__label" data-en="Provenance" data-vi="Nguồn gốc">Nguồn gốc</span>
+                              <span><span class="eg-chip eg-chip--source"><span class="eg-chip__label">AI + human</span></span></span>
+                            </div>
+                            <div class="eg-toolbar">
+                              <a class="eg-btn eg-btn--secondary eg-btn--sm" href="../42-pending-changes/evidgate-pending-changes.html"><span class="eg-btn__label" data-en="View pending changes" data-vi="Xem thay đổi chờ">Xem thay đổi chờ</span></a>
+                              <span class="eg-tooltip">
+                                <button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" aria-label="Giải thích nguồn gốc">
+                                  <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-book"></use></svg>
+                                </button>
+                                <span role="tooltip" data-en="Provenance is illustrative and read-only in this review." data-vi="Nguồn gốc là minh hoạ và chỉ đọc trong bản xem xét này.">Nguồn gốc là minh hoạ và chỉ đọc trong bản xem xét này.</span>
+                              </span>
+                            </div>
+                          </div>
+                        </section>
+          </div>
+          <aside class="eg-shell__context" aria-label="Ngữ cảnh ca kiểm thử">
+            <section class="eg-card" aria-labelledby="provenance-title">
+                          <header class="eg-card__header">
+                            <div>
+                              <h2 id="provenance-title" data-en="Requirement and version" data-vi="Yêu cầu và phiên bản">Yêu cầu và phiên bản</h2>
+                            </div>
+                          </header>
+                          <div class="eg-card__body">
+                            <ol class="eg-timeline">
+                              <li class="eg-timeline__item" data-state="historical">
+                                <span class="eg-timeline__marker" aria-hidden="true"></span>
+                                <div class="eg-timeline__body">
+                                  <span class="eg-timeline__time">20/10/2026</span>
+                                  <strong data-en="Requirement imported" data-vi="Đã nhập yêu cầu">Đã nhập yêu cầu</strong>
+                                  <span>checkout-spec-v3.2.md</span>
+                                </div>
+                              </li>
+                              <li class="eg-timeline__item" data-state="historical">
+                                <span class="eg-timeline__marker" aria-hidden="true"></span>
+                                <div class="eg-timeline__body">
+                                  <span class="eg-timeline__time">21/10/2026</span>
+                                  <strong data-en="Case v5 saved" data-vi="Đã lưu ca v5">Đã lưu ca v5</strong>
+                                  <span>Linh Nguyễn · 0f3a…9c21</span>
+                                </div>
+                              </li>
+                              <li class="eg-timeline__item" data-state="current">
+                                <span class="eg-timeline__marker" aria-hidden="true"></span>
+                                <div class="eg-timeline__body">
+                                  <span class="eg-timeline__time">21/10/2026</span>
+                                  <strong data-en="Waiting for review" data-vi="Đang chờ duyệt">Đang chờ duyệt</strong>
+                                  <span data-en="No run, verdict or waiver exists at G1." data-vi="Không có lượt chạy, kết luận hay miễn trừ ở G1.">Không có lượt chạy, kết luận hay miễn trừ ở G1.</span>
+                                </div>
+                              </li>
+                            </ol>
+                          </div>
+                        </section>
+
+            <section class="eg-card" aria-labelledby="quick-links-title">
+                          <header class="eg-card__header">
+                            <div>
+                              <h2 id="quick-links-title" data-en="Authoring shortcuts" data-vi="Lối tắt soạn thử">Lối tắt soạn thử</h2>
+                            </div>
+                          </header>
+                          <div class="eg-card__body">
+                            <div class="eg-stack" data-gap="2">
+                              <a href="../40-authoring-tree/evidgate-authoring-tree.html"><span data-en="Feature tree" data-vi="Cây chức năng">Cây chức năng</span></a>
+                              <a href="../41-test-case-editor/evidgate-test-case-editor.html"><span data-en="Test case editor" data-vi="Soạn ca kiểm thử">Soạn ca kiểm thử</span></a>
+                              <a href="../42-pending-changes/evidgate-pending-changes.html"><span data-en="Pending changes" data-vi="Thay đổi chờ áp dụng">Thay đổi chờ áp dụng</span></a>
+                              <a href="../43-generation/evidgate-generation.html"><span data-en="Generate tests" data-vi="Tạo kiểm thử">Tạo kiểm thử</span></a>
+                              <a href="../45-import-export/evidgate-import-export.html"><span data-en="Import / export" data-vi="Nhập / xuất">Nhập / xuất</span></a>
+                            </div>
+                          </div>
+                        </section>
+
+            <section class="eg-card" aria-labelledby="credit-title">
+                          <header class="eg-card__header">
+                            <div>
+                              <h2 id="credit-title" data-en="AI generation credit" data-vi="Tín dụng tạo bằng AI">Tín dụng tạo bằng AI</h2>
+                            </div>
+                          </header>
+                          <div class="eg-card__body">
+                            <div class="eg-credit-meter">
+                              <span class="eg-credit-meter__label" data-en="October 2026" data-vi="Tháng 10/2026">Tháng 10/2026</span>
+                              <span class="eg-credit-meter__balance">1 240 / 2 000</span>
+                              <span class="eg-credit-meter__estimate" data-en="Remaining · checklist estimate 12" data-vi="Còn lại · ước tính danh mục 12">Còn lại · ước tính danh mục 12</span>
+                              <span class="eg-credit-meter__track"><span class="eg-credit-meter__fill" style="--pct:62%"></span></span>
+                            </div>
+                          </div>
+                          <footer class="eg-card__footer">
+                            <span data-en="Not currency. Illustrative value." data-vi="Không phải tiền. Giá trị minh hoạ.">Không phải tiền. Giá trị minh hoạ.</span>
+                          </footer>
+                        </section>
+          </aside>
+        </div>
+
+        <section class="eg-card" aria-label="Tóm tắt thiết kế kiểm thử">
+          <div class="eg-card__body">
+            <div class="eg-toolbar">
+              <span class="eg-stack" data-gap="2"><span class="eg-kpi__label" data-en="Test cases" data-vi="Ca kiểm thử">Ca kiểm thử</span><span><strong>38</strong> <span class="eg-kpi__context" data-en="across 12 Checkout features" data-vi="trên 12 chức năng Checkout">trên 12 chức năng Checkout</span></span></span>
+              <span class="eg-stack" data-gap="2"><span class="eg-kpi__label" data-en="In progress" data-vi="Đang soạn">Đang soạn</span><span><strong>1</strong> <span class="eg-kpi__context">SHOP-TC-0042 · v5</span></span></span>
+              <span class="eg-stack" data-gap="2"><span class="eg-kpi__label" data-en="Pending review" data-vi="Chờ duyệt">Chờ duyệt</span><span><strong>3</strong> <span class="eg-kpi__context" data-en="human review required" data-vi="cần người duyệt">cần người duyệt</span></span></span>
+              <span class="eg-stack" data-gap="2"><span class="eg-kpi__label" data-en="AI credits" data-vi="Tín dụng AI">Tín dụng AI</span><span><strong>1 240 / 2 000</strong> <span class="eg-kpi__context" data-en="October 2026 · estimate 12 · not currency" data-vi="Tháng 10/2026 · ước tính 12 · không phải tiền">Tháng 10/2026 · ước tính 12 · không phải tiền</span></span></span>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Illustrative values" data-vi="Giá trị minh hoạ">Giá trị minh hoạ</span></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="eg-banner eg-banner--info">
+                  <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-layers"></use></svg></span>
+                  <div class="eg-banner__body">
+                    <strong data-en="3 changes are waiting for human review" data-vi="3 thay đổi đang chờ người duyệt">3 thay đổi đang chờ người duyệt</strong>
+                    <p data-en="Review the batch before it changes the feature tree. Nothing is applied automatically." data-vi="Duyệt lô thay đổi trước khi nó thay đổi cây chức năng. Không có thay đổi nào được tự động áp dụng.">Duyệt lô thay đổi trước khi nó thay đổi cây chức năng. Không có thay đổi nào được tự động áp dụng.</p>
+                  </div>
+                  <div class="eg-banner__actions">
+                    <a class="eg-btn eg-btn--secondary eg-btn--sm" href="../42-pending-changes/evidgate-pending-changes.html" data-en="Review changes" data-vi="Duyệt thay đổi">Duyệt thay đổi</a>
+                  </div>
+                </section>
+
+        <section class="eg-card" aria-labelledby="test-cases-title">
+                      <header class="eg-card__header">
+                        <div>
+                          <h2 id="test-cases-title" data-en="Recent test cases" data-vi="Ca kiểm thử gần đây">Ca kiểm thử gần đây</h2>
+                          <p data-en="Cases stay in authoring until a reviewer approves the batch." data-vi="Ca kiểm thử ở lại bước soạn cho đến khi người duyệt chấp thuận lô thay đổi.">Ca kiểm thử ở lại bước soạn cho đến khi người duyệt chấp thuận lô thay đổi.</p>
+                        </div>
+                        <a class="eg-btn eg-btn--ghost eg-btn--sm" href="../41-test-case-editor/evidgate-test-case-editor.html" data-eg-mutate>
+                          <span class="eg-btn__label" data-en="New test case" data-vi="Ca kiểm thử mới">Ca kiểm thử mới</span>
+                          <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-plus"></use></svg>
+                        </a>
+                      </header>
+                      <div class="eg-table__wrap">
+                        <table class="eg-table eg-table--compact">
+                          <caption class="eg-table__caption" data-en="Test cases are illustrative and do not represent a live project." data-vi="Ca kiểm thử là dữ liệu minh hoạ, không đại diện cho dự án thực.">Ca kiểm thử là dữ liệu minh hoạ, không đại diện cho dự án thực.</caption>
+                          <thead>
+                            <tr>
+                              <th scope="col" data-en="Case" data-vi="Ca">Ca</th>
+                              <th scope="col" data-en="Title" data-vi="Tiêu đề">Tiêu đề</th>
+                              <th scope="col" data-en="Source" data-vi="Nguồn">Nguồn</th>
+                              <th scope="col" data-en="Updated" data-vi="Cập nhật">Cập nhật</th>
+                              <th scope="col" data-en="Status" data-vi="Trạng thái">Trạng thái</th>
+                              <th scope="col"><span class="eg-visually-hidden">Mở</span></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td data-label-en="Case" data-label-vi="Ca" data-label="Ca"><code>SHOP-TC-0042</code> <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">v5</span></span></td>
+                              <td data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề" data-en="Confirm order shows the total" data-vi="Xác nhận đơn hàng hiển thị tổng tiền">Xác nhận đơn hàng hiển thị tổng tiền</td>
+                              <td data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn"><span class="eg-chip eg-chip--source"><span class="eg-chip__label">AI + human</span></span></td>
+                              <td data-label-en="Updated" data-label-vi="Cập nhật" data-label="Cập nhật">21/10/2026</td>
+                              <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="In progress" data-vi="Đang soạn">Đang soạn</span></span></td>
+                              <td data-label-en="Open" data-label-vi="Mở" data-label="Mở"><a class="eg-btn eg-btn--ghost eg-btn--sm" href="../41-test-case-editor/evidgate-test-case-editor.html"><span class="eg-btn__label" data-en="Open" data-vi="Mở">Mở</span></a></td>
+                            </tr>
+                            <tr>
+                              <td data-label-en="Case" data-label-vi="Ca" data-label="Ca"><code>SHOP-TC-0051</code> <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">v3</span></span></td>
+                              <td data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề" data-en="Apply a discount code" data-vi="Áp dụng mã giảm giá">Áp dụng mã giảm giá</td>
+                              <td data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn"><span class="eg-chip eg-chip--source"><span class="eg-chip__label" data-en="Manual" data-vi="Thủ công">Thủ công</span></span></td>
+                              <td data-label-en="Updated" data-label-vi="Cập nhật" data-label="Cập nhật">20/10/2026</td>
+                              <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--info"><span class="eg-badge__label" data-en="Pending review" data-vi="Chờ duyệt">Chờ duyệt</span></span></td>
+                              <td data-label-en="Open" data-label-vi="Mở" data-label="Mở"><a class="eg-btn eg-btn--ghost eg-btn--sm" href="../41-test-case-editor/evidgate-test-case-editor.html"><span class="eg-btn__label" data-en="Open" data-vi="Mở">Mở</span></a></td>
+                            </tr>
+                            <tr>
+                              <td data-label-en="Case" data-label-vi="Ca" data-label="Ca"><code>SHOP-TC-0058</code> <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">v1</span></span></td>
+                              <td data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề" data-en="Failed payment retry" data-vi="Thử lại thanh toán thất bại">Thử lại thanh toán thất bại</td>
+                              <td data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn"><span class="eg-chip eg-chip--source"><span class="eg-chip__label" data-en="Imported" data-vi="Nhập">Nhập</span></span></td>
+                              <td data-label-en="Updated" data-label-vi="Cập nhật" data-label="Cập nhật">19/10/2026</td>
+                              <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Draft" data-vi="Bản nháp">Bản nháp</span></span></td>
+                              <td data-label-en="Open" data-label-vi="Mở" data-label="Mở"><a class="eg-btn eg-btn--ghost eg-btn--sm" href="../41-test-case-editor/evidgate-test-case-editor.html"><span class="eg-btn__label" data-en="Open" data-vi="Mở">Mở</span></a></td>
+                            </tr>
+                            <tr>
+                              <td data-label-en="Case" data-label-vi="Ca" data-label="Ca"><code>SHOP-TC-0062</code> <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">v4</span></span></td>
+                              <td data-label-en="Title" data-label-vi="Tiêu đề" data-label="Tiêu đề" data-en="3-D Secure verification" data-vi="Xác thực 3-D Secure">Xác thực 3-D Secure</td>
+                              <td data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn"><span class="eg-chip eg-chip--source"><span class="eg-chip__label">AI</span></span></td>
+                              <td data-label-en="Updated" data-label-vi="Cập nhật" data-label="Cập nhật">18/10/2026</td>
+                              <td data-label-en="Status" data-label-vi="Trạng thái" data-label="Trạng thái"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Approved" data-vi="Đã duyệt">Đã duyệt</span></span></td>
+                              <td data-label-en="Open" data-label-vi="Mở" data-label="Mở"><a class="eg-btn eg-btn--ghost eg-btn--sm" href="../41-test-case-editor/evidgate-test-case-editor.html"><span class="eg-btn__label" data-en="Open" data-vi="Mở">Mở</span></a></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <footer class="eg-card__footer">
+                        <span data-en="Showing 4 of 38 cases" data-vi="Hiển thị 4 trên 38 ca">Hiển thị 4 trên 38 ca</span>
+                        <a href="../40-authoring-tree/evidgate-authoring-tree.html" data-en="Browse the feature tree" data-vi="Duyệt cây chức năng">Duyệt cây chức năng</a>
+                      </footer>
+                    </section>
+        <footer>
+          <hr>
+          <p><span data-en="Evidgate · Authoring workspace · G1 review fixture" data-vi="Evidgate · Không gian thiết kế kiểm thử · Dữ liệu xem xét G1">Evidgate · Không gian thiết kế kiểm thử · Dữ liệu xem xét G1</span></p>
+        </footer>
+      </main>
     </div>
-    <div class="scope-control project-scope">
-      <button class="scope-trigger" id="projectTrigger" aria-expanded="false" aria-haspopup="listbox" data-od-id="project-switcher"><span class="scope-kind" data-i18n="project">Project</span><span class="scope-name" id="projectLabel">storefront-web</span><svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg></button>
-      <div class="popover scope-pop" id="projectPopover" role="dialog" aria-label="Choose project"><h3 data-i18n="project">Project</h3><input class="popover-search" id="projectSearch" type="search" placeholder="Search projects" aria-label="Search projects"><div class="option-list" id="projectOptions" role="listbox"></div></div>
-    </div>
-    <div class="crumb" aria-label="Breadcrumb"><span data-i18n="runs">Runs</span> / <strong class="mono">run-1842</strong></div>
-    <div class="top-spacer"></div>
-    <button class="icon-btn" id="themeButton" aria-label="Switch theme" title="Switch theme" data-od-id="theme-toggle"><svg id="themeIcon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
-    <button class="text-btn locale" id="localeButton" data-od-id="locale-switch">VI</button>
-    <div class="account">
-      <button class="icon-btn account-trigger" id="accountTrigger" aria-expanded="false" aria-haspopup="menu" aria-label="Linh Nguyễn account" data-od-id="account-menu"><span class="avatar" aria-hidden="true">LN</span><span class="account-name">Linh Nguyễn</span><svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg></button>
-      <div class="popover account-pop" id="accountPopover" role="menu"><h3>Linh Nguyễn</h3><button class="menu-option" role="menuitem"><strong>Linh Nguyễn</strong><small>qa_engineer · Lotus Commerce</small></button><div class="menu-sep"></div><button class="menu-option" role="menuitem" id="signOut" data-i18n="signOut">Sign out</button></div>
-    </div>
-  </header>
-  <div class="mobile-notice" data-od-id="mobile-read-only-notice"><strong data-i18n="desktopRequired">Use a desktop to make changes</strong><span data-i18n="mobileReadOnly">This compact view is read-only.</span></div>
-  <div class="support-banner" role="note" data-od-id="support-access-banner">
-    <svg viewBox="0 0 24 24"><path d="M12 3 21 19H3L12 3Z"/><path d="M12 9v4m0 3v.1"/></svg>
-    <div><strong data-i18n="supportActive">Support access active</strong> · grant <span class="mono">sg-41</span> · operator <span class="mono">Support-07</span><br><span class="support-meta"><span data-i18n="scope">Scope</span>: storefront-web artifact metadata · <span data-i18n="expires">expires</span> <span class="mono">2026-10-13T11:00:00Z</span></span></div>
-    <div class="quota-line" title="server warned_at · 2026-10-13T09:40:00Z"><span data-i18n="artifactQuota">Artifacts</span> <strong>82%</strong><span class="quota-meter" aria-label="Artifact storage usage 82 percent"><i></i></span><a href="../31-quota-retention/evidgate-usage-retention.html" data-i18n="quotaRetention">Quota &amp; Retention</a></div>
   </div>
-  <main class="content" id="main-content" tabindex="-1">
-    <section class="title-row" data-od-id="run-heading">
-       <div class="title-copy"><div class="eyebrow" data-i18n="runDetails">Run details</div><h1 data-od-id="run-title"><span class="mono">run-1842</span> <span data-i18n="runTitle">· storefront web smoke</span></h1><div class="subtitle"><span data-i18n="build">Build</span> <span class="mono">ci-2026.10.13.1842</span> · <span data-i18n="branch">branch</span> <span class="mono">release/checkout-rc3</span></div></div>
-      <div class="title-actions"><button class="outline-btn" id="viewEvidence" data-od-id="view-evidence-action"><svg viewBox="0 0 24 24"><path d="M3 12s3.2-6 9-6 9 6 9 6-3.2 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.5"/></svg><span data-i18n="viewEvidence">View evidence</span></button><button class="icon-btn" id="runMore" aria-label="More run options" title="More options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
-    </section>
-    <div class="statusline"><span class="dot" aria-hidden="true"></span><strong data-i18n="collectionIncomplete">Collection incomplete</strong><span>· <span class="mono">incomplete</span></span><span class="fixture" data-i18n="illustrative">Illustrative fixture · timestamps UTC</span></div>
-    <section class="triad" aria-label="Run evaluation fields" data-od-id="evaluation-fields">
-      <div class="metric"><div class="metric-label" data-i18n="completeness">Collection completeness</div><div class="metric-value"><span class="pill warn" data-i18n="incomplete">Incomplete</span></div><div class="metric-note"><span class="mono">missing_required_artifact</span> · 1 required shard manifest</div></div>
-      <div class="metric"><div class="metric-label" data-i18n="outcome">Test outcome</div><div class="metric-value"><span class="pill fail"><svg viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8"/></svg><span>FAIL</span></span><span class="mono">has_failures</span></div><div class="metric-note" data-i18n="assertionFailed">Confirmed assertion failure remains FAIL.</div></div>
-      <div class="metric"><div class="metric-label" data-i18n="decision">Release decision</div><div class="metric-value"><span class="pill fail"><svg viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8"/></svg><span>FAIL</span></span><span class="mono">stored evaluation</span></div><div class="metric-note" data-i18n="policyVersion">Policy <span class="mono">release-policy@17</span> · stored result</div></div>
-    </section>
-    <div class="main-grid">
-      <section class="panel" data-od-id="run-tests-panel">
-         <div class="panel-head"><div><h2 data-i18n="testsInRun" data-od-id="tests-in-run-heading">Tests in this run</h2><div class="panel-meta"><span data-i18n="projectLabel">Project</span>: <span class="mono">storefront-web</span> · <span data-i18n="runAt">started</span> <span class="mono">2026-10-13T09:42:18Z</span></div></div><button class="quiet-btn desktop-only" id="exportEvidence" data-od-id="export-manifest-action"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg><span data-i18n="exportManifest">Export manifest</span></button></div>
-        <div class="panel-body"><div class="run-summary"><div><div class="run-id" data-i18n="checkoutTests">Checkout smoke suite</div><div class="run-context">Playwright TypeScript · GitHub Actions · <span class="mono">workflow #884</span></div></div><div class="run-actions"><button class="outline-btn" id="failureInboxAction" data-i18n="openFailureInbox">Open Failure Inbox</button></div></div>
-          <div class="run-facts"><div><div class="fact-label" data-i18n="commit">Commit</div><div class="fact-value mono" title="8f2a0b9c5a143b7de419e21476a6c0e9">8f2a0b9c5a143b…</div></div><div><div class="fact-label" data-i18n="collected">Collected</div><div class="fact-value">23 / 24 <span style="color:var(--warn)">· incomplete</span></div></div><div><div class="fact-label" data-i18n="duration">Duration</div><div class="fact-value mono">00:04:28</div></div><div><div class="fact-label" data-i18n="evidenceRevision">Evidence revision</div><div class="fact-value mono">evr-7</div></div></div>
-        </div>
-        <div class="table-toolbar"><div class="toolbar-left"><span data-i18n="filterTests">Filter tests</span><input class="filter-input" id="filterTests" type="search" placeholder="Search test names" aria-label="Filter tests"><span>24 <span data-i18n="records">records</span></span></div><label class="toolbar-left"><span data-i18n="pageSize">Rows</span><select aria-label="Rows per page"><option selected>50</option><option>100</option><option>200</option></select></label></div>
-        <div class="table-wrap"><table aria-label="Tests in run"><thead><tr><th data-i18n="test">Test</th><th data-i18n="rawNormalized">Raw / normalized</th><th data-i18n="attempt">Attempt</th><th data-i18n="evidenceRevision">Evidence revision</th></tr></thead><tbody id="testRows">
-          <tr data-od-id="run-test-checkout-saved-card"><td data-label-key data-label-en="Test" data-label-vi="Kiểm thử"><div class="test-name" title="checkout › applies a saved card and confirms order">checkout › applies a saved card and confirms order</div><div class="test-sub">tests/checkout/payment.spec.ts:118</div></td><td data-label-key data-label-en="Raw / normalized" data-label-vi="Gốc / chuẩn hóa"><span class="pill fail">FAIL</span> <span class="mono">assertion_failed</span></td><td data-label-key data-label-en="Attempt" data-label-vi="Lần thử"><div class="attempt"><span>2 / 2</span><span class="test-sub">flaky · retried</span></div></td><td data-label-key data-label-en="Evidence revision" data-label-vi="Phiên bản bằng chứng"><span class="hash-chip" title="SHA-256 6ea42a9f04c7d18b7ed43ab6c17a8a659c2ef8b8e33d20a57e22c9f1f30b91a"><span class="cell-hash">evr-7 · 6ea42a9f04c7d18b…</span><button aria-label="Copy full evidence hash" data-copy="6ea42a9f04c7d18b7ed43ab6c17a8a659c2ef8b8e33d20a57e22c9f1f30b91a">⧉</button></span></td></tr>
-          <tr data-od-id="run-test-billing-address"><td data-label-key data-label-en="Test" data-label-vi="Kiểm thử"><div class="test-name" title="checkout › validates billing address requirements">checkout › validates billing address requirements</div><div class="test-sub">tests/checkout/address.spec.ts:44</div></td><td data-label-key data-label-en="Raw / normalized" data-label-vi="Gốc / chuẩn hóa"><span class="pill pass">PASS</span> <span class="mono">passed</span></td><td data-label-key data-label-en="Attempt" data-label-vi="Lần thử"><div class="attempt"><span>1 / 1</span><span class="test-sub">original</span></div></td><td data-label-key data-label-en="Evidence revision" data-label-vi="Phiên bản bằng chứng"><span class="hash-chip"><span class="cell-hash">evr-7 · f9c81d20a681…</span><button aria-label="Copy full evidence hash" data-copy="f9c81d20a6812f9566a4a01d">⧉</button></span></td></tr>
-          <tr data-od-id="run-test-expired-payment"><td data-label-key data-label-en="Test" data-label-vi="Kiểm thử"><div class="test-name" title="checkout › declines an expired payment method">checkout › declines an expired payment method</div><div class="test-sub">tests/checkout/payment.spec.ts:207</div></td><td data-label-key data-label-en="Raw / normalized" data-label-vi="Gốc / chuẩn hóa"><span class="pill neutral">PENDING</span> <span class="mono">pending</span></td><td data-label-key data-label-en="Attempt" data-label-vi="Lần thử"><div class="attempt"><span>—</span><span class="test-sub">no result</span></div></td><td data-label-key data-label-en="Evidence revision" data-label-vi="Phiên bản bằng chứng"><span class="hash-chip"><span class="cell-hash">evr-7 · pending</span></span></td></tr>
-          <tr data-od-id="run-test-cart-restore"><td data-label-key data-label-en="Test" data-label-vi="Kiểm thử"><div class="test-name" title="checkout › restores cart after authentication">checkout › restores cart after authentication</div><div class="test-sub">tests/checkout/cart.spec.ts:81</div></td><td data-label-key data-label-en="Raw / normalized" data-label-vi="Gốc / chuẩn hóa"><span class="pill pass">PASS</span> <span class="mono">passed</span></td><td data-label-key data-label-en="Attempt" data-label-vi="Lần thử"><div class="attempt"><span>1 / 1</span><span class="test-sub">original</span></div></td><td data-label-key data-label-en="Evidence revision" data-label-vi="Phiên bản bằng chứng"><span class="hash-chip"><span class="cell-hash">evr-7 · 028fcc76a11e…</span><button aria-label="Copy full evidence hash" data-copy="028fcc76a11ef832f9516603">⧉</button></span></td></tr>
-        </tbody></table></div>
-        <div class="table-foot"><span data-i18n="cursorPagination">Showing 1–4 of 24 · cursor <span class="mono">c_7f31…</span></span><div class="pagination"><button class="page-btn" aria-label="Previous page" disabled>‹</button><button class="page-btn" aria-current="page">1</button><button class="page-btn" aria-label="Next page">›</button></div></div>
-      </section>
-      <aside class="panel state-panel" data-od-id="component-state-sheet" aria-label="Component state sheet">
-        <div class="panel-head"><div><h2 class="state-title" data-i18n="componentStates" data-od-id="component-state-heading">Component states</h2><div class="panel-meta" data-i18n="reviewContent">Design review content</div></div><span class="pill neutral">UI</span></div>
-        <div class="state-body">
-          <div class="state-section" data-od-id="state-decision-chips"><div class="state-label">DecisionChip</div><div class="state-row"><span class="pill pass">✓ PASS</span><span class="pill fail">× FAIL</span><span class="pill warn">! INCONCLUSIVE</span><span class="pill pending">PENDING</span></div></div>
-          <div class="state-section"><div class="state-label">EvidenceBadge · <span data-i18n="completeness">Collection completeness</span></div><div class="state-row"><span class="pill warn" data-i18n="incomplete">Incomplete</span><span class="pill neutral">missing_required_artifact</span></div><div class="source-note" style="margin-top:6px" data-i18n="missingReason">Missing reason: shard manifest absent from collector response.</div></div>
-          <div class="state-section" data-od-id="state-raw-normalized"><div class="state-label" data-i18n="rawNormalized">Raw / normalized</div><div class="state-line"><span>raw_status</span><strong class="mono">timedOut</strong></div><div class="state-line"><span>normalized</span><strong class="mono">inconclusive</strong></div><div class="state-line"><span>attempts</span><strong class="mono">2 of 2</strong></div></div>
-          <div class="state-section" data-od-id="state-healing-labels"><div class="state-label" data-i18n="healingState">Healing · separate labels</div><div class="state-row"><span class="pill warn" data-i18n="flaky">Flaky</span><span class="pill neutral" data-i18n="healed">Healed</span></div><div class="source-note" style="margin-top:6px" data-i18n="healingNote">Shadow suggestion preserves original failure and evidence revision.</div></div>
-          <div class="state-section"><div class="state-label" data-i18n="revisionHash">Revision / hash</div><span class="hash-chip" title="SHA-256 6ea42a9f04c7d18b7ed43ab6c17a8a659c2ef8b8e33d20a57e22c9f1f30b91a">sha256:6ea42a9f04c7d18b…</span><div class="source-note" style="margin-top:5px">revision <span class="mono">evr-7</span> · stored at <span class="mono">2026-10-13T09:46:46Z</span></div></div>
-          <div class="state-section"><div class="state-label" data-i18n="waiver">Waiver banner</div><div class="waiver"><strong data-i18n="waiverPending">Waiver pending review</strong><span class="mono">WVR-208</span> · checkout smoke · approver required</div><div class="source-note" style="margin-top:5px" data-i18n="waiverNote">No release approval action appears in healing review.</div></div>
-          <div class="state-section"><div class="state-label">Secret lifecycle · redacted</div><div class="state-line"><span>credential value</span><strong class="mono">••••••••••••</strong></div><button class="quiet-btn" data-copy="[REDACTED]" data-copy-type="redacted" style="min-height:30px;font-size:10px">Copy redacted reference</button><div class="source-note">Copy feedback only · no credential is generated or revealed.</div></div>
-          <div class="state-section"><div class="state-label" data-i18n="labelSources">Label sources</div><div class="source-note"><span class="mono">FAIL</span> · stored evaluation<br><span class="mono">flaky</span> · retry history<br><span class="mono">healed</span> · shadow review annotation<br><span class="mono">incomplete</span> · collector completeness record</div></div>
-        </div>
-      </aside>
+
+  <dialog class="eg-dialog eg-dialog--wide" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <header class="eg-dialog__header">
+      <div>
+        <h2 id="shortcuts-title" data-en="Keyboard shortcuts" data-vi="Phím tắt">Phím tắt</h2>
+        <p data-en="Available in this review fixture." data-vi="Khả dụng trong bản xem xét này.">Khả dụng trong bản xem xét này.</p>
+      </div>
+      <button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng hộp thoại">
+        <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg>
+      </button>
+    </header>
+    <div class="eg-dialog__body">
+      <div class="eg-stack" data-gap="2">
+        <p><kbd>Tab</kbd> · <span data-en="Move between controls" data-vi="Di chuyển giữa các điều khiển">Di chuyển giữa các điều khiển</span></p>
+        <p><kbd>↑</kbd> <kbd>↓</kbd> · <span data-en="Move in the feature tree" data-vi="Di chuyển trong cây chức năng">Di chuyển trong cây chức năng</span></p>
+        <p><kbd>Enter</kbd> · <span data-en="Expand or select a tree item" data-vi="Mở rộng hoặc chọn mục cây">Mở rộng hoặc chọn mục cây</span></p>
+        <p><kbd>Esc</kbd> · <span data-en="Close this dialog or the navigation drawer" data-vi="Đóng hộp thoại hoặc ngăn điều hướng">Đóng hộp thoại hoặc ngăn điều hướng</span></p>
+      </div>
     </div>
-    <section class="review-dock" data-od-id="design-review-controls">
-      <div class="review-head"><div class="review-heading"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="2" fill="var(--surface)"/><circle cx="15" cy="12" r="2" fill="var(--surface)"/><circle cx="10" cy="19" r="2" fill="var(--surface)"/></svg><strong data-i18n="reviewControls">Design review controls</strong><span>/ <span data-i18n="reviewControlsVi">Điều khiển xem xét thiết kế</span></span></div><div class="review-controls"><label for="stateSelect" data-i18n="scenario">Scenario</label><select id="stateSelect" data-od-id="state-selector"><option value="default" data-en="Default" data-vi="Mặc định">Default</option><option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option><option value="empty" data-en="Empty — no resources" data-vi="Trống — chưa có tài nguyên">Empty — no resources</option><option value="no-match" data-en="Empty — no filter matches" data-vi="Trống — không khớp bộ lọc">Empty — no filter matches</option><option value="error" data-en="Error" data-vi="Lỗi">Error</option><option value="403" data-en="403 — in-scope" data-vi="403 — trong phạm vi">403 — in-scope</option><option value="404" data-en="404 — not found" data-vi="404 — không tìm thấy">404 — not found</option><option value="412" data-en="412 — shared conflict" data-vi="412 — xung đột dùng chung">412 — shared conflict</option><option value="401" data-en="401 — re-auth" data-vi="401 — xác thực lại">401 — re-auth</option><option value="429" data-en="429 — rate limited" data-vi="429 — giới hạn tốc độ">429 — rate limited</option><option value="success" data-en="Success — server result" data-vi="Thành công — kết quả máy chủ">Success — server result</option><option value="quota" data-en="Quota — blocked" data-vi="Hạn mức — đã chặn">Quota — blocked</option><option value="quota-none" data-en="Quota — unavailable" data-vi="Hạn mức — không khả dụng">Quota — unavailable</option><option value="locale-error" data-en="Locale preference save error" data-vi="Lỗi lưu tùy chọn ngôn ngữ">Locale preference save error</option><option value="saving" data-en="Submitting" data-vi="Đang gửi">Submitting</option><option value="cancel202" data-en="Cancel 202 — recorded" data-vi="Hủy 202 — đã ghi nhận">Cancel 202 — recorded</option><option value="long" data-en="Long content" data-vi="Nội dung dài">Long content</option></select><select id="interactionSelect" aria-label="Interaction state" data-od-id="interaction-state-selector"><option value="normal" data-en="Control state: normal" data-vi="Trạng thái điều khiển: bình thường">Control state: normal</option><option value="disabled" data-en="Control state: disabled" data-vi="Trạng thái điều khiển: bị vô hiệu">Control state: disabled</option><option value="submitting" data-en="Control state: submitting" data-vi="Trạng thái điều khiển: đang gửi">Control state: submitting</option><option value="success" data-en="Control state: server-confirmed success" data-vi="Trạng thái điều khiển: thành công từ máy chủ">Control state: server-confirmed success</option></select></div></div>
-      <div class="scenario-area" id="scenarioArea" aria-live="polite" aria-atomic="true"><div class="scenario-banner"><div class="copy"><strong>Default · stored run evaluation</strong><p>Collection completeness, test outcome and release decision remain separate fields.</p></div><div class="scenario-actions"><button class="outline-btn" id="openConflictInline">Show shared 412 dialog</button></div></div></div>
-    </section>
-     <section class="notes" data-od-id="design-notes"><div class="notes-grid"><div><h3 data-i18n="proposedTokens">Proposed app tokens</h3><p>Light --bg, --surface, --fg, --muted, --border and --accent values follow the supplied brand. Proposed app tokens are their dark-theme counterparts, semantic --success/--warn/--danger pairs, --focus, --row-hover, compact spacing, 5px/8px radii and the 252px navigation rail. Status colors always pair with explicit text and icons. No webfont files were supplied; Manrope and Public Sans use Vietnamese-capable system fallbacks. This QA fixture shows only its illustrative granted Projects & Catalog, Runs, and Failure Inbox destinations; Healing Review, V2 Test Studio, Release, and Settings are omitted because their grants are unspecified.</p></div><div><h3 data-i18n="sourceContracts">Source contracts still required</h3><p>Server-granted navigation and project-scoped actions; support-header removal; stored evaluation and completeness payloads; quota warning/blocked/unavailable variants; locale preference save; cursor and idempotency behavior; 401 safe return and 429 Retry-After; current revision/diff payload for 412; the allowed secret lifecycle metadata and copy response. This is an illustrative design artifact, not production Angular code or an acceptance result.</p></div></div></section>
-  </main>
-</div>
-</div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
-<div class="modal-backdrop" id="conflictModal" aria-hidden="true">
-  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="conflictTitle" aria-describedby="conflictDesc" data-od-id="shared-conflict-dialog">
-    <div class="dialog-head"><h2 id="conflictTitle" data-i18n="conflictTitle">Someone else changed this — reload</h2><p id="conflictDesc" data-i18n="conflictDesc">Shared conflict pattern from a linked editing action. This read-only run page did not return 412.</p></div>
-    <div class="dialog-content"><div class="revision-grid"><div class="revision-box"><span data-i18n="currentRevision">Current revision</span><code>policy@18</code></div><div class="revision-box"><span data-i18n="draftRevision">Your draft base</span><code>policy@17</code></div></div><div class="diff"><div class="diff-title" data-i18n="changedFields">Changed fields</div><div class="diff-row"><span class="mono">requiredEvidence</span><span>Added <code class="mono">trace_bundle</code></span></div><div class="diff-row"><span class="mono">minPassRate</span><span>0.96 → 0.98</span></div></div><div class="draft"><strong data-i18n="unsavedDraft">Unsaved draft retained</strong><span class="mono">Draft policy note:</span> <span data-i18n="draftText">“Require traces for checkout release candidate.”</span><br><span data-i18n="reloadWarning">Reload replaces this draft. No auto-merge or silent resubmission.</span></div></div>
-    <div class="dialog-actions"><button class="outline-btn" id="cancelConflict" data-i18n="cancel">Cancel</button><button class="primary-btn" id="reloadConflict" data-i18n="reload">Reload</button></div>
-  </section>
-</div>
-<div class="live" id="liveAnnounce" aria-live="polite"></div>
-<script>
-(()=>{
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const translations={
- en:{skip:"Skip to main content",qa:"Quality assurance",projects:"Projects & Catalog",runs:"Runs",failure:"Failure Inbox",review:"Review",healing:"Healing Review",release:"Release",releaseNav:"Release",settings:"Settings",org:"Organization",project:"Project",signOut:"Sign out",supportActive:"Support access active",scope:"Scope",expires:"expires",artifactQuota:"Artifacts",quotaRetention:"Quota & Retention",runDetails:"Run details",runTitle:"· storefront web smoke",build:"Build",branch:"branch",viewEvidence:"View evidence",collectionIncomplete:"Collection incomplete",illustrative:"Illustrative fixture · timestamps UTC",completeness:"Collection completeness",incomplete:"Incomplete",outcome:"Test outcome",assertionFailed:"Confirmed assertion failure remains FAIL.",decision:"Release decision",policyVersion:'Policy <span class="mono">release-policy@17</span> · stored result',testsInRun:"Tests in this run",projectLabel:"Project",runAt:"started",exportManifest:"Export manifest",checkoutTests:"Checkout smoke suite",openFailureInbox:"Open Failure Inbox",commit:"Commit",collected:"Collected",duration:"Duration",evidenceRevision:"Evidence revision",filterTests:"Filter tests",records:"records",pageSize:"Rows",test:"Test",rawNormalized:"Raw / normalized",attempt:"Attempt",cursorPagination:'Showing 1–4 of 24 · cursor <span class="mono">c_7f31…</span>',componentStates:"Component states",reviewContent:"Design review content",missingReason:"Missing reason: shard manifest absent from collector response.",healingState:"Healing · separate labels",flaky:"Flaky",healed:"Healed",healingNote:"Shadow suggestion preserves original failure and evidence revision.",revisionHash:"Revision / hash",waiver:"Waiver banner",waiverPending:"Waiver pending review",waiverNote:"No release approval action appears in healing review.",labelSources:"Label sources",reviewControls:"Design review controls",reviewControlsVi:"Điều khiển xem xét thiết kế",scenario:"Scenario",proposedTokens:"Proposed app tokens",sourceContracts:"Source contracts still required",conflictTitle:"Someone else changed this — reload",conflictDesc:"Shared conflict pattern from a linked editing action. This read-only run page did not return 412.",currentRevision:"Current revision",draftRevision:"Your draft base",changedFields:"Changed fields",unsavedDraft:"Unsaved draft retained",draftText:"“Require traces for checkout release candidate.”",reloadWarning:"Reload replaces this draft. No auto-merge or silent resubmission.",cancel:"Cancel",reload:"Reload",fixtureFoot:"Illustrative workspace data",desktopRequired:"Use a desktop to make changes",mobileReadOnly:"This compact view is read-only."},
- vi:{skip:"Bỏ qua đến nội dung chính",qa:"Đảm bảo chất lượng",projects:"Dự án & Danh mục",runs:"Lượt chạy",failure:"Hộp thư lỗi",review:"Xem xét",healing:"Xem xét sửa cơ chế kiểm thử",release:"Phát hành",releaseNav:"Bản phát hành",settings:"Cài đặt",org:"Tổ chức",project:"Dự án",signOut:"Đăng xuất",supportActive:"Đang có quyền truy cập hỗ trợ",scope:"Phạm vi",expires:"hết hạn",artifactQuota:"Tệp bằng chứng",quotaRetention:"Hạn mức & Lưu giữ",runDetails:"Chi tiết lượt chạy",runTitle:"· kiểm thử nhanh storefront web",build:"Bản dựng",branch:"nhánh",viewEvidence:"Xem bằng chứng",collectionIncomplete:"Thu thập chưa đầy đủ",illustrative:"Dữ liệu minh họa · thời gian UTC",completeness:"Mức độ đầy đủ của bằng chứng",incomplete:"Chưa đầy đủ",outcome:"Kết quả kiểm thử",assertionFailed:"Lỗi xác nhận đã xác thực vẫn là FAIL.",decision:"Quyết định phát hành",policyVersion:'Chính sách <span class="mono">release-policy@17</span> · kết quả đã lưu',testsInRun:"Kiểm thử trong lượt chạy này",projectLabel:"Dự án",runAt:"bắt đầu",exportManifest:"Xuất danh mục",checkoutTests:"Bộ kiểm thử nhanh thanh toán",openFailureInbox:"Mở Hộp thư lỗi",commit:"Commit",collected:"Đã thu thập",duration:"Thời lượng",evidenceRevision:"Phiên bản bằng chứng",filterTests:"Lọc kiểm thử",records:"bản ghi",pageSize:"Số dòng",test:"Kiểm thử",rawNormalized:"Gốc / chuẩn hóa",attempt:"Lần thử",cursorPagination:'Hiển thị 1–4 trên 24 · con trỏ <span class="mono">c_7f31…</span>',componentStates:"Trạng thái thành phần",reviewContent:"Nội dung xem xét thiết kế",missingReason:"Lý do thiếu: phản hồi bộ thu thập không có tệp kê khai phân đoạn.",healingState:"Sửa cơ chế · nhãn riêng",flaky:"Không ổn định",healed:"Đã sửa",healingNote:"Đề xuất shadow giữ nguyên lỗi ban đầu và phiên bản bằng chứng.",revisionHash:"Phiên bản / mã băm",waiver:"Thông báo miễn trừ",waiverPending:"Miễn trừ đang chờ xem xét",waiverNote:"Không có thao tác phê duyệt phát hành trong phần xem xét sửa cơ chế.",labelSources:"Nguồn nhãn",reviewControls:"Điều khiển xem xét thiết kế",reviewControlsVi:"Design review controls",scenario:"Tình huống",proposedTokens:"Token ứng dụng đề xuất",sourceContracts:"Hợp đồng dữ liệu còn cần xác nhận",conflictTitle:"Dữ liệu đã thay đổi — tải lại",conflictDesc:"Mẫu xung đột dùng chung từ thao tác chỉnh sửa liên kết. Trang lượt chạy chỉ đọc này không trả về 412.",currentRevision:"Phiên bản hiện tại",draftRevision:"Nền của bản nháp",changedFields:"Trường đã thay đổi",unsavedDraft:"Đã giữ lại bản nháp chưa lưu",draftText:"“Yêu cầu trace cho ứng viên phát hành thanh toán.”",reloadWarning:"Tải lại sẽ thay thế bản nháp. Không tự gộp hoặc gửi lại âm thầm.",cancel:"Hủy",reload:"Tải lại",fixtureFoot:"Dữ liệu minh họa",desktopRequired:"Sử dụng máy tính để thay đổi dữ liệu",mobileReadOnly:"Chế độ xem gọn này chỉ đọc."}
- };
- Object.assign(translations.en,{visibleByGrant:"Visible in this QA permission fixture",serverRoutesOnly:"Routes are shown only when server-granted"});
- Object.assign(translations.vi,{visibleByGrant:"Hiển thị theo quyền QA minh họa",serverRoutesOnly:"Chỉ hiển thị tuyến do máy chủ cấp quyền"});
-let locale=localStorage.getItem('eg-locale')||'en',theme=localStorage.getItem('eg-theme')||'light';
-function applyLocale(){document.documentElement.lang=locale;$$('[data-i18n]').forEach(el=>{const k=el.dataset.i18n;if(translations[locale][k])el.innerHTML=translations[locale][k]});$$('option[data-en][data-vi]').forEach(el=>el.textContent=el.dataset[locale]);$('#localeButton').textContent=locale==='en'?'VI':'EN';$('#orgSearch').placeholder=locale==='en'?'Search organizations':'Tìm tổ chức';$('#projectSearch').placeholder=locale==='en'?'Search projects':'Tìm dự án';$('#filterTests').placeholder=locale==='en'?'Search test names':'Tìm tên kiểm thử';$('#orgSearch').setAttribute('aria-label',locale==='en'?'Search organizations':'Tìm tổ chức');$('#projectSearch').setAttribute('aria-label',locale==='en'?'Search projects':'Tìm dự án');$('#filterTests').setAttribute('aria-label',locale==='en'?'Filter tests':'Lọc kiểm thử');$('#themeButton').setAttribute('aria-label',locale==='en'?'Switch theme':'Đổi giao diện');$('#accountTrigger').setAttribute('aria-label',locale==='en'?'Linh Nguyễn account':'Tài khoản Linh Nguyễn');$('#interactionSelect').setAttribute('aria-label',locale==='en'?'Interaction state':'Trạng thái tương tác');$$('[data-label-en]').forEach(td=>td.dataset.label=td.dataset['label'+(locale==='en'?'En':'Vi')])}
-function applyTheme(){document.documentElement.dataset.theme=theme;localStorage.setItem('eg-theme',theme);$('#themeButton').setAttribute('aria-label',theme==='light'?'Switch to dark theme':'Switch to light theme');$('#themeIcon').innerHTML=theme==='light'?'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>':'<path d="M20 15.3A8.5 8.5 0 0 1 8.7 4a8.5 8.5 0 1 0 11.3 11.3Z"/>';localStorage.setItem('eg-theme',theme)}
-function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),3000)}
-applyLocale();applyTheme();
-$('#themeButton').onclick=()=>{theme=theme==='light'?'dark':'light';applyTheme()};
-$('#localeButton').onclick=()=>{const next=locale==='en'?'vi':'en';try{if($('#stateSelect')?.value==='locale-error'||sessionStorage.getItem('eg-locale-save-fail')==='1')throw Error();localStorage.setItem('eg-locale',next);locale=next;applyLocale();renderScenario();const fixtureUrl=new URL(location.href);fixtureUrl.searchParams.set('locale',locale);history.replaceState({},'',fixtureUrl);toast(locale==='en'?'Language changed · /en/':'Đã đổi ngôn ngữ · /vi/')}catch(e){toast(locale==='en'?'Could not save language preference. Current language kept.':'Không lưu được tùy chọn ngôn ngữ. Đã giữ nguyên ngôn ngữ hiện tại.')}};
-const scopes={orgs:[{name:'Lotus Commerce',meta:'Current organization'},{name:'Mekong Logistics',meta:'Accessible organization'}],projects:{'Lotus Commerce':[{name:'storefront-web',meta:'Lotus Commerce · current project'},{name:'Hệ thống thanh toán và đối soát thương mại đa kênh',meta:'Lotus Commerce'}],'Mekong Logistics':[{name:'evidgate-e2e',meta:'Mekong Logistics'}]}};
-function scopeOptions(kind,filter=''){const target=kind==='org'?'#orgOptions':'#projectOptions';const selected=kind==='org'?$('#orgLabel').textContent:$('#projectLabel').textContent;const list=kind==='org'?scopes.orgs:scopes.projects[$('#orgLabel').textContent]||[];$(target).innerHTML=list.filter(x=>x.name.toLowerCase().includes(filter.toLowerCase())).map(x=>`<button class="scope-option" role="option" aria-selected="${x.name===selected}" data-name="${x.name}"><strong>${x.name}</strong><small>${x.meta}</small></button>`).join('')||`<div class="source-note" style="padding:10px">${locale==='en'?'No results match these filters':'Không có kết quả phù hợp với bộ lọc'}</div>`;$$(`${target} .scope-option`).forEach(b=>b.onclick=()=>selectScope(kind,b.dataset.name))}
-function closePopovers(except,returnFocus=false){const active=$('.popover.open');$$('.popover').forEach(p=>{if(p!==except)p.classList.remove('open')});$$('.scope-trigger,.account-trigger').forEach(b=>{if(!except||!b.parentElement.contains(except))b.setAttribute('aria-expanded','false')});if(returnFocus&&active){const trigger=active.id==='orgPopover'?$('#orgTrigger'):active.id==='projectPopover'?$('#projectTrigger'):$('#accountTrigger');trigger.focus()}}
-function openPopover(id,trigger){const pop=$(id),was=pop.classList.contains('open');closePopovers();if(!was){pop.classList.add('open');trigger.setAttribute('aria-expanded','true');const input=pop.querySelector('input');if(input){input.value='';scopeOptions(id.includes('org')?'org':'project');input.focus()}else{const item=pop.querySelector('[role="menuitem"]');item?.setAttribute('tabindex','0');item?.focus()}}else trigger.focus()}
-$('#orgTrigger').onclick=()=>openPopover('#orgPopover',$('#orgTrigger'));$('#projectTrigger').onclick=()=>openPopover('#projectPopover',$('#projectTrigger'));$('#accountTrigger').onclick=()=>openPopover('#accountPopover',$('#accountTrigger'));
-$('#orgSearch').oninput=e=>scopeOptions('org',e.target.value);$('#projectSearch').oninput=e=>scopeOptions('project',e.target.value);scopeOptions('org');scopeOptions('project');
-$('#accountPopover').addEventListener('keydown',e=>{const items=[...$('#accountPopover').querySelectorAll('[role="menuitem"]')];if(!items.length)return;const i=items.indexOf(document.activeElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();items[(i+(e.key==='ArrowDown'?1:-1)+items.length)%items.length].focus()}if(e.key==='Home'){e.preventDefault();items[0].focus()}if(e.key==='End'){e.preventDefault();items.at(-1).focus()}});
-function selectScope(kind,name){const trigger=$(kind==='org'?'#orgTrigger':'#projectTrigger');const label=$(kind==='org'?'#orgLabel':'#projectLabel');label.textContent=name;if(kind==='org'){const available=scopes.projects[name]||[];$('#projectLabel').textContent=available[0]?.name||'—';scopeOptions('project')}closePopovers();trigger.focus();$('#testRows').innerHTML='';$('#scenarioArea').innerHTML=`<div class="scenario-banner"><div class="loading-bar" style="width:100%"><i></i></div><div class="copy"><strong>${locale==='en'?'Loading scoped data':'Đang tải dữ liệu theo phạm vi'}</strong><p>${locale==='en'?'Previous rows cleared while the server resolves this scope.':'Đã xóa dữ liệu cũ trong khi máy chủ tải phạm vi mới.'}</p></div></div>`;setTimeout(()=>{if(label.textContent===name){$('#testRows').innerHTML='';$('#scenarioArea').innerHTML=`<div class="scenario-banner"><div class="copy"><strong>${locale==='en'?'Scope changed':'Đã đổi phạm vi'}</strong><p>${locale==='en'?'Illustrative view is awaiting the server-scoped result. No previous rows are retained.':'Khung minh họa đang chờ kết quả theo phạm vi từ máy chủ. Không giữ lại dữ liệu cũ.'}</p></div></div>`}},850)}
-$$('.scope-pop').forEach(pop=>pop.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp'].includes(e.key))return;const options=[...pop.querySelectorAll('.scope-option')];if(!options.length)return;e.preventDefault();const current=options.indexOf(document.activeElement);const offset=e.key==='ArrowDown'?1:-1;options[(current+offset+options.length)%options.length].focus()}));
-document.addEventListener('click',e=>{if(!e.target.closest('.scope-control,.account'))closePopovers()});document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePopovers(null,true);closeConflict();}});
-$('#signOut').onclick=()=>{closePopovers(null,true);toast(locale==='en'?'Sign-out handoff needs the identity provider; this local fixture does not change the session.':'Cần nhà cung cấp định danh để đăng xuất; khung minh họa này không thay đổi phiên.')};
-const mobileQuery=window.matchMedia('(max-width: 767px)');function setMobileMode(){document.body.classList.toggle('mobile-readonly',mobileQuery.matches);$('#orgTrigger').disabled=mobileQuery.matches;$('#projectTrigger').disabled=mobileQuery.matches;}mobileQuery.addEventListener?.('change',setMobileMode);setMobileMode();
-$('#filterTests').addEventListener('input',e=>{const q=e.target.value.toLowerCase();let n=0;$$('#testRows tr').forEach(r=>{const show=r.textContent.toLowerCase().includes(q);r.hidden=!show;if(show)n++});$('#scenarioArea').dataset.filterCount=n});
-$$('[data-copy]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.dataset.copy);toast(b.dataset.copyType==='redacted'?(locale==='en'?'Redacted reference copied':'Đã sao chép tham chiếu đã ẩn'):(locale==='en'?'Hash copied':'Đã sao chép mã băm'))}catch(e){toast(locale==='en'?'Hash copy unavailable in this context':'Không thể sao chép mã băm trong ngữ cảnh này')}});
-$('#viewEvidence').onclick=()=>toast(locale==='en'?'Viewer handoff requires an isolated-origin integration; this local fixture opens no evidence.':'Cần tích hợp origin cô lập để bàn giao trình xem; khung minh họa cục bộ này không mở bằng chứng.');$('#exportEvidence').onclick=()=>toast(locale==='en'?'Manifest export awaits the corresponding server result.':'Xuất danh mục cần kết quả tương ứng từ máy chủ.');$('#failureInboxAction').onclick=()=>toast(locale==='en'?'Failure Inbox is a server-granted destination.':'Hộp thư lỗi là đích do máy chủ cấp quyền.');$('#runMore').onclick=()=>toast(locale==='en'?'No additional run action is available in this view.':'Không có thao tác lượt chạy khác trong chế độ xem này.');
-function makeScenarios(){return {
-   default:`<div class="scenario-banner"><div class="copy"><strong>${locale==='en'?'Default · stored run evaluation':'Mặc định · đánh giá lượt chạy đã lưu'}</strong><p>${locale==='en'?'Collection completeness, test outcome and release decision remain separate fields.':'Mức độ đầy đủ, kết quả kiểm thử và quyết định phát hành là các trường riêng.'}</p></div><div class="scenario-actions"><button class="outline-btn" id="openConflictInline">${locale==='en'?'Show shared 412 dialog':'Hiện hộp thoại 412 dùng chung'}</button></div></div>`,
- loading:`<div class="scenario-banner"><div class="loading-bar" style="width:92px"><i></i></div><div class="copy"><strong>${locale==='en'?'Loading':'Đang tải'}</strong><p>${locale==='en'?'Final layout space is reserved; duplicate submissions are disabled.':'Đã giữ chỗ bố cục cuối; thao tác gửi trùng bị vô hiệu hóa.'}</p></div><button class="primary-btn" disabled>${locale==='en'?'Loading…':'Đang tải…'}</button></div>`,
- empty:`<div class="scenario-banner"><svg class="empty-icon" viewBox="0 0 24 24"><path d="M4 6h16v13H4zM8 10h8M8 14h5"/></svg><div class="copy"><strong>${locale==='en'?'No projects yet':'Chưa có dự án'}</strong><p>${locale==='en'?'This illustrative empty state represents a server grant: project:create.':'Trạng thái trống minh họa này giả định máy chủ đã cấp project:create.'}</p></div><a class="outline-btn" href="../23-onboarding-wizard/evidgate-onboarding.html">${locale==='en'?'Open onboarding':'Mở hướng dẫn'}</a></div>`,
- 'no-match':`<div class="scenario-banner"><div class="copy"><strong>${locale==='en'?'No results match these filters':'Không có kết quả phù hợp với bộ lọc'}</strong><p>${locale==='en'?'Clear the test name filter to see the current page again.':'Xóa bộ lọc tên kiểm thử để xem lại trang hiện tại.'}</p></div><button class="outline-btn" id="clearFilter">${locale==='en'?'Clear filter':'Xóa bộ lọc'}</button></div>`,
-  error:`<div class="scenario-banner error"><div class="copy"><strong>${locale==='en'?'Could not load run details':'Không tải được chi tiết lượt chạy'}</strong><p>${locale==='en'?'Safe context retained · request id':'Đã giữ ngữ cảnh an toàn · mã yêu cầu'} <span class="mono">req_01HV9Y3Q8P</span></p></div><button class="outline-btn" id="retryButton">${locale==='en'?'Retry':'Thử lại'}</button></div>`,
- '403':`<div class="scenario-banner error"><div class="copy"><strong>403 · ${locale==='en'?'Not authorized':'Bạn không có quyền truy cập'}</strong><p>${locale==='en'?'This destination is in scope, but the server did not grant this action.':'Đích nằm trong phạm vi hiện tại nhưng máy chủ không cấp quyền thao tác.'}</p></div><span class="pill fail">403</span></div>`,
-  '404':`<div class="scenario-banner"><div class="copy"><strong>404 · ${locale==='en'?'Not found':'Không tìm thấy'}</strong><p>${locale==='en'?'Unknown and foreign-tenant identifiers have the same response.':'Mã không tồn tại và mã thuộc tổ chức khác có cùng phản hồi.'}</p></div></div>`,
-  '412':`<div class="scenario-banner warn"><div class="copy"><strong>412 · ${locale==='en'?'Someone else changed this — reload':'Người khác đã thay đổi dữ liệu — tải lại'}</strong><p>${locale==='en'?'Shared linked-edit conflict pattern from a linked editing action. This read-only page did not return 412.':'Mẫu xung đột chỉnh sửa dùng chung từ thao tác được liên kết. Trang chỉ đọc này không trả về 412.'}</p></div><button class="outline-btn" id="openConflict">${locale==='en'?'Review changes':'Xem thay đổi'}</button></div>`,
-  '401':`<div class="scenario-banner error"><div class="copy"><strong>401 · ${locale==='en'?'Session expired':'Phiên đăng nhập đã hết hạn'}</strong><p>${locale==='en'?'Polling stopped. Re-authentication returns to the safe run route.':'Đã dừng làm mới. Đăng nhập lại sẽ quay về đường dẫn lượt chạy an toàn.'}</p></div><button class="outline-btn" id="reauthButton">${locale==='en'?'Sign in':'Đăng nhập'}</button></div>`,
- '429':`<div class="scenario-banner warn"><div class="copy"><strong>429 · ${locale==='en'?'Rate limited':'Đã vượt giới hạn yêu cầu'}</strong><p>${locale==='en'?'Server Retry-After':'Thử lại sau do máy chủ cung cấp'}: <span class="mono">2026-10-13T09:48:00Z</span></p></div><button class="outline-btn" disabled>${locale==='en'?'Retry after server time':'Thử lại sau thời gian máy chủ'}</button></div>`,
- success:`<div class="scenario-banner"><div class="copy"><strong>${locale==='en'?'Saved':'Đã lưu'}</strong><p>${locale==='en'?'Success appears only after the supplied server result.':'Chỉ hiển thị thành công sau kết quả máy chủ được cung cấp.'} <span class="mono">policy@18</span></p></div><span class="pill pass">✓ ${locale==='en'?'Confirmed':'Đã xác nhận'}</span></div>`,
- quota:`<div class="scenario-banner error"><div class="copy"><strong>${locale==='en'?'Quota limit reached':'Đã đạt giới hạn hạn mức'}</strong><p>${locale==='en'?'artifact-storage · uploads blocked by the server limit.':'artifact-storage · máy chủ đã chặn tải lên do giới hạn.'}</p></div><a class="text-btn" href="../31-quota-retention/evidgate-usage-retention.html">${locale==='en'?'Quota & Retention':'Hạn mức & Lưu giữ'}</a></div>`,
- 'quota-none':`<div class="scenario-banner"><div class="copy"><strong>${locale==='en'?'Quota summary unavailable':'Không có thông tin hạn mức'}</strong><p>${locale==='en'?'No quota badge is shown when the server summary is unavailable.':'Không hiển thị huy hiệu hạn mức khi máy chủ không có thông tin.'}</p></div></div>`,
- 'locale-error':`<div class="scenario-banner error"><div class="copy"><strong>${locale==='en'?'Could not save language preference':'Không lưu được tùy chọn ngôn ngữ'}</strong><p>${locale==='en'?'Current locale stays active; the route remains unchanged.':'Giữ nguyên ngôn ngữ hiện tại; đường dẫn không thay đổi.'}</p></div><button class="outline-btn" id="localeRetry">${locale==='en'?'Retry preference save':'Thử lưu lại tùy chọn'}</button></div>`,
- saving:`<div class="scenario-banner"><div class="loading-bar" style="width:92px"><i></i></div><div class="copy"><strong>${locale==='en'?'Submitting':'Đang gửi'}</strong><p>${locale==='en'?'One intent keeps the same Idempotency-Key across retries.':'Một ý định giữ nguyên Idempotency-Key qua các lần thử lại.'}</p></div><button class="primary-btn" disabled>${locale==='en'?'Submitting…':'Đang gửi…'}</button></div>`,
-  cancel202:`<div class="scenario-banner warn"><div class="copy"><strong>202 · ${locale==='en'?'Cancel recorded':'Đã ghi nhận yêu cầu hủy'}</strong><p>${locale==='en'?'The cancel request was accepted; it does not mean the run has completed.':'Yêu cầu hủy đã được tiếp nhận; lượt chạy chưa được xác nhận hoàn tất.'}</p></div><span class="pill warn">202 Accepted</span></div>`
-  ,long:`<div class="scenario-banner"><div class="copy"><strong>${locale==='en'?'Long-content handling':'Xử lý nội dung dài'}</strong><p>Hệ thống thanh toán và đối soát thương mại đa kênh · ${locale==='en'?'full SHA-256 values wrap without clipping.':'mã SHA-256 đầy đủ tự xuống dòng.'}</p><span class="hash-chip">sha256:6ea42a9f04c7d18b7ed43ab6c17a8a659c2ef8b8e33d20a57e22c9f1f30b91</span></div></div>`
- }}
-function renderScenario(){const key=$('#stateSelect').value;const scenarios=makeScenarios();$('#scenarioArea').innerHTML=scenarios[key]||scenarios.default;const quota=$('.quota-line');if(quota){if(key==='quota-none'){quota.hidden=true}else if(key==='quota'){quota.hidden=false;quota.innerHTML=`<strong>${locale==='en'?'Quota limit reached':'Đã đạt giới hạn hạn mức'}</strong> · <span class="mono">artifact-storage</span> <a href="../31-quota-retention/evidgate-usage-retention.html">${locale==='en'?'Quota & Retention':'Hạn mức & Lưu giữ'}</a>`}else{quota.hidden=false;quota.innerHTML=`<span data-i18n="artifactQuota">${locale==='en'?'Artifacts':'Tệp bằng chứng'}</span> <strong>82%</strong><span class="quota-meter" aria-label="Artifact storage usage 82 percent"><i></i></span><a href="../31-quota-retention/evidgate-usage-retention.html">${locale==='en'?'Quota & Retention':'Hạn mức & Lưu giữ'}</a>`}};const open=$('#openConflict')||$('#openConflictInline');if(open)open.onclick=()=>openConflict(open);const clear=$('#clearFilter');if(clear)clear.onclick=()=>{$('#filterTests').value='';$('#filterTests').dispatchEvent(new Event('input'))};const localeRetry=$('#localeRetry');if(localeRetry)localeRetry.onclick=()=>toast(locale==='en'?'Preference save still needs a server response.':'Vẫn cần phản hồi máy chủ để lưu tùy chọn.');const retry=$('#retryButton');if(retry)retry.onclick=()=>{retry.disabled=true;retry.textContent=locale==='en'?'Loading…':'Đang tải…';setTimeout(()=>{retry.disabled=false;retry.textContent=locale==='en'?'Retry':'Thử lại';toast(locale==='en'?'Retry is ready; server response is still required.':'Có thể thử lại; vẫn cần phản hồi từ máy chủ.')},850)};const reauth=$('#reauthButton');if(reauth)reauth.onclick=()=>toast(locale==='en'?'Identity-provider sign-in handoff needs its safe return-route contract.':'Chuyển tiếp đăng nhập cần hợp đồng đường dẫn quay lại an toàn từ nhà cung cấp định danh.')}
-$('#stateSelect').onchange=renderScenario;renderScenario();$('#interactionSelect').onchange=e=>{const mode=e.target.value;const btn=$('#scenarioArea button');if(btn){btn.disabled=mode==='disabled'||mode==='submitting';if(mode==='submitting')btn.textContent=locale==='en'?'Submitting…':'Đang gửi…';else if(mode==='success'){if($('#stateSelect').value==='success'){btn.disabled=false;btn.textContent=locale==='en'?'Saved':'Đã lưu'}else{toast(locale==='en'?'Choose the server-result scenario before showing success.':'Chọn tình huống có kết quả máy chủ trước khi hiển thị thành công.');renderScenario()}}else if(mode==='normal')renderScenario()}};
- let lastFocus=null;function openConflict(trigger){lastFocus=trigger||document.activeElement;$('#conflictModal').classList.add('open');$('#conflictModal').setAttribute('aria-hidden','false');$('#cancelConflict').focus();document.addEventListener('keydown',trapFocus)}function closeConflict(){const modal=$('#conflictModal');if(!modal.classList.contains('open'))return;modal.classList.remove('open');modal.setAttribute('aria-hidden','true');document.removeEventListener('keydown',trapFocus);if(lastFocus&&lastFocus.focus)lastFocus.focus()}function trapFocus(e){if(e.key==='Escape'){e.preventDefault();closeConflict();return}if(e.key!=='Tab')return;const items=$$('#conflictModal button');const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}$('#cancelConflict').onclick=closeConflict;$('#conflictModal').addEventListener('click',e=>{if(e.target===$('#conflictModal'))closeConflict()});$('#reloadConflict').onclick=()=>{closeConflict();toast(locale==='en'?'Reload requested · fresh server revision required.':'Đã yêu cầu tải lại · cần phiên bản mới từ máy chủ.');$('#stateSelect').value='default';renderScenario()};
-})();
-</script>
+    <footer class="eg-dialog__footer">
+      <button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Close" data-vi="Đóng">Đóng</span></button>
+    </footer>
+  </dialog>
 </body>
 </html>
