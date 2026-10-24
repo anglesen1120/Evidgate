@@ -1,0 +1,191 @@
+@layer tokens, base, layout, components, utilities;
+
+@layer tokens {
+  :root {
+    /* [DECISION] Native controls follow the resolved light theme by default. */
+    color-scheme: light;
+    --eg-bg: #f5f8fa;
+    --eg-surface: #ffffff;
+    --eg-surface-raised: #f5f8fa;
+    --eg-text: #172b3a;
+    --eg-text-muted: #526471;
+    --eg-border: #dce5eb;
+    --eg-border-control: #7a8c99;
+    --eg-accent: #006b66;
+    --eg-accent-soft: #e8f5f2;
+    --eg-on-accent: #ffffff;
+    --eg-focus: #006b66;
+    --eg-scrim: #10202b99;
+
+    --eg-success-fg: #11633d;
+    --eg-success-bg: #e9f5ee;
+    --eg-danger-fg: #a62d37;
+    --eg-danger-bg: #fceef0;
+    --eg-warning-fg: #805500;
+    --eg-warning-bg: #fff5dc;
+    --eg-info-fg: #245ea1;
+    --eg-info-bg: #ecf3fc;
+    --eg-neutral-fg: #526471;
+    --eg-neutral-bg: #eff3f6;
+
+    /* [DECISION] Pending is independently named, neutral and verdict-free. */
+    --eg-pending-fg: #526471;
+    --eg-pending-bg: #eff3f6;
+    --eg-pending-border: #7a8c99;
+    /* [DECISION] Explicit text-role alias; v2 uses accent directly for links. */
+    --eg-accent-fg: var(--eg-accent);
+
+    --eg-font-display: 'Manrope', 'Public Sans', system-ui, sans-serif;
+    --eg-font-body: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --eg-font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+    --eg-text-xs: 12px;
+    --eg-text-sm: 14px;
+    --eg-text-md: 16px;
+    --eg-text-lg: 18px;
+    --eg-text-xl: 22px;
+    --eg-text-2xl: 28px;
+    --eg-leading-xs: 18px;
+    --eg-leading-sm: 20px;
+    --eg-leading-md: 24px;
+    --eg-leading-lg: 26px;
+    --eg-leading-xl: 30px;
+    --eg-leading-2xl: 36px;
+
+    --eg-weight-regular: 400;
+    --eg-weight-medium: 500;
+    --eg-weight-semibold: 600;
+    --eg-weight-bold: 700;
+
+    --eg-space-0: 0;
+    --eg-space-1: 2px;
+    --eg-space-2: 4px;
+    --eg-space-3: 8px;
+    --eg-space-4: 12px;
+    --eg-space-5: 16px;
+    --eg-space-6: 20px;
+    --eg-space-7: 24px;
+    --eg-space-8: 32px;
+    --eg-space-9: 40px;
+    --eg-space-10: 48px;
+    --eg-space-11: 56px;
+    --eg-space-12: 64px;
+
+    --eg-radius-sm: 4px;
+    --eg-radius-md: 8px;
+    --eg-radius-lg: 12px;
+    --eg-radius-pill: 999px;
+    --eg-border-width: 1px;
+    --eg-control-sm: 32px;
+    --eg-control-md: 36px;
+    --eg-control-lg: 40px;
+    --eg-control-touch: 44px;
+    --eg-row-compact: 40px;
+    --eg-row-default: 44px;
+    --eg-nav-width: 224px;
+    --eg-nav-rail: 68px;
+    --eg-rail-width: 320px;
+    --eg-focus-width: 2px;
+    --eg-focus-offset: 2px;
+
+    /* [DECISION] Preserve v2 flat overlays, sticky separator and navigation scrim. */
+    --eg-elevation-0: none;
+    --eg-elevation-1: 0 1px 0 var(--eg-border);
+    --eg-elevation-2: none;
+    --eg-elevation-3: 0 0 0 100vmax var(--eg-scrim);
+    /* [DECISION] Documentation/JS only: custom properties cannot parameterize media queries. */
+    --eg-bp-tablet: 768px;
+    --eg-bp-desktop: 1280px;
+
+    --eg-duration-fast: 150ms;
+    --eg-duration-standard: 200ms;
+    --eg-ease: cubic-bezier(0.2, 0, 0, 1);
+    --eg-z-base: 0;
+    --eg-z-sticky: 10;
+    --eg-z-menu: 20;
+    --eg-z-drawer: 30;
+    --eg-z-dialog: 40;
+    --eg-z-toast: 50;
+  }
+
+  /* [DECISION] Follow the OS only without an explicit light choice; no component rules here. */
+  /* Keep both dark declaration blocks identical; contrast.py compares their complete property maps. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      color-scheme: dark;
+      --eg-bg: #10202b;
+      --eg-surface: #14232d;
+      --eg-surface-raised: #192d39;
+      --eg-text: #e5eef4;
+      --eg-text-muted: #a8bac7;
+      --eg-border: #334a59;
+      --eg-border-control: #7f98a8;
+      --eg-accent: #76d8cb;
+      --eg-accent-soft: #153d3b;
+      --eg-on-accent: #10202b;
+      --eg-focus: #76d8cb;
+      --eg-scrim: #10202b99;
+
+      --eg-success-fg: #90dcad;
+      --eg-success-bg: #153b2a;
+      --eg-danger-fg: #ffb2ba;
+      --eg-danger-bg: #49242b;
+      --eg-warning-fg: #f2cd7a;
+      --eg-warning-bg: #40341c;
+      --eg-info-fg: #a7cbfa;
+      --eg-info-bg: #1c3555;
+      --eg-neutral-fg: #b8c7d2;
+      --eg-neutral-bg: #263844;
+
+      /* [DECISION] Dark equivalents of independent neutral pending and accent text roles. */
+      --eg-pending-fg: #b8c7d2;
+      --eg-pending-bg: #263844;
+      --eg-pending-border: #7f98a8;
+      --eg-accent-fg: var(--eg-accent);
+      /* [DECISION] Reuse v2 theme-aware border/scrim; do not invent darker shadows. */
+      --eg-elevation-0: none;
+      --eg-elevation-1: 0 1px 0 var(--eg-border);
+      --eg-elevation-2: none;
+      --eg-elevation-3: 0 0 0 100vmax var(--eg-scrim);
+    }
+  }
+
+  html[data-theme='dark'] {
+    /* [DECISION] Explicit user dark choice wins regardless of the OS preference. */
+    color-scheme: dark;
+    --eg-bg: #10202b;
+    --eg-surface: #14232d;
+    --eg-surface-raised: #192d39;
+    --eg-text: #e5eef4;
+    --eg-text-muted: #a8bac7;
+    --eg-border: #334a59;
+    --eg-border-control: #7f98a8;
+    --eg-accent: #76d8cb;
+    --eg-accent-soft: #153d3b;
+    --eg-on-accent: #10202b;
+    --eg-focus: #76d8cb;
+    --eg-scrim: #10202b99;
+
+    --eg-success-fg: #90dcad;
+    --eg-success-bg: #153b2a;
+    --eg-danger-fg: #ffb2ba;
+    --eg-danger-bg: #49242b;
+    --eg-warning-fg: #f2cd7a;
+    --eg-warning-bg: #40341c;
+    --eg-info-fg: #a7cbfa;
+    --eg-info-bg: #1c3555;
+    --eg-neutral-fg: #b8c7d2;
+    --eg-neutral-bg: #263844;
+
+    /* [DECISION] Dark equivalents of independent neutral pending and accent text roles. */
+    --eg-pending-fg: #b8c7d2;
+    --eg-pending-bg: #263844;
+    --eg-pending-border: #7f98a8;
+    --eg-accent-fg: var(--eg-accent);
+    /* [DECISION] Reuse v2 theme-aware border/scrim; do not invent darker shadows. */
+    --eg-elevation-0: none;
+    --eg-elevation-1: 0 1px 0 var(--eg-border);
+    --eg-elevation-2: none;
+    --eg-elevation-3: 0 0 0 100vmax var(--eg-scrim);
+  }
+}
