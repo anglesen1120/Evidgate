@@ -9,6 +9,587 @@
           <context context-type="linenumber">1,2</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shared.label-chip.flaky" datatype="html">
+        <source>Flaky</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">13,15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.label-chip.flaky-explanation" datatype="html">
+        <source> Flaky is a case label. It never overrides attempt #1 or the stored has_failures outcome. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">15,18</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.label-chip.original-failure" datatype="html">
+        <source>Original failure</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">22,24</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.label-chip.original-unavailable" datatype="html">
+        <source>Original failure unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">26,31</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.label-chip.healed" datatype="html">
+        <source>Healed with candidate</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">32,35</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.label-chip.hash-unavailable" datatype="html">
+        <source>Candidate hash unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">37,42</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.label-chip.shadow" datatype="html">
+        <source>Shadow evaluation</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">42,45</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.label-chip.official" datatype="html">
+        <source>Official evaluation</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">45,48</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.label-chip.mode-unavailable" datatype="html">
+        <source>Evaluation group unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">49,55</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.label-chip.unavailable" datatype="html">
+        <source>Label unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
+          <context context-type="linenumber">56,63</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.missing-reason-list.empty" datatype="html">
+        <source> No missing evidence reasons reported </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/missing-reason-list.component.ts</context>
+          <context context-type="linenumber">34,40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.missing-reason-list.label" datatype="html">
+        <source>Missing evidence reasons</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/missing-reason-list.component.ts</context>
+          <context context-type="linenumber">43</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.label" datatype="html">
+        <source>Waiver details</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">17,22</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.active" datatype="html">
+        <source>Approved by waiver</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">23,26</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.expired" datatype="html">
+        <source>Waiver expired</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">26,29</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.revoked" datatype="html">
+        <source>Waiver revoked</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">29,32</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.state-unavailable" datatype="html">
+        <source>Waiver state unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">32,37</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.details-unavailable" datatype="html">
+        <source>Waiver details unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">37,42</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.approver" datatype="html">
+        <source>Approved by</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">41,44</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.approver-unavailable" datatype="html">
+        <source>Approver unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">46,51</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.expires" datatype="html">
+        <source>Expires</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">51,54</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.expiry-unavailable" datatype="html">
+        <source>Expiry unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">56,62</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.utc-timestamp" datatype="html">
+        <source>UTC timestamp</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">62,66</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.waiver-banner.unchanged" datatype="html">
+        <source> This waiver does not change the stored outcome or decision. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/annotations/waiver-banner.component.ts</context>
+          <context context-type="linenumber">70,76</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.hash-chip.unavailable" datatype="html">
+        <source>Hash unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/hash-chip.component.ts</context>
+          <context context-type="linenumber">16,21</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.revision-chip.unavailable" datatype="html">
+        <source> Revision unavailable </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/revision-chip.component.ts</context>
+          <context context-type="linenumber">14,20</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.revision-chip.label" datatype="html">
+        <source>Revision</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/revision-chip.component.ts</context>
+          <context context-type="linenumber">25</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.run-state.created" datatype="html">
+        <source>Created</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.run-state.queued" datatype="html">
+        <source>Queued</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
+          <context context-type="linenumber">8</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.run-state.running" datatype="html">
+        <source>Running</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
+          <context context-type="linenumber">9</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.run-state.collecting" datatype="html">
+        <source>Collecting</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
+          <context context-type="linenumber">10</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.run-state.complete" datatype="html">
+        <source>Complete</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
+          <context context-type="linenumber">11</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.run-state.incomplete" datatype="html">
+        <source>Incomplete</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
+          <context context-type="linenumber">12</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.run-state.canceled" datatype="html">
+        <source>Canceled</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
+          <context context-type="linenumber">13</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.run-state.dimension" datatype="html">
+        <source>Run status</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
+          <context context-type="linenumber">33</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.run-state.unavailable" datatype="html">
+        <source>Run status unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
+          <context context-type="linenumber">41</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.status-pill.unavailable" datatype="html">
+        <source>Status unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/chips/status-pill.component.ts</context>
+          <context context-type="linenumber">35</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.data-table.no-rows" datatype="html">
+        <source> No rows </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/data-table/data-table.component.html</context>
+          <context context-type="linenumber">103,109</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.title" datatype="html">
+        <source>Shared UI state gallery</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">3,5</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.introduction" datatype="html">
+        <source> Render-only examples of evidence, decisions and their independent states. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">5,10</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.evaluations" datatype="html">
+        <source> Independent evaluation fields </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">11,14</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.invariant" datatype="html">
+        <source> Completeness, outcome and decision are separate fields. Missing evidence never implies approval. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">14,19</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.evaluation-pending" datatype="html">
+        <source>Incomplete evidence, pending decision</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">19,21</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.evaluation-fail" datatype="html">
+        <source>Complete evidence, failed evaluation</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">27,29</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.evidence" datatype="html">
+        <source>Evidence completeness</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">38,41</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.outcomes" datatype="html">
+        <source>Test outcomes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">47,50</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.decisions" datatype="html">
+        <source>Release decisions</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">57,59</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.status" datatype="html">
+        <source>Generic status tones</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">67,70</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.runs" datatype="html">
+        <source>Run lifecycle</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">81,84</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.hashes" datatype="html">
+        <source>Evidence hashes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">91,94</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.revisions" datatype="html">
+        <source>Immutable revisions</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">101,104</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reasons" datatype="html">
+        <source>Missing evidence reasons</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">110,113</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.waivers" datatype="html">
+        <source>Waiver metadata</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">116,120</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.labels" datatype="html">
+        <source>Case labels and healing provenance</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">138,140</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.tables" datatype="html">
+        <source>Read-only data tables</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">158,162</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.status-success" datatype="html">
+        <source>Available</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">52</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.status-info" datatype="html">
+        <source>Processing</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">53</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.status-warning" datatype="html">
+        <source>Needs attention</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">54</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.status-danger" datatype="html">
+        <source>Blocked</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">55</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.status-neutral" datatype="html">
+        <source>Not started</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">56</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.status-dimension" datatype="html">
+        <source>Example status</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">58</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.original-failure" datatype="html">
+        <source>Attempt #1: the checkout button could not be found.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">61</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reason-linked" datatype="html">
+        <source>Review the missing artifact example</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">65</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reason-plain" datatype="html">
+        <source>The declared producer has not supplied evidence.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">70</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.table-small" datatype="html">
+        <source>Evidence examples: 12 rows, default density</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">82</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.table-virtual" datatype="html">
+        <source>Evidence examples: 250 rows, virtual scrolling</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">83</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.table-empty" datatype="html">
+        <source>No evidence examples, compact density</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">84</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.column-hash" datatype="html">
+        <source>Evidence identity</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">89</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.column-note" datatype="html">
+        <source>Context</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">91</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.column-attempts" datatype="html">
+        <source>Attempts</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">93</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.column-mutation" datatype="html">
+        <source>Mutation</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
+          <context context-type="linenumber">95</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.decision-chip.dimension" datatype="html">
+        <source>Decision:</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
+          <context context-type="linenumber">11,14</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.decision-chip.unavailable" datatype="html">
+        <source> Decision unavailable </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
+          <context context-type="linenumber">16,23</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.decision-chip.pending" datatype="html">
+        <source>pending</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
+          <context context-type="linenumber">55</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.evidence-badge.dimension" datatype="html">
+        <source>Completeness:</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
+          <context context-type="linenumber">11,15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.evidence-badge.complete" datatype="html">
+        <source>Evidence complete</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
+          <context context-type="linenumber">34</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.evidence-badge.incomplete" datatype="html">
+        <source>Evidence incomplete</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
+          <context context-type="linenumber">36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.evidence-badge.unavailable" datatype="html">
+        <source>Evidence status unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
+          <context context-type="linenumber">38</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.outcome-pill.dimension" datatype="html">
+        <source>Outcome:</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
+          <context context-type="linenumber">11,15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.outcome-pill.all-passed" datatype="html">
+        <source>All tests passed</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
+          <context context-type="linenumber">34</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.outcome-pill.has-failures" datatype="html">
+        <source>Has failures</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
+          <context context-type="linenumber">36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.outcome-pill.no-results" datatype="html">
+        <source>No results</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
+          <context context-type="linenumber">38</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.outcome-pill.unavailable" datatype="html">
+        <source>Outcome unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+      </trans-unit>
     </body>
   </file>
 </xliff>

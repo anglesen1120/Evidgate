@@ -1,0 +1,73 @@
+:host {
+  display: block;
+  min-width: 0;
+  font-family: var(--eg-font-body);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+}
+
+.waiver {
+  display: flex;
+  flex-direction: column;
+  gap: var(--eg-space-3);
+  min-width: 0;
+  padding: var(--eg-space-3) var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  /* O5: adopt space-2 for the v2 stripe, whose exact width has no token. */
+  border-inline-start-width: var(--eg-space-2);
+  border-radius: var(--eg-radius-sm);
+  /* O5: neutral metadata, not an approval/success verdict. */
+  background: var(--eg-neutral-bg);
+  color: var(--eg-neutral-fg);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.waiver-expired {
+  background: var(--eg-warning-bg);
+  color: var(--eg-warning-fg);
+}
+
+.waiver-revoked {
+  background: var(--eg-danger-bg);
+  color: var(--eg-danger-fg);
+}
+
+h3,
+p,
+dl,
+dd {
+  margin: 0;
+}
+
+h3 {
+  font-size: var(--eg-text-sm);
+  font-weight: var(--eg-weight-semibold);
+}
+
+dl,
+dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-3);
+  min-width: 0;
+}
+
+dl {
+  flex-direction: column;
+}
+
+dt {
+  font-weight: var(--eg-weight-semibold);
+}
+
+dd {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.waiver-utc {
+  font-family: var(--eg-font-mono);
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
+}
