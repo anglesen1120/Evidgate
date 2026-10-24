@@ -105,8 +105,8 @@ function usableRetryAfter(seconds: number | null): number | null {
  * `intentHeaders(intent)`; it must reject with `ApiRequestError` for a server/transport failure
  * (the runner reads its `error`), and anything else is treated as a programming error.
  *
- * After an `AbortError` the intent is kept, because the request may already have reached the
- * server. A caller that changes the payload before resubmitting MUST call `reset()` first:
+ * After an `AbortError`, and after a retryable failure (network, timeout, 429, 503), the intent is
+ * kept, because the request may already have reached the server. A caller that changes the payload before resubmitting MUST call `reset()` first:
  * reusing the key for a different body can be answered with a 409 `idempotency_conflict`.
  *
  * The runner has no `dispose()`. An owner that unmounts while a `Retry-After` timer is pending
