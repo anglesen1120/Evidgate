@@ -37,7 +37,7 @@
 - **FR-09-13** Mutations that create resources send an `Idempotency-Key`; mutations on policy/draft/candidate send `If-Match` and render 412 as "someone else changed this - reload" with the diff.
 - **FR-09-14** Artifact rendering happens on an isolated origin (no app cookies, CSP) via the plan 06 viewer; presigned URL expiry is handled by refresh, never by showing a raw URL.
 - **FR-09-15** The `apps/web` origin serves a strict CSP — no `unsafe-inline`/`unsafe-eval` for script, a nonce for Angular styles, a `connect-src` allowlist, `frame-ancestors 'none'` (or a `frame-src` allowlist limited to the viewer origin) — with Trusted Types enforced so template injection cannot reach the DOM (W6, F-09-5); the headers are emitted by the static hosting layer (§11 #3).
-- **NFR-09-1** Cold load of the three heaviest screens (run detail, failure detail, candidate detail) stays within the 00 §5.6 W7 budgets: initial JS ≤ 300 kB gzip, any lazy chunk ≤ 150 kB gzip (`angular.json` `budgets` fail the build), LCP ≤ 2.5 s at p75 on the pilot's network ⚠️ target to measure; plan 10 records the web-vitals SLIs (LCP, INP) fed by the 09.1.1-T9 telemetry (T39); large tables use cursor pagination (00 §9.1), never "load all".
+- **NFR-09-1** Cold load of the three heaviest screens (run detail, failure detail, candidate detail) stays within the 00 §5.6 W7 budgets: initial JS ≤ 300 kB gzip, any lazy chunk ≤ 150 kB gzip, enforced by raw-size `angular.json` `budgets` that fail the build plus a gzip check over `dist` (`angular.json` budgets compare raw bytes, ADR-0008 rule 6), LCP ≤ 2.5 s at p75 on the pilot's network ⚠️ target to measure; plan 10 records the web-vitals SLIs (LCP, INP) fed by the 09.1.1-T9 telemetry (T39); large tables use cursor pagination (00 §9.1), never "load all".
 
 **Acceptance criteria (testable)**
 
@@ -107,7 +107,7 @@ Web libraries are fixed by DECISIONS §4.2 (licence and version verified 2026-09
 - Components (W2): standalone only, `ChangeDetectionStrategy.OnPush`, signal `input()`/`output()`/`model()`, built-in control flow (`@if`, `@for` with `track`), `@defer` for heavy panels (trace viewer, diff).
 - Change detection and state (W3/W4): zoneless (`provideZonelessChangeDetection`); `@ngrx/signals` SignalStore per feature; RxJS only at I/O edges via `toSignal`/`rxResource`; server state is never duplicated into a global store; list state keeps the cursor, not the whole history.
 - Data access (W5): the generated SDK (`@evidgate/sdk`) behind feature data services; interceptors add `X-Request-Id`/`traceparent`, the XSRF header and `Idempotency-Key` on mutations, and map the 00 §9.2 envelope to typed UI errors; no hand-written DTOs.
-- Lists and bundles (W7): CDK virtual scroll for lists > 200 rows; `angular.json` `budgets` fail the build past the W7 limits (NFR-09-1).
+- Lists and bundles (W7): CDK virtual scroll for lists > 200 rows; `angular.json` `budgets` fail the build past raw-size limits, and a gzip check over `dist` enforces the 300/150 kB gzip limits (`angular.json` budgets compare raw bytes, ADR-0008 rule 6; NFR-09-1).
 - a11y / i18n (W8): CDK a11y primitives; `@angular/localize` per-locale builds (FR-09-11); no template string without `i18n`.
 - Tests (W9): Vitest + Angular TestBed (zoneless test environment, no zone.js) for stores/services/components; CDK component harnesses instead of DOM selectors; Playwright E2E on the built app.
 
@@ -171,7 +171,7 @@ Web libraries are fixed by DECISIONS §4.2 (licence and version verified 2026-09
 #### Story 09.1.1 App scaffold and build - acceptance: `npm ci && npm run build -w apps/web` runs `ng build` and produces a production bundle inside the W7 budgets; Vitest and Playwright configs run in CI (F-09-1).
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 09.1.1-T1 | Scaffold the `apps/web` Angular workspace project inside npm workspaces (standalone bootstrap, `@angular/build` production `ng build`, `angular.json` budgets enforcing W7, `angular-eslint` lint/format, Vitest + Playwright configs) | M | V1 | G1 | 01.1.1-T3 |
+| 09.1.1-T1 | Scaffold the `apps/web` Angular workspace project inside npm workspaces (standalone bootstrap, `@angular/build` production `ng build`, `angular.json` budgets enforcing W7 as raw-size budgets plus a gzip check over `dist` (ADR-0008 rule 6), `angular-eslint` lint/format, Vitest + Playwright configs) | M | V1 | G1 | 01.1.1-T3 |
 | 09.1.1-T2 | Spike: (a) `@hey-api/openapi-ts` SDK consumption shape behind `HttpClient` interceptors; (b) zoneless change detection + Trusted Types confirmation (W3/W6); (c) CDK primitives for dense tables and virtual scroll; (d) `@ngrx/signals` SignalStore shape; outcome is an ADR | M | V1 | G1 | - |
 | 09.1.1-T3 | Generated SDK consumption (`@evidgate/sdk`) behind feature data services (W5); interceptors for `X-Request-Id`/`traceparent`, `Idempotency-Key`, typed error-envelope mapping | M | V1 | G1 | 01.3.2-T1, 09.1.1-T2 |
 | 09.1.1-T4 | App shell: layout, navigation, `CanMatchFn`/`CanActivateFn` permission-aware route guards reading server-declared permissions, tenant/project switcher, lazy feature routes | M | V1 | G1 | 09.1.1-T1 |
