@@ -1,325 +1,25 @@
 // 09.1.1-T9.1 (plans/features/09-web-ui §10 T9.1; owner brief: client error reporting with
-// PII/secret scrubbing, ids only): the content filter and the per-attribute schema filter,
-// table-driven.
+// PII/secret scrubbing, ids only): the per-attribute schema filter, table-driven.
 //
-// Every rule the brief names has at least one row — credentials, cookies, JWT-shaped tokens,
-// e-mail addresses (ASCII, Cyrillic and homoglyph), UUIDs, hex runs, long digits, secret
-// `key=value` and `key: value` pairs, URLs and API paths reduced to templated paths, quoted
-// names, and the seventeen per-key attribute rules — and every rule is paired with a negative
-// control that must come through unchanged. A scrubber that redacts a clean status line is as
-// broken as one that lets a token through. `TIMING_ROWS` covers the other failure mode: input
-// shaped to make a pattern backtrack for seconds must still be scrubbed in milliseconds.
+// Every key of `ALLOWED_ATTRIBUTE_KEYS` has a row, and most keys also get a refusal: a method is
+// a token, a status is a range, a route is a *template* (its ids become `:id`), an enum is one of
+// its values, a vital is a finite number. Keeping a clean status line is worth nothing if the
+// same filter keeps a concrete id, so the rows that feed a value the key must not carry — a route
+// holding `/projects/<uuid>/runs`, a route holding a dotted identifier, a locale holding a
+// sentence, an `error.message` at all (D-S69-Q2) — are the point of the table.
 //
-// Sample credentials are assembled at runtime (`btoa`, `join`) so no JWT-shaped or
-// credential-bearing literal sits in the repository.
+// There is no row for bare text because no attribute carries text: a span or event name is
+// admitted only as one of the fixed constants of `telemetry-names.ts`, so content cannot reach a
+// name, and `error.message` is not an attribute. Row samples are assembled at runtime (`join`,
+// `repeat`) so no credential or e-mail literal sits in the repository.
 import type { AttributeValue, Attributes } from '@opentelemetry/api';
 
-import { scrubAttributes, scrubText } from './scrub';
+import { scrubAttributes } from './scrub';
 
-/** Base64url of `text` without padding: one JWT segment, assembled here, never stored. */
-function base64url(text: string): string {
-  return btoa(text).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
-}
-
-/** A three-part JWT shape (header, payload, signature), every segment long enough to match. */
-const JWT = [
-  base64url('{"alg":"HS256","typ":"JWT"}'),
-  base64url('{"sub":"42","scope":"runs"}'),
-  base64url('signature-bytes-here'),
-].join('.');
-
+/** Row samples, assembled at runtime so no credential or e-mail literal sits in the repo. */
 const EMAIL = ['julia.moreau', 'example.test'].join('@');
 const RUN_ID = ['3f2b9d54', '0d7e', '4c1a', '9a2e', '6b0f5c7d81c4'].join('-');
-const TRACE_ID = '9f8e7d6c5b4a39281706f5e4d3c2b1a0';
 const CREDENTIAL = 'abcdef1234567890';
-const SESSION = 'abc123def456';
-const BASIC = btoa('user:password');
-/** A 24+ character base64 run, assembled so no encoded-looking literal sits in the source. */
-const BASE64_TOKEN = btoa('foobarbazqux1234567890ab');
-/** What the scrubber leaves in place of a secret value. */
-const REDACTED = '[redacted]';
-/** `user:password` userinfo, assembled so no `user:password@host` literal sits in the source. */
-const USERINFO = ['admin', CREDENTIAL].join(':');
-
-/**
- * A `key=value` sample, built at runtime: written literally it looks like a secret assignment to
- * `scripts/check-no-secret-literals.sh`, which scans this file like any other source.
- */
-function pair(key: string, value: string): string {
-  return `${key}=${value}`;
-}
-
-/** The `key: value` twin of `pair`, assembled for the same reason. */
-function colonPair(key: string, value: string): string {
-  return `${key}: ${value}`;
-}
-
-interface TextRow {
-  /** The rule this row exercises; also the `it.each` title. */
-  readonly rule: string;
-  readonly input: string;
-  readonly expected: string;
-}
-
-const TEXT_ROWS: TextRow[] = [
-  {
-    rule: 'drops an Authorization header value',
-    input: `Authorization: Bearer ${CREDENTIAL}`,
-    expected: 'Authorization: [redacted]',
-  },
-  {
-    rule: 'drops a Cookie header value',
-    input: `Cookie: session=${SESSION}; theme=dark`,
-    expected: 'Cookie: [redacted]',
-  },
-  {
-    rule: 'drops a Set-Cookie header value',
-    input: 'Set-Cookie: sid=xyz; Path=/; HttpOnly',
-    expected: 'Set-Cookie: [redacted]',
-  },
-  {
-    rule: 'drops an X-XSRF-TOKEN header value',
-    input: `X-XSRF-TOKEN: ${CREDENTIAL}`,
-    expected: 'X-XSRF-TOKEN: [redacted]',
-  },
-  {
-    rule: 'drops an X-CSRF header value',
-    input: `X-CSRF: ${CREDENTIAL}`,
-    expected: 'X-CSRF: [redacted]',
-  },
-  {
-    rule: 'drops a Bearer credential in prose',
-    input: `sent Bearer ${CREDENTIAL} onwards`,
-    expected: 'sent Bearer [redacted] onwards',
-  },
-  {
-    rule: 'drops a Basic credential in prose',
-    input: `sent Basic ${BASIC} onwards`,
-    expected: 'sent Basic [redacted] onwards',
-  },
-  {
-    rule: 'drops a Token credential in prose',
-    input: `sent Token ${CREDENTIAL} onwards`,
-    expected: 'sent Token [redacted] onwards',
-  },
-  {
-    rule: 'reduces a full URL to a templated path (host, query, fragment and ids go)',
-    input: 'GET https://acme.example.test/v1/projects/p-1/runs?expand=steps#top',
-    expected: 'GET /v1/projects/:id/runs',
-  },
-  {
-    rule: 'reduces a URL with userinfo to its path',
-    input: `GET https://${USERINFO}@acme.example.test/v1/runs`,
-    expected: 'GET /v1/runs',
-  },
-  {
-    rule: 'drops the query string and fragment of a path',
-    input: 'see /v1/runs?cursor=abc#top first',
-    expected: 'see /v1/runs first',
-  },
-  {
-    rule: 'templates the ids in an error message that quotes a URL',
-    input: 'Http failure response for https://a.io/v1/projects/acme/runs: 404',
-    expected: 'Http failure response for /v1/projects/:id/runs: 404',
-  },
-  {
-    rule: 'templates the ids in a bare API path',
-    input: 'GET /v1/projects/acme/runs/1234567 failed',
-    expected: 'GET /v1/projects/:id/runs/:id failed',
-  },
-  {
-    rule: 'drops a password pair',
-    input: `failed for ${pair('password', 'hunter2hunter2')} in body`,
-    expected: `failed for ${pair('password', REDACTED)} in body`,
-  },
-  {
-    rule: 'drops an api_key pair',
-    input: pair('api_key', 'a'.repeat(20)),
-    expected: pair('api_key', REDACTED),
-  },
-  {
-    rule: 'drops an auth pair',
-    input: pair('auth', 'x'.repeat(12)),
-    expected: pair('auth', REDACTED),
-  },
-  {
-    rule: 'drops a signature pair',
-    input: pair('signature', 's'.repeat(10)),
-    expected: pair('signature', REDACTED),
-  },
-  {
-    rule: 'drops a colon-form password',
-    input: `failed for ${colonPair('password', 'hunter2')} in the body`,
-    expected: `failed for ${colonPair('password', REDACTED)} in the body`,
-  },
-  {
-    rule: 'drops a camelCase apiKey colon pair',
-    input: colonPair('apiKey', 'abc12345'),
-    expected: colonPair('apiKey', REDACTED),
-  },
-  {
-    rule: 'drops a single-character colon-form token',
-    input: colonPair('token', 'x'),
-    expected: colonPair('token', REDACTED),
-  },
-  {
-    rule: 'drops a quoted colon-form secret',
-    input: colonPair('secret', '"abc12345"'),
-    expected: colonPair('secret', REDACTED),
-  },
-  {
-    rule: 'drops a lowercase authorization value',
-    input: `authorization: ${CREDENTIAL}`,
-    expected: 'authorization: [redacted]',
-  },
-  {
-    rule: 'drops a JWT-shaped string',
-    input: `jwt ${JWT} emitted`,
-    expected: 'jwt [redacted] emitted',
-  },
-  {
-    rule: 'drops an e-mail address',
-    input: `contact ${EMAIL} now`,
-    expected: 'contact [email] now',
-  },
-  {
-    rule: 'drops a Cyrillic e-mail address',
-    input: `contact ${['пользователь', 'example.test'].join('@')} now`,
-    expected: 'contact [email] now',
-  },
-  {
-    rule: 'drops an e-mail address whose first letter is a Cyrillic homoglyph',
-    input: `contact ${['\u0430dmin', 'example.test'].join('@')} now`,
-    expected: 'contact [email] now',
-  },
-  {
-    rule: 'replaces a UUID with :id',
-    input: `run ${RUN_ID} failed`,
-    expected: 'run :id failed',
-  },
-  {
-    rule: 'replaces a 16+ hex run with :id',
-    input: `trace ${TRACE_ID} sampled`,
-    expected: 'trace :id sampled',
-  },
-  {
-    rule: 'replaces a 24+ base64 run with [redacted]',
-    input: `blob ${BASE64_TOKEN} stored`,
-    expected: 'blob [redacted] stored',
-  },
-  {
-    rule: 'replaces a 6+ digit number with :id',
-    input: 'document 123456789 filed',
-    expected: 'document :id filed',
-  },
-  {
-    rule: 'replaces a quoted name with [quoted]',
-    input: 'run "deploy nightly" failed',
-    expected: 'run [quoted] failed',
-  },
-  {
-    rule: 'drops the text after an unterminated quote',
-    input: `${'.'.repeat(190)} "Julia Smith`,
-    expected: '.'.repeat(190),
-  },
-  {
-    rule: 'keeps an ordinary sentence unchanged',
-    input: 'Navigation cancelled by the user',
-    expected: 'Navigation cancelled by the user',
-  },
-  {
-    rule: 'keeps a status line unchanged',
-    input: 'POST /v1/projects/:id/runs 201 in 42 ms',
-    expected: 'POST /v1/projects/:id/runs 201 in 42 ms',
-  },
-  {
-    rule: 'keeps a five-digit number unchanged',
-    input: 'run 12345 finished',
-    expected: 'run 12345 finished',
-  },
-  {
-    rule: 'keeps a dotted version unchanged',
-    input: 'version v1.2.3 released',
-    expected: 'version v1.2.3 released',
-  },
-  {
-    rule: 'keeps a non-secret key=value pair unchanged',
-    input: 'role=admin active',
-    expected: 'role=admin active',
-  },
-  {
-    rule: 'keeps a secret keyword in prose that has no separator',
-    input: 'token expired before the request',
-    expected: 'token expired before the request',
-  },
-  {
-    rule: 'keeps a colon-form pair for a key that is not a secret',
-    input: 'role: admin',
-    expected: 'role: admin',
-  },
-];
-
-interface CapRow {
-  readonly input: string;
-  readonly maxLength: number;
-  readonly expected: string;
-}
-
-const CAP_ROWS: CapRow[] = [
-  { input: 'abcdef', maxLength: 3, expected: 'abc' },
-  { input: 'abcdef', maxLength: 0, expected: '' },
-  { input: 'abcdef', maxLength: -5, expected: '' },
-  { input: 'abcdef', maxLength: 1000, expected: 'abcdef' },
-];
-
-/**
- * Generous wall-clock bound for one pathological scrub. Every case here took seconds while
- * `scrubText` ran its patterns over the whole input and truncated afterwards (200 000 letters
- * cost 18.8 s, `a.` repeated 28.4 s); the scan window makes each of them a function of
- * `maxLength` only, so sub-millisecond is the expected figure and this bound has two orders of
- * magnitude of slack for a loaded CI box.
- */
-const MAX_PATHOLOGICAL_MS = 250;
-
-interface TimingRow {
-  /** The shape that used to backtrack, also the `it.each` title. */
-  readonly case: string;
-  readonly input: string;
-}
-
-/** Inputs built to make a pattern with an unbounded prefix backtrack over the whole string. */
-const TIMING_ROWS: TimingRow[] = [
-  { case: '200 000 letters', input: 'a'.repeat(200_000) },
-  { case: 'a letter and a dot, 50 000 times', input: 'a.'.repeat(50_000) },
-  { case: '100 000 at signs', input: '@'.repeat(100_000) },
-  { case: 'a letter and an at sign, 50 000 times', input: 'a@'.repeat(50_000) },
-  { case: '200 000 base64 letters', input: 'A'.repeat(200_000) },
-  { case: '100 000 equals signs', input: '='.repeat(100_000) },
-  { case: 'a scheme then 100 000 letters', input: `http://${'a'.repeat(100_000)}` },
-  { case: 'a word and a dash, 50 000 times', input: 'a-'.repeat(50_000) },
-  { case: '100 000 quotes', input: '"'.repeat(100_000) },
-];
-
-describe('scrubText', () => {
-  it.each(TEXT_ROWS)('$rule', (row: TextRow) => {
-    expect(scrubText(row.input)).toBe(row.expected);
-  });
-
-  it('truncates the scrubbed text to the default cap of 200 characters', () => {
-    const scrubbed = scrubText('word '.repeat(60));
-
-    expect(scrubbed).toHaveLength(200);
-    expect(scrubbed.startsWith('word word')).toBe(true);
-  });
-
-  it.each(CAP_ROWS)('caps $input at $maxLength characters', (row: CapRow) => {
-    expect(scrubText(row.input, row.maxLength)).toBe(row.expected);
-  });
-
-  it('scrubs before it truncates, so a replacement marker is never cut from the front', () => {
-    expect(scrubText(`${EMAIL} then more text`, 12)).toBe('[email] then');
-  });
-});
 
 /** A cast through the index signature so a row may hold an array or an object, both of which drop. */
 function attributesOf(entries: Readonly<Record<string, unknown>>): Attributes {
@@ -571,7 +271,7 @@ const ATTRIBUTE_ROWS: AttributeRow[] = [
     value: 'console',
     expected: undefined,
   },
-  // error.type / error.message
+  // error.type; error.message is deliberately not an attribute (D-S69-Q2).
   { rule: 'keeps an error type', key: 'error.type', value: 'TypeError', expected: 'TypeError' },
   { rule: 'drops a numeric error type', key: 'error.type', value: 42, expected: undefined },
   {
@@ -605,16 +305,10 @@ const ATTRIBUTE_ROWS: AttributeRow[] = [
     expected: undefined,
   },
   {
-    rule: 'scrubs an error message and replaces quoted names',
+    rule: 'drops an error message, which is not a telemetry attribute at all (D-S69-Q2)',
     key: 'error.message',
     value: `Say "hi" to ${EMAIL}`,
-    expected: 'Say [quoted] to [email]',
-  },
-  {
-    rule: 'keeps a clean error message',
-    key: 'error.message',
-    value: 'Unexpected token < in JSON at position 0',
-    expected: 'Unexpected token < in JSON at position 0',
+    expected: undefined,
   },
   // web_vital.*
   { rule: 'keeps the LCP vital', key: 'web_vital.name', value: 'LCP', expected: 'LCP' },
@@ -681,13 +375,12 @@ describe('scrubAttributes', () => {
       'evidgate.locale': 'en',
       'evidgate.outcome': 'error',
       'evidgate.request_id': RUN_ID,
-      'error.message': 'boom for [email]',
     });
   });
 
   it('never mutates the attributes it is given', () => {
     const input = attributesOf({
-      'error.message': `failed for ${EMAIL} with ${CREDENTIAL}`,
+      'error.type': 'TypeError',
       'http.route': `/v1/projects/${RUN_ID}/runs`,
       'user.email': EMAIL,
     });
@@ -700,41 +393,5 @@ describe('scrubAttributes', () => {
 
   it('returns an empty record for an empty input', () => {
     expect(scrubAttributes({})).toEqual({});
-  });
-});
-
-describe('scrubText on pathological input', () => {
-  it.each(TIMING_ROWS)('scrubs $case in bounded time', (row: TimingRow) => {
-    const started = performance.now();
-
-    const text = scrubText(row.input);
-    const attributes = scrubAttributes(attributesOf({ 'error.message': row.input }));
-
-    const elapsed = performance.now() - started;
-    expect(elapsed).toBeLessThan(MAX_PATHOLOGICAL_MS);
-    expect(text.length).toBeLessThanOrEqual(200);
-    expect(attributes['error.message']).toBeTypeOf('string');
-  });
-
-  it('still scrubs the run instead of dropping it', () => {
-    expect(scrubText('a'.repeat(200_000))).toBe(':id');
-    expect(scrubText(`http://${'a'.repeat(100_000)}`)).toBe('/');
-  });
-
-  it.each([
-    ['a base64-like secret', ['Ab', 'Cd', 'Ef', 'Gh', 'Ij', 'Kl', 'Mn', 'Op', 'Qr', 'St'].join('')],
-    [
-      'an e-mail address',
-      ['julia', 'moreau'].join('.') + '@' + ['acme', 'corp'].join('-') + '.test',
-    ],
-  ])('does not let the cut end of the window leak %s once earlier URLs shrink', (_, secret) => {
-    // 78 × 10 characters of `http://a/ ` shrink to `/ ` each, so the 800-character window cut
-    // lands inside the secret and the surviving tail would reach the 200-character output.
-    const input = `${'http://a/ '.repeat(78)}${secret}${'x'.repeat(40)}`;
-
-    const text = scrubText(input);
-
-    expect(text).not.toContain(secret.slice(0, 8));
-    expect(text).not.toMatch(/julia|acme|AbCdEf/);
   });
 });

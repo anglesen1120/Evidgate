@@ -105,8 +105,6 @@ export interface ErrorReport {
   source: ErrorSource;
   /** The error's constructor name (`TypeError`, `ApiRequestError`, …) or `Error`. */
   type: string;
-  /** One line of text for a non-API error; never set for `source: 'api'`. */
-  message?: string;
   status?: number;
   errorKind?: string;
   errorCode?: string;
@@ -125,7 +123,7 @@ export interface TelemetryRuntime {
   setRoute(route: string): void;
   /** Opens a CLIENT `api.request` span as a child of the current route trace. */
   startApiCall(input: { method: string; route: string }): ApiCall;
-  /** Records a `client.error` span; an API error carries kind/code/status, never its message. */
+  /** Records a `client.error` span: source, type and ids; no message text, ever. */
   reportError(report: ErrorReport): void;
   /** Emits one `web_vital` span per metric that changed since the last flush. */
   flushVitals(): void;
@@ -394,10 +392,8 @@ export function startTelemetrySdk(
       'error.type': report.type,
       'evidgate.route': currentRoute,
     };
-    // An API error is an envelope: its message is server text and never leaves the app.
-    if (report.source !== 'api' && report.message !== undefined) {
-      attributes['error.message'] = report.message;
-    }
+    // No message text at all (D-S69-Q2): a `client.error` span is a classification and ids, so
+    // the report has nothing to offer here and the allowlist has no key for it either.
     if (report.status !== undefined) {
       attributes['http.response.status_code'] = report.status;
     }
@@ -418,8 +414,8 @@ export function startTelemetrySdk(
       { kind: SpanKind.INTERNAL, attributes },
       parentContext(),
     );
-    // No exception event and no stack trace: the status code and the scrubbed message are all
-    // a `client.error` span carries.
+    // No exception event and no stack trace, and no message text: a `client.error` span carries
+    // the classification, the ids and the current route, nothing the error said.
     span.setStatus({ code: SpanStatusCode.ERROR });
     span.end();
   }

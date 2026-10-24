@@ -33,7 +33,6 @@ const CREDENTIAL = 'abcdef1234567890';
 
 /** Every attribute key a web span may carry, spelled out: the allowlist is a contract. */
 const EXPECTED_ATTRIBUTE_KEYS: readonly string[] = [
-  'error.message',
   'error.type',
   'evidgate.api.error_code',
   'evidgate.api.error_kind',
@@ -75,7 +74,6 @@ const VALID_ATTRIBUTES = {
   'evidgate.api.retryable': false,
   'evidgate.error.source': 'angular',
   'error.type': 'TypeError',
-  'error.message': 'The request did not reach the server.',
   'web_vital.name': 'INP',
   'web_vital.value': 187.5,
   'web_vital.rating': 'good',
@@ -93,7 +91,7 @@ function onlySpan(spans: readonly ReadableSpan[]): ReadableSpan {
 }
 
 describe('the attribute allowlist', () => {
-  it('allows exactly the seventeen attribute keys the plan names', () => {
+  it('allows exactly the sixteen attribute keys the plan names', () => {
     expect([...ALLOWED_ATTRIBUTE_KEYS].sort()).toEqual([...EXPECTED_ATTRIBUTE_KEYS].sort());
   });
 
@@ -138,6 +136,8 @@ describe('a span exported through the scrubbing exporter', () => {
           'http.route': `/v1/projects/${PATH_ID}/runs`,
           'http.url': `https://acme.example.test/v1/runs?token=${CREDENTIAL}`,
           'evidgate.request_id': REQUEST_ID,
+          // No attribute carries message text (D-S69-Q2): this one must not survive the export.
+          'error.message': `boom "${EMAIL}"`,
           'user.email': EMAIL,
         },
       },

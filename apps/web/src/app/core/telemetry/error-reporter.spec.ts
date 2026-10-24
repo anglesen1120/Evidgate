@@ -131,26 +131,25 @@ describe('TelemetryErrorHandler', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps Angular console output and records the error type and message', async () => {
+  it('keeps Angular console output and records the error type, never its message', async () => {
     const harness = await createHarness();
     const error = new TypeError('x is not a function');
 
     harness.handler.handleError(error);
 
     expect(consoleError).toHaveBeenCalledWith('ERROR', error);
-    expect(harness.reports).toEqual([
-      { source: 'angular', type: 'TypeError', message: 'x is not a function' },
-    ]);
+    expect(harness.reports).toEqual([{ source: 'angular', type: 'TypeError' }]);
+    // D-S69-Q2: no message text at all, so not even the thrown text reaches the report.
+    expect(JSON.stringify(harness.reports)).not.toContain('x is not a function');
   });
 
-  it('reports a thrown string as an Error-typed report with the string as its message', async () => {
+  it('reports a thrown string as an Error-typed report without the string', async () => {
     const harness = await createHarness();
 
     harness.handler.handleError('something broke');
 
-    expect(harness.reports).toEqual([
-      { source: 'angular', type: 'Error', message: 'something broke' },
-    ]);
+    expect(harness.reports).toEqual([{ source: 'angular', type: 'Error' }]);
+    expect(JSON.stringify(harness.reports)).not.toContain('something broke');
   });
 
   it('reports an ApiRequestError by its identifiers only', async () => {
@@ -189,7 +188,7 @@ describe('TelemetryErrorHandler', () => {
     const harness = await createHarness();
 
     for (let index = 0; index < 12; index += 1) {
-      harness.handler.handleError(new Error(`failure ${index}`));
+      harness.handler.handleError(new RangeError(`failure ${index}`));
     }
 
     expect(harness.reports).toHaveLength(10);
@@ -197,10 +196,12 @@ describe('TelemetryErrorHandler', () => {
     expect(consoleError).toHaveBeenCalledTimes(12);
 
     vi.advanceTimersByTime(61_000);
-    harness.handler.handleError(new Error('after the window'));
+    harness.handler.handleError(new SyntaxError('after the window'));
 
     expect(harness.reports).toHaveLength(11);
-    expect(harness.reports[10]?.message).toBe('after the window');
+    // A report has no text (D-S69-Q2), so the class name is what says which one arrived last.
+    expect(harness.reports[10]?.type).toBe('SyntaxError');
+    expect(harness.reports.slice(0, 10).every((report) => report.type === 'RangeError')).toBe(true);
   });
 
   it('spends no budget while the chunk has not loaded, and ten reports pass once it has', async () => {
@@ -221,16 +222,17 @@ describe('TelemetryErrorHandler', () => {
 
     await harness.arrive();
 
-    for (let index = 0; index < 11; index += 1) {
-      harness.handler.handleError(new Error(`after the chunk ${index}`));
+    for (let index = 0; index < 10; index += 1) {
+      harness.handler.handleError(new RangeError(`after the chunk ${index}`));
     }
+    harness.handler.handleError(new SyntaxError('after the chunk 10'));
 
-    // The twenty reports that could not be exported spent nothing: the first ten exportable ones
-    // all pass, and only the eleventh is dropped.
+    // The twenty reports that could not be exported spent nothing: the ten exportable ones all
+    // pass, and only the eleventh — the one whose type differs, since a report carries no text —
+    // is dropped.
     expect(harness.service.runtime).not.toBeNull();
     expect(harness.reports).toHaveLength(10);
-    expect(harness.reports[0]?.message).toBe('after the chunk 0');
-    expect(harness.reports[9]?.message).toBe('after the chunk 9');
+    expect(harness.reports.every((report) => report.type === 'RangeError')).toBe(true);
     expect(consoleError).toHaveBeenCalledTimes(31);
   });
 });
@@ -252,7 +254,7 @@ describe('registerGlobalErrorListeners', () => {
     vi.restoreAllMocks();
   });
 
-  it('reports a window error with its type and message', async () => {
+  it('reports a window error with its type, and reads no message from the event', async () => {
     const harness = await createHarness();
     unregister = registerGlobalErrorListeners(window, harness.service);
 
@@ -263,23 +265,23 @@ describe('registerGlobalErrorListeners', () => {
       }),
     );
 
-    expect(harness.reports).toEqual([
-      { source: 'window.error', type: 'RangeError', message: 'offset is out of range' },
-    ]);
+    expect(harness.reports).toEqual([{ source: 'window.error', type: 'RangeError' }]);
+    expect(JSON.stringify(harness.reports)).not.toContain('offset is out of range');
+    expect(JSON.stringify(harness.reports)).not.toContain('ignored');
   });
 
-  it('falls back to the event message when the thrown value is not an Error', async () => {
+  it('reports an Error type when the event threw no Error, still without text', async () => {
     const harness = await createHarness();
     unregister = registerGlobalErrorListeners(window, harness.service);
 
     window.dispatchEvent(new ErrorEvent('error', { error: null, message: 'Script error.' }));
 
-    expect(harness.reports).toEqual([
-      { source: 'window.error', type: 'Error', message: 'Script error.' },
-    ]);
+    expect(harness.reports).toEqual([{ source: 'window.error', type: 'Error' }]);
+    // The event's own `message` is text as well: nothing here falls back to it.
+    expect(JSON.stringify(harness.reports)).not.toContain('Script error.');
   });
 
-  it('reports an unhandled rejection', async () => {
+  it('reports an unhandled rejection by type only', async () => {
     const harness = await createHarness();
     unregister = registerGlobalErrorListeners(window, harness.service);
 
@@ -290,9 +292,8 @@ describe('registerGlobalErrorListeners', () => {
       }),
     );
 
-    expect(harness.reports).toEqual([
-      { source: 'unhandledrejection', type: 'Error', message: 'the query failed' },
-    ]);
+    expect(harness.reports).toEqual([{ source: 'unhandledrejection', type: 'Error' }]);
+    expect(JSON.stringify(harness.reports)).not.toContain('the query failed');
   });
 
   it('stops reporting once unregistered, and removes both listeners', async () => {

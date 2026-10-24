@@ -5,9 +5,10 @@
 //
 // Every report is an id and a classification, never a payload: an API failure contributes its
 // status, kind, code, retryable flag and request id and never its message (server text is not the
-// client's to export), and a thrown error contributes its type and one scrubbed line. The
-// scrubbing itself happens in the exporter (`scrubbing-exporter.ts`), so nothing here can leak a
-// value that the allow-list does not carry — this file only avoids *offering* one.
+// client's to export), and a thrown error contributes its source and its constructor name — no
+// message text at all (D-S69-Q2, 00 §9.1 "ids only"), not even a scrubbed line. The scrubbing
+// itself happens in the exporter (`scrubbing-exporter.ts`), so nothing here can leak a value that
+// the allow-list does not carry — this file only avoids *offering* one.
 //
 // Reports are rate limited: an error inside a render loop can fire hundreds of times a second,
 // and the point of a client error span is to be found in a trace, not to be the outage. The
@@ -62,18 +63,7 @@ function errorType(error: unknown): string {
   return error instanceof Error && error.name !== '' ? error.name : 'Error';
 }
 
-/** One line of text for a thrown value, or `null` when it carries none. */
-function errorMessage(error: unknown): string | null {
-  if (error instanceof Error) {
-    return error.message.length > 0 ? error.message : null;
-  }
-  if (typeof error === 'string') {
-    return error.length > 0 ? error : null;
-  }
-  return null;
-}
-
-/** The report of an `ApiRequestError`: identifiers only, never `error.message`. */
+/** The report of an `ApiRequestError`: identifiers only, no message text. */
 function reportOfApiError(error: unknown): ErrorReport | null {
   if (!isApiRequestError(error)) {
     return null;
@@ -115,12 +105,7 @@ export class TelemetryErrorHandler implements ErrorHandler {
       this.service.reportError(apiReport);
       return;
     }
-    const report: ErrorReport = { source: 'angular', type: errorType(error) };
-    const message = errorMessage(error);
-    if (message !== null) {
-      report.message = message;
-    }
-    this.service.reportError(report);
+    this.service.reportError({ source: 'angular', type: errorType(error) });
   }
 }
 
@@ -131,28 +116,17 @@ export class TelemetryErrorHandler implements ErrorHandler {
  */
 export function registerGlobalErrorListeners(win: Window, service: TelemetryService): () => void {
   const onError = (event: ErrorEvent): void => {
-    const thrown: unknown = event.error;
     if (!withinBudget(service, Date.now())) {
       return;
     }
-    const report: ErrorReport = { source: 'window.error', type: errorType(thrown) };
-    const message = errorMessage(thrown) ?? (event.message.length > 0 ? event.message : null);
-    if (message !== null) {
-      report.message = message;
-    }
-    service.reportError(report);
+    // `event.error` only: the event's `message` is text, and no report carries text.
+    service.reportError({ source: 'window.error', type: errorType(event.error) });
   };
   const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
-    const reason: unknown = event.reason;
     if (!withinBudget(service, Date.now())) {
       return;
     }
-    const report: ErrorReport = { source: 'unhandledrejection', type: errorType(reason) };
-    const message = errorMessage(reason);
-    if (message !== null) {
-      report.message = message;
-    }
-    service.reportError(report);
+    service.reportError({ source: 'unhandledrejection', type: errorType(event.reason) });
   };
   win.addEventListener('error', onError);
   win.addEventListener('unhandledrejection', onUnhandledRejection);

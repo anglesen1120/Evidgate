@@ -332,42 +332,53 @@ initializer that starts the facade.
   | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | `route.change` | `NavigationStart`, or the replay of a landing navigation that ended before the chunk loaded (backdated, left open while it was in flight); ended by the paired `NavigationEnd`/`Cancel`/`Skipped`/`Error` | `evidgate.route` template, `evidgate.outcome` (`ok`/`cancelled`/`error`)                                                                                                           |
   | `api.request`  | `telemetryInterceptor`, one per same-origin `/v1` request                                                                                                                                                 | `http.request.method`, `http.route` template, `http.response.status_code`, `evidgate.request_id` (UUID only), `evidgate.api.error_*`, `evidgate.api.retryable`, `evidgate.outcome` |
-  | `client.error` | `TelemetryErrorHandler` (Angular) and the `error`/`unhandledrejection` listeners                                                                                                                          | `evidgate.error.source`, `error.type`, `error.message`, status/api error keys, `evidgate.request_id`, current `evidgate.route`                                                     |
+  | `client.error` | `TelemetryErrorHandler` (Angular) and the `error`/`unhandledrejection` listeners                                                                                                                          | `evidgate.error.source`, `error.type`, status/api error keys, `evidgate.request_id`, current `evidgate.route` — no message attribute at all                                        |
   | `web_vital`    | LCP/INP/CLS flush                                                                                                                                                                                         | `web_vital.name`, `web_vital.value`, `web_vital.rating`, `web_vital.navigation_type`, `evidgate.route`                                                                             |
 
   The closed key set is `attribute-allowlist.ts` (`ALLOWED_ATTRIBUTE_KEYS` /
   `ALLOWED_RESOURCE_KEYS`); anything outside it is dropped at export, not merely unset. Fields
   such as `evidgate.locale` (`en`/`vi`) and `evidgate.request_id` are only kept in their strict
-  shape.
+  shape. A `client.error` span is a classification and ids — source, type, route template,
+  status/kind/code/retryable and the request id — and **never message text**, not even a scrubbed
+  line (D-S69-Q2; the plan's privacy row is "ids only"). `ErrorReport` has no message field, the
+  Angular handler transmits only the error's constructor name, and the window listeners read
+  `event.error`/`event.reason`, never `event.message`.
 
 - **First navigation.** The chunk can arrive after the landing navigation has already ended, and
-  the router never replays `events`, so the facade records that first navigation while loading and
-  replays it once the runtime exists (`telemetry.service.ts`, `recordWhileLoading` /
-  `replayPendingNavigation`). The replayed `route.change` keeps the navigation's **original start
-  and end timestamps** and the route template of the matched tree, so the landing page's
+  the router never replays `events`. So `provideTelemetry()`'s initializer starts the facade and
+  installs the global error listeners, `start()` subscribes to `Router.events` and registers the
+  visibility and CSP hooks — all **before** the dynamic import resolves — and the facade records
+  that first navigation while loading, then replays it once the runtime exists
+  (`telemetry.service.ts`, `recordWhileLoading` / `replayPendingNavigation`). The replayed
+  `route.change` keeps the navigation's **original start and end timestamps** and the route
+  template of the matched tree, so the landing page's
   `api.request`, `client.error` and `web_vital` spans continue that same trace instead of starting
   a second one or falling back to `/unknown`. A navigation still in flight when the chunk arrives
   opens its span then and is closed by its own `NavigationEnd`; a later navigation seen while the
   chunk is still loading replaces the recorded one — one slot, no queue.
 
-- **Scrub policy.** `ScrubbingSpanExporter` rewrites every span on the way out, and `scrub.ts` does
-  the text work: **no stack traces, no server messages** (an API error carries status/code/kind,
-  never the body), **no ids outside a route template** (a parameter is `:id`, `http.route` keeps
-  only known static segments), **no query strings or fragments**, and no emails, JWT-shaped tokens,
-  `Authorization`/`Cookie`/`X-XSRF-TOKEN` values, long hex/base64 runs or six-plus-digit numbers —
-  those become `[redacted]`/`:id`/`[email]`, and quoted substrings become `[quoted]`. Free text is
-  truncated at 200 characters; links and `status.message` are dropped while the status code stays.
-  A name is never exported as free text: a span name outside the four constants above is exported
-  as `unknown` (`telemetry-names.ts` `SPAN_NAMES`), a span event is dropped unless its name is in
-  `EVENT_NAMES` (empty today — the facade records no events), and the instrumentation scope is
-  reduced to this app's one scope name plus its version, with no `schemaUrl`.
-  **Residual risk, stated plainly:** a regex cannot recognise a bare organisation or project name
-  written in prose (`failed for org Acme`), so such a name in a thrown `error.message` is not
-  removed; a route or path slug made only of plain lowercase words keeps its words (only digit,
-  dotted and otherwise id-shaped segments become `:id`, literal route segments being the route
-  templates' job); and a secret that begins inside the last characters of the scan window
-  (four times the field's length cap, at most 2048 characters, applied **before** any pattern runs
-  so no input can make a pattern slow) can survive in part.
+- **Scrub policy.** One layer, not two, and no regular-expression text scrubber anywhere in the
+  telemetry path — a property of the design, not a gap. A span _name_ is admitted only when it is
+  one of the fixed constants of `telemetry-names.ts` (`SPAN_NAMES`) and an event only when its name
+  is in `EVENT_NAMES` (empty today), so a name that carries content is dropped rather than rewritten
+  (`scrubbing-exporter.ts`); D-S69-Q2 removed `error.message`, so no attribute carries free text at
+  all; what remains is a closed set of structured values, which is what `scrub.ts` filters: an
+  allowlist of keys (`ALLOWED_ATTRIBUTE_KEYS`, anything else dropped by key) and one rule per
+  key — a method token, a status range, a route _template_ (`:param`, `**`, a version prefix, or
+  a plain lowercase word stays, anything else becomes `:id`; a value carrying `?`/`#` or longer
+  than 300 characters is dropped), an enum (`evidgate.locale` `en`/`vi`, `evidgate.outcome`
+  `ok`/`cancelled`/`error`, `error.type` identifier-shaped), a boolean, a finite number.
+  `status.message` and span links are dropped while the status code stays; the instrumentation scope
+  is reduced to this app's one scope name plus its version with no `schemaUrl`; resource attributes
+  are filtered with `ALLOWED_RESOURCE_KEYS`. A URL never enters an attribute in the first place —
+  the API path is templated by `api-path-template.ts` before it is recorded.
+- **Residual risk, by construction.** The ids in a route path are recognised by shape, so a slug
+  made of plain words keeps those words (`/projects/acme-corp/runs`): a static route word and a slug
+  look alike, and concrete literals are the router's business (`route-template.ts`). **The text
+  layer was retired by D-S69-Q2** — it had no production caller once `error.message` left the
+  allowlist; the hardened `scrubText` and its ReDoS bounds live in git history at
+  `42ef1da..1791502`, and a future free-text attribute would have to be restored from there.
+
 - **Route and API templates.** `route-template.ts` concatenates the router's `routeConfig.path`
   chain and never reads a parameter _value_; `api-path-template.ts` reduces a URL to `/v1/...`
   keeping only static segments from a hand-maintained set (`/v1/projects/:id/runs`), everything
@@ -390,15 +401,17 @@ initializer that starts the facade.
   exported, so it is not counted and the first ten exportable reports still pass. An
   `ApiRequestError` reports `source: 'api'` with status/kind/code/retryable/request id only, never
   its message.
-- **Vitals.** LCP is the browser's final candidate — `web-vitals` finalises it on the first input
-  or on hide and the facade emits it once per page (`lcpFlushed`), never an early candidate. INP
-  and CLS are cumulative and registered with `reportAllChanges: true`, so a later interaction or
-  shift replaces the number that leaves. A metric is emitted only when it changed since the last
-  flush, as one `web_vital` span attributed to the route current at flush time. Flush points: the
-  next `NavigationStart` (the route being left, before the new route opens its trace), the tab
-  turning hidden (`visibilitychange`), `pagehide`, and `shutdown()`. The two page-leave paths also
-  flush the export queue (`TelemetryRuntime.forceFlush`), because `BatchSpanProcessor`'s own
-  page-leave listeners were registered before any span of this app existed.
+- **Vitals.** LCP is registered **without** `reportAllChanges`: `web-vitals` finalises it on the
+  first input or when the page is hidden, and the facade emits it once per page (`lcpFlushed`) —
+  never an early candidate. INP and CLS are registered with `reportAllChanges: true` and are
+  **page-cumulative**: a `web_vital` span attributed to route B carries the shifts and interactions
+  accumulated since page load, not only route B's own, because that is what those metrics mean. A
+  metric is emitted only when it changed since the last flush, as one `web_vital` span attributed to
+  the route current at flush time. Flush points: the next `NavigationStart` (the route being left —
+  vitals go first, before the new route opens its trace), the tab turning hidden
+  (`visibilitychange`), `pagehide`, and `shutdown()`. The page-leave paths are followed by an
+  explicit `TelemetryRuntime.forceFlush`, because `BatchSpanProcessor`'s own page-leave listeners
+  were registered before any span of this app existed.
 - **Deploy hand-over — 09.1.1-T10 and 10.2.1-T1.4.** The static hosting edge must (a) inject both
   `<meta>` tags per deployment, the endpoint being an absolute `https:` URL, and (b) set
   `EVIDGATE_WEB_CONNECT_SRC` to that endpoint's origin when it emits the app-origin CSP — the

@@ -17,7 +17,13 @@ import {
 } from '@opentelemetry/sdk-trace';
 import type { Metric, ReportOpts } from 'web-vitals';
 
-import { startTelemetrySdk, type TelemetryRuntime, type VitalReporters } from './telemetry-sdk';
+import {
+  startTelemetrySdk,
+  type ErrorReport,
+  type ErrorSource,
+  type TelemetryRuntime,
+  type VitalReporters,
+} from './telemetry-sdk';
 
 /** A request id the server could have echoed; its shape is what `evidgate.request_id` accepts. */
 const REQUEST_ID = '3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b';
@@ -112,6 +118,21 @@ function firstSpanNamed(exporter: InMemorySpanExporter, name: string): ReadableS
     throw new Error(`expected an exported "${name}" span; exported: ${exportedNames(exporter)}`);
   }
   return span;
+}
+
+/**
+ * Text a hostile (or merely outdated) caller might offer as an error message: a URL with a
+ * credential, a JWT and an e-mail address. `ErrorReport` has no `message` field any more
+ * (D-S69-Q2), so the specs below hand it over through a cast to prove the span never carries it.
+ */
+function hostileErrorText(): string {
+  const url = `https://acme.example.test/v1/runs?token=${jwtSample()}`;
+  return `POST ${url} failed for ops@example.com`;
+}
+
+/** A report of any source carrying hostile `message` text, as a stale caller would build it. */
+function hostileReport(source: ErrorSource, text: string): ErrorReport {
+  return { source, type: 'TypeError', message: text } as unknown as ErrorReport;
 }
 
 /** The span names an exporter holds, for a failure message that says what did arrive. */
@@ -283,30 +304,21 @@ describe('startTelemetrySdk', () => {
     const harness = startSdk();
     harness.runtime.setRoute('/projects/:projectId');
     harness.runtime.beginRouteChange().end('ok', '/projects/:projectId');
-    harness.runtime.reportError({
-      source: 'angular',
-      type: 'TypeError',
-      message: 'x is not a function',
-    });
+    harness.runtime.reportError({ source: 'angular', type: 'TypeError' });
     harness.runtime.reportError({ source: 'unhandledrejection', type: 'RangeError' });
-    harness.runtime.reportError({
-      source: 'window.error',
-      type: 'ReferenceError',
-      message: 'y is not defined',
-    });
+    harness.runtime.reportError({ source: 'window.error', type: 'ReferenceError' });
 
     const [angular, rejection, windowError] = spansNamed(harness.exporter, 'client.error');
 
     expect(angular?.attributes['evidgate.error.source']).toBe('angular');
     expect(angular?.attributes['error.type']).toBe('TypeError');
-    expect(angular?.attributes['error.message']).toBe('x is not a function');
     expect(angular?.attributes['evidgate.route']).toBe('/projects/:projectId');
     expect(angular?.status.code).toBe(SpanStatusCode.ERROR);
-    expect(rejection?.attributes['error.message']).toBeUndefined();
+    expect(rejection?.attributes['error.type']).toBe('RangeError');
     expect(windowError?.attributes['evidgate.error.source']).toBe('window.error');
   });
 
-  it('keeps an API error envelope but never its message', () => {
+  it('keeps an API error envelope and never its message', () => {
     const harness = startSdk();
     harness.runtime.reportError({
       source: 'api',
@@ -316,7 +328,6 @@ describe('startTelemetrySdk', () => {
       errorCode: 'run_not_found',
       retryable: false,
       requestId: REQUEST_ID,
-      message: 'the run 9a1b belongs to another project',
     });
 
     const span = firstSpanNamed(harness.exporter, 'client.error');
@@ -332,25 +343,49 @@ describe('startTelemetrySdk', () => {
     expect(span.links).toHaveLength(0);
   });
 
-  it('scrubs a credential and a query string out of an error message', () => {
+  it('a client.error span carries no message attribute, for any source', () => {
     const harness = startSdk();
-    const jwt = jwtSample();
-    harness.runtime.reportError({
-      source: 'unhandledrejection',
-      type: 'Error',
-      message: `POST /v1/runs?suite=${jwt} failed for token=${jwt} and ops@example.com`,
-    });
+    const text = hostileErrorText();
+    for (const source of ['angular', 'window.error', 'unhandledrejection', 'api'] as const) {
+      harness.runtime.reportError(hostileReport(source, text));
+    }
 
-    const message = String(
-      firstSpanNamed(harness.exporter, 'client.error').attributes['error.message'],
-    );
+    const spans = spansNamed(harness.exporter, 'client.error');
+    expect(spans).toHaveLength(4);
+    for (const span of spans) {
+      // Structural: no key, whatever it is called, mentions a message.
+      for (const key of Object.keys(span.attributes)) {
+        expect(key.toLowerCase()).not.toContain('message');
+      }
+      // Textual: none of what the caller offered survives in the serialised span.
+      const serialised = JSON.stringify({
+        name: span.name,
+        attributes: span.attributes,
+        events: span.events,
+        status: span.status,
+      });
+      expect(serialised).not.toContain('acme.example.test');
+      expect(serialised).not.toContain('token=');
+      expect(serialised).not.toContain('@example.com');
+      expect(serialised).not.toContain('failed for');
+    }
+  });
 
-    expect(message).toContain('/v1/runs');
-    expect(message).toContain('[redacted]');
-    expect(message).toContain('[email]');
-    expect(message).not.toContain(jwt);
-    expect(message).not.toContain('@example.com');
-    expect(message).not.toContain('suite=');
+  it('adds no attribute for the text a thrown error offered', () => {
+    const harness = startSdk();
+    harness.runtime.setRoute('/projects/:projectId/runs');
+    harness.runtime.reportError(hostileReport('window.error', hostileErrorText()));
+
+    const [span] = spansNamed(harness.exporter, 'client.error');
+    if (span === undefined) {
+      throw new Error('expected an exported "client.error" span');
+    }
+    // Exactly the classification, the source and the route: the hostile text bought no key.
+    expect(Object.keys(span.attributes).sort()).toEqual([
+      'error.type',
+      'evidgate.error.source',
+      'evidgate.route',
+    ]);
   });
 
   it('templates a concrete id that reaches a span through setRoute', () => {

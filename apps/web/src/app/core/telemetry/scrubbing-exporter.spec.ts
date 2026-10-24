@@ -73,6 +73,9 @@ function spanFields(): Omit<ReadableSpan, 'parentSpanContext'> {
       'http.route': `/v1/projects/${RUN_ID}/runs`,
       'http.url': `https://acme.example.test/v1/runs?token=${CREDENTIAL}`,
       'user.email': EMAIL,
+      // No attribute carries message text any more (D-S69-Q2): a span that still presents one
+      // must leave without it.
+      'error.message': `boom "${EMAIL}" for ${CREDENTIAL}`,
     },
     links: [{ context: SPAN_CONTEXT, attributes: { 'user.email': EMAIL } }],
     events: [
@@ -172,7 +175,7 @@ describe('ScrubbingSpanExporter', () => {
     expect(exporter.callbacks[0]).toBe(callback);
   });
 
-  it('keeps an allowlisted span name and scrubs the span attributes', () => {
+  it('keeps an allowlisted span name, scrubs the attributes and drops an error message', () => {
     const { output } = exportOne(hostileSpan());
 
     expect(output.name).toBe('api.request');
@@ -180,6 +183,8 @@ describe('ScrubbingSpanExporter', () => {
       'http.request.method': 'POST',
       'http.route': '/v1/projects/:id/runs',
     });
+    // The key is not allowlisted at all, so this is a drop on the key, not a scrub of its value.
+    expect(output.attributes['error.message']).toBeUndefined();
   });
 
   it('exports a span name the four constants do not cover as unknown', () => {
@@ -205,6 +210,9 @@ describe('ScrubbingSpanExporter', () => {
     expect(input.events).toHaveLength(1);
     expect(output.events).toEqual([]);
     expect(output.links).toEqual([]);
+    // The event also carried an `error.message` attribute: nowhere in the emitted span does its
+    // text survive, because the event that held it was dropped whole.
+    expect(JSON.stringify(output)).not.toContain('boom');
   });
 
   it('keeps the status code and drops the status message', () => {

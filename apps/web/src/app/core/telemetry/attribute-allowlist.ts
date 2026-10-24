@@ -8,9 +8,10 @@
 // accident — it has to add the key here, in front of the reviewer, and give it a rule in
 // `scrub.ts`.
 //
-// What is deliberately absent: no message text (only `error.message`, scrubbed), no stack
-// trace, no URL, no host, no org/project name, no user or session identifier other than the
-// page's own `X-Request-Id`, which the server already correlates on.
+// What is deliberately absent: message text of any kind — not even a scrubbed one (D-S69-Q2,
+// 00 §9.1 "ids only") — no stack trace, no URL, no host, no org/project name, and no user or
+// session identifier other than the page's own `X-Request-Id`, which the server already
+// correlates on.
 
 /**
  * Attribute and span-event keys the web exporter may forward, with exactly the values
@@ -32,10 +33,9 @@ export const ALLOWED_ATTRIBUTE_KEYS: ReadonlySet<string> = new Set<string>([
   'evidgate.api.error_code',
   'evidgate.api.error_kind',
   'evidgate.api.retryable',
-  // Client errors: a scrubbed one-line message and the error's constructor name.
+  // Client errors: where it came from and the error's constructor name; no message text.
   'evidgate.error.source',
   'error.type',
-  'error.message',
   // Web vitals (core web vitals naming; `web_vital.*` is this plan's own namespace).
   'web_vital.name',
   'web_vital.value',
