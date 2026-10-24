@@ -1,6 +1,58 @@
 # @evidgate/web
 
-Placeholder npm workspace for the Angular SPA. Owned by story 09.1.1-T1, which replaces this package.json with the real Angular 22 application (plans/09-web-ui.md, 00 §5.2).
+The Evidgate Angular 22.2 single-page app (`plans/09-web-ui.md`, 00 §5.2): standalone components
+with `ChangeDetectionStrategy.OnPush`, zoneless change detection, no `NgModule`. Story 09.1.1-T1
+replaced the 01.1.1-T3 placeholder in this workspace with the real application project; today it
+renders the shell placeholder heading of `src/app/app.html`, and the shell, guards and screens
+land in 09.1.1-T4 and 09.2.1+.
+
+## Running it
+
+Run from the repository root (npm workspaces) or from `apps/web`:
+
+| Command                     | What it does                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm run start -w apps/web` | `ng serve` — the dev server with the `development` configuration (no optimization, source maps)   |
+| `npm run build -w apps/web` | `ng build` (production) into `apps/web/dist/browser`, then `node scripts/check-bundle-budget.mjs` |
+| `npm run test -w apps/web`  | `ng test --watch=false` — component/unit specs, writes `apps/web/test-results/junit.xml`          |
+| `npm run e2e -w apps/web`   | `npx playwright test` against the **built** bundle (see [E2E](#e2e-playwright)); build first      |
+
+Build output and reports are git-ignored: `apps/web/dist/`, `apps/web/.angular/` (build cache),
+`apps/web/test-results/` (JUnit XML, traces) and `apps/web/playwright-report/`.
+
+### Unit tests
+
+Component specs run through the Angular builder (`angular.json` target `test`,
+`@angular/build:unit-test`) with the **Vitest** runner, the **jsdom** environment and a zoneless
+TestBed (`src/zoneless.spec.ts` guards the zoneless setup). The builder's `junit` reporter writes
+`apps/web/test-results/junit.xml` for the Evidgate dogfooding of 01.10.1-T1.1 (T48).
+
+`apps/web` is **not** a project of the root `vitest.config.ts` any more: a root `npx vitest run`
+collects only `packages/*`, because running the Angular specs outside the builder would skip its
+TestBed and jsdom wiring. `npm run test --workspaces` still reaches them through the script above.
+
+### Build budgets (00 §5.6 W7)
+
+W7 allows **300 kB gzip** for the initial JS and **150 kB gzip** for any lazy chunk. Two gates
+enforce it, and only one of them is `angular.json`:
+
+- `apps/web/scripts/check-bundle-budget.mjs` is the W7 gate. It gzips the emitted scripts, takes
+  the initial set from the `<script>`/`modulepreload` tags of `dist/browser/index.html`, and fails
+  the build on a breach. Chained after `ng build` by `npm run build -w apps/web`.
+- The `budgets` block of `angular.json` is a **raw-size backstop**, not the gzip numbers of W7:
+  the installed `@angular/build` compares `budgets` against on-disk asset bytes and never gzips,
+  so it cannot express W7 as written (the AC1 wording gap). Its thresholds sit at 3× the gzip
+  targets (initial 900 kB error / 600 kB warning, `anyScript` 450/300 kB, component style
+  12/6 kB), which still makes AC1's threshold test — lowering a budget below the current output
+  size fails the build — hold for that backstop.
+
+### Zoneless change detection
+
+`src/app/app.config.ts` provides zoneless change detection and `zone.js` is not a dependency.
+W3 keeps that decision at ⚠️ until the 09.1.1-T2 integration-fit spike ADR answers the fit
+questions: the plan numbers that ADR `docs/adr/0007-web-integration-fit.md` (T2.2). It does not
+exist yet, so this README does not link it; if the spike finds a blocker, the fallback is recorded
+there rather than silently in code.
 
 ## Design reference — Web UI v2 (S50)
 
@@ -19,16 +71,27 @@ What the mockups fix, and where it lands in this app:
 
 Rules the mockups keep and the app keeps too: completeness, outcome and decision are separate fields; a missing or pending result never renders as PASS; healing is proposed as a PR and never applied from the UI; controls in one row share a height, action labels do not wrap, and nothing scrolls sideways at 360 px.
 
-## E2E (Playwright) — 01.6.1-T5
+## E2E (Playwright)
 
-`playwright.config.ts` is the web E2E workspace: one `chromium` project, retries 2 when `CI` is
-set, `trace: 'retain-on-failure'`, and a `webServer` that starts `e2e/static-server.mjs`
-(a dependency-free Node static server over `e2e/public/`). Until 09.1.1-T2 lands the Angular
-application, that static page is what `e2e/smoke.spec.ts` asserts (AC7); drop the `webServer`
-block for `ng serve`/the built bundle then.
+`playwright.config.ts` is the web E2E workspace: one `chromium` project, `retries: 2` when `CI`
+is set (0 locally), `forbidOnly` on CI, `trace: 'retain-on-failure'`,
+`screenshot: 'only-on-failure'`, and three reporters — `list`, `html` (into
+`apps/web/playwright-report/`) and `junit` (into `apps/web/test-results/e2e-junit.xml`, read by the
+01.10.1-T1.1 dogfooding).
+
+The suite runs against the **built** application, never `ng serve`: the `webServer` block starts
+`e2e/static-server.mjs`, a dependency-free Node http server over `apps/web/dist/browser`, with SPA
+fallback to `index.html` for client routes, correct content types for the emitted assets, no
+directory listing, and a traversal guard so no request can read outside `dist/browser`. The server
+picks an **ephemeral** high port (chosen once per run in `playwright.config.ts` and passed on
+through `EVIDGATE_WEB_E2E_PORT`, so parallel worktrees never share 4200/8080/8765 or a fixed
+4173), and it exits with a "run `npm run build -w apps/web`" message when
+`dist/browser/index.html` is missing — a stale dist is a loud failure, not a silent fallback to
+some other page.
 
 ```sh
-npm run e2e -w apps/web   # or: npx playwright test, with apps/web as the working directory
+npm run build -w apps/web   # the E2E suite tests this output
+npm run e2e -w apps/web     # or: npx playwright test, with apps/web as the working directory
 ```
 
 Locally the first run needs the pinned browser build once:
@@ -37,9 +100,13 @@ Locally the first run needs the pinned browser build once:
 npx playwright install chromium
 ```
 
-Vitest owns `src/**/*.test.ts` and never collects these `*.spec.ts` files (the root
-`vitest.config.ts` lists the workspaces as `test.projects`, and `vitest.config.base.mts` fixes
-the `include` glob), so `npx vitest run` stays E2E-free.
+Specs: `e2e/smoke.spec.ts` (AC2 — the built bundle bootstraps: page title `Evidgate`, the
+`app-root` heading from `src/app/app.html`, and no console or page errors during load) and
+`e2e/static-server.spec.ts` (SPA fallback and the traversal guard of the server itself).
+
+Vitest owns `src/**/*.spec.ts` through the Angular builder and never collects these `*.spec.ts`
+files: the root `vitest.config.ts` lists only `packages/*` as projects, so `npx vitest run` stays
+E2E-free.
 
 ## CI hooks for 01.7.1-T1
 
@@ -50,6 +117,15 @@ Consumed by 01.7.1-T1.3 (`ci.yml`, job wired **non-blocking** — `continue-on-e
   Ubuntu 26 on 2026-10-19 — matches the .NET jobs' pin), independent of the .NET jobs. Steps: checkout →
   Node 26 setup → `npm ci` → `npx playwright install --with-deps chromium` → `npm run e2e -w apps/web`.
   Keep the browser cache step before the install so a cache hit makes `install` a no-op.
+- **Build before the test run:** the job above has no build step and the suite serves
+  `dist/browser`, so `npm run e2e -w apps/web` must build first. Recommended
+  `apps/web/package.json`: `"e2e": "npm run build && playwright test"` — `npm run build` inside
+  the workspace is `ng build` plus the W7 budget gate, so the E2E job also proves the bundle is
+  inside budget. Hand-over to 01.7.1-T1.3: either adopt that script line (then `ci.yml` needs no
+  extra step) or add `npm run build -w apps/web` before `npm run e2e -w apps/web` and keep the
+  script as `playwright test` — not both. 09.1.1-T1 does not edit `package.json`, and
+  `playwright.config.ts` deliberately does not build, so a missing bundle stays a loud failure
+  instead of a hidden rebuild.
 - **Browser cache:** the default cache directory on Linux is `~/.cache/ms-playwright`; set
   `PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright` on the job so the path is explicit.
 
@@ -67,8 +143,8 @@ Consumed by 01.7.1-T1.3 (`ci.yml`, job wired **non-blocking** — `continue-on-e
 - **Artifacts on failure:** the `list` + `html` reporters and `trace: 'retain-on-failure'` write
   into `apps/web/playwright-report/` and `apps/web/test-results/` (both git-ignored). Upload both
   with `if: failure()`, `retention-days: 14` (01.7.1 §8), artifact name `playwright-report`; the
-  `.zip` traces in `test-results/` open in `npx playwright show-trace`. The `html` report is for
-  humans; the Evidgate-side dogfood (01.10.1-T1.1) needs the Playwright `junit` reporter, which
-  T1.1 adds — the plan's `junit` config is not wired here.
+  `.zip` traces in `test-results/` open in `npx playwright show-trace`. The `junit` reporter writes
+  `apps/web/test-results/e2e-junit.xml` beside them, the E2E counterpart of the unit-test JUnit
+  XML that the dogfooding of 01.10.1-T1.1 consumes.
 - **Retries:** 2 on CI (`process.env.CI`), 0 locally; `forbidOnly` is set on CI so a committed
   `test.only` fails the job instead of silently shrinking the suite.
