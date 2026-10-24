@@ -73,8 +73,8 @@
   ],
   "exceptions": {
     "ADR-0002": {
-      "reason": "MPL-2.0 weak copyleft is compatible with closed-source SaaS: lightningcss is a build-time-only transitive of vite (via vitest) and never ships in runtime artefacts; ADR-0002's vitest row carries the direct dependency. Package keys are case-insensitive fnmatch patterns ('ecosystem:name' or 'ecosystem:name@version').",
-      "packages": ["npm:lightningcss*"]
+      "reason": "MPL-2.0 weak copyleft is compatible with closed-source SaaS: lightningcss is a build-time-only transitive of vite (via vitest) and never ships in runtime artefacts; ADR-0002's vitest row carries the direct dependency. axe-core is a test-time-only devDependency of apps/web (a11y specs in jsdom), unmodified and never bundled; its own ADR-0002 row carries it (09.1.1-T7). Package keys are case-insensitive fnmatch patterns ('ecosystem:name' or 'ecosystem:name@version').",
+      "packages": ["npm:lightningcss*", "npm:axe-core"]
     }
   }
 }

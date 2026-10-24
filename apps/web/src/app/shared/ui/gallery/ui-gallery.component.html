@@ -1,0 +1,184 @@
+<main class="gallery">
+  <header>
+    <h1 i18n="@@shared.gallery.title">Shared UI state gallery</h1>
+    <p i18n="@@shared.gallery.introduction">
+      Render-only examples of evidence, decisions and their independent states.
+    </p>
+  </header>
+
+  <section aria-labelledby="gallery-evaluations">
+    <h2 id="gallery-evaluations" i18n="@@shared.gallery.evaluations">
+      Independent evaluation fields
+    </h2>
+    <p i18n="@@shared.gallery.invariant">
+      Completeness, outcome and decision are separate fields. Missing evidence never implies
+      approval.
+    </p>
+    <div class="evaluation-grid">
+      <article>
+        <h3 i18n="@@shared.gallery.evaluation-pending">Incomplete evidence, pending decision</h3>
+        <div class="specimens" data-demo="evaluation-pending">
+          <app-evidence-badge [completeness]="'incomplete'" />
+          <app-outcome-pill [outcome]="'no_results'" />
+          <app-decision-chip />
+        </div>
+      </article>
+      <article>
+        <h3 i18n="@@shared.gallery.evaluation-fail">Complete evidence, failed evaluation</h3>
+        <div class="specimens" data-demo="evaluation-fail">
+          <app-evidence-badge [completeness]="'complete'" />
+          <app-outcome-pill [outcome]="'has_failures'" />
+          <app-decision-chip [decision]="'FAIL'" />
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-evidence">
+    <h2 id="gallery-evidence" i18n="@@shared.gallery.evidence">Evidence completeness</h2>
+    <div class="specimens">
+      <app-evidence-badge [completeness]="'complete'" />
+      <app-evidence-badge [completeness]="'incomplete'" />
+      <app-evidence-badge />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-outcomes">
+    <h2 id="gallery-outcomes" i18n="@@shared.gallery.outcomes">Test outcomes</h2>
+    <div class="specimens">
+      <app-outcome-pill [outcome]="'all_passed'" />
+      <app-outcome-pill [outcome]="'has_failures'" />
+      <app-outcome-pill [outcome]="'no_results'" />
+      <app-outcome-pill />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-decisions">
+    <h2 id="gallery-decisions" i18n="@@shared.gallery.decisions">Release decisions</h2>
+    <div class="specimens">
+      <app-decision-chip [decision]="'PASS'" data-demo="decision-pass" />
+      <app-decision-chip [decision]="'FAIL'" />
+      <app-decision-chip [decision]="'INCONCLUSIVE'" />
+      <app-decision-chip />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-status">
+    <h2 id="gallery-status" i18n="@@shared.gallery.status">Generic status tones</h2>
+    <div class="specimens">
+      @for (sample of statusSamples; track sample.tone) {
+        <app-status-pill
+          [tone]="sample.tone"
+          [label]="sample.label"
+          [dimension]="statusDimension"
+        />
+      }
+      <app-status-pill [tone]="'neutral'" [label]="''" [dimension]="statusDimension" />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-runs">
+    <h2 id="gallery-runs" i18n="@@shared.gallery.runs">Run lifecycle</h2>
+    <div class="specimens">
+      @for (state of runStates; track state) {
+        <app-run-state-pill [state]="state" />
+      }
+      <app-run-state-pill [state]="''" />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-hashes">
+    <h2 id="gallery-hashes" i18n="@@shared.gallery.hashes">Evidence hashes</h2>
+    <div class="specimens">
+      <app-hash-chip [value]="'a1b2c3'" />
+      <app-hash-chip [value]="longHash" />
+      <app-hash-chip [value]="longHash" [abbreviate]="0" />
+      <app-hash-chip [value]="''" />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-revisions">
+    <h2 id="gallery-revisions" i18n="@@shared.gallery.revisions">Immutable revisions</h2>
+    <div class="specimens">
+      <app-revision-chip [revision]="0" />
+      <app-revision-chip [revision]="42" />
+      <app-revision-chip [revision]="''" />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-reasons">
+    <h2 id="gallery-reasons" i18n="@@shared.gallery.reasons">Missing evidence reasons</h2>
+    <app-missing-reason-list [reasons]="reasons" />
+    <app-missing-reason-list />
+  </section>
+
+  <section aria-labelledby="gallery-waivers">
+    <h2 id="gallery-waivers" i18n="@@shared.gallery.waivers">Waiver metadata</h2>
+    <div class="stack">
+      <app-waiver-banner
+        [approver]="'Mai Nguyen'"
+        [expiresAt]="'2026-12-01T12:00:00Z'"
+        [state]="'active'"
+      />
+      <app-waiver-banner
+        [approver]="'Mai Nguyen'"
+        [expiresAt]="'2026-09-01T12:00:00Z'"
+        [state]="'expired'"
+      />
+      <app-waiver-banner
+        [approver]="'Mai Nguyen'"
+        [expiresAt]="'2026-12-01T12:00:00Z'"
+        [state]="'revoked'"
+      />
+      <app-waiver-banner [approver]="''" [expiresAt]="''" />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-labels">
+    <h2 id="gallery-labels" i18n="@@shared.gallery.labels">Case labels and healing provenance</h2>
+    <div class="stack">
+      <app-label-chip [kind]="'flaky'" [originalFailure]="originalFailure" />
+      <app-label-chip
+        [kind]="'healed'"
+        [mode]="'shadow'"
+        [candidateHash]="longHash"
+        [originalFailure]="originalFailure"
+      />
+      <app-label-chip
+        [kind]="'healed'"
+        [mode]="'official'"
+        [candidateHash]="longHash"
+        [originalFailure]="originalFailure"
+      />
+      <app-label-chip [kind]="'healed'" />
+    </div>
+  </section>
+
+  <section aria-labelledby="gallery-tables">
+    <h2 id="gallery-tables" i18n="@@shared.gallery.tables">Read-only data tables</h2>
+    <div class="stack">
+      <app-data-table
+        [columns]="tableColumns"
+        [rows]="smallRows"
+        [rowId]="rowId"
+        [caption]="smallCaption"
+        data-demo="table-small"
+      />
+      <app-data-table
+        [columns]="tableColumns"
+        [rows]="virtualRows"
+        [rowId]="rowId"
+        [caption]="virtualCaption"
+        data-demo="table-virtual"
+      />
+      <app-data-table
+        [columns]="tableColumns"
+        [rows]="emptyRows"
+        [rowId]="rowId"
+        [caption]="emptyCaption"
+        [rowHeight]="'compact'"
+        data-demo="table-empty"
+      />
+    </div>
+  </section>
+</main>
