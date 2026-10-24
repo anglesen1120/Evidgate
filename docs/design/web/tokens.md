@@ -527,5 +527,21 @@ declaration text out of the string or template literal:
   has yet decided what a spinner or skeleton needs, so the check would be guesswork. Add a duration
   pattern when that rule exists.
 
+**Disposition of each limitation (S62 send-back on PR #138).** Nothing above is left unowned:
+
+| Limitation or review nit | Disposition |
+| --- | --- |
+| Template `style="…"` attributes and `[style.x]` bindings | Handed to 09.1.1-T7 (plan `09.1.1-app-scaffold-and-build-acceptance-npm.md:177`, STATUS §6 row "09.1.1-T7 `style-tokens` coverage gaps") |
+| Motion durations (`transition`/`animation`) | Handed to 09.1.1-T7 (same note and row; the loading/skeleton pattern decides) |
+| `border-spacing` | Handed to 09.1.1-T7 (same note and row; the shared list table picks the gap) |
+| Style string imported, built by a function, or held in `let`/`var` | Accepted by design, not handed over: resolving it needs whole-program analysis and would guess runtime values; code review is the net |
+| `@core.Component` namespace form | Accepted by design, not handed over: the project convention imports `Component` directly |
+| `styles` in `*.spec.ts` | Accepted by design, not handed over: test host components are never shipped |
+| Sizing, `transform`/`translate`, `letter-spacing`/`word-spacing`/`text-indent` | Accepted by design, not handed over: no numeric token exists to replace them (see "Deliberately not checked") |
+| CSS system colour keywords | Accepted by design, not handed over: they carry no brand value and are the forced-colors pattern |
+| `.scss`/`.sass` files not matched | Accepted by design, not handed over: `apps/web/angular.json` sets `style: css` and no SCSS file exists |
+| Review nit: one `const` used by two components reports twice at the const's location | Accepted by design, not handed over: duplicate message only, never a missed or false verdict |
+| Review nit: `${n}px` inside a comment within a template literal can be reported | Accepted by design, not handed over: an extra report on an unrealistic input, fixed by deleting the comment |
+
 A new component foreground/background pair still has to be added to `contrast.py` and regenerated
 into the table above — the lint rule checks spelling, not contrast.
