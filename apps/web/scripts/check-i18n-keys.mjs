@@ -4,11 +4,13 @@
 // `ng extract-i18n` writes the source catalog (XLIFF 1.2, custom ids `@@area.name`), and every
 // locale catalog must cover every id in it with a non-empty <target> and the same placeholder
 // set. This script is that gate. It is dependency-free (node: fs/path/url only) so
-// `npm ci --ignore-scripts` on CI needs nothing extra, and it reads XLIFF with a small tolerant
-// regex/state parser instead of an XML library.
+// `npm ci --ignore-scripts` on CI needs nothing extra, and it reads XLIFF with a small
+// hand-written linear scanner instead of an XML library.
 //
 // Fail-closed on purpose: a missing source catalog, a source catalog with zero <trans-unit>, or
-// an angular.json without `locales` is an error, because an empty check must never pass.
+// an angular.json without `locales` is an error, because an empty check must never pass. A
+// malformed unit (self-closing, unclosed, or without a closing ">") is an error for the same
+// reason: it can never be matched against a locale.
 //
 // Every path is resolved against the angular.json directory, so the result does not depend on
 // the caller's cwd. CLI:
@@ -54,22 +56,88 @@ function parseSegmentText(raw) {
   return { text: decodeEntities(withTokens), placeholders };
 }
 
-/** `<trans-unit>` bodies of one catalog, in document order. */
-function parseCatalog(content) {
+const UNIT_OPEN = '<trans-unit';
+const UNIT_CLOSE = '</trans-unit>';
+const ALT_TRANS_OPEN = '<alt-trans';
+const ALT_TRANS_CLOSE = '</alt-trans>';
+
+/**
+ * One `<trans-unit>` body with every `<alt-trans>` block removed: an alternative translation
+ * carries its own `<target>`, which must never stand in for the unit's real one. An unclosed
+ * `<alt-trans>` swallows the rest of the body, so its `<target>` cannot pass as the real one.
+ */
+function withoutAltTrans(body) {
+  const kept = [];
+  let cursor = 0;
+  for (;;) {
+    const open = body.indexOf(ALT_TRANS_OPEN, cursor);
+    if (open === -1) {
+      kept.push(body.slice(cursor));
+      return kept.join('');
+    }
+    const close = body.indexOf(ALT_TRANS_CLOSE, open);
+    if (close === -1) {
+      kept.push(body.slice(cursor, open));
+      return kept.join('');
+    }
+    kept.push(body.slice(cursor, open));
+    cursor = close + ALT_TRANS_CLOSE.length;
+  }
+}
+
+/**
+ * `<trans-unit>` bodies of one catalog, in document order; malformed units are appended to
+ * `errors` against `label`.
+ *
+ * Linear on purpose: a `[\s\S]*?` regex rescans to the end of the file for every unclosed
+ * `<trans-unit>`, which is quadratic, so the scan is `indexOf` from the current cursor and never
+ * revisits text. A self-closing `<trans-unit …/>` declares no key and is reported and skipped
+ * without swallowing the unit that follows it; an unclosed or truncated one is reported and ends
+ * the scan, because a broken catalog must fail closed instead of silently under-counting keys.
+ */
+function parseCatalog(content, label, errors) {
   const units = [];
-  for (const match of content.matchAll(/<trans-unit\b([^>]*)>([\s\S]*?)<\/trans-unit>/g)) {
-    const body = match[2];
+  let cursor = 0;
+  for (;;) {
+    const open = content.indexOf(UNIT_OPEN, cursor);
+    if (open === -1) return units;
+    const tagEnd = content.indexOf('>', open);
+    const header = tagEnd === -1 ? '' : content.slice(open + UNIT_OPEN.length, tagEnd);
+    // `<trans-unitfoo>` is a different element, which is what the old regex `\b` rejected.
+    if (/^[A-Za-z0-9_]/.test(header)) {
+      cursor = open + UNIT_OPEN.length;
+      continue;
+    }
+    const id = attribute(header, 'id');
+    const named = id === undefined ? UNIT_OPEN : `${UNIT_OPEN} id="${id}"`;
+    if (tagEnd === -1) {
+      errors.push(`${label}: ${named} is truncated — it has no closing ">"`);
+      return units;
+    }
+    if (/\/\s*$/.test(header)) {
+      errors.push(
+        `${label}: ${named}/> is self-closing — a unit needs an explicit <source> and ` +
+          '</trans-unit>, so its key was not checked',
+      );
+      cursor = tagEnd + 1;
+      continue;
+    }
+    const close = content.indexOf(UNIT_CLOSE, tagEnd + 1);
+    if (close === -1) {
+      errors.push(
+        `${label}: ${named}> is never closed — missing </trans-unit>; ` +
+          'stopped checking this file',
+      );
+      return units;
+    }
+    const body = withoutAltTrans(content.slice(tagEnd + 1, close));
     const segment = (name) => {
       const found = new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`).exec(body);
       return found ? parseSegmentText(found[1]) : null;
     };
-    units.push({
-      id: attribute(match[1], 'id'),
-      source: segment('source'),
-      target: segment('target'),
-    });
+    units.push({ id, source: segment('source'), target: segment('target') });
+    cursor = close + UNIT_CLOSE.length;
   }
-  return units;
 }
 
 /** A segment holds no content when it is absent, or only whitespace and no placeholder. */
@@ -174,7 +242,7 @@ export function checkI18nKeys({ angularJsonPath, root } = {}) {
     );
     return { errors, locales, keyCount };
   }
-  const sourceUnits = parseCatalog(readFileSync(sourcePath, 'utf8'));
+  const sourceUnits = parseCatalog(readFileSync(sourcePath, 'utf8'), shown(sourcePath), errors);
   if (sourceUnits.length === 0) {
     errors.push(
       `source catalog ${shown(sourcePath)} has no <trans-unit> entries — ` +
@@ -205,7 +273,7 @@ export function checkI18nKeys({ angularJsonPath, root } = {}) {
       }
       readFiles += 1;
       const label = shown(file);
-      const units = parseCatalog(readFileSync(file, 'utf8'));
+      const units = parseCatalog(readFileSync(file, 'utf8'), label, errors);
       checkIds(units, label, errors);
 
       for (const unit of units) {

@@ -16,16 +16,26 @@
 //
 // Layout: with `localize` (angular.json build configurations) `@angular/build:application`
 // writes one directory per locale — `dist/browser/en/`, `dist/browser/vi/` — each holding its
-// own index.html and chunks, and no root index.html; a build without `localize` (and every
-// synthetic dist this gate's own proofs create) puts index.html at the root of
-// `dist/browser`. Every locale directory found is checked on its own against the same two
-// limits, and the report prefixes each row with the locale. A dist with neither layout fails
-// closed instead of reporting "0 kB".
+// own index.html and chunks, and no root index.html. Every locale directory is checked on its
+// own against the same two limits, and the report prefixes each row with the locale.
 //
-// The dist directory is resolved from this file's own location
-// (`apps/web/dist/browser`, the same way `e2e/static-server.mjs` does it), so the check
-// reports the same thing whatever the caller's cwd is. `EVIDGATE_WEB_DIST_DIR` overrides it
-// ONLY to run the synthetic-output proofs of this gate; it is not a build knob.
+// The expected locale set is NOT read back from the output: `projects.web.i18n.sourceLocale`
+// plus every key of `projects.web.i18n.locales` in apps/web/angular.json is the contract, and
+// the build must satisfy all of it. Deriving it from the directories found instead would let a
+// build that silently lost `en/` pass, because the surviving `vi/` directory alone looks like
+// a complete localized build. So a missing expected locale directory (or its index.html), and
+// an unexpected locale directory that the config does not declare, both fail the gate. The
+// single unnamed layout (index.html directly in the dist directory) is checked only when
+// `EVIDGATE_WEB_LOCALES` is set to the empty string, i.e. only for a synthetic proof build.
+// A dist matching no layout fails closed instead of reporting "0 kB".
+//
+// Paths are resolved from this file's own location — the dist directory
+// (`apps/web/dist/browser`, the same way `e2e/static-server.mjs` does it) and
+// `apps/web/angular.json` — so the check reports the same thing whatever the caller's cwd is.
+// `EVIDGATE_WEB_DIST_DIR` and `EVIDGATE_WEB_LOCALES` exist ONLY for the synthetic-output
+// proofs of this gate (apps/web/scripts/check-bundle-budget.test.mjs); they are not build
+// knobs. `EVIDGATE_WEB_LOCALES` takes a comma-separated locale list, or the empty string for
+// the unnamed single-layout proof.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,6 +47,8 @@ import { gzipSync } from 'node:zlib';
 const DIST_DIR = process.env.EVIDGATE_WEB_DIST_DIR
   ? resolve(process.env.EVIDGATE_WEB_DIST_DIR)
   : resolve(fileURLToPath(new URL('../dist/browser/', import.meta.url)));
+// The locale contract: `projects.web.i18n` of the same project this script belongs to.
+const ANGULAR_JSON_PATH = fileURLToPath(new URL('../angular.json', import.meta.url));
 /** W7: initial JS budget, gzip, 1000 bytes per kB (the unit Angular's budgets use). */
 const INITIAL_JS_GZIP_LIMIT_BYTES = 300 * 1000;
 /** W7: per lazy-chunk budget, gzip. */
@@ -118,34 +130,106 @@ function showPath(path) {
 }
 
 /**
- * The bundle layouts to check, as `{ label, dir }`. A localized build emits one directory per
- * locale, each with its own index.html; locale directories win when they exist, because that
- * is what `localize` produces and a leftover root index.html would double-count their chunks.
- * Otherwise the root layout (index.html directly in the dist directory) is the single layout.
+ * The locales the production build must emit, and where that set came from: `sourceLocale` (a
+ * string, or `{ code }` in the newer schema) followed by every key of `projects.web.i18n.locales`
+ * in apps/web/angular.json. An empty locale list means "one unnamed layout", which is reachable
+ * only through `EVIDGATE_WEB_LOCALES=''` — the synthetic single-layout proof.
  */
-function findLayouts(distDir) {
+function expectedLocales() {
+  const override = process.env.EVIDGATE_WEB_LOCALES;
+  if (override !== undefined) {
+    return {
+      locales: override
+        .split(',')
+        .map((locale) => locale.trim())
+        .filter((locale) => locale !== ''),
+      source: 'EVIDGATE_WEB_LOCALES',
+    };
+  }
+
+  let config;
+  try {
+    config = JSON.parse(readFileSync(ANGULAR_JSON_PATH, 'utf8'));
+  } catch (error) {
+    fail(`cannot read ${ANGULAR_JSON_PATH} for the expected locales (${error.message}).`);
+  }
+  const i18n = config?.projects?.web?.i18n;
+  const sourceLocale =
+    typeof i18n?.sourceLocale === 'string' ? i18n.sourceLocale : i18n?.sourceLocale?.code;
+  if (typeof sourceLocale !== 'string' || sourceLocale === '') {
+    fail(`projects.web.i18n.sourceLocale is missing from ${ANGULAR_JSON_PATH}.`);
+  }
+  return {
+    locales: [sourceLocale, ...Object.keys(i18n.locales ?? {})],
+    source: ANGULAR_JSON_PATH,
+  };
+}
+
+/**
+ * The bundle layouts to check, as `{ label, dir }`: one per expected locale, each of which must
+ * exist with its own index.html. A leftover root index.html is ignored in that mode, because a
+ * localized build does not write one and counting it would double-count the chunks.
+ *
+ * With an empty locale list (`EVIDGATE_WEB_LOCALES=''`) the single unnamed layout —
+ * index.html directly in the dist directory — is the only layout, which is what an unlocalized
+ * proof build produces. The expected-locale checks are what make a build that lost a locale
+ * fail: reading the locales back from the output would call the surviving directories complete.
+ */
+function findLayouts(distDir, { locales, source }) {
   let entries;
   try {
     entries = readdirSync(distDir, { withFileTypes: true });
   } catch {
     fail(`no ${distDir}/ — run \`ng build\` first (this check reads the production output).`);
   }
-  const locales = entries
-    .filter((entry) => entry.isDirectory() && isFile(join(distDir, entry.name, 'index.html')))
-    .map((entry) => entry.name)
-    .sort();
-  if (locales.length > 0) {
-    return locales.map((locale) => ({ label: locale, dir: join(distDir, locale) }));
-  }
-  if (isFile(join(distDir, 'index.html'))) {
+  const directoryNames = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+
+  if (locales.length === 0) {
+    if (!isFile(join(distDir, 'index.html'))) {
+      // Fail closed: nothing to measure, and reporting "0 kB initial" would pass for the wrong
+      // reason.
+      fail(`no ${join(distDir, 'index.html')} — run \`ng build\` first.`);
+    }
     return [{ label: '', dir: distDir }];
   }
-  // Fail closed: with neither a locale directory nor a root index.html there is nothing to
-  // measure, and reporting "0 kB initial" would pass the gate for the wrong reason.
-  fail(
-    `no locale directory (<locale>/index.html) and no ${join(distDir, 'index.html')} — ` +
-      'run `ng build` first (this check reads the production output).',
-  );
+
+  const missingDirectory = locales.filter((locale) => !directoryNames.includes(locale));
+  for (const locale of missingDirectory) {
+    console.error(
+      `bundle budget: missing locale "${locale}" — no ${join(distDir, locale)}/ directory, ` +
+        `although ${source} declares it.`,
+    );
+  }
+  if (missingDirectory.length > 0) {
+    fail(`${missingDirectory.length} expected locale(s) missing from the build output.`);
+  }
+
+  const missingIndex = locales.filter((locale) => !isFile(join(distDir, locale, 'index.html')));
+  for (const locale of missingIndex) {
+    console.error(
+      `bundle budget: missing locale "${locale}" — ${join(distDir, locale, 'index.html')} ` +
+        `is absent, although ${source} declares the locale.`,
+    );
+  }
+  if (missingIndex.length > 0) {
+    fail(`${missingIndex.length} expected locale(s) without an index.html.`);
+  }
+
+  const unexpected = directoryNames
+    .filter((name) => isFile(join(distDir, name, 'index.html')))
+    .filter((name) => !locales.includes(name))
+    .sort();
+  if (unexpected.length > 0) {
+    for (const name of unexpected) {
+      console.error(
+        `bundle budget: unexpected locale directory ${join(distDir, name)}/ — ` +
+          `${source} declares only ${locales.join(', ')}.`,
+      );
+    }
+    fail(`${unexpected.length} locale directory(ies) the locale configuration does not declare.`);
+  }
+
+  return locales.map((locale) => ({ label: locale, dir: join(distDir, locale) }));
 }
 
 /** The W7 rows for one layout: the gzip size of every script, split into initial and lazy. */
@@ -206,7 +290,7 @@ function measureLayout({ label, dir }) {
   };
 }
 
-const layouts = findLayouts(DIST_DIR);
+const layouts = findLayouts(DIST_DIR, expectedLocales());
 const measured = layouts.map(measureLayout);
 
 console.log('bundle budget (gzip, 1000 bytes per kB) — 00 §5.6 W7');

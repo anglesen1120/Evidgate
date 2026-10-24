@@ -120,6 +120,46 @@ test('template: a bound text with literal letters is reported', async () => {
   reported(result, I18N);
 });
 
+// D3: a visible string hidden inside the interpolation is invisible to the i18n rule (its
+// literal parts are empty), so the config's own restricted-syntax selectors own that case.
+test('template: a literal string in a text interpolation is reported', async () => {
+  const result = await lintTemplate("<p>{{ 'literal' }}</p>");
+  const [message] = reported(result, RESTRICTED);
+  assert.match(message.message, /i18n="@@area\.name"/);
+  assert.match(message.message, /09\.1\.1-T6\.1/);
+});
+
+test('template: a plain interpolation passes the literal-text rule', async () => {
+  const result = await lintTemplate('<p>{{ name }}</p>');
+  clean(result, RESTRICTED);
+});
+
+test('template: a piped interpolation passes the literal-text rule', async () => {
+  const result = await lintTemplate('<p>{{ count | number }}</p>');
+  clean(result, RESTRICTED);
+});
+
+// Pipe and call arguments are not rendered text of their own, and the selectors must not
+// over-match them (a `{{ x | date: 'short' }}` pattern is not a translatable sentence).
+test('template: literal pipe and call arguments are not reported', async () => {
+  const result = await lintTemplate("<p>{{ x | slice: 'a' }} {{ fn('b') }}</p>");
+  clean(result, RESTRICTED);
+});
+
+// Implemented as reported, both branches: either branch can render visible English.
+test('template: a conditional whose branches are literals is reported', async () => {
+  const result = await lintTemplate("<p>{{ cond ? 'a' : 'b' }}</p>");
+  assert.equal(reported(result, RESTRICTED).length, 2);
+});
+
+// Attribute interpolations and control-flow conditions are outside the rule's scope on purpose.
+test('template: literals outside text interpolation are not reported', async () => {
+  const result = await lintTemplate(
+    `<div title="{{ 'attr' }}"></div>@if ('cond') { <p>Hello</p> }`,
+  );
+  clean(result, RESTRICTED);
+});
+
 test('typescript: the $localize call form is reported', async () => {
   const result = await lintTypeScript(
     `${TS_PREAMBLE}export const bare = $localize('bare call');\n`,
@@ -160,6 +200,47 @@ test('typescript: the template element after an interpolation is not tested', as
     TS_PREAMBLE +
       'declare const name: string;\n' +
       'export const mixed = $localize`:@@probe.mixed:Hello ${name} and welcome`;\n',
+  );
+  clean(result, RESTRICTED);
+});
+
+// F4(a): the metadata regex requires at least one id character, so an empty `@@:` id — which
+// `ng extract-i18n` would key on `` and no translator could address — is reported.
+test('typescript: an empty custom id is reported', async () => {
+  const result = await lintTypeScript(`${TS_PREAMBLE}export const empty = $localize\`:@@:Hi\`;\n`);
+  const [message] = reported(result, RESTRICTED);
+  assert.match(message.message, /custom id/);
+  assert.match(message.message, /09\.1\.1-T6\.1/);
+});
+
+// F4(b): `$localize` reached through a global object is a MemberExpression tag/callee, which a
+// `tag.name` / `callee.name` selector never sees.
+test('typescript: the member-expression call form is reported', async () => {
+  const result = await lintTypeScript(
+    `${TS_PREAMBLE}export const viaWindow = window.$localize('bare member call');\n`,
+  );
+  const [message] = reported(result, RESTRICTED);
+  assert.match(message.message, /@@area\.name/);
+});
+
+test('typescript: the member-expression tagged form without an id is reported', async () => {
+  const result = await lintTypeScript(
+    `${TS_PREAMBLE}export const viaGlobal = globalThis.$localize\`plain member text\`;\n`,
+  );
+  const [message] = reported(result, RESTRICTED);
+  assert.match(message.message, /custom id/);
+});
+
+test('typescript: the member-expression tagged form with an empty id is reported', async () => {
+  const result = await lintTypeScript(
+    `${TS_PREAMBLE}export const viaSelf = self.$localize\`:@@:empty id\`;\n`,
+  );
+  reported(result, RESTRICTED);
+});
+
+test('typescript: the member-expression tagged form with @@area.name passes', async () => {
+  const result = await lintTypeScript(
+    `${TS_PREAMBLE}export const viaGlobal = globalThis.$localize\`:@@probe.member:Hello\`;\n`,
   );
   clean(result, RESTRICTED);
 });

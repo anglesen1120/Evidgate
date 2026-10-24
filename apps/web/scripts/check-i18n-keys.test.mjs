@@ -70,6 +70,26 @@ function writeCatalog(dir, path, units, options) {
   return file;
 }
 
+/** A catalog written verbatim, for the malformed shapes `transUnit()` never produces. */
+function rawCatalog(body) {
+  return `<?xml version="1.0" encoding="UTF-8" ?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+  <file source-language="en" datatype="plaintext" original="ng2.template">
+    <body>
+${body}
+    </body>
+  </file>
+</xliff>
+`;
+}
+
+function writeRaw(dir, path, content) {
+  const file = join(dir, path);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, content, 'utf8');
+  return file;
+}
+
 function writeAngularJson(dir, locales) {
   const i18n = { sourceLocale: 'en' };
   if (locales !== null) i18n.locales = locales;
@@ -204,6 +224,118 @@ test('(h) an angular.json that declares no locales fails', () => {
   const result = run(dir);
   assert.match(text(result), /angular\.json: projects\.web\.i18n\.locales is missing/);
   assert.deepEqual(result.locales, []);
+});
+
+test('a self-closing <trans-unit/> is reported and never swallows the next unit', () => {
+  const source = [
+    { id: 'a.one', source: 'One' },
+    { id: 'a.two', source: 'Two' },
+    { id: 'a.three', source: 'Three' },
+  ];
+  const units = (third) =>
+    rawCatalog(
+      [
+        transUnit({ id: 'a.one', source: 'One', target: 'Một' }),
+        '      <trans-unit id="a.two"/>',
+        third,
+      ].join('\n'),
+    );
+
+  const dir = fixture({ source });
+  writeRaw(dir, VI_CATALOG, units(transUnit({ id: 'a.three', source: 'Three', target: 'Ba' })));
+  const result = run(dir);
+  assert.match(text(result), /messages\.vi\.xlf: <trans-unit id="a\.two"\/> is self-closing/);
+  assert.doesNotMatch(text(result), /missing id "a\.three"/);
+  // The self-closing unit declares no content, so the key it names cannot be claimed as present.
+  assert.match(text(result), /\(src\/locale\/messages\.vi\.xlf\): missing id "a\.two"/);
+  assert.equal(result.keyCount, 3);
+
+  const blankNext = fixture({ source });
+  const blankThird = transUnit({ id: 'a.three', source: 'Three', target: ' ' });
+  writeRaw(blankNext, VI_CATALOG, units(blankThird));
+  assert.match(text(run(blankNext)), /id "a\.three" has an empty <target>/);
+});
+
+test('<target> inside <alt-trans> is not the unit target, and a real one still counts', () => {
+  const withBody = (lines) => {
+    const body = ['      <trans-unit id="app.greeting">', ...lines, '      </trans-unit>'];
+    return rawCatalog([transUnit(VI_UNITS[0]), body.join('\n')].join('\n'));
+  };
+
+  const altOnly = fixture({ source: SOURCE_UNITS });
+  writeRaw(
+    altOnly,
+    VI_CATALOG,
+    withBody([
+      '        <source>Hello <x id="INTERPOLATION" equiv-text="{{ name }}"/></source>',
+      '        <alt-trans>',
+      '          <target>Xin chào <x id="INTERPOLATION"/></target>',
+      '        </alt-trans>',
+    ]),
+  );
+  const altOnlyResult = run(altOnly);
+  assert.equal(altOnlyResult.errors.length, 1, text(altOnlyResult));
+  assert.match(
+    text(altOnlyResult),
+    /messages\.vi\.xlf: id "app\.greeting" has no <target> element/,
+  );
+
+  const withReal = fixture({ source: SOURCE_UNITS });
+  writeRaw(
+    withReal,
+    VI_CATALOG,
+    withBody([
+      '        <source>Hello <x id="INTERPOLATION" equiv-text="{{ name }}"/></source>',
+      '        <alt-trans>',
+      '          <target>Chào <x id="PH"/></target>',
+      '        </alt-trans>',
+      '        <target>Xin chào <x id="INTERPOLATION"/></target>',
+    ]),
+  );
+  assert.deepEqual(run(withReal).errors, [], 'a real target after an <alt-trans> still counts');
+});
+
+test('an unclosed <trans-unit> is reported instead of under-counting keys', () => {
+  const brokenUnit = rawCatalog(
+    [
+      '      <trans-unit id="app.title" datatype="html">',
+      '        <source>Evidgate</source>',
+      '        <target>Evidgate</target>',
+    ].join('\n'),
+  );
+
+  const locale = fixture({ source: SOURCE_UNITS });
+  writeRaw(locale, VI_CATALOG, brokenUnit);
+  const localeResult = run(locale);
+  assert.match(
+    text(localeResult),
+    /messages\.vi\.xlf: <trans-unit id="app\.title"> is never closed/,
+  );
+  assert.match(text(localeResult), /missing <\/trans-unit>/);
+
+  const sourceCatalog = fixture();
+  writeRaw(sourceCatalog, SOURCE_CATALOG, brokenUnit);
+  assert.match(
+    text(run(sourceCatalog)),
+    /messages\.xlf: <trans-unit id="app\.title"> is never closed/,
+  );
+});
+
+test('40,000 unclosed <trans-unit> entries are scanned in under a second', () => {
+  const body = Array.from(
+    { length: 40_000 },
+    (_unused, index) =>
+      `      <trans-unit id="perf.key${index}" datatype="html">\n` +
+      `        <source>Key ${index}</source>`,
+  ).join('\n');
+  const dir = fixture({ source: SOURCE_UNITS });
+  writeRaw(dir, VI_CATALOG, rawCatalog(body));
+
+  const started = performance.now();
+  const result = run(dir);
+  const elapsed = performance.now() - started;
+  assert.match(text(result), /is never closed/);
+  assert.ok(elapsed < 1000, `parsing took ${elapsed.toFixed(0)} ms, expected under 1000 ms`);
 });
 
 test('a second locale missing one key fails naming that locale', () => {
