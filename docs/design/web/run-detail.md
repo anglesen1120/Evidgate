@@ -2,8 +2,10 @@
 
 Owner approval: pending (B2 / 09.1.1-T11.1)
 
-Flow id: `run-detail`  
-CR-D-2 phase: **G2** ([NAV.md:14–18,22][nav]).  
+Flow id: `run-detail`
+
+CR-D-2 phase: **G2** ([NAV.md:14–18,22][nav]).
+
 Feature tasks: `09.3.1-T1` (related run list), `T2` (detail identity/context/timeline), `T3` (evidence), `T4` (attempts), `T6` (producers), `T7` (actions); `09.2.1-T4` (related original-report comparison). `09.3.1-T8` healed labels are G3; `09.3.1-T5`, `T9`, `T10`, `T11` (decision, exceptions, releases) are G4, not implied by this G2 page. Task ids are verified in [09.3.1 §10][feature], [09.2.1:157–164][onboarding-plan] and the [CR-D-2 task exceptions, 13-product-phases.md:79][phases].
 
 The approved visual direction is the supplied v2 HTML, not a newly drawn wireframe. The exports document the primary page at 1280×800, phase G4 so every route is available; that capture setting does not add a release-decision panel to the G2 mockup or constitute owner sign-off.

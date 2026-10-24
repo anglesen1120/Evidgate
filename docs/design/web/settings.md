@@ -2,8 +2,10 @@
 
 Owner approval: pending (B2 / 09.1.1-T11.1)
 
-Flow id: `settings`  
-CR-D-2 phase: **G1 shell**, with destinations available only at or before the current review phase. Secret references enter at G2; policies enter at G4. Later-phase tabs are hidden, not disabled teasers ([NAV]:38–43; [S]:154–174; [JS]:466–486).  
+Flow id: `settings`
+
+CR-D-2 phase: **G1 shell**, with destinations available only at or before the current review phase. Secret references enter at G2; policies enter at G4. Later-phase tabs are hidden, not disabled teasers ([NAV]:38–43; [S]:154–174; [JS]:466–486).
+
 Feature tasks: **09.7.1-T1–T11**, specifically T1 shell, T2 members, T3 secret references, T4 policy, T5 quota/retention, T6 audit, T7 agents, T8 integrations, T9 security events, T10 support access, T11 quota badge ([settings plan] §10). The phase map places T3/T5/T9/T10/T11 in G2 and T4/T7/T8 in G4; the G1 AI-credit region is separate from G2 quota/retention ([phase plan]:74–79,164). Project AI guidance on page 44 belongs to 13.4.1-T5 / 13.2.1, not a new Settings task ([CR-D-2 screen map]:56).
 
 This is a specification of the existing v2 mockups, not a new wireframe or proof of application behavior. Source citations use the linked file label followed by its source line numbers. The six image rows reference exports of **page 27**, at 1280×800, phase G4; they do not substitute related-page screenshots. Owner approval remains pending under [AC9 and T11.1]:31,196 and the [B2 gate]:79.

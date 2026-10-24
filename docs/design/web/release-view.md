@@ -2,8 +2,10 @@
 
 Owner approval: pending (B2 / 09.1.1-T11.1)
 
-Flow id: `release-view`  
-CR-D-2 phase: **G4** ([NAV]:32; [phase plan]:79). The route is hidden until the phase switch reaches G4. A directly opened earlier-phase reference carries the **“G4 reference · hidden in G1–G3”** banner, while its `[data-eg-phase="G4"]` body remains hidden; at G4 the body is available and the earlier-phase notice is hidden ([R]:2,37–40; [JS]:466–486). The footer still identifies it as a G4 reference ([R]:125). This is not a release approval action.  
+Flow id: `release-view`
+
+CR-D-2 phase: **G4** ([NAV]:32; [phase plan]:79). The route is hidden until the phase switch reaches G4. A directly opened earlier-phase reference carries the **“G4 reference · hidden in G1–G3”** banner, while its `[data-eg-phase="G4"]` body remains hidden; at G4 the body is available and the earlier-phase notice is hidden ([R]:2,37–40; [JS]:466–486). The footer still identifies it as a G4 reference ([R]:125). This is not a release approval action.
+
 Feature task: **09.3.1-T10**, including T10.1 release route/store, T10.2 component matrix, T10.3 freshness/late-window warnings and T10.4 accessibility/i18n/budget acceptance ([release plan]:206–213). Related decision/waiver page 06 is T5/T9/T11, also G4; quality overview is 09.9.1, not an extra release-view implementation task ([phase plan]:77–79; [CR-D-2 screen map]:23,34–35).
 
 The v2 mockups are the wireframes; this document ports their structure and records their gaps without inventing new visual designs. Source citations use the linked file label plus its source line numbers. Images below export **page 21**, 1280×800, with phase G4 so every requested state is reachable. Owner approval remains pending under [AC9 and T11.1]:31,196 and the [B2 gate]:79.

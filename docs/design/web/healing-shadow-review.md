@@ -2,8 +2,10 @@
 
 Owner approval: pending (B2 / 09.1.1-T11.1)
 
-Flow id: `healing-shadow-review`  
-CR-D-2 phase: **G3** ([NAV.md:23–27,58](../web-ui/output/NAV.md)).  
+Flow id: `healing-shadow-review`
+
+CR-D-2 phase: **G3** ([NAV.md:23–27,58](../web-ui/output/NAV.md)).
+
 Feature tasks: **09.5.1-T1–T3** (read-only shadow queue, candidate detail, original/shadow comparison); **09.5.2-T1–T4** (separate V2 approval/rejection, knowledge revocation, availability, release-approval separation); **13.8.1-T3/T4** (manual-case UI-change proposal, project shadow window) and **13.8.2-T2** (review evidence presentation). IDs verified in [09.5.1 §10](../../../plans/features/09-web-ui/09.5.1-shadow-review-v1-acceptance-candidates-are.md), [09.5.2 §10](../../../plans/features/09-web-ui/09.5.2-approval-v2-acceptance-approve-reject-binds.md) and [plan 13:208–219](../../../plans/13-product-phases.md). Plan 13:76 places 09.5 in G3; old M3/M4 feature headers do not override CR-D-2 phases.
 
 The Web UI v2 mockups are the wireframe source. This document does not create a new design or authorize runtime healing. All six screenshot sets use **page 13**, including the generic error/permission/conflict specimens, at 1280×800, phase G4. Related pages explain the rest of the flow; their images are not substituted for primary-page states.

@@ -2,8 +2,10 @@
 
 Owner approval: pending (B2 / 09.1.1-T11.1)
 
-Flow id: `failure-inbox`  
-CR-D-2 phase: **G3** ([NAV.md:19–21](../web-ui/output/NAV.md)).  
+Flow id: `failure-inbox`
+
+CR-D-2 phase: **G3** ([NAV.md:19–21](../web-ui/output/NAV.md)).
+
 Feature tasks: **09.4.1-T1–T7** (inbox, incident detail, triage, investigation, isolated artifacts, insufficient evidence and restricted artifacts); **13.8.2-T2** adds failure-label/drift-class presentation. Verified in [09.4.1 §10](../../../plans/features/09-web-ui/09.4.1-triage-without-losing-the-original-failure.md) and [plan 13:208–219](../../../plans/13-product-phases.md). Plan 13:76 places 09.4 in G3; the feature header's old M3 is not a different phase.
 
 This is a specification of the existing Web UI v2 mockups, not a replacement wireframe. Screenshot links export the primary page at 1280×800, phase G4, in each requested state/theme/locale. They are review evidence, not proof of owner approval or of a live API integration.

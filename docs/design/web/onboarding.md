@@ -2,8 +2,10 @@
 
 Owner approval: pending (B2 / 09.1.1-T11.1)
 
-Flow id: `onboarding`  
-CR-D-2 phase: **G1**, with a separately gated G2 continuation ([NAV.md:34–35,55][nav]).  
+Flow id: `onboarding`
+
+CR-D-2 phase: **G1**, with a separately gated G2 continuation ([NAV.md:34–35,55][nav]).
+
 Feature tasks: `09.2.1-T1` (wizard shell and resource-derived resume); `09.2.1-T2`–`T5` (connection, sample run, comparison and enablement), `T7` (connection health/CLI). The G1 authoring destinations are `13.4.1-T3`–`T5` and phase navigation is `13.4.1-T7`. These are existing task ids, not new scope: [09.2.1 §10][feature] and [13-product-phases.md:79,154–164][phases]. `09.2.1-T2`–`T8` are G2; the older feature-plan milestone does not override that phase map.
 
 This specification documents the supplied Web UI v2 mockups; it introduces no replacement wireframe or visual system. Exported images are the primary page at 1280×800, phase G4 so its G2 continuation is visible. Their inclusion is not owner approval or evidence of a working Angular feature.
