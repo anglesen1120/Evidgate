@@ -88,9 +88,10 @@ export class ApiGateway {
    *   re-thrown unchanged, because the caller aborted it on purpose; never an `ApiRequestError`.
    *   This applies even when `result` also carries a response: an abort during the SDK's body
    *   read leaves a partial body, so the cancellation wins over the success check;
-   * - a `TimeoutError` (the adapter's deadline, `http-client-fetch.ts`) throws `ApiRequestError`
-   *   from `mapTimeoutError`, i.e. `kind: 'timeout'`, `status: 0`, retryable only with the same
-   *   `Idempotency-Key`, carrying the underlying error as its `cause`;
+   * - a `TimeoutError` (the adapter's deadline, `http-client-fetch.ts`) with no response throws
+   *   `ApiRequestError` from `mapTimeoutError`, i.e. `kind: 'timeout'`, `status: 0`, retryable
+   *   only with the same `Idempotency-Key`, carrying the underlying error as its `cause`. A
+   *   response whose body merely resembles one is a refusal and keeps its status mapping;
    * - a non-2xx result, or any result whose `error` is set, throws `ApiRequestError` built from
    *   `mapApiError` (status, `00 §9.2` body, response headers) — a 403/404/412/429 is never
    *   turned into a success value;
@@ -136,12 +137,15 @@ export class ApiGateway {
     if (isAbortError(result.error)) {
       throw asThrown(result.error);
     }
-    if (isTimeoutError(result.error)) {
-      throw new ApiRequestError(mapTimeoutError(), { cause: result.error });
-    }
 
     const { response } = result;
     if (response === undefined) {
+      // The adapter's deadline is a typed outcome only as a missing response: a server that
+      // answers 4xx/5xx with a body that happens to carry `name: 'TimeoutError'` is a refusal,
+      // so it keeps its status, code and request id through `mapApiError` below.
+      if (isTimeoutError(result.error)) {
+        throw new ApiRequestError(mapTimeoutError(), { cause: result.error });
+      }
       // No HTTP response: the SDK caught a rejection (a transport failure) and resolved it as
       // `error`. An absent `error` cannot be classified either, so it takes the same transport
       // failure rather than being thrown as `undefined`.

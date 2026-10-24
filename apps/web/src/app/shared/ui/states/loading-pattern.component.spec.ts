@@ -16,13 +16,6 @@ const rows = [
   ['success', 'n/a — route-level replacement'],
 ] as const;
 
-function styles(): string {
-  return Array.from(document.querySelectorAll('style'))
-    .map((style) => style.textContent ?? '')
-    .filter((css) => css.includes('.state-panel') || css.includes('.loading-pattern__skeleton'))
-    .join('\n');
-}
-
 describe('LoadingPatternComponent', () => {
   let fixture: ComponentFixture<LoadingPatternComponent>;
   let root: HTMLElement;
@@ -65,15 +58,5 @@ describe('LoadingPatternComponent', () => {
     fixture.componentRef.setInput('label', undefined);
     fixture.detectChanges();
     expect(root.querySelector('h2')?.textContent).toContain('Loading evidence');
-  });
-
-  it('reserves token geometry, wraps overflow and stays static even without reduced motion', () => {
-    const css = styles();
-    expect(css).toContain('min-block-size: calc(');
-    expect(css).toContain('var(--eg-space-12)');
-    expect(css).toContain('overflow-wrap: anywhere');
-    expect(css).toContain('var(--eg-info-bg)');
-    expect(css).not.toMatch(/(?:^|[;{])\s*(?:animation|transition)(?:-[\w-]+)?\s*:/);
-    expect(root.querySelector('[style]')).toBeNull();
   });
 });

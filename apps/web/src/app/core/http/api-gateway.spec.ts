@@ -2,8 +2,9 @@
 // without the network. `api-client.spec.ts` proves the same paths through the real SDK and
 // `HttpClient`; these specs isolate one branch each, so a regression names itself:
 //
-// - a deadline `TimeoutError` (rejected by the operation, or handed back as `result.error`) is the
-//   typed `timeout` failure, never a status mapping and never a success;
+// - a deadline `TimeoutError` (rejected by the operation, or handed back as `result.error` when no
+//   response arrived) is the typed `timeout` failure, never a status mapping and never a success;
+//   a response whose body merely carries a `TimeoutError` name keeps its status mapping;
 // - a rejection or `result.error` without an HTTP response is only a retryable `network`
 //   failure when it is a `TypeError`; any other value is a programming error and is re-thrown
 //   unchanged (a plain `Error` from `newUuid`, say, must not become a retryable network error);
@@ -125,6 +126,35 @@ describe('ApiGateway classification (09.1.1-T8)', () => {
       // claim that nothing happened (the only thing that makes a fresh key safe).
       expect(rejection.error.kind).not.toBe('network');
       expect(rejection.error.message).toContain('may');
+    });
+
+    it('keeps the status mapping for a body that merely looks like a timeout', async () => {
+      const envelope = {
+        name: 'TimeoutError',
+        message: 'The request timed out.',
+        error: {
+          code: 'upstream_timeout',
+          message: 'The upstream service did not answer.',
+          request_id: REQUEST_ID,
+          retryable: true,
+        },
+      };
+      const rejection = await captureRejection(
+        gateway.call<SdkResult>(() =>
+          Promise.resolve({ response: envelopeResponse(503, envelope), error: envelope }),
+        ),
+      );
+
+      if (!isApiRequestError(rejection)) {
+        throw rejection;
+      }
+      // A response arrived, so this is a refusal: the status, the server's code and the request
+      // id survive instead of collapsing into the status-0 `timeout` failure. 503 is a status that
+      // `kindForStatus` maps on its own, so the kind proves the status path ran.
+      expect(rejection.error.kind).toBe('unavailable');
+      expect(rejection.error.status).toBe(503);
+      expect(rejection.error.code).toBe('upstream_timeout');
+      expect(rejection.error.requestId).toBe(REQUEST_ID);
     });
   });
 

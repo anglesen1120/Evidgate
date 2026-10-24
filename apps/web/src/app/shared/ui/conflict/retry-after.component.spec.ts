@@ -108,8 +108,8 @@ describe('RetryAfterComponent', () => {
     expect(button.disabled).toBe(false);
   });
 
-  it.each([null, 0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
-    'uses missing-interval copy, never a guessed zero interval, for %s',
+  it.each([null, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'uses missing-interval copy without inventing a duration for %s',
     (seconds) => {
       const { root, button } = render(seconds, true);
       expect(root.textContent).toContain('The server did not say how long to wait');

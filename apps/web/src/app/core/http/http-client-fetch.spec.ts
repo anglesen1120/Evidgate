@@ -540,6 +540,83 @@ describe('createHttpClientFetch (09.1.1-T3.2)', () => {
       });
       await expect(pending).resolves.toHaveProperty('status', 200);
     });
+
+    it('surfaces a caller abort during a stalled body read as an AbortError', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs: 1_000 });
+      const controller = new AbortController();
+      const request = new Request(apiUrl('/runs'), {
+        method: 'POST',
+        body: '{"name":"nightly"}',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      });
+      // The platform body read never settles, so only the signal can end the call.
+      vi.spyOn(request, 'text').mockReturnValue(new Promise<string>(() => undefined));
+
+      const settlement = adapter(request).then(
+        () => 'resolved',
+        (reason: unknown) => reason,
+      );
+      controller.abort();
+
+      const error = await settlement;
+      expect(error).toBeInstanceOf(DOMException);
+      expect((error as DOMException).name).toBe('AbortError');
+      // Nothing is sent for a half-read body, and the 1 s deadline never had to fire.
+      httpMock.expectNone(apiUrl('/runs'));
+    });
+
+    it('surfaces that abort even when the deadline is disabled', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs: 0 });
+      const controller = new AbortController();
+      const request = new Request(apiUrl('/runs'), {
+        method: 'POST',
+        body: '{"name":"nightly"}',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      });
+      vi.spyOn(request, 'text').mockReturnValue(new Promise<string>(() => undefined));
+
+      const settlement = adapter(request).then(
+        () => 'resolved',
+        (reason: unknown) => reason,
+      );
+      controller.abort();
+
+      const error = await settlement;
+      expect(error).toBeInstanceOf(DOMException);
+      expect((error as DOMException).name).toBe('AbortError');
+      httpMock.expectNone(apiUrl('/runs'));
+    });
+
+    it('leaves no deadline timer or abort listener behind once the call settles', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs: 1_000 });
+      const controller = new AbortController();
+      const request = new Request(apiUrl('/runs'), {
+        method: 'POST',
+        body: '{"name":"nightly"}',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      });
+      const removed = vi.spyOn(request.signal, 'removeEventListener');
+
+      const pending = adapter(request);
+      const testRequest = await takeRequest(apiUrl('/runs'));
+      // The body read finished, so its abort listener was released before the request went out.
+      expect(removed).toHaveBeenCalledWith('abort', expect.any(Function));
+
+      testRequest.flush(JSON.stringify({ run_id: 'run-1' }), {
+        status: 201,
+        statusText: 'Created',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      await expect(pending).resolves.toHaveProperty('status', 201);
+      // The deadline is the adapter's only timer, and a settled call leaves none behind.
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   // 09.1.1-T8: responses travel as text. These rows are the round-trip proof for every body

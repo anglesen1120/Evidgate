@@ -334,6 +334,63 @@ describe('createIntentRunner', () => {
     expect(runner.retryEligible()).toBe(true);
   });
 
+  it('treats a non-finite or negative Retry-After as no wait', async () => {
+    vi.useFakeTimers();
+
+    for (const seconds of [Number.NaN, -7]) {
+      let calls = 0;
+      const unavailable = apiError({
+        kind: 'unavailable',
+        status: 503,
+        retryable: true,
+        retryAfterSeconds: seconds,
+      });
+      const runner = createIntentRunner(() => {
+        calls += 1;
+        return Promise.reject(failure(unavailable));
+      });
+
+      await runner.run();
+
+      expect(runner.retryAfterSeconds()).toBeNull();
+      expect(runner.retryEligible()).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(calls).toBe(1);
+    }
+  });
+
+  it('clamps a huge Retry-After to the largest timer delay', async () => {
+    vi.useFakeTimers();
+    let attempt = 0;
+    const farFuture = apiError({
+      kind: 'unavailable',
+      status: 503,
+      retryable: true,
+      retryAfterSeconds: Number.MAX_SAFE_INTEGER,
+    });
+    const runner = createIntentRunner(() => {
+      attempt += 1;
+      return attempt === 1 ? Promise.reject(failure(farFuture)) : Promise.resolve('ok');
+    });
+
+    await runner.run();
+
+    expect(runner.retryAfterSeconds()).toBe(Number.MAX_SAFE_INTEGER);
+    expect(runner.retryEligible()).toBe(false);
+    expect(vi.getTimerCount()).toBe(1);
+
+    // The clamped delay is 2^31-1 ms; one millisecond earlier the retry is still closed.
+    await vi.advanceTimersByTimeAsync(2 ** 31 - 2);
+    expect(runner.retryEligible()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runner.retryEligible()).toBe(true);
+
+    await runner.retry();
+    expect(attempt).toBe(2);
+    expect(runner.status()).toBe('succeeded');
+  });
+
   it('never makes a non-retryable 422 validation failure eligible', async () => {
     vi.useFakeTimers();
     let calls = 0;
@@ -356,11 +413,32 @@ describe('createIntentRunner', () => {
     expect(vi.getTimerCount()).toBe(0);
 
     await runner.retry();
-    await runner.run();
 
     expect(calls).toBe(1);
     expect(runner.intent()).toBe(intent);
     expect(runner.error()?.kind).toBe('validation');
+  });
+
+  it('run() after a 422 starts a new intent with a new key', async () => {
+    const keys: string[] = [];
+    let attempt = 0;
+    const validation = apiError({ kind: 'validation', status: 422, retryable: false });
+    const runner = createIntentRunner((intent) => {
+      keys.push(intent.idempotencyKey);
+      attempt += 1;
+      return attempt === 1 ? Promise.reject(failure(validation)) : Promise.resolve('ok');
+    });
+
+    await runner.run();
+    expect(keys).toHaveLength(1);
+
+    // The caller fixed the field and submitted again: a new action, hence a new key.
+    await runner.run();
+
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).not.toBe(keys[0]);
+    expect(runner.status()).toBe('succeeded');
+    expect(runner.intent()).toBeNull();
   });
 
   it('never retries a 412 precondition failure (the dialog reloads instead)', async () => {
@@ -387,6 +465,32 @@ describe('createIntentRunner', () => {
 
     expect(calls).toBe(1);
     expect(runner.status()).toBe('failed');
+  });
+
+  it('run() after a 412 starts a new intent with a new key', async () => {
+    const keys: string[] = [];
+    let attempt = 0;
+    const stale = apiError({
+      kind: 'precondition_failed',
+      status: 412,
+      code: 'precondition_failed',
+      retryable: false,
+    });
+    const runner = createIntentRunner((intent) => {
+      keys.push(intent.idempotencyKey);
+      attempt += 1;
+      return attempt === 1 ? Promise.reject(failure(stale)) : Promise.resolve('ok');
+    });
+
+    await runner.run();
+    expect(keys).toHaveLength(1);
+
+    // After reloading the current revision the caller submits again: a new action, new key.
+    await runner.run();
+
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).not.toBe(keys[0]);
+    expect(runner.status()).toBe('succeeded');
   });
 
   it('reset() clears the Retry-After timer and every signal', async () => {

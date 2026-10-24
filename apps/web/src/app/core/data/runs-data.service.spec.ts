@@ -43,18 +43,10 @@ const RUN_STATE = {
 };
 
 /**
- * A JSON body as the adapter delivers it: the adapter reads every response as text
- * (`responseType: 'text'`), so `flush` takes the serialized JSON string, and the SDK parses it
- * into `data` because of the response `Content-Type` supplied alongside.
- */
-function jsonText(value: unknown): string {
-  return JSON.stringify(value);
-}
-
-/**
- * The served media type, which `flush` does not derive from the blob: the SDK picks its parser
- * from the response `Content-Type` (`parseAs: 'auto'`), so a flush without this header reaches
- * the SDK as an unparsed stream — exactly what a server that omitted the header would do.
+ * The served media type: the adapter reads bodies as text (`responseType: 'text'`) and `flush`
+ * adds no content type of its own, while the SDK picks its parser from the response
+ * `Content-Type` (`parseAs: 'auto'`), so a flush without this header reaches the SDK as an
+ * unparsed stream — exactly what a server that omitted the header would do.
  */
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
@@ -106,7 +98,7 @@ describe('RunsDataService (09.1.1-T3.1)', () => {
     expect(request.request.method).toBe('GET');
     expect(request.request.urlWithParams).toContain('cursor=c1');
     expect(request.request.urlWithParams).toContain('limit=20');
-    request.flush(jsonText(RUN_PAGE), { headers: JSON_HEADERS });
+    request.flush(JSON.stringify(RUN_PAGE), { headers: JSON_HEADERS });
     await expect(page).resolves.toEqual(RUN_PAGE);
   });
 
@@ -114,7 +106,7 @@ describe('RunsDataService (09.1.1-T3.1)', () => {
     const page = service.list('p-1');
     const request = await takeRequest(httpMock, RUNS_URL);
     expect(request.request.headers.has('Idempotency-Key')).toBe(false);
-    request.flush(jsonText(RUN_PAGE), { headers: JSON_HEADERS });
+    request.flush(JSON.stringify(RUN_PAGE), { headers: JSON_HEADERS });
     await page;
   });
 
@@ -122,7 +114,7 @@ describe('RunsDataService (09.1.1-T3.1)', () => {
     const run = service.get('r-1');
     const request = await takeRequest(httpMock, `${API_BASE_URL}/runs/r-1`);
     expect(request.request.method).toBe('GET');
-    request.flush(jsonText(RUN_STATE), { headers: JSON_HEADERS });
+    request.flush(JSON.stringify(RUN_STATE), { headers: JSON_HEADERS });
     const state: RunStateDto = await run;
     expect(state.version).toBe(3);
   });
@@ -135,7 +127,7 @@ describe('RunsDataService (09.1.1-T3.1)', () => {
     expect(request.request.headers.get('Idempotency-Key')).toBe(intent.idempotencyKey);
     // The adapter hands the interceptors the request text, so the body is the serialized JSON.
     expect(request.request.body).toBe(JSON.stringify({ manifest_id: 'mf-1' }));
-    request.flush(jsonText(RUN_CREATED), {
+    request.flush(JSON.stringify(RUN_CREATED), {
       status: 201,
       statusText: '',
       headers: JSON_HEADERS,
@@ -155,7 +147,7 @@ describe('RunsDataService (09.1.1-T3.1)', () => {
       },
     };
     (await takeRequest(httpMock, `${API_BASE_URL}/projects/other-tenant/runs`)).flush(
-      jsonText(envelope),
+      JSON.stringify(envelope),
       { status: 404, statusText: '', headers: { 'Content-Type': 'application/json' } },
     );
 

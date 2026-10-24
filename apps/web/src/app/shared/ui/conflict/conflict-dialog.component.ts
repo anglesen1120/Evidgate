@@ -148,6 +148,16 @@ let nextDialogId = 0;
   `,
 })
 export class ConflictDialogComponent {
+  /**
+   * Owner-controlled visibility. Dismissal closes the native dialog before
+   * keepEditing emits; its handler MUST reset open to false. Ignoring that
+   * output leaves the input and native dialog state desynchronised.
+   *
+   * reload emits without closing so loading/error states retain the draft.
+   * On successful reload the owner MUST set open to false, then focus its
+   * view heading after rendering. A failed reload keeps open true.
+   * Native close events do not emit an additional output or reopen the dialog.
+   */
   readonly open = input(false);
   readonly fields = input<readonly ConflictField[]>([]);
   readonly currentRevision = input<string | null>(null);

@@ -44,7 +44,7 @@ class Host {
   readonly status = signal<'loading' | 'ready' | 'error'>('ready');
   readonly error = signal<ApiError | null>(null);
   readonly empty = signal(false);
-  readonly eligible = signal(true);
+  readonly eligible = signal(false);
   readonly busy = signal(false);
   readonly href = signal<string | undefined>(undefined);
   readonly retries: string[] = [];
@@ -147,8 +147,27 @@ describe('RequestStateComponent route-level replacement', () => {
     expect(root.querySelector('button')?.disabled).toBe(true);
   });
 
+  it('disables a 429 retry with a supplied interval when retryEligible is not bound', async () => {
+    const unbound = TestBed.createComponent(RequestStateComponent);
+    unbound.componentRef.setInput('status', 'error');
+    unbound.componentRef.setInput(
+      'error',
+      failure({ kind: 'rate_limited', status: 429, retryAfterSeconds: 30 }),
+    );
+    const retries: string[] = [];
+    unbound.componentInstance.retry.subscribe(() => retries.push('retry'));
+    await unbound.whenStable();
+    const panel = unbound.nativeElement as HTMLElement;
+    expect(panel.querySelector('app-retry-after')?.textContent).toContain('Retry after: 30 s');
+    const button = panel.querySelector('button')!;
+    expect(button.disabled).toBe(true);
+    button.click();
+    expect(retries).toEqual([]);
+  });
+
   it('uses rate-limit fallback without guessing a missing interval and distinguishes 503', async () => {
     host.status.set('error');
+    host.eligible.set(true);
     host.error.set(failure({ kind: 'rate_limited', status: 429 }));
     await fixture.whenStable();
     expect(root.textContent).toContain('The server did not say how long to wait');

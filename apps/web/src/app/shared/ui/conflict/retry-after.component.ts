@@ -13,7 +13,8 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
         <h2 i18n="@@shared.retry-after.title">429 · Rate limited</h2>
       }
       <p role="status" [attr.aria-live]="'polite'" aria-atomic="true">
-        @if (interval(); as seconds) {
+        @let seconds = interval();
+        @if (seconds !== null) {
           <span i18n="@@shared.retry-after.interval">Retry after: {{ seconds }} s</span>
         } @else {
           <span i18n="@@shared.retry-after.interval-unavailable">
@@ -68,7 +69,7 @@ export class RetryAfterComponent {
   // This is the supplied interval, not remaining time. The owner controls eligibility.
   protected readonly interval = computed(() => {
     const seconds = this.retryAfterSeconds();
-    return seconds !== null && Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+    return seconds !== null && Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
   });
 
   protected requestRetry(): void {

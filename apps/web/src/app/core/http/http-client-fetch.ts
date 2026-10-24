@@ -93,9 +93,10 @@ const TEXT_MIME_TYPE_PREFIX = 'text/';
  * must never become a success value. An aborted `request.signal` cancels the request and
  * rejects with a `DOMException` named `AbortError`. A call that outlives `timeoutMs` (default
  * {@link DEFAULT_REQUEST_TIMEOUT_MS}) is cancelled and rejects with a `DOMException` named
- * `TimeoutError`; an abort that arrives in the same turn wins and stays an `AbortError`. A
- * request body that is neither JSON nor text is refused with a `TypeError` before it is sent,
- * because the adapter can only forward the body as text; see the module comment.
+ * `TimeoutError`; an abort that arrives in the same turn — or while a stalled request body is
+ * still being read — wins and stays an `AbortError`. A request body that is neither JSON nor
+ * text is refused with a `TypeError` before it is sent, because the adapter can only forward
+ * the body as text; see the module comment.
  */
 export function createHttpClientFetch(
   http: HttpClient,
@@ -114,8 +115,9 @@ export function createHttpClientFetch(
     const deadline = createDeadline(timeoutMs);
     try {
       const text = await readRequestBody(request, deadline);
-      // Reading the body awaits, so the signal may have been aborted since the check above; a
-      // listener added to an already-fired signal never runs, so the abort must be caught here.
+      // `readRequestBody` races the signal, so a cancellation during the read arrives as an
+      // `AbortError`. This re-check covers the other order: the body read settled in the same
+      // turn the signal was aborted, so nothing is sent for a call the caller cancelled.
       if (request.signal.aborted) {
         throw abortError();
       }
@@ -218,24 +220,45 @@ function createDeadline(timeoutMs: number): Deadline | null {
 }
 
 /**
- * Reads the request body under the same deadline as the request. A body that never finishes
- * arriving (a stalled upload, a caller-owned stream) must not hold the call open past the
- * deadline; the deadline's rejection wins and no request is sent.
+ * Reads the request body under the call's deadline and the caller's `signal`. A body that never
+ * finishes arriving (a stalled upload, a caller-owned stream) must not hold the call open, so
+ * three outcomes race: the body text, the deadline's `TimeoutError` and the caller's abort. An
+ * abort wins over a deadline that fires in the same turn, and it is the only ending left when the
+ * deadline is disabled (`timeoutMs <= 0`). The listener never outlives the read.
  */
 async function readRequestBody(request: Request, deadline: Deadline | null): Promise<string> {
   const method = request.method.toUpperCase();
   if (method === 'GET' || method === 'HEAD') {
     return '';
   }
-  const body = request.text();
+  const { signal } = request;
+  // A listener added to a signal that has already fired never runs, so an abort from before the
+  // read is reported here; without it a stalled body would wait for the deadline or forever.
+  if (signal.aborted) {
+    throw abortError();
+  }
+  // `Promise.withResolvers` is ES2024, so the executor form is how the reject handle escapes.
+  let rejectAbort: (reason: unknown) => void = () => undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  const onAbort = () => rejectAbort(abortError());
+  signal.addEventListener('abort', onAbort, { once: true });
   try {
-    return await (deadline === null ? body : Promise.race([body, deadline.expiration]));
+    const body = request.text();
+    return await (deadline === null
+      ? Promise.race([body, aborted])
+      : Promise.race([body, aborted, deadline.expiration]));
   } catch (error: unknown) {
-    // An abort the caller asked for wins over a deadline that fired at the same moment.
-    if (request.signal.aborted) {
+    // A read that ends because of a cancellation can reject with the stream's own error, so the
+    // signal is the authority on whether this was one - and an abort also wins over a deadline
+    // that fired at the same moment.
+    if (signal.aborted) {
       throw abortError();
     }
     throw error;
+  } finally {
+    signal.removeEventListener('abort', onAbort);
   }
 }
 

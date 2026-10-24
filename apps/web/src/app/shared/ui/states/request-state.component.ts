@@ -81,7 +81,7 @@ export class RequestStateComponent {
   readonly emptyDescription = input<string | undefined>();
   readonly emptyActionLabel = input<string | undefined>();
   readonly emptyActionHref = input<string | undefined>();
-  readonly retryEligible = input(true);
+  readonly retryEligible = input(false);
   readonly retryBusy = input(false);
   readonly retry = output<void>();
   readonly emptyAction = output<void>();

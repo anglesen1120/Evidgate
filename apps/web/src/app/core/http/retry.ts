@@ -11,9 +11,11 @@
 // the runner never guesses a countdown — and a positive interval is one `setTimeout` per failure,
 // never a ticking poll and never an automatic retry.
 //
-// `reset()` is the only way to abandon an intent (after a 412 dialog reload or an explicit cancel):
-// the next `run()` then mints a new key. It does not cancel an in-flight request — the runner has
-// no `AbortSignal` — it only stops that attempt from writing any signal when it settles.
+// `reset()` abandons an intent explicitly (after a 412 dialog reload or an explicit cancel), and
+// `run()` does the same for a non-retryable failure, since the caller resubmitted a corrected
+// action; either way the next attempt mints a new key. `reset()` does not cancel an in-flight
+// request — the runner has no `AbortSignal`; it only stops that attempt from writing any signal
+// when it settles.
 //
 // No DI and no RxJS: signals work outside an injection context, and the clock is injectable only so
 // the failure instant of a `Retry-After` wait is deterministic in tests.
@@ -41,6 +43,8 @@ export interface IntentRunnerOptions {
 /**
  * The state and the explicit actions of one user action (a mutation, or any request whose result
  * the page renders). Read-only signals for rendering; `run()`/`retry()`/`reset()` for intent.
+ * From a retryable failure `run()` retries the same intent; from a non-retryable one (422,
+ * 412, 403, …) it starts a new action with a new key, because the caller fixed the payload.
  */
 export interface IntentRunner<T> {
   readonly status: Signal<IntentRunStatus>;
@@ -55,9 +59,18 @@ export interface IntentRunner<T> {
   readonly intent: Signal<Intent | null>;
   /** `true` when `retry()` would start an attempt now. */
   readonly retryEligible: Signal<boolean>;
-  /** Server `Retry-After` of the last failure; `null` when absent or when a new attempt starts. */
+  /**
+   * Server `Retry-After` of the last failure, in whole seconds; `null` when absent, negative,
+   * non-finite, or when a new attempt starts.
+   */
   readonly retryAfterSeconds: Signal<number | null>;
-  /** Start the user action; mints an intent unless an abandoned one is still current. */
+  /**
+   * Start the user action. From `idle`/`succeeded`, from a non-retryable failure (422, 412,
+   * 403, …) or from a programming error, this mints a NEW intent: the caller resubmitted a
+   * corrected action. An intent left by an `AbortError` is reused (see `createIntentRunner`).
+   * From a retryable failure it behaves like `retry()`: same key, honouring the `Retry-After`
+   * wait, so a 429 still waiting stays a no-op.
+   */
   run(): Promise<void>;
   /** Explicit user retry of the SAME intent; a no-op unless {@link retryEligible}. */
   retry(): Promise<void>;
@@ -76,10 +89,28 @@ function isAbortError(value: unknown): boolean {
   );
 }
 
+/** Largest delay a browser or Node timer accepts; a longer server interval is clamped to it. */
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
+
+/**
+ * A server `Retry-After` usable as a wait: a finite, non-negative number of seconds. A negative
+ * or non-finite value is not an interval, so it is treated like an absent one ([DECISION 2]).
+ */
+function usableRetryAfter(seconds: number | null): number | null {
+  return seconds !== null && Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+}
+
 /**
  * Create the runner for one operation. `operation` receives the intent so it can send
  * `intentHeaders(intent)`; it must reject with `ApiRequestError` for a server/transport failure
  * (the runner reads its `error`), and anything else is treated as a programming error.
+ *
+ * After an `AbortError` the intent is kept, because the request may already have reached the
+ * server. A caller that changes the payload before resubmitting MUST call `reset()` first:
+ * reusing the key for a different body can be answered with a 409 `idempotency_conflict`.
+ *
+ * The runner has no `dispose()`. An owner that unmounts while a `Retry-After` timer is pending
+ * calls `reset()` (e.g. from `ngOnDestroy`) so the timer is cleared.
  */
 export function createIntentRunner<T>(
   operation: (intent: Intent) => Promise<T>,
@@ -116,7 +147,9 @@ export function createIntentRunner<T>(
     if (seconds === null || seconds <= 0) {
       return;
     }
-    const delayMs = seconds * 1000;
+    // A delay above the timer maximum fires immediately in browsers and warns in Node, which
+    // would turn a hostile or malformed interval into no wait at all; clamp it instead.
+    const delayMs = Math.min(seconds * 1000, MAX_TIMER_DELAY_MS);
     // The interval runs from the failure instant; the timer only wakes the signal at its end.
     waitDeadlineState.set(now() + delayMs);
     retryTimer = setTimeout(() => {
@@ -163,8 +196,10 @@ export function createIntentRunner<T>(
     } catch (caught) {
       if (isAbortError(caught)) {
         if (epoch === attemptEpoch) {
-          // A cancellation is not a failure, and the request may have reached the server, so
-          // the intent (and its key) is kept for the next run().
+          // A cancellation is not a failure and the request may have reached the server, so
+          // the intent (and its key) is kept for the next run(). A caller whose next attempt
+          // changes the payload must reset() first, or the reused key risks a 409
+          // idempotency_conflict.
           errorState.set(null);
           statusState.set('idle');
         }
@@ -174,11 +209,13 @@ export function createIntentRunner<T>(
         if (epoch !== attemptEpoch) {
           return;
         }
+        const retryAfterSeconds = usableRetryAfter(caught.error.retryAfterSeconds);
         errorState.set(caught.error);
-        retryAfterState.set(caught.error.retryAfterSeconds);
+        retryAfterState.set(retryAfterSeconds);
         statusState.set('failed');
-        // The intent is kept: a failed action is only abandoned by reset().
-        startRetryWait(caught.error.retryAfterSeconds);
+        // The intent is kept: a failed action is only abandoned by reset(), or by run() after a
+        // non-retryable failure.
+        startRetryWait(retryAfterSeconds);
         return;
       }
       if (epoch === attemptEpoch) {
@@ -195,9 +232,15 @@ export function createIntentRunner<T>(
       return;
     }
     if (statusState() === 'failed') {
-      // Same intent, same key; retry() also enforces the `Retry-After` wait.
-      await retry();
-      return;
+      const failure = errorState();
+      if (failure !== null && failure.retryable) {
+        // Same intent, same key; retry() also enforces the `Retry-After` wait.
+        await retry();
+        return;
+      }
+      // 422/412/403 or a programming error: the caller corrected the action and resubmits it,
+      // so the failed intent is abandoned here and a new key is minted below.
+      reset();
     }
     // After success/reset the signal is null (fresh key); after an abort it still holds the
     // abandoned attempt's intent, which is reused because that request may have been delivered.

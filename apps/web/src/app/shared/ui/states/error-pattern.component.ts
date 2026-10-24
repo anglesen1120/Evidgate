@@ -10,7 +10,9 @@ import type { ApiError } from '../../../core/http/api-error';
   template: `
     <section class="state-panel state-panel--error">
       @for (failure of failures(); track failure) {
-        <h2 class="state-panel__title" role="alert" aria-atomic="true">{{ heading() }}</h2>
+        <div role="alert" aria-atomic="true">
+          <h2 class="state-panel__title">{{ heading() }}</h2>
+        </div>
       } @empty {
         <h2 class="state-panel__title">{{ heading() }}</h2>
       }
@@ -48,7 +50,7 @@ export class ErrorPatternComponent {
   readonly retry = output<void>();
 
   // Key only the announcement to the immutable typed error, not retry state or change detection.
-  // A new failure recreates its alert heading; unrelated renders retain the same live-region node.
+  // A new failure recreates its alert wrapper; unrelated renders retain the same live-region node.
   protected readonly failures = computed(() => {
     const failure = this.error();
     return failure ? [failure] : [];

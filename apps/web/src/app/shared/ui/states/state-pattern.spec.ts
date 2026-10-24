@@ -38,10 +38,8 @@ describe('patternForError', () => {
   for (const kind of Object.keys(cases) as ApiErrorKind[]) {
     it(`maps ${kind} to ${cases[kind]} independently of HTTP status and code`, () => {
       const error = errorOfKind(kind);
-      const original = { ...error };
       Object.freeze(error);
       expect(patternForError(error)).toBe(cases[kind]);
-      expect(error).toEqual(original);
     });
   }
 

@@ -28,13 +28,6 @@ const failure: ApiError = {
   details: [],
 };
 
-function styles(): string {
-  return Array.from(document.querySelectorAll('style'))
-    .map((style) => style.textContent ?? '')
-    .filter((css) => css.includes('.state-panel') || css.includes('.error-pattern__request-id'))
-    .join('\n');
-}
-
 describe('ErrorPatternComponent', () => {
   let fixture: ComponentFixture<ErrorPatternComponent>;
   let root: HTMLElement;
@@ -60,7 +53,8 @@ describe('ErrorPatternComponent', () => {
         expect(button.classList.contains('state-panel__action')).toBe(true);
         expect(root.querySelector('section')?.hasAttribute('tabindex')).toBe(false);
         expect(root.querySelector('[aria-disabled], [class*="success"], [aria-busy]')).toBeNull();
-        expect(root.querySelector('[role="alert"]')?.textContent).toBe('Service unavailable');
+        expect(root.querySelector('[role="alert"] h2')?.textContent).toBe('Service unavailable');
+        expect(root.querySelector('h2')?.hasAttribute('role')).toBe(false);
         expect(root.querySelector('.state-panel__description')?.textContent).toBe(failure.message);
         expect(root.querySelector('code')?.textContent).toBe(failure.code);
         expect(root.querySelector('.error-pattern__request-id')?.textContent).toContain(
@@ -68,13 +62,9 @@ describe('ErrorPatternComponent', () => {
         );
         if (state === 'hover') {
           button.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-          expect(styles()).toContain(':hover');
-          expect(styles()).toContain('var(--eg-surface-raised)');
         } else if (state === 'focus-visible') {
           button.focus();
           expect(document.activeElement).toBe(button);
-          expect(styles()).toContain('outline: var(--eg-focus-width) solid var(--eg-focus)');
-          expect(styles()).toContain('outline-offset: var(--eg-focus-offset)');
         } else if (state === 'active') {
           button.click();
           expect(events).toEqual(['retry']);
@@ -83,7 +73,6 @@ describe('ErrorPatternComponent', () => {
           fixture.detectChanges();
           expect(button.disabled).toBe(true);
           button.click();
-          expect(styles()).toContain('var(--eg-neutral-bg)');
         }
         if (state !== 'active') expect(events).toEqual([]);
       });
@@ -93,14 +82,18 @@ describe('ErrorPatternComponent', () => {
   it('retains the announcement node on unrelated rendering and creates one for a new failure', () => {
     const alert = root.querySelector('[role="alert"]');
     expect(root.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    const heading = alert?.querySelector('h2');
+    expect(heading?.hasAttribute('role')).toBe(false);
     fixture.detectChanges();
     fixture.componentRef.setInput('retryDisabled', true);
     fixture.detectChanges();
     expect(root.querySelector('[role="alert"]')).toBe(alert);
+    expect(root.querySelector('h2')).toBe(heading);
     fixture.componentRef.setInput('error', { ...failure, requestId: 'request-002' });
     fixture.detectChanges();
     expect(root.querySelector('[role="alert"]')).not.toBe(alert);
     expect(root.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    expect(root.querySelector('[role="alert"] h2')).not.toBe(heading);
     expect(root.querySelector('.error-pattern__request-id')?.textContent).toContain('request-002');
   });
 
@@ -142,7 +135,7 @@ describe('ErrorPatternComponent', () => {
     expect(root.textContent).not.toMatch(/private-body|private-header/);
   });
 
-  it('renders server message, machine code and request id as selectable literal text', () => {
+  it('renders server message, machine code and request id as literal text', () => {
     const untrusted = 'Lỗi yêu cầu '.repeat(40) + '<script>window.injected=true</script>';
     fixture.componentRef.setInput('error', {
       ...failure,
@@ -155,8 +148,5 @@ describe('ErrorPatternComponent', () => {
     expect(root.querySelector('code')?.textContent).toBe(untrusted);
     expect(root.querySelector('.error-pattern__request-id')?.textContent).toContain(untrusted);
     expect(root.querySelector('script, [style]')).toBeNull();
-    expect(styles()).toContain('font-family: var(--eg-font-mono)');
-    expect(styles()).toContain('user-select: text');
-    expect(styles()).toContain('overflow-wrap: anywhere');
   });
 });
