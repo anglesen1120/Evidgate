@@ -179,6 +179,85 @@ call from the fixture corpus `fixtures/web-api/<name>/` (01.6.1-T3 shape: `input
   every fixture body against `contracts/openapi.yaml` with the `@evidgate/cli` Ajv validator inside
   `npm run test -w apps/web`, so a fixture that lost a required member fails the suite.
 
+## Telemetry (09.1.1-T9.1)
+
+OpenTelemetry web traces for route changes and API calls, plus the three Web Vitals, with **one
+trace id end to end**: a navigation → its API calls → the `traceparent` the ASP.NET API continues.
+Everything lives in `src/app/core/telemetry/`; nothing it emits is user-visible, so no i18n ids.
+`provideTelemetry()` in `app.config.ts` installs the error handler and a **non-blocking** app
+initializer that starts the facade.
+
+- **Lazy chunk.** Only the facade and its bootstrap/HTTP wiring are in the initial bundle
+  (`telemetry.service.ts`, `provide-telemetry.ts`, the `TelemetryErrorHandler` of
+  `error-reporter.ts` and the `telemetryInterceptor` of `trace.interceptor.ts`); `telemetry-sdk.ts`
+  dynamically imports `@opentelemetry/*` and `web-vitals` after bootstrap, so the SDK and the
+  vitals library form a chunk of their own, held to the W7 150 kB gzip lazy limit rather than the
+  300 kB initial one. Until that chunk resolves, or if it fails (one `console.warn`, then stay
+  disabled), every facade call is a no-op: telemetry loss never breaks the app, and `start()` is
+  idempotent.
+- **Configuration** is two `<meta>` tags of `index.html`, read once at boot
+  (`telemetry-config.ts`, exposed as `TELEMETRY_CONFIG`). This story does not edit `index.html`:
+  the hosting edge injects both tags (hand-over below).
+
+  | Meta name                         | Accepted value                                                                                                                                | Anything else      |
+  | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+  | `evidgate-otlp-endpoint`          | absolute OTLP/HTTP traces URL; `https:` anywhere, `http:` only for `localhost`/`127.0.0.1`/`[::1]`; no userinfo, no query string, no fragment | treated as unset   |
+  | `evidgate-telemetry-sample-ratio` | number in `[0, 1]`                                                                                                                            | sampling ratio `1` |
+
+  An unset endpoint disables the exporter — **no network call is ever made** — while tracing,
+  span creation and `traceparent` propagation still run against a no-op exporter. A ratio decides
+  how much of the traffic is exported, never whether the app traces locally.
+
+- **Sampling.** `ParentBasedSampler` with a root `TraceIdRatioBasedSampler(sampleRatio)`: every
+  route change opens a **new root trace**, so the ratio is applied per navigation, and each
+  `api.request`/`client.error` span follows its route trace's decision (a child of an unsampled
+  parent is dropped). The decision travels in the `traceparent` flag byte (`01` sampled, `00` not).
+- **What is exported** — four fixed span names, never a URL in a span name, no metrics SDK:
+
+  | Span           | Started by                                                                        | Attributes (allowlisted keys only)                                                                                                                                                 |
+  | -------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `route.change` | `NavigationStart`, ended by the paired `NavigationEnd`/`Cancel`/`Skipped`/`Error` | `evidgate.route` template, `evidgate.outcome` (`ok`/`cancelled`/`error`)                                                                                                           |
+  | `api.request`  | `telemetryInterceptor`, one per same-origin `/v1` request                         | `http.request.method`, `http.route` template, `http.response.status_code`, `evidgate.request_id` (UUID only), `evidgate.api.error_*`, `evidgate.api.retryable`, `evidgate.outcome` |
+  | `client.error` | `TelemetryErrorHandler` (Angular) and the `error`/`unhandledrejection` listeners  | `evidgate.error.source`, `error.type`, `error.message`, status/api error keys, `evidgate.request_id`, current `evidgate.route`                                                     |
+  | `web_vital`    | LCP/INP/CLS flush                                                                 | `web_vital.name`, `web_vital.value`, `web_vital.rating`, `web_vital.navigation_type`, `evidgate.route`                                                                             |
+
+  The closed key set is `attribute-allowlist.ts` (`ALLOWED_ATTRIBUTE_KEYS` /
+  `ALLOWED_RESOURCE_KEYS`); anything outside it is dropped at export, not merely unset. Fields
+  such as `evidgate.locale` (`en`/`vi`) and `evidgate.request_id` are only kept in their strict
+  shape.
+
+- **Scrub policy.** `ScrubbingSpanExporter` rewrites every span on the way out, and `scrub.ts` does
+  the text work: **no stack traces, no server messages** (an API error carries status/code/kind,
+  never the body), **no ids outside a route template** (a parameter is `:id`, `http.route` keeps
+  only known static segments), **no query strings or fragments**, and no emails, JWT-shaped tokens,
+  `Authorization`/`Cookie`/`X-XSRF-TOKEN` values, long hex/base64 runs or six-plus-digit numbers —
+  those become `[redacted]`/`:id`/`[email]`, and quoted substrings become `[quoted]`. Free text is
+  truncated at 200 characters; links and `status.message` are dropped while the status code stays.
+- **Route and API templates.** `route-template.ts` concatenates the router's `routeConfig.path`
+  chain and never reads a parameter _value_; `api-path-template.ts` reduces a URL to `/v1/...`
+  keeping only static segments from a hand-maintained set (`/v1/projects/:id/runs`), everything
+  else becoming `:id`. A spec derives that set from
+  `core/http/testing/openapi-operations.fixture.json` and fails when a static segment is missing.
+- **`traceparent`.** `telemetryInterceptor` is **first** in `provideApi()`'s
+  `withInterceptors([...])` (`core/http/api-client.ts`): it opens the `api.request` span and sets
+  the header from the span's W3C context, only when the request carries none.
+  `requestIdInterceptor` never overwrites a caller-set `traceparent`, so the span's ids are the
+  ones on the wire and the API continues the same trace. With telemetry unloaded nothing is set
+  and the T3 random `traceparent` is used unchanged. Only same-origin `/v1` requests are touched
+  (`isApiRequestUrl`, [Data access](#data-access-0911-t3)).
+- **Error reporting.** `TelemetryErrorHandler` wraps Angular's default handler (console output is
+  unchanged) and shares one rate limit with the global listeners: **10 reports per rolling 60 s**,
+  extra reports dropped silently, never queued. An `ApiRequestError` reports `source: 'api'` with
+  status/kind/code/retryable/request id only, never its message.
+- **Vitals.** LCP, INP and CLS run with `reportAllChanges: true`; the latest value per metric is
+  emitted once at the next `NavigationStart`, when the tab turns hidden
+  (`visibilitychange`) and on `pagehide`, attributed to the route current at flush time.
+- **Deploy hand-over — 09.1.1-T10 and 10.2.1-T1.4.** The static hosting edge must (a) inject both
+  `<meta>` tags per deployment, and (b) put **exactly the exporter origin** in the app-origin CSP
+  `connect-src` — no wildcard, no `unsafe-*` anywhere. A wrong or missing origin only stops the
+  export (the browser blocks it and the app keeps working); a too-wide `connect-src` would weaken
+  the CSP for every request. Opt-out and the remaining emission wiring are 09.1.1-T9.2.
+
 ## i18n
 
 Angular's built-in i18n (`@angular/localize` 22.2.0, ADR-0008 row f) is the only translation

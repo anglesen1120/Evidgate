@@ -2,6 +2,7 @@ import { type ApplicationConfig, provideZonelessChangeDetection } from '@angular
 
 import { provideDevBackend } from './core/dev-fixtures/dev-backend';
 import { provideApi } from './core/http/api-client';
+import { provideTelemetry } from './core/telemetry/provide-telemetry';
 
 // ADR-0008 settled both integration questions this file used to leave open: change detection is
 // zoneless (00 §5.6 W3 — no zone.js dependency, polyfill or import in this workspace, and a spec
@@ -13,6 +14,17 @@ import { provideApi } from './core/http/api-client';
 // last provider of a token wins. In a production build this module is `dev-backend.ts` and the call
 // adds nothing; the `fixtures` configuration swaps in `dev-backend.fixtures.ts`, which answers from
 // `fixtures/web-api/` through the same `HttpClient`, interceptors and `ApiGateway` as the real API.
+//
+// 09.1.1-T9.1: `provideTelemetry()` replaces the `ErrorHandler` (records `client.error` spans) and
+// starts the lazy telemetry chunk from an app initializer that never blocks bootstrap. It reads the
+// OTLP endpoint and the sampling ratio from `index.html`'s meta tags; with neither tag present it
+// traces locally against a no-op exporter and makes no network call, and the app behaves exactly
+// as before if the chunk itself never loads.
 export const appConfig: ApplicationConfig = {
-  providers: [provideZonelessChangeDetection(), provideApi(), provideDevBackend()],
+  providers: [
+    provideZonelessChangeDetection(),
+    provideApi(),
+    provideDevBackend(),
+    provideTelemetry(),
+  ],
 };
