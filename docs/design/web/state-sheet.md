@@ -2,7 +2,7 @@
 
 Status: design reference with T7/T8 Angular implementation resolutions below, not an owner-approval record. The static v2 captures remain reference evidence; implementation captures are identified separately under T8 resolutions.
 
-Source task: [09.1.1 §2 AC8/AC9, §9, §10 T7/T8/T11 and T11 Notes](../../../plans/features/09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md), source lines 30–31, 107–116, 170–184, 198–207. Contracts: [00 §5.6 W1/W8/W9](../../../plans/00-overview.md) and [09 FR-09-1–FR-09-7, FR-09-13](../../../plans/09-web-ui.md), source lines 25–31, 37.
+Source task: [09.1.1 §2 AC8/AC9, §9, §10 T7/T8/T11 and T11 Notes](../../../plans/features/09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md), source lines 30–31, 107–116, 178–197, 216–227. Contracts: [00 §5.6 W1/W8/W9](../../../plans/00-overview.md) and [09 FR-09-1–FR-09-7, FR-09-13](../../../plans/09-web-ui.md), source lines 25–31, 37.
 
 ## Scope and evidence
 
