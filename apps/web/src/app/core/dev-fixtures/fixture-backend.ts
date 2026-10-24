@@ -95,6 +95,11 @@ const STATUS_TEXT: Readonly<Record<number, string>> = {
  * The body in the shape the caller asked for. The T3 adapter always asks for `blob` (it converts
  * the body to a fetch `Response` itself), `json` stays the parsed value, and `text`/`arraybuffer`
  * keep working for any other `HttpClient` caller a spec adds.
+ *
+ * No branch may hand out the object a fixture document holds: the catalog is module-level, so a
+ * caller that mutated the `json` body in place would corrupt every later answer from that fixture.
+ * The serializing branches already produce fresh values, and `json` clones (the body is plain
+ * `input.json` data, so `structuredClone` is enough).
  */
 function wireBody(body: unknown, responseType: string, contentType: string): unknown {
   if (body === null || body === undefined) {
@@ -109,7 +114,7 @@ function wireBody(body: unknown, responseType: string, contentType: string): unk
     case 'arraybuffer':
       return new TextEncoder().encode(text).buffer;
     default:
-      return body;
+      return structuredClone(body);
   }
 }
 

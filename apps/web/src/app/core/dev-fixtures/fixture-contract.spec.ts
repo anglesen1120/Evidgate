@@ -7,7 +7,10 @@
 //   1. `fixtures/web-api/<name>/input.json` — every response body validates against the
 //      response schema the contract declares for its `operation_id` + `status`, through the
 //      same Ajv 2020-12 + ajv-formats configuration the server-side contract tests use
-//      (`createOpenApiResponseValidator` from `@evidgate/cli`, T12.2 slice A);
+//      (`createOpenApiResponseValidator` from `@evidgate/cli`, T12.2 slice A), and every
+//      response header it answers with is declared in the `headers` object of that same
+//      (operation, status) response — the corpus only ever answers `X-Request-Id`, which
+//      00 §9.1 requires on every response;
 //   2. `FIXTURE_CATALOG` (the explicit `import … input.json` list the backend serves) names
 //      exactly the corpus directories and holds each parsed `input.json`, so the two cannot
 //      drift; `FIXTURE_ROUTES` carries the contract's method and path template per operation.
@@ -18,11 +21,11 @@
 // plus the 403 and 412 fixtures AC10 names. The 01.6.1-T3 corpus shape (`web-api` /
 // `api-response`) is checked as well.
 //
-// The last two tests are the negative control of test 3: they take the `runs-list` page, break
-// it the way a contract change would (a removed `required` run member, a non-uuid uuid) and
-// require the validator to report it. Without them "every fixture validates" could pass while
-// the check validated nothing — AC10's done-when is precisely "fails on a fixture with a
-// removed required field".
+// The last three tests are the negative controls of test 3 and of the header check above: they
+// take the `runs-list` page, break it the way a contract change would (a removed `required` run
+// member, a non-uuid uuid) and answer a header the contract does not declare, each of which must
+// be reported. Without them "every fixture validates" could pass while the check validated
+// nothing — AC10's done-when is precisely "fails on a fixture with a removed required field".
 //
 // Read-only and offline: the contract and the corpus are read from the repository with
 // `node:fs`, exactly like `../http/contract-smoke.spec.ts`. No `fetch`, no `HttpClient`, no
@@ -48,6 +51,15 @@ const LIST_RUNS_OPERATION = 'listRuns';
 
 /** A string the contract's `format: uuid` refuses, used by the second negative control. */
 const NOT_A_UUID = 'not-a-uuid';
+
+/** A header name no response of `contracts/openapi.yaml` declares, used by the third one. */
+const UNDECLARED_HEADER = 'X-Fixture-Undeclared';
+
+/**
+ * How many `$ref` hops a response or header object may take before the check calls it
+ * unresolved — the same bound `packages/cli`'s response validator uses.
+ */
+const MAX_REFERENCE_HOPS = 16;
 
 /** The exact member names of the T12.1 `input.json` document contract. */
 const DOCUMENT_MEMBERS: readonly string[] = [
@@ -160,6 +172,102 @@ function resolveContractPointer(reference: string): unknown {
         isRecord(node) ? node[token.replace(/~1/g, '/').replace(/~0/g, '~')] : undefined,
       CONTRACT_DOCUMENT,
     );
+}
+
+/**
+ * Follow a local `$ref` chain (`'200': {$ref: '#/components/responses/…'}`, `X-Request-Id:
+ * {$ref: '#/components/headers/…'}`) until a real node remains, the way the response validator
+ * follows response refs. A `$ref` the document cannot resolve (a non-local file, a pointer to
+ * nothing) or a chain longer than `MAX_REFERENCE_HOPS` throws, naming the member being read.
+ */
+function derefContractNode(node: unknown, member: string): unknown {
+  let current = node;
+  let reference = isRecord(current) ? current['$ref'] : undefined;
+  for (let hops = 0; typeof reference === 'string'; hops += 1) {
+    if (hops >= MAX_REFERENCE_HOPS) {
+      throw new Error(
+        `contracts/openapi.yaml: ${member} follows more than ${MAX_REFERENCE_HOPS} $ref hops; the header check cannot resolve it`,
+      );
+    }
+    current = resolveContractPointer(reference);
+    reference = isRecord(current) ? current['$ref'] : undefined;
+  }
+  return current;
+}
+
+/** The operation object of `contracts/openapi.yaml` carrying `operationId`. */
+function operationNode(operationId: string): Record<string, unknown> {
+  const paths = isRecord(CONTRACT_DOCUMENT) ? CONTRACT_DOCUMENT['paths'] : undefined;
+  if (!isRecord(paths)) {
+    throw new Error('contracts/openapi.yaml declares no paths object');
+  }
+  for (const pathItem of Object.values(paths)) {
+    if (!isRecord(pathItem)) {
+      continue;
+    }
+    for (const operation of Object.values(pathItem)) {
+      if (isRecord(operation) && operation['operationId'] === operationId) {
+        return operation;
+      }
+    }
+  }
+  throw new Error(
+    `contracts/openapi.yaml declares no operation with operationId '${operationId}', so the header check has no response to read`,
+  );
+}
+
+/**
+ * The header names the contract declares for the response `operationId` answers with `status`.
+ * The response object is followed through its `$ref` (the error responses live in
+ * `components.responses`) and every header through its own `$ref`, so a broken reference fails
+ * here instead of silently leaving the response with no declared headers.
+ */
+function declaredResponseHeaderNames(operationId: string, status: number): readonly string[] {
+  const context = `the ${status} response of '${operationId}'`;
+  const responses = operationNode(operationId)['responses'];
+  if (!isRecord(responses)) {
+    throw new Error(`contracts/openapi.yaml: '${operationId}' declares no responses object`);
+  }
+  // The response validator reads a numeric status the same way: the declared code, else `default`.
+  const declaredResponse = responses[String(status)] ?? responses['default'];
+  if (declaredResponse === undefined) {
+    throw new Error(`contracts/openapi.yaml: ${context} is undeclared, so it declares no headers`);
+  }
+
+  const response = derefContractNode(declaredResponse, context);
+  if (!isRecord(response)) {
+    throw new Error(`contracts/openapi.yaml: ${context} is not a response object`);
+  }
+  const headers = response['headers'];
+  if (headers === undefined) {
+    return [];
+  }
+  if (!isRecord(headers)) {
+    throw new Error(`contracts/openapi.yaml: the headers of ${context} are not an object`);
+  }
+
+  const names: string[] = [];
+  for (const [name, header] of Object.entries(headers)) {
+    if (derefContractNode(header, `the '${name}' header of ${context}`) === undefined) {
+      throw new Error(
+        `contracts/openapi.yaml: the '${name}' header of ${context} is an unresolvable $ref, so it is not a declared header`,
+      );
+    }
+    names.push(name);
+  }
+  return names;
+}
+
+/**
+ * The fixture's header names that the same (operation, status) response does not declare.
+ * HTTP header names are case-insensitive, so the comparison is too: a fixture answering
+ * `x-request-id` is as declared as one answering `X-Request-Id`. Empty means every header of
+ * the fixture is part of the contract.
+ */
+function undeclaredResponseHeaders(document: FixtureDocumentShape): readonly string[] {
+  const headerNames = declaredResponseHeaderNames(document.operation_id, document.status);
+  const declared = new Set(headerNames.map((name) => name.toLowerCase()));
+  return Object.keys(document.headers).filter((name) => !declared.has(name.toLowerCase()));
 }
 
 /** The `ContractValidationResult` rows as one readable line for a failure message. */
@@ -307,7 +415,22 @@ function requiredRunUuidField(): string {
 }
 
 /**
- * The default `listRuns` page and its first run row — the subject of both negative controls.
+ * The `runs-list` fixture document — the subject of every negative control. `readDocument`
+ * re-parses `input.json` on every call, so a document handed out here is never shared.
+ */
+function runsListDocument(): FixtureDocumentShape {
+  const fixture = CORPUS.find((entry) => entry.name === RUNS_LIST_FIXTURE);
+  if (fixture === undefined) {
+    throw new Error(
+      `fixtures/web-api/${RUNS_LIST_FIXTURE} is missing; the AC10 negative control needs the listRuns page`,
+    );
+  }
+  return readDocument(fixture);
+}
+
+/**
+ * The default `listRuns` page and its first run row — the subject of both body negative
+ * controls.
  * `readDocument` re-parses `input.json` on every call, so mutating the returned page never
  * leaks into another test.
  */
@@ -315,14 +438,7 @@ function runsListSubject(): {
   readonly page: Record<string, unknown>;
   readonly row: Record<string, unknown>;
 } {
-  const fixture = CORPUS.find((entry) => entry.name === RUNS_LIST_FIXTURE);
-  if (fixture === undefined) {
-    throw new Error(
-      `fixtures/web-api/${RUNS_LIST_FIXTURE} is missing; the AC10 negative control needs the listRuns page`,
-    );
-  }
-
-  const body = readDocument(fixture).body;
+  const body = runsListDocument().body;
   if (!isRecord(body)) {
     throw new Error(
       `fixtures/web-api/${RUNS_LIST_FIXTURE}/input.json: the 200 body must be a RunPage object`,
@@ -377,6 +493,27 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       expect(
         result.errors,
         `fixtures/web-api/${fixture.name} (${document.operation_id} ${document.status}, variant '${document.variant}') no longer matches contracts/openapi.yaml: ${describeErrors(result.errors)}`,
+      ).toEqual([]);
+    });
+
+    it(`answers fixtures/web-api/${fixture.name} with headers contracts/openapi.yaml declares`, () => {
+      const document = readDocument(fixture);
+      const declared = declaredResponseHeaderNames(document.operation_id, document.status);
+      // 00 §9.1: every response carries `X-Request-Id`, so a fixture answering none would make
+      // the header check below pass without checking a single name.
+      expect(
+        Object.keys(document.headers).length,
+        `fixtures/web-api/${fixture.name} (${document.operation_id} ${document.status}) answers with no header at all; every response of §9.1 carries X-Request-Id`,
+      ).toBeGreaterThan(0);
+      expect(
+        declared.length,
+        `contracts/openapi.yaml declares no header for the ${document.status} response of '${document.operation_id}', so fixtures/web-api/${fixture.name} cannot answer one`,
+      ).toBeGreaterThan(0);
+
+      const undeclared = undeclaredResponseHeaders(document);
+      expect(
+        undeclared,
+        `fixtures/web-api/${fixture.name} answers with header(s) ${undeclared.join(', ')} that contracts/openapi.yaml does not declare for the ${document.status} response of '${document.operation_id}' (declared: ${declared.join(', ')})`,
       ).toEqual([]);
     });
   }
@@ -577,5 +714,38 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       result.errors.some((error) => error.path.includes(field) || error.reason === 'format'),
       `the contract check reported ${describeErrors(result.errors)}, none of which names '${field}'`,
     ).toBe(true);
+  });
+
+  it('reports a fixture header contracts/openapi.yaml does not declare', () => {
+    const document = runsListDocument();
+    const declared = declaredResponseHeaderNames(document.operation_id, document.status);
+
+    // The response ref is followed before its `headers` object is read: a check that looked at
+    // the operation's own `responses['200']` and stopped there would see no header at all.
+    expect(
+      declared.map((name) => name.toLowerCase()),
+      `the ${document.status} response of '${document.operation_id}' declares no 'x-request-id', so the baseline below is empty for the wrong reason`,
+    ).toContain('x-request-id');
+    expect(
+      undeclaredResponseHeaders(document),
+      'the unmutated runs-list headers must be declared before the control adds one that is not',
+    ).toEqual([]);
+
+    // Header names are case-insensitive: a fixture answering the declared header in another
+    // case is still declared, so only a genuinely absent name fails.
+    const lowercasedHeaders: Record<string, string> = { 'x-request-id': 'fixture-request-id' };
+    const lowercased = { ...document, headers: lowercasedHeaders };
+    expect(
+      undeclaredResponseHeaders(lowercased),
+      "a lowercased 'x-request-id' must count as the declared 'X-Request-Id'",
+    ).toEqual([]);
+
+    const withUndeclared = { ...document, headers: { ...lowercasedHeaders } };
+    withUndeclared.headers[UNDECLARED_HEADER] = 'fixture-only';
+    const undeclared = undeclaredResponseHeaders(withUndeclared);
+    expect(
+      undeclared,
+      `a runs-list fixture answering '${UNDECLARED_HEADER}' still passed the header check — it cannot catch a fixture that answers a header contracts/openapi.yaml does not declare`,
+    ).toEqual([UNDECLARED_HEADER]);
   });
 });

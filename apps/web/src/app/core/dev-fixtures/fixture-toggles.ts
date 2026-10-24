@@ -11,6 +11,11 @@
 //   ?fixture.variant.<operationId>=<variant>   e.g. ?fixture.variant.listRuns=forbidden
 //   ?fixture.latency=<ms>                      every operation, unless a per-operation latency wins
 //
+// A latency is a whole, non-negative number of milliseconds, clamped to ten minutes, from the URL
+// and from `setLatency` alike; anything else (`abc`, `-5`, `1e3`, `1.5`, empty) is ignored. `'*'` is
+// a wildcard for latency only: the backend asks for the matched route's operation id alone, so a
+// stored `'*'` variant (`fixture.variant.*=…`) is never consulted and changes no answer.
+//
 // An unknown variant or operation is answered by the backend as HTTP 501 `fixture_not_found`, which
 // is the state a stale bookmark should show rather than a silently different fixture.
 //
@@ -36,13 +41,25 @@ export const LATENCY_PARAM = 'fixture.latency';
 /** Upper bound on a latency toggle: ten minutes, the point past which a review URL is stuck. */
 const MAX_LATENCY_MS = 600_000;
 
-/** Non-negative whole milliseconds, or `null` for a value that is not one. */
+/**
+ * The one latency rule, shared by the `fixture.latency` parameter and `setLatency`: a whole,
+ * non-negative number of milliseconds, clamped to the ten-minute cap so a too-large but well-formed
+ * value still yields a delay instead of a stuck review. Anything else — a fraction, a negative
+ * value, `Infinity`, `NaN` — is not a latency and yields `null`.
+ */
+function clampLatency(milliseconds: number): number | null {
+  if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) {
+    return null;
+  }
+  return Math.min(milliseconds, MAX_LATENCY_MS);
+}
+
+/** The `fixture.latency` value: decimal digits only, then the shared rule. */
 function parseLatency(value: string | null): number | null {
   if (value === null || !/^\d+$/.test(value)) {
     return null;
   }
-  const milliseconds = Number(value);
-  return Number.isSafeInteger(milliseconds) && milliseconds <= MAX_LATENCY_MS ? milliseconds : null;
+  return clampLatency(Number(value));
 }
 
 /**
@@ -83,6 +100,10 @@ export class FixtureToggles {
    * default (`ok`). The variant is not validated here: a variant no fixture carries is the
    * backend's `501 fixture_not_found`, so a typo shows as a missing fixture rather than an
    * unrelated fixture's body.
+   *
+   * `'*'` is a wildcard for latency only (`setLatency`, `latencyFor`). The backend asks for the
+   * matched route's operation id, so a variant stored under `'*'` is never consulted: the call is
+   * inert rather than a wildcard, and it changes no answer.
    */
   setVariant(operationId: string, variant: string | null): void {
     if (variant === null) {
@@ -94,16 +115,21 @@ export class FixtureToggles {
 
   /**
    * Overrides the answer delay for one operation, or for `'*'` (every operation); `null` removes
-   * the override. Milliseconds are rounded and clamped to a non-negative value, so a fractional or
-   * negative number can never schedule a timer that never fires.
+   * the override. The same rule as the `fixture.latency` parameter applies (`clampLatency`): a
+   * whole, non-negative number of milliseconds, clamped to ten minutes. A fraction, a negative
+   * value, `Infinity` or `NaN` is not a latency and is ignored, leaving any override already set in
+   * place — exactly how an unusable URL value leaves the page's toggles untouched.
    */
   setLatency(operationId: string, milliseconds: number | null): void {
     if (milliseconds === null) {
       this.latencies.delete(operationId);
       return;
     }
-    const normalised = Number.isFinite(milliseconds) ? Math.max(0, Math.round(milliseconds)) : 0;
-    this.latencies.set(operationId, Math.min(normalised, MAX_LATENCY_MS));
+    const normalised = clampLatency(milliseconds);
+    if (normalised === null) {
+      return;
+    }
+    this.latencies.set(operationId, normalised);
   }
 
   /** The selected variant of `operationId`, or `ok` when nothing is selected. */

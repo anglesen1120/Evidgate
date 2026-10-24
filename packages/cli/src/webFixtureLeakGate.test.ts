@@ -32,6 +32,20 @@ const MARKERS = [
 const CORPUS_NAME = 'fixture-only-project-name';
 
 /**
+ * A corpus body string with non-ASCII characters (`Dự án Đông Dương`). A bundle that escaped
+ * it holds none of these characters, only their `\uXXXX` forms, so the raw needle misses it and
+ * the escaped one must not.
+ */
+const NON_ASCII_CORPUS_NAME = 'Dự án Đông Dương';
+
+/**
+ * `NON_ASCII_CORPUS_NAME` in the escaped spelling the gate must also search: every non-ASCII code
+ * unit as a lowercase `\uXXXX`. Spelled out rather than derived, so the case pins the spelling
+ * itself instead of trusting a copy of the gate's own escaping helper.
+ */
+const NON_ASCII_CORPUS_ESCAPED = String.raw`D\u1ef1 \u00e1n \u0110\u00f4ng D\u01b0\u01a1ng`;
+
+/**
  * Production-shaped script text that must pass: `content-type`, `application/json` and
  * `precondition_failed` are protocol vocabulary the app itself carries (see the gate's
  * `PROTOCOL_MEMBERS`), not fixture data.
@@ -89,6 +103,21 @@ function corpusDocument(name: string): unknown {
     latency_ms: 0,
     body: { items: [{ id: 'perm-0192f0d1-7c4e-7a1f-9b5d-2c6d3e4f5a60', name }] },
   };
+}
+
+/**
+ * `value` with every non-ASCII UTF-16 code unit written as a lowercase `\uXXXX` escape — the form
+ * the gate also searches (and the form a minifier that escapes non-ASCII text emits). Written
+ * over code units, not code points, so a surrogate pair becomes its two escapes exactly as
+ * `JSON.stringify` plus such an escape pass produces.
+ */
+function escapeNonAscii(value: string): string {
+  let escaped = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    escaped += code > 0x7f ? `\\u${code.toString(16).padStart(4, '0')}` : value[index];
+  }
+  return escaped;
 }
 
 describe('no-fixture-code gate', () => {
@@ -183,6 +212,46 @@ describe('no-fixture-code gate', () => {
     expect(result.stderr).toContain(CORPUS_NAME);
     expect(result.stderr).toContain('fixtures/web-api/permissions-list/input.json');
     expect(result.stderr).toContain('chunk-ABC123.js');
+  });
+
+  it('fails_on_a_fixture_string_in_a_copied_asset', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+    // `public/` is copied verbatim, so an icon or a translation catalog leaks a fixture string
+    // exactly like a chunk does; both extensions joined the scanned set with 09.1.1-T12.
+    await ws.output(
+      'favicon.svg',
+      `<svg xmlns="http://www.w3.org/2000/svg"><title>${CORPUS_NAME}</title></svg>`,
+    );
+    await ws.output(
+      'locale/messages.xlf',
+      `<trans-unit id="app.title"><source>${CORPUS_NAME}</source></trans-unit>`,
+    );
+
+    const result = ws.run();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('favicon.svg');
+    expect(result.stderr).toContain('messages.xlf');
+    expect(result.stderr).toContain('fixtures/web-api/permissions-list/input.json');
+  });
+
+  it('fails_on_a_json_escaped_non_ascii_fixture_string', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(NON_ASCII_CORPUS_NAME));
+    const escaped = escapeNonAscii(NON_ASCII_CORPUS_NAME);
+    // The helper is a cross-check only: the spelled-out literal is what the bundle carries, so a
+    // helper that stopped matching the gate's escaping would fail here.
+    expect(escaped).toBe(NON_ASCII_CORPUS_ESCAPED);
+    // The bundle carries the escapes only, so the raw needle cannot match it.
+    expect(NON_ASCII_CORPUS_ESCAPED).not.toContain(NON_ASCII_CORPUS_NAME);
+    await ws.output('chunk-ABC123.js', `export const label="${NON_ASCII_CORPUS_ESCAPED}";`);
+
+    const result = ws.run();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('chunk-ABC123.js');
+    expect(result.stderr).toContain('input.json (JSON-escaped)');
   });
 
   it('fails_when_the_dist_directory_is_empty', async () => {

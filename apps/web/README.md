@@ -158,6 +158,11 @@ call from the fixture corpus `fixtures/web-api/<name>/` (01.6.1-T3 shape: `input
   inject(FixtureToggles).setLatency('listRuns', 800); // a slow answer; '*' for every operation
   ```
 
+  A latency is a whole, non-negative number of milliseconds clamped to 600 000, by the same rule
+  from the URL and from `setLatency`; a value that is not one (`abc`, `-5`, `1e3`, `1.5`, empty) is
+  ignored. `'*'` is a wildcard for latency only: the backend asks for the matched route's operation
+  id, so `fixture.variant.*=x` is stored but never consulted and changes no answer — unlike
+  `setLatency('*', …)`, which delays every operation.
   Today the corpus carries `ok` for every servable operation, `forbidden` for `listRuns` and
   `precondition_failed` for `updateProject`; an unknown variant is the 501 above. A fixture's own
   `latency_ms` applies when no toggle overrides it.

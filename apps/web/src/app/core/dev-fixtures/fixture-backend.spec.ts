@@ -19,7 +19,7 @@
 // not visible through the SDK's resolved value, and reaching for them any other way would mean
 // duplicating the chain this spec exists to prove.
 
-import { HttpResponse, type HttpEvent, type HttpRequest } from '@angular/common/http';
+import { HttpClient, HttpResponse, type HttpEvent, type HttpRequest } from '@angular/common/http';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import {
@@ -31,7 +31,7 @@ import {
   updateProject,
   type ErrorEnvelope,
 } from '@evidgate/sdk';
-import { tap } from 'rxjs';
+import { firstValueFrom, tap } from 'rxjs';
 
 import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
@@ -215,6 +215,27 @@ describe('fixture backend (09.1.1-T12.1)', () => {
     const request = handled.at(0);
     expect(request?.headers.get('X-Request-Id')).toMatch(UUID_V4);
     expect(request?.headers.get('traceparent')).toMatch(TRACEPARENT);
+  });
+
+  it('copies a json body, so a caller that mutates it cannot alter the catalog', async () => {
+    const http = TestBed.inject(HttpClient);
+    const document = documentOf('permissions-list');
+    const original = structuredClone(document.body);
+    const url = `${API_BASE_URL}/permissions`;
+
+    const first = await firstValueFrom(
+      http.get<Record<string, unknown>>(url, { responseType: 'json' }),
+    );
+    first['items'] = [];
+    first['mutated_by_the_spec'] = true;
+
+    const second = await firstValueFrom(
+      http.get<Record<string, unknown>>(url, { responseType: 'json' }),
+    );
+
+    expect(second).not.toBe(first);
+    expect(second).toEqual(original);
+    expect(document.body).toEqual(original);
   });
 
   it('applies a latency toggle before answering', async () => {

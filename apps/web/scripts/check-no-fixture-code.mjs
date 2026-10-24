@@ -12,7 +12,9 @@
 //    catalog/route import) reached the build.
 // 2. The fixture corpus data: every string value of >= `MIN_FIXTURE_STRING_LENGTH` characters in
 //    `fixtures/web-api/*/input.json`. A response body that survived into the bundle leaks the
-//    fixtures just as plainly as the backend code does. The protocol slots of a fixture document
+//    fixtures just as plainly as the backend code does. A value holding a non-ASCII character is
+//    also searched in its `\uXXXX`-escaped form, because a minifier that escapes non-ASCII text
+//    emits the escape sequence rather than the character. The protocol slots of a fixture document
 //    (`headers`, `operation_id`, `variant`, `code`) are skipped with their whole subtree: their
 //    values are vocabulary production code already carries — `content-type`/`application/json` in
 //    the HTTP client, the operation ids in the SDK, `precondition_failed`-style codes in
@@ -41,8 +43,25 @@ const FIXTURE_DIR = process.env.EVIDGATE_WEB_FIXTURE_DIR
   ? resolve(process.env.EVIDGATE_WEB_FIXTURE_DIR)
   : resolve(fileURLToPath(new URL('../../../fixtures/web-api/', import.meta.url)));
 
-/** Everything the browser can serve, including source maps and the copied assets. */
-const SCANNED_EXTENSIONS = ['.js', '.mjs', '.html', '.css', '.map', '.json', '.txt'];
+/**
+ * Everything the browser can serve, including source maps, the copied assets and the
+ * translation catalogs. `@angular/build` copies `public/` verbatim, so an `.svg` or a
+ * `.webmanifest` can carry a fixture string just as a chunk can; `.xlf` covers a build that
+ * emits its translation files next to the bundle. The textual types only: `.ico`, fonts and
+ * images are binary, so `readFileSync(…, 'utf8')` never runs on them.
+ */
+const SCANNED_EXTENSIONS = [
+  '.js',
+  '.mjs',
+  '.html',
+  '.css',
+  '.map',
+  '.json',
+  '.txt',
+  '.svg',
+  '.xlf',
+  '.webmanifest',
+];
 
 /**
  * The fixture backend's marker strings (see the header). They are matched verbatim, so a
@@ -69,6 +88,13 @@ const MIN_FIXTURE_STRING_LENGTH = 12;
  * (`content-type`/`application/json`, the SDK operation ids, the `precondition_failed`-style codes
  * of `apps/web/src/app/core/http/api-error.ts`), so scanning them would report a leak on every
  * build without saying anything about the fixtures.
+ *
+ * The five code markers of `MARKERS` are the primary leak detector: the fixture backend cannot
+ * reach a production bundle without at least one of them, and they are matched in every scanned
+ * file for free. Skipping the `code`, `headers`, `variant` and `operation_id` members is a
+ * deliberate trade-off — the corpus strings still cover the fixture *data* (`body` values, which
+ * production code never carries), so a leaked response body is caught without the noise the
+ * vocabulary would add on every build.
  */
 const PROTOCOL_MEMBERS = new Set(['headers', 'operation_id', 'variant', 'code']);
 
@@ -144,6 +170,23 @@ function collectFixtureStrings(value, name, strings) {
   }
 }
 
+/**
+ * `value` with every non-ASCII code unit written as a lowercase `\uXXXX` escape, the form a
+ * bundler or minifier emits when it escapes non-ASCII text (`đ` becomes `\u0111`, and an astral
+ * character becomes its two surrogate escapes, exactly as `JSON.stringify` + such an escape pass
+ * produces). A corpus string that survives into a bundle that way still leaks the fixture, so the
+ * escaped form is searched as well — it never matches the raw string and vice versa. ASCII text
+ * is returned unchanged, which is how a caller tells whether escaping applies.
+ */
+function escapeNonAscii(value) {
+  let escaped = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    escaped += code > 0x7f ? `\\u${code.toString(16).padStart(4, '0')}` : value[index];
+  }
+  return escaped;
+}
+
 /** The corpus string values a bundle must not contain, keyed by the fixture they came from. */
 function fixtureStrings(dir) {
   if (!existsSync(dir)) {
@@ -187,6 +230,14 @@ const needles = [
     needle: value,
     source: `fixtures/web-api/${name}/input.json`,
   })),
+  // A second needle per non-ASCII fixture string: the escaped form a bundler emits (see
+  // `escapeNonAscii`). ASCII-only values have no distinct escaped form and are skipped.
+  ...[...fixtureValues]
+    .filter(([value]) => escapeNonAscii(value) !== value)
+    .map(([value, name]) => ({
+      needle: escapeNonAscii(value),
+      source: `fixtures/web-api/${name}/input.json (JSON-escaped)`,
+    })),
 ];
 
 const leaks = [];
