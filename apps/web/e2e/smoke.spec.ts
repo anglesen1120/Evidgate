@@ -37,8 +37,8 @@ test('boots the built Angular bundle at the default locale (vi)', async ({ page 
   expect(new URL(page.url()).pathname.startsWith('/vi/')).toBe(true);
   await expect(page.locator('html')).toHaveAttribute('lang', 'vi');
 
-  // Title comes from `src/index.html`; the visible page is the shell the router mounted.
-  await expect(page).toHaveTitle('Evidgate');
+  // `src/index.html` carries `Evidgate`; the shell prefixes the routed page heading (`<page> · Evidgate`).
+  await expect(page).toHaveTitle(/Evidgate$/);
   await expect(page.locator('app-root app-shell')).toBeVisible();
   const heading = page.locator('app-root h1').first();
   await expect(heading).toBeVisible();
@@ -65,7 +65,7 @@ test('serves the English bundle under /en', async ({ page }) => {
   expect(new URL(page.url()).pathname.startsWith('/en/')).toBe(true);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 
-  await expect(page).toHaveTitle('Evidgate');
+  await expect(page).toHaveTitle(/Evidgate$/);
   await expect(page.locator('app-root app-shell')).toBeVisible();
   const heading = page.locator('app-root h1').first();
   await expect(heading).toBeVisible();

@@ -187,14 +187,18 @@ interface AxeGlobal {
  * axe is injected from the workspace's own `axe-core` devDependency (`axe.source`), so no package
  * is added and the rule set is the version the repo pins.
  */
-export async function axeScan(page: Page): Promise<AxeResults> {
+export async function axeScan(page: Page, context?: string): Promise<AxeResults> {
   await page.addScriptTag({ content: axe.source });
-  return page.evaluate(async (options: RunOptions) => {
-    // `window.axe` is the global the injected script just defined; axe-core ships no typing for
-    // the browser copy it injects, so this is the boundary where the shape is known.
-    const axeGlobal = window as typeof window & { axe: AxeGlobal };
-    return axeGlobal.axe.run(document, options);
-  }, AXE_OPTIONS);
+  return page.evaluate(
+    async ({ context, options }: { context: string | undefined; options: RunOptions }) => {
+      // `window.axe` is the global the injected script just defined; axe-core ships no typing for
+      // the browser copy it injects, so this is the boundary where the shape is known.
+      const axeGlobal = window as typeof window & { axe: AxeGlobal };
+      // `context` is a CSS selector string here; axe resolves it inside the page.
+      return axeGlobal.axe.run((context ?? document) as Document, options);
+    },
+    { context, options: AXE_OPTIONS },
+  );
 }
 
 /** One axe finding, trimmed to what a report can quote. */
