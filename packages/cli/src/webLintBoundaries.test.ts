@@ -3,6 +3,8 @@
 // feature→feature import — by linting inline snippets with the exported flat-config blocks
 // (apps/web/lint/boundaries.cjs, including the built-in `no-restricted-globals` its HTTP
 // block registers) and the typescript-eslint parser, exactly as eslint.config.js does.
+// 09.1.1-T10 (AC7) adds the fourth rule here: `evidgate/no-bypass-security-trust`, which
+// holds every DomSanitizer bypass except the one reviewed artifact-viewer bridge.
 //
 // This spec lives in @evidgate/cli, not in apps/web, on purpose: `ng test` compiles its
 // specs with the Angular application builder for the browser, so a spec there cannot load
@@ -61,6 +63,7 @@ const HTTP_OUTSIDE_CORE = 'evidgate/no-http-outside-core';
 const HTTP_GLOBALS = 'no-restricted-globals';
 const WIRE_DTO = 'evidgate/no-hand-written-wire-dto';
 const FEATURE_BOUNDARY = 'evidgate/no-feature-cross-import';
+const BYPASS_TRUST = 'evidgate/no-bypass-security-trust';
 
 const FEATURE_FILE = 'apps/web/src/app/features/runs/x.ts';
 const CORE_HTTP_FILE = 'apps/web/src/app/core/http/x.ts';
@@ -84,6 +87,7 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       HTTP_GLOBALS,
       WIRE_DTO,
       FEATURE_BOUNDARY,
+      BYPASS_TRUST,
     ]);
     expect(new Set(boundaries.flatMap((block) => block.files ?? []))).toEqual(
       new Set(['apps/web/src/**/*.ts']),
@@ -421,6 +425,118 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       ].join('\n');
       expect(ruleIds(code, CORE_FILE)).toEqual([FEATURE_BOUNDARY]);
       expect(ruleIds(code, SHARED_FILE)).toEqual([FEATURE_BOUNDARY]);
+    });
+  });
+
+  describe('no-bypass-security-trust', () => {
+    // The T10.1 done-when: a feature file hands sanitized output back to a sink.
+    const bypassCall = [
+      'export function bind(sanitizer: DomSanitizer, value: string): unknown {',
+      '  return sanitizer.bypassSecurityTrustHtml(value);',
+      '}',
+      '',
+    ].join('\n');
+
+    it('rejects a bypassSecurityTrustHtml call in a feature file', () => {
+      expect(ruleIds(bypassCall, FEATURE_FILE)).toEqual([BYPASS_TRUST]);
+    });
+
+    it('rejects each of the five DomSanitizer bypass methods', () => {
+      for (const method of ['Html', 'Style', 'Script', 'Url', 'ResourceUrl']) {
+        const code = [
+          'export function bind(sanitizer: DomSanitizer, value: string): unknown {',
+          `  return sanitizer.bypassSecurityTrust${method}(value);`,
+          '}',
+          '',
+        ].join('\n');
+        expect(ruleIds(code, FEATURE_FILE)).toEqual([BYPASS_TRUST]);
+      }
+    });
+
+    it('rejects optional chaining and a string-computed member', () => {
+      const optionalMember = [
+        'export function bind(sanitizer: DomSanitizer, value: string): unknown {',
+        '  return sanitizer?.bypassSecurityTrustUrl(value);',
+        '}',
+        '',
+      ].join('\n');
+      expect(ruleIds(optionalMember, FEATURE_FILE)).toEqual([BYPASS_TRUST]);
+
+      const optionalCall = [
+        'export function bind(sanitizer: DomSanitizer, value: string): unknown {',
+        '  return sanitizer.bypassSecurityTrustScript?.(value);',
+        '}',
+        '',
+      ].join('\n');
+      expect(ruleIds(optionalCall, FEATURE_FILE)).toEqual([BYPASS_TRUST]);
+
+      const computed = [
+        'export function bind(sanitizer: DomSanitizer, value: string): unknown {',
+        "  return sanitizer['bypassSecurityTrustResourceUrl'](value);",
+        '}',
+        '',
+      ].join('\n');
+      expect(ruleIds(computed, FEATURE_FILE)).toEqual([BYPASS_TRUST]);
+    });
+
+    it('rejects an aliased member reference that is never called', () => {
+      const code = [
+        'export function bind(sanitizer: DomSanitizer): (value: string) => unknown {',
+        '  const bindHtml = sanitizer.bypassSecurityTrustHtml;',
+        '  return bindHtml;',
+        '}',
+        '',
+      ].join('\n');
+      expect(ruleIds(code, FEATURE_FILE)).toEqual([BYPASS_TRUST]);
+    });
+
+    it('rejects a destructured bypass and its bare identifier call', () => {
+      const code = [
+        'export function bind(sanitizer: DomSanitizer, value: string): unknown {',
+        '  const { bypassSecurityTrustStyle } = sanitizer;',
+        '  return bypassSecurityTrustStyle(value);',
+        '}',
+        '',
+      ].join('\n');
+      expect(ruleIds(code, FEATURE_FILE)).toEqual([BYPASS_TRUST, BYPASS_TRUST]);
+    });
+
+    it('allows the bypass inside the reviewed artifact-viewer bridge', () => {
+      const bridgeFile = 'apps/web/src/app/features/runs/artifact-viewer-bridge/x.ts';
+      expect(lint(bypassCall, bridgeFile)).toEqual([]);
+      expect(lint(bypassCall, 'apps/web/src/app/shared/artifact-viewer-bridge/x.ts')).toEqual([]);
+    });
+
+    it('does not allow a name that merely contains the bridge words', () => {
+      expect(
+        ruleIds(bypassCall, 'apps/web/src/app/features/runs/artifact-viewer-bridge-notes.ts'),
+      ).toEqual([BYPASS_TRUST]);
+      expect(
+        ruleIds(bypassCall, 'apps/web/src/app/features/runs/not-artifact-viewer-bridge/x.ts'),
+      ).toEqual([BYPASS_TRUST]);
+      expect(ruleIds(bypassCall, CORE_HTTP_FILE)).toEqual([BYPASS_TRUST]);
+    });
+
+    it('accepts sanitize() and an unrelated method name', () => {
+      const sanitize = [
+        'export function read(sanitizer: DomSanitizer, value: string): string | null {',
+        '  return sanitizer.sanitize(SecurityContext.HTML, value);',
+        '}',
+        '',
+      ].join('\n');
+      expect(lint(sanitize, FEATURE_FILE)).toEqual([]);
+
+      const unrelated = [
+        'export function bind(sanitizer: DomSanitizer, value: string): unknown {',
+        '  return sanitizer.bypassSecurityTrustFoo(value);',
+        '}',
+        '',
+      ].join('\n');
+      expect(lint(unrelated, FEATURE_FILE)).toEqual([]);
+    });
+
+    it('holds a spec file to the same rule', () => {
+      expect(ruleIds(bypassCall, 'apps/web/src/app/x.spec.ts')).toEqual([BYPASS_TRUST]);
     });
   });
 });
