@@ -1,6 +1,6 @@
 # Web UX design foundation (09.1.1-T11)
 
-Design foundation for `apps/web`: flow specifications, design tokens, themes, layout and breakpoints. It documents the owner-approved Web UI v2 mockups in [`../web-ui/output/`](../web-ui/output/NAV.md); it does not replace them. Source task: [09.1.1-T11](../../../plans/features/09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md) (AC9, sub-tasks T11.1–T11.3). Owner approval of the flow screens is gate B2 ([`prompts-crd2/00-README.md`](../web-ui/prompts-crd2/00-README.md)); it is recorded in each flow file header and is still pending.
+Design foundation for `apps/web`: flow specifications, design tokens, themes, layout and breakpoints. It documents the owner-approved Web UI v2 mockups in [`../web-ui/output/`](../web-ui/output/NAV.md); it does not replace them. Source task: [09.1.1-T11](../../../plans/features/09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md) (AC9, sub-tasks T11.1–T11.4). Owner approval of the flow screens is gate B2 ([`prompts-crd2/00-README.md`](../web-ui/prompts-crd2/00-README.md)); it is recorded in each flow file header and is still pending.
 
 | Sub-task | File | Content |
 | --- | --- | --- |
@@ -12,10 +12,13 @@ Design foundation for `apps/web`: flow specifications, design tokens, themes, la
 | T11.1 | [`release-view.md`](release-view.md) | Release view flow (phase G4) |
 | T11.2 | [`tokens.md`](tokens.md), [`../../../apps/web/src/styles/tokens.css`](../../../apps/web/src/styles/tokens.css) | Token inventory, themes, contrast table; [`contrast.py`](contrast.py) recomputes the table |
 | T11.3 | [`layout.md`](layout.md) | Grid, breakpoints (≥ 1280 / 768–1279 / < 768), dense-table density rules |
+| T11.4 | [`state-sheet.md`](state-sheet.md) | T7/T8 component states, token recipes, accessibility, v2 reference captures and future component-spec anchors |
 
 ## Screenshots
 
 `images/<flow>/<state>-<theme>-<locale>.png` for the six flows: state `default`, `loading`, `empty`, `error`, `403`, `412`; theme `light`, `dark`; locale `vi`, `en`. `images/layout/failure-inbox-<width>.png` for [`layout.md`](layout.md).
+
+`images/state-sheet/<component>-<state>-<theme>-<locale>.png` for the [component state sheet](state-sheet.md#screenshots): clipped v2 specimens, with explicit proxy labels where an assembled component is absent.
 
 How they were exported (re-run after a v2 mockup change):
 
@@ -26,5 +29,6 @@ How they were exported (re-run after a v2 mockup change):
 
 ## Not in this folder
 
-- The component state sheet and the `style-tokens` lint rule (AC9 lint part): 09.1.1-T11.4.
-- The CDK table demo restyled with the tokens (T11.3 "done when" part): needs the T2 spike and the T1 app; handed to 09.1.1-T11.4 (see `STATUS.md` §6 and the T11 Notes in the task file).
+- The component state sheet is delivered here by 09.1.1-T11.4; actual links from each future component spec are handed to 09.1.1-T7/T8 ([anchors and responsibilities](state-sheet.md#how-the-specs-link-here)).
+- The `style-tokens` lint rule is delivered by the same task, 09.1.1-T11.4, and documented in [`tokens.md` — Lint rule `style-tokens`](tokens.md#lint-rule-style-tokens).
+- The CDK table demo restyled with the tokens (T11.3 "done when" part) is re-handed to **09.1.1-T7**, consuming T2's spike and the T1 app. Use the [layout rules and open checks](layout.md#open-points--hand-overs); the older T11 Notes and layout receiving-task rows still name T11.4 and need the coordinator's hand-over update.

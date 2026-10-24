@@ -87,6 +87,8 @@ def pairs():
     for foreground in ('text', 'text-muted'):
         for background in ('bg', 'surface', 'surface-raised', 'accent-soft'):
             checks.append((foreground, background, 'text', 4.5))
+    # 09.1.1-T11.4 state sheet: v2 disabled-action recipe (text-muted on a neutral fill).
+    checks.append(('text-muted', 'neutral-bg', 'disabled action text', 4.5))
     for background in ('bg', 'surface'):
         checks.append(('accent', background, 'link text', 4.5))
     checks.append(('on-accent', 'accent', 'button label', 4.5))

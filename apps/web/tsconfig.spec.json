@@ -8,11 +8,25 @@
   "compilerOptions": {
     "noEmit": true,
     // The builder's Vitest runner sets `globals: true` (describe/it/expect without imports);
-    // `node` is needed by playwright.config.ts (`process.env`).
-    "types": ["vitest/globals", "node"]
+    // `node` is needed by playwright.config.ts (`process.env`) and by the ESLint rule spec
+    // (node:fs/node:url to read tokens.css and locate the repository root).
+    "types": ["vitest/globals", "node"],
+    // 09.1.1-T11.4: the ESLint rule spec runs under Vitest through
+    // `eslint-rules/vitest.config.mts`, which imports the shared base by its real `.mts`
+    // path (the Vitest native config loader does not remap `.js` specifiers onto `.mts`).
+    // tsc only allows that extension spelling under noEmit.
+    "allowImportingTsExtensions": true
   },
   // tsconfig.json excludes specs from the application project; this project exists to
   // type-check exactly those, so the inherited `exclude` must not apply here.
   "exclude": [],
-  "include": ["src/**/*.spec.ts", "playwright.config.ts", "e2e/**/*.ts"]
+  "include": [
+    "src/**/*.spec.ts",
+    "playwright.config.ts",
+    "e2e/**/*.ts",
+    // 09.1.1-T11.4 (AC9): the `style-tokens` rule spec and its Vitest config. The rule
+    // itself is plain CommonJS (`eslint-rules/*.js`) linted by ESLint, not type-checked.
+    "eslint-rules/**/*.spec.ts",
+    "eslint-rules/vitest.config.mts"
+  ]
 }
