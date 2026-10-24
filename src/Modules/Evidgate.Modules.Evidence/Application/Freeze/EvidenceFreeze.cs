@@ -20,6 +20,12 @@ namespace Evidgate.Modules.Evidence.Application.Freeze;
 /// are decided entirely in memory over that result, and at most one <c>UPDATE</c> persists the pairs that resolved for
 /// the first time — two statements whatever the number of artifacts or requirements (AC6, 00 §5.7 P2/P3).
 /// </para>
+/// <para>
+/// Both bounds fail closed instead of handing back a result the stored rows disagree with: a run above
+/// <see cref="FreezeRequest.MaxReadyArtifacts"/> ready artifacts is refused before any write, and a resolution
+/// <c>UPDATE</c> that touches fewer rows than it was sent (an artifact left <c>ready</c>, or a concurrent freeze won the
+/// race) throws so the caller rolls its transaction back and retries.
+/// </para>
 /// </summary>
 /// <param name="db">The Dapper path over the ambient scope; it demands an active scope before it touches the database.</param>
 /// <param name="scopes">The tenant-scope accessor; <c>Require()</c> is the guard that throws before any statement.</param>
@@ -39,7 +45,8 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         var scope = scopes.Require();
 
         // Statement 1: every ready artifact of the run with its resolved case_attempt, one statement however many
-        // artifacts and requirements the call carries. An unknown or foreign run simply answers no row.
+        // artifacts and requirements the call carries. An unknown or foreign run simply answers no row. The limit is
+        // one past the cap, so the row that proves the run is too large is still read (F4, D-S57-Q10).
         var rows = await db.QueryAsync<ReadyArtifactRow>(
             FreezeSql.SelectReadyArtifacts,
             new
@@ -47,8 +54,18 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
                 org_id = scope.OrgId,
                 project_id = scope.ProjectId,
                 run_id = request.RunId,
+                max_rows = FreezeRequest.MaxReadyArtifacts + 1,
             },
             cancellationToken).ConfigureAwait(false);
+
+        // Fail closed before any write: a run above the cap is refused as a whole, so the read is never unbounded and
+        // a partial revision can never be built from a truncated ready set.
+        if (rows.Count > FreezeRequest.MaxReadyArtifacts)
+        {
+            throw new InvalidOperationException(
+                $"run {request.RunId} has more than {FreezeRequest.MaxReadyArtifacts} ready artifacts, so its evidence "
+                + "cannot be frozen in one revision; nothing was written.");
+        }
 
         var pending = new List<ReadyArtifactRow>();
         var resolvedAttempts = new Dictionary<(string ExecutionKey, string Kind), HashSet<int>>();
@@ -95,12 +112,9 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         if (pending.Count > 0)
         {
             // Statement 2: one bounded UPDATE for the whole batch, idempotent by its `attempt_id is null` guard, so a
-            // second call over the same state issues no statement at all (AC4). The batch is ordered by artifact id
-            // (ordinal) so two concurrent freezes of one run take the row locks in one global order.
-            pending.Sort(static (left, right) =>
-                string.CompareOrdinal(IdText(left.ArtifactId), IdText(right.ArtifactId)));
-
-            await db.ExecuteAsync(
+            // second call over the same state issues no statement at all (AC4). The statement locks and writes the
+            // batch in `a.id` order itself (FreezeSql.ResolveAttemptIds), so no in-memory ordering is needed here.
+            var resolved = await db.ExecuteAsync(
                 FreezeSql.ResolveAttemptIds,
                 new
                 {
@@ -110,6 +124,18 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
                     rows = SerializeResolutions(pending),
                 },
                 cancellationToken).ConfigureAwait(false);
+
+            // Every row the read sent must still match the guard at write time (F3, D-S57-Q11): a shorter count means
+            // an artifact left `ready`, or a concurrent freeze resolved the same pair, between the read and the
+            // UPDATE. Reporting the row as resolved would contradict what is stored, so the call fails closed and the
+            // caller's rollback undoes its partial write (05.3.2-T2 retries the reconcile on this).
+            if (resolved != pending.Count)
+            {
+                throw new InvalidOperationException(
+                    $"the freeze of run {request.RunId} changed {resolved} of {pending.Count} artifacts: an artifact left "
+                    + "the 'ready' state or was resolved by a concurrent freeze between the read and the update; the "
+                    + "caller must roll back and retry.");
+            }
         }
 
         // AC1/AC2 ordering (06.5.1 §5): (execution_key, attempt_no, kind, artifact id), ordinal, decided here so the
@@ -123,7 +149,9 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
 
         var ready = new List<FrozenArtifact>(ordered.Count);
         var orphans = new List<OrphanArtifact>();
-        var missing = new List<MissingReason>(ordered.Count + request.Required.Count);
+        // Gaps are the exception, not the shape of a call: a complete freeze reports none, so this list starts empty
+        // instead of reserving one slot per ready artifact plus one per requirement (F8).
+        var missing = new List<MissingReason>();
 
         foreach (var row in ordered)
         {
@@ -172,7 +200,14 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
             hashRows[index] = new HashRow(row.ArtifactId, row.ObjectKey, row.Checksum);
         }
 
-        return new FreezeResult(ready, orphans, missing, CanonicalHash.Compute(JsonSerializer.Serialize(hashRows)));
+        // Serialized straight to UTF-8 and canonicalized from those bytes, so the digest costs no UTF-16 string and no
+        // copy (F8). JsonSerializerOptions.Default is the configuration the previous Serialize(string) call used, so
+        // the digest of a given ready set is byte-identical to before (the tests recompute it independently).
+        return new FreezeResult(
+            ready,
+            orphans,
+            missing,
+            CanonicalHash.Compute(JsonSerializer.SerializeToUtf8Bytes(hashRows, JsonSerializerOptions.Default)));
     }
 
     /// <summary>
@@ -310,8 +345,12 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         }
     }
 
-    /// <summary>The one <c>jsonb</c> batch parameter of statement 2, in the recordset's column names.</summary>
-    /// <param name="rows">The rows that resolved for the first time, already ordered by artifact id.</param>
+    /// <summary>
+    /// The one <c>jsonb</c> batch parameter of statement 2, in the recordset's column names. The order is the read's
+    /// arbitrary order on purpose: statement 2 sorts and locks the batch by <c>a.id</c> itself
+    /// (<c>FreezeSql.ResolveAttemptIds</c>), so no ordering cost is paid here.
+    /// </summary>
+    /// <param name="rows">The rows that resolved for the first time.</param>
     /// <returns>The batch as JSON text.</returns>
     private static string SerializeResolutions(List<ReadyArtifactRow> rows)
     {

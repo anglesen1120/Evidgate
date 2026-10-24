@@ -32,6 +32,15 @@ public interface IEvidenceFreeze
     /// A run the tenant scope cannot see (unknown id, another org, another project) yields no artifacts, so every requirement is
     /// reported missing: missing evidence never reads as complete.
     /// </para>
+    /// <para>
+    /// <b>Nothing partial is reported.</b> The call is fail-closed on both of its bounds. A run with more than
+    /// <see cref="FreezeRequest.MaxReadyArtifacts"/> <c>ready</c> artifacts is refused before anything is written, and the
+    /// resolution <c>UPDATE</c> must touch every row the read sent it: when an artifact left <c>ready</c>, or another freeze
+    /// resolved the same pair, between the read and the <c>UPDATE</c>, the call throws instead of returning a result that
+    /// disagrees with the rows stored. That write is part of the caller's transaction, so the caller's rollback undoes it;
+    /// 05.3.2-T2 retries the reconcile on the exception and SHOULD serialise freezes of one run (the run row is the natural
+    /// lock), so the race stays rare rather than being a policy.
+    /// </para>
     /// </summary>
     /// <param name="request">The run and the requirement set the caller resolved from the manifest and policy.</param>
     /// <param name="cancellationToken">Cancellation.</param>
@@ -40,8 +49,13 @@ public interface IEvidenceFreeze
     /// The request is malformed: an empty run id, more than <see cref="FreezeRequest.MaxRequired"/> requirements, or a
     /// requirement with a bad execution key, kind, reason code or attempt number (a caller bug, never a data condition).
     /// </exception>
-    /// <exception cref="InvalidOperationException">No tenant scope is open, or a stored <c>attempt_id</c> disagrees with the
-    /// attempt its <c>(execution_key, attempt_no)</c> resolves to (an integrity violation; nothing is rewritten).</exception>
+    /// <exception cref="InvalidOperationException">
+    /// No tenant scope is open; a stored <c>attempt_id</c> disagrees with the attempt its <c>(execution_key, attempt_no)</c>
+    /// resolves to (an integrity violation; nothing is rewritten); the run has more than
+    /// <see cref="FreezeRequest.MaxReadyArtifacts"/> <c>ready</c> artifacts (too large to freeze in one revision; nothing is
+    /// written); or the resolution <c>UPDATE</c> resolved fewer rows than it was sent, because an artifact changed during the
+    /// freeze — the caller must roll back and retry.
+    /// </exception>
     Task<FreezeResult> FreezeAsync(FreezeRequest request, CancellationToken cancellationToken);
 }
 
@@ -55,6 +69,13 @@ public sealed record FreezeRequest(Guid RunId, IReadOnlyList<RequiredArtifactSpe
 {
     /// <summary>The largest requirement set one call accepts; the comparison is in memory over the single read.</summary>
     public const int MaxRequired = 10_000;
+
+    /// <summary>
+    /// The largest number of <c>ready</c> artifacts one freeze accepts in a run. The read stops one row past it, so a
+    /// run above the bound is refused as a whole (fail closed: nothing is written, no partial revision is produced)
+    /// rather than being silently truncated. It bounds one call's memory and one reconciliation's work.
+    /// </summary>
+    public const int MaxReadyArtifacts = 50_000;
 }
 
 /// <summary>One required artifact: a <c>ready</c> artifact of <see cref="Kind"/> must exist for the execution.</summary>
