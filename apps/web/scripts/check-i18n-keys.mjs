@@ -56,6 +56,31 @@ function parseSegmentText(raw) {
   return { text: decodeEntities(withTokens), placeholders };
 }
 
+/**
+ * The first `<name …>…</name>` of a unit body, scanned forward only (a regex retried at every
+ * unclosed `<name` is quadratic). A missing close tag ends the search: no later opener can have
+ * a close tag either. Returns null when the element is absent or never closed.
+ */
+function findSegment(body, name) {
+  const open = `<${name}`;
+  const close = `</${name}>`;
+  let from = 0;
+  for (;;) {
+    const start = body.indexOf(open, from);
+    if (start === -1) return null;
+    const next = body[start + open.length];
+    if (next !== undefined && /\w/.test(next)) {
+      from = start + open.length;
+      continue;
+    }
+    const tagEnd = body.indexOf('>', start + open.length);
+    if (tagEnd === -1) return null;
+    const end = body.indexOf(close, tagEnd + 1);
+    if (end === -1) return null;
+    return parseSegmentText(body.slice(tagEnd + 1, end));
+  }
+}
+
 const UNIT_OPEN = '<trans-unit';
 const UNIT_CLOSE = '</trans-unit>';
 const ALT_TRANS_OPEN = '<alt-trans';
@@ -131,10 +156,7 @@ function parseCatalog(content, label, errors) {
       return units;
     }
     const body = withoutAltTrans(content.slice(tagEnd + 1, close));
-    const segment = (name) => {
-      const found = new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`).exec(body);
-      return found ? parseSegmentText(found[1]) : null;
-    };
+    const segment = (name) => findSegment(body, name);
     units.push({ id, source: segment('source'), target: segment('target') });
     cursor = close + UNIT_CLOSE.length;
   }
