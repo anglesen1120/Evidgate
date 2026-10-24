@@ -25,6 +25,14 @@ interface Finding {
   column: number;
 }
 
+/**
+ * A finding together with its rendered message, for the cases whose point is the reported
+ * value (`message` data) rather than only the location.
+ */
+interface DetailedFinding extends Finding {
+  message: string;
+}
+
 const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const CSS_RULE = 'style-tokens/no-raw-literals';
 const INLINE_RULE = 'style-tokens/no-raw-literals-inline';
@@ -41,13 +49,14 @@ const COMPONENT_SOURCE_PATH = 'apps/web/src/app/app.ts';
 const eslint = new ESLint({ cwd: REPO_ROOT });
 
 /**
- * Lints `code` as if it were the file at `filePath`, through the repository config.
+ * Lints `code` as if it were the file at `filePath`, through the repository config, and keeps
+ * both the location and the rendered message.
  *
  * @param code source text
  * @param filePath repository-relative path (decides which config block applies)
- * @returns every lint message ESLint produced
+ * @returns every lint message ESLint produced, with its text
  */
-async function lint(code: string, filePath: string): Promise<Finding[]> {
+async function lintDetailed(code: string, filePath: string): Promise<DetailedFinding[]> {
   const results = await eslint.lintText(code, { filePath });
   const result = results[0];
   if (!result) {
@@ -58,6 +67,24 @@ async function lint(code: string, filePath: string): Promise<Finding[]> {
     messageId: message.messageId ?? null,
     line: message.line ?? 0,
     column: message.column ?? 0,
+    message: message.message,
+  }));
+}
+
+/**
+ * Lints `code` as if it were the file at `filePath`, through the repository config.
+ *
+ * @param code source text
+ * @param filePath repository-relative path (decides which config block applies)
+ * @returns every lint message ESLint produced
+ */
+async function lint(code: string, filePath: string): Promise<Finding[]> {
+  const findings = await lintDetailed(code, filePath);
+  return findings.map(({ ruleId, messageId, line, column }) => ({
+    ruleId,
+    messageId,
+    line,
+    column,
   }));
 }
 
@@ -66,16 +93,27 @@ async function lintComponentStyle(code: string): Promise<Finding[]> {
   return lint(code, COMPONENT_STYLE_PATH);
 }
 
-/** Lints a component source and keeps only the inline-styles rule. */
-async function lintInlineStyles(code: string): Promise<Finding[]> {
-  const findings = await lint(code, COMPONENT_SOURCE_PATH);
-  // A parse or project-service failure arrives as a `ruleId === null` message; filtering it out
-  // would let a broken snippet pass vacuously, so fail loudly instead.
+/** Lints a component source and keeps only the inline-styles rule messages, with their text. */
+async function lintInlineStylesDetailed(code: string): Promise<DetailedFinding[]> {
+  const findings = await lintDetailed(code, COMPONENT_SOURCE_PATH);
   const fatal = findings.filter((finding) => finding.ruleId === null);
   if (fatal.length > 0) {
-    throw new Error(`lintInlineStyles: ${JSON.stringify(fatal)}`);
+    throw new Error(`lintInlineStylesDetailed: ${JSON.stringify(fatal)}`);
   }
   return findings.filter((finding) => finding.ruleId === INLINE_RULE);
+}
+
+/** Lints a component source and keeps only the inline-styles rule. */
+async function lintInlineStyles(code: string): Promise<Finding[]> {
+  // A parse or project-service failure arrives as a `ruleId === null` message; filtering it out
+  // would let a broken snippet pass vacuously, so fail loudly instead.
+  const findings = await lintInlineStylesDetailed(code);
+  return findings.map(({ ruleId, messageId, line, column }) => ({
+    ruleId,
+    messageId,
+    line,
+    column,
+  }));
 }
 
 function cssFinding(messageId: string, line: number, column: number): Finding {
@@ -196,6 +234,32 @@ describe('style-tokens/no-raw-literals (apps/web/**/*.css)', () => {
     });
   });
 
+  describe('offsets are UTF-16 code units, so a non-BMP character does not shift them', () => {
+    it('reports a hex colour that follows an emoji in a comment', async () => {
+      // Regression (maskNonCode): splitting the value with `[...text]` counts an emoji as one
+      // element while every offset is a code unit, so the masking shifted this literal one
+      // character left and reported the wrong column and value. The comment sits between two
+      // value tokens, so it is part of the value text the detector sees.
+      const findings = await lintDetailed(
+        ruleBlock('background: var(--x) /* 😀 */ #fff;'),
+        COMPONENT_STYLE_PATH,
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject(cssFinding('rawHexColour', 2, 31));
+      expect(findings[0]?.message).toContain("'#fff'");
+    });
+
+    it('reports a hex colour that follows an emoji in a quoted string', async () => {
+      const findings = await lintDetailed(
+        ruleBlock('--local-label: "😀" #aabbcc;'),
+        COMPONENT_STYLE_PATH,
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject(cssFinding('rawHexColour', 2, 21));
+      expect(findings[0]?.message).toContain("'#aabbcc'");
+    });
+  });
+
   describe('raw lengths fail', () => {
     it('fails on a px padding', async () => {
       const findings = await lintComponentStyle(ruleBlock('padding: 16px;'));
@@ -236,6 +300,31 @@ describe('style-tokens/no-raw-literals (apps/web/**/*.css)', () => {
       const findings = await lintComponentStyle(ruleBlock('inset: 0 2px;'));
       expect(findings).toEqual([cssFinding('rawLength', 2, 10)]);
     });
+
+    it('fails on a custom-property length in a plain custom property', async () => {
+      const findings = await lintComponentStyle(ruleBlock('--local-gap: 8px;'));
+      expect(findings).toEqual([cssFinding('rawLength', 2, 14)]);
+    });
+
+    it('fails on a rem length in a custom property', async () => {
+      const findings = await lintComponentStyle(ruleBlock('--local-inset: 0.5rem;'));
+      expect(findings).toEqual([cssFinding('rawLength', 2, 16)]);
+    });
+
+    it('fails on a scroll-margin', async () => {
+      const findings = await lintComponentStyle(ruleBlock('scroll-margin: 8px;'));
+      expect(findings).toEqual([cssFinding('rawLength', 2, 16)]);
+    });
+
+    it('fails on a logical scroll-padding longhand', async () => {
+      const findings = await lintComponentStyle(ruleBlock('scroll-padding-block-start: 1.5rem;'));
+      expect(findings).toEqual([cssFinding('rawLength', 2, 29)]);
+    });
+
+    it('fails on an outline-offset', async () => {
+      const findings = await lintComponentStyle(ruleBlock('outline-offset: 2px;'));
+      expect(findings).toEqual([cssFinding('rawLength', 2, 17)]);
+    });
   });
 
   describe('token references and literal-free values pass', () => {
@@ -257,6 +346,47 @@ describe('style-tokens/no-raw-literals (apps/web/**/*.css)', () => {
           'border-radius: var(--eg-radius-md);',
           'background: color-mix(in srgb, var(--eg-text) 10%, transparent);',
           '--local-gap: var(--eg-space-4);',
+          '--local-zero: 0;',
+          '--local-ratio: 1.5;',
+          '--local-share: 100%;',
+          '--local-calc: calc(var(--eg-space-2) * 2);',
+          'scroll-margin: var(--eg-space-2);',
+          'outline-offset: var(--eg-focus-offset);',
+        ),
+      );
+      expect(findings).toEqual([]);
+    });
+
+    it('passes CSS system colour keywords, the forced-colors way of styling', async () => {
+      // A system colour is not a brand literal: it resolves to the user's OS colour and is the
+      // recommended way to keep a control visible under `forced-colors: active` (WCAG 2.2
+      // SC 1.4.3/1.4.11). It carries no palette value, so it is not reported.
+      const findings = await lintComponentStyle(
+        ruleBlock(
+          'color: CanvasText;',
+          'background-color: Canvas;',
+          'border-color: ButtonText;',
+          'outline-color: LinkText;',
+        ),
+      );
+      expect(findings).toEqual([]);
+    });
+
+    it('does not check sizing, transform, tracking or table spacing properties', async () => {
+      // Documented exclusions (tokens.md, "Deliberately not checked"): there is no numeric token
+      // to reference, so a literal there is not a token violation.
+      const findings = await lintComponentStyle(
+        ruleBlock(
+          'width: 240px;',
+          'height: 48px;',
+          'min-width: 360px;',
+          'max-width: 1280px;',
+          'transform: translateY(-2px);',
+          'letter-spacing: 0.5px;',
+          'word-spacing: 1px;',
+          'text-indent: 2em;',
+          'border-spacing: 4px;',
+          'outline-offset: var(--eg-focus-offset);',
         ),
       );
       expect(findings).toEqual([]);
@@ -321,7 +451,9 @@ describe('style-tokens/no-raw-literals (apps/web/**/*.css)', () => {
       const findings = await lintComponentStyle(
         ruleBlock('--eg-accent: #006b66;', '--eg-space-5: 16px;'),
       );
-      expect(findings).toEqual([cssFinding('rawHexColour', 2, 14)]);
+      // Both halves of the exemption are proved: the colour AND the length that tokens.css is
+      // allowed to declare are raw literals everywhere else.
+      expect(findings).toEqual([cssFinding('rawHexColour', 2, 14), cssFinding('rawLength', 3, 15)]);
     });
 
     it('produces no finding in the current app.css and styles.css', async () => {
@@ -383,6 +515,185 @@ describe('style-tokens/no-raw-literals-inline (inline @Component styles)', () =>
         '}',
         '}',
       ),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('fails on a raw length in a custom property of an inline style', async () => {
+    const findings = await lintInlineStyles(
+      inlineComponent('.example {', '--local-gap: 8px;', 'padding: var(--local-gap);', '}'),
+    );
+    expect(findings).toEqual([inlineFinding('rawLength', 8, 14)]);
+  });
+
+  it('fails on an interpolation immediately followed by a raw unit', async () => {
+    const findings = await lintInlineStylesDetailed(
+      [
+        "import { Component } from '@angular/core';",
+        '',
+        'const space = 8;',
+        '',
+        '@Component({',
+        "  selector: 'app-example',",
+        "  template: '',",
+        '  styles: [',
+        '    `.example { padding: ${space}px; }`',
+        '  ],',
+        '})',
+        'export class ExampleComponent {}',
+        '',
+      ].join('\n'),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject(inlineFinding('rawLength', 9, 34));
+    expect(findings[0]?.message).toContain("'${space}px'");
+  });
+
+  it('fails on an interpolation followed by a unit in a custom property', async () => {
+    const findings = await lintInlineStyles(
+      [
+        "import { Component } from '@angular/core';",
+        '',
+        'const gap = 1.5;',
+        '',
+        '@Component({',
+        "  selector: 'app-example',",
+        "  template: '',",
+        '  styles: [',
+        '    `.example { --local-gap: ${gap}rem; }`',
+        '  ],',
+        '})',
+        'export class ExampleComponent {}',
+        '',
+      ].join('\n'),
+    );
+    expect(findings).toEqual([inlineFinding('rawLength', 9, 36)]);
+  });
+
+  it('passes an interpolation followed by a percentage or used through var()', async () => {
+    const findings = await lintInlineStyles(
+      [
+        "import { Component } from '@angular/core';",
+        '',
+        'const share = 50;',
+        'const gap = "var(--eg-space-4)";',
+        '',
+        '@Component({',
+        "  selector: 'app-example',",
+        "  template: '',",
+        '  styles: [',
+        '    `.example { padding: ${share}%; gap: ${gap}; }`',
+        '  ],',
+        '})',
+        'export class ExampleComponent {}',
+        '',
+      ].join('\n'),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('never scans interpolation source as stylesheet text', async () => {
+    // The expression is JavaScript: `"#fff"` there is not a declaration value, so it is masked
+    // before the entry is read as a stylesheet.
+    const findings = await lintInlineStyles(
+      [
+        "import { Component } from '@angular/core';",
+        '',
+        '@Component({',
+        "  selector: 'app-example',",
+        "  template: '',",
+        '  styles: [',
+        '    `.example { color: ${"#fff"}; }`',
+        '  ],',
+        '})',
+        'export class ExampleComponent {}',
+        '',
+      ].join('\n'),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('does not report an interpolated unit where a static length would not be checked', async () => {
+    // `width` and `transform` are deliberately outside the length contract (see tokens.md), so
+    // `width: ${n}px` is not a raw length there — the same reason `width: 8px` passes.
+    const findings = await lintInlineStyles(
+      [
+        "import { Component } from '@angular/core';",
+        '',
+        'const size = 240;',
+        'const offset = -2;',
+        '',
+        '@Component({',
+        "  selector: 'app-example',",
+        "  template: '',",
+        '  styles: [',
+        '    `.example { width: ${size}px; transform: translateY(${offset}px); }`',
+        '  ],',
+        '})',
+        'export class ExampleComponent {}',
+        '',
+      ].join('\n'),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('checks a stylesheet held in a module-level const referenced by styles', async () => {
+    const findings = await lintInlineStyles(
+      [
+        "import { Component } from '@angular/core';",
+        '',
+        "const EXAMPLE_STYLES = '.example { padding: 16px; }';",
+        '',
+        '@Component({',
+        "  selector: 'app-example',",
+        "  template: '',",
+        '  styles: [EXAMPLE_STYLES],',
+        '})',
+        'export class ExampleComponent {}',
+        '',
+      ].join('\n'),
+    );
+    expect(findings).toEqual([inlineFinding('rawLength', 3, 45)]);
+  });
+
+  it('passes a token-only stylesheet held in a module-level const', async () => {
+    const findings = await lintInlineStyles(
+      [
+        "import { Component } from '@angular/core';",
+        '',
+        'const EXAMPLE_STYLES = `',
+        '.example { padding: var(--eg-space-4); }',
+        '`;',
+        '',
+        '@Component({',
+        "  selector: 'app-example',",
+        "  template: '',",
+        '  styles: [EXAMPLE_STYLES],',
+        '})',
+        'export class ExampleComponent {}',
+        '',
+      ].join('\n'),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('does not resolve a styles reference that is not a module-level const', async () => {
+    // A function call, an import or a `let` is a documented limitation: the rule must stay
+    // silent rather than invent a result for a value it cannot see.
+    const findings = await lintInlineStyles(
+      [
+        "import { Component } from '@angular/core';",
+        '',
+        'let sharedStyles = ".example { color: red; }";',
+        '',
+        '@Component({',
+        "  selector: 'app-example',",
+        "  template: '',",
+        '  styles: [sharedStyles],',
+        '})',
+        'export class ExampleComponent {}',
+        '',
+      ].join('\n'),
     );
     expect(findings).toEqual([]);
   });

@@ -8,13 +8,25 @@
 //   allowed to hold raw values is `apps/web/src/styles/tokens.css`, which the config
 //   exempts.
 // - `no-raw-literals-inline` lints the `styles: [...]` entries of an `@Component`, because
-//   an Angular component style may be a string instead of a .css file.
+//   an Angular component style may be a string instead of a .css file. A template-literal
+//   entry is scanned as a stylesheet AND each interpolation followed by a raw unit
+//   (`${space}px`) is reported, since the unit makes the value a literal length. A
+//   `styles: [NAME]` reference to a module-level `const NAME = '...'` of the same file is
+//   resolved and checked.
 //
 // NOT covered (documented limitation): template `style="..."` attributes and `[style.x]`
 // bindings. They are template input rather than a stylesheet literal and Angular writes
-// them through the sanitizer; the token contract is enforced for stylesheets only.
+// them through the sanitizer; the token contract is enforced for stylesheets only. Also not
+// covered: a style string built elsewhere or imported, the `@core.Component({...})`
+// namespace form (`@Component` is matched as a bare identifier), and `styles` inside a
+// `*.spec.ts` file (the app config block ignores specs).
 
-const { advanceLoc, findDeclarations, findRawLiterals } = require('./raw-literal-detector.js');
+const {
+  advanceLoc,
+  findDeclarations,
+  findRawLiterals,
+  isLengthProperty,
+} = require('./raw-literal-detector.js');
 
 /**
  * The 1-based `line`/`column` of an absolute character offset of a source text.
@@ -42,6 +54,13 @@ const MESSAGES = {
   rawLength:
     "Raw length '{{value}}' in a component style: use an --eg-* spacing, radius, border-width or type token.",
 };
+
+/**
+ * A raw unit directly after a template interpolation: `${space}px`. The interpolation holds a
+ * JavaScript number, so the unit turns it into a CSS length even though no digit appears in
+ * the stylesheet text; scanning the text alone would never see it.
+ */
+const INTERPOLATED_UNIT_RE = /^(px|rem|em)(?![a-zA-Z0-9-])/iu;
 
 /**
  * Reports every finding of one scanned value text, translating the detector's character
@@ -155,6 +174,39 @@ function findStylesProperty(objectExpression) {
   return undefined;
 }
 
+/**
+ * Resolves a `styles: [NAME]` reference to the initializer of a module-level
+ * `const NAME = <string>` of the SAME file. That is the one indirection still visible to a
+ * single-file lint pass; anything else (an import, a function call, a `let` that can change)
+ * is a documented limitation rather than a guess.
+ *
+ * @param {import('eslint').SourceCode} sourceCode the TypeScript source code
+ * @param {object} identifier the referenced identifier node
+ * @returns {object | undefined} the string or template literal initializer, when resolvable
+ */
+function resolveConstInitializer(sourceCode, identifier) {
+  let variable;
+  for (let scope = sourceCode.getScope(identifier); scope && !variable; scope = scope.upper) {
+    variable = scope.set.get(identifier.name);
+  }
+
+  const definition = variable?.defs?.[0];
+  if (!definition || definition.type !== 'Variable' || !definition.node?.init) {
+    return undefined;
+  }
+
+  const declaration = definition.parent;
+  if (!declaration || declaration.kind !== 'const' || declaration.parent?.type !== 'Program') {
+    return undefined;
+  }
+
+  const initializer = definition.node.init;
+  if (initializer.type === 'Literal' && typeof initializer.value === 'string') {
+    return initializer;
+  }
+  return initializer.type === 'TemplateLiteral' ? initializer : undefined;
+}
+
 /** @type {import('eslint').Rule.RuleModule} */
 const noRawLiteralsInline = {
   meta: {
@@ -172,7 +224,118 @@ const noRawLiteralsInline = {
     const text = sourceCode.text;
 
     /**
-     * Checks one `styles` entry (a string literal or a template literal without
+     * Reports `${space}px`, `${space}rem` and `${space}em`: an interpolation immediately
+     * followed by a raw unit builds a literal length at runtime, which is exactly what the
+     * token contract forbids. The report covers the unit and names the interpolation in
+     * `value`.
+     *
+     * Only a declaration whose static value would be checked qualifies (a length property or a
+     * custom property), so `width: ${n}px` is not reported for the same reason `width: 8px`
+     * is not: sizing is deliberately outside the contract.
+     *
+     * @param {object} expression a template interpolation's ESTree expression node
+     * @param {Array<{ property: string, valueStart: number, valueText: string }>} declarations
+     *   the declarations of the same stylesheet content
+     * @param {number} contentStart file offset of the content's first character
+     * @returns {void}
+     */
+    function reportInterpolatedUnit(expression, declarations, contentStart) {
+      if (!expression.range) {
+        return;
+      }
+
+      // The interpolation's closing brace is the first `}` after the expression: a `}` inside
+      // the expression itself (an object literal, a nested template) is part of its range.
+      const closingBrace = text.indexOf('}', expression.range[1]);
+      if (closingBrace === -1) {
+        return;
+      }
+
+      const unitStart = closingBrace + 1;
+      const unitMatch = INTERPOLATED_UNIT_RE.exec(text.slice(unitStart, unitStart + 3));
+      if (!unitMatch) {
+        return;
+      }
+
+      const unitOffset = unitStart - contentStart;
+      const declaration = declarations.find(
+        (candidate) =>
+          unitOffset >= candidate.valueStart &&
+          unitOffset < candidate.valueStart + candidate.valueText.length,
+      );
+      if (!declaration) {
+        return;
+      }
+      const property = declaration.property.toLowerCase();
+      if (!isLengthProperty(property) && !property.startsWith('--')) {
+        return;
+      }
+
+      const interpolationStart = text.lastIndexOf('${', expression.range[0]);
+      const interpolation =
+        interpolationStart === -1 ? '' : text.slice(interpolationStart, unitStart);
+      // `index` is an absolute offset into the file here, so `valueOffset` is 0.
+      reportFindings(
+        context,
+        expression,
+        text,
+        0,
+        [
+          {
+            index: unitStart,
+            length: unitMatch[1].length,
+            messageId: 'rawLength',
+            data: { value: `${interpolation}${unitMatch[1]}` },
+          },
+        ],
+        0,
+      );
+    }
+
+    /**
+     * Replaces every `${...}` of a template entry with spaces, keeping the text length so every
+     * offset still maps to the file. A declaration value scanner stops at `{`/`}` — an
+     * interpolation would truncate `padding: ${space}px` at the `${` — and expression source is
+     * JavaScript, not stylesheet text, so it must not be scanned for literals either.
+     *
+     * @param {string} content the entry's source text
+     * @param {number} contentStart file offset of `content[0]`
+     * @param {Array<object>} expressions the template's interpolation nodes
+     * @returns {string} same-length text with the interpolations blanked
+     */
+    function blankInterpolations(content, contentStart, expressions) {
+      if (expressions.length === 0) {
+        return content;
+      }
+
+      const characters = content.split('');
+      const blank = (from, to) => {
+        for (
+          let offset = Math.max(from, 0);
+          offset < to && offset < characters.length;
+          offset += 1
+        ) {
+          characters[offset] = ' ';
+        }
+      };
+
+      for (const expression of expressions) {
+        if (!expression.range) {
+          continue;
+        }
+        const open = text.lastIndexOf('${', expression.range[0]);
+        if (open === -1) {
+          continue;
+        }
+        const close = text.indexOf('}', expression.range[1]);
+        blank(open - contentStart, close === -1 ? content.length : close + 1 - contentStart);
+      }
+
+      return characters.join('');
+    }
+
+    /**
+     * Checks one `styles` entry (a string literal, or a template literal with or without
      * interpolation) as a stylesheet.
      *
      * @param {object} element literal or template-literal node
@@ -181,6 +344,7 @@ const noRawLiteralsInline = {
     function checkStylesEntry(element) {
       let contentStart;
       let content;
+      let expressions = [];
 
       if (element.type === 'TemplateLiteral') {
         const first = element.quasis[0];
@@ -192,7 +356,12 @@ const noRawLiteralsInline = {
         // test the characters instead of assuming either shape.
         contentStart = text[first.range[0]] === '`' ? first.range[0] + 1 : first.range[0];
         const contentEnd = text[last.range[1] - 1] === '`' ? last.range[1] - 1 : last.range[1];
-        content = text.slice(contentStart, contentEnd);
+        expressions = element.expressions;
+        content = blankInterpolations(
+          text.slice(contentStart, contentEnd),
+          contentStart,
+          expressions,
+        );
       } else if (element.type === 'Literal' && typeof element.value === 'string') {
         // The source slice, not `element.value`: an escape sequence must not shift the
         // offsets the report locations are computed from. The content starts one character
@@ -203,12 +372,18 @@ const noRawLiteralsInline = {
         return;
       }
 
-      for (const declaration of findDeclarations(content)) {
+      const declarations = findDeclarations(content);
+
+      for (const declaration of declarations) {
         const findings = findRawLiterals(declaration.property, declaration.valueText);
         if (findings.length === 0) {
           continue;
         }
         reportFindings(context, element, text, contentStart + declaration.valueStart, findings, 0);
+      }
+
+      for (const expression of expressions) {
+        reportInterpolatedUnit(expression, declarations, contentStart);
       }
     }
 
@@ -229,9 +404,24 @@ const noRawLiteralsInline = {
         const value = stylesProperty.value;
         if (value.type === 'ArrayExpression') {
           for (const element of value.elements) {
-            if (element) {
-              checkStylesEntry(element);
+            if (!element) {
+              continue;
             }
+            if (element.type === 'Identifier') {
+              const initializer = resolveConstInitializer(sourceCode, element);
+              if (initializer) {
+                checkStylesEntry(initializer);
+              }
+              continue;
+            }
+            checkStylesEntry(element);
+          }
+          return;
+        }
+        if (value.type === 'Identifier') {
+          const initializer = resolveConstInitializer(sourceCode, value);
+          if (initializer) {
+            checkStylesEntry(initializer);
           }
           return;
         }

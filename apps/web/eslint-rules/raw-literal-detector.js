@@ -16,7 +16,9 @@
 //   property and a `var(--x, <fallback>)` fallback (the fallback is ordinary value text);
 // - CSS named colours in colour-bearing properties and in custom properties;
 // - non-zero `px`/`rem`/`em` lengths in spacing, radius, border-width, type-size and
-//   shadow-offset properties (the token categories that have numeric tokens).
+//   shadow-offset properties, and in EVERY custom property (a local `--local-gap: 8px`
+//   copies a raw length exactly like `gap: 8px` does) — the categories that have numeric
+//   tokens.
 // Allowed everywhere: `var(--*)` references, `0`, unitless numbers, percentages, and the
 // keywords below. `@media`/`@container`/`@supports` PRELUDES are never scanned — CSS cannot
 // read custom properties there, so `--eg-bp-tablet`/`--eg-bp-desktop` have literal mirrors.
@@ -220,6 +222,10 @@ const LENGTH_PROPERTY_PATTERNS = [
   /^row-gap$/u,
   /^column-gap$/u,
   /^grid-(row|column)-gap$/u,
+  // `scroll-margin*`/`scroll-padding*` are a spacing scale like `margin`/`padding`, longhands
+  // and logical forms included: a scroll snap offset is never viewport-relative.
+  /^scroll-margin(-.+)?$/u,
+  /^scroll-padding(-.+)?$/u,
   /^inset(-.+)?$/u,
   /^(top|right|bottom|left)$/u,
   /^border-radius$/u,
@@ -231,6 +237,7 @@ const LENGTH_PROPERTY_PATTERNS = [
   /^border-(top|right|bottom|left|block|inline)(-(start|end))?$/u,
   /^outline$/u,
   /^outline-width$/u,
+  /^outline-offset$/u,
   /^font$/u,
   /^font-size$/u,
   /^line-height$/u,
@@ -292,11 +299,16 @@ function isLengthProperty(property) {
  * (an SVG fragment id is not a hex colour). Every blanked character becomes a space, so an
  * index into the returned string is still an index into the original value.
  *
+ * The mask is length-preserving in UTF-16 CODE UNITS, not code points: every index a caller
+ * uses (`match.index`, `masked[index]`, `valueText.slice(...)`) is a code-unit offset, so the
+ * text is split with `split('')`. Splitting with `[...text]` would collapse a surrogate pair
+ * into one entry and shift every offset after a non-BMP character (an emoji) by one.
+ *
  * @param {string} text declaration value text
  * @returns {string} same-length text with non-code spans blanked
  */
 function maskNonCode(text) {
-  const characters = [...text];
+  const characters = text.split('');
   const length = text.length;
 
   const blank = (from, to) => {
@@ -439,7 +451,10 @@ function findRawLiterals(property, valueText) {
     }
   }
 
-  if (isLengthProperty(normalisedProperty)) {
+  // A custom property is checked for lengths as well as colours: `--local-gap: 8px` copies a
+  // raw value just as `gap: 8px` does, and a component that declares it locally is exactly how
+  // a raw length would otherwise slip past the rule. `tokens.css` stays exempt at config level.
+  if (isLengthProperty(normalisedProperty) || normalisedProperty.startsWith('--')) {
     for (const match of masked.matchAll(DIMENSION_RE)) {
       const numberMatch = DIMENSION_NUMBER_RE.exec(match[0]);
       if (numberMatch && Number.parseFloat(numberMatch[0]) === 0) {
