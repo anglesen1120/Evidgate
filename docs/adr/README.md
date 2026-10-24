@@ -25,3 +25,4 @@
 | [0005-licence-allow-deny-policy.md](0005-licence-allow-deny-policy.md) | Licence allow/deny policy for NuGet and npm | accepted | 2026-09-25 |
 | [0006-cqrs-pipeline-and-data-access.md](0006-cqrs-pipeline-and-data-access.md) | CQRS pipeline and data access | accepted | 2026-09-25 |
 | [0007-single-github-app.md](0007-single-github-app.md) | Single GitHub App per environment (production + non-production) | proposed | 2026-10-11 |
+| [0008-web-integration-fit.md](0008-web-integration-fit.md) | Web integration fit: SDK behind `HttpClient`, zoneless, Trusted Types, CDK tables, SignalStore | accepted | 2026-10-24 |
