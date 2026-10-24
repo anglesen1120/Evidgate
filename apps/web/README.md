@@ -84,7 +84,8 @@ production edge of 10.2.1-T1.4 — nothing hand-copies a policy string:
 | `e2e/csp.spec.ts`             | The Playwright AC7 proof, run on both locales                                                                                                       |
 
 The policy itself — `trusted-types` is `angular` only, so the `angular#unsafe-bypass` entry of the
-ADR-0008 spike is deliberately not shipped and no `bypassSecurityTrust*` value can reach a DOM sink:
+ADR-0008 spike is deliberately not shipped and a `bypassSecurityTrust*` value is refused when it
+reaches a DOM sink:
 
 | Directive                   | Value                                 | What it does                                                                |
 | --------------------------- | ------------------------------------- | --------------------------------------------------------------------------- |
@@ -100,6 +101,13 @@ ADR-0008 spike is deliberately not shipped and no `bypassSecurityTrust*` value c
 | `object-src`                | `'none'`                              | no plugin or embedded object content                                        |
 | `require-trusted-types-for` | `'script'`                            | DOM script sinks accept Trusted Types only                                  |
 | `trusted-types`             | `angular`                             | the only policy name the app may create — no `angular#unsafe-bypass`        |
+
+**No script nonce.** `script-src` is `'self'` alone: the application builder copies the nonce onto
+its own `<script>` tags (`nonce="__CSP_NONCE__"` in the emitted `index.html`), but with no
+`'nonce-…'` source in `script-src` those attributes are inert — the scripts load because they are
+same-origin, not because of the nonce — so they are never a reason to add the nonce to
+`script-src`: `assertStrictPolicy` compares that directive whole against `'self'` and rejects a
+policy whose nonce appears anywhere but `style-src`.
 
 **`EVIDGATE_WEB_CONNECT_SRC`** is the one environment input: a space- or comma-separated list of
 `https:`/`wss:` origins appended to `connect-src` (`parseConnectSrc` validates each one and fails
@@ -119,13 +127,28 @@ that body does not use). The production edge repeats exactly this contract
 (`e2e/static-server.mjs` is its reference): it consumes the JSON, never edits a built JS/CSS file,
 and its acceptance check is `csp.spec.ts` run against the edge preview.
 
-**Trusted Types ban.** Because the policy allows the `angular` policy only, a `bypassSecurityTrust*`
-call throws at run time. The lint rule `evidgate/no-bypass-security-trust` catches it earlier: every
-`DomSanitizer.bypassSecurityTrust{Html,Style,Script,Url,ResourceUrl}` access, call, alias and
-destructuring under `src/` is reported, except inside a directory named exactly
-`artifact-viewer-bridge` below `src/app` (the rule's single constant; the 06 viewer bridge of
-09.4.1-T5 lives there or amends the constant). Bind the text with interpolation or `[innerText]`
-instead.
+**Trusted Types ban.** Because the policy lists `angular` only, a `bypassSecurityTrust*` value is
+refused when it reaches a DOM sink: the app-origin policy has no `angular#unsafe-bypass` policy that
+could hand the sink a value, so the refusal happens at the sink, not as a throw from the call. The
+lint rule `evidgate/no-bypass-security-trust` (`lint/rules/no-bypass-security-trust.cjs`) reports
+the same mistake earlier, where the author still sees the line: under `src/` every use of
+`DomSanitizer.bypassSecurityTrust{Html,Style,Script,Url,ResourceUrl}` is reported — a plain or
+optional-chained member access or call; a computed member name that is constant, i.e. a string
+literal, a template literal or a `+` chain of those; a bare identifier call; a destructuring,
+computed key included; an import of the name, aliased or not; and any other constant that spells one
+of the five exactly, wherever it appears — a key held in a `const`,
+`Reflect.get(sanitizer, 'bypassSecurityTrustHtml')`, and the inner literal of
+``sanitizer[`${'bypassSecurityTrustHtml'}`]``, because a template literal with expressions is not
+folded and its inner literals are reported instead. A bypass call written inside an inline
+`template:` string is template source rather than AST, so the rule scans that property's value and
+reports it once per property; a `templateUrl` file is outside its scope, because the Angular
+template rules that run over `.html` do not look for a bypass call. The rule's single allow-list is
+a directory named exactly `artifact-viewer-bridge` at any depth below `apps/web/src/app`: the segment
+must match exactly (an `artifact-viewer-bridge-notes.ts` file or a `not-artifact-viewer-bridge/`
+directory stays reportable), `..` is resolved before the check so a path cannot leave the bridge, and
+a path outside `apps/web/src/app/` is never exempt. The allow-list is a lint exemption only, not a
+policy grant: whether the bridge may itself render is the isolated viewer origin's own policy
+question (06.3.3 / 09.4.1-T5, open there). Bind the text with interpolation or `[innerText]` instead.
 
 **Style attributes.** `style-src` has no `unsafe-inline`, so a static `style="…"` attribute in a
 template is blocked by the browser: the declaration is dropped and a `securitypolicyviolation` is

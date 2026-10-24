@@ -119,11 +119,15 @@ test('carries the app-origin policy on every status class', async ({ request }) 
     await request.get('/vi/missing.js'), // 404: an asset a broken reference asks for
     await request.get('/', { maxRedirects: 0 }), // 302: the locale redirect
     await request.post('/'), // 405: a method a static bundle does not answer
+    await request.get('/..%2f..%2fpackage.json'), // 403: a traversal refused before any read
   ];
 
-  expect(answers.map((answer) => answer.status())).toEqual([200, 404, 302, 405]);
+  expect(answers.map((answer) => answer.status())).toEqual([200, 404, 302, 405, 403]);
   for (const answer of answers) {
     expectPolicy(answer.headers());
+    // `no-store` on every answer, not only on documents: the policy names a per-response nonce,
+    // so a cache that replays any of these would replay a nonce the next header does not allow.
+    expect(answer.headers()['cache-control']).toBe('no-store');
   }
 
   // 400: a malformed escape. Sent verbatim over a socket, because the `request` fixture
@@ -131,6 +135,7 @@ test('carries the app-origin policy on every status class', async ({ request }) 
   const raw = await rawRequest(realDistPort(), 'GET /%zz HTTP/1.1');
   expect(raw.split('\r\n')[0]).toContain('400');
   expectPolicy(rawHeaders(raw));
+  expect(rawHeaders(raw)['cache-control']).toBe('no-store');
 });
 
 test('writes the nonce of its own policy header into each locale document', async ({ request }) => {
@@ -240,20 +245,35 @@ async function freePort(): Promise<number> {
   return port;
 }
 
+/** How long a temporary server may take to print its "serving" line before the start fails. */
+const START_TIMEOUT_MS = 10_000;
+
 function waitUntilServing(child: ChildProcessWithoutNullStreams): Promise<void> {
   return new Promise((resolveServing, rejectServing) => {
     let stderr = '';
+    // A child that never reaches its listen callback would hang the whole suite instead of
+    // failing it, so the wait is bounded and the failure quotes what the child did say.
+    const timer = setTimeout(() => {
+      rejectServing(
+        new Error(`static-server.mjs did not serve within ${START_TIMEOUT_MS} ms: ${stderr}`),
+      );
+    }, START_TIMEOUT_MS);
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk: string) => {
       stderr += chunk;
     });
-    child.once('error', rejectServing);
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      rejectServing(error);
+    });
     child.once('exit', (code) => {
+      clearTimeout(timer);
       rejectServing(new Error(`static-server.mjs exited (${String(code)}): ${stderr}`));
     });
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
       if (chunk.includes('serving')) {
+        clearTimeout(timer);
         resolveServing();
       }
     });
@@ -277,22 +297,35 @@ async function runToExit(
  * Start `static-server.mjs` over a throwaway dist whose single-layout index.html is `indexHtml`.
  * `env` adds variables to the child's environment — the policy tests set
  * `EVIDGATE_WEB_CONNECT_SRC` this way — and a value there wins over the inherited one.
+ *
+ * A start that fails (no "serving" line, an early exit) kills the child and drops the temp dir
+ * before rethrowing: the caller only gets a `TempServer` it can stop, so a failed start would
+ * otherwise leave a process and a directory behind for the rest of the run.
  */
 async function startDist(indexHtml: string, env: Record<string, string> = {}): Promise<TempServer> {
   const tempDir = mkdtempSync(join(tmpdir(), 'evidgate-web-e2e-'));
-  const distDir = join(tempDir, 'dist', 'browser');
-  mkdirSync(distDir, { recursive: true });
-  writeFileSync(join(distDir, 'index.html'), indexHtml);
+  let child: ChildProcessWithoutNullStreams | undefined;
+  try {
+    const distDir = join(tempDir, 'dist', 'browser');
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(join(distDir, 'index.html'), indexHtml);
 
-  const port = await freePort();
-  // `EVIDGATE_WEB_E2E_ROOT` points the server at the temporary dist; the port goes as the
-  // first argument, which wins over the `EVIDGATE_WEB_E2E_PORT` value the config set for the
-  // suite's own server and that this child inherits.
-  const child = spawn(process.execPath, [SERVER_FILE, String(port)], {
-    env: { ...process.env, [ROOT_ENV]: distDir, ...env },
-  });
-  await waitUntilServing(child);
-  return { url: `http://127.0.0.1:${port}`, port, child, tempDir };
+    const port = await freePort();
+    // `EVIDGATE_WEB_E2E_ROOT` points the server at the temporary dist; the port goes as the
+    // first argument, which wins over the `EVIDGATE_WEB_E2E_PORT` value the config set for the
+    // suite's own server and that this child inherits.
+    child = spawn(process.execPath, [SERVER_FILE, String(port)], {
+      env: { ...process.env, [ROOT_ENV]: distDir, ...env },
+    });
+    await waitUntilServing(child);
+    return { url: `http://127.0.0.1:${port}`, port, child, tempDir };
+  } catch (error) {
+    // SIGKILL, not SIGTERM: a child that never reached its listen callback has no handler yet,
+    // and a failed start must not wait out a grace period it will not use.
+    child?.kill('SIGKILL');
+    rmSync(tempDir, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 /** Kill a temporary server and drop its dist; also safe for one that already exited. */
@@ -318,8 +351,15 @@ async function startTempServer(): Promise<TempServer> {
   const distDir = join(server.tempDir, 'dist', 'browser');
   // Stat-able but not readable: the read stream fails, the server must answer 500.
   writeFileSync(join(distDir, 'locked.txt'), 'never served');
+  // The same failure for a DOCUMENT: `sendDocument` reads the whole file before writing a
+  // header, so this path proves a 500 that still carries its own policy header.
+  writeFileSync(
+    join(distDir, 'locked.html'),
+    '<!doctype html><html><body>never served</body></html>',
+  );
   if (!IS_ROOT) {
     chmodSync(join(distDir, 'locked.txt'), 0o000);
+    chmodSync(join(distDir, 'locked.html'), 0o000);
   }
   // A link that leads out of the bundle: served only if the server trusted the link.
   const outsideFile = join(server.tempDir, 'outside-the-bundle.txt');
@@ -412,6 +452,17 @@ test('answers 500 for a file it cannot read and keeps serving the bundle', async
   const response = await request.get(`${url}/locked.txt`);
   expect(response.status()).toBe(500);
   expect(await response.text()).toBe('Internal Server Error');
+  // The 500 is an answer like any other: it carries its own policy and its own nonce.
+  expectPolicy(response.headers());
+  expect(response.headers()['cache-control']).toBe('no-store');
+
+  // The document path fails in `sendDocument`, which reads the whole file before writing any
+  // header: that 500 goes through `sendText` and must carry the same policy.
+  const documentResponse = await request.get(`${url}/locked.html`);
+  expect(documentResponse.status()).toBe(500);
+  expect(await documentResponse.text()).toBe('Internal Server Error');
+  expectPolicy(documentResponse.headers());
+  expect(documentResponse.headers()['cache-control']).toBe('no-store');
 
   expect((await request.get(`${url}/`)).status()).toBe(200);
 });
@@ -441,6 +492,9 @@ test('refuses a symlink that leads out of the bundle', async ({ request }) => {
   const response = await request.get(`${url}/escape.txt`);
   expect(response.status()).toBe(403);
   expect(await response.text()).not.toContain('outside the bundle');
+  // A refusal carries the app-origin policy and the no-store contract like every other answer.
+  expectPolicy(response.headers());
+  expect(response.headers()['cache-control']).toBe('no-store');
 });
 
 test('refuses to start when index.html is a link out of the bundle', async () => {
@@ -563,16 +617,19 @@ test('refuses to start when EVIDGATE_WEB_CONNECT_SRC is not a list of origins', 
     mkdirSync(distDir, { recursive: true });
     writeFileSync(join(distDir, 'index.html'), '<!doctype html><html><body></body></html>');
 
-    const child = spawn(process.execPath, [SERVER_FILE, String(await freePort())], {
-      env: { ...process.env, [ROOT_ENV]: distDir, [CONNECT_SRC_ENV]: '*' },
-    });
-    const { code, stderr } = await runToExit(child);
+    // A wildcard would open `connect-src` to every host, and a port outside 1-65535 is not a
+    // port a browser can reach: both stop the server at start with the variable named, instead
+    // of weakening the policy of every later response or shipping a dead source.
+    for (const value of ['*', 'https://api.example.com:99999']) {
+      const child = spawn(process.execPath, [SERVER_FILE, String(await freePort())], {
+        env: { ...process.env, [ROOT_ENV]: distDir, [CONNECT_SRC_ENV]: value },
+      });
+      const { code, stderr } = await runToExit(child);
 
-    // A wildcard would open `connect-src` to every host, so it stops the server at start with
-    // the variable named, instead of weakening the policy of every later response.
-    expect(code).toBe(1);
-    expect(stderr).toContain(CONNECT_SRC_ENV);
-    expect(stderr).toContain('*');
+      expect(code, value).toBe(1);
+      expect(stderr, value).toContain(CONNECT_SRC_ENV);
+      expect(stderr, value).toContain(`invalid connect-src entry ${JSON.stringify(value)}`);
+    }
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

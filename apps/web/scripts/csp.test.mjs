@@ -1,8 +1,10 @@
 // 09.1.1-T10 (AC7, ADR-0008 rule 4): proofs for apps/web/scripts/csp.mjs and for the repo wiring
-// the policy depends on (the src/index.html placeholder, the angular.json build flags and the
-// shared deploy JSON). Each case asserts an observable property of the produced header or of the
-// files that feed it, so the suite fails when the policy silently drifts rather than when the
-// implementation is rewritten in an equivalent way.
+// the policy depends on (the src/index.html placeholder and the angular.json build flags). Each
+// case asserts an observable property of the produced header or of the files that feed it, so the
+// suite fails when the policy silently drifts rather than when the implementation is rewritten in
+// an equivalent way. The deploy JSON needs no shape re-check — importing the module already
+// refuses a malformed one and the fixed-policy case pins the bytes it produces — but its nonce
+// marker is pinned below, because the deployed edge substitutes that exact token from that file.
 //
 // Repo files are resolved from this test's own location (`new URL('../src/index.html', ...)`), so
 // the suite behaves identically whatever the caller's cwd is — the same convention as
@@ -13,6 +15,7 @@ import test from 'node:test';
 
 import {
   NONCE_PLACEHOLDER,
+  assertConnectSrcAppendable,
   assertStrictPolicy,
   buildCsp,
   buildSecurityHeaders,
@@ -170,10 +173,51 @@ test('connectSrc rejects anything but a bare https:/wss: origin, naming the entr
     'data:',
     'https://',
     'a.com',
+    'https://a..b',
+    'https://a.example.com.',
+    'https://-a.example.com',
+    'https://a.example.com:',
+    'https://a.example.com:0',
+    'https://a.example.com:65536',
+    'https://a.example.com:99999',
   ];
   for (const entry of rejected) {
     assertThrowsNaming(entry, () => buildCsp({ nonce: VALID_NONCE, connectSrc: [entry] }));
   }
+});
+
+test('connectSrc normalises the scheme and host to lower case', () => {
+  const policy = buildCsp({
+    nonce: VALID_NONCE,
+    connectSrc: ['HTTPS://API.Example.COM', 'WSS://X.Example.COM:8443'],
+  });
+  // A CSP source is case-insensitive, so the header carries one canonical spelling: the emitted
+  // bytes never depend on the casing the deploy environment used.
+  assert.equal(
+    splitPolicy(policy).get('connect-src').join(' '),
+    "'self' https://api.example.com wss://x.example.com:8443",
+  );
+
+  // Two spellings of one origin are one source, not two entries in the header.
+  const deduplicated = buildCsp({
+    nonce: VALID_NONCE,
+    connectSrc: ['https://api.example.com', 'HTTPS://api.example.com'],
+  });
+  assert.equal(
+    splitPolicy(deduplicated).get('connect-src').join(' '),
+    "'self' https://api.example.com",
+  );
+});
+
+test('buildCsp refuses connectSrc extras for a policy without a connect-src directive', () => {
+  assert.throws(
+    () => assertConnectSrcAppendable({ 'img-src': ["'self'"] }, ['https://api.example.com']),
+    /connect-src/,
+  );
+  // No extras means nothing to drop, so a policy without connect-src stays valid.
+  assert.deepEqual(assertConnectSrcAppendable({ 'img-src': ["'self'"] }, []), []);
+  const extras = ['https://a.b'];
+  assert.deepEqual(assertConnectSrcAppendable({ 'connect-src': ["'self'"] }, extras), extras);
 });
 
 test('parseConnectSrc splits comma and whitespace separated allowlists', () => {
@@ -224,6 +268,65 @@ test('assertStrictPolicy keeps the nonce inside style-src', () => {
   );
 });
 
+test('assertStrictPolicy compares forbidden sources case-insensitively', () => {
+  // A browser matches a CSP keyword case-insensitively, so a hand-edited policy that spells the
+  // escape hatch `'Unsafe-Inline'` would be honoured there and must not pass this guard.
+  for (const policy of [
+    "default-src 'none'; script-src 'Unsafe-Inline'",
+    "default-src 'none'; script-src 'UNSAFE-EVAL'",
+    "default-src 'none'; script-src 'Strict-Dynamic'",
+    "connect-src *; script-src 'self'",
+    "trusted-types Angular#Unsafe-Bypass; script-src 'self'",
+  ]) {
+    assert.throws(() => assertStrictPolicy(policy), /forbidden source/);
+  }
+  // A CSP keyword is matched case-insensitively by the browser, so a differently-cased `'self'`
+  // is the same single source and stays allowed by the exact-source rule.
+  const trustedTypes = "; require-trusted-types-for 'script'; trusted-types angular";
+  const caseVaried = `script-src 'Self'${trustedTypes}`;
+  assert.equal(assertStrictPolicy(caseVaried), caseVaried);
+});
+
+test('assertStrictPolicy requires Trusted Types to stay enforced', () => {
+  const base = "default-src 'none'; script-src 'self'; style-src 'self'";
+  const requireScript = "; require-trusted-types-for 'script'";
+  assert.throws(() => assertStrictPolicy(base), /require-trusted-types-for/);
+  // The directive alone is not enough: without `trusted-types`, every policy name is free.
+  assert.throws(() => assertStrictPolicy(`${base}${requireScript}`), /trusted-types directive/);
+  // Only `'script'` counts: any other value would leave the DOM sinks this policy closes open.
+  assert.throws(
+    () => assertStrictPolicy(`${base}; require-trusted-types-for 'style'`),
+    /require-trusted-types-for/,
+  );
+  const complete = `${base}${requireScript}; trusted-types angular`;
+  assert.equal(assertStrictPolicy(complete), complete);
+});
+
+test('assertStrictPolicy keeps script-src at exactly self', () => {
+  const trustedTypes = "; require-trusted-types-for 'script'; trusted-types angular";
+  for (const scriptSrc of [
+    "'self' data:",
+    "'self' blob:",
+    'blob:',
+    'data:',
+    'https:',
+    'http:',
+    "'self' https://cdn.example.com",
+    'https://cdn.example.com',
+  ]) {
+    assert.throws(
+      () => assertStrictPolicy(`default-src 'none'; script-src ${scriptSrc}${trustedTypes}`),
+      /script-src must be exactly 'self'/,
+    );
+  }
+  assert.throws(
+    () => assertStrictPolicy(`default-src 'none'${trustedTypes}`),
+    /script-src must be exactly 'self'/,
+  );
+  const allowed = `script-src 'self'${trustedTypes}`;
+  assert.equal(assertStrictPolicy(allowed), allowed);
+});
+
 test('injectNonce replaces every placeholder and leaves the rest byte-identical', () => {
   const html =
     '<app-root ngCspNonce="__CSP_NONCE__"></app-root>' +
@@ -253,10 +356,11 @@ test('injectNonce throws on an invalid nonce and passes html without placeholder
   assert.equal(injectNonce(plain, VALID_NONCE), plain);
 });
 
-test('src/index.html carries exactly one nonce placeholder, on the app-root element', () => {
+test('src/index.html carries the nonce placeholder on the app-root element', () => {
   const html = readFileSync(INDEX_HTML_PATH, 'utf8');
 
-  assert.equal(html.split(NONCE_PLACEHOLDER).length - 1, 1);
+  // Only the attribute is asserted: its count is an incidental property of the template, while
+  // `ngCspNonce` on the app root is what Angular reads to authorise the styles it writes.
   assert.match(html, /<app-root\b[^>]*\sngCspNonce="__CSP_NONCE__"[^>]*>/);
 });
 
@@ -269,19 +373,10 @@ test('angular.json disables SRI and critical-path inlining and never enables aut
   assert.equal(containsKey(angular, 'autoCsp'), false);
 });
 
-test('the deploy JSON matches the module and holds a non-empty source list per directive', () => {
-  const policy = readJson(POLICY_JSON_PATH);
-
-  assert.equal(policy.nonce_placeholder, NONCE_PLACEHOLDER);
-  assert.equal(policy.nonce_marker, '{nonce}');
-
-  const directives = Object.entries(policy.directives);
-  assert.ok(directives.length > 0, 'the policy must declare directives');
-  for (const [name, sources] of directives) {
-    assert.ok(Array.isArray(sources) && sources.length > 0, `${name} must be a non-empty array`);
-    for (const source of sources) {
-      assert.equal(typeof source, 'string');
-      assert.notEqual(source, '', `${name} must not hold an empty source`);
-    }
-  }
+test('the deploy JSON keeps the nonce marker the edge substitutes', () => {
+  // The one JSON property the module does NOT assert at import: `csp.mjs` requires only a
+  // non-empty marker and substitutes whatever it finds, so a renamed marker would leave every
+  // header in this suite byte-identical while the deployed edge — which replaces this exact
+  // token out of the same file (10.2.1-T1.4) — served it verbatim in `style-src`.
+  assert.equal(readJson(POLICY_JSON_PATH).nonce_marker, '{nonce}');
 });

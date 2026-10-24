@@ -632,11 +632,18 @@ test('blocks inline script and style that carry no allowed nonce', async ({ page
   );
   await page.goto('/csp-probe.html');
 
-  // Two blocked scripts plus a blocked <style> and a blocked style attribute: wait for the
-  // violation events (they are dispatched asynchronously) instead of reading a half-filled list.
+  // Two blocked scripts, a blocked <style> and a blocked style attribute: four violations, but a
+  // count is the wrong thing to wait on — it says nothing about WHICH event arrived last, so the
+  // assertions below could read a list that already has four entries of the wrong kinds. Wait for
+  // exactly the directives they inspect (accepting either spelling of the element directives)
+  // and for the document to finish loading, instead of a fixed sleep.
   await page.waitForFunction(() => {
     const probe = window as unknown as ProbeWindow;
-    return (probe.__violations?.length ?? 0) >= 3;
+    if (document.readyState !== 'complete') return false;
+    const blocked = new Set((probe.__violations ?? []).map((violation) => violation.directive));
+    const scriptBlocked = blocked.has('script-src-elem') || blocked.has('script-src');
+    const styleBlocked = blocked.has('style-src-elem') || blocked.has('style-src');
+    return scriptBlocked && styleBlocked && blocked.has('style-src-attr');
   });
 
   const state = await page.evaluate(readProbeState);

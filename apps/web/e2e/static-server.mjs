@@ -28,10 +28,12 @@
 //   - a fresh nonce is generated for EVERY response (document, asset, redirect, error text) and
 //     the status line plus that header are always written through `writeResponseHead`, so no
 //     answer path can forget the policy;
+//   - every answer is also sent `cache-control: no-store`, because the policy is a per-response
+//     decision: a stored copy would replay a nonce that the next response's header does not
+//     allow, whether it is a document, an asset, a redirect or an error text;
 //   - HTML documents (each locale's index.html and the SPA fallback) are read whole instead of
 //     streamed, because `__CSP_NONCE__` is replaced there — in `ngCspNonce` and in every other
-//     occurrence — with the nonce of that response's own header, and are sent `no-store`: a
-//     cached copy would name a nonce a later policy header does not allow;
+//     occurrence — with the nonce of that response's own header;
 //   - assets are still streamed untouched, with a policy header but no nonce in the body, where
 //     it could not be used anyway.
 // `EVIDGATE_WEB_CONNECT_SRC` widens `connect-src` beyond `'self'` for a suite that has to call
@@ -217,8 +219,16 @@ function writeResponseHead(response, status, headers, nonce = generateNonce()) {
   return nonce;
 }
 
+/**
+ * Answer with plain text (an error text). `cache-control: no-store` applies to every answer this
+ * server writes, not only to documents: a stored error text would be replayed without its policy
+ * ever being re-evaluated, and the policy of a response is a per-response decision.
+ */
 function sendText(response, status, body) {
-  writeResponseHead(response, status, { 'content-type': 'text/plain; charset=utf-8' });
+  writeResponseHead(response, status, {
+    'content-type': 'text/plain; charset=utf-8',
+    'cache-control': 'no-store',
+  });
   response.end(body);
 }
 
@@ -377,6 +387,7 @@ const server = createServer((request, response) => {
     writeResponseHead(response, 405, {
       allow: ALLOWED_METHODS,
       'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
     });
     response.end('Method Not Allowed');
     return;
@@ -410,7 +421,10 @@ const server = createServer((request, response) => {
   // outlive the dist it was served from. A path that names a locale is never redirected, so
   // `/vi/` and `/vi` answer with that locale's page.
   if (!ROOT_LAYOUT && route.fromRoot && route.parts.length === 0) {
-    writeResponseHead(response, 302, { location: `/${START_LOCALE}/` });
+    writeResponseHead(response, 302, {
+      location: `/${START_LOCALE}/`,
+      'cache-control': 'no-store',
+    });
     response.end();
     return;
   }

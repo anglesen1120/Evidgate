@@ -82,9 +82,9 @@ module.exports = [
   },
   // 09.1.1-T10 (AC7, ADR-0008 rule 4; 00 §5.6 W6, FR-09-15): the app origin runs under the
   // Trusted Types policy of apps/web/scripts/app-origin-csp.json, which has no
-  // `angular#unsafe-bypass` — a bypassSecurityTrust* value throws in the browser, so the rule
-  // reports it at lint time. The one reviewed exception (the 06 artifact-viewer bridge,
-  // owned by 09.4.1-T5) is the rule's own allow-list, not a second block.
+  // `angular#unsafe-bypass` — the browser refuses a bypassSecurityTrust* value at the DOM
+  // sink, so the rule reports it at lint time. The one reviewed exception (the 06
+  // artifact-viewer bridge, owned by 09.4.1-T5) is the rule's own allow-list, not a block.
   {
     name: 'evidgate/web-no-bypass-security-trust',
     files: APPLICATION_FILES,

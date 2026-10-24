@@ -29,10 +29,17 @@ const NONCE_PATTERN = /^[A-Za-z0-9+/]{22}==$/;
 
 /**
  * The only shape a `connect-src` extension may take: a bare https:/wss: origin with an optional
- * port, no path, no wildcard, no comma and no `;`. Anything else is either a no-op in the browser
- * or a way to smuggle a second directive into the header, so it throws with the entry named.
+ * port, no path, no wildcard, no comma and no `;`. Every host label must be non-empty (`a..b` is
+ * refused, as is a label that starts or ends with `-`), and the port is range-checked after the
+ * match, because `\d{1,5}` alone would also accept `:0` and `:99999`. Anything else is either a
+ * no-op in the browser or a way to smuggle a second directive into the header, so it throws with
+ * the entry named.
  */
-const ORIGIN_PATTERN = /^(https|wss):\/\/[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\d{1,5})?$/i;
+const ORIGIN_PATTERN =
+  /^(https|wss):\/\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*)(?::(\d{1,5}))?$/i;
+
+/** The highest port a URL may name; the origin regex has already limited it to at most 5 digits. */
+const MAX_PORT = 65_535;
 
 /**
  * Source expressions that must never reach the app origin. `unsafe-inline`, `unsafe-eval`,
@@ -95,13 +102,26 @@ function assertNonce(nonce) {
 }
 
 function assertConnectSrcOrigin(entry) {
-  if (typeof entry !== 'string' || !ORIGIN_PATTERN.test(entry)) {
+  const match = typeof entry === 'string' ? ORIGIN_PATTERN.exec(entry) : null;
+  if (match === null) {
     throw new Error(
       `invalid connect-src entry ${JSON.stringify(entry)}: expected a bare https: or wss: ` +
         'origin such as https://api.example.com',
     );
   }
-  return entry;
+  // The regex caps the digit count, not the value: `:0` and `:99999` both match it and neither
+  // is a port a browser can connect to, so the range is checked here rather than widened into it.
+  const port = match[3];
+  if (port !== undefined && (Number(port) < 1 || Number(port) > MAX_PORT)) {
+    throw new Error(
+      `invalid connect-src entry ${JSON.stringify(entry)}: port must be 1-${String(MAX_PORT)}`,
+    );
+  }
+  // Scheme and host are case-insensitive in a CSP source, so the header carries the canonical
+  // lower-case form: two spellings of one origin are one entry, and the emitted header does not
+  // depend on the casing the deploy environment happened to use. The port is digits, which
+  // lower-casing leaves alone.
+  return entry.toLowerCase();
 }
 
 /**
@@ -115,8 +135,9 @@ export function parseConnectSrc(value) {
     throw new Error(`EVIDGATE_WEB_CONNECT_SRC must be a string, got ${typeof value}`);
   }
   const entries = value.split(/[\s,]+/).filter((entry) => entry !== '');
-  for (const entry of entries) assertConnectSrcOrigin(entry);
-  return entries;
+  // The validated entries are returned in their canonical lower-case form, so what the caller
+  // hands to `buildCsp` is already what the header will carry.
+  return entries.map((entry) => assertConnectSrcOrigin(entry));
 }
 
 function parseDirectives(policy) {
@@ -131,11 +152,60 @@ function parseDirectives(policy) {
 }
 
 /**
+ * `directives` is `parseDirectives` output. Directive names are case-insensitive in a browser,
+ * so the lookups below compare them lower-case.
+ */
+function findDirective(directives, name) {
+  return directives.find((entry) => entry.name.toLowerCase() === name);
+}
+
+/**
+ * Trusted Types is not an optional part of this policy: it is what makes `script-src 'self'`
+ * enough for a framework that renders templates, and a policy that stopped requiring it would
+ * look identical in every other assertion while re-opening the DOM sinks it exists to close.
+ */
+function assertTrustedTypesPolicy(directives) {
+  const required = findDirective(directives, 'require-trusted-types-for');
+  if (
+    required === undefined ||
+    required.sources.length !== 1 ||
+    required.sources[0].toLowerCase() !== "'script'"
+  ) {
+    throw new Error("the CSP policy must declare require-trusted-types-for 'script'");
+  }
+  const allowed = findDirective(directives, 'trusted-types');
+  if (allowed === undefined || allowed.sources.length === 0) {
+    throw new Error(
+      'the CSP policy must declare a trusted-types directive, or every policy name is free',
+    );
+  }
+}
+
+/**
+ * `script-src` is exactly `'self'`. A nonce there is unused (the bundle ships no inline script)
+ * and any other source — `blob:`, `data:`, an https:/http: origin, a bare host — would be a
+ * second place an injected script could come from, so the directive is compared whole instead of
+ * source by source.
+ */
+function assertScriptSrcSelf(directives) {
+  const script = findDirective(directives, 'script-src');
+  if (
+    script === undefined ||
+    script.sources.length !== 1 ||
+    script.sources[0].toLowerCase() !== "'self'"
+  ) {
+    const found = script === undefined ? 'no script-src at all' : script.sources.join(' ');
+    throw new Error(`script-src must be exactly 'self', found ${found}`);
+  }
+}
+
+/**
  * The policy's own guardrail. `buildCsp` runs it over every header it produces, so editing
  * `app-origin-csp.json` into an `unsafe-eval` or wildcard policy breaks every build and every
  * preview server rather than silently weakening the app origin. Exported for its own proofs.
  *
- * With `nonce` given it also enforces that the nonce appears in exactly one directive, style-src.
+ * With `nonce` given it also enforces that the nonce appears in exactly one directive, style-src;
+ * either way it enforces Trusted Types and a `script-src` of exactly `'self'`.
  */
 export function assertStrictPolicy(policy, nonce) {
   if (typeof policy !== 'string' || policy === '') {
@@ -144,7 +214,9 @@ export function assertStrictPolicy(policy, nonce) {
   const directives = parseDirectives(policy);
   for (const { name, sources } of directives) {
     for (const source of sources) {
-      if (FORBIDDEN_SOURCES.has(source)) {
+      // Case-insensitive, because the browser matches a keyword that way: a hand-edited
+      // `'Unsafe-Inline'` resolves to `'unsafe-inline'` there, so it must be refused here.
+      if (FORBIDDEN_SOURCES.has(source.toLowerCase())) {
         throw new Error(`CSP directive ${name} carries forbidden source ${source}`);
       }
     }
@@ -159,7 +231,26 @@ export function assertStrictPolicy(policy, nonce) {
       throw new Error(`the CSP nonce may appear only in style-src, found in ${found}`);
     }
   }
+  assertScriptSrcSelf(directives);
+  assertTrustedTypesPolicy(directives);
   return policy;
+}
+
+/**
+ * An extra `connect-src` origin is only meaningful where the policy has a `connect-src` to append
+ * it to; without that directive the loop in `buildCsp` would drop the entry silently, and a
+ * deploy that set `EVIDGATE_WEB_CONNECT_SRC` would ship a policy that cannot reach the origin it
+ * declared — the exact failure the variable exists to avoid. So that is a throw, not a no-op.
+ * Exported for its own proof, like `assertStrictPolicy`.
+ */
+export function assertConnectSrcAppendable(directives, extras) {
+  if (extras.length > 0 && !Object.hasOwn(directives, 'connect-src')) {
+    throw new Error(
+      'the CSP policy declares no connect-src directive, so these origins cannot be added: ' +
+        extras.join(' '),
+    );
+  }
+  return extras;
 }
 
 /**
@@ -174,9 +265,10 @@ export function buildCsp({ nonce, connectSrc = [] } = {}) {
   }
   const extras = [];
   for (const entry of connectSrc) {
-    assertConnectSrcOrigin(entry);
-    if (!extras.includes(entry)) extras.push(entry);
+    const origin = assertConnectSrcOrigin(entry);
+    if (!extras.includes(origin)) extras.push(origin);
   }
+  assertConnectSrcAppendable(POLICY.directives, extras);
 
   const parts = [];
   for (const [name, values] of Object.entries(POLICY.directives)) {
