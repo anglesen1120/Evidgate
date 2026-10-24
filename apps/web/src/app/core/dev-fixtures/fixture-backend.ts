@@ -17,8 +17,8 @@
 // invented an empty page for an uncovered operation would hide the gap.
 //
 // Shapes: a `>= 400` answer is raised as `HttpErrorResponse` and a `2xx` as `HttpResponse`, which is
-// what Angular's real backends produce; the adapter reads a blob, so the body is a `Blob` of the
-// JSON text for `responseType: 'blob'` (and the parsed value or text otherwise). Every answer
+// what Angular's real backends produce; the adapter reads text (09.1.1-T8), so the body is the JSON
+// text for `responseType: 'text'` (a `Blob` for 'blob', the parsed value otherwise). Every answer
 // carries `Content-Type: application/json`, the fixture's own headers and
 // `X-Evidgate-Fixture: <fixture name>`, the last one so a review can tell which corpus directory
 // answered without the browser network panel.
