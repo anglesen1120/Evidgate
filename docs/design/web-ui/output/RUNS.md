@@ -1,4 +1,40 @@
-# S44 Web UI design runs
+# Web UI design runs
+
+## S50 runs (v2, current)
+
+OpenDesign project `evidgate-web-ui-v2` on the Linux OpenDesign host, agent `amr` with its configured default model `deepseek-v4.1-flash` (no agent or model override passed). Skills used for the briefs and reviews: `frontend-design` and `ui-ux-pro-max`.
+
+The design is built in phases. Each phase has a generation run, a review by two design agents (mechanics and visual lenses, with Playwright measurements at 1440/1280/768/360, light/dark, vi/en), a fix run, and a delta review of the fix. Open delta items are carried into the next phase's run. A final whole-site review and its fix run close the set.
+
+All pages share one stylesheet, `assets/evidgate.css`, and one script, `assets/evidgate.js`. Pages contain no `<style>` blocks, no page-scoped selectors and no remote fonts or scripts. The sidebar is generated from the nav registry in `assets/evidgate.js`.
+
+| run | phase | run id | output / note |
+|---|---|---|---|
+| P1 | P1 foundation | `6ec7866f-3e0e-4bb4-b444-e2cca386a75e` | plan only; follow-up execute run P1b |
+| P1b | P1 foundation | `86b37a9c-9fa3-46d5-90db-ef2ef5696045` | assets/evidgate.css, assets/evidgate.js, index, 00-components, 01, 02 |
+| P1fix | P1 fix | `c8565e9b-880e-4010-90ac-2cfb8eacf8f3` | review fixes |
+| P2 | P2 G1 home + settings | `37f6ac92-8bc3-41b2-8de3-f6234fdd71b7` | plan only; follow-up P2b |
+| P2b | P2 G1 home + settings | `10770e3e-1e94-4db7-8908-07778797faab` | 23, 24, 27, 28, 31, 44 |
+| P2fix | P1+P2 fix | `ede82da2-575c-46f9-b798-a62afdd2ca76` | review fixes |
+| P3 | P3 G1 authoring | `dad0973f-d44f-4adb-9af1-92f771d18e13` | 40, 41, 42, 43, 45 |
+| P3fix | P3 fix | `5adc452b-f635-4749-8ce7-cc8b71c27a27` | review fixes |
+| P4 | P4 G2 runs | `849ff693-0a5a-4562-bc6d-9bc9d16af51c` | 03, 04, 05, 07, 11, 25, 26, 46 |
+| P4fix | P4 fix | `3b0575e8-870a-4b20-8be9-4f84aae6747c` | review fixes + P3 delta |
+| P5 | P5 G3 learn + repair | `e3eee72c-8ded-4f96-b10f-68d603b726bf` | plan only; follow-up P5b |
+| P5b | P5 G3 learn + repair | `71a96e92-8a82-490c-b976-05f91d3c17f0` | 08, 09, 10, 12, 13, 14, 15, 16, 47; ended signal_killed, all 9 files written |
+| P6 | P6 admin + locale | `d13a110d-742b-4247-8168-f863941966cc` | 29, 32, 33, 36, 39 |
+| P5fix | P5 fix | `df34a67d-2ab1-438f-919b-993d1ef47b3f` | review fixes + P4 delta |
+| P6fix | P6 fix | `538ca6dc-35af-4485-91e8-557d28eda7bb` | interrupted: OpenDesign daemon restarted |
+| P6fixb | P6 fix (continued) | `d9aa154f-8c26-41ca-bd5f-bf2b165d8e09` | review fixes |
+| P7a | P7 G4 (part a) | `f2450ca3-beb8-4855-98a6-46e2de8bd0bd` | 06, 17, 18, 19, 20, 21 + P5 delta |
+| P7b | P7 G4 (part b) | `9df00dae-5f9b-482c-8c14-fc2b471d492e` | failed: model stalled before first output (inactivity timeout) |
+| P7b2 | P7 G4 (part b) | `9bac4556-bc96-4dfd-bf6f-a35b12d14a01` | plan only; follow-up P7b3 |
+| P7b3 | P7 G4 (part b) | `b5ae252f-a7a4-4b6f-b5b5-567e57ad7fdf` | 22, 30, 34, 35, 37, 38 + P6 delta; ended on run timeout after all 6 files were written |
+| P7afix | P7a fix | `61589465-8265-435b-be1c-ec9a2c784420` | review fixes |
+| P7bfix | P7b fix | `55f1a7a1-a40c-42f4-a61b-1a54fac074e4` | review fixes |
+| FINALfix | Final fix | `a4a7b65d-8b6c-496a-82b4-675eb2900129` | whole-site review SF-1..SF-5 + P7 delta |
+
+## S44 runs (v1, superseded)
 
 Project: `Evidgate — Web UI` (`evidgate-web-ui-0026`), skill `frontend-design`, model `gpt-6-luna`. Agent per page in the table (amr = OpenDesign Cloud; codex = Codex CLI bundled in OpenDesign).
 

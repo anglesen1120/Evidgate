@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="vi" data-theme="light" data-nav="import-export" data-phase-min="G1">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Nhập và xuất · Evidgate</title>
+  <link rel="stylesheet" href="../assets/evidgate.css">
+  <script src="../assets/evidgate.js" defer></script>
+</head>
+<body>
+  <a class="eg-skip-link" href="#main"><span data-en="Skip to main content" data-vi="Bỏ qua đến nội dung chính">Bỏ qua đến nội dung chính</span></a>
+  <div class="eg-shell">
+    <aside class="eg-nav" id="eg-primary-nav" data-eg-nav aria-label="Điều hướng sản phẩm"></aside>
+    <div class="eg-shell__main">
+      <header class="eg-topbar">
+        <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-nav-toggle aria-expanded="true" aria-controls="eg-primary-nav" aria-label="Mở hoặc thu gọn điều hướng">
+          <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-menu"></use></svg>
+        </button>
+        <div class="eg-topbar__scope">
+          <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Project" data-vi="Dự án">Dự án</span></span>
+          <span><strong>storefront-web</strong> · Lotus Commerce</span>
+        </div>
+        <div class="eg-topbar__search">
+          <label class="eg-visually-hidden" for="nav-search">Tìm mục điều hướng</label>
+          <input class="eg-input eg-input--search" id="nav-search" type="search" data-eg-nav-search data-placeholder-en="Search navigation" data-placeholder-vi="Tìm mục điều hướng" placeholder="Tìm mục điều hướng">
+        </div>
+        <div class="eg-topbar__actions">
+          <span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Author</span></span>
+          <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-open="shortcuts-dialog" aria-haspopup="dialog" aria-label="Phím tắt">
+            <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-book"></use></svg>
+          </button>
+          <div class="eg-menu">
+            <button class="eg-btn eg-btn--ghost eg-btn--sm eg-menu__trigger" type="button" aria-expanded="false" aria-controls="account-menu">
+              <span>LN</span>
+              <span class="eg-btn__label">Linh Nguyễn</span>
+              <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg>
+            </button>
+            <div class="eg-menu__panel" id="account-menu" hidden>
+              <p><strong>Linh Nguyễn</strong><br><span data-en="QA engineer · Lotus Commerce" data-vi="Kỹ sư QA · Lotus Commerce">Kỹ sư QA · Lotus Commerce</span></p>
+              <a class="eg-menu__item" href="../27-settings-shell/evidgate-settings.html" data-en="Workspace settings" data-vi="Cài đặt không gian làm việc">Cài đặt không gian làm việc</a>
+              <a class="eg-menu__item" href="../44-ai-settings/evidgate-ai-settings.html" data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</a>
+              <a class="eg-menu__item" href="../02-login/evidgate-sign-in.html" data-en="Sign out" data-vi="Đăng xuất">Đăng xuất</a>
+            </div>
+          </div>
+        </div>
+      </header>
+      <main tabindex="-1" class="eg-shell__content" id="main">
+        <nav class="eg-breadcrumbs" aria-label="Đường dẫn">
+          <ol>
+            <li class="eg-breadcrumbs__item"><a href="../index.html" data-en="Design index" data-vi="Hồ sơ thiết kế">Hồ sơ thiết kế</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item"><a href="../24-project-connection/evidgate-project-overview.html">storefront-web</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item"><a href="../40-authoring-tree/evidgate-authoring-tree.html" data-en="Feature tree" data-vi="Cây chức năng">Cây chức năng</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item" aria-current="page" data-en="Import and export" data-vi="Nhập và xuất">Nhập và xuất</li>
+          </ol>
+        </nav>
+
+        <div class="eg-banner eg-banner--desktop">
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong data-en="Desktop required to import" data-vi="Cần máy tính để nhập">Cần máy tính để nhập</strong>
+            <p data-en="This narrow view is read-only. File intake, row previews and export scope remain inspectable, but no import can be confirmed." data-vi="Chế độ hẹp này là chỉ đọc. Dữ liệu tệp, bản xem trước các dòng và phạm vi xuất vẫn xem được, nhưng không thể xác nhận nhập.">Chế độ hẹp này là chỉ đọc. Dữ liệu tệp, bản xem trước các dòng và phạm vi xuất vẫn xem được, nhưng không thể xác nhận nhập.</p>
+          </div>
+        </div>
+
+        <header class="eg-page-header">
+          <div>
+            <p class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Authoring</span></p>
+            <h1 class="eg-page-header__title" data-en="Import and export" data-vi="Nhập và xuất">Nhập và xuất</h1>
+            <p class="eg-page-header__description" data-en="Preview authoring imports before committing them, and export an explicitly scoped set of manual cases with project-prefixed identities. Imported text is untrusted plain text; no row is dropped or overwritten silently." data-vi="Xem trước dữ liệu soạn được nhập trước khi cam kết, và xuất một tập ca thủ công có phạm vi rõ ràng với danh tính gắn tiền tố dự án. Văn bản nhập là văn bản thuần không tin cậy; không dòng nào bị bỏ hoặc ghi đè ngầm.">Xem trước dữ liệu soạn được nhập trước khi cam kết, và xuất một tập ca thủ công có phạm vi rõ ràng với danh tính gắn tiền tố dự án. Văn bản nhập là văn bản thuần không tin cậy; không dòng nào bị bỏ hoặc ghi đè ngầm.</p>
+            <p class="eg-page-header__meta">
+              <span>storefront-web · SHOP</span>
+              <span aria-hidden="true">·</span>
+              <span data-en="source import" data-vi="nguồn nhập">nguồn nhập</span>
+              <span aria-hidden="true">·</span>
+              <span data-en="Base version av-12" data-vi="Phiên bản gốc av-12">Phiên bản gốc av-12</span>
+              <span aria-hidden="true">·</span>
+              <span>ais-3</span>
+            </p>
+          </div>
+          <div class="eg-page-header__actions">
+            <a class="eg-btn eg-btn--secondary" href="../40-authoring-tree/evidgate-authoring-tree.html"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-arrow-right"></use></svg><span class="eg-btn__label" data-en="Back to feature tree" data-vi="Về cây chức năng">Về cây chức năng</span></a>
+          </div>
+        </header>
+
+        <div data-eg-review data-eg-states="default,loading,no-file,malformed,unsupported,validation,duplicate,mixed,denied,error,403,401,429,success,export-empty,export-unavailable"></div>
+
+        <div data-eg-show-state="loading" hidden aria-busy="true">
+          <div class="eg-split-pane">
+            <section class="eg-card" aria-hidden="true">
+              <div class="eg-card__header"><span class="eg-skeleton eg-skeleton--title"></span><span class="eg-skeleton eg-skeleton--control"></span></div>
+              <div class="eg-card__body"><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--block"></span></div>
+            </section>
+            <section class="eg-card" aria-hidden="true">
+              <div class="eg-card__header"><span class="eg-skeleton eg-skeleton--title"></span><span class="eg-skeleton eg-skeleton--control"></span></div>
+              <div class="eg-card__body"><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span></div>
+            </section>
+          </div>
+          <span class="eg-visually-hidden" role="status" data-en="Loading the import preview and export scope" data-vi="Đang tải bản xem trước nhập và phạm vi xuất">Đang tải bản xem trước nhập và phạm vi xuất</span>
+        </div>
+
+        <div class="eg-stack" data-gap="4">
+          <div class="eg-state eg-state--empty" data-eg-show-state="no-file" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-file"></use></svg></span>
+            <span class="eg-state__title" data-en="No file selected yet" data-vi="Chưa chọn tệp">Chưa chọn tệp</span>
+            <span class="eg-state__description" data-en="Choose a CSV, XLSX or JSON file to preview. No validation has run and no authoring version can be created." data-vi="Chọn tệp CSV, XLSX hoặc JSON để xem trước. Chưa chạy kiểm tra và không thể tạo phiên bản soạn nào.">Chọn tệp CSV, XLSX hoặc JSON để xem trước. Chưa chạy kiểm tra và không thể tạo phiên bản soạn nào.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Open the sample preview" data-vi="Mở bản xem trước mẫu">Mở bản xem trước mẫu</span></button></span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="malformed" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="The file could not be parsed" data-vi="Không thể phân tích tệp">Không thể phân tích tệp</span>
+            <span class="eg-state__description" data-en="Malformed CSV, XLSX or JSON is rejected before validation. The file is not stored, no preview rows are created and nothing is written." data-vi="Tệp CSV, XLSX hoặc JSON sai cấu trúc bị từ chối trước khi kiểm tra. Tệp không được lưu, không tạo dòng xem trước và không ghi gì.">Tệp CSV, XLSX hoặc JSON sai cấu trúc bị từ chối trước khi kiểm tra. Tệp không được lưu, không tạo dòng xem trước và không ghi gì.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Back to the sample preview" data-vi="Về bản xem trước mẫu">Về bản xem trước mẫu</span></button></span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="unsupported" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="Unsupported file type" data-vi="Loại tệp không được hỗ trợ">Loại tệp không được hỗ trợ</span>
+            <span class="eg-state__description" data-en="Only CSV, XLSX and JSON are accepted. Type limits are supplied by the host; this fixture does not invent a numeric size cap." data-vi="Chỉ chấp nhận CSV, XLSX và JSON. Giới hạn loại tệp do máy chủ cung cấp; bản minh hoạ này không tự đặt ra giới hạn kích thước bằng số.">Chỉ chấp nhận CSV, XLSX và JSON. Giới hạn loại tệp do máy chủ cung cấp; bản minh hoạ này không tự đặt ra giới hạn kích thước bằng số.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Back to the sample preview" data-vi="Về bản xem trước mẫu">Về bản xem trước mẫu</span></button></span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="validation" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="2 row errors block the import" data-vi="2 lỗi dòng chặn việc nhập">2 lỗi dòng chặn việc nhập</span>
+            <span class="eg-state__description" data-en="Row 3 is missing an expected result and row 4 uses OTHER-TC-0051 instead of the SHOP prefix. All rows stay in the preview; nothing is dropped or overwritten." data-vi="Dòng 3 thiếu kết quả mong đợi và dòng 4 dùng OTHER-TC-0051 thay vì tiền tố SHOP. Mọi dòng vẫn ở trong bản xem trước; không dòng nào bị bỏ hoặc ghi đè.">Dòng 3 thiếu kết quả mong đợi và dòng 4 dùng OTHER-TC-0051 thay vì tiền tố SHOP. Mọi dòng vẫn ở trong bản xem trước; không dòng nào bị bỏ hoặc ghi đè.</span>
+            <span class="eg-state__actions"><a class="eg-btn eg-btn--secondary eg-btn--sm" href="#import-errors"><span class="eg-btn__label" data-en="Review row errors" data-vi="Xem lỗi theo dòng">Xem lỗi theo dòng</span></a><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Back to the preview" data-vi="Về bản xem trước">Về bản xem trước</span></button></span>
+          </div>
+          <div class="eg-state eg-state--conflict" data-eg-show-state="duplicate" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-shield-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="Duplicate case id in the file" data-vi="Mã ca bị trùng trong tệp">Mã ca bị trùng trong tệp</span>
+            <span class="eg-state__description" data-en="SHOP-TC-0042 appears in rows 2 and 5. The supplied fixture defines no merge or last-wins policy, so confirmation is blocked and both rows remain inspectable." data-vi="SHOP-TC-0042 xuất hiện ở dòng 2 và dòng 5. Dữ liệu minh hoạ không định nghĩa chính sách gộp hay lấy dòng cuối, nên xác nhận bị chặn và cả hai dòng vẫn xem được.">SHOP-TC-0042 xuất hiện ở dòng 2 và dòng 5. Dữ liệu minh hoạ không định nghĩa chính sách gộp hay lấy dòng cuối, nên xác nhận bị chặn và cả hai dòng vẫn xem được.</span>
+            <span class="eg-state__actions"><a class="eg-btn eg-btn--secondary eg-btn--sm" href="#duplicate-specimen"><span class="eg-btn__label" data-en="Inspect both rows" data-vi="Xem cả hai dòng">Xem cả hai dòng</span></a><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Back to the preview" data-vi="Về bản xem trước">Về bản xem trước</span></button></span>
+          </div>
+          <div class="eg-state eg-state--conflict" data-eg-show-state="mixed" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-shield-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="1 valid row, 2 invalid rows" data-vi="1 dòng hợp lệ, 2 dòng không hợp lệ">1 dòng hợp lệ, 2 dòng không hợp lệ</span>
+            <span class="eg-state__description" data-en="The valid row cannot be imported while any row is invalid in the supplied fixture. No partial-import policy is supplied, so confirmation writes nothing and every row stays available for inspection." data-vi="Dòng hợp lệ không thể được nhập khi còn dòng không hợp lệ trong dữ liệu minh hoạ. Không có chính sách nhập một phần, nên xác nhận không ghi gì và mọi dòng vẫn xem được.">Dòng hợp lệ không thể được nhập khi còn dòng không hợp lệ trong dữ liệu minh hoạ. Không có chính sách nhập một phần, nên xác nhận không ghi gì và mọi dòng vẫn xem được.</span>
+            <span class="eg-state__actions"><a class="eg-btn eg-btn--secondary eg-btn--sm" href="#import-errors"><span class="eg-btn__label" data-en="Review row errors" data-vi="Xem lỗi theo dòng">Xem lỗi theo dòng</span></a></span>
+          </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="denied" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+            <span class="eg-state__title" data-en="Import is not allowed for this role" data-vi="Vai trò này không được phép nhập">Vai trò này không được phép nhập</span>
+            <span class="eg-state__description" data-en="The preview and export scope stay readable. File intake and confirmation are unavailable, and no downgrade to a partial import is offered." data-vi="Bản xem trước và phạm vi xuất vẫn đọc được. Không thể chọn tệp hay xác nhận, và không có phương án hạ cấp sang nhập một phần.">Bản xem trước và phạm vi xuất vẫn đọc được. Không thể chọn tệp hay xác nhận, và không có phương án hạ cấp sang nhập một phần.</span>
+            <span class="eg-state__actions"><a class="eg-btn eg-btn--secondary eg-btn--sm" href="../40-authoring-tree/evidgate-authoring-tree.html"><span class="eg-btn__label" data-en="Back to feature tree" data-vi="Về cây chức năng">Về cây chức năng</span></a></span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="error" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="The import failed" data-vi="Nhập thất bại">Nhập thất bại</span>
+            <span class="eg-state__description" data-en="No authoring version was created. Every preview row and the reason remain retained; retry is explicit and never automatic." data-vi="Không phiên bản soạn nào được tạo. Mọi dòng xem trước và lý do đều được giữ; thử lại là thao tác rõ ràng, không tự động.">Không phiên bản soạn nào được tạo. Mọi dòng xem trước và lý do đều được giữ; thử lại là thao tác rõ ràng, không tự động.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Back to the preview" data-vi="Về bản xem trước">Về bản xem trước</span></button></span>
+          </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="403" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+            <span class="eg-state__title" data-en="Authoring write permission was revoked" data-vi="Quyền ghi soạn đã bị thu hồi">Quyền ghi soạn đã bị thu hồi</span>
+            <span class="eg-state__description" data-en="Nothing can be imported, and export download is unavailable in this state. No hidden overwrite or partial import is offered." data-vi="Không thể nhập gì, và không thể tải tệp xuất trong trạng thái này. Không có ghi đè ẩn hay nhập một phần nào được đưa ra.">Không thể nhập gì, và không thể tải tệp xuất trong trạng thái này. Không có ghi đè ẩn hay nhập một phần nào được đưa ra.</span>
+          </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="401" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+            <span class="eg-state__title" data-en="Your session expired" data-vi="Phiên đăng nhập đã hết hạn">Phiên đăng nhập đã hết hạn</span>
+            <span class="eg-state__description" data-en="Sign in again. The file preview and the typed reason are retained; nothing is validated or written automatically." data-vi="Đăng nhập lại. Bản xem trước tệp và lý do đã nhập được giữ; không có gì được kiểm tra hay ghi tự động.">Đăng nhập lại. Bản xem trước tệp và lý do đã nhập được giữ; không có gì được kiểm tra hay ghi tự động.</span>
+          </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="429" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+            <span class="eg-state__title" data-en="Too many import requests" data-vi="Quá nhiều yêu cầu nhập">Quá nhiều yêu cầu nhập</span>
+            <span class="eg-state__description" data-en="No version was created. The retained preview and reason stay intact; retry is explicit and duplicate submission is blocked." data-vi="Không phiên bản nào được tạo. Bản xem trước và lý do được giữ nguyên; thử lại là thao tác rõ ràng và việc gửi trùng bị chặn.">Không phiên bản nào được tạo. Bản xem trước và lý do được giữ nguyên; thử lại là thao tác rõ ràng và việc gửi trùng bị chặn.</span>
+          </div>
+          <div class="eg-state eg-state--empty" data-eg-show-state="success" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-check"></use></svg></span>
+            <span class="eg-state__title" data-en="Imported · exactly one version av-13" data-vi="Đã nhập · đúng một phiên bản av-13">Đã nhập · đúng một phiên bản av-13</span>
+            <span class="eg-state__description" data-en="Supplied fixture response: the all-valid file appended one immutable authoring version with source import, actor Linh Nguyễn, time 2026-10-23T15:12:00Z and resulting ids SHOP-TC-0042 v5, SHOP-TC-0043 v2 and SHOP-TC-0051 v3. No row was overwritten." data-vi="Phản hồi minh hoạ được cung cấp: tệp hoàn toàn hợp lệ đã thêm đúng một phiên bản soạn bất biến với nguồn nhập, người thực hiện Linh Nguyễn, thời điểm 2026-10-23T15:12:00Z và các mã kết quả SHOP-TC-0042 v5, SHOP-TC-0043 v2 và SHOP-TC-0051 v3. Không dòng nào bị ghi đè.">Phản hồi minh hoạ được cung cấp: tệp hoàn toàn hợp lệ đã thêm đúng một phiên bản soạn bất biến với nguồn nhập, người thực hiện Linh Nguyễn, thời điểm 2026-10-23T15:12:00Z và các mã kết quả SHOP-TC-0042 v5, SHOP-TC-0043 v2 và SHOP-TC-0051 v3. Không dòng nào bị ghi đè.</span>
+            <div class="eg-stack" data-gap="2">
+              <span class="eg-field__label" data-en="Confirmed scope and reason" data-vi="Phạm vi và lý do đã xác nhận">Phạm vi và lý do đã xác nhận</span>
+              <div class="eg-stack" data-gap="2">
+                <p data-en="3 rows · SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051 · project code prefix SHOP" data-vi="3 dòng · SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051 · tiền tố mã dự án SHOP">3 dòng · SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051 · tiền tố mã dự án SHOP</p>
+                <p data-en="Reason · Import manual cases from supplier export" data-vi="Lý do · Nhập ca thủ công từ tệp xuất của nhà cung cấp">Lý do · Nhập ca thủ công từ tệp xuất của nhà cung cấp</p>
+              </div>
+            </div>
+            <span class="eg-state__actions"><a class="eg-btn eg-btn--secondary eg-btn--sm" href="../41-test-case-editor/evidgate-test-case-editor.html"><span class="eg-btn__label" data-en="Open SHOP-TC-0042" data-vi="Mở SHOP-TC-0042">Mở SHOP-TC-0042</span></a><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Back to import and export" data-vi="Về nhập và xuất">Về nhập và xuất</span></button></span>
+          </div>
+          <div class="eg-state eg-state--empty" data-eg-show-state="export-empty" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-file"></use></svg></span>
+            <span class="eg-state__title" data-en="No cases selected for export" data-vi="Chưa chọn ca kiểm thử để xuất">Chưa chọn ca kiểm thử để xuất</span>
+            <span class="eg-state__description" data-en="The current scope resolves to 0 cases. Choose a project, node, filtered set or explicit selection; the whole project is never substituted." data-vi="Phạm vi hiện tại trả về 0 ca. Chọn dự án, nút phân cấp, tập đã lọc hoặc lựa chọn rõ ràng; toàn bộ dự án không bao giờ được thay thế.">Phạm vi hiện tại trả về 0 ca. Chọn dự án, nút phân cấp, tập đã lọc hoặc lựa chọn rõ ràng; toàn bộ dự án không bao giờ được thay thế.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Back to import and export" data-vi="Về nhập và xuất">Về nhập và xuất</span></button></span>
+          </div>
+          <div class="eg-state eg-state--conflict" data-eg-show-state="export-unavailable" hidden>
+            <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-shield-alert"></use></svg></span>
+            <span class="eg-state__title" data-en="Export unavailable for this scope" data-vi="Không thể xuất cho phạm vi này">Không thể xuất cho phạm vi này</span>
+            <span class="eg-state__description" data-en="The scope includes scan-pending or sensitive artifacts and the supplied fixture offers no download for them. No premium format or hidden cross-project scope is offered." data-vi="Phạm vi bao gồm hiện vật đang chờ quét hoặc nhạy cảm và dữ liệu minh hoạ không cung cấp tệp tải cho chúng. Không có định dạng trả phí hay phạm vi chéo dự án ẩn nào được đưa ra.">Phạm vi bao gồm hiện vật đang chờ quét hoặc nhạy cảm và dữ liệu minh hoạ không cung cấp tệp tải cho chúng. Không có định dạng trả phí hay phạm vi chéo dự án ẩn nào được đưa ra.</span>
+            <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Back to import and export" data-vi="Về nhập và xuất">Về nhập và xuất</span></button></span>
+          </div>
+        </div>
+
+        <div class="eg-stack" data-gap="6" data-eg-hide-state="loading,no-file,malformed,unsupported,denied,error,403,401,429,success,export-empty,export-unavailable">
+          <div class="eg-banner eg-banner--info eg-banner--stack">
+            <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-file"></use></svg></span>
+            <div class="eg-banner__body">
+              <strong data-en="Project context · storefront-web · SHOP · ais-3" data-vi="Ngữ cảnh dự án · storefront-web · SHOP · ais-3">Ngữ cảnh dự án · storefront-web · SHOP · ais-3</strong>
+              <p data-en="Import preview precedes any write. Exported text is scoped to the selection shown; imported strings are rendered as untrusted plain text, never executed." data-vi="Bản xem trước nhập đứng trước mọi thao tác ghi. Văn bản xuất chỉ thuộc phạm vi đã hiển thị; chuỗi được nhập hiển thị như văn bản thuần không tin cậy, không bao giờ được thực thi.">Bản xem trước nhập đứng trước mọi thao tác ghi. Văn bản xuất chỉ thuộc phạm vi đã hiển thị; chuỗi được nhập hiển thị như văn bản thuần không tin cậy, không bao giờ được thực thi.</p>
+            </div>
+            <div class="eg-banner__actions"><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Preview · not applied" data-vi="Xem trước · chưa áp dụng">Xem trước · chưa áp dụng</span></span></div>
+          </div>
+
+          <div class="eg-tabs" data-eg-tabs>
+            <label class="eg-visually-hidden" for="io-tab-select">Chọn phần nhập hoặc xuất</label>
+            <select class="eg-select eg-tabs__mobile" id="io-tab-select" data-eg-tab-select>
+              <option value="import-tab" selected>Nhập</option>
+              <option value="export-tab">Xuất</option>
+            </select>
+            <div class="eg-tabs__list" role="tablist" aria-label="Nhập và xuất">
+              <button class="eg-tabs__tab" type="button" role="tab" id="import-tab" aria-controls="import-panel" aria-selected="true"><span data-en="Import" data-vi="Nhập">Nhập</span></button>
+              <button class="eg-tabs__tab" type="button" role="tab" id="export-tab" aria-controls="export-panel" aria-selected="false" tabindex="-1"><span data-en="Export" data-vi="Xuất">Xuất</span></button>
+            </div>
+
+            <div class="eg-tabs__panel" id="import-panel" role="tabpanel" aria-labelledby="import-tab">
+              <div class="eg-stack" data-gap="6">
+                <section class="eg-card" id="import-intake" aria-labelledby="intake-title">
+                  <header class="eg-card__header eg-card__header--meta">
+                    <div>
+                      <h2 id="intake-title" data-en="File and target" data-vi="Tệp và đích">Tệp và đích</h2>
+                      <p data-en="File intake is separate from validation. A selected file does not prove its rows are valid, and no version exists until a confirmed all-valid import." data-vi="Chọn tệp tách biệt với kiểm tra. Tệp đã chọn không chứng minh các dòng hợp lệ, và chưa có phiên bản nào cho đến khi xác nhận một lần nhập hoàn toàn hợp lệ.">Chọn tệp tách biệt với kiểm tra. Tệp đã chọn không chứng minh các dòng hợp lệ, và chưa có phiên bản nào cho đến khi xác nhận một lần nhập hoàn toàn hợp lệ.</p>
+                    </div>
+                    <span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="File accepted" data-vi="Đã nhận tệp">Đã nhận tệp</span></span>
+                  </header>
+                  <div class="eg-card__body">
+                    <div class="eg-readonly-summary" data-eg-summary-scope="#import-intake">
+                      <div><span class="eg-field__label" data-en="Source file" data-vi="Tệp nguồn">Tệp nguồn</span><p>checkout-cases.xlsx · XLSX · <span data-en="3 source rows" data-vi="3 dòng nguồn">3 dòng nguồn</span></p></div>
+                      <div><span class="eg-field__label" data-en="Format" data-vi="Định dạng">Định dạng</span><p data-eg-summary-value="import-format">XLSX</p></div>
+                      <div><span class="eg-field__label" data-en="Target project and source" data-vi="Dự án đích và nguồn">Dự án đích và nguồn</span><p>storefront-web · SHOP · <code>import</code></p></div>
+                      <p class="eg-field__hint" data-en="Read-only at this width. File intake and import confirmation require a desktop view." data-vi="Chỉ đọc ở độ rộng này. Nhận tệp và xác nhận nhập cần chế độ máy tính.">Read-only at this width. File intake and import confirmation require a desktop view.</p>
+                    </div>
+                    <div class="eg-form">
+                      <div class="eg-form__grid">
+                        <div class="eg-field" data-eg-mutate>
+                          <label class="eg-field__label" for="import-file" data-en="Replace source file" data-vi="Thay tệp nguồn">Thay tệp nguồn</label>
+                          <input class="eg-input" id="import-file" name="import-file" type="file" accept=".csv,.xlsx,.json" aria-describedby="import-file-hint">
+                          <p class="eg-field__hint" id="import-file-hint" data-en="The accepted fixture file is shown below. CSV, XLSX or JSON; numeric size limits are supplied by the host and are not invented here." data-vi="Tệp minh hoạ đã nhận được hiển thị bên dưới. CSV, XLSX hoặc JSON; giới hạn kích thước bằng số do máy chủ cung cấp và không được tự đặt ra ở đây.">Tệp minh hoạ đã nhận được hiển thị bên dưới. CSV, XLSX hoặc JSON; giới hạn kích thước bằng số do máy chủ cung cấp và không được tự đặt ra ở đây.</p>
+                        </div>
+                        <div class="eg-field" data-eg-mutate>
+                          <label class="eg-field__label" for="import-format" data-en="Format" data-vi="Định dạng">Định dạng</label>
+                          <select class="eg-select" id="import-format" name="import-format">
+                            <option value="csv">CSV</option>
+                            <option value="xlsx" selected>XLSX</option>
+                            <option value="json">JSON</option>
+                          </select>
+                          <p class="eg-field__hint" data-en="All three formats are accepted for import." data-vi="Cả ba định dạng đều được chấp nhận để nhập.">Cả ba định dạng đều được chấp nhận để nhập.</p>
+                        </div>
+                        <div class="eg-field">
+                          <span class="eg-field__label" data-en="Target project and source" data-vi="Dự án đích và nguồn">Dự án đích và nguồn</span>
+                          <p><strong>storefront-web</strong> · <code>SHOP</code> · <code>ais-3</code></p>
+                          <p class="eg-kpi__context"><span data-en="Source" data-vi="Nguồn">Nguồn</span> · <code>import</code></p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="eg-banner eg-banner--info">
+                      <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-file"></use></svg></span>
+                      <div class="eg-banner__body">
+                        <strong><code>manual-cases-shop.xlsx</code></strong>
+                        <p><span data-en="XLSX · storefront-web · SHOP · source import · 3 source rows" data-vi="XLSX · storefront-web · SHOP · nguồn nhập · 3 dòng nguồn">XLSX · storefront-web · SHOP · nguồn nhập · 3 dòng nguồn</span></p>
+                        <p class="eg-kpi__context" data-en="Intake accepted. Validation below found 1 valid and 2 invalid rows, so this file is not imported." data-vi="Đã nhận tệp. Phần kiểm tra bên dưới thấy 1 dòng hợp lệ và 2 dòng không hợp lệ, nên tệp này không được nhập.">Đã nhận tệp. Phần kiểm tra bên dưới thấy 1 dòng hợp lệ và 2 dòng không hợp lệ, nên tệp này không được nhập.</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="eg-card" aria-labelledby="preview-title">
+                  <header class="eg-card__header eg-card__header--meta">
+                    <div>
+                      <h2 id="preview-title" data-en="Preview rows" data-vi="Xem trước các dòng">Xem trước các dòng</h2>
+                      <p data-en="Source rows stay in file order and every row is retained. Cell errors sit next to the value they concern; values wrap and remain selectable for safe inspection." data-vi="Các dòng nguồn giữ thứ tự trong tệp và mọi dòng đều được giữ. Lỗi ô nằm cạnh giá trị liên quan; giá trị xuống dòng và vẫn chọn được để xem an toàn.">Các dòng nguồn giữ thứ tự trong tệp và mọi dòng đều được giữ. Lỗi ô nằm cạnh giá trị liên quan; giá trị xuống dòng và vẫn chọn được để xem an toàn.</p>
+                    </div>
+                    <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="3 rows" data-vi="3 dòng">3 dòng</span></span>
+                  </header>
+                  <div class="eg-card__body">
+                    <div class="eg-form__summary" id="import-errors" tabindex="-1" role="group" aria-labelledby="import-errors-title">
+                      <strong id="import-errors-title" data-en="Row errors · 2 problems block confirmation" data-vi="Lỗi theo dòng · 2 vấn đề chặn xác nhận">Lỗi theo dòng · 2 vấn đề chặn xác nhận</strong>
+                      <span data-en="Both errors are linked to the exact cell. No row is removed and no case is overwritten." data-vi="Cả hai lỗi liên kết tới đúng ô. Không dòng nào bị xoá và không ca nào bị ghi đè.">Cả hai lỗi liên kết tới đúng ô. Không dòng nào bị xoá và không ca nào bị ghi đè.</span>
+                      <a href="#row-3-expected-cell" data-en="Jump to the first problem · row 3 expected result" data-vi="Đến vấn đề đầu tiên · kết quả mong đợi dòng 3">Đến vấn đề đầu tiên · kết quả mong đợi dòng 3</a>
+                    </div>
+
+                    <div class="eg-table__wrap">
+                      <table class="eg-table eg-table--compact" data-eg-table aria-label="Xem trước các dòng nhập">
+                        <caption class="eg-table__caption"><span data-en="Source row numbers are file-provided. Project-prefixed ids are validated against SHOP; imported text is plain text." data-vi="Số dòng nguồn do tệp cung cấp. Mã gắn tiền tố dự án được kiểm tra với SHOP; văn bản nhập là văn bản thuần.">Số dòng nguồn do tệp cung cấp. Mã gắn tiền tố dự án được kiểm tra với SHOP; văn bản nhập là văn bản thuần.</span></caption>
+                        <thead>
+                          <tr>
+                            <th scope="col"><span data-en="Source row" data-vi="Dòng nguồn">Dòng nguồn</span></th>
+                            <th scope="col"><span data-en="Case id" data-vi="Mã ca">Mã ca</span></th>
+                            <th scope="col"><span data-en="Hierarchy" data-vi="Phân cấp">Phân cấp</span></th>
+                            <th scope="col"><span data-en="Title and preconditions" data-vi="Tiêu đề và điều kiện trước">Tiêu đề và điều kiện trước</span></th>
+                            <th scope="col"><span data-en="Priority" data-vi="Ưu tiên">Ưu tiên</span></th>
+                            <th scope="col"><span data-en="Step and expected" data-vi="Bước và mong đợi">Bước và mong đợi</span></th>
+                            <th scope="col"><span data-en="Validation" data-vi="Kiểm tra">Kiểm tra</span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td data-label-en="Source row" data-label-vi="Dòng nguồn" data-label="Dòng nguồn">2</td>
+                            <td data-label-en="Case id" data-label-vi="Mã ca" data-label="Mã ca"><code>SHOP-TC-0042</code></td>
+                            <td data-label-en="Hierarchy" data-label-vi="Phân cấp" data-label="Phân cấp"><span data-en="Checkout / Order review / Validation / SHOP-CL-0017" data-vi="Thanh toán / Xem lại đơn hàng / Kiểm tra tính hợp lệ / SHOP-CL-0017">Thanh toán / Xem lại đơn hàng / Kiểm tra tính hợp lệ / SHOP-CL-0017</span></td>
+                            <td data-label-en="Title and preconditions" data-label-vi="Tiêu đề và điều kiện trước" data-label="Tiêu đề và điều kiện trước"><span data-en="Confirm order shows the total / Xác nhận đơn hàng hiển thị tổng tiền" data-vi="Xác nhận đơn hàng hiển thị tổng tiền / Confirm order shows the total">Xác nhận đơn hàng hiển thị tổng tiền / Confirm order shows the total</span><br><span class="eg-kpi__context" data-en="Precondition · a cart with one physical item" data-vi="Điều kiện trước · giỏ hàng có một mặt hàng vật lý">Điều kiện trước · giỏ hàng có một mặt hàng vật lý</span></td>
+                            <td data-label-en="Priority" data-label-vi="Ưu tiên" data-label="Ưu tiên"><span data-en="High" data-vi="Cao">Cao</span></td>
+                            <td data-label-en="Step and expected" data-label-vi="Bước và mong đợi" data-label="Bước và mong đợi"><span data-en="Action · confirm the order" data-vi="Hành động · xác nhận đơn hàng">Hành động · xác nhận đơn hàng</span><br><span data-en="Expected · the order total is shown" data-vi="Mong đợi · tổng đơn hàng được hiển thị">Mong đợi · tổng đơn hàng được hiển thị</span></td>
+                            <td data-label-en="Validation" data-label-vi="Kiểm tra" data-label="Kiểm tra"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Valid · v5" data-vi="Hợp lệ · v5">Hợp lệ · v5</span></span><br><span class="eg-kpi__context" data-en="v4 history" data-vi="lịch sử v4">lịch sử v4</span></td>
+                          </tr>
+                          <tr>
+                            <td data-label-en="Source row" data-label-vi="Dòng nguồn" data-label="Dòng nguồn">3</td>
+                            <td data-label-en="Case id" data-label-vi="Mã ca" data-label="Mã ca"><code>SHOP-TC-0043</code></td>
+                            <td data-label-en="Hierarchy" data-label-vi="Phân cấp" data-label="Phân cấp"><span data-en="Checkout / Order review / Validation / SHOP-CL-0018" data-vi="Thanh toán / Xem lại đơn hàng / Kiểm tra tính hợp lệ / SHOP-CL-0018">Thanh toán / Xem lại đơn hàng / Kiểm tra tính hợp lệ / SHOP-CL-0018</span></td>
+                            <td data-label-en="Title and preconditions" data-label-vi="Tiêu đề và điều kiện trước" data-label="Tiêu đề và điều kiện trước"><span data-en="Required delivery address / Địa chỉ giao hàng bắt buộc" data-vi="Địa chỉ giao hàng bắt buộc / Required delivery address">Địa chỉ giao hàng bắt buộc / Required delivery address</span><br><span class="eg-kpi__context" data-en="Precondition · checkout with delivery" data-vi="Điều kiện trước · thanh toán có giao hàng">Điều kiện trước · thanh toán có giao hàng</span></td>
+                            <td data-label-en="Priority" data-label-vi="Ưu tiên" data-label="Ưu tiên"><span data-en="High" data-vi="Cao">Cao</span></td>
+                            <td id="row-3-expected-cell" tabindex="-1" data-label-en="Step and expected" data-label-vi="Bước và mong đợi" data-label="Bước và mong đợi"><span data-en="Action · continue without an address" data-vi="Hành động · tiếp tục khi chưa có địa chỉ">Hành động · tiếp tục khi chưa có địa chỉ</span><p class="eg-field__error" id="row-3-expected-error"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg><span data-en="Expected result is required. This cell is empty in the source row; the row is not dropped." data-vi="Cần có kết quả mong đợi. Ô này trống trong dòng nguồn; dòng không bị bỏ.">Cần có kết quả mong đợi. Ô này trống trong dòng nguồn; dòng không bị bỏ.</span></p></td>
+                            <td data-label-en="Validation" data-label-vi="Kiểm tra" data-label="Kiểm tra"><span class="eg-badge eg-badge--danger"><span class="eg-badge__label" data-en="Invalid · missing expected result" data-vi="Không hợp lệ · thiếu kết quả mong đợi">Không hợp lệ · thiếu kết quả mong đợi</span></span><br><span class="eg-kpi__context">v2</span></td>
+                          </tr>
+                          <tr>
+                            <td data-label-en="Source row" data-label-vi="Dòng nguồn" data-label="Dòng nguồn">4</td>
+                            <td id="row-4-id-cell" tabindex="-1" data-label-en="Case id" data-label-vi="Mã ca" data-label="Mã ca"><code>OTHER-TC-0051</code><p class="eg-field__error" id="row-4-prefix-error"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg><span data-en="Wrong project prefix. The canonical id is SHOP-TC-0051." data-vi="Sai tiền tố dự án. Mã chuẩn là SHOP-TC-0051.">Sai tiền tố dự án. Mã chuẩn là SHOP-TC-0051.</span></p><span class="eg-kpi__context"><span data-en="Canonical id" data-vi="Mã chuẩn">Mã chuẩn</span> · <code>SHOP-TC-0051</code></span></td>
+                            <td data-label-en="Hierarchy" data-label-vi="Phân cấp" data-label="Phân cấp"><span data-en="Checkout / Order review / Validation / SHOP-CL-0019" data-vi="Thanh toán / Xem lại đơn hàng / Kiểm tra tính hợp lệ / SHOP-CL-0019">Thanh toán / Xem lại đơn hàng / Kiểm tra tính hợp lệ / SHOP-CL-0019</span></td>
+                            <td data-label-en="Title and preconditions" data-label-vi="Tiêu đề và điều kiện trước" data-label="Tiêu đề và điều kiện trước"><span data-en="Apply a discount code / Áp dụng mã giảm giá" data-vi="Áp dụng mã giảm giá / Apply a discount code">Áp dụng mã giảm giá / Apply a discount code</span><br><span class="eg-kpi__context" data-en="Precondition · a cart eligible for one discount code" data-vi="Điều kiện trước · giỏ hàng đủ điều kiện dùng một mã giảm giá">Điều kiện trước · giỏ hàng đủ điều kiện dùng một mã giảm giá</span></td>
+                            <td data-label-en="Priority" data-label-vi="Ưu tiên" data-label="Ưu tiên"><span data-en="Medium" data-vi="Trung bình">Trung bình</span></td>
+                            <td data-label-en="Step and expected" data-label-vi="Bước và mong đợi" data-label="Bước và mong đợi"><span data-en="Action · enter a valid discount code" data-vi="Hành động · nhập mã giảm giá hợp lệ">Hành động · nhập mã giảm giá hợp lệ</span><br><span data-en="Expected · the discount is applied to the total" data-vi="Mong đợi · mã giảm giá được áp dụng vào tổng tiền">Mong đợi · mã giảm giá được áp dụng vào tổng tiền</span></td>
+                            <td data-label-en="Validation" data-label-vi="Kiểm tra" data-label="Kiểm tra"><span class="eg-badge eg-badge--danger"><span class="eg-badge__label" data-en="Invalid · wrong project prefix" data-vi="Không hợp lệ · sai tiền tố dự án">Không hợp lệ · sai tiền tố dự án</span></span><br><span class="eg-kpi__context">v3</span></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <nav class="eg-pagination" aria-label="Phân trang dòng nhập">
+                      <p class="eg-pagination__summary"><span data-en="3 source rows · 1 valid · 2 invalid · all rows retained" data-vi="3 dòng nguồn · 1 hợp lệ · 2 không hợp lệ · giữ tất cả">3 dòng nguồn · 1 hợp lệ · 2 không hợp lệ · giữ tất cả</span></p>
+                      <div class="eg-pagination__controls">
+                        <button class="eg-btn eg-btn--ghost eg-btn--sm" type="button" disabled><span class="eg-btn__label" data-en="Previous" data-vi="Trước">Trước</span></button>
+                        <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">1 / 1</span></span>
+                        <button class="eg-btn eg-btn--ghost eg-btn--sm" type="button" disabled><span class="eg-btn__label" data-en="Next" data-vi="Sau">Sau</span></button>
+                      </div>
+                    </nav>
+                  </div>
+                </section>
+
+                <section class="eg-card" aria-labelledby="confirm-title">
+                  <header class="eg-card__header eg-card__header--meta">
+                    <div>
+                      <h2 id="confirm-title" data-en="Validated scope and version reason" data-vi="Phạm vi đã kiểm tra và lý do phiên bản">Phạm vi đã kiểm tra và lý do phiên bản</h2>
+                      <p data-en="The exact validated scope is shown before confirmation. With errors present the scope is withheld, the reason is retained and the primary action stays blocked." data-vi="Phạm vi đã kiểm tra chính xác được hiển thị trước khi xác nhận. Khi còn lỗi, phạm vi không được chốt, lý do được giữ và hành động chính vẫn bị chặn.">Phạm vi đã kiểm tra chính xác được hiển thị trước khi xác nhận. Khi còn lỗi, phạm vi không được chốt, lý do được giữ và hành động chính vẫn bị chặn.</p>
+                    </div>
+                    <span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Writes 0 rows" data-vi="Ghi 0 dòng">Ghi 0 dòng</span></span>
+                  </header>
+                  <div class="eg-card__body">
+                    <form class="eg-form" id="import-form" action="#" method="get" novalidate>
+                      <div class="eg-form__section">
+                        <div class="eg-stack" data-gap="2">
+                          <span class="eg-field__label" data-en="Exact validated scope" data-vi="Phạm vi đã kiểm tra chính xác">Phạm vi đã kiểm tra chính xác</span>
+                          <div class="eg-stack" data-gap="2">
+                            <p data-en="Source import · target storefront-web · project code prefix SHOP · base av-12" data-vi="Nguồn nhập · đích storefront-web · tiền tố mã dự án SHOP · gốc av-12">Nguồn nhập · đích storefront-web · tiền tố mã dự án SHOP · gốc av-12</p>
+                            <p data-en="3 rows inspected · 1 valid · 2 invalid · 0 rows confirmed" data-vi="3 dòng đã kiểm tra · 1 hợp lệ · 2 không hợp lệ · 0 dòng được xác nhận">3 dòng đã kiểm tra · 1 hợp lệ · 2 không hợp lệ · 0 dòng được xác nhận</p>
+                            <p data-en="Reason · Import manual cases from supplier export" data-vi="Lý do · Nhập ca thủ công từ tệp xuất của nhà cung cấp">Lý do · Nhập ca thủ công từ tệp xuất của nhà cung cấp</p>
+                            <p data-en="No authoring version will be created from this invalid fixture." data-vi="Không phiên bản soạn nào được tạo từ dữ liệu không hợp lệ này.">Không phiên bản soạn nào được tạo từ dữ liệu không hợp lệ này.</p>
+                          </div>
+                        </div>
+                        <div class="eg-field" data-eg-mutate>
+                          <label class="eg-field__label" for="import-reason" data-en="Version reason" data-vi="Lý do phiên bản">Lý do phiên bản</label>
+                          <input class="eg-input" id="import-reason" name="import-reason" value="Nhập ca thủ công từ tệp xuất của nhà cung cấp" data-value-en="Import manual cases from supplier export" data-value-vi="Nhập ca thủ công từ tệp xuất của nhà cung cấp" data-eg-base-en="Import manual cases from supplier export" data-eg-base-vi="Nhập ca thủ công từ tệp xuất của nhà cung cấp">
+                          <p class="eg-field__hint" data-en="Shown in confirmation. The reason is retained while errors remain, but it cannot unlock the import." data-vi="Hiển thị khi xác nhận. Lý do được giữ khi còn lỗi, nhưng không thể mở khoá việc nhập.">Hiển thị khi xác nhận. Lý do được giữ khi còn lỗi, nhưng không thể mở khoá việc nhập.</p>
+                        </div>
+                        <div class="eg-form__actions">
+                          <button class="eg-btn eg-btn--primary" type="button" disabled data-eg-mutate><span class="eg-btn__label" data-en="Import new version" data-vi="Nhập thành phiên bản mới">Nhập thành phiên bản mới</span></button>
+                          <a class="eg-btn eg-btn--secondary" href="#import-errors"><span class="eg-btn__label" data-en="Fix errors before importing" data-vi="Sửa lỗi trước khi nhập">Sửa lỗi trước khi nhập</span></a>
+                          <span class="eg-kpi__context" data-en="No partial import, no upsert and no duplicate resolution is supplied. Unresolved errors block this action." data-vi="Không có nhập một phần, không upsert và không có cách xử lý trùng lặp. Lỗi chưa xử lý chặn thao tác này.">Không có nhập một phần, không upsert và không có cách xử lý trùng lặp. Lỗi chưa xử lý chặn thao tác này.</span>
+                        </div>
+                      </div>
+                    </form>
+                    <details>
+                      <summary data-en="Implementation metadata · read-only" data-vi="Siêu dữ liệu triển khai · chỉ đọc">Siêu dữ liệu triển khai · chỉ đọc</summary>
+                      <div class="eg-stack" data-gap="2">
+                        <p class="eg-kpi__context"><span data-en="Base" data-vi="Gốc">Gốc</span>: <code>av-12</code></p>
+                        <p class="eg-kpi__context"><span data-en="Source" data-vi="Nguồn">Nguồn</span>: <code>import</code></p>
+                        <p class="eg-kpi__context" data-en="No request is sent and no file is stored by this preview. An all-valid import would append one immutable version; the invalid fixture appends nothing." data-vi="Bản xem trước này không gửi yêu cầu và không lưu tệp. Một lần nhập hoàn toàn hợp lệ sẽ thêm một phiên bản bất biến; dữ liệu không hợp lệ không thêm gì.">Bản xem trước này không gửi yêu cầu và không lưu tệp. Một lần nhập hoàn toàn hợp lệ sẽ thêm một phiên bản bất biến; dữ liệu không hợp lệ không thêm gì.</p>
+                      </div>
+                    </details>
+                  </div>
+                </section>
+
+                <section class="eg-card" aria-labelledby="import-history-title">
+                  <header class="eg-card__header eg-card__header--meta">
+                    <div><h2 id="import-history-title" data-en="Authoring versions" data-vi="Phiên bản soạn">Phiên bản soạn</h2><p data-en="Versions are append-only. The current base stays av-12 until a confirmed all-valid import." data-vi="Phiên bản chỉ được thêm, không ghi đè. Bản gốc hiện tại vẫn là av-12 cho đến khi xác nhận một lần nhập hoàn toàn hợp lệ.">Phiên bản chỉ được thêm, không ghi đè. Bản gốc hiện tại vẫn là av-12 cho đến khi xác nhận một lần nhập hoàn toàn hợp lệ.</p></div>
+                  </header>
+                  <div class="eg-card__body">
+                    <ol class="eg-timeline">
+                      <li class="eg-timeline__item" data-state="current"><span class="eg-timeline__marker" aria-hidden="true"></span><div class="eg-timeline__body"><span class="eg-timeline__time">2026-10-19T11:30:00Z</span><strong>av-12 · <span data-en="current base" data-vi="gốc hiện tại">gốc hiện tại</span></strong><span>Linh Nguyễn · <span data-en="source authoring · reason: Align checklist priorities" data-vi="nguồn soạn · lý do: Căn chỉnh ưu tiên danh mục">nguồn soạn · lý do: Căn chỉnh ưu tiên danh mục</span></span></div></li>
+                      <li class="eg-timeline__item" data-state="historical"><span class="eg-timeline__marker" aria-hidden="true"></span><div class="eg-timeline__body"><span class="eg-timeline__time">2026-10-16T09:12:00Z</span><strong>av-11</strong><span data-en="Historical · immutable" data-vi="Lịch sử · bất biến">Lịch sử · bất biến</span></div></li>
+                    </ol>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div class="eg-tabs__panel" id="export-panel" role="tabpanel" aria-labelledby="export-tab" hidden>
+              <div class="eg-stack" data-gap="6">
+                <section class="eg-card" aria-labelledby="export-scope-title">
+                  <header class="eg-card__header eg-card__header--meta">
+                    <div>
+                      <h2 id="export-scope-title" data-en="Export scope" data-vi="Phạm vi xuất">Phạm vi xuất</h2>
+                      <p data-en="Choose a format and an exact scope. The project total is context only; a smaller selection is never expanded to the whole project." data-vi="Chọn định dạng và phạm vi chính xác. Tổng số của dự án chỉ để tham chiếu; một lựa chọn nhỏ hơn không bao giờ bị mở rộng thành toàn bộ dự án.">Chọn định dạng và phạm vi chính xác. Tổng số của dự án chỉ để tham chiếu; một lựa chọn nhỏ hơn không bao giờ bị mở rộng thành toàn bộ dự án.</p>
+                    </div>
+                    <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">av-12</span></span>
+                  </header>
+                  <div class="eg-card__body">
+                    <form class="eg-form" id="export-form" action="#" method="get" novalidate>
+                      <div class="eg-form__grid">
+                        <div class="eg-field">
+                          <label class="eg-field__label" for="export-format" data-en="Export format" data-vi="Định dạng xuất">Định dạng xuất</label>
+                          <select class="eg-select" id="export-format" name="export-format" data-eg-format-select>
+                            <option value="csv" selected>CSV</option>
+                            <option value="xlsx">XLSX</option>
+                            <option value="json">JSON</option>
+                          </select>
+                          <p class="eg-field__hint" data-en="CSV, XLSX and JSON are all available. No premium format is offered." data-vi="CSV, XLSX và JSON đều khả dụng. Không có định dạng trả phí nào được đưa ra.">CSV, XLSX và JSON đều khả dụng. Không có định dạng trả phí nào được đưa ra.</p>
+                        </div>
+                        <div class="eg-field">
+                          <span class="eg-field__label" data-en="Project code prefix" data-vi="Tiền tố mã dự án">Tiền tố mã dự án</span>
+                          <p><code>SHOP</code> · <span data-en="storefront-web · Lotus Commerce" data-vi="storefront-web · Lotus Commerce">storefront-web · Lotus Commerce</span></p>
+                          <p class="eg-kpi__context" data-en="Every exported case id keeps this prefix." data-vi="Mọi mã ca được xuất đều giữ tiền tố này.">Mọi mã ca được xuất đều giữ tiền tố này.</p>
+                        </div>
+                      </div>
+                      <fieldset class="eg-field eg-fieldset">
+                        <legend class="eg-field__label" data-en="Scope" data-vi="Phạm vi">Phạm vi</legend>
+                        <div class="eg-stack" data-gap="2">
+                          <label class="eg-check"><input type="radio" name="export-scope" value="project" data-eg-scope-unavailable="true" data-eg-scope-en="Project · 38 manual cases" data-eg-scope-vi="Dự án · 38 ca thủ công" data-eg-scope-count="38" data-eg-scope-ids-en="all 38 project cases" data-eg-scope-ids-vi="toàn bộ 38 ca của dự án"><span class="eg-check__label"><span data-en="Project · 38 manual cases · storefront-web · SHOP" data-vi="Dự án · 38 ca thủ công · storefront-web · SHOP">Dự án · 38 ca thủ công · storefront-web · SHOP</span></span></label>
+                          <label class="eg-check"><input type="radio" name="export-scope" value="node" data-eg-scope-en="Selected hierarchy node · SHOP-CL-0017" data-eg-scope-vi="Nút phân cấp đã chọn · SHOP-CL-0017" data-eg-scope-count="1" data-eg-scope-ids-en="SHOP-TC-0042" data-eg-scope-ids-vi="SHOP-TC-0042"><span class="eg-check__label"><span data-en="Selected hierarchy node · SHOP-CL-0017 · 1 case" data-vi="Nút phân cấp đã chọn · SHOP-CL-0017 · 1 ca">Nút phân cấp đã chọn · SHOP-CL-0017 · 1 ca</span></span></label>
+                          <label class="eg-check"><input type="radio" name="export-scope" value="filtered" data-eg-scope-unavailable="true" data-eg-scope-en="Current filtered cases from page 40" data-eg-scope-vi="Các ca đang lọc từ trang 40" data-eg-scope-count="6" data-eg-scope-ids-en="6 filtered cases from page 40" data-eg-scope-ids-vi="6 ca đang lọc từ trang 40"><span class="eg-check__label"><span data-en="Current filtered cases from page 40 · 6 cases" data-vi="Các ca đang lọc từ trang 40 · 6 ca">Các ca đang lọc từ trang 40 · 6 ca</span></span></label>
+                          <label class="eg-check"><input type="radio" name="export-scope" value="selection" checked data-eg-scope-en="Selected cases" data-eg-scope-vi="Ca kiểm thử đã chọn" data-eg-scope-count="3" data-eg-scope-ids-en="SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051" data-eg-scope-ids-vi="SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051"><span class="eg-check__label"><span data-en="Selected cases · 3 of 38 · SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051" data-vi="Ca kiểm thử đã chọn · 3 trong 38 · SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051">Ca kiểm thử đã chọn · 3 trong 38 · SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051</span></span></label>
+                        </div>
+                      </fieldset>
+                      <div class="eg-stack" data-gap="2" data-eg-scope-summary data-eg-scope-source="#export-form"><span class="eg-field__label" data-en="Exact export scope" data-vi="Phạm vi xuất chính xác">Phạm vi xuất chính xác</span>
+                        <div class="eg-stack" data-gap="2">
+                          <p><strong data-en="Scope" data-vi="Phạm vi">Phạm vi</strong> · <span data-eg-scope-slot="label">Selected cases</span></p>
+                          <p><strong data-en="Cases" data-vi="Ca">Ca</strong> · <span data-eg-scope-slot="count">3</span> · <span data-eg-scope-slot="ids">SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051</span></p>
+                          <p><strong data-en="Format" data-vi="Định dạng">Định dạng</strong> · <span data-eg-scope-slot="format">CSV</span> · <strong data-en="Prefix" data-vi="Tiền tố">Tiền tố</strong> <span data-eg-scope-slot="prefix">SHOP</span> · <strong data-en="Base" data-vi="Gốc">Gốc</strong> <span data-eg-scope-slot="version">av-12</span></p>
+                          <p class="eg-kpi__context" data-en="Counts are supplied by scope, not inferred from the project total." data-vi="Số lượng do phạm vi cung cấp, không suy ra từ tổng số dự án.">Counts are supplied by scope, not inferred from the project total.</p>
+                          <p class="eg-field__error" data-eg-scope-unavailable hidden data-en="This scope is unavailable in the supplied fixture; download is blocked." data-vi="Phạm vi này không khả dụng trong dữ liệu minh hoạ; tải xuống bị chặn.">This scope is unavailable in the supplied fixture; download is blocked.</p>
+                        </div>
+                      </div>
+                    </form>
+                    <div class="eg-banner eg-banner--info">
+                      <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-eye"></use></svg></span>
+                      <div class="eg-banner__body">
+                        <strong data-en="Selection is not silently expanded" data-vi="Lựa chọn không bị mở rộng ngầm">Lựa chọn không bị mở rộng ngầm</strong>
+                        <p data-en="The project total (38) stays visible for context only. Downloading the default scope exports exactly 3 cases. The other scope counts are supplied for comparison; changing the selection updates the supplied summary." data-vi="Tổng số dự án (38) chỉ hiển thị để tham chiếu. Tải phạm vi mặc định xuất đúng 3 ca. Các số lượng phạm vi khác được cung cấp để so sánh; bản tĩnh này giữ nguyên bản tóm tắt mặc định.">Tổng số dự án (38) chỉ hiển thị để tham chiếu. Tải phạm vi này xuất đúng 3 ca; đổi lựa chọn sẽ đổi phạm vi được cung cấp.</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="eg-card" aria-labelledby="field-preview-title">
+                  <header class="eg-card__header eg-card__header--meta">
+                    <div>
+                      <h2 id="field-preview-title" data-en="Export field preview" data-vi="Xem trước trường xuất">Xem trước trường xuất</h2>
+                      <p data-en="These fields preserve hierarchy, identity, preconditions, priority and paired action/expected steps for the documented round trip. This is a field preview, not an invented column schema." data-vi="Các trường này giữ phân cấp, danh tính, điều kiện trước, ưu tiên và cặp hành động/mong đợi cho vòng nhập xuất đã được ghi. Đây là xem trước trường, không phải lược đồ cột tự đặt ra.">Các trường này giữ phân cấp, danh tính, điều kiện trước, ưu tiên và cặp hành động/mong đợi cho vòng nhập xuất đã được ghi. Đây là xem trước trường, không phải lược đồ cột tự đặt ra.</p>
+                    </div>
+                    <span class="eg-badge eg-badge--info"><span class="eg-badge__label" data-en="Export fields" data-vi="Trường xuất">Trường xuất</span></span>
+                  </header>
+                  <div class="eg-card__body">
+                    <div class="eg-table__wrap">
+                      <table class="eg-table eg-table--compact" data-eg-table aria-label="Trường xuất và giá trị minh hoạ">
+                        <caption class="eg-table__caption"><span data-en="Example values come from the selected scope. Column order and file schema are supplied by the host and are not invented here." data-vi="Giá trị ví dụ lấy từ phạm vi đã chọn. Thứ tự cột và lược đồ tệp do máy chủ cung cấp và không được tự đặt ra ở đây.">Giá trị ví dụ lấy từ phạm vi đã chọn. Thứ tự cột và lược đồ tệp do máy chủ cung cấp và không được tự đặt ra ở đây.</span></caption>
+                        <thead>
+                          <tr>
+                            <th scope="col"><span data-en="Field" data-vi="Trường">Trường</span></th>
+                            <th scope="col"><span data-en="Supplied example" data-vi="Ví dụ được cung cấp">Ví dụ được cung cấp</span></th>
+                            <th scope="col"><span data-en="What it preserves" data-vi="Nội dung được giữ">Nội dung được giữ</span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr><td data-label-en="Field" data-label-vi="Trường" data-label="Trường"><code>case_id</code></td><td data-label-en="Supplied example" data-label-vi="Ví dụ được cung cấp" data-label="Ví dụ được cung cấp"><code>SHOP-TC-0042</code></td><td data-label-en="What it preserves" data-label-vi="Nội dung được giữ" data-label="Nội dung được giữ"><span data-en="Project-prefixed identity" data-vi="Danh tính gắn tiền tố dự án">Danh tính gắn tiền tố dự án</span></td></tr>
+                          <tr><td data-label-en="Field" data-label-vi="Trường" data-label="Trường"><code>hierarchy_path</code></td><td data-label-en="Supplied example" data-label-vi="Ví dụ được cung cấp" data-label="Ví dụ được cung cấp"><span data-en="Checkout / Order review / Validation / SHOP-CL-0017" data-vi="Thanh toán / Xem lại đơn hàng / Kiểm tra tính hợp lệ / SHOP-CL-0017">Thanh toán / Xem lại đơn hàng / Kiểm tra tính hợp lệ / SHOP-CL-0017</span></td><td data-label-en="What it preserves" data-label-vi="Nội dung được giữ" data-label="Nội dung được giữ"><span data-en="Module, category and checklist parent" data-vi="Mô-đun, danh mục và danh mục kiểm tra cha">Mô-đun, danh mục và danh mục kiểm tra cha</span></td></tr>
+                          <tr><td data-label-en="Field" data-label-vi="Trường" data-label="Trường"><code>title</code></td><td data-label-en="Supplied example" data-label-vi="Ví dụ được cung cấp" data-label="Ví dụ được cung cấp"><span data-en="Confirm order shows the total / Xác nhận đơn hàng hiển thị tổng tiền" data-vi="Xác nhận đơn hàng hiển thị tổng tiền / Confirm order shows the total">Xác nhận đơn hàng hiển thị tổng tiền / Confirm order shows the total</span></td><td data-label-en="What it preserves" data-label-vi="Nội dung được giữ" data-label="Nội dung được giữ"><span data-en="Complete bilingual title as plain text" data-vi="Tiêu đề song ngữ đầy đủ dưới dạng văn bản thuần">Tiêu đề song ngữ đầy đủ dưới dạng văn bản thuần</span></td></tr>
+                          <tr><td data-label-en="Field" data-label-vi="Trường" data-label="Trường"><code>preconditions</code></td><td data-label-en="Supplied example" data-label-vi="Ví dụ được cung cấp" data-label="Ví dụ được cung cấp"><span data-en="A cart with one physical item" data-vi="Giỏ hàng có một mặt hàng vật lý">Giỏ hàng có một mặt hàng vật lý</span></td><td data-label-en="What it preserves" data-label-vi="Nội dung được giữ" data-label="Nội dung được giữ"><span data-en="Required starting state" data-vi="Trạng thái bắt đầu bắt buộc">Trạng thái bắt đầu bắt buộc</span></td></tr>
+                          <tr><td data-label-en="Field" data-label-vi="Trường" data-label="Trường"><code>priority</code></td><td data-label-en="Supplied example" data-label-vi="Ví dụ được cung cấp" data-label="Ví dụ được cung cấp"><span data-en="High" data-vi="Cao">Cao</span></td><td data-label-en="What it preserves" data-label-vi="Nội dung được giữ" data-label="Nội dung được giữ"><span data-en="Authoring priority" data-vi="Mức ưu tiên soạn">Mức ưu tiên soạn</span></td></tr>
+                          <tr><td data-label-en="Field" data-label-vi="Trường" data-label="Trường"><code>steps</code></td><td data-label-en="Supplied example" data-label-vi="Ví dụ được cung cấp" data-label="Ví dụ được cung cấp"><span data-en="Action · confirm the order · Expected · the order total is shown" data-vi="Hành động · xác nhận đơn hàng · Mong đợi · tổng đơn hàng được hiển thị">Hành động · xác nhận đơn hàng · Mong đợi · tổng đơn hàng được hiển thị</span></td><td data-label-en="What it preserves" data-label-vi="Nội dung được giữ" data-label="Nội dung được giữ"><span data-en="Paired action and expected result" data-vi="Cặp hành động và kết quả mong đợi">Cặp hành động và kết quả mong đợi</span></td></tr>
+                          <tr><td data-label-en="Field" data-label-vi="Trường" data-label="Trường"><code>source_version</code></td><td data-label-en="Supplied example" data-label-vi="Ví dụ được cung cấp" data-label="Ví dụ được cung cấp"><code>av-12</code></td><td data-label-en="What it preserves" data-label-vi="Nội dung được giữ" data-label="Nội dung được giữ"><span data-en="Version the export was taken from" data-vi="Phiên bản dùng để xuất">Phiên bản dùng để xuất</span></td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="eg-code">
+                      <div class="eg-code__header"><span data-en="JSON · supplied fixture example" data-vi="JSON · ví dụ minh hoạ được cung cấp">JSON · ví dụ minh hoạ được cung cấp</span><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Not a schema" data-vi="Không phải lược đồ">Không phải lược đồ</span></span></div>
+                      <pre class="eg-code__content">{
+  "case_id": "SHOP-TC-0042",
+  "hierarchy_path": ["Checkout", "Order review", "Validation", "SHOP-CL-0017"],
+  "title": "Confirm order shows the total / Xác nhận đơn hàng hiển thị tổng tiền",
+  "preconditions": "A cart with one physical item",
+  "priority": "high",
+  "steps": [
+    { "action": "Confirm the order", "expected": "The order total is shown" }
+  ],
+  "source_version": "av-12"
+}</pre>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="eg-card" aria-labelledby="download-title">
+                  <header class="eg-card__header eg-card__header--meta">
+                    <div>
+                      <h2 id="download-title" data-en="Download status" data-vi="Trạng thái tải xuống">Trạng thái tải xuống</h2>
+                      <p data-en="Ready for the default selected-cases scope shown above. The supplied fixture prepares a local manifest only; it does not write a file or call a network endpoint." data-vi="Sẵn sàng cho phạm vi ca đã chọn mặc định hiển thị ở trên. Dữ liệu minh hoạ chỉ chuẩn bị một bản kê cục bộ; không ghi tệp và không gọi điểm cuối mạng.">Sẵn sàng cho đúng phạm vi hiển thị ở trên. Dữ liệu minh hoạ chỉ chuẩn bị một bản kê cục bộ; không ghi tệp và không gọi điểm cuối mạng.</p>
+                    </div>
+                    <span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Ready" data-vi="Sẵn sàng">Sẵn sàng</span></span>
+                  </header>
+                  <div class="eg-card__body">
+                    <div class="eg-stack" data-gap="2" data-eg-scope-summary data-eg-scope-source="#export-form"><span class="eg-field__label" data-en="Download scope" data-vi="Phạm vi tải xuống">Phạm vi tải xuống</span>
+                      <div class="eg-stack" data-gap="2">
+                        <p><span data-eg-scope-slot="count">3</span> <span data-en="cases" data-vi="ca">ca</span> · <span data-eg-scope-slot="ids">SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051</span> · <span data-en="prefix" data-vi="tiền tố">tiền tố</span> <span data-eg-scope-slot="prefix">SHOP</span></p>
+                        <p><span data-en="Source version" data-vi="Phiên bản nguồn">Phiên bản nguồn</span> <span data-eg-scope-slot="version">av-12</span> · <span data-eg-scope-slot="format">CSV</span> · <span data-en="hierarchy and paired steps included" data-vi="bao gồm phân cấp và cặp bước">hierarchy and paired steps included</span></p>
+                        <p class="eg-field__error" data-eg-scope-unavailable hidden data-en="Download is unavailable for this scope." data-vi="Tải xuống không khả dụng cho phạm vi này.">Download is unavailable for this scope.</p>
+                      </div>
+                    </div>
+                    <div class="eg-form__actions">
+                      <button class="eg-btn eg-btn--primary" type="button" data-eg-open="export-dialog" data-eg-scope-download data-eg-mutate><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-file"></use></svg><span class="eg-btn__label" data-en="Download export" data-vi="Tải tệp xuất">Tải tệp xuất</span></button>
+                      <a class="eg-btn eg-btn--secondary" href="../40-authoring-tree/evidgate-authoring-tree.html"><span class="eg-btn__label" data-en="Change selection on page 40" data-vi="Đổi lựa chọn ở trang 40">Đổi lựa chọn ở trang 40</span></a>
+                    </div>
+                    <div class="eg-banner eg-banner--warning">
+                      <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+                      <div class="eg-banner__body">
+                        <strong data-en="Unavailable by design" data-vi="Không khả dụng theo thiết kế">Không khả dụng theo thiết kế</strong>
+                        <p data-en="Scan-pending or sensitive artifacts are not offered for download. No premium format, hidden cross-project scope or silent whole-project export is available." data-vi="Hiện vật đang chờ quét hoặc nhạy cảm không được cung cấp để tải. Không có định dạng trả phí, phạm vi chéo dự án ẩn hay xuất toàn bộ dự án ngầm nào.">Hiện vật đang chờ quét hoặc nhạy cảm không được cung cấp để tải. Không có định dạng trả phí, phạm vi chéo dự án ẩn hay xuất toàn bộ dự án ngầm nào.</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+
+          <section class="eg-card" aria-labelledby="other-states-title">
+            <header class="eg-card__header eg-card__header--meta">
+              <div><h2 id="other-states-title" data-en="Other fixture states" data-vi="Các trạng thái minh hoạ khác">Các trạng thái minh hoạ khác</h2><p data-en="Duplicate ids, malformed input, empty scopes and unavailable exports are static specimens. The shared review control changes the whole page." data-vi="Mã trùng, dữ liệu sai cấu trúc, phạm vi trống và xuất không khả dụng là mẫu tĩnh. Điều khiển xem xét chung thay đổi toàn trang.">Mã trùng, dữ liệu sai cấu trúc, phạm vi trống và xuất không khả dụng là mẫu tĩnh. Điều khiển xem xét chung thay đổi toàn trang.</p></div>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-grid" data-cols="2" data-gap="4">
+                <section class="eg-card" id="duplicate-specimen" tabindex="-1">
+                  <div class="eg-card__body">
+                    <h3 data-en="Duplicate ids" data-vi="Mã trùng">Mã trùng</h3>
+                    <p><code>SHOP-TC-0042</code> · <span data-en="row 2" data-vi="dòng 2">dòng 2</span><br><code>SHOP-TC-0042</code> · <span data-en="row 5" data-vi="dòng 5">dòng 5</span></p>
+                    <p data-en="Both rows stay. Confirmation is blocked because no merge, last-wins or overwrite policy is supplied." data-vi="Cả hai dòng được giữ. Xác nhận bị chặn vì không có chính sách gộp, lấy dòng cuối hay ghi đè nào được cung cấp.">Cả hai dòng được giữ. Xác nhận bị chặn vì không có chính sách gộp, lấy dòng cuối hay ghi đè nào được cung cấp.</p>
+                    <span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Blocked · both rows retained" data-vi="Bị chặn · giữ cả hai dòng">Bị chặn · giữ cả hai dòng</span></span>
+                  </div>
+                </section>
+                <section class="eg-card">
+                  <div class="eg-card__body">
+                    <h3 data-en="Malformed file" data-vi="Tệp sai cấu trúc">Tệp sai cấu trúc</h3>
+                    <p><code>broken-cases.json</code> · <span data-en="parse error at line 7" data-vi="lỗi phân tích ở dòng 7">lỗi phân tích ở dòng 7</span></p>
+                    <p data-en="Truncated JSON creates no preview rows and no version. The file is rejected before validation." data-vi="JSON bị cắt tạo không dòng xem trước và không phiên bản. Tệp bị từ chối trước khi kiểm tra.">JSON bị cắt tạo không dòng xem trước và không phiên bản. Tệp bị từ chối trước khi kiểm tra.</p>
+                    <span class="eg-badge eg-badge--danger"><span class="eg-badge__label" data-en="No rows created" data-vi="Không tạo dòng nào">Không tạo dòng nào</span></span>
+                  </div>
+                </section>
+                <section class="eg-card">
+                  <div class="eg-card__body">
+                    <h3 data-en="Unsupported type" data-vi="Loại không được hỗ trợ">Loại không được hỗ trợ</h3>
+                    <p><code>cases.pdf</code></p>
+                    <p data-en="Only CSV, XLSX and JSON are accepted. Type limits are host-supplied; no numeric cap is invented in this fixture." data-vi="Chỉ chấp nhận CSV, XLSX và JSON. Giới hạn loại do máy chủ cung cấp; không có giới hạn số tự đặt ra trong dữ liệu này.">Chỉ chấp nhận CSV, XLSX và JSON. Giới hạn loại do máy chủ cung cấp; không có giới hạn số tự đặt ra trong dữ liệu này.</p>
+                    <span class="eg-badge eg-badge--danger"><span class="eg-badge__label" data-en="Rejected before validation" data-vi="Bị từ chối trước khi kiểm tra">Bị từ chối trước khi kiểm tra</span></span>
+                  </div>
+                </section>
+                <section class="eg-card">
+                  <div class="eg-card__body">
+                    <h3 data-en="No selected rows" data-vi="Chưa chọn dòng nào">Chưa chọn dòng nào</h3>
+                    <p data-en="0 selected · the empty selection is not expanded to the filtered set or the project." data-vi="0 đã chọn · lựa chọn trống không được mở rộng thành tập đã lọc hay toàn dự án.">0 đã chọn · lựa chọn trống không được mở rộng thành tập đã lọc hay toàn dự án.</p>
+                    <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="No cases selected" data-vi="Chưa chọn ca kiểm thử">Chưa chọn ca kiểm thử</span></span>
+                  </div>
+                </section>
+                <section class="eg-card">
+                  <div class="eg-card__body">
+                    <h3 data-en="Empty export scope" data-vi="Phạm vi xuất trống">Phạm vi xuất trống</h3>
+                    <p data-en="0 cases under SHOP-CL-0017 · download stays unavailable and no whole-project fallback is used." data-vi="0 ca dưới SHOP-CL-0017 · không thể tải và không dùng phương án thay thế toàn dự án.">0 ca dưới SHOP-CL-0017 · không thể tải và không dùng phương án thay thế toàn dự án.</p>
+                    <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Empty scope" data-vi="Phạm vi trống">Phạm vi trống</span></span>
+                  </div>
+                </section>
+                <section class="eg-card">
+                  <div class="eg-card__body">
+                    <h3 data-en="Export unavailable" data-vi="Xuất không khả dụng">Xuất không khả dụng</h3>
+                    <p data-en="The scope includes a scan-pending artifact. No download is offered for scan-pending or sensitive artifacts." data-vi="Phạm vi bao gồm hiện vật đang chờ quét. Không cung cấp tải xuống cho hiện vật đang chờ quét hoặc nhạy cảm.">Phạm vi bao gồm hiện vật đang chờ quét. Không cung cấp tải xuống cho hiện vật đang chờ quét hoặc nhạy cảm.</p>
+                    <span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Unavailable · no workaround" data-vi="Không khả dụng · không có cách thay thế">Không khả dụng · không có cách thay thế</span></span>
+                  </div>
+                </section>
+                <section class="eg-card">
+                  <div class="eg-card__body">
+                    <h3 data-en="Long imported value" data-vi="Giá trị nhập dài">Giá trị nhập dài</h3>
+                    <p data-en="The total must include delivery, discount and tax lines before the customer confirms, while preserving the original order summary wording for accessibility." data-vi="Tổng tiền phải bao gồm phí giao hàng, giảm giá và thuế trước khi khách xác nhận, đồng thời giữ nội dung tóm tắt đơn hàng gốc cho trợ năng.">Tổng tiền phải bao gồm phí giao hàng, giảm giá và thuế trước khi khách xác nhận, đồng thời giữ nội dung tóm tắt đơn hàng gốc cho trợ năng.</p>
+                    <p class="eg-kpi__context" data-en="Wraps and remains selectable in the preview; every imported value is plain text." data-vi="Xuống dòng và vẫn chọn được trong bản xem trước; mọi giá trị nhập là văn bản thuần.">Xuống dòng và vẫn chọn được trong bản xem trước; mọi giá trị nhập là văn bản thuần.</p>
+                  </div>
+                </section>
+                <section class="eg-card">
+                  <div class="eg-card__body">
+                    <h3 data-en="All-valid success" data-vi="Thành công hoàn toàn hợp lệ">Thành công hoàn toàn hợp lệ</h3>
+                    <p data-en="A separate all-valid fixture appends av-13 with source import. The invalid preview above never creates that version." data-vi="Một dữ liệu riêng hoàn toàn hợp lệ thêm av-13 với nguồn nhập. Bản xem trước không hợp lệ ở trên không bao giờ tạo phiên bản đó.">Một dữ liệu riêng hoàn toàn hợp lệ thêm av-13 với nguồn nhập. Bản xem trước không hợp lệ ở trên không bao giờ tạo phiên bản đó.</p>
+                    <span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Supplied response only" data-vi="Chỉ phản hồi được cung cấp">Chỉ phản hồi được cung cấp</span></span>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <footer>
+          <hr>
+          <p><span data-en="Evidgate · G1 import/export fixture · Illustrative values, not live data" data-vi="Evidgate · Dữ liệu nhập/xuất G1 · Giá trị minh hoạ, không phải dữ liệu thực">Evidgate · Dữ liệu nhập/xuất G1 · Giá trị minh hoạ, không phải dữ liệu thực</span></p>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <dialog class="eg-dialog eg-dialog--wide" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <header class="eg-dialog__header"><div><h2 id="shortcuts-title" data-en="Keyboard shortcuts" data-vi="Phím tắt">Phím tắt</h2><p data-en="Available in this review fixture." data-vi="Khả dụng trong bản xem xét này.">Khả dụng trong bản xem xét này.</p></div><button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng hộp thoại"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button></header>
+    <div class="eg-dialog__body"><div class="eg-stack" data-gap="2"><p><kbd>Tab</kbd> · <span data-en="Move between file intake, preview rows and export scope" data-vi="Di chuyển giữa dữ liệu tệp, dòng xem trước và phạm vi xuất">Di chuyển giữa dữ liệu tệp, dòng xem trước và phạm vi xuất</span></p><p><kbd>←</kbd> <kbd>→</kbd> · <span data-en="Move between Import and Export tabs" data-vi="Di chuyển giữa tab Nhập và Xuất">Di chuyển giữa tab Nhập và Xuất</span></p><p><kbd>Esc</kbd> · <span data-en="Close a dialog and return focus" data-vi="Đóng hộp thoại và trả tiêu điểm">Đóng hộp thoại và trả tiêu điểm</span></p></div></div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Close" data-vi="Đóng">Đóng</span></button></footer>
+  </dialog>
+
+  <dialog class="eg-dialog eg-dialog--wide" id="export-dialog" aria-labelledby="export-dialog-title">
+    <header class="eg-dialog__header"><div><h2 id="export-dialog-title" data-en="Download the scoped export?" data-vi="Tải tệp xuất theo phạm vi?">Tải tệp xuất theo phạm vi?</h2><p data-en="The supplied fixture prepares a local manifest for exactly the scope shown. No network request is sent and no file is written." data-vi="Dữ liệu minh hoạ chuẩn bị một bản kê cục bộ cho đúng phạm vi hiển thị. Không gửi yêu cầu mạng và không ghi tệp.">Dữ liệu minh hoạ chuẩn bị một bản kê cục bộ cho đúng phạm vi hiển thị. Không gửi yêu cầu mạng và không ghi tệp.</p></div><button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button></header>
+    <div class="eg-dialog__body">
+      <div class="eg-stack" data-gap="3">
+        <div class="eg-stack" data-gap="2" data-eg-scope-summary data-eg-scope-source="#export-form"><span class="eg-field__label" data-en="Download scope" data-vi="Phạm vi tải xuống">Phạm vi tải xuống</span>
+          <div class="eg-stack" data-gap="2">
+            <p><span data-eg-scope-slot="count">3</span> <span data-en="of 38 manual cases" data-vi="trong 38 ca thủ công">of 38 manual cases</span> · <span data-eg-scope-slot="ids">SHOP-TC-0042, SHOP-TC-0043, SHOP-TC-0051</span></p>
+            <p><span data-en="Project code prefix" data-vi="Tiền tố mã dự án">Project code prefix</span> <span data-eg-scope-slot="prefix">SHOP</span> · <span data-en="source version" data-vi="phiên bản nguồn">source version</span> <span data-eg-scope-slot="version">av-12</span> · <span data-eg-scope-slot="format">CSV</span></p>
+            <p data-en="Fields · hierarchy, identity, preconditions, priority and paired action/expected steps" data-vi="Trường · phân cấp, danh tính, điều kiện trước, ưu tiên và cặp hành động/mong đợi">Fields · hierarchy, identity, preconditions, priority and paired action/expected steps</p>
+          </div>
+        </div>
+        <div class="eg-banner eg-banner--info"><div class="eg-banner__body"><p data-en="This is a static review fixture. Closing this dialog makes no change; no scan-pending or sensitive artifact is included." data-vi="Đây là bản xem xét tĩnh. Đóng hộp thoại này không thay đổi gì; không có hiện vật đang chờ quét hoặc nhạy cảm nào được bao gồm.">Đây là bản xem xét tĩnh. Đóng hộp thoại này không thay đổi gì; không có hiện vật đang chờ quét hoặc nhạy cảm nào được bao gồm.</p></div></div>
+      </div>
+    </div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Cancel" data-vi="Huỷ">Huỷ</span></button><button class="eg-btn eg-btn--primary" type="button" data-eg-close data-eg-scope-download data-eg-mutate><span class="eg-btn__label" data-en="Download export" data-vi="Tải tệp xuất">Tải tệp xuất</span></button></footer>
+  </dialog>
+</body>
+</html>

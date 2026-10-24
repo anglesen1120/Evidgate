@@ -1,82 +1,276 @@
 <!doctype html>
-<html lang="en" data-page="27" data-nav="settings">
+<html lang="vi" data-theme="light" data-nav="settings" data-phase-min="G1">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<title>Settings · Evidgate</title>
-<link rel="stylesheet" href="../assets/evidgate.css">
-<script src="../assets/evidgate.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Cài đặt · Evidgate</title>
+  <link rel="stylesheet" href="../assets/evidgate.css">
+  <script src="../assets/evidgate.js" defer></script>
 </head>
 <body>
-<a class="skip" href="#main" data-t="skip">Skip to main content</a>
-<div class="layout" id="app" data-od-id="settings-shell">
-  <aside class="eg-nav" id="evidgateSidebar" data-eg-nav aria-label="Primary navigation"></aside>
-  <div class="work">
-    <header class="topbar"><div class="crumb"><span data-t="workspace">Workspace</span>　/　<strong data-t="settings">Settings</strong></div><div class="top-actions"><button class="quiet" id="themeButton" type="button" data-od-id="theme-toggle" aria-label="Switch theme">Dark</button><button class="quiet" id="localeButton" type="button" data-od-id="locale-toggle" aria-label="Switch language">VI</button></div></header>
-    <main id="main" class="frame" tabindex="-1">
-      <div id="mobileNotice" class="mobile-required" data-t="desktopRequired">Use a desktop to make changes</div>
-      <div id="pageContent">
-        <div class="page-head"><div><h1 data-od-id="settings-title" data-t="settings">Settings</h1><p data-t="settingsIntro">Choose a scope, then open a destination available to your current permissions.</p></div><div class="identity"><div class="avatar" aria-hidden="true">HL</div><div><strong>Hà Lê</strong><span data-t="tenantAdmin">Tenant admin</span></div></div></div>
-        <div class="shell-notice" role="status"><div><strong data-t="supportNoGrant">No active support grant</strong><span class="meta"> · <span data-t="scopeExpiryNote">Active grants show their audited scope and expiry here.</span></span></div><span class="quota-badge" data-t="quotaBadge">Quota details not supplied</span></div>
-        <section class="settings-grid" aria-label="Settings navigation and selected content" data-od-id="settings-region">
-          <aside class="settings-rail" aria-label="Settings destinations">
-            <div class="scope-label"><span data-t="scope">Scope</span><span aria-hidden="true">⌄</span></div>
-            <div class="scope-toggle" role="group" aria-label="Settings scope"><button id="orgScope" data-od-id="scope-organization" type="button" aria-pressed="true" data-t="orgScopeTab">Organization</button><button id="projectScope" data-od-id="scope-project" type="button" aria-pressed="false" data-t="projectScopeTab">Project</button></div>
-            <div class="scope-context"><small id="scopeCaption">Organization</small><strong id="scopeValue">Lotus Commerce</strong></div>
-            <div id="settingsNav" class="settings-nav" role="navigation" aria-label="Settings sections"></div><label for="mobileDestination" class="mobile-destination-label" data-t="destination">Destination</label><select id="mobileDestination" class="mobile-destination" aria-label="Settings destination" data-od-id="mobile-settings-destination"></select>
-          </aside>
-          <section id="tabContent" class="content" aria-live="polite" aria-busy="false"></section>
-        </section>
-        <details class="state-panel" data-od-id="design-review-controls">
-          <summary><span><span lang="en">Design review controls</span> <span class="review-caption">/ <span lang="vi">Điều khiển xem xét thiết kế</span></span></span></summary>
-          <div class="review-controls">
-            <div class="field"><label for="stateSelect" data-t="state">State</label><select id="stateSelect" data-od-id="review-state"><option value="default">Default</option><option value="loading">Loading</option><option value="empty">Empty · no resources</option><option value="filtered-empty">Empty · no filter matches</option><option value="error">Error</option><option value="403">403 · Not authorized</option><option value="404">404 · Not found</option><option value="412">412 · Conflict specimen</option><option value="401">401 · Re-authentication</option><option value="429">429 · Rate limited</option><option value="no-tabs">No accessible tabs</option><option value="session-changed">Session permissions changed</option><option value="last-admin">Last-admin refusal</option><option value="invite-accepted">Invitation accepted</option><option value="invite-expired">Invitation expired</option><option value="invite-revoked">Invitation revoked</option><option value="role403">Role update permission revoked</option></select></div>
-            <div class="field"><label for="permissionSelect" data-t="permissionFixture">Permission fixture</label><select id="permissionSelect" data-od-id="review-permissions"><option value="admin">Tenant admin · supplied scope permissions</option><option value="viewer">Read-only viewer · project:read</option><option value="none">No accessible settings tabs</option></select></div>
-            <div class="field"><label for="scopeReview" data-t="scope">Scope</label><select id="scopeReview"><option value="organization">Organization</option><option value="project">Project · storefront-web</option></select></div>
+  <a class="eg-skip-link" href="#main"><span data-en="Skip to main content" data-vi="Bỏ qua đến nội dung chính">Bỏ qua đến nội dung chính</span></a>
+  <div class="eg-shell">
+    <aside class="eg-nav" id="eg-primary-nav" data-eg-nav aria-label="Điều hướng sản phẩm"></aside>
+    <div class="eg-shell__main">
+      <header class="eg-topbar">
+        <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-nav-toggle aria-expanded="true" aria-controls="eg-primary-nav" aria-label="Mở hoặc thu gọn điều hướng">
+          <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-menu"></use></svg>
+        </button>
+        <div class="eg-topbar__scope">
+          <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Project" data-vi="Dự án">Dự án</span></span>
+          <span><strong>storefront-web</strong> · Lotus Commerce</span>
+        </div>
+        <div class="eg-topbar__search">
+          <label class="eg-visually-hidden" for="nav-search">Tìm mục điều hướng</label>
+          <input class="eg-input eg-input--search" id="nav-search" type="search" data-eg-nav-search data-placeholder-en="Search navigation" data-placeholder-vi="Tìm mục điều hướng" placeholder="Tìm mục điều hướng">
+        </div>
+        <div class="eg-topbar__actions">
+          <span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Author</span></span>
+          <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-open="shortcuts-dialog" aria-haspopup="dialog" aria-label="Phím tắt">
+            <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-book"></use></svg>
+          </button>
+          <div class="eg-menu">
+            <button class="eg-btn eg-btn--ghost eg-btn--sm eg-menu__trigger" type="button" aria-expanded="false" aria-controls="account-menu">
+              <span>LN</span>
+              <span class="eg-btn__label">Linh Nguyễn</span>
+              <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg>
+            </button>
+            <div class="eg-menu__panel" id="account-menu" hidden>
+              <p><strong>Linh Nguyễn</strong><br><span data-en="QA engineer · Lotus Commerce" data-vi="Kỹ sư QA · Lotus Commerce">Kỹ sư QA · Lotus Commerce</span></p>
+              <a class="eg-menu__item" href="../27-settings-shell/evidgate-settings.html" data-en="Workspace settings" data-vi="Cài đặt không gian làm việc">Cài đặt không gian làm việc</a>
+              <a class="eg-menu__item" href="../44-ai-settings/evidgate-ai-settings.html" data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</a>
+              <a class="eg-menu__item" href="../02-login/evidgate-sign-in.html" data-en="Sign out" data-vi="Đăng xuất">Đăng xuất</a>
+            </div>
           </div>
-          <p class="access-note" data-t="reviewNote">Local illustrative fixtures only. Navigation visibility follows the selected permission fixture; a server remains authoritative.</p>
-        </details><details class="state-panel" data-od-id="design-notes"><summary><span data-t="designNotes">Design notes</span></summary><div class="access-note"><p data-t="proposedTokens">Dark palette, secondary surfaces, status colors, spacing and radius are proposed app tokens. Manrope and Public Sans use local/system fallback stacks; no remote fonts are loaded.</p><p data-t="policyGap">Policy remains hidden until its read/write permission source conflict is resolved.</p></div></details>
-      </div>
-      <div id="notFound" class="not-found-view" hidden><h2 data-t="notFound">Not found</h2><p data-t="notFoundDetail">This destination is unavailable.</p></div>
-    </main>
+        </div>
+      </header>
+      <main tabindex="-1" class="eg-shell__content" id="main">
+        <nav class="eg-breadcrumbs" aria-label="Đường dẫn">
+          <ol>
+            <li class="eg-breadcrumbs__item"><a href="../index.html" data-en="Design index" data-vi="Hồ sơ thiết kế">Hồ sơ thiết kế</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item"><a href="../24-project-connection/evidgate-project-overview.html">storefront-web</a></li><li class="eg-breadcrumbs__separator" aria-hidden="true">/</li><li class="eg-breadcrumbs__item" aria-current="page" data-en="Settings" data-vi="Cài đặt">Cài đặt</li>
+          </ol>
+        </nav>
+
+        <div class="eg-banner eg-banner--desktop">
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong data-en="Desktop required for changes" data-vi="Cần máy tính để thay đổi">Cần máy tính để thay đổi</strong>
+            <p data-en="This narrow view is read-only. Open on a desktop to change settings, members or usage records." data-vi="Chế độ hẹp này là chỉ đọc. Mở trên máy tính để thay đổi cài đặt, thành viên hoặc bản ghi sử dụng.">Chế độ hẹp này là chỉ đọc. Mở trên máy tính để thay đổi cài đặt, thành viên hoặc bản ghi sử dụng.</p>
+          </div>
+        </div>
+
+
+        <header class="eg-page-header">
+          <div>
+            <p class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Settings</span></p>
+            <h1 class="eg-page-header__title" data-en="Settings" data-vi="Cài đặt">Cài đặt</h1>
+            <p class="eg-page-header__description" data-en="Choose a scope, then open a destination allowed by the supplied permission fixture. Organization AI consent stays separate from project AI settings." data-vi="Chọn phạm vi, sau đó mở đích được phép theo mẫu quyền được cung cấp. Chấp thuận AI của tổ chức tách biệt với cài đặt AI của dự án.">Chọn phạm vi, sau đó mở đích được phép theo mẫu quyền được cung cấp. Chấp thuận AI của tổ chức tách biệt với cài đặt AI của dự án.</p>
+            <p class="eg-page-header__meta"><span>Lotus Commerce</span><span aria-hidden="true">·</span><span>storefront-web</span><span aria-hidden="true">·</span><span data-en="Permission fixture: Hà Lê · tenant admin" data-vi="Mẫu quyền: Hà Lê · quản trị tổ chức">Mẫu quyền: Hà Lê · quản trị tổ chức</span></p>
+          </div>
+        </header>
+<div data-eg-review data-eg-states="default,loading,empty,no-project,no-tabs,error,403,404,401,412,429"></div><div data-eg-show-state="loading" hidden aria-busy="true">
+          <section class="eg-card" aria-hidden="true">
+            <div class="eg-card__header"><div class="eg-stack" data-gap="2"><span class="eg-skeleton eg-skeleton--title"></span><span class="eg-skeleton eg-skeleton--meta"></span></div><span class="eg-skeleton eg-skeleton--control"></span></div>
+            <div class="eg-card__body"><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row"></span><span class="eg-skeleton eg-skeleton--row eg-skeleton--short"></span><span class="eg-skeleton eg-skeleton--block"></span></div>
+          </section>
+          <div class="eg-grid" data-cols="3" data-gap="4">
+            <section class="eg-card" aria-hidden="true"><div class="eg-card__body"><span class="eg-skeleton eg-skeleton--block"></span><span class="eg-skeleton eg-skeleton--row"></span></div></section>
+            <section class="eg-card" aria-hidden="true"><div class="eg-card__body"><span class="eg-skeleton eg-skeleton--block"></span><span class="eg-skeleton eg-skeleton--row"></span></div></section>
+            <section class="eg-card" aria-hidden="true"><div class="eg-card__body"><span class="eg-skeleton eg-skeleton--block"></span><span class="eg-skeleton eg-skeleton--row"></span></div></section>
+          </div>
+          <span class="eg-visually-hidden" role="status" data-en="Loading page data" data-vi="Đang tải dữ liệu trang">Đang tải dữ liệu trang</span>
+        </div>
+        <div class="eg-stack" data-gap="4">
+          <div class="eg-state eg-state--empty" data-eg-show-state="empty" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-layers"></use></svg></span>
+          <span class="eg-state__title" data-en="No settings destinations" data-vi="Không có đích cài đặt">Không có đích cài đặt</span>
+          <span class="eg-state__description" data-en="No destination is accessible with the supplied permissions. Ask an administrator; hidden destinations are not revealed." data-vi="Không đích nào có thể truy cập với quyền được cấp. Hãy hỏi quản trị viên; các đích ẩn không bị tiết lộ.">Không đích nào có thể truy cập với quyền được cấp. Hãy hỏi quản trị viên; các đích ẩn không bị tiết lộ.</span>
+        </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="error" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+          <span class="eg-state__title" data-en="The page could not be loaded" data-vi="Không thể tải trang">Không thể tải trang</span>
+          <span class="eg-state__description" data-en="Retry keeps the current scope; no draft is merged or resubmitted." data-vi="Thử lại giữ nguyên phạm vi hiện tại; không bản nháp nào bị hợp nhất hay gửi lại.">Thử lại giữ nguyên phạm vi hiện tại; không bản nháp nào bị hợp nhất hay gửi lại.</span>
+          <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Retry" data-vi="Thử lại">Thử lại</span></button></span>
+        </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="403" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <span class="eg-state__title" data-en="You do not have access" data-vi="Bạn không có quyền truy cập">Bạn không có quyền truy cập</span>
+          <span class="eg-state__description" data-en="Ask a project owner for access; the rest of the workspace stays unchanged." data-vi="Yêu cầu chủ dự án cấp quyền; phần còn lại của không gian làm việc không đổi.">Yêu cầu chủ dự án cấp quyền; phần còn lại của không gian làm việc không đổi.</span>
+        </div>
+          <div class="eg-state eg-state--not-found" data-eg-show-state="404" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-search"></use></svg></span>
+          <span class="eg-state__title" data-en="Not found" data-vi="Không tìm thấy">Không tìm thấy</span>
+          <span class="eg-state__description" data-en="The item may not exist or you may not have access. No existence details are disclosed." data-vi="Mục có thể không tồn tại hoặc bạn không có quyền. Không tiết lộ thông tin về sự tồn tại.">Mục có thể không tồn tại hoặc bạn không có quyền. Không tiết lộ thông tin về sự tồn tại.</span>
+        </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="401" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <span class="eg-state__title" data-en="Your session expired" data-vi="Phiên đăng nhập đã hết hạn">Phiên đăng nhập đã hết hạn</span>
+          <span class="eg-state__description" data-en="Sign in again; retained drafts in this fixture are not submitted automatically." data-vi="Đăng nhập lại; bản nháp được giữ trong bản xem xét này không tự động gửi.">Đăng nhập lại; bản nháp được giữ trong bản xem xét này không tự động gửi.</span>
+        </div>
+          <div class="eg-state eg-state--conflict" data-eg-show-state="412" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-shield-alert"></use></svg></span>
+          <span class="eg-state__title" data-en="Review conflict" data-vi="Xung đột khi duyệt">Xung đột khi duyệt</span>
+          <span class="eg-state__description" data-en="This edit target changed. Your draft is retained; Reload is explicit and nothing is auto-merged." data-vi="Mục cần sửa đã thay đổi. Bản nháp được giữ; Tải lại là thao tác rõ ràng và không tự hợp nhất.">Mục cần sửa đã thay đổi. Bản nháp được giữ; Tải lại là thao tác rõ ràng và không tự hợp nhất.</span>
+        </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="429" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+          <span class="eg-state__title" data-en="Too many requests" data-vi="Quá nhiều yêu cầu">Quá nhiều yêu cầu</span>
+          <span class="eg-state__description" data-en="The server asked the client to wait. No values are changed and no request is retried automatically." data-vi="Máy chủ yêu cầu chờ. Không giá trị nào bị thay đổi và không yêu cầu nào được tự động thử lại.">Máy chủ yêu cầu chờ. Không giá trị nào bị thay đổi và không yêu cầu nào được tự động thử lại.</span>
+        </div>
+        </div>
+        <div class="eg-stack" data-gap="6" data-eg-hide-state="loading,empty,error,403,404,401,412,429">
+
+          <section class="eg-card" aria-labelledby="scope-title">
+            <header class="eg-card__header eg-card__header--meta">
+              <div>
+                <h2 id="scope-title" data-en="Scope" data-vi="Phạm vi">Phạm vi</h2>
+                <p data-en="Project AI settings are scoped to storefront-web. Organization AI opt-in is tenant-wide and never changes when project settings are saved." data-vi="Cài đặt AI của dự án thuộc storefront-web. Chấp thuận AI của tổ chức là toàn tổ chức và không đổi khi lưu cài đặt dự án.">Cài đặt AI của dự án thuộc storefront-web. Chấp thuận AI của tổ chức là toàn tổ chức và không đổi khi lưu cài đặt dự án.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Read-only fixture" data-vi="Mẫu chỉ đọc">Mẫu chỉ đọc</span></span>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-form__grid">
+                <div class="eg-field">
+                  <label class="eg-field__label" for="settings-scope" data-en="Scope" data-vi="Phạm vi">Phạm vi</label>
+                  <select class="eg-select" id="settings-scope"><option>Project · storefront-web</option><option>Organization · Lotus Commerce</option></select>
+                  <p class="eg-field__hint" data-en="Changing scope resets the destination to the first accessible item." data-vi="Đổi phạm vi sẽ đặt lại đích về mục đầu tiên có thể truy cập.">Đổi phạm vi sẽ đặt lại đích về mục đầu tiên có thể truy cập.</p>
+                </div>
+                <div class="eg-field">
+                  <label class="eg-field__label" for="settings-project" data-en="Project" data-vi="Dự án">Dự án</label>
+                  <select class="eg-select" id="settings-project"><option>storefront-web · SHOP</option><option>evidgate-e2e</option></select>
+                </div>
+              </div>
+              <p class="eg-kpi__context" data-en="Illustrative fixtures only. Navigation visibility follows the supplied permission fixture; a server remains authoritative." data-vi="Chỉ là mẫu minh hoạ. Hiển thị điều hướng theo mẫu quyền được cung cấp; máy chủ vẫn là nguồn quyết định.">Chỉ là mẫu minh hoạ. Hiển thị điều hướng theo mẫu quyền được cung cấp; máy chủ vẫn là nguồn quyết định.</p>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="dest-title">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="dest-title" data-en="Destinations" data-vi="Đích đến">Đích đến</h2>
+                <p data-en="G1 destinations only. Later-phase entries are removed from this view, not shown as disabled teasers." data-vi="Chỉ các đích G1. Mục của giai đoạn sau bị ẩn khỏi chế độ xem này, không hiển thị dưới dạng gợi ý vô hiệu.">Chỉ các đích G1. Mục của giai đoạn sau bị ẩn khỏi chế độ xem này, không hiển thị dưới dạng gợi ý vô hiệu.</p>
+              </div>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-tabs eg-tabs--vertical" data-eg-tabs>
+                <label class="eg-visually-hidden" for="settings-dest" data-en="Choose a settings destination" data-vi="Chọn đích cài đặt">Chọn đích cài đặt</label>
+                <select class="eg-select eg-tabs__mobile" id="settings-dest" data-eg-tab-select>
+                  <option value="set-general-tab" data-en="Project" data-vi="Dự án">Dự án</option>
+                  <option value="set-ai-tab" selected data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</option>
+                  <option value="set-members-tab" data-en="Members" data-vi="Thành viên">Thành viên</option>
+                  <option value="set-audit-tab" data-en="Audit log" data-vi="Nhật ký kiểm toán">Nhật ký kiểm toán</option>
+                  <option value="set-usage-tab" data-en="AI usage" data-vi="Mức sử dụng AI">Mức sử dụng AI</option>
+                </select>
+                <div class="eg-tabs__list" role="tablist" aria-label="Đích cài đặt" data-aria-en="Settings destinations" data-aria-vi="Đích cài đặt" aria-orientation="vertical">
+                  <button class="eg-tabs__tab" type="button" role="tab" id="set-general-tab" aria-controls="set-general-panel" aria-selected="false" tabindex="-1"><span data-en="Project" data-vi="Dự án">Dự án</span></button>
+                  <button class="eg-tabs__tab" type="button" role="tab" id="set-ai-tab" aria-controls="set-ai-panel" aria-selected="true"><span data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</span> <span class="eg-badge eg-badge--info"><span class="eg-badge__label">ais-3</span></span></button>
+                  <button class="eg-tabs__tab" type="button" role="tab" id="set-members-tab" aria-controls="set-members-panel" aria-selected="false" tabindex="-1"><span data-en="Members" data-vi="Thành viên">Thành viên</span></button>
+                  <button class="eg-tabs__tab" type="button" role="tab" id="set-audit-tab" aria-controls="set-audit-panel" aria-selected="false" tabindex="-1"><span data-en="Audit log" data-vi="Nhật ký kiểm toán">Nhật ký kiểm toán</span></button>
+                  <button class="eg-tabs__tab" type="button" role="tab" id="set-usage-tab" aria-controls="set-usage-panel" aria-selected="false" tabindex="-1"><span data-en="AI usage" data-vi="Mức sử dụng AI">Mức sử dụng AI</span></button>
+                  <button class="eg-tabs__tab" type="button" role="tab" id="set-secrets-tab" aria-controls="set-secrets-panel" aria-selected="false" tabindex="-1" data-eg-phase="G2" hidden><span data-en="Secret references" data-vi="Tham chiếu bí mật">Tham chiếu bí mật</span></button>
+                  <button class="eg-tabs__tab" type="button" role="tab" id="set-policies-tab" aria-controls="set-policies-panel" aria-selected="false" tabindex="-1" data-eg-phase="G4" hidden><span data-en="Policies" data-vi="Chính sách">Chính sách</span></button>
+                </div>
+
+                <div class="eg-tabs__panel" id="set-general-panel" role="tabpanel" aria-labelledby="set-general-tab" hidden>
+                  <div class="eg-stack" data-gap="4">
+                    <div class="eg-form">
+                      <div class="eg-form__grid">
+                        <div class="eg-field"><label class="eg-field__label" for="set-org" data-en="Organization" data-vi="Tổ chức">Tổ chức</label><input class="eg-input" id="set-org" value="Lotus Commerce" readonly></div>
+                        <div class="eg-field"><label class="eg-field__label" for="set-name" data-en="Project name" data-vi="Tên dự án">Tên dự án</label><input class="eg-input" id="set-name" value="storefront-web" readonly></div>
+                        <div class="eg-field"><label class="eg-field__label" for="set-key" data-en="Project key" data-vi="Khoá dự án">Khoá dự án</label><input class="eg-input" id="set-key" value="SHOP" readonly></div>
+                        <div class="eg-field"><label class="eg-field__label" for="set-locale" data-en="Output language" data-vi="Ngôn ngữ đầu ra">Ngôn ngữ đầu ra</label><select class="eg-select" id="set-locale" disabled><option>vi · Tiếng Việt</option><option>en · English</option></select></div>
+                      </div>
+                    </div>
+                    <div class="eg-banner eg-banner--info"><span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span><div class="eg-banner__body"><strong data-en="Read-only for this permission fixture" data-vi="Chỉ đọc với mẫu quyền này">Chỉ đọc với mẫu quyền này</strong><p data-en="Fields are shown for context. This fixture does not grant an edit action; a supported edit elsewhere uses the shared 412 pattern." data-vi="Các trường được hiển thị để tham khảo. Mẫu này không cấp thao tác sửa; một chỉnh sửa được hỗ trợ ở nơi khác dùng mẫu 412 chung.">Các trường được hiển thị để tham khảo. Mẫu này không cấp thao tác sửa; một chỉnh sửa được hỗ trợ ở nơi khác dùng mẫu 412 chung.</p></div></div>
+                  </div>
+                </div>
+                <div class="eg-tabs__panel" id="set-members-panel" role="tabpanel" aria-labelledby="set-members-tab" hidden>
+                  <div class="eg-stack" data-gap="4">
+                    <p data-en="Membership and roles live on their own page. This destination does not duplicate the directory." data-vi="Thành viên và vai trò nằm ở trang riêng. Đích này không lặp lại danh bạ.">Thành viên và vai trò nằm ở trang riêng. Đích này không lặp lại danh bạ.</p>
+                    <div class="eg-form__actions"><a class="eg-btn eg-btn--secondary" href="../28-members-roles/evidgate-members-roles.html"><span class="eg-btn__label" data-en="Open members and roles" data-vi="Mở thành viên và vai trò">Mở thành viên và vai trò</span></a></div>
+                  </div>
+                </div>
+                <div class="eg-tabs__panel" id="set-audit-panel" role="tabpanel" aria-labelledby="set-audit-tab" hidden>
+                  <div class="eg-stack" data-gap="4">
+                    <p data-en="Audit events are supplied elsewhere. No policy activation or release verdict is configured on this page." data-vi="Sự kiện kiểm tra được cung cấp ở nơi khác. Trang này không cấu hình kích hoạt chính sách hay kết luận phát hành.">Sự kiện kiểm tra được cung cấp ở nơi khác. Trang này không cấu hình kích hoạt chính sách hay kết luận phát hành.</p>
+                    <p class="eg-kpi__context">audit-2026-10-23-0912 · settings.viewed · Hà Lê</p>
+                  </div>
+                </div>
+                <div class="eg-tabs__panel" id="set-ai-panel" role="tabpanel" aria-labelledby="set-ai-tab">
+                  <div class="eg-stack" data-gap="4">
+                    <div class="eg-grid" data-cols="3" data-gap="4">
+                      <div class="eg-kpi"><span class="eg-kpi__label" data-en="Project settings version" data-vi="Phiên bản cài đặt dự án">Phiên bản cài đặt dự án</span><span class="eg-kpi__value">ais-3</span><span class="eg-kpi__context" data-en="Linh Nguyễn · 2026-10-23T09:00:00Z" data-vi="Linh Nguyễn · 2026-10-23T09:00:00Z">Linh Nguyễn · 2026-10-23T09:00:00Z</span></div>
+                      <div class="eg-kpi"><span class="eg-kpi__label" data-en="Output languages" data-vi="Ngôn ngữ đầu ra">Ngôn ngữ đầu ra</span><span class="eg-kpi__value">vi · en</span><span class="eg-kpi__context" data-en="Interface locale is separate" data-vi="Ngôn ngữ giao diện là riêng">Ngôn ngữ giao diện là riêng</span></div>
+                      <div class="eg-kpi eg-kpi--warning"><span class="eg-kpi__label" data-en="Organization AI opt-in" data-vi="Chấp thuận AI của tổ chức">Chấp thuận AI của tổ chức</span><span class="eg-kpi__value" data-en="Off" data-vi="Tắt">Tắt</span><span class="eg-kpi__context" data-en="Tenant scope · supplied" data-vi="Phạm vi tổ chức · được cung cấp">Phạm vi tổ chức · được cung cấp</span></div>
+                    </div>
+                    <div class="eg-banner eg-banner--warning eg-banner--stack"><span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-sparkle"></use></svg></span><div class="eg-banner__body"><strong data-en="AI generation is off; manual authoring is available" data-vi="Chưa bật tạo bằng AI; vẫn có thể soạn kiểm thử thủ công">Chưa bật tạo bằng AI; vẫn có thể soạn kiểm thử thủ công</strong><p data-en="The organization has not opted in. Requirements, manual checklists and review still work. This page has no consent toggle and no fabricated administration URL." data-vi="Tổ chức chưa chấp thuận. Yêu cầu, danh sách kiểm tra thủ công và xem xét vẫn hoạt động. Trang này không có nút bật chấp thuận và không có URL quản trị tự đặt.">Tổ chức chưa chấp thuận. Yêu cầu, danh sách kiểm tra thủ công và xem xét vẫn hoạt động. Trang này không có nút bật chấp thuận và không có URL quản trị tự đặt.</p></div><div class="eg-banner__actions"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Contact an administrator" data-vi="Liên hệ quản trị viên">Liên hệ quản trị viên</span></span></div></div>
+                    <div class="eg-stack" data-gap="2">
+                      <span class="eg-kpi__label" data-en="Opt-in status specimens" data-vi="Mẫu trạng thái chấp thuận">Mẫu trạng thái chấp thuận</span>
+                      <div class="eg-stack" data-gap="2"><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="On · supplied policy src-7" data-vi="Bật · chính sách src-7 được cung cấp">Bật · chính sách src-7 được cung cấp</span></span><span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Off · current specimen" data-vi="Tắt · mẫu hiện tại">Tắt · mẫu hiện tại</span></span><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Status unavailable" data-vi="Không có dữ liệu trạng thái">Không có dữ liệu trạng thái</span></span></div>
+                    </div>
+                    <div class="eg-form__actions">
+                      <a class="eg-btn eg-btn--primary" href="../44-ai-settings/evidgate-ai-settings.html"><span class="eg-btn__label" data-en="Open AI settings" data-vi="Mở cài đặt AI">Mở cài đặt AI</span></a>
+                      <a class="eg-btn eg-btn--secondary" href="../31-quota-retention/evidgate-usage-retention.html"><span class="eg-btn__label" data-en="View AI usage" data-vi="Xem mức sử dụng AI">Xem mức sử dụng AI</span></a>
+                    </div>
+                  </div>
+                </div>
+                <div class="eg-tabs__panel" id="set-usage-panel" role="tabpanel" aria-labelledby="set-usage-tab" hidden>
+                  <div class="eg-stack" data-gap="4">
+                    <p data-en="Credit balance and usage by action are read on the usage page. This settings destination does not allocate credits per project." data-vi="Số dư tín dụng và mức sử dụng theo thao tác được xem ở trang mức sử dụng. Đích cài đặt này không phân bổ tín dụng theo dự án.">Số dư tín dụng và mức sử dụng theo thao tác được xem ở trang mức sử dụng. Đích cài đặt này không phân bổ tín dụng theo dự án.</p>
+                    <div class="eg-form__actions"><a class="eg-btn eg-btn--secondary" href="../31-quota-retention/evidgate-usage-retention.html"><span class="eg-btn__label" data-en="Open usage and AI credits" data-vi="Mở mức sử dụng và tín dụng AI">Mở mức sử dụng và tín dụng AI</span></a></div>
+                  </div>
+                </div>
+
+                <div class="eg-tabs__panel" id="set-secrets-panel" role="tabpanel" aria-labelledby="set-secrets-tab" hidden>
+                  <p data-en="Secret references are a G2 destination. No secret value is displayed." data-vi="Tham chiếu bí mật là đích G2. Không giá trị bí mật nào được hiển thị.">Tham chiếu bí mật là đích G2. Không giá trị bí mật nào được hiển thị.</p>
+                </div>
+                <div class="eg-tabs__panel" id="set-policies-panel" role="tabpanel" aria-labelledby="set-policies-tab" hidden>
+                  <p data-en="Policies are a G4 destination." data-vi="Chính sách là đích G4.">Chính sách là đích G4.</p>
+                </div>
+
+              </div>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="consent-title">
+            <header class="eg-card__header eg-card__header--meta">
+              <div>
+                <h2 id="consent-title" data-en="Organization AI opt-in" data-vi="Chấp thuận sử dụng AI của tổ chức">Chấp thuận sử dụng AI của tổ chức</h2>
+                <p data-en="Tenant-wide and read-only here. Saving project settings never enables AI consent." data-vi="Toàn tổ chức và chỉ đọc tại đây. Lưu cài đặt dự án không bao giờ bật chấp thuận AI.">Toàn tổ chức và chỉ đọc tại đây. Lưu cài đặt dự án không bao giờ bật chấp thuận AI.</p>
+              </div>
+              <span class="eg-badge eg-badge--warning"><span class="eg-badge__label" data-en="Off" data-vi="Tắt">Tắt</span></span>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-banner eg-banner--warning eg-banner--stack"><span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-sparkle"></use></svg></span><div class="eg-banner__body"><strong data-en="AI generation is off; manual authoring is available" data-vi="Chưa bật tạo bằng AI; vẫn có thể soạn kiểm thử thủ công">Chưa bật tạo bằng AI; vẫn có thể soạn kiểm thử thủ công</strong><p data-en="The organization has not opted in. Requirements, manual checklists and review still work. No administration URL is supplied, so contact an administrator." data-vi="Tổ chức chưa chấp thuận. Yêu cầu, danh sách kiểm tra thủ công và xem xét vẫn hoạt động. Không có URL quản trị được cung cấp, hãy liên hệ quản trị viên.">Tổ chức chưa chấp thuận. Yêu cầu, danh sách kiểm tra thủ công và xem xét vẫn hoạt động. Không có URL quản trị được cung cấp, hãy liên hệ quản trị viên.</p></div><div class="eg-banner__actions"><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Contact an administrator" data-vi="Liên hệ quản trị viên">Liên hệ quản trị viên</span></span></div></div>
+              <div class="eg-form__grid">
+                <div class="eg-stack" data-gap="2"><span class="eg-kpi__label" data-en="On specimen" data-vi="Mẫu bật">Mẫu bật</span><span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="On · source src-7" data-vi="Bật · nguồn src-7">Bật · nguồn src-7</span></span></div>
+                <div class="eg-stack" data-gap="2"><span class="eg-kpi__label" data-en="Unavailable specimen" data-vi="Mẫu không có dữ liệu">Mẫu không có dữ liệu</span><span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Status unavailable" data-vi="Không có dữ liệu trạng thái">Không có dữ liệu trạng thái</span></span></div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <footer>
+          <hr>
+          <p><span data-en="Evidgate · G1 review fixture · Illustrative values, not live data" data-vi="Evidgate · Dữ liệu xem xét G1 · Giá trị minh hoạ, không phải dữ liệu thực">Evidgate · Dữ liệu xem xét G1 · Giá trị minh hoạ, không phải dữ liệu thực</span></p>
+        </footer>
+      </main>
+    </div>
   </div>
-</div>
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<dialog id="conflictDialog" aria-labelledby="conflictTitle" aria-describedby="conflictDescription"><form method="dialog" style="padding:22px;max-width:560px"><h2 id="conflictTitle" data-t="conflictTitle">Someone else changed this</h2><p id="conflictDescription" data-t="conflictDescription">Shared conflict pattern from a linked edit; this settings landing route itself is not a 412 response.</p><dl class="detail-list"><div><dt data-t="currentRevision">Current revision</dt><dd><span data-t="unavailable">Not supplied in this fixture</span> · <span data-t="illustrative">Illustrative fixture</span></dd></div><div><dt data-t="changedFields">Changed fields</dt><dd data-t="changedPermissions">Permission scope · project target</dd></div></dl><div class="diff"><div><b data-t="serverValue">Current server value</b><span data-t="serverDraft">Project target: storefront-web</span></div><div><b data-t="yourDraft">Unsaved draft retained</b><span class="draft-copy">scope=organization</span></div></div><p class="scope-text" data-t="reloadWarning">Reload replaces the draft. Nothing is merged or resubmitted automatically.</p><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="inline-btn" value="cancel" data-t="cancel">Cancel</button><button id="reloadDraft" class="inline-btn" value="reload" data-t="reload">Reload</button></div></form></dialog>
-
-
-
-<script>
-const words={
- en:{skip:"Skip to main content",organization:"Organization",workspace:"Workspace",quality:"Quality",runs:"Runs",catalog:"Test catalog",settings:"Settings",tenantAdmin:"Tenant admin",supportAccess:"Support access",noGrant:"No active grant in this fixture",supportNoGrant:"No active support grant",scopeExpiryNote:"Active grants show their audited scope and expiry here.",quotaBadge:"Quota details not supplied",settingsIntro:"Choose a scope, then open a destination available to your current permissions.",desktopRequired:"Use a desktop to make changes",scope:"Scope",orgSettings:"Organization settings",projectSettings:"Project settings",orgScopeTab:"Organization",projectScopeTab:"Project",reviewControls:"Design review controls",destination:"Destination",designNotes:"Design notes",proposedTokens:"Dark palette, secondary surfaces, status colors, spacing and radius are proposed app tokens. Manrope and Public Sans use local/system fallback stacks; no remote fonts are loaded.",state:"State",permissionFixture:"Permission fixture",stateDefault:"Default",stateLoading:"Loading",stateEmpty:"Empty · no resources",stateFilteredEmpty:"Empty · no filter matches",stateError:"Error",state403:"403 · Not authorized",state404:"404 · Not found",state412:"412 · Conflict specimen",state401:"401 · Re-authentication",state429:"429 · Rate limited",stateNoTabs:"No accessible tabs",stateSession:"Session permissions changed",stateLong:"Long-content layout",permissionAdmin:"Tenant admin · supplied scope permissions",permissionViewer:"Read-only viewer · project:read",permissionNone:"No accessible settings tabs",scopeProject:"Project settings · storefront-web",reviewNote:"Local illustrative fixtures only. Navigation visibility follows the selected permission fixture; a server remains authoritative.",notFound:"Not found",notFoundDetail:"This destination is unavailable.",conflictTitle:"Someone else changed this",conflictDescription:"Shared conflict pattern from a linked edit; this settings landing route itself is not a 412 response.",currentRevision:"Current revision",changedFields:"Changed fields",changedPermissions:"Permission scope · project target",serverValue:"Current server value",serverDraft:"Project target: storefront-web",yourDraft:"Unsaved draft retained",reloadWarning:"Reload replaces the draft. Nothing is merged or resubmitted automatically.",cancel:"Cancel",reload:"Reload",members:"Members & roles",secrets:"Secret references",policy:"Policy",quota:"Quota & retention",audit:"Audit",securityEvents:"Security events",integrations:"Integrations",support:"Support access",apiTokens:"API tokens",deployTargets:"Deploy targets",agents:"Agents V2",orgGroup:"Organization",projectGroup:"Project",projectName:"storefront-web",orgName:"Lotus Commerce",membersTitle:"Members and roles",membersDesc:"Organization membership and assigned roles.",illustrative:"Illustrative excerpt · no live member directory",member:"Member",role:"Role",membershipScope:"Membership scope",organizationValue:"Lotus Commerce",reader:"QA",maintainer:"Maintainer",admin:"Tenant admin",orgOnly:"Organization-wide",emptyTitle:"No resources to show",emptyDescription:"This fixture contains no records for the selected destination.",filterEmptyTitle:"No results match these filters",filterEmptyDesc:"Clear or adjust the current filters to see matching records.",loading:"Loading settings",loadingDesc:"The selected destination is loading. Existing layout space is reserved.",errorTitle:"Settings could not be loaded",errorDesc:"Safe context is retained. Retry requires a new server request.",requestId:"Request ID",retry:"Retry",retryReady:"Retry is ready; a server response is still required.",unauthorizedTitle:"Not authorized",unauthorizedDesc:"The current in-scope request was refused. Refresh permissions or return to an allowed destination.",foreign404:"Unknown and foreign destinations use the same not-found view.",reauthTitle:"Sign in again",reauthDesc:"Your session needs re-authentication. Safe return route is preserved:",rateTitle:"Too many requests",rateDesc:"Retry-After was supplied by the server:",retryAfter:"60 seconds (illustrative server value)",noTabsTitle:"No settings destinations available",noTabsDesc:"No accessible settings tab was supplied for this permission fixture.",sessionTitle:"Session permissions changed",sessionDesc:"The session changed. Refresh the permission fixture before opening a destination.",refresh:"Refresh permissions",refreshed:"Permission fixture refreshed locally; no server request was made.",orgScopeDesc:"Organization-scoped destination",projectScopeDesc:"Project-scoped destination",metadataOnly:"Metadata only",noSecret:"Secret values are never shown here.",unavailable:"Not supplied in this fixture",auditEmpty:"No sample audit records supplied.",securityEmpty:"No sample security events supplied.",integrationEmpty:"No integration records supplied.",supportEmpty:"No active support grant is represented. Scope and expiry appear only when provided.",tokenEmpty:"No token metadata supplied.",deployEmpty:"No deploy target records supplied.",agentsUnavailable:"Agents V2 is not available in this V1 fixture.",quotaUnknown:"Usage and retention values were not supplied.",quotaSource:"Quota visibility requires usage:read; retention visibility requires project:read.",secretMeta:"Reference metadata is shown only when supplied by the server.",policyGap:"Policy is hidden in this fixture until the policy:write vs policy:read source conflict is resolved.",retryNote:"The retry control is a local review affordance; it does not call a service.",longFixtureLabel:"Long label fixture · illustrative"},
- vi:{skip:"Bỏ qua đến nội dung chính",organization:"Tổ chức",workspace:"Không gian làm việc",quality:"Chất lượng",runs:"Lượt chạy",catalog:"Danh mục kiểm thử",settings:"Cài đặt",tenantAdmin:"Quản trị viên tổ chức",supportAccess:"Quyền hỗ trợ",noGrant:"Không có quyền đang hoạt động trong dữ liệu minh họa",supportNoGrant:"Không có quyền hỗ trợ đang hoạt động",scopeExpiryNote:"Quyền đang hoạt động sẽ hiển thị phạm vi kiểm toán và thời hạn tại đây.",quotaBadge:"Chưa có dữ liệu hạn mức",settingsIntro:"Chọn phạm vi, sau đó mở mục được cấp quyền hiện tại.",desktopRequired:"Sử dụng máy tính để thay đổi dữ liệu",scope:"Phạm vi",orgSettings:"Cài đặt tổ chức",projectSettings:"Cài đặt dự án",orgScopeTab:"Tổ chức",projectScopeTab:"Dự án",reviewControls:"Điều khiển xem xét thiết kế",destination:"Mục",designNotes:"Ghi chú thiết kế",proposedTokens:"Bảng màu tối, bề mặt phụ, màu trạng thái, khoảng cách và bo góc là token ứng dụng đề xuất. Manrope và Public Sans dùng phông thay thế cục bộ/hệ thống; không tải phông từ xa.",state:"Trạng thái",permissionFixture:"Bộ quyền minh họa",stateDefault:"Mặc định",stateLoading:"Đang tải",stateEmpty:"Trống · không có tài nguyên",stateFilteredEmpty:"Trống · không khớp bộ lọc",stateError:"Lỗi",state403:"403 · Không có quyền",state404:"404 · Không tìm thấy",state412:"412 · Mẫu xung đột",state401:"401 · Cần đăng nhập lại",state429:"429 · Quá nhiều yêu cầu",stateNoTabs:"Không có tab khả dụng",stateSession:"Quyền phiên đã thay đổi",stateLong:"Bố cục nội dung dài",permissionAdmin:"Quản trị tổ chức · quyền phạm vi minh họa",permissionViewer:"Chỉ xem · project:read",permissionNone:"Không có tab cài đặt khả dụng",scopeProject:"Cài đặt dự án · storefront-web",reviewNote:"Chỉ dùng dữ liệu minh họa cục bộ. Điều hướng theo bộ quyền đã chọn; máy chủ vẫn là nguồn quyết định.",notFound:"Không tìm thấy",notFoundDetail:"Mục này hiện không khả dụng.",conflictTitle:"Người khác đã thay đổi dữ liệu này",conflictDescription:"Mẫu xung đột dùng chung từ thao tác chỉnh sửa liên kết; trang cài đặt này không tự trả về 412.",currentRevision:"Phiên bản hiện tại",changedFields:"Trường đã thay đổi",changedPermissions:"Phạm vi quyền · mục tiêu dự án",serverValue:"Giá trị máy chủ hiện tại",serverDraft:"Mục tiêu dự án: storefront-web",yourDraft:"Bản nháp chưa lưu được giữ lại",reloadWarning:"Tải lại sẽ thay thế bản nháp. Không tự gộp hoặc gửi lại.",cancel:"Hủy",reload:"Tải lại",members:"Thành viên và vai trò",secrets:"Tham chiếu bí mật",policy:"Chính sách",quota:"Hạn mức và lưu giữ",audit:"Kiểm toán",securityEvents:"Sự kiện bảo mật",integrations:"Tích hợp",support:"Quyền hỗ trợ",apiTokens:"Mã thông báo API",deployTargets:"Mục tiêu triển khai",agents:"Agents V2",orgGroup:"Tổ chức",projectGroup:"Dự án",projectName:"storefront-web",orgName:"Lotus Commerce",membersTitle:"Thành viên và vai trò",membersDesc:"Thành viên tổ chức và vai trò được gán.",illustrative:"Trích đoạn minh họa · không phải danh bạ trực tiếp",member:"Thành viên",role:"Vai trò",membershipScope:"Phạm vi thành viên",organizationValue:"Lotus Commerce",reader:"QA",maintainer:"Người bảo trì",admin:"Quản trị viên tổ chức",orgOnly:"Toàn tổ chức",emptyTitle:"Không có tài nguyên để hiển thị",emptyDescription:"Dữ liệu minh họa này không có bản ghi cho mục đã chọn.",filterEmptyTitle:"Không có kết quả phù hợp với bộ lọc",filterEmptyDesc:"Xóa hoặc điều chỉnh bộ lọc để xem kết quả phù hợp.",loading:"Đang tải cài đặt",loadingDesc:"Mục đã chọn đang tải. Bố cục cuối được giữ chỗ.",errorTitle:"Không thể tải cài đặt",errorDesc:"Ngữ cảnh an toàn được giữ lại. Thử lại cần yêu cầu mới đến máy chủ.",requestId:"Mã yêu cầu",retry:"Thử lại",retryReady:"Có thể thử lại; vẫn cần phản hồi từ máy chủ.",unauthorizedTitle:"Bạn không có quyền truy cập",unauthorizedDesc:"Yêu cầu trong phạm vi hiện tại bị từ chối. Làm mới quyền hoặc quay về mục được phép.",foreign404:"Mục không xác định và ngoài tổ chức dùng cùng một trang không tìm thấy.",reauthTitle:"Đăng nhập lại",reauthDesc:"Phiên cần xác thực lại. Đường dẫn quay lại an toàn được giữ:",rateTitle:"Quá nhiều yêu cầu",rateDesc:"Máy chủ đã cung cấp Retry-After:",retryAfter:"60 giây (giá trị minh họa từ máy chủ)",noTabsTitle:"Không có mục cài đặt khả dụng",noTabsDesc:"Bộ quyền minh họa không cung cấp tab cài đặt nào có thể truy cập.",sessionTitle:"Quyền phiên đã thay đổi",sessionDesc:"Phiên đã thay đổi. Làm mới bộ quyền trước khi mở mục.",refresh:"Làm mới quyền",refreshed:"Đã làm mới bộ quyền cục bộ; không gửi yêu cầu máy chủ.",orgScopeDesc:"Mục thuộc phạm vi tổ chức",projectScopeDesc:"Mục thuộc phạm vi dự án",metadataOnly:"Chỉ siêu dữ liệu",noSecret:"Không hiển thị giá trị bí mật tại đây.",unavailable:"Chưa được cung cấp trong dữ liệu minh họa",auditEmpty:"Chưa có bản ghi kiểm toán minh họa.",securityEmpty:"Chưa có sự kiện bảo mật minh họa.",integrationEmpty:"Chưa có bản ghi tích hợp minh họa.",supportEmpty:"Không có quyền hỗ trợ đang hoạt động trong dữ liệu minh họa. Chỉ hiển thị phạm vi và thời hạn khi được cung cấp.",tokenEmpty:"Chưa có siêu dữ liệu mã thông báo.",deployEmpty:"Chưa có bản ghi mục tiêu triển khai.",agentsUnavailable:"Agents V2 không có trong dữ liệu minh họa V1 này.",quotaUnknown:"Chưa cung cấp giá trị sử dụng và thời gian lưu giữ.",quotaSource:"Xem hạn mức cần usage:read; xem thời gian lưu giữ cần project:read.",secretMeta:"Chỉ hiển thị siêu dữ liệu tham chiếu khi máy chủ cung cấp.",policyGap:"Ẩn chính sách đến khi làm rõ xung đột nguồn policy:write và policy:read.",retryNote:"Thao tác thử lại chỉ phục vụ xem xét cục bộ; không gọi dịch vụ.",longFixtureLabel:"Nhãn dài minh họa · dữ liệu giả lập"}
-};
-const permissionSets={admin:{org:["membership:read","ingest_token:read","audit:read","security_event:read","support:read"],project:["usage:read","project:read","webhook:read","api_token:read","deploy_target:read"]},viewer:{org:[],project:["project:read"]},none:{org:[],project:[]}};
-const navItems=[{id:"members",scope:"org",perm:"membership:read",group:"orgGroup"},{id:"secrets",scope:"org",perm:"ingest_token:read",group:"orgGroup"},{id:"audit",scope:"org",perm:"audit:read",group:"orgGroup"},{id:"securityEvents",scope:"org",perm:"security_event:read",group:"orgGroup"},{id:"support",scope:"org",perm:"support:read",group:"orgGroup"},{id:"quota",scope:"project",perm:["usage:read","project:read"],group:"projectGroup"},{id:"integrations",scope:"project",perm:"webhook:read",group:"projectGroup"},{id:"apiTokens",scope:"project",perm:"api_token:read",group:"projectGroup"},{id:"deployTargets",scope:"project",perm:"deploy_target:read",group:"projectGroup"}];
-const ROUTES={members:"../28-members-roles/evidgate-members-roles.html",secrets:"../29-secret-references/evidgate-secret-references.html",audit:"../32-audit-log/evidgate-audit-log.html",securityEvents:"../33-security-events/evidgate-security-events.html",support:"../36-support-access/evidgate-support-access.html",quota:"../31-quota-retention/evidgate-usage-retention.html",integrations:"../35-integrations-webhooks/evidgate-webhook-integrations.html",apiTokens:"../37-api-tokens/evidgate-api-tokens.html",deployTargets:"../38-deploy-targets/evidgate-deploy-targets.html"};
-let locale="en",theme="light";try{locale=localStorage.getItem("eg-settings-locale")||"en";theme=localStorage.getItem("eg-settings-theme")||"light"}catch(_){}let scope="organization",fixture="admin",activeTab="members",currentState="default";
-function setPref(key,value){try{localStorage.setItem(key,value)}catch(_){}}
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)], t=k=>words[locale][k]||k;
-function updateReviewOptions(){const opts={stateSelect:[["default","stateDefault"],["loading","stateLoading"],["empty","stateEmpty"],["filtered-empty","stateFilteredEmpty"],["error","stateError"],["403","state403"],["404","state404"],["412","state412"],["401","state401"],["429","state429"],["no-tabs","stateNoTabs"],["session-changed","stateSession"],["long-content","stateLong"]],permissionSelect:[["admin","permissionAdmin"],["viewer","permissionViewer"],["none","permissionNone"]],scopeReview:[["organization","orgSettings"],["project","scopeProject"]]};for(const [id,rows] of Object.entries(opts)){const el=$("#"+id),value=el.value;el.innerHTML=rows.map(([v,k])=>`<option value="${v}">${t(k)}</option>`).join("");el.value=value}}
-function translate(){document.documentElement.lang=locale;$$('[data-t]').forEach(el=>{const k=el.dataset.t;el.textContent=t(k)});$('#localeButton').textContent=locale==="en"?"VI":"EN";$('#themeButton').textContent=theme==="light"?(locale==="en"?"Dark":"Tối"):(locale==="en"?"Light":"Sáng");$('#themeButton').setAttribute("aria-label",locale==="en"?"Switch theme":"Đổi giao diện");$('#localeButton').setAttribute("aria-label",locale==="en"?"Switch language":"Đổi ngôn ngữ");updateReviewOptions();renderNav();renderPage()}
-function permissions(){return permissionSets[fixture][scope==="organization"?"org":"project"]}
-function availableItems(){return navItems.filter(item=>item.scope===(scope==="organization"?"org":"project")&&(Array.isArray(item.perm)?item.perm.some(p=>permissions().includes(p)):permissions().includes(item.perm)))}
-function syncScope(){const isOrg=scope==="organization";$('#orgScope').setAttribute('aria-pressed',String(isOrg));$('#projectScope').setAttribute('aria-pressed',String(!isOrg));$('#scopeCaption').textContent=isOrg?t('orgSettings'):t('projectSettings');$('#scopeValue').textContent=isOrg?t('orgName'):t('projectName');$('#scopeReview').value=isOrg?'organization':'project';const chosen=availableItems();if(!chosen.some(x=>x.id===activeTab))activeTab=chosen[0]?.id||'';renderNav();history.replaceState({},'',`${location.pathname}?scope=${scope}&tab=${activeTab||'none'}`)}
-function renderNav(){const items=availableItems();let last='';$('#settingsNav').innerHTML=items.map(item=>{let group=item.group!==last?`<div class="group-title">${t(item.group)}</div>`:'';last=item.group;return `${group}<a href="${ROUTES[item.id]||'evidgate-settings.html'}" data-tab="${item.id}" data-od-id="settings-destination-${item.id}" aria-current="${item.id===activeTab?'page':'false'}">${t(item.id)}</a>`}).join('');$('#mobileDestination').innerHTML=items.map(item=>`<option value="${item.id}" ${item.id===activeTab?'selected':''}>${t(item.id)}</option>`).join('');$$('[data-tab]').forEach(a=>a.onclick=e=>{e.preventDefault();const route=ROUTES[a.dataset.tab];if(route){location.href=route;return}selectTab(a.dataset.tab)});$('#mobileDestination').onchange=e=>{const route=ROUTES[e.target.value];if(route){location.href=route;return}selectTab(e.target.value)}}
-function selectTab(id){activeTab=id;currentState='default';$('#stateSelect').value='default';renderNav();renderPage();history.replaceState({},'',`${location.pathname}?scope=${scope}&tab=${activeTab}`)}
-function header(title,desc,scopeName){return `<div class="content-head"><div><h2 data-od-id="settings-content-title">${title}</h2><p>${desc}</p></div><span class="scope-chip">${scopeName}</span></div>`}
-function members(){return `${header(t('membersTitle'),t('membersDesc'),t('orgScopeDesc'))}<section class="subsection"><h3 data-od-id="member-list-heading">${t('membersTitle')}</h3><p>${t('illustrative')}</p><div class="table-wrap"><table><thead><tr><th>${t('member')}</th><th>${t('role')}</th><th>${t('membershipScope')}</th></tr></thead><tbody><tr data-od-id="member-linh"><td class="name-cell" data-label="${t('member')}"><strong>Linh</strong><small>${t('reader')}</small></td><td data-label="${t('role')}"><span class="role-tag">${t('reader')}</span></td><td data-label="${t('membershipScope')}" class="scope-text">${t('organizationValue')}</td></tr><tr data-od-id="member-minh"><td class="name-cell" data-label="${t('member')}"><strong>Minh Trần</strong><small>${t('maintainer')}</small></td><td data-label="${t('role')}"><span class="role-tag">${t('maintainer')}</span></td><td data-label="${t('membershipScope')}" class="scope-text">${t('organizationValue')}</td></tr><tr data-od-id="member-ha"><td class="name-cell" data-label="${t('member')}"><strong>Hà Lê</strong><small>${t('admin')}</small></td><td data-label="${t('role')}"><span class="role-tag">${t('admin')}</span></td><td data-label="${t('membershipScope')}" class="scope-text">${t('organizationValue')}</td></tr></tbody></table></div><div class="page-note"><strong>${t('metadataOnly')}:</strong> ${t('illustrative')}</div></section>`}
-function unavailable(title,desc,scopeName){return `${header(title,desc,scopeName)}<div class="empty-state"><h3>${t('emptyTitle')}</h3><p>${desc}</p></div>`}
-function tabPage(){let item=navItems.find(x=>x.id===activeTab);if(!item)return `<div class="empty-state"><h3>${t('noTabsTitle')}</h3><p>${t('noTabsDesc')}</p></div>`;let org=item.scope==='org',sc=org?t('orgScopeDesc'):t('projectScopeDesc');switch(item.id){case'members':return members();case'secrets':return `${header(t('secrets'),t('secretMeta'),sc)}<div class="notice"><strong>${t('metadataOnly')}</strong><p>${t('noSecret')}</p></div>${unavailable(t('secrets'),t('unavailable'),sc)}`;case'quota':return `${header(t('quota'),t('quotaSource'),sc)}<dl class="detail-list">${permissions().includes('usage:read')?`<div><dt>${t('quota')}</dt><dd>${t('unavailable')}</dd></div>`:''}${permissions().includes('project:read')?`<div><dt>${t('projectSettings')}</dt><dd>${t('unavailable')}</dd></div>`:''}</dl><div class="page-note"><strong>${t('quotaUnknown')}</strong></div>`;case'audit':return unavailable(t('audit'),t('auditEmpty'),sc);case'securityEvents':return unavailable(t('securityEvents'),t('securityEmpty'),sc);case'integrations':return unavailable(t('integrations'),t('integrationEmpty'),sc);case'support':return `${header(t('support'),t('supportEmpty'),sc)}<div class="notice"><strong>${t('supportNoGrant')}</strong><p>${t('supportEmpty')}</p></div>`;case'apiTokens':return `${header(t('apiTokens'),t('tokenEmpty'),sc)}<div class="notice"><strong>${t('metadataOnly')}</strong><p>${t('noSecret')}</p></div>${unavailable(t('apiTokens'),t('unavailable'),sc)}`;case'deployTargets':return unavailable(t('deployTargets'),t('deployEmpty'),sc);default:return unavailable(t(item.id),t('unavailable'),sc)}}
-function stateBlock(){switch(currentState){case'loading':return `<div class="state-view" aria-label="${t('loading')}" aria-busy="true"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><p class="scope-text">${t('loadingDesc')}</p></div>`;case'empty':return `<div class="state-view empty-state"><h3>${t('emptyTitle')}</h3><p>${t('emptyDescription')}</p></div>`;case'filtered-empty':return `<div class="state-view empty-state"><h3>${t('filterEmptyTitle')}</h3><p>${t('filterEmptyDesc')}</p></div>`;case'error':return `<div class="state-view notice error" role="alert"><strong>${t('errorTitle')}</strong><p>${t('errorDesc')}</p><p>${t('requestId')}: <span class="sensitive">req_illustrative_01</span></p><button class="inline-btn" id="retryLocal">${t('retry')}</button><p>${t('retryNote')}</p></div>`;case'403':return `<div class="state-view notice error" role="alert"><strong>${t('unauthorizedTitle')}</strong><p>${t('unauthorizedDesc')}</p></div>`;case'401':return `<div class="state-view notice warn" role="alert"><strong>${t('reauthTitle')}</strong><p>${t('reauthDesc')} <span class="sensitive">/settings/organization/members</span></p></div>`;case'429':return `<div class="state-view notice warn" role="alert"><strong>${t('rateTitle')}</strong><p>${t('rateDesc')} <span class="sensitive">${t('retryAfter')}</span></p></div>`;case'412':return `<div class="state-view notice warn"><strong>${t('conflictTitle')}</strong><p>${t('conflictDescription')}</p><button class="inline-btn" id="openConflict">${t('conflictTitle')}</button></div>`;case'no-tabs':return `<div class="state-view empty-state"><h3>${t('noTabsTitle')}</h3><p>${t('noTabsDesc')}</p></div>`;case'session-changed':return `<div class="state-view notice warn"><strong>${t('sessionTitle')}</strong><p>${t('sessionDesc')}</p><button class="inline-btn" id="refreshPermissions">${t('refresh')}</button></div>`;case'long-content':return `<div class="state-view">${header(t('membersTitle'),t('membersDesc'),t('orgScopeDesc'))}<div class="page-note"><strong>${t('longFixtureLabel')}</strong><p class="draft-copy">Lotus Commerce / storefront-web / organization membership and scoped access destination / illustrative long-content fixture</p></div></div>`;default:return tabPage()}}
-function renderPage(){const missing=currentState==='404';$('#pageContent').classList.toggle('not-found-active',missing);$('#notFound').hidden=!missing;if(missing)return;const panel=$('#tabContent');panel.setAttribute('aria-busy',String(currentState==='loading'));panel.innerHTML=stateBlock();const retry=$('#retryLocal');if(retry)retry.onclick=()=>toast(t('retryReady'));const open=$('#openConflict');if(open)open.onclick=()=>openConflict(open);const refresh=$('#refreshPermissions');if(refresh)refresh.onclick=()=>{fixture='viewer';scope='project';$('#permissionSelect').value='viewer';currentState='default';$('#stateSelect').value='default';syncScope();renderPage();toast(t('refreshed'))}}
-function toast(message){const el=$('#toast');el.textContent=message;el.hidden=false;clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>el.hidden=true,3200)}
-function openConflict(trigger){dialogTrigger=trigger||$('#stateSelect');const d=$('#conflictDialog');if(typeof d.showModal==='function')d.showModal();else d.setAttribute('open','')}
-$('#conflictDialog').addEventListener('close',()=>{if(dialogTrigger&&document.contains(dialogTrigger))dialogTrigger.focus();dialogTrigger=null});$('#reloadDraft').addEventListener('click',()=>{currentState='default';$('#stateSelect').value='default';renderPage();toast(t('retryReady'))});
-$('#themeButton').onclick=()=>{theme=theme==='light'?'dark':'light';document.documentElement.dataset.theme=theme;setPref('eg-settings-theme',theme);translate()};$('#localeButton').onclick=()=>{locale=locale==='en'?'vi':'en';setPref('eg-settings-locale',locale);translate()};
-$('#orgScope').onclick=()=>{scope='organization';syncScope();renderPage()};{const orgSwitch=$('#org-switch');if(orgSwitch)orgSwitch.onclick=()=>{scope='organization';activeTab='';currentState='default';activeTab=availableItems()[0]?.id||'';if(!activeTab)currentState='no-tabs';$('#stateSelect').value=currentState;syncScope();renderPage();toast(locale==='en'?'Lotus Commerce context selected · local view reset; permissions unchanged.':'Đã chọn ngữ cảnh Lotus Commerce · đặt lại chế độ xem cục bộ; quyền không đổi.')};}$('#projectScope').onclick=()=>{scope='project';syncScope();renderPage()};$('#scopeReview').onchange=e=>{scope=e.target.value;syncScope();renderPage()};$('#permissionSelect').onchange=e=>{fixture=e.target.value;scope=fixture==='viewer'?'project':'organization';currentState=fixture==='none'?'no-tabs':'default';$('#stateSelect').value=currentState==='no-tabs'?'no-tabs':'default';syncScope();renderPage()};$('#stateSelect').onchange=e=>{currentState=e.target.value;renderPage()};
-document.documentElement.dataset.theme=theme;syncScope();translate();
-</script>
+<dialog class="eg-dialog eg-dialog--wide" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <header class="eg-dialog__header">
+      <div>
+        <h2 id="shortcuts-title" data-en="Keyboard shortcuts" data-vi="Phím tắt">Phím tắt</h2>
+        <p data-en="Available in this review fixture." data-vi="Khả dụng trong bản xem xét này.">Khả dụng trong bản xem xét này.</p>
+      </div>
+      <button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng hộp thoại"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button>
+    </header>
+    <div class="eg-dialog__body"><div class="eg-stack" data-gap="2"><p><kbd>Tab</kbd> · <span data-en="Move between controls" data-vi="Di chuyển giữa các điều khiển">Di chuyển giữa các điều khiển</span></p><p><kbd>←</kbd> <kbd>→</kbd> · <span data-en="Move between tabs" data-vi="Di chuyển giữa các tab">Di chuyển giữa các tab</span></p><p><kbd>Esc</kbd> · <span data-en="Close a dialog and return focus" data-vi="Đóng hộp thoại và trả tiêu điểm">Đóng hộp thoại và trả tiêu điểm</span></p></div></div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Close" data-vi="Đóng">Đóng</span></button></footer>
+  </dialog>
 </body>
 </html>

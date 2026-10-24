@@ -1,60 +1,389 @@
 <!doctype html>
-<html lang="en" data-theme="light" data-page="31" data-nav="quota">
+<html lang="vi" data-theme="light" data-nav="quota" data-phase-min="G1">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<title>Evidgate — Quota and retention</title>
-<link rel="stylesheet" href="../assets/evidgate.css">
-<script src="../assets/evidgate.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Mức sử dụng và tín dụng AI · Evidgate</title>
+  <link rel="stylesheet" href="../assets/evidgate.css">
+  <script src="../assets/evidgate.js" defer></script>
 </head>
 <body>
-<a class="skip" href="#main" data-i18n="skip">Skip to usage and retention / Bỏ qua đến hạn mức và lưu giữ</a>
-<div class="shell">
-<aside class="eg-nav" id="evidgateSidebar" data-eg-nav aria-label="Primary navigation"></aside>
-<div class="main" id="main">
-  <header class="topbar"><button class="scope" type="button" aria-label="Project scope">storefront-web <small data-i18n="project">Project</small></button><div class="crumb" data-i18n="breadcrumb">Workspace <span aria-hidden="true">/</span> <strong>Usage</strong></div><div class="spacer"></div><button class="utility" id="themeToggle" type="button" aria-label="Switch to dark theme">Dark</button><button class="utility locale" id="localeToggle" type="button" aria-label="Switch to Vietnamese">VI</button><button class="utility" type="button" aria-label="Account menu">LC</button></header>
-  <main class="content" data-od-id="usage-retention-page">
-    <div class="mobile-notice" data-od-id="desktop-required"><strong data-i18n="desktopNotice">Use a desktop to make changes / Sử dụng máy tính để thay đổi dữ liệu</strong><span data-i18n="mobileReadOnly">Usage and retention are read-only at this screen size.</span></div>
-    <div class="title-row"><div><div class="eyebrow" data-i18n="eyebrow">Organization controls</div><h1 data-od-id="page-title" data-i18n="title">Quota and retention</h1><div class="subtitle"><span>Lotus Commerce</span><span aria-hidden="true"> · </span><span data-i18n="project">Project</span> <span class="mono">storefront-web</span></div></div><div class="title-utility"><button type="button" class="btn" id="refreshUsage" data-od-id="refresh-usage"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 6v4h-4M4 14v-4h4"/><path d="M5.2 7.1A6 6 0 0 1 15.5 5L16 6M4 14l.5 1a6 6 0 0 0 10.3-2.1"/></svg><span data-i18n="refresh">Refresh usage</span></button></div></div>
-    <div class="scope-line"><span class="scope-name">storefront-web</span><span class="sep"></span><span data-i18n="scopeTenant">Organization</span><strong>Lotus Commerce</strong><span class="badge warn" id="shellBadge"><i class="dot"></i><span data-i18n="quotaWarning">Quota warning</span></span><span class="asof" data-i18n="asOf">as_of 2026-10-13T10:30Z</span></div>
-    <div class="shell-alert" id="quotaAlert" role="status" aria-live="polite"><span class="alert-mark">!</span><div><strong data-i18n="warnAlertTitle">Usage has reached a server warning threshold</strong><p data-i18n="warnAlertCopy">Warning timestamps are supplied by the service. This is not a test failure or release decision.</p></div></div>
-    <div class="section-head"><div><h2 data-i18n="usageTitle">Current usage</h2><p data-i18n="usageSub">Counters are reported by the service for this project.</p></div><label class="period"><span data-i18n="usageWindow">Usage window</span><select id="usageWindow" aria-label="Usage window"><option data-i18n="lastDay">Last 24 hours</option><option selected data-i18n="currentPeriod">Current period</option></select></label></div>
-    <section class="metrics" id="usageMetrics" aria-label="Current usage metrics" data-od-id="usage-metrics">
-      <article class="metric" data-od-id="metric-artifact-storage"><div class="metric-head"><span class="metric-title" data-i18n="artifactStorage">Artifact storage</span><span class="badge warn"><i class="dot"></i><span data-i18n="warned">Warned</span></span></div><div class="metric-value"><span id="storageUsed">82</span><small>GiB / 100 GiB</small></div><div class="metric-copy" data-i18n="storageDescription">Stored test artifacts for this project</div><div class="meter" aria-hidden="true"><span id="storageBar" style="width:82%"></span></div><div class="metric-foot"><span data-i18n="warnedAt">warned_at</span><time datetime="2026-10-13T08:00:00Z">2026-10-13T08:00Z</time></div></article>
-      <article class="metric" data-od-id="metric-ingest"><div class="metric-head"><span class="metric-title" data-i18n="dailyIngest">Daily ingest events</span><span class="badge warn"><i class="dot"></i><span data-i18n="warned">Warned</span></span></div><div class="metric-value"><span>40,000</span><small>/ 50,000</small></div><div class="metric-copy" data-i18n="ingestDescription">Events received today · server counter</div><div class="meter" aria-hidden="true"><span style="width:80%"></span></div><div class="metric-foot"><span data-i18n="warnedAt">warned_at</span><time datetime="2026-10-13T08:00:00Z">2026-10-13T08:00Z</time></div></article>
-      <article class="metric unavailable" data-od-id="metric-egress"><div class="metric-head"><span class="metric-title" data-i18n="egress">Egress</span><span class="badge neutral"><i class="dot"></i><span data-i18n="unavailable">Unavailable</span></span></div><div class="metric-value"><span data-i18n="unavailable">Unavailable</span></div><div class="metric-copy" data-i18n="egressDescription">Counter not populated. No zero value is inferred.</div><div class="meter neutral" aria-hidden="true"><span style="width:0"></span></div><div class="metric-foot"><span class="mono">egress_bytes</span><span class="mono">null</span></div></article>
-    </section>
-<section class="retention" data-od-id="retention-settings"><div class="panel"><div class="panel-head"><div><h2 data-i18n="retentionTitle">Retention window</h2><p data-i18n="retentionSub">Current scope: project:read · project:write to change</p></div><span class="badge neutral"><i class="dot"></i><span data-i18n="currentSetting">Current setting</span></span></div><div class="panel-body"><div class="retention-grid"><div><div class="field"><label for="retentionSelect" data-i18n="proposedWindow">Proposed retention window</label><select id="retentionSelect"><option value="30">30 days</option><option value="14" selected>14 days</option></select><small data-i18n="retentionHint">A shorter window may make older artifact links unavailable sooner.</small></div><div class="current-window"><span data-i18n="currentWindow">Current retention</span><strong><span id="currentDays">30</span> <span data-i18n="days">days</span></strong></div></div><div class="impact" id="impactSummary" data-od-id="deletion-impact"><div class="impact-heading"><strong data-i18n="impactTitle">Deletion impact</strong><small data-i18n="serverPreview">Server-provided preview</small></div><div class="impact-stats"><div class="impact-stat"><span data-i18n="artifactsDeleted">Artifacts deleted sooner</span><strong>1,284</strong></div><div class="impact-stat"><span data-i18n="eligibleStorage">Eligible storage</span><strong>16.2 GiB</strong></div><div class="impact-stat"><span data-i18n="earliestAffected">Earliest affected</span><strong class="mono">2026-09-13</strong></div></div><div class="impact-note"><strong data-i18n="linksMayExpire">Artifact links may become unavailable.</strong> <span data-i18n="retentionContract">Original results and evaluations follow the server retention contract; no archival guarantee is implied.</span></div></div></div><div class="retention-bottom"><div class="retention-copy"><strong data-i18n="reviewBeforeSave">Review the deletion impact before saving.</strong> <span data-i18n="impactSource">Counts and eligible storage come from the server preview and are not calculated from the visible table.</span></div><button class="btn primary" id="openImpact" data-od-id="save-retention"><span data-i18n="saveRetention">Save retention</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5"/></svg></button></div></div></div></section>
-    <section class="records" aria-label="Quota and retention source details"><div class="panel record-panel"><h2 data-i18n="sourceDetail">Server-declared quota state</h2><div class="record-line"><span>artifact_storage</span><strong id="storageStateWire" class="mono">warned · blocked_at: null</strong></div><div class="record-line"><span>daily_ingest_events</span><strong class="mono">warned_at · 2026-10-13T08:00Z</strong></div><div class="record-line"><span>egress_bytes</span><strong class="mono">null</strong></div></div><aside class="contract-note"><strong data-i18n="noBilling">Usage view only</strong><span data-i18n="noBillingCopy">No invoice, payment, upgrade or billing estimate is shown. Quota state comes from server-declared timestamps.</span></aside></section>
-    <section class="review" data-od-id="design-review-controls"><div class="review-head"><div><strong data-i18n="reviewTitle">Design review controls / Điều khiển xem xét thiết kế</strong><small data-i18n="reviewLocal">Local illustrative states · no server requests</small></div><div class="review-controls"><label for="stateSelect" data-i18n="scenario">Scenario</label><select id="stateSelect" aria-label="Select design review state"><option value="default">Default · Mặc định</option><option value="loading">Loading · Đang tải</option><option value="empty">Empty usage · Không có dữ liệu</option><option value="no-match">No filter matches · Không khớp</option><option value="error">Error · Lỗi</option><option value="401">401 · Re-authentication</option><option value="403">403 · Not authorized</option><option value="404">404 · Not found</option><option value="412">412 · Edit conflict pattern</option><option value="429">429 · quota_exceeded</option><option value="blocked">Storage blocked · Đã chặn</option><option value="impact-null">Impact preview unavailable · Không có bản xem trước</option><option value="save-error">Retention save failed · Lưu thất bại</option><option value="stale">Preview became stale · Dữ liệu cũ</option><option value="success">Save success · Đã lưu</option></select></div></div><div class="review-body" id="stateView" aria-live="polite" aria-atomic="true"><div class="muted" data-i18n="stateHint">Choose a local state to inspect the response pattern.</div></div></section>
-    <footer class="design-notes" data-od-id="design-notes"><div><h2 data-i18n="tokenTitle">Design notes · proposed app tokens</h2><p data-i18n="tokenNotes">Dark surfaces, semantic states, spacing and radii are app-level proposals. Light brand tokens are preserved. Manrope and Public Sans use Vietnamese-capable local fallback stacks; no font files were supplied.</p></div><div><h2 data-i18n="contractTitle">Unresolved source contracts</h2><p data-i18n="contractNotes">Retention deletion timing, artifact-link behavior and evaluation/result retention need a server contract. The 412 example is an editing conflict pattern; ETag or revision-header behavior is unconfirmed. Fixture counts and timestamps are illustrative only.</p></div></footer>
-  </main>
-</div></div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
-<div class="backdrop" id="impactDialog"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="impactDialogTitle" aria-describedby="impactDialogDescription"><div class="dialog-head"><h2 id="impactDialogTitle" data-i18n="confirmImpactTitle">Review deletion impact</h2><p id="impactDialogDescription" data-i18n="confirmImpactDescription">Confirm the server preview before shortening retention from 30 to 14 days.</p></div><div class="dialog-body"><div class="impact-dialog" id="dialogImpact"><div class="impact-heading"><strong data-i18n="impactTitle">Deletion impact</strong><small data-i18n="serverPreview">Server-provided preview</small></div><div class="impact-stats"><div class="impact-stat"><span data-i18n="artifactsDeleted">Artifacts deleted sooner</span><strong>1,284</strong></div><div class="impact-stat"><span data-i18n="eligibleStorage">Eligible storage</span><strong>16.2 GiB</strong></div><div class="impact-stat"><span data-i18n="earliestAffected">Earliest affected</span><strong class="mono">2026-09-13</strong></div></div><div class="impact-note"><strong data-i18n="linksMayExpire">Artifact links may become unavailable.</strong> <span data-i18n="retentionContract">Original results and evaluations follow the server retention contract; no archival guarantee is implied.</span></div></div><div class="message error hidden" id="previewUnavailable" role="alert"><div class="copy"><strong data-i18n="previewNullTitle">Deletion impact unavailable</strong><p data-i18n="previewNullCopy">Preview data is null. This is not zero impact. Confirmation is blocked until a valid server preview is available.</p></div></div><div class="confirm" id="confirmArea"><input id="confirmCheck" type="checkbox"><label for="confirmCheck" data-i18n="confirmCheckbox">I understand these artifacts may be deleted sooner and their links may become unavailable.</label></div><div class="dialog-warning hidden" id="dialogPermission" role="alert"></div></div><div class="dialog-footer"><button type="button" class="btn" id="cancelImpact" data-i18n="cancel">Cancel</button><button type="button" class="btn primary" id="confirmSave" disabled data-i18n="saveRetention">Save retention</button></div></section></div>
-<script>
-(()=>{'use strict';
-const root=document.documentElement,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const copy={en:{skip:'Skip to usage and retention / Bỏ qua đến hạn mức và lưu giữ',workspace:'Workspace',overview:'Overview',projects:'Projects',runs:'Runs',quotaNav:'Quota & retention',settings:'Settings',illustrative:'Illustrative interface · UTC',project:'Project',breadcrumb:'Workspace / Usage',desktopNotice:'Use a desktop to make changes / Sử dụng máy tính để thay đổi dữ liệu',mobileReadOnly:'Usage and retention are read-only at this screen size.',eyebrow:'Organization controls',title:'Quota and retention',refresh:'Refresh usage',scopeTenant:'Organization',quotaWarning:'Quota warning',asOf:'as_of 2026-10-13T10:30Z',warnAlertTitle:'Usage has reached a server warning threshold',warnAlertCopy:'Warning timestamps are supplied by the service. This is not a test failure or release decision.',usageTitle:'Current usage',usageSub:'Required scope: usage:read · tenant_admin.',usageWindow:'Usage window',lastDay:'Last 24 hours',currentPeriod:'Current period',artifactStorage:'Artifact storage',warned:'Warned',storageDescription:'Stored test artifacts for this project',warnedAt:'warned_at',dailyIngest:'Daily ingest events',ingestDescription:'Events received today · server counter',egress:'Egress',unavailable:'Unavailable',egressDescription:'Counter not populated. No zero value is inferred.',retentionTitle:'Retention window',retentionSub:'Current scope: project:read · project:write to change',currentSetting:'Current setting',proposedWindow:'Proposed retention window',retentionHint:'A shorter window may make older artifact links unavailable sooner.',currentWindow:'Current retention',days:'days',impactTitle:'Deletion impact',serverPreview:'Server-provided preview',artifactsDeleted:'Artifacts deleted sooner',eligibleStorage:'Eligible storage',earliestAffected:'Earliest affected',linksMayExpire:'Artifact links may become unavailable.',retentionContract:'Original results and evaluations follow the server retention contract; no archival guarantee is implied.',reviewBeforeSave:'Review the deletion impact before saving.',impactSource:'Counts and eligible storage come from the server preview and are not calculated from the visible table.',saveRetention:'Save retention',sourceDetail:'Server-declared quota state',noBilling:'Usage view only',noBillingCopy:'No invoice, payment, upgrade or billing estimate is shown. Quota state comes from server-declared timestamps.',reviewTitle:'Design review controls / Điều khiển xem xét thiết kế',reviewLocal:'Local illustrative states · no server requests',scenario:'Scenario',stateHint:'Choose a local state to inspect the response pattern.',tokenTitle:'Design notes · proposed app tokens',tokenNotes:'Dark surfaces, semantic states, spacing and radii are app-level proposals. Light brand tokens are preserved. Manrope and Public Sans use Vietnamese-capable local fallback stacks; no font files were supplied.',contractTitle:'Unresolved source contracts',contractNotes:'Retention deletion timing, artifact-link behavior and evaluation/result retention need a server contract. The 412 example is an editing conflict pattern; ETag or revision-header behavior is unconfirmed. Fixture counts and timestamps are illustrative only.',confirmImpactTitle:'Review deletion impact',confirmImpactDescription:'Confirm the server preview before shortening retention from 30 to 14 days.',previewNullTitle:'Deletion impact unavailable',previewNullCopy:'Preview data is null. This is not zero impact. Confirmation is blocked until a valid server preview is available.',confirmCheckbox:'I understand these artifacts may be deleted sooner and their links may become unavailable.',cancel:'Cancel',retry:'Retry',reload:'Reload',reloadPreview:'Reload preview',signIn:'Sign in again',retained:'Edited value retained',submitting:'Saving…',saved:'Saved · server result supplied',states:{loading:['Loading usage','Usage values are loading. The final metric and retention layout stays reserved; save is disabled.'],empty:['No usage records','No usage data was returned. This differs from a populated data set with a filter that has no matches. Retention settings remain visible.'], 'no-match':['No results match this filter','Usage records exist, but none match the selected usage window. Clear the filter to return to the current-period fixture.'],error:['Could not load usage','Safe context retained · request id req_fixture_503_82. Retry is deliberate; this local control sends no request.'],401:['Sign in again · 401','The session expired. Re-authentication preserves the safe return route /org/lotus-commerce/projects/storefront-web/usage.'],403:['Not authorized · 403','project:write permission was revoked. The 14-day edit is retained; no save is sent. Request id req_fixture_403_14d.'],404:['Not found · 404','Unknown and foreign-tenant identifiers use the same not-found response. Request id req_fixture_404_1f2a.'],412:['Someone else changed this — reload','Linked retention edit conflict pattern only · concurrency header contract unconfirmed. Latest retention value is unavailable; draft 14 days remains visible. No auto-merge or resubmit.'],429:['Quota exceeded · 429','artifact_storage · quota_exceeded · Retry-After: 3600 seconds supplied by server. Uploads are blocked; assertions are unaffected.'],blocked:['Uploads blocked by quota','Storage is 100 GiB / 100 GiB · blocked_at 2026-10-13T10:25Z supplied. New uploads are blocked; existing assertion outcomes are not changed.'], 'impact-null':['Deletion impact unavailable','The preview response is null, not zero. Destructive confirmation remains disabled.'], 'save-error':['Retention save failed','The 14-day selection remains in the form. No success is implied. Request id req_fixture_500_retention. Retry is explicit.'],stale:['Preview is out of date','The server reports that deletion-impact counts changed. Reload the preview before confirming. The current draft remains 14 days.'],success:['Retention saved · server response supplied','Fixture response: retention window saved at 14 days. This is a local illustrative result; prior evaluation records were not rewritten.']},filterReset:'Usage window reset to Current period.',previewReload:'Fresh server preview selected · local fixture values retained.',successToast:'Supplied result shown · retention is now 14 days in this fixture.'},
-vi:{skip:'Bỏ qua đến hạn mức và lưu giữ',workspace:'Không gian làm việc',overview:'Tổng quan',projects:'Dự án',runs:'Lượt chạy',quotaNav:'Hạn mức và lưu giữ',settings:'Cài đặt',illustrative:'Giao diện minh họa · UTC',project:'Dự án',breadcrumb:'Không gian / Sử dụng',desktopNotice:'Sử dụng máy tính để thay đổi dữ liệu',mobileReadOnly:'Hạn mức và lưu giữ chỉ đọc ở kích thước màn hình này.',eyebrow:'Kiểm soát tổ chức',title:'Hạn mức và thời gian lưu giữ',refresh:'Làm mới mức sử dụng',scopeTenant:'Tổ chức',quotaWarning:'Cảnh báo hạn mức',asOf:'as_of 2026-10-13T10:30Z',warnAlertTitle:'Mức sử dụng đã chạm ngưỡng cảnh báo từ máy chủ',warnAlertCopy:'Thời điểm cảnh báo do dịch vụ cung cấp. Đây không phải lỗi kiểm thử hay quyết định phát hành.',usageTitle:'Mức sử dụng hiện tại',usageSub:'Phạm vi cần có: usage:read · tenant_admin.',usageWindow:'Khoảng thời gian',lastDay:'24 giờ qua',currentPeriod:'Kỳ hiện tại',artifactStorage:'Dung lượng hiện vật',warned:'Đã cảnh báo',storageDescription:'Hiện vật kiểm thử được lưu cho dự án này',warnedAt:'warned_at',dailyIngest:'Sự kiện nạp hằng ngày',ingestDescription:'Sự kiện nhận hôm nay · bộ đếm máy chủ',egress:'Lưu lượng ra',unavailable:'Không khả dụng',egressDescription:'Bộ đếm chưa được điền. Không suy ra giá trị không.',retentionTitle:'Thời gian lưu giữ',retentionSub:'Phạm vi hiện tại: project:read · cần project:write để thay đổi',currentSetting:'Cài đặt hiện tại',proposedWindow:'Thời gian lưu giữ đề xuất',retentionHint:'Khoảng thời gian ngắn hơn có thể khiến liên kết hiện vật cũ không còn khả dụng sớm hơn.',currentWindow:'Thời gian hiện tại',days:'ngày',impactTitle:'Tác động xóa dữ liệu',serverPreview:'Bản xem trước từ máy chủ',artifactsDeleted:'Hiện vật sẽ bị xóa sớm hơn',eligibleStorage:'Dung lượng đủ điều kiện',earliestAffected:'Ảnh hưởng sớm nhất',linksMayExpire:'Liên kết hiện vật có thể không còn khả dụng.',retentionContract:'Kết quả gốc và đánh giá tuân theo hợp đồng lưu giữ của máy chủ; không hàm ý bảo đảm lưu trữ.',reviewBeforeSave:'Xem tác động xóa trước khi lưu.',impactSource:'Số lượng và dung lượng đủ điều kiện đến từ bản xem trước máy chủ, không tính từ bảng đang hiển thị.',saveRetention:'Lưu thời gian lưu giữ',sourceDetail:'Trạng thái hạn mức do máy chủ khai báo',noBilling:'Chỉ xem mức sử dụng',noBillingCopy:'Không hiển thị hóa đơn, thanh toán, nâng cấp hay ước tính chi phí. Trạng thái hạn mức dựa trên thời điểm máy chủ khai báo.',reviewTitle:'Design review controls / Điều khiển xem xét thiết kế',reviewLocal:'Trạng thái minh họa cục bộ · không gửi máy chủ',scenario:'Tình huống',stateHint:'Chọn trạng thái cục bộ để xem mẫu phản hồi.',tokenTitle:'Ghi chú thiết kế · token ứng dụng đề xuất',tokenNotes:'Bề mặt tối, trạng thái ngữ nghĩa, khoảng cách và bán kính là đề xuất cấp ứng dụng. Token thương hiệu sáng được giữ nguyên. Manrope và Public Sans khai báo cùng font hệ thống cục bộ hỗ trợ tiếng Việt; không có tệp font.',contractTitle:'Hợp đồng nguồn còn bỏ ngỏ',contractNotes:'Thời điểm xóa, hành vi liên kết hiện vật và thời hạn giữ kết quả/đánh giá cần hợp đồng máy chủ. Ví dụ 412 là mẫu xung đột khi chỉnh sửa; chưa xác nhận ETag hay header phiên bản. Số liệu và mốc thời gian là minh họa.',confirmImpactTitle:'Xem tác động xóa dữ liệu',confirmImpactDescription:'Xác nhận bản xem trước máy chủ trước khi rút thời gian lưu giữ từ 30 xuống 14 ngày.',previewNullTitle:'Không có tác động xóa dữ liệu',previewNullCopy:'Dữ liệu xem trước là null, không phải tác động bằng không. Chặn xác nhận xóa cho đến khi có bản xem trước hợp lệ.',confirmCheckbox:'Tôi hiểu các hiện vật này có thể bị xóa sớm hơn và liên kết có thể không còn sử dụng được.',cancel:'Hủy',retry:'Thử lại',reload:'Tải lại',reloadPreview:'Tải lại bản xem trước',signIn:'Đăng nhập lại',retained:'Đã giữ giá trị chỉnh sửa',submitting:'Đang lưu…',saved:'Đã lưu · có phản hồi máy chủ',states:{loading:['Đang tải mức sử dụng','Đang tải giá trị sử dụng. Giữ chỗ bố cục cuối; đã tắt nút lưu.'],empty:['Chưa có dữ liệu sử dụng','Không có dữ liệu sử dụng được trả về. Khác với bộ dữ liệu có sẵn nhưng bộ lọc không khớp. Cài đặt lưu giữ vẫn hiển thị.'],'no-match':['Không có kết quả phù hợp với bộ lọc','Có bản ghi sử dụng nhưng không khớp khoảng thời gian đã chọn. Xóa bộ lọc để xem kỳ hiện tại.'],error:['Không tải được mức sử dụng','Giữ ngữ cảnh an toàn · mã yêu cầu req_fixture_503_82. Có thể chủ động thử lại; điều khiển cục bộ không gửi yêu cầu.'],401:['Đăng nhập lại · 401','Phiên đăng nhập đã hết hạn. Đăng nhập lại sẽ giữ đường dẫn an toàn /org/lotus-commerce/projects/storefront-web/usage.'],403:['Không có quyền · 403','Quyền project:write đã bị thu hồi. Giữ chỉnh sửa 14 ngày; không gửi lưu. Mã yêu cầu req_fixture_403_14d.'],404:['Không tìm thấy · 404','Mã không tồn tại và mã thuộc tenant khác có cùng phản hồi không tìm thấy. Mã yêu cầu req_fixture_404_1f2a.'],412:['Người khác đã thay đổi dữ liệu — tải lại','Chỉ là mẫu xung đột thao tác chỉnh sửa thời gian lưu giữ · chưa xác nhận hợp đồng header đồng bộ. Giá trị mới nhất chưa có; vẫn giữ bản nháp 14 ngày. Không tự gộp hay gửi lại.'],429:['Vượt hạn mức · 429','artifact_storage · quota_exceeded · Retry-After: 3600 giây do máy chủ cung cấp. Đã chặn tải hiện vật; kết quả kiểm thử không đổi.'],blocked:['Tải hiện vật lên bị chặn do hạn mức','Dung lượng đạt 100 GiB / 100 GiB · blocked_at 2026-10-13T10:25Z do máy chủ cung cấp. Đã chặn lượt tải mới; không đổi kết quả assertion hiện có.'],'impact-null':['Không có tác động xóa dữ liệu','Phản hồi xem trước là null, không phải không có tác động. Tắt xác nhận hành động xóa.'],'save-error':['Lưu thời gian lưu giữ thất bại','Lựa chọn 14 ngày vẫn ở trong biểu mẫu. Không suy ra đã lưu. Mã yêu cầu req_fixture_500_retention. Thử lại là thao tác chủ động.'],stale:['Bản xem trước đã cũ','Máy chủ báo số lượng tác động xóa đã thay đổi. Tải lại bản xem trước trước khi xác nhận. Vẫn giữ bản nháp 14 ngày.'],success:['Đã lưu · có phản hồi máy chủ','Phản hồi mẫu: đã lưu thời gian lưu giữ 14 ngày. Đây là kết quả minh họa cục bộ; không viết lại đánh giá trước đó.']},filterReset:'Đã đặt lại khoảng thời gian về kỳ hiện tại.',previewReload:'Đã chọn bản xem trước mới · giữ giá trị dữ liệu mẫu cục bộ.',successToast:'Hiển thị kết quả được cung cấp · dữ liệu mẫu hiện là 14 ngày.'}}
-;
-let lang=localStorage.getItem('evidgate-locale')||'en',theme=localStorage.getItem('evidgate-theme')||'light',state='default',focusBefore=null,originalRetention='30',previewReady=true,permission=true;
-function toast(text){const t=$('#toast');t.textContent=text;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),3000)}
-function setTheme(){root.dataset.theme=theme;$('#themeToggle').textContent=lang==='en'?(theme==='light'?'Dark':'Light'):(theme==='light'?'Tối':'Sáng');$('#themeToggle').setAttribute('aria-label',lang==='en'?(theme==='light'?'Switch to dark theme':'Switch to light theme'):(theme==='light'?'Chuyển giao diện tối':'Chuyển giao diện sáng'));localStorage.setItem('evidgate-theme',theme)}
-function localize(){root.lang=lang;$$('[data-i18n]').forEach(el=>{const key=el.dataset.i18n;if(copy[lang][key])el.textContent=copy[lang][key]});$('#localeToggle').textContent=lang==='en'?'VI':'EN';$('#localeToggle').setAttribute('aria-label',lang==='en'?'Switch to Vietnamese':'Chuyển sang tiếng Anh');setTheme();applyState(state);localStorage.setItem('evidgate-locale',lang)}
-function setBlocked(blocked){$('#storageUsed').textContent=blocked?'100':'82';$('#storageBar').style.width=blocked?'100%':'82%';$('#storageStateWire').textContent=blocked?'blocked · blocked_at: 2026-10-13T10:25Z':'warned · blocked_at: null';$('#shellBadge').className='badge '+(blocked?'blocked':'warn');$('#shellBadge span').textContent=blocked?(lang==='en'?'Storage blocked':'Đã chặn dung lượng'):copy[lang].quotaWarning;$('#quotaAlert').className='shell-alert';$('#quotaAlert').querySelector('strong').textContent=blocked?copy[lang].states.blocked[0]:copy[lang].warnAlertTitle;$('#quotaAlert').querySelector('p').textContent=blocked?copy[lang].states.blocked[1]:copy[lang].warnAlertCopy;$('#quotaAlert .alert-mark').textContent=blocked?'×':'!';$('#quotaAlert .alert-mark').style.color=blocked?'var(--danger)':'var(--warn)'}
-function updateDialog(){const nullPreview=state==='impact-null',stale=state==='stale',forbidden=state==='403';$('#reloadPreview')?.remove();$('#dialogImpact').classList.toggle('hidden',nullPreview);$('#previewUnavailable').classList.toggle('hidden',!nullPreview);$('#confirmCheck').disabled=nullPreview||stale||forbidden||!previewReady;$('#confirmCheck').checked=false;$('#dialogPermission').classList.toggle('hidden',!forbidden);$('#dialogPermission').textContent=copy[lang].states['403'][1];$('#confirmSave').disabled=nullPreview||stale||forbidden||!previewReady;$('#confirmArea').classList.toggle('hidden',nullPreview||stale||forbidden);if(stale){$('#dialogImpact').classList.remove('hidden');$('#dialogImpact').querySelector('.impact-heading small').textContent=lang==='en'?'Stale · refresh required':'Dữ liệu cũ · cần tải lại';$('#dialogImpact').insertAdjacentHTML('afterend','<button type="button" class="btn" id="reloadPreview">'+copy[lang].reloadPreview+'</button>')}else{$('#dialogImpact').querySelector('.impact-heading small').textContent=copy[lang].serverPreview;$('#dialogImpact').querySelector('#reloadPreview')?.remove()}}
-function openDialog(){if(innerWidth<768){toast(copy[lang].desktopNotice);return}focusBefore=document.activeElement;$('#impactDialog').classList.add('open');updateDialog();$('#cancelImpact').focus()}
-function closeDialog(){const wasOpen=$('#impactDialog').classList.contains('open');$('#impactDialog').classList.remove('open');if(wasOpen)focusBefore?.focus()}
-function updateRetentionAction(){const changed=$('#retentionSelect').value==='14';$('#impactSummary').classList.toggle('hidden',!changed||state==='impact-null');$('#openImpact').disabled=!changed||['loading','403','412','success','impact-null'].includes(state)||innerWidth<768}
-function applyState(key){state=key;const view=$('#stateView'),d=copy[lang].states[key];view.replaceChildren();setBlocked(key==='blocked');const loading=key==='loading';$('#usageMetrics').classList.toggle('hidden',key==='empty'||key==='no-match');$('#usageMetrics').classList.toggle('loading',loading);if(loading){view.innerHTML='<div class="loading-lines" aria-label="Loading"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton short"></div></div>'}else if(key==='default'){const hint=document.createElement('div');hint.className='muted';hint.textContent=copy[lang].stateHint;view.append(hint)}else{const box=document.createElement('div');box.className='message '+(['error','401','403','404','412','429','save-error'].includes(key)?'error':['blocked','stale','impact-null'].includes(key)?'warn':key==='success'?'success':'');const content=document.createElement('div');content.className='copy';const h=document.createElement('strong');h.textContent=d[0];const p=document.createElement('p');p.textContent=d[1];content.append(h,p);box.append(content);if(['error','401','412','429','stale'].includes(key)){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=key==='401'?copy[lang].signIn:key==='412'?copy[lang].reload:key==='429'?'Retry-After: 3600s':key==='stale'?copy[lang].reloadPreview:copy[lang].retry;b.addEventListener('click',()=>{if(key==='stale'){state='default';applyState('default');toast(copy[lang].previewReload)}else if(key==='412'){$('#stateSelect').value='default';applyState('default');toast(lang==='en'?'Latest revision reloaded · 14-day draft retained for review; no merge':'Đã tải lại phiên bản mới nhất · giữ bản nháp 14 ngày để xem xét; không gộp')}else if(key==='401'){toast(lang==='en'?'Re-authentication · safe return route preserved':'Đăng nhập lại · giữ đường dẫn quay lại an toàn')}else toast(lang==='en'?'Retry selected · no network request sent':'Đã chọn thử lại · không gửi yêu cầu mạng')});box.append(b)}view.append(box)}$('#retentionSelect').disabled=['loading','403','412','success'].includes(key)||innerWidth<768;updateRetentionAction();$('#refreshUsage').disabled=loading;if($('#impactDialog').classList.contains('open'))updateDialog()}
-$('#themeToggle').addEventListener('click',()=>{theme=theme==='light'?'dark':'light';setTheme()});$('#localeToggle').addEventListener('click',()=>{lang=lang==='en'?'vi':'en';localize()});$('#stateSelect').addEventListener('change',e=>applyState(e.target.value));$('#retentionSelect').addEventListener('change',()=>{if($('#retentionSelect').value==='14'){previewReady=true;updateRetentionAction()}else{updateRetentionAction();toast(lang==='en'?'No shorter retention change selected':'Chưa chọn rút ngắn thời gian lưu giữ')}});$('#usageWindow').addEventListener('change',e=>{if(state==='no-match')toast(copy[lang].filterReset)});
-$('#refreshUsage').addEventListener('click',()=>{applyState('loading');setTimeout(()=>applyState('default'),650)});$('#openImpact').addEventListener('click',openDialog);$('#cancelImpact').addEventListener('click',()=>{closeDialog();$('#retentionSelect').value=originalRetention;updateRetentionAction();toast(lang==='en'?'Cancelled · current 30-day value retained':'Đã hủy · giữ thời gian hiện tại 30 ngày')});$('#confirmCheck').addEventListener('change',e=>$('#confirmSave').disabled=!e.target.checked||!previewReady||state==='impact-null'||state==='stale'||state==='403');$('#confirmSave').addEventListener('click',()=>{if($('#confirmSave').disabled)return;const button=$('#confirmSave');button.disabled=true;button.textContent=copy[lang].submitting;$('#cancelImpact').disabled=true;setTimeout(()=>{closeDialog();$('#cancelImpact').disabled=false;$('#currentDays').textContent='14';originalRetention='14';$('#retentionSelect').value='14';$('#stateSelect').value='success';applyState('success');toast(copy[lang].successToast)},700)});
-$('#impactDialog').addEventListener('click',e=>{if(e.target===$('#impactDialog'))closeDialog();if(e.target.id==='reloadPreview'){e.target.remove();state='default';$('#stateSelect').value='default';applyState('default');previewReady=true;updateDialog();toast(copy[lang].previewReload)}});document.addEventListener('keydown',e=>{if(!$('#impactDialog').classList.contains('open'))return;if(e.key==='Escape'){e.preventDefault();closeDialog();return}if(e.key==='Tab'){const f=$$('#impactDialog button:not(:disabled),#impactDialog input:not(:disabled)');if(!f.length)return;if(e.shiftKey&&document.activeElement===f[0]){e.preventDefault();f[f.length-1].focus()}else if(!e.shiftKey&&document.activeElement===f[f.length-1]){e.preventDefault();f[0].focus()}}});
-window.addEventListener('resize',()=>{if(innerWidth<768){$('#openImpact').disabled=true;$('#retentionSelect').disabled=true}else{applyState(state)}});
-lang=localStorage.getItem('evidgate-locale')||'en';theme=localStorage.getItem('evidgate-theme')||'light';localize();applyState('default');
-})();
-</script>
+  <a class="eg-skip-link" href="#main"><span data-en="Skip to main content" data-vi="Bỏ qua đến nội dung chính">Bỏ qua đến nội dung chính</span></a>
+  <div class="eg-shell">
+    <aside class="eg-nav" id="eg-primary-nav" data-eg-nav aria-label="Điều hướng sản phẩm"></aside>
+    <div class="eg-shell__main">
+      <header class="eg-topbar">
+        <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-nav-toggle aria-expanded="true" aria-controls="eg-primary-nav" aria-label="Mở hoặc thu gọn điều hướng">
+          <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-menu"></use></svg>
+        </button>
+        <div class="eg-topbar__scope">
+          <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Project" data-vi="Dự án">Dự án</span></span>
+          <span><strong>storefront-web</strong> · Lotus Commerce</span>
+        </div>
+        <div class="eg-topbar__search">
+          <label class="eg-visually-hidden" for="nav-search">Tìm mục điều hướng</label>
+          <input class="eg-input eg-input--search" id="nav-search" type="search" data-eg-nav-search data-placeholder-en="Search navigation" data-placeholder-vi="Tìm mục điều hướng" placeholder="Tìm mục điều hướng">
+        </div>
+        <div class="eg-topbar__actions">
+          <span class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Author</span></span>
+          <button class="eg-btn eg-btn--ghost eg-btn--icon" type="button" data-eg-open="shortcuts-dialog" aria-haspopup="dialog" aria-label="Phím tắt">
+            <svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-book"></use></svg>
+          </button>
+          <div class="eg-menu">
+            <button class="eg-btn eg-btn--ghost eg-btn--sm eg-menu__trigger" type="button" aria-expanded="false" aria-controls="account-menu">
+              <span>LN</span>
+              <span class="eg-btn__label">Linh Nguyễn</span>
+              <svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-chevron-down"></use></svg>
+            </button>
+            <div class="eg-menu__panel" id="account-menu" hidden>
+              <p><strong>Linh Nguyễn</strong><br><span data-en="QA engineer · Lotus Commerce" data-vi="Kỹ sư QA · Lotus Commerce">Kỹ sư QA · Lotus Commerce</span></p>
+              <a class="eg-menu__item" href="../27-settings-shell/evidgate-settings.html" data-en="Workspace settings" data-vi="Cài đặt không gian làm việc">Cài đặt không gian làm việc</a>
+              <a class="eg-menu__item" href="../44-ai-settings/evidgate-ai-settings.html" data-en="AI settings" data-vi="Cài đặt AI">Cài đặt AI</a>
+              <a class="eg-menu__item" href="../02-login/evidgate-sign-in.html" data-en="Sign out" data-vi="Đăng xuất">Đăng xuất</a>
+            </div>
+          </div>
+        </div>
+      </header>
+      <main tabindex="-1" class="eg-shell__content" id="main">
+        <nav class="eg-breadcrumbs" aria-label="Đường dẫn">
+          <ol>
+            <li class="eg-breadcrumbs__item"><a href="../index.html" data-en="Design index" data-vi="Hồ sơ thiết kế">Hồ sơ thiết kế</a></li>
+            <li class="eg-breadcrumbs__separator" aria-hidden="true">/</li>
+            <li class="eg-breadcrumbs__item"><a href="../24-project-connection/evidgate-project-overview.html">storefront-web</a></li><li class="eg-breadcrumbs__separator" aria-hidden="true">/</li><li class="eg-breadcrumbs__item" aria-current="page" data-en="Usage and AI credits" data-vi="Mức sử dụng và tín dụng AI">Mức sử dụng và tín dụng AI</li>
+          </ol>
+        </nav>
+
+        <div class="eg-banner eg-banner--desktop">
+          <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <div class="eg-banner__body">
+            <strong data-en="Desktop required for changes" data-vi="Cần máy tính để thay đổi">Cần máy tính để thay đổi</strong>
+            <p data-en="This narrow view is read-only. Open on a desktop to change settings, members or usage records." data-vi="Chế độ hẹp này là chỉ đọc. Mở trên máy tính để thay đổi cài đặt, thành viên hoặc bản ghi sử dụng.">Chế độ hẹp này là chỉ đọc. Mở trên máy tính để thay đổi cài đặt, thành viên hoặc bản ghi sử dụng.</p>
+          </div>
+        </div>
+
+
+        <header class="eg-page-header">
+          <div>
+            <p class="eg-badge eg-badge--info"><span class="eg-badge__label">G1 · Usage</span></p>
+            <h1 class="eg-page-header__title" data-en="Usage and AI credits" data-vi="Mức sử dụng và tín dụng AI">Mức sử dụng và tín dụng AI</h1>
+            <p class="eg-page-header__description" data-en="Tenant credit balance first, then usage by action for the selected UTC period. The selected project is usage context, not a credit allocation." data-vi="Số dư tín dụng của tổ chức trước, sau đó là mức sử dụng theo thao tác trong kỳ UTC đã chọn. Dự án đã chọn là ngữ cảnh sử dụng, không phải phân bổ tín dụng.">Số dư tín dụng của tổ chức trước, sau đó là mức sử dụng theo thao tác trong kỳ UTC đã chọn. Dự án đã chọn là ngữ cảnh sử dụng, không phải phân bổ tín dụng.</p>
+            <p class="eg-page-header__meta"><span>Lotus Commerce</span><span aria-hidden="true">·</span><span>storefront-web</span><span aria-hidden="true">·</span><span data-en="As of 2026-10-23T04:00:00Z" data-vi="Tính đến 2026-10-23T04:00:00Z">Tính đến 2026-10-23T04:00:00Z</span></p>
+          </div>
+          <div class="eg-page-header__actions">
+            <button class="eg-btn eg-btn--secondary" type="button" data-eg-delay-state="loading" data-eg-delay-ms="700"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg><span class="eg-btn__label" data-en="Refresh usage" data-vi="Làm mới mức sử dụng">Làm mới mức sử dụng</span></button>
+            <a class="eg-btn eg-btn--ghost" href="../27-settings-shell/evidgate-settings.html"><span class="eg-btn__label" data-en="Settings" data-vi="Cài đặt">Cài đặt</span></a>
+          </div>
+        </header>
+<div data-eg-review data-eg-states="default,loading,empty,no-match,table-error,error,403,404,401,429,412"></div>
+        <div class="eg-stack" data-gap="4">
+
+          <div class="eg-state eg-state--permission" data-eg-show-state="403" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <span class="eg-state__title" data-en="You do not have access" data-vi="Bạn không có quyền truy cập">Bạn không có quyền truy cập</span>
+          <span class="eg-state__description" data-en="Ask a project owner for access; the rest of the workspace stays unchanged." data-vi="Yêu cầu chủ dự án cấp quyền; phần còn lại của không gian làm việc không đổi.">Yêu cầu chủ dự án cấp quyền; phần còn lại của không gian làm việc không đổi.</span>
+        </div>
+          <div class="eg-state eg-state--not-found" data-eg-show-state="404" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-search"></use></svg></span>
+          <span class="eg-state__title" data-en="Not found" data-vi="Không tìm thấy">Không tìm thấy</span>
+          <span class="eg-state__description" data-en="The item may not exist or you may not have access. No existence details are disclosed." data-vi="Mục có thể không tồn tại hoặc bạn không có quyền. Không tiết lộ thông tin về sự tồn tại.">Mục có thể không tồn tại hoặc bạn không có quyền. Không tiết lộ thông tin về sự tồn tại.</span>
+        </div>
+          <div class="eg-state eg-state--permission" data-eg-show-state="401" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-lock"></use></svg></span>
+          <span class="eg-state__title" data-en="Your session expired" data-vi="Phiên đăng nhập đã hết hạn">Phiên đăng nhập đã hết hạn</span>
+          <span class="eg-state__description" data-en="Sign in again; retained drafts in this fixture are not submitted automatically." data-vi="Đăng nhập lại; bản nháp được giữ trong bản xem xét này không tự động gửi.">Đăng nhập lại; bản nháp được giữ trong bản xem xét này không tự động gửi.</span>
+        </div>
+          <div class="eg-state eg-state--conflict" data-eg-show-state="412" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-shield-alert"></use></svg></span>
+          <span class="eg-state__title" data-en="Review conflict" data-vi="Xung đột khi duyệt">Xung đột khi duyệt</span>
+          <span class="eg-state__description" data-en="This edit target changed. Your draft is retained; Reload is explicit and nothing is auto-merged." data-vi="Mục cần sửa đã thay đổi. Bản nháp được giữ; Tải lại là thao tác rõ ràng và không tự hợp nhất.">Mục cần sửa đã thay đổi. Bản nháp được giữ; Tải lại là thao tác rõ ràng và không tự hợp nhất.</span>
+        </div>
+          <div class="eg-state eg-state--error" data-eg-show-state="429" hidden>
+          <span class="eg-state__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+          <span class="eg-state__title" data-en="Too many requests" data-vi="Quá nhiều yêu cầu">Quá nhiều yêu cầu</span>
+          <span class="eg-state__description" data-en="The server asked the client to wait. No values are changed and no request is retried automatically." data-vi="Máy chủ yêu cầu chờ. Không giá trị nào bị thay đổi và không yêu cầu nào được tự động thử lại.">Máy chủ yêu cầu chờ. Không giá trị nào bị thay đổi và không yêu cầu nào được tự động thử lại.</span>
+        </div>
+        </div>
+
+        <div class="eg-stack" data-gap="7" data-eg-hide-state="403,404,401,429,412">
+
+          <section class="eg-card" aria-labelledby="balance-title">
+            <header class="eg-card__header eg-card__header--meta">
+              <div>
+                <h2 id="balance-title" data-en="AI credit balance" data-vi="Số dư tín dụng AI">Số dư tín dụng AI</h2>
+                <p data-en="Tenant-scoped, shared by every Lotus Commerce project. Not a project allocation and not a currency amount." data-vi="Phạm vi tổ chức, dùng chung cho mọi dự án Lotus Commerce. Không phải phân bổ theo dự án và không phải số tiền.">Phạm vi tổ chức, dùng chung cho mọi dự án Lotus Commerce. Không phải phân bổ theo dự án và không phải số tiền.</p>
+              </div>
+              <span class="eg-badge eg-badge--success"><span class="eg-badge__label" data-en="Available" data-vi="Khả dụng">Khả dụng</span></span>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-credit-meter">
+                <span class="eg-credit-meter__label">Lotus Commerce · 2026-10</span>
+                <span class="eg-credit-meter__balance">1 240 / 2 000</span>
+                <span class="eg-credit-meter__estimate" data-en="Remaining · 12 credits per checklist estimate" data-vi="Còn lại · ước tính 12 tín dụng mỗi danh sách kiểm tra">Còn lại · ước tính 12 tín dụng mỗi danh sách kiểm tra</span>
+                <span class="eg-credit-meter__track"><span class="eg-credit-meter__fill" style="--pct:62%"></span></span>
+              </div>
+              <div class="eg-grid" data-cols="3" data-gap="4">
+                <div class="eg-kpi"><span class="eg-kpi__label" data-en="Confirmed zero" data-vi="Xác nhận bằng 0">Xác nhận bằng 0</span><span class="eg-kpi__value">0</span><span class="eg-kpi__context" data-en="Manual authoring still available" data-vi="Vẫn có thể soạn thủ công">Vẫn có thể soạn thủ công</span></div>
+                <div class="eg-kpi eg-kpi--neutral"><span class="eg-kpi__label" data-en="Unavailable balance" data-vi="Không có số dư">Không có số dư</span><span class="eg-kpi__value">—</span><span class="eg-kpi__context" data-en="Never displayed as zero" data-vi="Không bao giờ hiển thị là 0">Không bao giờ hiển thị là 0</span></div>
+                <div class="eg-kpi"><span class="eg-kpi__label" data-en="Usage scope" data-vi="Phạm vi sử dụng">Phạm vi sử dụng</span><span class="eg-kpi__value" data-en="Project context" data-vi="Ngữ cảnh dự án">Ngữ cảnh dự án</span><span class="eg-kpi__context" data-en="storefront-web · not an allocation" data-vi="storefront-web · không phải phân bổ">storefront-web · không phải phân bổ</span></div>
+              </div>
+              <p class="eg-kpi__context" data-en="as_of 2026-10-13T10:30Z · supplied by the service; independent of action rows" data-vi="as_of 2026-10-13T10:30Z · do dịch vụ cung cấp; độc lập với các dòng thao tác">as_of 2026-10-13T10:30Z · supplied by the service; independent of action rows</p>
+              <div class="eg-banner eg-banner--warning">
+                <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-sparkle"></use></svg></span>
+                <div class="eg-banner__body"><strong data-en="Exhausted credits do not block manual authoring" data-vi="Hết tín dụng không chặn soạn thủ công">Hết tín dụng không chặn soạn thủ công</strong><p data-en="AI generation is blocked while the confirmed balance is zero; requirements, manual checklists and review remain available. No top-up or pricing flow is offered here." data-vi="Tạo bằng AI bị chặn khi số dư xác nhận bằng 0; yêu cầu, danh sách kiểm tra thủ công và xem xét vẫn khả dụng. Trang này không có nạp thêm hay bảng giá.">Tạo bằng AI bị chặn khi số dư xác nhận bằng 0; yêu cầu, danh sách kiểm tra thủ công và xem xét vẫn khả dụng. Trang này không có nạp thêm hay bảng giá.</p></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="usage-title">
+            <header class="eg-card__header eg-card__header--meta">
+              <div>
+                <h2 id="usage-title" data-en="Usage by action" data-vi="Mức sử dụng theo thao tác">Mức sử dụng theo thao tác</h2>
+                <p data-en="Supplied usage records for the selected UTC period. Invocation counts are shown only where supplied; none are present in this fixture." data-vi="Bản ghi sử dụng được cung cấp cho kỳ UTC đã chọn. Số lần gọi chỉ hiển thị khi có dữ liệu; bản xem xét này không có.">Bản ghi sử dụng được cung cấp cho kỳ UTC đã chọn. Số lần gọi chỉ hiển thị khi có dữ liệu; bản xem xét này không có.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label" data-en="Usage only" data-vi="Chỉ mức sử dụng">Chỉ mức sử dụng</span></span>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-state eg-state--empty" data-eg-show-state="loading" hidden>
+                <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-clock"></use></svg></span>
+                <span class="eg-state__title" data-en="Loading usage records" data-vi="Đang tải bản ghi sử dụng">Đang tải bản ghi sử dụng</span>
+                <span class="eg-state__description" data-en="The independent credit balance and as-of time stay visible while the action table loads." data-vi="Số dư tín dụng độc lập và mốc thời gian vẫn hiển thị trong khi bảng thao tác đang tải.">The independent credit balance and as-of time stay visible while the action table loads.</span>
+              </div>
+              <div class="eg-state eg-state--empty" data-eg-show-state="empty" hidden>
+                <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-layers"></use></svg></span>
+                <span class="eg-state__title" data-en="No usage in this period" data-vi="Không có mức sử dụng trong kỳ này">Không có mức sử dụng trong kỳ này</span>
+                <span class="eg-state__description" data-en="No usage records were supplied for 2026-10. The credit balance above remains independently available." data-vi="Không có bản ghi sử dụng nào cho 2026-10. Số dư tín dụng ở trên vẫn độc lập và khả dụng.">No usage records were supplied for 2026-10. The credit balance above remains independently available.</span>
+              </div>
+              <div class="eg-state eg-state--empty" data-eg-show-state="no-match" hidden>
+                <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-search"></use></svg></span>
+                <span class="eg-state__title" data-en="No usage matches this period" data-vi="Không có mức sử dụng khớp kỳ này">No usage matches this period</span>
+                <span class="eg-state__description" data-en="The balance and as-of time are retained. Choose a wider period to see supplied rows." data-vi="Số dư và mốc thời gian được giữ lại. Chọn kỳ rộng hơn để xem các dòng được cung cấp.">The balance and as-of time are retained. Choose a wider period to see supplied rows.</span>
+                <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Reset period" data-vi="Đặt lại kỳ">Reset period</span></button></span>
+              </div>
+              <div class="eg-state eg-state--error" data-eg-show-state="table-error,error" hidden>
+                <span class="eg-state__icon"><svg class="eg-icon" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+                <span class="eg-state__title" data-en="Usage records could not be loaded" data-vi="Không thể tải bản ghi sử dụng">Usage records could not be loaded</span>
+                <span class="eg-state__description" data-en="Table-only error specimen. The credit balance above is unaffected; Retry reloads only the action table and nothing is auto-submitted." data-vi="Mẫu lỗi chỉ của bảng. Số dư tín dụng ở trên không bị ảnh hưởng; Thử lại chỉ tải lại bảng thao tác và không tự gửi gì.">Table-only error specimen. The credit balance above is unaffected; Retry reloads only the action table and nothing is auto-submitted.</span>
+                <span class="eg-state__actions"><button class="eg-btn eg-btn--secondary eg-btn--sm" type="button" data-eg-set-state="default"><span class="eg-btn__label" data-en="Retry table" data-vi="Thử lại bảng">Retry table</span></button></span>
+              </div>
+              <div data-eg-hide-state="loading,empty,no-match,table-error,error">
+              <div class="eg-form__grid">
+                <div class="eg-field">
+                  <label class="eg-field__label" for="usage-period" data-en="Usage period" data-vi="Kỳ sử dụng">Kỳ sử dụng</label>
+                  <select class="eg-select" id="usage-period">
+                    <option>2026-10 · 2026-10-01T00:00:00Z – 2026-11-01T00:00:00Z</option>
+                    <option>2026-09 · 2026-09-01T00:00:00Z – 2026-10-01T00:00:00Z</option>
+                  </select>
+                  <p class="eg-field__hint" data-en="Period bounds are UTC; changing the selection does not recalculate the tenant balance." data-vi="Mốc kỳ là UTC; đổi lựa chọn không tính lại số dư của tổ chức.">Mốc kỳ là UTC; đổi lựa chọn không tính lại số dư của tổ chức.</p>
+                </div>
+                <div class="eg-field">
+                  <label class="eg-field__label" for="usage-project" data-en="Usage context" data-vi="Ngữ cảnh sử dụng">Ngữ cảnh sử dụng</label>
+                  <select class="eg-select" id="usage-project"><option>storefront-web</option><option>evidgate-e2e</option></select>
+                  <p class="eg-field__hint" data-en="Only filters rows; the balance stays tenant-scoped." data-vi="Chỉ lọc các dòng; số dư vẫn thuộc phạm vi tổ chức.">Chỉ lọc các dòng; số dư vẫn thuộc phạm vi tổ chức.</p>
+                </div>
+              </div>
+              <div class="eg-table__wrap">
+                <table class="eg-table">
+                  <caption class="eg-table__caption" data-en="Illustrative usage · 2026-10-01T00:00:00Z – 2026-11-01T00:00:00Z" data-vi="Mức sử dụng minh hoạ · 2026-10-01T00:00:00Z – 2026-11-01T00:00:00Z">Mức sử dụng minh hoạ · 2026-10-01T00:00:00Z – 2026-11-01T00:00:00Z</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" data-en="Action" data-vi="Thao tác">Thao tác</th>
+                      <th scope="col" data-en="Credits" data-vi="Tín dụng">Tín dụng</th>
+                      <th scope="col" data-en="Recorded" data-vi="Ghi nhận">Ghi nhận</th>
+                      <th scope="col" data-en="Source" data-vi="Nguồn">Nguồn</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <th scope="row" data-label-en="Action" data-label-vi="Thao tác" data-label="Thao tác" data-en="Checklist" data-vi="Danh sách kiểm tra">Danh sách kiểm tra</th>
+                      <td data-label-en="Credits" data-label-vi="Tín dụng" data-label="Tín dụng"><strong>312</strong></td>
+                      <td data-label-en="Recorded" data-label-vi="Ghi nhận" data-label="Ghi nhận" data-en="Period total" data-vi="Tổng kỳ">Tổng kỳ</td>
+                      <td data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn">usage-2026-10-ck</td>
+                    </tr>
+                    <tr>
+                      <th scope="row" data-label-en="Action" data-label-vi="Thao tác" data-label="Thao tác" data-en="Test case" data-vi="Ca kiểm thử">Ca kiểm thử</th>
+                      <td data-label-en="Credits" data-label-vi="Tín dụng" data-label="Tín dụng"><strong>284</strong></td>
+                      <td data-label-en="Recorded" data-label-vi="Ghi nhận" data-label="Ghi nhận" data-en="Period total" data-vi="Tổng kỳ">Tổng kỳ</td>
+                      <td data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn">usage-2026-10-tc</td>
+                    </tr>
+                    <tr>
+                      <th scope="row" data-label-en="Action" data-label-vi="Thao tác" data-label="Thao tác" data-en="Translate" data-vi="Dịch">Dịch</th>
+                      <td data-label-en="Credits" data-label-vi="Tín dụng" data-label="Tín dụng"><strong>41</strong></td>
+                      <td data-label-en="Recorded" data-label-vi="Ghi nhận" data-label="Ghi nhận" data-en="Period total" data-vi="Tổng kỳ">Tổng kỳ</td>
+                      <td data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn">usage-2026-10-tr</td>
+                    </tr>
+                    <tr data-eg-phase="G2" hidden>
+                      <th scope="row" data-label-en="Action" data-label-vi="Thao tác" data-label="Thao tác" data-en="Script mapping" data-vi="Ánh xạ kịch bản">Ánh xạ kịch bản</th>
+                      <td data-label-en="Credits" data-label-vi="Tín dụng" data-label="Tín dụng"><strong>96</strong></td>
+                      <td data-label-en="Recorded" data-label-vi="Ghi nhận" data-label="Ghi nhận" data-en="Period total" data-vi="Tổng kỳ">Tổng kỳ</td>
+                      <td data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn">usage-2026-10-sm</td>
+                    </tr>
+                    <tr data-eg-phase="G3" hidden>
+                      <th scope="row" data-label-en="Action" data-label-vi="Thao tác" data-label="Thao tác" data-en="Locate fallback" data-vi="Định vị dự phòng">Định vị dự phòng</th>
+                      <td data-label-en="Credits" data-label-vi="Tín dụng" data-label="Tín dụng"><strong>27</strong></td>
+                      <td data-label-en="Recorded" data-label-vi="Ghi nhận" data-label="Ghi nhận" data-en="Period total" data-vi="Tổng kỳ">Tổng kỳ</td>
+                      <td data-label-en="Source" data-label-vi="Nguồn" data-label="Nguồn">usage-2026-10-lf</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              </div>
+              <p class="eg-kpi__context" data-en="Credits are illustrative estimates, not approved tariffs or money. Balance is never calculated from these rows." data-vi="Tín dụng là ước tính minh hoạ, không phải biểu phí được duyệt hay tiền. Số dư không bao giờ được tính từ các dòng này.">Tín dụng là ước tính minh hoạ, không phải biểu phí được duyệt hay tiền. Số dư không bao giờ được tính từ các dòng này.</p>
+            </div>
+          </section>
+
+          <section class="eg-card" data-eg-phase="G2" aria-labelledby="storage-title">
+            <header class="eg-card__header eg-card__header--meta">
+              <div>
+                <h2 id="storage-title" data-en="Storage, ingest and egress" data-vi="Lưu trữ, thu nhận và truyền ra">Lưu trữ, thu nhận và truyền ra</h2>
+                <p data-en="Separate resource quotas supplied by the service. They never change the credit balance and are not a release outcome." data-vi="Hạn mức tài nguyên riêng do dịch vụ cung cấp. Chúng không làm thay đổi số dư tín dụng và không phải kết quả phát hành.">Separate resource quotas supplied by the service. They never change the credit balance and are not a release outcome.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">G2</span></span>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-grid" data-cols="3" data-gap="4">
+                <div class="eg-kpi"><span class="eg-kpi__label" data-en="Artifact storage" data-vi="Lưu trữ hiện vật">Lưu trữ hiện vật</span><span class="eg-kpi__value">82 GiB / 100 GiB</span><span class="eg-kpi__context" data-en="warned · warned_at 2026-10-13T08:00Z · blocked_at: null" data-vi="warned · warned_at 2026-10-13T08:00Z · blocked_at: null">warned · warned_at 2026-10-13T08:00Z · blocked_at: null</span></div>
+                <div class="eg-kpi"><span class="eg-kpi__label" data-en="Daily ingest events" data-vi="Sự kiện thu nhận hằng ngày">Sự kiện thu nhận hằng ngày</span><span class="eg-kpi__value">40,000 / 50,000</span><span class="eg-kpi__context" data-en="warned · warned_at 2026-10-13T08:00Z" data-vi="warned · warned_at 2026-10-13T08:00Z">warned · warned_at 2026-10-13T08:00Z</span></div>
+                <div class="eg-kpi eg-kpi--neutral"><span class="eg-kpi__label" data-en="Egress" data-vi="Truyền ra">Truyền ra</span><span class="eg-kpi__value" data-en="Unavailable" data-vi="Không khả dụng">Không khả dụng</span><span class="eg-kpi__context" data-en="egress_bytes null · never zero" data-vi="egress_bytes null · không phải 0">egress_bytes null · không phải 0</span></div>
+              </div>
+              <div class="eg-form__section">
+                <fieldset class="eg-fieldset">
+                  <legend class="eg-field__label" data-en="Retention window" data-vi="Thời hạn lưu giữ">Thời hạn lưu giữ</legend>
+                  <div class="eg-form__grid" data-eg-mutate>
+                    <div class="eg-field">
+                      <label class="eg-field__label" for="retention-window" data-en="Proposed retention window" data-vi="Thời hạn lưu giữ đề xuất">Thời hạn lưu giữ đề xuất</label>
+                      <select class="eg-select" id="retention-window" data-eg-retention-select>
+                        <option value="30" data-en="30 days" data-vi="30 ngày">30 ngày</option>
+                        <option value="14" selected data-en="14 days" data-vi="14 ngày">14 ngày</option>
+                      </select>
+                      <p class="eg-field__hint" data-en="A shorter window may make older artifact links unavailable sooner. Deletion follows the server preview only." data-vi="Thời hạn ngắn hơn có thể làm liên kết hiện vật cũ không khả dụng sớm hơn. Việc xoá chỉ theo bản xem trước của máy chủ.">A shorter window may make older artifact links unavailable sooner. Deletion follows the server preview only.</p>
+                    </div>
+                    <div class="eg-field"><span class="eg-field__label" data-en="Current retention" data-vi="Thời hạn lưu giữ hiện tại">Thời hạn lưu giữ hiện tại</span><span class="eg-kpi__value">30 <span data-en="days" data-vi="ngày">ngày</span></span></div>
+                  </div>
+                  <div class="eg-grid" data-cols="3" data-gap="4">
+                    <div class="eg-kpi"><span class="eg-kpi__label" data-en="Artifacts deleted sooner" data-vi="Hiện vật bị xoá sớm hơn">Hiện vật bị xoá sớm hơn</span><span class="eg-kpi__value">1,284</span></div>
+                    <div class="eg-kpi"><span class="eg-kpi__label" data-en="Eligible storage" data-vi="Dung lượng đủ điều kiện">Dung lượng đủ điều kiện</span><span class="eg-kpi__value">16.2 GiB</span></div>
+                    <div class="eg-kpi"><span class="eg-kpi__label" data-en="Earliest affected" data-vi="Ảnh hưởng sớm nhất">Ảnh hưởng sớm nhất</span><span class="eg-kpi__value">2026-09-13</span></div>
+                  </div>
+                  <p class="eg-field__hint" data-en="Server-provided preview. Artifact links may become unavailable; original results and evaluations follow the server retention contract, with no archival guarantee." data-vi="Bản xem trước do máy chủ cung cấp. Liên kết hiện vật có thể không còn khả dụng; kết quả gốc và đánh giá tuân theo hợp đồng lưu giữ của máy chủ, không có bảo đảm lưu trữ.">Server-provided preview. Artifact links may become unavailable; original results and evaluations follow the server retention contract, with no archival guarantee.</p>
+                </fieldset>
+                <div class="eg-readonly-summary">
+                  <span class="eg-field__label" data-en="Retention · read-only on this screen" data-vi="Lưu giữ · chỉ đọc ở màn hình này">Lưu giữ · chỉ đọc ở màn hình này</span>
+                  <div class="eg-stack" data-gap="2">
+                    <p><strong data-en="Current retention" data-vi="Thời hạn hiện tại">Thời hạn hiện tại</strong><br><span>30 ngày / 30 days</span></p>
+                    <p><strong data-en="Proposed retention" data-vi="Thời hạn đề xuất">Thời hạn đề xuất</strong><br><span>14 ngày / 14 days</span></p>
+                    <p><strong data-en="Artifacts deleted sooner" data-vi="Hiện vật bị xoá sớm hơn">Hiện vật bị xoá sớm hơn</strong><br><span>1,284</span></p>
+                    <p><strong data-en="Eligible storage" data-vi="Dung lượng đủ điều kiện">Dung lượng đủ điều kiện</strong><br><span>16.2 GiB</span></p>
+                    <p><strong data-en="Earliest affected" data-vi="Ảnh hưởng sớm nhất">Ảnh hưởng sớm nhất</strong><br><span>2026-09-13</span></p>
+                  </div>
+                </div>
+              </div>
+              <div class="eg-form__actions" data-eg-mutate>
+                <button class="eg-btn eg-btn--primary" type="button" data-eg-open="impact-dialog"><span class="eg-btn__label" data-en="Review deletion impact" data-vi="Xem tác động xoá">Xem tác động xoá</span></button>
+              </div>
+              <div class="eg-banner eg-banner--danger">
+                <span class="eg-banner__icon"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-alert"></use></svg></span>
+                <div class="eg-banner__body"><strong data-en="Separate supplied blocked fixture" data-vi="Mẫu bị chặn được cung cấp riêng">Mẫu bị chặn được cung cấp riêng</strong><p data-en="Storage 100 GiB / 100 GiB · blocked_at 2026-10-13T10:25Z supplied. New uploads are blocked; existing assertion outcomes are not changed. This is not the current warned state shown above." data-vi="Dung lượng 100 GiB / 100 GiB · blocked_at 2026-10-13T10:25Z được cung cấp. Lượt tải lên mới bị chặn; kết quả assertion hiện có không đổi. Đây không phải trạng thái warned hiện tại ở trên.">Storage 100 GiB / 100 GiB · blocked_at 2026-10-13T10:25Z supplied. New uploads are blocked; existing assertion outcomes are not changed. This is not the current warned state shown above.</p></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="eg-card" data-eg-phase="G2" aria-labelledby="quota-records-title">
+            <header class="eg-card__header eg-card__header--meta">
+              <div>
+                <h2 id="quota-records-title" data-en="Server-declared quota state" data-vi="Trạng thái hạn mức do máy chủ khai báo">Trạng thái hạn mức do máy chủ khai báo</h2>
+                <p data-en="Source quota records supplied by the service. Timestamps are quota state, not usage or balance values." data-vi="Bản ghi hạn mức nguồn do dịch vụ cung cấp. Mốc thời gian là trạng thái hạn mức, không phải giá trị sử dụng hay số dư.">Source quota records supplied by the service. Timestamps are quota state, not usage or balance values.</p>
+              </div>
+              <span class="eg-badge eg-badge--neutral"><span class="eg-badge__label">G2</span></span>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-table__wrap">
+                <table class="eg-table eg-table--compact">
+                  <caption class="eg-table__caption" data-en="Server-declared quota state · sourced 2026-10-13T10:30Z" data-vi="Trạng thái hạn mức do máy chủ khai báo · nguồn 2026-10-13T10:30Z">Server-declared quota state · sourced 2026-10-13T10:30Z</caption>
+                  <thead><tr><th scope="col" data-en="Quota record" data-vi="Bản ghi hạn mức">Bản ghi hạn mức</th><th scope="col" data-en="Supplied state" data-vi="Trạng thái được cung cấp">Trạng thái được cung cấp</th></tr></thead>
+                  <tbody>
+                    <tr><th scope="row" data-label-en="Quota record" data-label-vi="Bản ghi hạn mức" data-label="Bản ghi hạn mức">artifact_storage</th><td data-label-en="Supplied state" data-label-vi="Trạng thái được cung cấp" data-label="Trạng thái được cung cấp">warned · blocked_at: null</td></tr>
+                    <tr><th scope="row" data-label-en="Quota record" data-label-vi="Bản ghi hạn mức" data-label="Bản ghi hạn mức">daily_ingest_events</th><td data-label-en="Supplied state" data-label-vi="Trạng thái được cung cấp" data-label="Trạng thái được cung cấp">warned_at · 2026-10-13T08:00Z</td></tr>
+                    <tr><th scope="row" data-label-en="Quota record" data-label-vi="Bản ghi hạn mức" data-label="Bản ghi hạn mức">egress_bytes</th><td data-label-en="Supplied state" data-label-vi="Trạng thái được cung cấp" data-label="Trạng thái được cung cấp">null</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="eg-card" aria-labelledby="records-title">
+            <header class="eg-card__header">
+              <div>
+                <h2 id="records-title" data-en="Source records" data-vi="Bản ghi nguồn">Bản ghi nguồn</h2>
+                <p data-en="Usage only. These records do not represent invoices, approved tariffs or release verdicts." data-vi="Chỉ là mức sử dụng. Các bản ghi này không phải hoá đơn, biểu giá được duyệt hay kết luận phát hành.">Chỉ là mức sử dụng. Các bản ghi này không phải hoá đơn, biểu giá được duyệt hay kết luận phát hành.</p>
+              </div>
+            </header>
+            <div class="eg-card__body">
+              <div class="eg-stack" data-gap="3">
+                <p class="eg-kpi__context" data-en="usage-2026-10-checklist · 312 credits · supplied 2026-10-23T03:58:00Z" data-vi="usage-2026-10-checklist · 312 tín dụng · cung cấp 2026-10-23T03:58:00Z">usage-2026-10-checklist · 312 tín dụng · cung cấp 2026-10-23T03:58:00Z</p>
+                <p class="eg-kpi__context" data-en="usage-2026-10-test-case · 284 credits · supplied 2026-10-23T03:58:00Z" data-vi="usage-2026-10-test-case · 284 tín dụng · cung cấp 2026-10-23T03:58:00Z">usage-2026-10-test-case · 284 tín dụng · cung cấp 2026-10-23T03:58:00Z</p>
+                <p class="eg-kpi__context" data-en="usage-2026-10-translate · 41 credits · supplied 2026-10-23T03:58:00Z" data-vi="usage-2026-10-translate · 41 tín dụng · cung cấp 2026-10-23T03:58:00Z">usage-2026-10-translate · 41 tín dụng · cung cấp 2026-10-23T03:58:00Z</p>
+                <p data-en="Model ids model-small and model-large are provenance placeholders; this page has no model selector." data-vi="Mã model-small và model-large là chỗ giữ chỗ nguồn gốc; trang này không có bộ chọn mô hình.">Mã model-small và model-large là chỗ giữ chỗ nguồn gốc; trang này không có bộ chọn mô hình.</p>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <footer>
+          <hr>
+          <p><span data-en="Evidgate · G1 review fixture · Illustrative values, not live data" data-vi="Evidgate · Dữ liệu xem xét G1 · Giá trị minh hoạ, không phải dữ liệu thực">Evidgate · Dữ liệu xem xét G1 · Giá trị minh hoạ, không phải dữ liệu thực</span></p>
+        </footer>
+      </main>
+    </div>
+  </div>
+<dialog class="eg-dialog eg-dialog--wide" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <header class="eg-dialog__header">
+      <div>
+        <h2 id="shortcuts-title" data-en="Keyboard shortcuts" data-vi="Phím tắt">Phím tắt</h2>
+        <p data-en="Available in this review fixture." data-vi="Khả dụng trong bản xem xét này.">Khả dụng trong bản xem xét này.</p>
+      </div>
+      <button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng hộp thoại"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button>
+    </header>
+    <div class="eg-dialog__body"><div class="eg-stack" data-gap="2"><p><kbd>Tab</kbd> · <span data-en="Move between controls" data-vi="Di chuyển giữa các điều khiển">Di chuyển giữa các điều khiển</span></p><p><kbd>←</kbd> <kbd>→</kbd> · <span data-en="Move between tabs" data-vi="Di chuyển giữa các tab">Di chuyển giữa các tab</span></p><p><kbd>Esc</kbd> · <span data-en="Close a dialog and return focus" data-vi="Đóng hộp thoại và trả tiêu điểm">Đóng hộp thoại và trả tiêu điểm</span></p></div></div>
+    <footer class="eg-dialog__footer"><button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Close" data-vi="Đóng">Đóng</span></button></footer>
+  </dialog>
+  <dialog class="eg-dialog" id="impact-dialog" aria-labelledby="impact-title">
+    <header class="eg-dialog__header">
+      <div>
+        <h2 id="impact-title" data-en="Review deletion impact" data-vi="Xem tác động xoá">Xem tác động xoá</h2>
+        <p data-eg-retention-target data-eg-retention-current="30" data-en-template="Confirm the server preview before shortening retention from 30 to {days} days. No deletion occurs in this review fixture." data-en-template-same="Current retention stays at 30 days; no deletion preview applies and nothing is confirmed." data-vi-template-same="Thời hạn hiện tại giữ nguyên 30 ngày; không áp dụng bản xem trước xoá và không xác nhận gì." data-vi-template="Xác nhận bản xem trước của máy chủ trước khi rút ngắn thời hạn lưu giữ từ 30 xuống {days} ngày. Không có thao tác xoá trong bản xem xét này.">Confirm the server preview before shortening retention from 30 to 14 days. No deletion occurs in this review fixture.</p>
+      </div>
+      <button class="eg-btn eg-btn--ghost eg-btn--icon eg-btn--sm" type="button" data-eg-close aria-label="Đóng hộp thoại"><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false"><use href="#eg-i-close"></use></svg></button>
+    </header>
+    <div class="eg-dialog__body">
+      <div class="eg-stack" data-gap="3">
+        <div class="eg-stack" data-gap="2">
+          <span class="eg-field__label" data-en="Supplied preview state" data-vi="Trạng thái xem trước được cung cấp">Trạng thái xem trước được cung cấp</span>
+          <div class="eg-toolbar" role="group" aria-label="Trạng thái xem trước được cung cấp">
+            <label class="eg-check"><input type="radio" name="retention-fixture" value="fresh" data-eg-retention-fixture checked><span class="eg-check__label"><span data-en="Fresh preview" data-vi="Bản xem trước mới">Bản xem trước mới</span></span></label>
+            <label class="eg-check"><input type="radio" name="retention-fixture" value="stale" data-eg-retention-fixture><span class="eg-check__label"><span data-en="Stale preview" data-vi="Bản xem trước cũ">Bản xem trước cũ</span></span></label>
+            <label class="eg-check"><input type="radio" name="retention-fixture" value="unavailable" data-eg-retention-fixture><span class="eg-check__label"><span data-en="No preview returned" data-vi="Không trả về bản xem trước">Không trả về bản xem trước</span></span></label>
+          </div>
+        </div>
+        <div class="eg-grid" data-cols="3" data-gap="4" data-eg-impact-metrics>
+          <div class="eg-kpi"><span class="eg-kpi__label" data-en="Artifacts deleted sooner" data-vi="Hiện vật bị xoá sớm hơn">Hiện vật bị xoá sớm hơn</span><span class="eg-kpi__value">1,284</span></div>
+          <div class="eg-kpi"><span class="eg-kpi__label" data-en="Eligible storage" data-vi="Dung lượng đủ điều kiện">Dung lượng đủ điều kiện</span><span class="eg-kpi__value">16.2 GiB</span></div>
+          <div class="eg-kpi"><span class="eg-kpi__label" data-en="Earliest affected" data-vi="Ảnh hưởng sớm nhất">Ảnh hưởng sớm nhất</span><span class="eg-kpi__value">2026-09-13</span></div>
+        </div>
+        <div class="eg-banner eg-banner--warning" data-eg-impact-unavailable hidden>
+          <div class="eg-banner__body"><strong data-eg-impact-title data-en="No deletion preview for this selection" data-vi="Không có bản xem trước xoá cho lựa chọn này">No deletion preview for this selection</strong><p data-eg-impact-description data-en="Retention is unchanged or based on a stale preview. The server preview must be refreshed before any confirmation; nothing is deleted and no count is invented." data-vi="Thời hạn không đổi hoặc dựa trên bản xem trước cũ. Phải làm mới bản xem trước của máy chủ trước khi xác nhận; không xoá gì và không tự đặt số lượng.">Retention is unchanged or based on a stale preview. The server preview must be refreshed before any confirmation; nothing is deleted and no count is invented.</p></div>
+        </div>
+        <label class="eg-check"><input type="checkbox" data-eg-retention-ack><span class="eg-check__label"><span data-en="I reviewed this server preview and understand links may become unavailable." data-vi="Tôi đã xem bản xem trước của máy chủ và hiểu rằng liên kết có thể không còn khả dụng.">I reviewed this server preview and understand links may become unavailable.</span></span></label>
+        <p data-en="Artifact links may become unavailable. Original results and evaluations follow the server retention contract; no archival guarantee is implied." data-vi="Liên kết hiện vật có thể không còn khả dụng. Kết quả gốc và đánh giá tuân theo hợp đồng lưu giữ của máy chủ; không có bảo đảm lưu trữ.">Artifact links may become unavailable. Original results and evaluations follow the server retention contract; no archival guarantee is implied.</p>
+        <p class="eg-field__hint" data-en="Counts and eligible storage come from the server preview and are not calculated from the visible table. This confirmation is distinct from credit exhaustion and from storage warned_at or blocked_at thresholds." data-vi="Số lượng và dung lượng đủ điều kiện đến từ bản xem trước của máy chủ và không được tính từ bảng hiển thị. Xác nhận này tách biệt với việc hết tín dụng và với ngưỡng warned_at hay blocked_at của lưu trữ.">Counts and eligible storage come from the server preview and are not calculated from the visible table. This confirmation is distinct from credit exhaustion and from storage warned_at or blocked_at thresholds.</p>
+      </div>
+    </div>
+    <footer class="eg-dialog__footer">
+      <button class="eg-btn eg-btn--secondary" type="button" data-eg-close><span class="eg-btn__label" data-en="Cancel" data-vi="Huỷ">Huỷ</span></button>
+      <button class="eg-btn eg-btn--danger" type="button" data-eg-close data-eg-mutate data-eg-retention-confirm disabled aria-disabled="true"><span class="eg-btn__label" data-en="Save retention" data-vi="Lưu thời hạn">Lưu thời hạn</span></button>
+    </footer>
+  </dialog>
+
 </body>
 </html>
