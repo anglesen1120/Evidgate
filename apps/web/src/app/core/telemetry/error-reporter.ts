@@ -13,7 +13,9 @@
 // and the point of a client error span is to be found in a trace, not to be the outage. The
 // budget is per service instance (ten per rolling minute), shared by the Angular handler and the
 // global listeners so the two cannot double the ceiling, and a dropped report is dropped
-// silently — logging the drop would be the same flood one level down.
+// silently — logging the drop would be the same flood one level down. A report is only counted
+// when the facade has a loaded runtime: while the chunk loads (or after it failed) a report
+// cannot be exported, so it must not spend a slot the first exportable report would need.
 import { ErrorHandler, inject, Injectable } from '@angular/core';
 
 import { isApiRequestError } from '../http/api-error';
@@ -33,8 +35,18 @@ const WINDOW_MS = 60_000;
  */
 const budgets = new WeakMap<TelemetryService, number[]>();
 
-/** Whether `service` may report now; records the report when it may. */
+/**
+ * Whether `service` may report now; records the report when it may.
+ *
+ * A null runtime (the chunk is loading, or the load failed) is checked first and costs no budget:
+ * `reportError` would be a no-op, so charging a slot for it would spend the minute's allowance on
+ * reports nobody will ever see and drop the eleventh — the first one that could have been
+ * exported. The budget is the exporter's, so it is only spent when there is an exporter.
+ */
 function withinBudget(service: TelemetryService, now: number): boolean {
+  if (service.runtime === null) {
+    return false;
+  }
   const kept = (budgets.get(service) ?? []).filter((at) => at > now - WINDOW_MS);
   if (kept.length >= MAX_REPORTS) {
     budgets.set(service, kept);

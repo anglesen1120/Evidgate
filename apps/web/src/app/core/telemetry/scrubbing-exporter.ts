@@ -2,11 +2,14 @@
 // loss must never break the app): the last gate before a span leaves the app.
 //
 // Whatever instrumentation recorded, this exporter hands the inner exporter a NEW plain
-// `ReadableSpan`-shaped object: the span name is scrubbed, attributes and event attributes go
-// through `scrubAttributes` (allowlist + per-key rules), links are dropped, the status message
-// is dropped (code kept), and the resource keeps only `ALLOWED_RESOURCE_KEYS`. The input span
-// is never mutated, so a test exporter or the SDK's own bookkeeping still sees what was
-// recorded; only the copy that crosses the network is redacted.
+// `ReadableSpan`-shaped object: the span name is narrowed to `SPAN_NAMES` (anything else is
+// exported under the fixed name `unknown`, because a name is where a hostile instrumentation
+// would put a URL or a message), attributes and event attributes go through `scrubAttributes`
+// (allowlist + per-key rules), links are dropped, the status message is dropped (code kept), the
+// event list keeps only the names in `EVENT_NAMES`, the instrumentation scope is reduced to
+// `name` + `version` with the name pinned to `INSTRUMENTATION_NAME`, and the resource keeps only
+// `ALLOWED_RESOURCE_KEYS`. The input span is never mutated, so a test exporter or the SDK's own
+// bookkeeping still sees what was recorded; only the copy that crosses the network is redacted.
 //
 // Why this file imports `@opentelemetry/resources` at runtime (the only runtime OTel import
 // outside `telemetry-sdk.ts`): a filtered resource has to be a real `Resource` (the OTLP
@@ -19,10 +22,13 @@ import type { Attributes } from '@opentelemetry/api';
 import type { ReadableSpan, SpanExporter, TimedEvent } from '@opentelemetry/sdk-trace';
 
 import { ALLOWED_RESOURCE_KEYS } from './attribute-allowlist';
-import { scrubAttributes, scrubText } from './scrub';
-
-/** A span name is a constant (`route.change`, `api.request`, …); anything longer is content. */
-const MAX_SPAN_NAME_LENGTH = 120;
+import { scrubAttributes } from './scrub';
+import {
+  EVENT_NAMES,
+  INSTRUMENTATION_NAME,
+  SPAN_NAMES,
+  UNKNOWN_SPAN_NAME,
+} from './telemetry-names';
 
 /** The SDK's export callback, taken from the interface so `@opentelemetry/core` stays unimported. */
 type ExportResultCallback = Parameters<SpanExporter['export']>[1];
@@ -71,27 +77,45 @@ function scrubbedResource(resource: Resource): Resource {
   return resourceFromAttributes(attributes, schemaUrl === undefined ? undefined : { schemaUrl });
 }
 
-/** The event with a scrubbed name and scrubbed attributes; timing is copied as it is. */
+/**
+ * The event with scrubbed attributes; timing is copied as it is. Its name is already known to be
+ * in `EVENT_NAMES`, so it is one of this app's constants and needs no scrubbing of its own.
+ */
 function scrubbedEvent(event: TimedEvent): TimedEvent {
   const { droppedAttributesCount } = event;
   return {
     time: event.time,
-    name: scrubText(event.name, MAX_SPAN_NAME_LENGTH),
+    name: event.name,
     attributes: scrubAttributes(event.attributes ?? {}),
     ...(droppedAttributesCount === undefined ? {} : { droppedAttributesCount }),
   };
 }
 
 /**
+ * The events that cross the network: only the names in `EVENT_NAMES` (none today). An event name
+ * this app did not write is content — it is where a message or a URL would sit — so it is
+ * dropped rather than renamed: a scrubbed name would still be a name the receiver cannot trust.
+ */
+function scrubbedEvents(events: readonly TimedEvent[]): TimedEvent[] {
+  return events.filter((event) => EVENT_NAMES.has(event.name)).map(scrubbedEvent);
+}
+
+/**
  * The export copy of one span. Contexts are captured as values (`spanContext` is a function
  * on the SDK's span, so the copy closes over the result rather than re-entering the original
  * with a foreign `this`), times and counters are copied, `status.message` and links are gone.
+ *
+ * The name is a constant: an allowlisted one is kept and anything else is exported as `unknown`,
+ * because a name is where a hostile instrumentation puts a URL or a message. The instrumentation
+ * scope is reduced to the one scope this app uses plus its own build version — a foreign scope's
+ * name is content, and `schemaUrl` is a URL, so neither is exported.
  */
 function toScrubbedSpan(span: ReadableSpan): ReadableSpan {
   const spanContext = span.spanContext();
-  const { parentSpanContext } = span;
+  const { parentSpanContext, instrumentationScope } = span;
+  const { version: scopeVersion } = instrumentationScope;
   return {
-    name: scrubText(span.name, MAX_SPAN_NAME_LENGTH),
+    name: SPAN_NAMES.has(span.name) ? span.name : UNKNOWN_SPAN_NAME,
     kind: span.kind,
     spanContext: () => spanContext,
     startTime: span.startTime,
@@ -99,11 +123,14 @@ function toScrubbedSpan(span: ReadableSpan): ReadableSpan {
     status: { code: span.status.code },
     attributes: scrubAttributes(span.attributes),
     links: [],
-    events: span.events.map(scrubbedEvent),
+    events: scrubbedEvents(span.events),
     duration: span.duration,
     ended: span.ended,
     resource: scrubbedResource(span.resource),
-    instrumentationScope: span.instrumentationScope,
+    instrumentationScope: {
+      name: INSTRUMENTATION_NAME,
+      ...(scopeVersion === undefined ? {} : { version: scopeVersion }),
+    },
     droppedAttributesCount: span.droppedAttributesCount,
     droppedEventsCount: span.droppedEventsCount,
     droppedLinksCount: span.droppedLinksCount,

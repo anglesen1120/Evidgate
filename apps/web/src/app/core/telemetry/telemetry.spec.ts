@@ -21,6 +21,7 @@ import type { ReadableSpan } from '@opentelemetry/sdk-trace';
 import { ALLOWED_ATTRIBUTE_KEYS, ALLOWED_RESOURCE_KEYS } from './attribute-allowlist';
 import { scrubAttributes } from './scrub';
 import { ScrubbingSpanExporter } from './scrubbing-exporter';
+import { INSTRUMENTATION_NAME } from './telemetry-names';
 
 /** PII: never on a span, under any key. */
 const EMAIL = ['julia.moreau', 'example.test'].join('@');
@@ -168,13 +169,21 @@ describe('a span exported through the scrubbing exporter', () => {
     }
   });
 
-  it('scrubs the event name and drops the event attributes it cannot allow', async () => {
+  it('drops an event whose name is not one of the allowed names', async () => {
     const { exported } = await exportHostileSpan();
-    const [event] = exported.events;
 
-    expect(exported.events).toHaveLength(1);
-    expect(event?.name).toBe('failed for [email]');
-    expect(event?.attributes).toEqual({ 'error.message': 'boom [quoted]' });
+    // The facade records no span events, so an event name is content (here an e-mail address) and
+    // the exporter drops the event instead of exporting a name the receiver cannot trust.
+    expect(exported.events).toEqual([]);
+  });
+
+  it('pins the exported scope to the app scope, whatever scope recorded the span', async () => {
+    const { exported } = await exportHostileSpan();
+
+    // The span was recorded by `evidgate-web-test`: a scope name is not an identifier, so the
+    // receiver only ever sees this app's one scope.
+    expect(exported.instrumentationScope).toEqual({ name: INSTRUMENTATION_NAME });
+    expect('schemaUrl' in exported.instrumentationScope).toBe(false);
   });
 
   it('drops the status message and the links, keeping the status code', async () => {

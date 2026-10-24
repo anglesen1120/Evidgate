@@ -1,8 +1,10 @@
 // 09.1.1-T9.1 (plans/features/09-web-ui §10 T9.1; owner brief: PII/secret scrubbing, telemetry
 // loss must never break the app): the exporter is the boundary a receiver sees, so this spec
-// pins the three properties the plan asks of it — the recorded span is never mutated, the inner
-// exporter gets scrubbed copies, and `shutdown`/`forceFlush` are the inner exporter's own —
-// with a plain hand-built `ReadableSpan` so every hostile field is deliberate.
+// pins the properties the plan asks of it — the recorded span is never mutated, the inner
+// exporter gets scrubbed copies, the name/event/scope sets are closed (an unlisted span name is
+// `unknown`, an unlisted event is dropped, a foreign scope is replaced), and
+// `shutdown`/`forceFlush` are the inner exporter's own — with a plain hand-built `ReadableSpan`
+// so every hostile field is deliberate.
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import type { SpanContext } from '@opentelemetry/api';
 import { resourceFromAttributes } from '@opentelemetry/resources';
@@ -10,6 +12,12 @@ import type { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace';
 
 import { ALLOWED_ATTRIBUTE_KEYS, ALLOWED_RESOURCE_KEYS } from './attribute-allowlist';
 import { ScrubbingSpanExporter } from './scrubbing-exporter';
+import {
+  EVENT_NAMES,
+  INSTRUMENTATION_NAME,
+  SPAN_NAMES,
+  UNKNOWN_SPAN_NAME,
+} from './telemetry-names';
 
 const EMAIL = ['julia.moreau', 'example.test'].join('@');
 const RUN_ID = ['3f2b9d54', '0d7e', '4c1a', '9a2e', '6b0f5c7d81c4'].join('-');
@@ -54,7 +62,7 @@ class RecordingExporter implements SpanExporter {
 /** Every field of the hostile span except the optional parent context. */
 function spanFields(): Omit<ReadableSpan, 'parentSpanContext'> {
   return {
-    name: `api.request for ${EMAIL}`,
+    name: 'api.request',
     kind: SpanKind.CLIENT,
     spanContext: () => SPAN_CONTEXT,
     startTime: [1_700_000_000, 0],
@@ -83,7 +91,13 @@ function spanFields(): Omit<ReadableSpan, 'parentSpanContext'> {
       'deployment.environment': 'acme-prod',
       'user.email': EMAIL,
     }),
-    instrumentationScope: { name: 'evidgate-web-test', version: '1.0.0' },
+    // A scope this app never creates: the name is a URL that also carries an e-mail address, and
+    // `schemaUrl` is a URL, so both are content the receiver must not see.
+    instrumentationScope: {
+      name: `https://collector.example.test/v1/traces?user=${EMAIL}`,
+      version: '1.0.0',
+      schemaUrl: 'https://opentelemetry.io/schemas/1.25.0',
+    },
     droppedAttributesCount: 1,
     droppedEventsCount: 2,
     droppedLinksCount: 3,
@@ -158,24 +172,39 @@ describe('ScrubbingSpanExporter', () => {
     expect(exporter.callbacks[0]).toBe(callback);
   });
 
-  it('scrubs the span name and the span attributes', () => {
+  it('keeps an allowlisted span name and scrubs the span attributes', () => {
     const { output } = exportOne(hostileSpan());
 
-    expect(output.name).toBe('api.request for [email]');
+    expect(output.name).toBe('api.request');
     expect(output.attributes).toEqual({
       'http.request.method': 'POST',
       'http.route': '/v1/projects/:id/runs',
     });
   });
 
-  it('scrubs event names and attributes and drops the events’ links', () => {
-    const { output } = exportOne(hostileSpan());
+  it('exports a span name the four constants do not cover as unknown', () => {
+    const { output } = exportOne(hostileSpan({ name: `GET /v1/runs?email=${EMAIL}` }));
 
+    expect(output.name).toBe(UNKNOWN_SPAN_NAME);
+    expect(output.name).toBe('unknown');
+    expect(JSON.stringify(output)).not.toContain(EMAIL);
+  });
+
+  it('admits exactly the four span names and no event name', () => {
+    expect([...SPAN_NAMES].sort()).toEqual(
+      ['api.request', 'client.error', 'route.change', 'web_vital'].sort(),
+    );
+    expect([...EVENT_NAMES]).toEqual([]);
+  });
+
+  it('drops an event whose name this app did not write, and the span links', () => {
+    const { input, output } = exportOne(hostileSpan());
+
+    // The hostile event name carries an e-mail address and is not a constant: it is dropped, not
+    // scrubbed, so the receiver never sees a name it cannot trust.
+    expect(input.events).toHaveLength(1);
+    expect(output.events).toEqual([]);
     expect(output.links).toEqual([]);
-    expect(output.events).toHaveLength(1);
-    expect(output.events[0]?.name).toBe('failed for [email]');
-    expect(output.events[0]?.attributes).toEqual({ 'error.message': 'boom [quoted]' });
-    expect(output.events[0]?.droppedAttributesCount).toBe(0);
   });
 
   it('keeps the status code and drops the status message', () => {
@@ -196,7 +225,7 @@ describe('ScrubbingSpanExporter', () => {
     }
   });
 
-  it('copies the context, the timings, the scope and the dropped counters', () => {
+  it('copies the context, the timings and the dropped counters', () => {
     const { input, output } = exportOne(hostileSpan());
 
     expect(output.kind).toBe(input.kind);
@@ -205,10 +234,43 @@ describe('ScrubbingSpanExporter', () => {
     expect(output.endTime).toEqual(input.endTime);
     expect(output.duration).toEqual(input.duration);
     expect(output.ended).toBe(true);
-    expect(output.instrumentationScope).toEqual(input.instrumentationScope);
     expect(output.droppedAttributesCount).toBe(1);
     expect(output.droppedEventsCount).toBe(2);
     expect(output.droppedLinksCount).toBe(3);
+  });
+
+  it('pins a foreign instrumentation scope to the one app scope and drops schemaUrl', () => {
+    const { output } = exportOne(hostileSpan());
+
+    expect(output.instrumentationScope).toEqual({
+      name: INSTRUMENTATION_NAME,
+      version: '1.0.0',
+    });
+    expect('schemaUrl' in output.instrumentationScope).toBe(false);
+    const serialized = JSON.stringify(output.instrumentationScope);
+    expect(serialized).not.toContain(EMAIL);
+    expect(serialized).not.toContain('collector.example.test');
+    expect(serialized).not.toContain('opentelemetry.io');
+  });
+
+  it('keeps the app’s own scope name and version as they are', () => {
+    const { output } = exportOne(
+      hostileSpan({ instrumentationScope: { name: INSTRUMENTATION_NAME, version: '2.4.1' } }),
+    );
+
+    expect(output.instrumentationScope).toEqual({
+      name: INSTRUMENTATION_NAME,
+      version: '2.4.1',
+    });
+  });
+
+  it('omits the scope version when the recorded scope has none', () => {
+    const { output } = exportOne(
+      hostileSpan({ instrumentationScope: { name: `foreign-${EMAIL}` } }),
+    );
+
+    expect(output.instrumentationScope).toEqual({ name: INSTRUMENTATION_NAME });
+    expect('version' in output.instrumentationScope).toBe(false);
   });
 
   it('keeps only allowlisted attribute keys and no identifier anywhere', () => {
@@ -221,6 +283,7 @@ describe('ScrubbingSpanExporter', () => {
     expect(serialized).not.toContain(EMAIL);
     expect(serialized).not.toContain(RUN_ID);
     expect(serialized).not.toContain(CREDENTIAL);
+    expect(serialized).not.toContain('collector.example.test');
   });
 
   it('omits the parent span context when the input has none', () => {

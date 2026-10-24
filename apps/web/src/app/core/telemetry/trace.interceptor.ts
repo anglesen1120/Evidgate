@@ -7,6 +7,9 @@
 // not set). Every other header, and every request outside same-origin `/v1`, is untouched: the
 // interceptor answers with `next(request)` unchanged when telemetry has not loaded, which is why
 // a failed telemetry chunk still produces the T3 random `traceparent` and never a missing one.
+// A request the caller already stamped with its own `traceparent` passes through the same way:
+// its trace context is the one the server continues, so there is no span this app could record
+// whose ids would reach the wire.
 //
 // The span is ended on all three exits — a response, an error, and an unsubscribe before either
 // (`finalize`), where a cancelled navigation or a cancelled query must not leave a span open.
@@ -127,24 +130,34 @@ function resultOfError(error: unknown): ApiCallResult {
 
 /**
  * Traces every same-origin `/v1` request as a child span of the current route change and adds
- * its `traceparent` unless the caller set one. A request outside `/v1`, or one made before the
- * telemetry chunk loaded, passes through byte for byte.
+ * its `traceparent`.
+ *
+ * Three requests pass through byte for byte, with no span and no URL work: one outside `/v1`,
+ * one that already carries a `traceparent` (the caller's trace is the one the server continues,
+ * and a span whose ids never reach the wire would be a second trace nothing joins), and one made
+ * before the telemetry chunk loaded (there is no runtime to record it, so the route template is
+ * not computed either). A request that does get a span is the one case where the caller did not
+ * set the header and the facade has a runtime.
  */
 export const telemetryInterceptor: HttpInterceptorFn = (request, next) => {
   const document = inject(DOCUMENT);
   if (!isApiRequestUrl(request.url, document.location.href)) {
     return next(request);
   }
-  const call = inject(TelemetryService).startApiCall({
+  if (request.headers.has('traceparent')) {
+    return next(request);
+  }
+  const runtime = inject(TelemetryService).runtime;
+  if (runtime === null) {
+    return next(request);
+  }
+  const call = runtime.startApiCall({
     method: request.method,
     route: apiPathTemplate(request.url, document.location.href),
   });
-  if (call === null) {
-    return next(request);
-  }
-  const outgoing = request.headers.has('traceparent')
-    ? request
-    : request.clone({ headers: request.headers.set('traceparent', call.traceparent) });
+  const outgoing = request.clone({
+    headers: request.headers.set('traceparent', call.traceparent),
+  });
   return next(outgoing).pipe(
     tap({
       next: (event: HttpEvent<unknown>) => {

@@ -15,7 +15,7 @@ import {
   type ReadableSpan,
   type SpanExporter,
 } from '@opentelemetry/sdk-trace';
-import type { Metric } from 'web-vitals';
+import type { Metric, ReportOpts } from 'web-vitals';
 
 import { startTelemetrySdk, type TelemetryRuntime, type VitalReporters } from './telemetry-sdk';
 
@@ -44,21 +44,28 @@ function metricOf(name: Metric['name'], value: number, rating: Metric['rating'])
 /** A reporter set whose callbacks the spec calls, standing in for a browser's observers. */
 interface VitalProbe {
   readonly reporters: VitalReporters;
+  /** The second argument each reporter was registered with, so the options can be asserted. */
+  readonly options: Partial<Record<'LCP' | 'INP' | 'CLS', ReportOpts | undefined>>;
   report(name: 'LCP' | 'INP' | 'CLS', value: number, rating?: Metric['rating']): void;
 }
 
 function vitalProbe(): VitalProbe {
   const callbacks: Partial<Record<'LCP' | 'INP' | 'CLS', (metric: Metric) => void>> = {};
+  const options: Partial<Record<'LCP' | 'INP' | 'CLS', ReportOpts | undefined>> = {};
   return {
+    options,
     reporters: {
-      onLCP: (onReport) => {
+      onLCP: (onReport, opts) => {
         callbacks.LCP = onReport;
+        options.LCP = opts;
       },
-      onINP: (onReport) => {
+      onINP: (onReport, opts) => {
         callbacks.INP = onReport;
+        options.INP = opts;
       },
-      onCLS: (onReport) => {
+      onCLS: (onReport, opts) => {
         callbacks.CLS = onReport;
+        options.CLS = opts;
       },
     },
     report(name, value, rating = 'good') {
@@ -376,6 +383,78 @@ describe('startTelemetrySdk', () => {
       firstSpanNamed(harness.exporter, 'route.change').spanContext().traceId,
     );
     expect(spans[1]?.attributes['web_vital.rating']).toBe('needs-improvement');
+  });
+
+  it('reports every change of the cumulative metrics and only the final candidate of LCP', () => {
+    const harness = startSdk();
+
+    // LCP is finalised by the browser on the first input or on hide, so this app never asks for
+    // early candidates; INP and CLS are cumulative, so an intermediate value is the current best.
+    expect(harness.vitals.options.LCP).toBeUndefined();
+    expect(harness.vitals.options.INP).toEqual({ reportAllChanges: true });
+    expect(harness.vitals.options.CLS).toEqual({ reportAllChanges: true });
+
+    void harness.runtime.shutdown();
+  });
+
+  it('dates a route trace with the timestamps it is given', () => {
+    const harness = startSdk();
+    const endedAt = Date.now();
+    const startedAt = endedAt - 40;
+
+    // The facade replays a navigation that happened before the chunk arrived, so the span must
+    // carry that navigation's times rather than the time the replay ran.
+    harness.runtime.beginRouteChange(startedAt).end('ok', '/runs', endedAt);
+
+    const [span] = spansNamed(harness.exporter, 'route.change');
+    if (span === undefined) {
+      throw new Error('expected an exported "route.change" span');
+    }
+    const durationMs = span.duration[0] * 1e3 + span.duration[1] / 1e6;
+    expect(durationMs).toBeGreaterThanOrEqual(40);
+    expect(durationMs).toBeLessThan(4000);
+    expect(span.startTime[0] * 1e3 + span.startTime[1] / 1e6).toBeLessThanOrEqual(startedAt + 1);
+  });
+
+  it('exports through forceFlush, and swallows an exporter that cannot flush', async () => {
+    // An exporter whose own `forceFlush` rejects is the only way this test bites: the synchronous
+    // processor already exported the span in `onEnd`, so a plain assertion on the exported span
+    // would pass with `forceFlush`'s body deleted. What it must do is reach the exporter and keep
+    // a failure out of the page (an unhandled rejection fails this file).
+    const log: string[] = [];
+    const exporter: SpanExporter = {
+      export(spans, resultCallback): void {
+        for (const span of spans) {
+          log.push(`export:${span.name}`);
+        }
+        resultCallback({ code: 0 });
+      },
+      shutdown: () => Promise.resolve(),
+      forceFlush: () => {
+        log.push('forceFlush');
+        return Promise.reject(new Error('exporter unavailable'));
+      },
+    };
+    const vitals = vitalProbe();
+    const runtime = startTelemetrySdk(
+      { endpoint: null, sampleRatio: 1 },
+      { exporter, vitalReporters: vitals.reporters },
+    );
+
+    vitals.report('CLS', 0.05);
+    runtime.flushVitals();
+    expect(() => {
+      runtime.forceFlush();
+    }).not.toThrow();
+
+    // `processor.forceFlush()` awaits its pending exports before it reaches the exporter, so the
+    // delegation lands on a later task; letting it settle also surfaces a missing `.catch` as an
+    // unhandled rejection, which fails this file.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(log).toEqual(['export:web_vital', 'forceFlush']);
   });
 
   it('does not re-emit an unchanged metric, and emits LCP only once', () => {

@@ -20,8 +20,14 @@ import {
 } from '@angular/router';
 import { LOCALE_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { InMemorySpanExporter, type ReadableSpan } from '@opentelemetry/sdk-trace';
-import { Subject } from 'rxjs';
+import type { MockInstance } from 'vitest';
+import {
+  InMemorySpanExporter,
+  type ReadableSpan,
+  type SpanExporter,
+} from '@opentelemetry/sdk-trace';
+import { Observable, Subject } from 'rxjs';
+import type { Metric } from 'web-vitals';
 
 import { startTelemetrySdk } from './telemetry-sdk';
 import type {
@@ -32,10 +38,10 @@ import type {
   TelemetryOutcome,
   TelemetryRuntime,
   TelemetrySdkOptions,
+  VitalReporters,
 } from './telemetry-sdk';
 import { TELEMETRY_CONFIG, type TelemetryConfig } from './telemetry-config';
 import { TELEMETRY_SDK_LOADER, TelemetryService } from './telemetry.service';
-import { UNKNOWN_ROUTE } from './route-template';
 
 /** A concrete id and query a navigation can carry but no span attribute may. */
 const RUN_UUID = '3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b';
@@ -53,10 +59,26 @@ function snapshot(paths: readonly (string | null)[]): ActivatedRouteSnapshot {
   return node as unknown as ActivatedRouteSnapshot;
 }
 
-/** The two members `TelemetryService` reads off `Router`, and an event stream the spec drives. */
+/**
+ * The two members `TelemetryService` reads off `Router`, plus a stream the spec drives and a
+ * teardown counter, so the spec can prove the facade released its subscription.
+ */
 class RouterDouble {
-  readonly events = new Subject<RouterEvent>();
   readonly routerState = { snapshot: { root: snapshot(['']) } };
+  /** How often the facade tore its subscription down. */
+  unsubscribed = 0;
+  private readonly source = new Subject<RouterEvent>();
+  readonly events: Observable<RouterEvent> = new Observable<RouterEvent>((subscriber) => {
+    const subscription = this.source.subscribe(subscriber);
+    return () => {
+      this.unsubscribed += 1;
+      subscription.unsubscribe();
+    };
+  });
+
+  next(event: RouterEvent): void {
+    this.source.next(event);
+  }
 }
 
 /** A runtime that records every call, for the wiring that produces no span of its own. */
@@ -94,6 +116,10 @@ class RuntimeDouble implements TelemetryRuntime {
     this.calls.push('flushVitals');
   }
 
+  forceFlush(): void {
+    this.calls.push('forceFlush');
+  }
+
   disableExport(): void {
     this.calls.push('disableExport');
   }
@@ -112,7 +138,11 @@ interface Harness {
   readonly sdkOptions: (TelemetrySdkOptions | undefined)[];
   /** `true` when the harness stubbed the runtime instead of starting the real SDK. */
   readonly stub: RuntimeDouble | null;
+  /** Every export this harness made, in order: `export:<span name>`. */
+  readonly logs: string[];
   loadCount(): number;
+  /** Resolves a `'deferred'` loader; a no-op for the other kinds. */
+  releaseLoader(): void;
 }
 
 interface HarnessOptions {
@@ -120,33 +150,64 @@ interface HarnessOptions {
   readonly document?: Document;
   readonly config?: TelemetryConfig;
   readonly locale?: string;
-  /** Loader outcome: `'reject'` fails the chunk, `'stub'` returns a recording runtime. */
-  readonly loader?: 'real' | 'stub' | 'reject';
+  /**
+   * Loader outcome: `'reject'` fails the chunk, `'stub'` returns a recording runtime,
+   * `'deferred'` resolves only when the spec calls `releaseLoader()`.
+   */
+  readonly loader?: 'real' | 'stub' | 'reject' | 'deferred';
+  /** Stand-ins for the three `web-vitals` reporters, so vitals can be dirty without a browser. */
+  readonly vitalReporters?: VitalReporters;
 }
 
 function createHarness(options: HarnessOptions = {}): Harness {
   const exporter = new InMemorySpanExporter();
+  const logs: string[] = [];
+  /** Logs every export in order and hands it to the in-memory exporter as well. */
+  const loggedExporter: SpanExporter = {
+    export(spans, resultCallback): void {
+      for (const span of spans) {
+        logs.push(`export:${span.name}`);
+      }
+      exporter.export(spans, resultCallback);
+    },
+    shutdown: () => exporter.shutdown(),
+    forceFlush: () => exporter.forceFlush(),
+  };
   const router = new RouterDouble();
   const stub = options.loader === 'stub' ? new RuntimeDouble() : null;
+  const vitals = options.vitalReporters ?? null;
   const configs: TelemetryConfig[] = [];
   const sdkOptions: (TelemetrySdkOptions | undefined)[] = [];
   let loads = 0;
 
+  let release: (() => void) | null = null;
+  const chunk = (): { startTelemetrySdk: typeof startTelemetrySdk } => ({
+    startTelemetrySdk: (config: TelemetryConfig, sdk?: TelemetrySdkOptions) => {
+      configs.push(config);
+      sdkOptions.push(sdk);
+      if (stub !== null) {
+        return stub;
+      }
+      return startTelemetrySdk(config, {
+        ...sdk,
+        exporter: loggedExporter,
+        ...(vitals === null ? {} : { vitalReporters: vitals }),
+      });
+    },
+  });
   const loader = (): Promise<{ startTelemetrySdk: typeof startTelemetrySdk }> => {
     loads += 1;
     if (options.loader === 'reject') {
       return Promise.reject(new Error('chunk unavailable'));
     }
-    return Promise.resolve({
-      startTelemetrySdk: (config: TelemetryConfig, sdk?: TelemetrySdkOptions) => {
-        configs.push(config);
-        sdkOptions.push(sdk);
-        if (stub !== null) {
-          return stub;
-        }
-        return startTelemetrySdk(config, { ...sdk, exporter });
-      },
-    });
+    if (options.loader === 'deferred') {
+      return new Promise((resolve) => {
+        release = () => {
+          resolve(chunk());
+        };
+      });
+    }
+    return Promise.resolve(chunk());
   };
 
   TestBed.resetTestingModule();
@@ -170,7 +231,11 @@ function createHarness(options: HarnessOptions = {}): Harness {
     configs,
     sdkOptions,
     stub,
+    logs,
     loadCount: () => loads,
+    releaseLoader: () => {
+      release?.();
+    },
   };
 }
 
@@ -195,6 +260,39 @@ function dispatchHiddenVisibilityChange(): void {
   }
 }
 
+/** A reporter set whose callbacks the spec calls, standing in for a browser's observers. */
+function vitalProbe(): {
+  readonly reporters: VitalReporters;
+  report(name: 'LCP' | 'INP' | 'CLS', value: number): void;
+} {
+  const callbacks: Partial<Record<'LCP' | 'INP' | 'CLS', (metric: Metric) => void>> = {};
+  return {
+    reporters: {
+      onLCP: (onReport) => {
+        callbacks.LCP = onReport;
+      },
+      onINP: (onReport) => {
+        callbacks.INP = onReport;
+      },
+      onCLS: (onReport) => {
+        callbacks.CLS = onReport;
+      },
+    },
+    report(name, value) {
+      callbacks[name]?.({
+        name,
+        value,
+        rating: 'good',
+        delta: value,
+        id: `${name}-1`,
+        entries: [],
+        navigationType: 'navigate',
+        navigationId: 1,
+      });
+    },
+  };
+}
+
 /** A configuration exporting to `origin`, so a violation has an origin to match. */
 function configFor(origin: string): TelemetryConfig {
   return { endpoint: `${origin}/v1/traces`, sampleRatio: 1 };
@@ -205,19 +303,31 @@ function configFor(origin: string): TelemetryConfig {
  * `SecurityPolicyViolationEvent` constructor, so the fields are defined on a plain `Event` — the
  * same shape the browser sends, without the browser.
  */
+/** The listeners the facade registers on `document`, captured before it starts. */
+let documentListeners: MockInstance<Document['addEventListener']>;
+
 function dispatchCspViolation(
   blockedURI: string,
   directive: string = 'connect-src',
   disposition: string = 'enforce',
+  trusted: boolean = true,
 ): void {
-  const event = new Event('securitypolicyviolation') as unknown as SecurityPolicyViolationEvent;
-  Object.defineProperties(event, {
-    blockedURI: { value: blockedURI },
-    effectiveDirective: { value: directive },
-    violatedDirective: { value: directive },
-    disposition: { value: disposition },
-  });
-  document.dispatchEvent(event);
+  // jsdom reports `isTrusted: false` for every event and that own property cannot be redefined, so
+  // the spec calls the listener the facade registered, with the fields a raised violation carries.
+  const registration = documentListeners.mock.calls.find(
+    ([type]) => type === 'securitypolicyviolation',
+  );
+  const handler = registration?.[1] as ((event: SecurityPolicyViolationEvent) => void) | undefined;
+  if (handler === undefined) {
+    throw new Error('the facade registered no securitypolicyviolation listener');
+  }
+  handler({
+    blockedURI,
+    effectiveDirective: directive,
+    violatedDirective: directive,
+    disposition,
+    isTrusted: trusted,
+  } as unknown as SecurityPolicyViolationEvent);
 }
 
 /** A `traceparent` a server can continue, independent of any exporter. */
@@ -227,6 +337,7 @@ const TRACEPARENT_SHAPE = /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/;
 async function settle(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
+  await Promise.resolve();
 }
 
 function spansNamed(exporter: InMemorySpanExporter, name: string): readonly ReadableSpan[] {
@@ -234,7 +345,12 @@ function spansNamed(exporter: InMemorySpanExporter, name: string): readonly Read
 }
 
 describe('TelemetryService', () => {
+  beforeEach(() => {
+    documentListeners = vi.spyOn(document, 'addEventListener');
+  });
+
   afterEach(() => {
+    documentListeners.mockRestore();
     TestBed.resetTestingModule();
   });
 
@@ -322,8 +438,8 @@ describe('TelemetryService', () => {
     harness.router.routerState.snapshot.root = snapshot(['', 'projects/:projectId', 'runs/:runId']);
 
     const url = `/projects/${RUN_UUID}/runs/r-9?tab=2`;
-    harness.router.events.next(new NavigationStart(1, url));
-    harness.router.events.next(new NavigationEnd(2, url, url));
+    harness.router.next(new NavigationStart(1, url));
+    harness.router.next(new NavigationEnd(2, url, url));
 
     const spans = spansNamed(harness.exporter, 'route.change');
 
@@ -343,10 +459,10 @@ describe('TelemetryService', () => {
     await settle();
     harness.router.routerState.snapshot.root = snapshot(['', 'projects/:projectId']);
 
-    harness.router.events.next(new NavigationStart(1, '/projects/p-1'));
-    harness.router.events.next(new NavigationEnd(2, '/projects/p-1', '/projects/p-1'));
-    harness.router.events.next(new NavigationStart(3, '/projects/p-1/runs'));
-    harness.router.events.next(new NavigationCancel(4, '/projects/p-1/runs', 'guard'));
+    harness.router.next(new NavigationStart(1, '/projects/p-1'));
+    harness.router.next(new NavigationEnd(2, '/projects/p-1', '/projects/p-1'));
+    harness.router.next(new NavigationStart(3, '/projects/p-1/runs'));
+    harness.router.next(new NavigationCancel(4, '/projects/p-1/runs', 'guard'));
 
     const spans = spansNamed(harness.exporter, 'route.change');
 
@@ -362,10 +478,10 @@ describe('TelemetryService', () => {
     harness.service.start();
     await settle();
 
-    harness.router.events.next(new NavigationStart(1, '/runs'));
-    harness.router.events.next(new NavigationSkipped(2, '/runs', 'ignored'));
-    harness.router.events.next(new NavigationStart(3, '/runs/1'));
-    harness.router.events.next(new NavigationError(4, '/runs/1', new Error('resolver failed')));
+    harness.router.next(new NavigationStart(1, '/runs'));
+    harness.router.next(new NavigationSkipped(2, '/runs', 'ignored'));
+    harness.router.next(new NavigationStart(3, '/runs/1'));
+    harness.router.next(new NavigationError(4, '/runs/1', new Error('resolver failed')));
 
     const spans = spansNamed(harness.exporter, 'route.change');
 
@@ -373,7 +489,8 @@ describe('TelemetryService', () => {
       'cancelled',
       'error',
     ]);
-    expect(spans[0]?.attributes['evidgate.route']).toBe(UNKNOWN_ROUTE);
+    // The replayed landing navigation matched the root route, so that is the route being left.
+    expect(spans[0]?.attributes['evidgate.route']).toBe('/');
   });
 
   it('closes a navigation that never finished when the next one starts', async () => {
@@ -381,9 +498,9 @@ describe('TelemetryService', () => {
     harness.service.start();
     await settle();
 
-    harness.router.events.next(new NavigationStart(1, '/a'));
-    harness.router.events.next(new NavigationStart(2, '/b'));
-    harness.router.events.next(new NavigationEnd(3, '/b', '/b'));
+    harness.router.next(new NavigationStart(1, '/a'));
+    harness.router.next(new NavigationStart(2, '/b'));
+    harness.router.next(new NavigationEnd(3, '/b', '/b'));
 
     const spans = spansNamed(harness.exporter, 'route.change');
 
@@ -420,7 +537,7 @@ describe('TelemetryService', () => {
     harness.service.start();
     await settle();
 
-    harness.router.events.next(new NavigationStart(1, '/projects/p-1/runs'));
+    harness.router.next(new NavigationStart(1, '/projects/p-1/runs'));
 
     const calls = harness.stub?.calls ?? [];
     const flush = calls.indexOf('flushVitals');
@@ -428,15 +545,35 @@ describe('TelemetryService', () => {
     expect(flush).toBeLessThan(calls.indexOf('beginRouteChange'));
   });
 
-  it('flushes vitals when the page is hidden away', async () => {
+  it('asks the runtime to flush the queue after the vitals spans are created', async () => {
     const harness = createHarness({ loader: 'stub' });
     harness.service.start();
     await settle();
 
+    harness.stub?.calls.splice(0);
     window.dispatchEvent(new Event('pagehide'));
-    dispatchHiddenVisibilityChange();
+    // Order matters: `flushVitals` creates and ends the spans, `forceFlush` exports them. The
+    // batch processor registered its own page-leave listeners at construction, before they existed.
+    expect(harness.stub?.calls).toEqual(['flushVitals', 'forceFlush']);
 
-    expect(harness.stub?.calls.filter((call) => call === 'flushVitals')).toHaveLength(2);
+    harness.stub?.calls.splice(0);
+    dispatchHiddenVisibilityChange();
+    expect(harness.stub?.calls).toEqual(['flushVitals', 'forceFlush']);
+  });
+
+  it('exports the vitals of the page being left', async () => {
+    const vitals = vitalProbe();
+    const harness = createHarness({ vitalReporters: vitals.reporters });
+    harness.service.start();
+    await settle();
+    vitals.report('INP', 180);
+    harness.logs.splice(0);
+
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect(harness.logs).toEqual(['export:web_vital']);
+    expect(spansNamed(harness.exporter, 'web_vital')).toHaveLength(1);
+    expect(spansNamed(harness.exporter, 'web_vital')[0]?.attributes['web_vital.name']).toBe('INP');
   });
 
   it('switches export off when the CSP blocks the exporter origin, and keeps tracing', async () => {
@@ -514,13 +651,91 @@ describe('TelemetryService', () => {
     warn.mockRestore();
   });
 
-  it('does not flush on a visibilitychange that is still visible', async () => {
+  it('does not flush anything on a visibilitychange that is still visible', async () => {
     const harness = createHarness({ loader: 'stub' });
     harness.service.start();
     await settle();
+    harness.stub?.calls.splice(0);
 
     window.dispatchEvent(new Event('visibilitychange'));
 
-    expect(harness.stub?.calls).not.toContain('flushVitals');
+    expect(harness.stub?.calls).toEqual([]);
+  });
+
+  it('ignores a violation the page constructed itself (isTrusted false)', async () => {
+    const origin = 'https://otel-synthetic.evidgate.example';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const harness = createHarness({ config: configFor(origin) });
+    harness.service.start();
+    await settle();
+
+    dispatchCspViolation(origin, 'connect-src', 'enforce', false);
+    harness.service.runtime?.beginRouteChange().end('ok', '/runs');
+
+    expect(spansNamed(harness.exporter, 'route.change')).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('replays the navigation that ended before the chunk was ready', async () => {
+    const harness = createHarness({ loader: 'deferred' });
+    harness.service.start();
+
+    // The landing navigation happens while the dynamic import is still in flight.
+    harness.router.routerState.snapshot.root = snapshot(['', 'projects/:projectId', 'runs']);
+    harness.router.next(new NavigationStart(1, '/projects/p-1/runs'));
+    harness.router.next(new NavigationEnd(2, '/projects/p-1/runs', '/projects/p-1/runs'));
+    await settle();
+    expect(spansNamed(harness.exporter, 'route.change')).toHaveLength(0);
+
+    harness.releaseLoader();
+    await settle();
+
+    const landing = spansNamed(harness.exporter, 'route.change');
+    expect(landing).toHaveLength(1);
+    expect(landing[0]?.attributes['evidgate.route']).toBe('/projects/:projectId/runs');
+    expect(landing[0]?.attributes['evidgate.outcome']).toBe('ok');
+
+    // The first API call of the landing page continues that same trace.
+    const call = harness.service.startApiCall({ method: 'GET', route: '/v1/runs' });
+    call?.end({ outcome: 'ok' });
+    const api = spansNamed(harness.exporter, 'api.request')[0];
+    expect(api?.spanContext().traceId).toBe(landing[0]?.spanContext().traceId);
+  });
+
+  it('opens the landing trace when its navigation is still in flight at ready', async () => {
+    const harness = createHarness({ loader: 'deferred' });
+    harness.service.start();
+
+    harness.router.next(new NavigationStart(1, '/runs'));
+    await settle();
+    harness.releaseLoader();
+    await settle();
+
+    // The span is open, not exported: the router has not finished this navigation yet.
+    expect(spansNamed(harness.exporter, 'route.change')).toHaveLength(0);
+
+    harness.router.next(new NavigationEnd(2, '/runs', '/runs'));
+
+    const spans = spansNamed(harness.exporter, 'route.change');
+    expect(spans).toHaveLength(1);
+    expect(spans[0]?.attributes['evidgate.outcome']).toBe('ok');
+  });
+
+  it('releases every listener when the chunk fails to load', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const documentRemove = vi.spyOn(document, 'removeEventListener');
+    const windowRemove = vi.spyOn(window, 'removeEventListener');
+    const harness = createHarness({ loader: 'reject' });
+
+    harness.service.start();
+    await settle();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(documentRemove).toHaveBeenCalledWith('securitypolicyviolation', expect.any(Function));
+    expect(windowRemove).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+    expect(windowRemove).toHaveBeenCalledWith('pagehide', expect.any(Function));
+    expect(harness.router.unsubscribed).toBe(1);
+    warn.mockRestore();
   });
 });

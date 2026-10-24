@@ -308,11 +308,19 @@ initializer that starts the facade.
   `evidgate-otlp-endpoint`** value it injects: one URL, one origin, so
   `https://otlp.example.com/v1/traces` pairs with `https://otlp.example.com` (`parseConnectSrc`
   takes bare `https:`/`wss:` origins only). If the origin is missing, the browser blocks the
-  export as a `connect-src` violation; the app listens for that `securitypolicyviolation` and
-  disables the exporter (one `console.warn`), while tracing and `traceparent` keep working. The
+  export as a `connect-src` violation; the app listens for that `securitypolicyviolation`
+  (**trusted** events only — a page-constructed one is ignored) and disables the exporter (one
+  `console.warn`), while tracing and `traceparent` keep working. The
   same rule from the hosting side is in [`infra/README.md`](../../infra/README.md) and
   [`docs/runbooks/environments.md`](../../docs/runbooks/environments.md); the collector origin
   itself is owned by 10.3.1-T2 [OPEN].
+
+- **CORS pairing.** The collector is cross-origin and the browser exporter POSTs
+  `Content-Type: application/json`, so the collector (or the edge in front of it) must answer the
+  `OPTIONS` preflight and send `Access-Control-Allow-Origin` for the app origin plus
+  `Access-Control-Allow-Headers: content-type`. Without them the browser blocks every export and
+  the app has no signal for it (it only detects CSP violations): the loss is silent. Owners:
+  10.2.1-T1.4 (edge) and 10.3.1-T2 (collector) [OPEN].
 
 - **Sampling.** `ParentBasedSampler` with a root `TraceIdRatioBasedSampler(sampleRatio)`: every
   route change opens a **new root trace**, so the ratio is applied per navigation, and each
@@ -320,17 +328,27 @@ initializer that starts the facade.
   parent is dropped). The decision travels in the `traceparent` flag byte (`01` sampled, `00` not).
 - **What is exported** — four fixed span names, never a URL in a span name, no metrics SDK:
 
-  | Span           | Started by                                                                        | Attributes (allowlisted keys only)                                                                                                                                                 |
-  | -------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | `route.change` | `NavigationStart`, ended by the paired `NavigationEnd`/`Cancel`/`Skipped`/`Error` | `evidgate.route` template, `evidgate.outcome` (`ok`/`cancelled`/`error`)                                                                                                           |
-  | `api.request`  | `telemetryInterceptor`, one per same-origin `/v1` request                         | `http.request.method`, `http.route` template, `http.response.status_code`, `evidgate.request_id` (UUID only), `evidgate.api.error_*`, `evidgate.api.retryable`, `evidgate.outcome` |
-  | `client.error` | `TelemetryErrorHandler` (Angular) and the `error`/`unhandledrejection` listeners  | `evidgate.error.source`, `error.type`, `error.message`, status/api error keys, `evidgate.request_id`, current `evidgate.route`                                                     |
-  | `web_vital`    | LCP/INP/CLS flush                                                                 | `web_vital.name`, `web_vital.value`, `web_vital.rating`, `web_vital.navigation_type`, `evidgate.route`                                                                             |
+  | Span           | Started by                                                                                                                                                                                                | Attributes (allowlisted keys only)                                                                                                                                                 |
+  | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `route.change` | `NavigationStart`, or the replay of a landing navigation that ended before the chunk loaded (backdated, left open while it was in flight); ended by the paired `NavigationEnd`/`Cancel`/`Skipped`/`Error` | `evidgate.route` template, `evidgate.outcome` (`ok`/`cancelled`/`error`)                                                                                                           |
+  | `api.request`  | `telemetryInterceptor`, one per same-origin `/v1` request                                                                                                                                                 | `http.request.method`, `http.route` template, `http.response.status_code`, `evidgate.request_id` (UUID only), `evidgate.api.error_*`, `evidgate.api.retryable`, `evidgate.outcome` |
+  | `client.error` | `TelemetryErrorHandler` (Angular) and the `error`/`unhandledrejection` listeners                                                                                                                          | `evidgate.error.source`, `error.type`, `error.message`, status/api error keys, `evidgate.request_id`, current `evidgate.route`                                                     |
+  | `web_vital`    | LCP/INP/CLS flush                                                                                                                                                                                         | `web_vital.name`, `web_vital.value`, `web_vital.rating`, `web_vital.navigation_type`, `evidgate.route`                                                                             |
 
   The closed key set is `attribute-allowlist.ts` (`ALLOWED_ATTRIBUTE_KEYS` /
   `ALLOWED_RESOURCE_KEYS`); anything outside it is dropped at export, not merely unset. Fields
   such as `evidgate.locale` (`en`/`vi`) and `evidgate.request_id` are only kept in their strict
   shape.
+
+- **First navigation.** The chunk can arrive after the landing navigation has already ended, and
+  the router never replays `events`, so the facade records that first navigation while loading and
+  replays it once the runtime exists (`telemetry.service.ts`, `recordWhileLoading` /
+  `replayPendingNavigation`). The replayed `route.change` keeps the navigation's **original start
+  and end timestamps** and the route template of the matched tree, so the landing page's
+  `api.request`, `client.error` and `web_vital` spans continue that same trace instead of starting
+  a second one or falling back to `/unknown`. A navigation still in flight when the chunk arrives
+  opens its span then and is closed by its own `NavigationEnd`; a later navigation seen while the
+  chunk is still loading replaces the recorded one — one slot, no queue.
 
 - **Scrub policy.** `ScrubbingSpanExporter` rewrites every span on the way out, and `scrub.ts` does
   the text work: **no stack traces, no server messages** (an API error carries status/code/kind,
@@ -339,6 +357,17 @@ initializer that starts the facade.
   `Authorization`/`Cookie`/`X-XSRF-TOKEN` values, long hex/base64 runs or six-plus-digit numbers —
   those become `[redacted]`/`:id`/`[email]`, and quoted substrings become `[quoted]`. Free text is
   truncated at 200 characters; links and `status.message` are dropped while the status code stays.
+  A name is never exported as free text: a span name outside the four constants above is exported
+  as `unknown` (`telemetry-names.ts` `SPAN_NAMES`), a span event is dropped unless its name is in
+  `EVENT_NAMES` (empty today — the facade records no events), and the instrumentation scope is
+  reduced to this app's one scope name plus its version, with no `schemaUrl`.
+  **Residual risk, stated plainly:** a regex cannot recognise a bare organisation or project name
+  written in prose (`failed for org Acme`), so such a name in a thrown `error.message` is not
+  removed; a route or path slug made only of plain lowercase words keeps its words (only digit,
+  dotted and otherwise id-shaped segments become `:id`, literal route segments being the route
+  templates' job); and a secret that begins inside the last characters of the scan window
+  (four times the field's length cap, at most 2048 characters, applied **before** any pattern runs
+  so no input can make a pattern slow) can survive in part.
 - **Route and API templates.** `route-template.ts` concatenates the router's `routeConfig.path`
   chain and never reads a parameter _value_; `api-path-template.ts` reduces a URL to `/v1/...`
   keeping only static segments from a hand-maintained set (`/v1/projects/:id/runs`), everything
@@ -346,18 +375,30 @@ initializer that starts the facade.
   `core/http/testing/openapi-operations.fixture.json` and fails when a static segment is missing.
 - **`traceparent`.** `telemetryInterceptor` is **first** in `provideApi()`'s
   `withInterceptors([...])` (`core/http/api-client.ts`): it opens the `api.request` span and sets
-  the header from the span's W3C context, only when the request carries none.
+  the header from the span's W3C context, only when the request carries none. A request the caller
+  already stamped with its own `traceparent` passes through untouched with no span (its ids are the
+  ones on the wire, so a span here would be a trace nothing joins); so does one made before the
+  telemetry chunk loaded, before the route template is even computed.
   `requestIdInterceptor` never overwrites a caller-set `traceparent`, so the span's ids are the
   ones on the wire and the API continues the same trace. With telemetry unloaded nothing is set
   and the T3 random `traceparent` is used unchanged. Only same-origin `/v1` requests are touched
   (`isApiRequestUrl`, [Data access](#data-access-0911-t3)).
 - **Error reporting.** `TelemetryErrorHandler` wraps Angular's default handler (console output is
   unchanged) and shares one rate limit with the global listeners: **10 reports per rolling 60 s**,
-  extra reports dropped silently, never queued. An `ApiRequestError` reports `source: 'api'` with
-  status/kind/code/retryable/request id only, never its message.
-- **Vitals.** LCP, INP and CLS run with `reportAllChanges: true`; the latest value per metric is
-  emitted once at the next `NavigationStart`, when the tab turns hidden
-  (`visibilitychange`) and on `pagehide`, attributed to the route current at flush time.
+  extra reports dropped silently, never queued. The budget is only spent while the facade has a
+  loaded runtime: a report raised while the chunk is loading (or after a load failure) cannot be
+  exported, so it is not counted and the first ten exportable reports still pass. An
+  `ApiRequestError` reports `source: 'api'` with status/kind/code/retryable/request id only, never
+  its message.
+- **Vitals.** LCP is the browser's final candidate — `web-vitals` finalises it on the first input
+  or on hide and the facade emits it once per page (`lcpFlushed`), never an early candidate. INP
+  and CLS are cumulative and registered with `reportAllChanges: true`, so a later interaction or
+  shift replaces the number that leaves. A metric is emitted only when it changed since the last
+  flush, as one `web_vital` span attributed to the route current at flush time. Flush points: the
+  next `NavigationStart` (the route being left, before the new route opens its trace), the tab
+  turning hidden (`visibilitychange`), `pagehide`, and `shutdown()`. The two page-leave paths also
+  flush the export queue (`TelemetryRuntime.forceFlush`), because `BatchSpanProcessor`'s own
+  page-leave listeners were registered before any span of this app existed.
 - **Deploy hand-over — 09.1.1-T10 and 10.2.1-T1.4.** The static hosting edge must (a) inject both
   `<meta>` tags per deployment, the endpoint being an absolute `https:` URL, and (b) set
   `EVIDGATE_WEB_CONNECT_SRC` to that endpoint's origin when it emits the app-origin CSP — the

@@ -25,6 +25,7 @@ import { Subject, firstValueFrom, of, throwError, type Observable } from 'rxjs';
 import { startTelemetrySdk } from './telemetry-sdk';
 import type { TelemetrySdkOptions } from './telemetry-sdk';
 import type { TelemetryConfig } from './telemetry-config';
+import { TELEMETRY_CONFIG } from './telemetry-config';
 import { TELEMETRY_SDK_LOADER, TelemetryService } from './telemetry.service';
 import { telemetryInterceptor } from './trace.interceptor';
 
@@ -248,40 +249,86 @@ describe('telemetryInterceptor', () => {
 
   it('passes through when the telemetry chunk has not loaded', async () => {
     const harness = await createHarness({ start: false });
+    const request = new HttpRequest('GET', API_URL);
     let seen = null as HttpRequest<unknown> | null;
 
     await firstValueFrom(
-      send(new HttpRequest('GET', API_URL), (outgoing) => {
+      send(request, (outgoing) => {
         seen = outgoing;
         return of(responseEvent(200));
       }),
     );
 
     expect(harness.service.runtime).toBeNull();
+    expect(seen).toBe(request);
     expect(seen?.headers.has('traceparent')).toBe(false);
     expect(harness.exporter.getFinishedSpans()).toHaveLength(0);
   });
 
-  it('never overwrites a traceparent the caller set', async () => {
+  it('opens no span and leaves the request untouched when the caller set a traceparent', async () => {
     const harness = await createHarness();
     const callerTraceparent = '00-11111111111111111111111111111111-2222222222222222-01';
+    const request = new HttpRequest('GET', API_URL, {
+      headers: new HttpHeaders({ traceparent: callerTraceparent }),
+    });
     let seen = null as HttpRequest<unknown> | null;
 
     await firstValueFrom(
-      send(
-        new HttpRequest('GET', API_URL, {
-          headers: new HttpHeaders({ traceparent: callerTraceparent }),
-        }),
-        (outgoing) => {
-          seen = outgoing;
-          return of(responseEvent(200));
-        },
-      ),
+      send(request, (outgoing) => {
+        seen = outgoing;
+        return of(responseEvent(200));
+      }),
     );
 
+    // The server continues the caller's trace, so a span here would hold ids that never reach the
+    // wire: the interceptor does not create one and hands the request through as it is.
+    expect(seen).toBe(request);
     expect(seen?.headers.get('traceparent')).toBe(callerTraceparent);
-    // The span still exists: the caller's trace context is what the server continues.
-    expect(spansNamed(harness.exporter, 'api.request')).toHaveLength(1);
+    expect(spansNamed(harness.exporter, 'api.request')).toHaveLength(0);
+  });
+
+  it('reads the document url once when there is no runtime, so no template is computed', async () => {
+    // `apiPathTemplate` is pure and has no injection seam, and the Angular runner rejects mocking
+    // a relative module, so the work is observed where it has to touch the world: the document
+    // url. `isApiRequestUrl` reads it once; an api.request template computed before the runtime
+    // guard — or the old eager `service.startApiCall({ route: apiPathTemplate(...) })` — reads it
+    // a second time.
+    let hrefReads = 0;
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: DOCUMENT,
+          useValue: {
+            location: {
+              get href(): string {
+                hrefReads += 1;
+                return 'http://localhost/';
+              },
+            },
+          },
+        },
+        // The facade takes its endpoint and ratio from the document's meta tags; this document is
+        // a bare url, so the config is provided instead of parsed.
+        { provide: TELEMETRY_CONFIG, useValue: { endpoint: null, sampleRatio: 1 } },
+      ],
+    });
+    const service = TestBed.inject(TelemetryService);
+    const request = new HttpRequest('GET', '/v1/runs');
+    let seen = null as HttpRequest<unknown> | null;
+
+    await firstValueFrom(
+      send(request, (outgoing) => {
+        seen = outgoing;
+        return of(responseEvent(200));
+      }),
+    );
+
+    expect(service.runtime).toBeNull();
+    expect(hrefReads).toBe(1);
+    // No span means no clone: the handler receives the caller's request itself.
+    expect(seen).toBe(request);
+    expect(seen?.headers.has('traceparent')).toBe(false);
   });
 
   it('records the envelope code and the retryable flag of a refused call', async () => {

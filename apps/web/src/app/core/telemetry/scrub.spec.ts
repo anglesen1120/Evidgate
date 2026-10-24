@@ -3,10 +3,12 @@
 // table-driven.
 //
 // Every rule the brief names has at least one row — credentials, cookies, JWT-shaped tokens,
-// e-mail addresses, UUIDs, hex runs, long digits, secret `key=value` pairs, full URLs with a
-// query or fragment, quoted names, and the seventeen per-key attribute rules — and every rule
-// is paired with a negative control that must come through unchanged. A scrubber that redacts
-// a clean status line is as broken as one that lets a token through.
+// e-mail addresses (ASCII, Cyrillic and homoglyph), UUIDs, hex runs, long digits, secret
+// `key=value` and `key: value` pairs, URLs and API paths reduced to templated paths, quoted
+// names, and the seventeen per-key attribute rules — and every rule is paired with a negative
+// control that must come through unchanged. A scrubber that redacts a clean status line is as
+// broken as one that lets a token through. `TIMING_ROWS` covers the other failure mode: input
+// shaped to make a pattern backtrack for seconds must still be scrubbed in milliseconds.
 //
 // Sample credentials are assembled at runtime (`btoa`, `join`) so no JWT-shaped or
 // credential-bearing literal sits in the repository.
@@ -45,6 +47,11 @@ const USERINFO = ['admin', CREDENTIAL].join(':');
  */
 function pair(key: string, value: string): string {
   return `${key}=${value}`;
+}
+
+/** The `key: value` twin of `pair`, assembled for the same reason. */
+function colonPair(key: string, value: string): string {
+  return `${key}: ${value}`;
 }
 
 interface TextRow {
@@ -96,9 +103,9 @@ const TEXT_ROWS: TextRow[] = [
     expected: 'sent Token [redacted] onwards',
   },
   {
-    rule: 'reduces a full URL to its path (host, query and fragment go)',
+    rule: 'reduces a full URL to a templated path (host, query, fragment and ids go)',
     input: 'GET https://acme.example.test/v1/projects/p-1/runs?expand=steps#top',
-    expected: 'GET /v1/projects/p-1/runs',
+    expected: 'GET /v1/projects/:id/runs',
   },
   {
     rule: 'reduces a URL with userinfo to its path',
@@ -109,6 +116,16 @@ const TEXT_ROWS: TextRow[] = [
     rule: 'drops the query string and fragment of a path',
     input: 'see /v1/runs?cursor=abc#top first',
     expected: 'see /v1/runs first',
+  },
+  {
+    rule: 'templates the ids in an error message that quotes a URL',
+    input: 'Http failure response for https://a.io/v1/projects/acme/runs: 404',
+    expected: 'Http failure response for /v1/projects/:id/runs: 404',
+  },
+  {
+    rule: 'templates the ids in a bare API path',
+    input: 'GET /v1/projects/acme/runs/1234567 failed',
+    expected: 'GET /v1/projects/:id/runs/:id failed',
   },
   {
     rule: 'drops a password pair',
@@ -131,6 +148,31 @@ const TEXT_ROWS: TextRow[] = [
     expected: pair('signature', REDACTED),
   },
   {
+    rule: 'drops a colon-form password',
+    input: `failed for ${colonPair('password', 'hunter2')} in the body`,
+    expected: `failed for ${colonPair('password', REDACTED)} in the body`,
+  },
+  {
+    rule: 'drops a camelCase apiKey colon pair',
+    input: colonPair('apiKey', 'abc12345'),
+    expected: colonPair('apiKey', REDACTED),
+  },
+  {
+    rule: 'drops a single-character colon-form token',
+    input: colonPair('token', 'x'),
+    expected: colonPair('token', REDACTED),
+  },
+  {
+    rule: 'drops a quoted colon-form secret',
+    input: colonPair('secret', '"abc12345"'),
+    expected: colonPair('secret', REDACTED),
+  },
+  {
+    rule: 'drops a lowercase authorization value',
+    input: `authorization: ${CREDENTIAL}`,
+    expected: 'authorization: [redacted]',
+  },
+  {
     rule: 'drops a JWT-shaped string',
     input: `jwt ${JWT} emitted`,
     expected: 'jwt [redacted] emitted',
@@ -138,6 +180,16 @@ const TEXT_ROWS: TextRow[] = [
   {
     rule: 'drops an e-mail address',
     input: `contact ${EMAIL} now`,
+    expected: 'contact [email] now',
+  },
+  {
+    rule: 'drops a Cyrillic e-mail address',
+    input: `contact ${['пользователь', 'example.test'].join('@')} now`,
+    expected: 'contact [email] now',
+  },
+  {
+    rule: 'drops an e-mail address whose first letter is a Cyrillic homoglyph',
+    input: `contact ${['\u0430dmin', 'example.test'].join('@')} now`,
     expected: 'contact [email] now',
   },
   {
@@ -159,6 +211,16 @@ const TEXT_ROWS: TextRow[] = [
     rule: 'replaces a 6+ digit number with :id',
     input: 'document 123456789 filed',
     expected: 'document :id filed',
+  },
+  {
+    rule: 'replaces a quoted name with [quoted]',
+    input: 'run "deploy nightly" failed',
+    expected: 'run [quoted] failed',
+  },
+  {
+    rule: 'drops the text after an unterminated quote',
+    input: `${'.'.repeat(190)} "Julia Smith`,
+    expected: '.'.repeat(190),
   },
   {
     rule: 'keeps an ordinary sentence unchanged',
@@ -185,6 +247,16 @@ const TEXT_ROWS: TextRow[] = [
     input: 'role=admin active',
     expected: 'role=admin active',
   },
+  {
+    rule: 'keeps a secret keyword in prose that has no separator',
+    input: 'token expired before the request',
+    expected: 'token expired before the request',
+  },
+  {
+    rule: 'keeps a colon-form pair for a key that is not a secret',
+    input: 'role: admin',
+    expected: 'role: admin',
+  },
 ];
 
 interface CapRow {
@@ -198,6 +270,34 @@ const CAP_ROWS: CapRow[] = [
   { input: 'abcdef', maxLength: 0, expected: '' },
   { input: 'abcdef', maxLength: -5, expected: '' },
   { input: 'abcdef', maxLength: 1000, expected: 'abcdef' },
+];
+
+/**
+ * Generous wall-clock bound for one pathological scrub. Every case here took seconds while
+ * `scrubText` ran its patterns over the whole input and truncated afterwards (200 000 letters
+ * cost 18.8 s, `a.` repeated 28.4 s); the scan window makes each of them a function of
+ * `maxLength` only, so sub-millisecond is the expected figure and this bound has two orders of
+ * magnitude of slack for a loaded CI box.
+ */
+const MAX_PATHOLOGICAL_MS = 250;
+
+interface TimingRow {
+  /** The shape that used to backtrack, also the `it.each` title. */
+  readonly case: string;
+  readonly input: string;
+}
+
+/** Inputs built to make a pattern with an unbounded prefix backtrack over the whole string. */
+const TIMING_ROWS: TimingRow[] = [
+  { case: '200 000 letters', input: 'a'.repeat(200_000) },
+  { case: 'a letter and a dot, 50 000 times', input: 'a.'.repeat(50_000) },
+  { case: '100 000 at signs', input: '@'.repeat(100_000) },
+  { case: 'a letter and an at sign, 50 000 times', input: 'a@'.repeat(50_000) },
+  { case: '200 000 base64 letters', input: 'A'.repeat(200_000) },
+  { case: '100 000 equals signs', input: '='.repeat(100_000) },
+  { case: 'a scheme then 100 000 letters', input: `http://${'a'.repeat(100_000)}` },
+  { case: 'a word and a dash, 50 000 times', input: 'a-'.repeat(50_000) },
+  { case: '100 000 quotes', input: '"'.repeat(100_000) },
 ];
 
 describe('scrubText', () => {
@@ -332,6 +432,36 @@ const ATTRIBUTE_ROWS: AttributeRow[] = [
     expected: '/v1/runs/:id/cancel',
   },
   {
+    rule: 'templates the id of a concrete route and keeps its words',
+    key: 'evidgate.route',
+    value: '/projects/acme-corp/runs/p-1',
+    expected: '/projects/acme-corp/runs/:id',
+  },
+  {
+    rule: 'templates a numeric id in a concrete route',
+    key: 'evidgate.route',
+    value: '/projects/acme/runs/1234567',
+    expected: '/projects/acme/runs/:id',
+  },
+  {
+    rule: 'keeps a version prefix but templates the id after it',
+    key: 'evidgate.route',
+    value: '/v1/runs/p-1',
+    expected: '/v1/runs/:id',
+  },
+  {
+    rule: 'templates a dotted identifier in a route',
+    key: 'evidgate.route',
+    value: `/projects/${['julia', 'moreau'].join('.')}/runs`,
+    expected: '/projects/:id/runs',
+  },
+  {
+    rule: 'templates a dotted identifier in an API route',
+    key: 'http.route',
+    value: `/v1/projects/${['acme', 'corp'].join('.')}/runs`,
+    expected: '/v1/projects/:id/runs',
+  },
+  {
     rule: 'drops a route carrying a query string',
     key: 'evidgate.route',
     value: '/v1/runs?x=1',
@@ -445,6 +575,36 @@ const ATTRIBUTE_ROWS: AttributeRow[] = [
   { rule: 'keeps an error type', key: 'error.type', value: 'TypeError', expected: 'TypeError' },
   { rule: 'drops a numeric error type', key: 'error.type', value: 42, expected: undefined },
   {
+    rule: 'keeps a dotted error type',
+    key: 'error.type',
+    value: 'ZoneAwarePromise.Error',
+    expected: 'ZoneAwarePromise.Error',
+  },
+  {
+    rule: 'drops an error type holding a space',
+    key: 'error.type',
+    value: 'Julia Smith',
+    expected: undefined,
+  },
+  {
+    rule: 'drops an error type holding an e-mail address',
+    key: 'error.type',
+    value: ['boom', 'example.test'].join('@'),
+    expected: undefined,
+  },
+  {
+    rule: 'drops an error type starting with a digit',
+    key: 'error.type',
+    value: '9Lives',
+    expected: undefined,
+  },
+  {
+    rule: 'drops an error type longer than the cap',
+    key: 'error.type',
+    value: 'E'.repeat(129),
+    expected: undefined,
+  },
+  {
     rule: 'scrubs an error message and replaces quoted names',
     key: 'error.message',
     value: `Say "hi" to ${EMAIL}`,
@@ -540,5 +700,24 @@ describe('scrubAttributes', () => {
 
   it('returns an empty record for an empty input', () => {
     expect(scrubAttributes({})).toEqual({});
+  });
+});
+
+describe('scrubText on pathological input', () => {
+  it.each(TIMING_ROWS)('scrubs $case in bounded time', (row: TimingRow) => {
+    const started = performance.now();
+
+    const text = scrubText(row.input);
+    const attributes = scrubAttributes(attributesOf({ 'error.message': row.input }));
+
+    const elapsed = performance.now() - started;
+    expect(elapsed).toBeLessThan(MAX_PATHOLOGICAL_MS);
+    expect(text.length).toBeLessThanOrEqual(200);
+    expect(attributes['error.message']).toBeTypeOf('string');
+  });
+
+  it('still scrubs the run instead of dropping it', () => {
+    expect(scrubText('a'.repeat(200_000))).toBe(':id');
+    expect(scrubText(`http://${'a'.repeat(100_000)}`)).toBe('/');
   });
 });

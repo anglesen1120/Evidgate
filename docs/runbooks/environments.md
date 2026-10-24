@@ -75,6 +75,12 @@ no collector origin. From the hosting side the same rule is in
 [`../../infra/README.md`](../../infra/README.md), "Web bundle hosting: CSP and the telemetry
 pairing".
 
+The collector must also allow the web app's origin by CORS: the browser exporter POSTs
+`Content-Type: application/json` cross-origin, so the collector (or the edge in front of it) answers the
+`OPTIONS` preflight and sends `Access-Control-Allow-Origin` for the app origin and
+`Access-Control-Allow-Headers: content-type`. A missing header blocks every export silently (the app
+detects CSP violations only). Owners: 10.2.1-T1.4 (edge), 10.3.1-T2 (collector) **[OPEN]**.
+
 `requiredAtBoot` in the matrix means the process exits **non-zero, naming the key** when the value is
 missing or malformed — the validated-options mechanism of 01.1.2-T1 (`IOptions` +
 `ValidateDataAnnotations` + `ValidateOnStart`, and `MigratorOptions.FromEnvironment` for the migration

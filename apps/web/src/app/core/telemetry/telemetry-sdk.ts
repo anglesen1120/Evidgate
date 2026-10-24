@@ -40,19 +40,17 @@ import { onCLS, onINP, onLCP, type Metric, type ReportOpts } from 'web-vitals';
 
 import { ScrubbingSpanExporter } from './scrubbing-exporter';
 import type { TelemetryConfig } from './telemetry-config';
+import {
+  API_SPAN_NAME,
+  ERROR_SPAN_NAME,
+  INSTRUMENTATION_NAME,
+  ROUTE_SPAN_NAME,
+  VITAL_SPAN_NAME,
+} from './telemetry-names';
 import { UNKNOWN_ROUTE } from './route-template';
 
 /** `service.name` of every span this app exports. */
 const SERVICE_NAME = 'evidgate-web';
-
-/** Instrumentation scope name; one scope for the whole facade. */
-const INSTRUMENTATION_NAME = 'evidgate-web-telemetry';
-
-/** The four fixed span names. A span name never holds a URL, a route value or a message. */
-const ROUTE_SPAN_NAME = 'route.change';
-const API_SPAN_NAME = 'api.request';
-const ERROR_SPAN_NAME = 'client.error';
-const VITAL_SPAN_NAME = 'web_vital';
 
 /** W3C trace context version this facade emits (`00`, the only one defined). */
 const TRACE_CONTEXT_VERSION = '00';
@@ -70,8 +68,12 @@ export interface RouteChange {
    * Idempotent: a facade that ends a change twice (an explicit end plus the next
    * `beginRouteChange`) records one span. The context stays the parent of later API and error
    * spans until the next `beginRouteChange`.
+   *
+   * `endTime` (epoch milliseconds) is for a navigation the facade only learns about after it
+   * finished — the first one, replayed once the chunk is ready — so the span keeps the duration
+   * the router measured.
    */
-  end(outcome: TelemetryOutcome, route: string): void;
+  end(outcome: TelemetryOutcome, route: string, endTime?: number): void;
 }
 
 /** What an API call learned when it finished. Every field but `outcome` is optional. */
@@ -114,8 +116,11 @@ export interface ErrorReport {
 
 /** The handle the facade holds: the whole runtime surface, all of it optional to call. */
 export interface TelemetryRuntime {
-  /** Opens a new root trace for a navigation, ending the previous unfinished one as cancelled. */
-  beginRouteChange(): RouteChange;
+  /**
+   * Opens a new root trace for a navigation, ending the previous unfinished one as cancelled.
+   * `startTime` (epoch milliseconds) backdates the span for a replayed navigation.
+   */
+  beginRouteChange(startTime?: number): RouteChange;
   /** Remembers the matched route template; later vitals and errors are attributed to it. */
   setRoute(route: string): void;
   /** Opens a CLIENT `api.request` span as a child of the current route trace. */
@@ -124,6 +129,13 @@ export interface TelemetryRuntime {
   reportError(report: ErrorReport): void;
   /** Emits one `web_vital` span per metric that changed since the last flush. */
   flushVitals(): void;
+  /**
+   * Asks the processor to export what it still holds. `BatchSpanProcessor` installs its own
+   * page-leave listeners when it is constructed, so a `web_vital` span created by the facade
+   * afterwards would otherwise wait for the next batch timer: the facade flushes, then calls this.
+   * Never throws; a failing export is the exporter's problem, not the page's.
+   */
+  forceFlush(): void;
   /**
    * Stops exporting without stopping tracing: the queue is dropped and every later span goes to
    * a no-op exporter, while span ids and the `traceparent` handed to the server keep working.
@@ -178,8 +190,13 @@ const VITAL_NAMES: readonly VitalName[] = ['LCP', 'INP', 'CLS'];
 /** The production reporters (`web-vitals` itself). */
 const WEB_VITALS_REPORTERS: VitalReporters = { onLCP, onINP, onCLS };
 
-/** Ask for the running value, not just the final one: INP and CLS change during a visit. */
-const VITAL_REPORT_OPTIONS: ReportOpts = { reportAllChanges: true };
+/**
+ * INP and CLS are page-cumulative (worst interaction, layout shift across the visit), so the
+ * running value is what the next flush should carry. LCP is registered *without* this option:
+ * `web-vitals` finalises it on the first user input or when the page is hidden, and freezing an
+ * early candidate would report a metric the browser itself does not consider final.
+ */
+const CUMULATIVE_VITAL_OPTIONS: ReportOpts = { reportAllChanges: true };
 
 /**
  * The exporter used when no OTLP endpoint is configured: it accepts every export and drops it.
@@ -267,7 +284,7 @@ export function startTelemetrySdk(
   let currentRoute: string = UNKNOWN_ROUTE;
 
   const vitals: Record<VitalName, VitalSnapshot | null> = { LCP: null, INP: null, CLS: null };
-  /** `LCP` is emitted once per page: its later `reportAllChanges` updates are dropped. */
+  /** `LCP` is emitted at most once per page, whatever the browser reports afterwards. */
   let lcpFlushed = false;
   /** Set by {@link disableExport}; keeps a second call from flushing the queue twice. */
   let exportDisabled = false;
@@ -280,20 +297,24 @@ export function startTelemetrySdk(
     currentRoute = route;
   }
 
-  function beginRouteChange(): RouteChange {
+  function beginRouteChange(startTime?: number): RouteChange {
     // A navigation that never reached `NavigationEnd` (a redirect, a guard, a crashed resolver)
     // still gets a span: it is the previous route trace, closed as cancelled.
     openRouteChange?.end('cancelled', currentRoute);
     const span = tracer.startSpan(
       ROUTE_SPAN_NAME,
-      { kind: SpanKind.INTERNAL, attributes: localeAttributes(options.locale) },
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: localeAttributes(options.locale),
+        ...(startTime === undefined ? {} : { startTime }),
+      },
       ROOT_CONTEXT,
     );
     routeSpan = span;
     routeContext = trace.setSpan(ROOT_CONTEXT, span);
     let ended = false;
     const change: RouteChange = {
-      end(outcome: TelemetryOutcome, route: string): void {
+      end(outcome: TelemetryOutcome, route: string, endTime?: number): void {
         if (ended) {
           return;
         }
@@ -303,7 +324,11 @@ export function startTelemetrySdk(
         if (outcome === 'error') {
           span.setStatus({ code: SpanStatusCode.ERROR });
         }
-        span.end();
+        if (endTime === undefined) {
+          span.end();
+        } else {
+          span.end(endTime);
+        }
         if (openRouteChange === change) {
           openRouteChange = null;
         }
@@ -414,9 +439,9 @@ export function startTelemetrySdk(
 
   const reporters = options.vitalReporters ?? WEB_VITALS_REPORTERS;
   try {
-    reporters.onLCP(recordVital, VITAL_REPORT_OPTIONS);
-    reporters.onINP(recordVital, VITAL_REPORT_OPTIONS);
-    reporters.onCLS(recordVital, VITAL_REPORT_OPTIONS);
+    reporters.onLCP(recordVital);
+    reporters.onINP(recordVital, CUMULATIVE_VITAL_OPTIONS);
+    reporters.onCLS(recordVital, CUMULATIVE_VITAL_OPTIONS);
   } catch {
     // A browser without `PerformanceObserver` (or with observability disabled by policy) must
     // still get route and API tracing; only the vitals of this page are lost.
@@ -460,13 +485,18 @@ export function startTelemetrySdk(
    * now (and is dropped), so no POST to a blocked origin is retried; the sampler, the span ids and
    * `traceparentOf` are untouched, which is what keeps the server-side trace continuing.
    */
+  /** Exports the queue now; a rejected flush stays inside the exporter. */
+  function forceFlush(): void {
+    void processor.forceFlush().catch(() => undefined);
+  }
+
   function disableExport(): void {
     if (exportDisabled) {
       return;
     }
     exportDisabled = true;
     exportTarget = NOOP_EXPORTER;
-    void processor.forceFlush().catch(() => undefined);
+    forceFlush();
   }
 
   async function shutdown(): Promise<void> {
@@ -480,6 +510,7 @@ export function startTelemetrySdk(
     startApiCall,
     reportError,
     flushVitals,
+    forceFlush,
     disableExport,
     shutdown,
   };

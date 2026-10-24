@@ -20,8 +20,10 @@ import {
   NavigationSkipped,
   NavigationStart,
   Router,
+  type ActivatedRouteSnapshot,
   type Event as RouterEvent,
 } from '@angular/router';
+import type { Subscription } from 'rxjs';
 
 import { routeTemplate, UNKNOWN_ROUTE } from './route-template';
 import { TELEMETRY_CONFIG } from './telemetry-config';
@@ -34,6 +36,15 @@ import type {
   TelemetryRuntime,
   startTelemetrySdk,
 } from './telemetry-sdk';
+
+/**
+ * The route tree of a router that has not matched anything yet: `routeTemplate` reads it as `/`,
+ * which is the same `/` an unmatched root reports.
+ */
+const EMPTY_ROUTE_ROOT = {
+  routeConfig: null,
+  firstChild: null,
+} as unknown as ActivatedRouteSnapshot;
 
 /** The lazily imported chunk: exactly the SDK entry point's signature. */
 export type TelemetrySdkLoader = () => Promise<{ startTelemetrySdk: typeof startTelemetrySdk }>;
@@ -85,6 +96,27 @@ interface ViolationFields {
   readonly effectiveDirective?: string;
   readonly violatedDirective?: string;
   readonly disposition?: string;
+  /**
+   * Only a violation the browser itself raised counts: anything the page can construct reports
+   * `isTrusted: false`, and a synthetic event must never switch telemetry off.
+   */
+  readonly isTrusted?: boolean;
+}
+
+/**
+ * The navigation that happened before the chunk was ready. One slot, no queue: `Router.events`
+ * has no replay, so without it the landing page would have no `route.change` at all, and its
+ * vitals and errors would be attributed to `/unknown`.
+ */
+interface PendingNavigation {
+  /** `Date.now()` of the `NavigationStart`; the replayed span keeps this start. */
+  readonly startedAt: number;
+  /** `Date.now()` of the terminal event, or `null` while the navigation is still in flight. */
+  readonly endedAt: number | null;
+  /** `ok` for a `NavigationEnd`; `cancelled`/`error` for the other terminal events. */
+  readonly outcome: TelemetryOutcome;
+  /** The route template matched when it ended, or `null` while it is in flight. */
+  readonly route: string | null;
 }
 
 /** Route changes, API calls and client errors, traced from one facade. */
@@ -107,6 +139,10 @@ export class TelemetryService {
   private readonly endpointOrigin = originOf(this.config.endpoint);
   /** True once a CSP violation showed that export cannot leave the page; warns exactly once. */
   private exportDisabled = false;
+  /** Every listener this facade owns, so a failed load can release all of them. */
+  private routerSubscription: Subscription | null = null;
+  /** The landing navigation, recorded until the runtime exists (see {@link PendingNavigation}). */
+  private pendingNavigation: PendingNavigation | null = null;
 
   /** The loaded runtime, or `null` while the chunk loads and after a load failure. */
   get runtime(): TelemetryRuntime | null {
@@ -127,9 +163,7 @@ export class TelemetryService {
       return;
     }
     this.state = 'loading';
-    // Registered before the chunk loads: a block found while loading is remembered by
-    // `exportDisabled` and applied to the runtime as soon as it exists.
-    this.document.addEventListener('securitypolicyviolation', this.onSecurityPolicyViolation);
+    this.listen();
     this.load().catch(() => this.disable());
   }
 
@@ -153,7 +187,7 @@ export class TelemetryService {
     if (this.exportDisabled) {
       this.runtimeValue.disableExport();
     }
-    this.wire();
+    this.replayPendingNavigation();
   }
 
   /** Terminal state of a chunk that failed to load: one warning, then silence. */
@@ -163,6 +197,7 @@ export class TelemetryService {
     }
     this.state = 'disabled';
     this.runtimeValue = null;
+    this.releaseListeners();
     console.warn('Telemetry is unavailable; the app continues without it.');
   }
 
@@ -174,6 +209,9 @@ export class TelemetryService {
    */
   private readonly onSecurityPolicyViolation = (event: SecurityPolicyViolationEvent): void => {
     const report: ViolationFields = event;
+    if (report.isTrusted !== true) {
+      return;
+    }
     const directive = report.effectiveDirective ?? report.violatedDirective ?? '';
     if (this.exportDisabled || report.disposition === 'report-only') {
       return;
@@ -198,30 +236,66 @@ export class TelemetryService {
     return blockedURI === endpoint || originOf(blockedURI) === this.endpointOrigin;
   }
 
-  private wire(): void {
+  /**
+   * Every listener is registered before the chunk resolves: the router does not replay `events`,
+   * and a CSP violation can arrive while the chunk is still loading. `releaseListeners` undoes
+   * all of it.
+   */
+  private listen(): void {
     const view = this.document.defaultView;
     if (view !== null) {
-      // Vitals are attributed to the route current when the page is left, which is the only
-      // moment they are final: `pagehide` fires in the bfcache path too, so both are cheap.
-      view.addEventListener('visibilitychange', () => {
-        if (this.document.visibilityState === 'hidden') {
-          this.runtimeValue?.flushVitals();
-        }
-      });
-      view.addEventListener('pagehide', () => {
-        this.runtimeValue?.flushVitals();
-      });
+      view.addEventListener('visibilitychange', this.onVisibilityChange);
+      view.addEventListener('pagehide', this.onPageHide);
     }
-    const router = this.router;
-    if (router !== null) {
-      router.events.subscribe((event) => this.handleRouterEvent(event));
+    this.document.addEventListener('securitypolicyviolation', this.onSecurityPolicyViolation);
+    this.routerSubscription =
+      this.router?.events.subscribe((event) => this.handleRouterEvent(event)) ?? null;
+  }
+
+  /** Removes every listener this facade added; idempotent. */
+  private releaseListeners(): void {
+    const view = this.document.defaultView;
+    if (view !== null) {
+      view.removeEventListener('visibilitychange', this.onVisibilityChange);
+      view.removeEventListener('pagehide', this.onPageHide);
     }
+    this.document.removeEventListener('securitypolicyviolation', this.onSecurityPolicyViolation);
+    this.routerSubscription?.unsubscribe();
+    this.routerSubscription = null;
+  }
+
+  private readonly onVisibilityChange = (): void => {
+    if (this.document.visibilityState === 'hidden') {
+      this.flushVitalsNow();
+    }
+  };
+
+  private readonly onPageHide = (): void => {
+    this.flushVitalsNow();
+  };
+
+  /**
+   * Emits the dirty vitals, then exports them. `BatchSpanProcessor` registers its own page-leave
+   * listeners when it is constructed — before these spans exist — so without the explicit flush
+   * they would sit in the queue until the batch timer, on a page that may already be gone.
+   */
+  private flushVitalsNow(): void {
+    const runtime = this.runtimeValue;
+    if (runtime === null) {
+      return;
+    }
+    runtime.flushVitals();
+    runtime.forceFlush();
   }
 
   private handleRouterEvent(event: RouterEvent): void {
-    const router = this.router;
     const runtime = this.runtimeValue;
-    if (router === null || runtime === null) {
+    if (runtime === null) {
+      this.recordWhileLoading(event);
+      return;
+    }
+    const router = this.router;
+    if (router === null) {
       return;
     }
     if (event instanceof NavigationStart) {
@@ -247,6 +321,76 @@ export class TelemetryService {
     if (event instanceof NavigationError) {
       this.endRouteChange('error');
     }
+  }
+
+  /** Keeps the landing navigation in one slot while the chunk loads; a later one replaces it. */
+  private recordWhileLoading(event: RouterEvent): void {
+    if (event instanceof NavigationStart) {
+      this.pendingNavigation = {
+        startedAt: Date.now(),
+        endedAt: null,
+        outcome: 'cancelled',
+        route: null,
+      };
+      return;
+    }
+    const pending = this.pendingNavigation;
+    if (pending === null || pending.endedAt !== null) {
+      return;
+    }
+    const endedAt = Date.now();
+    if (event instanceof NavigationEnd) {
+      this.pendingNavigation = {
+        startedAt: pending.startedAt,
+        endedAt,
+        outcome: 'ok',
+        route: routeTemplate(this.routerStateRoot()),
+      };
+      return;
+    }
+    if (
+      event instanceof NavigationCancel ||
+      event instanceof NavigationSkipped ||
+      event instanceof NavigationError
+    ) {
+      this.pendingNavigation = {
+        startedAt: pending.startedAt,
+        endedAt,
+        outcome: event instanceof NavigationError ? 'error' : 'cancelled',
+        route: pending.route,
+      };
+    }
+  }
+
+  /**
+   * Gives the landing page its trace. The runtime exists now, so the recorded navigation is
+   * replayed with the timestamps the router used: an ended one becomes a start-and-close span, an
+   * in-flight one becomes the span its `NavigationEnd` will close. `setRoute` runs first, so
+   * vitals and errors of this page carry a real route and not `/unknown`.
+   */
+  private replayPendingNavigation(): void {
+    const runtime = this.runtimeValue;
+    if (runtime === null || this.router === null) {
+      return;
+    }
+    const pending = this.pendingNavigation;
+    this.pendingNavigation = null;
+    const route = pending?.route ?? routeTemplate(this.routerStateRoot());
+    this.currentRoute = route;
+    runtime.setRoute(route);
+    if (pending === null) {
+      return;
+    }
+    if (pending.endedAt === null) {
+      this.routeChange = runtime.beginRouteChange(pending.startedAt);
+      return;
+    }
+    runtime.beginRouteChange(pending.startedAt).end(pending.outcome, route, pending.endedAt);
+  }
+
+  /** The live route tree root, or an empty chain when the router has none yet. */
+  private routerStateRoot(): ActivatedRouteSnapshot {
+    return this.router?.routerState.snapshot.root ?? EMPTY_ROUTE_ROOT;
   }
 
   private endRouteChange(outcome: TelemetryOutcome, route: string = this.currentRoute): void {

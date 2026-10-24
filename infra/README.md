@@ -198,6 +198,13 @@ with `https://otlp.example.com`. The collector and its origin are **10.3.1-T2
 [OPEN]**: until that origin exists, leave both the variable and the tag out and the
 web exporter stays a no-op.
 
+**CORS on the collector.** The collector is cross-origin and the browser exporter POSTs
+`Content-Type: application/json`, so the collector (or the edge in front of it) must
+answer the `OPTIONS` preflight and send `Access-Control-Allow-Origin` for the app origin
+and `Access-Control-Allow-Headers: content-type`. Without them the browser blocks every
+export and the app cannot tell (it only detects CSP violations): the loss is silent.
+Edge half 10.2.1-T1.4, collector half 10.3.1-T2 **[OPEN]**.
+
 When the two diverge the browser refuses the export as a `connect-src` violation and
 the app disables its exporter on that `securitypolicyviolation` (one `console.warn`)
 while tracing and the `traceparent` propagation keep working — a lost export, never a
