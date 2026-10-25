@@ -5,7 +5,7 @@ import { AuditDataService, type AuditListQuery } from '../../../core/data/audit-
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { AuditPage } from './audit.page';
-import { AuditStore, EMPTY_AUDIT_FILTERS } from './audit.store';
+import { AUDIT_MAX_PAGES, AuditStore, EMPTY_AUDIT_FILTERS } from './audit.store';
 
 function entry(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   return {
@@ -255,6 +255,35 @@ describe('AuditPage (09.7.1-T6)', () => {
     root.querySelector<HTMLButtonElement>('[data-audit-previous]')!.click();
     await fixture.whenStable();
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(200);
+  });
+  it('stops offering more rows at the list bound and points at the filter', async () => {
+    // 20-row pages: the bound is a number of PAGES, so it is reached with 4,000 rows, not 10,000,
+    // and the hint must print the rows on screen rather than a fixed product of the two limits.
+    const entries = Array.from({ length: 4_500 }, (_, index) => entry(`row-${index}`));
+    data.list.mockImplementation((_org, _query, cursor) => {
+      const start = Number(cursor ?? 0);
+      const end = Math.min(start + 20, entries.length);
+      return Promise.resolve({
+        items: entries.slice(start, end),
+        next_cursor: end < entries.length ? String(end) : null,
+      });
+    });
+    const { fixture, root, store } = await render();
+    await store.load('org1');
+    for (let page = 1; page < AUDIT_MAX_PAGES; page++) {
+      await store.loadMore('org1');
+    }
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(data.list.mock.calls.every(([, query]) => query.limit === 50)).toBe(true);
+    expect(store.rows()).toHaveLength(AUDIT_MAX_PAGES * 20);
+    // At the bound the control is gone and the hint says what to do next.
+    expect(root.querySelector('[data-audit-load-more]')).toBeNull();
+    expect(root.querySelector('[data-audit-browse-capped]')?.textContent).toContain(
+      'Showing the newest 4,000 rows. Narrow the filters or export CSV to review older activity.',
+    );
+    expect(root.querySelector('[data-audit-paging-error]')).toBeNull();
   });
   it('loads the next cursor only explicitly and preserves rows on partial failure with retry', async () => {
     data.list.mockResolvedValueOnce({ items: [entry('first')], next_cursor: 'page2' });

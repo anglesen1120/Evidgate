@@ -1944,7 +1944,7 @@
       <trans-unit id="settings.audit.support-unrecorded" datatype="html"><source>Platform staff access (grant id not recorded on this row)</source></trans-unit>
       <trans-unit id="settings.audit.export" datatype="html"><source>Export CSV</source></trans-unit>
       <trans-unit id="settings.audit.retry" datatype="html"><source>Retry</source></trans-unit>
-      <trans-unit id="settings.audit.export-capped" datatype="html"><source>First <x id="cap" equiv-text="AUDIT_EXPORT_CAP.toLocaleString('en-US')"/> rows exported — narrow the filter for a complete export.</source></trans-unit>
+      <trans-unit id="settings.audit.export-capped" datatype="html"><source>First <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> rows exported — narrow the filter for a complete export.</source></trans-unit>
       <trans-unit id="settings.audit.export-progress" datatype="html"><source>Exporting… <x id="rows" equiv-text="rows"/> rows</source></trans-unit>
       <trans-unit id="settings.audit.export-done" datatype="html"><source>Exported <x id="rows" equiv-text="rows"/> rows.</source></trans-unit>
       <trans-unit id="settings.audit.title" datatype="html"><source>Audit log</source></trans-unit>
@@ -1976,6 +1976,7 @@
       <trans-unit id="settings.audit.loading-more" datatype="html"><source>Loading more activity…</source></trans-unit>
       <trans-unit id="settings.audit.paging-retry" datatype="html"><source>Retry loading more</source></trans-unit>
       <trans-unit id="settings.audit.paging-failed" datatype="html"><source>The next audit page could not be loaded. The rows already shown are unchanged.</source></trans-unit>
+      <trans-unit id="settings.audit.browse-capped" datatype="html"><source>Showing the newest <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> rows. Narrow the filters or export CSV to review older activity.</source></trans-unit>
     </body>
   </file>
 </xliff>

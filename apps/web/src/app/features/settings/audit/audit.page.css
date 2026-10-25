@@ -154,21 +154,29 @@ span.identifier {
   border-inline-start: var(--eg-space-1) solid var(--eg-warning-fg);
 }
 .support-access {
+  position: relative;
   display: inline-block;
   min-height: var(--eg-control-touch);
   padding: var(--eg-space-1);
 }
 .support-description {
   display: none;
-  margin-block-start: var(--eg-space-2);
+  /* Open over preceding cells, not below the row or outside the scrolling table. */
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 100%;
+  inline-size: var(--eg-rail-width);
+  box-sizing: border-box;
+  z-index: var(--eg-z-menu);
+  overflow-wrap: anywhere;
   padding: var(--eg-space-2);
   color: var(--eg-text);
   background: var(--eg-surface-raised);
   border: var(--eg-border-width) solid var(--eg-border);
   border-radius: var(--eg-radius-sm);
 }
-.support-access:hover .support-description,
-.support-access:focus-within .support-description {
+.support-access:hover .support-description:not([hidden]),
+.support-access:focus-within .support-description:not([hidden]) {
   display: block;
 }
 .banner {

@@ -10,7 +10,14 @@
 // - a 3,000-row corpus ends by itself in 15 pages and is not capped;
 // - exactly 10,000 rows with no next cursor is not capped either — the banner is about rows left
 //   behind, not about the count reaching the cap;
-// - a repeated cursor and an endless short-page list are contract violations, not exports.
+// - 50-row pages are a supported server, not a broken one: 3,000 rows finish in 60 pages, uncapped,
+//   and a server that never stops naming a cursor finishes as `capped` at the export's page bound
+//   with the rows it read — the short-page case that used to fail with a retryable-looking error;
+// - the table's own bound is 200 pages / 10,000 rows (`browseCapped`), not the shared
+//   `MAX_CURSOR_PAGES`: reaching it stops the list without a failure and without a request;
+// - a repeated cursor is a contract violation, not an export or a list;
+// - an export is generation-guarded: a reset, a reload and store destruction each supersede it, and
+//   a superseded loop publishes nothing and reads no further page.
 //
 // The rest pins the list's rules: the newest `load` wins, `loadMore` appends and keeps the rows on
 // a refusal, the filters reach the wire query with `''` omitted, and no signal holds a
@@ -20,9 +27,14 @@ import { TestBed } from '@angular/core/testing';
 import type { AuditEntryDto, AuditListResponse } from '@evidgate/sdk';
 
 import { AuditDataService, type AuditListQuery } from '../../../core/data/audit-data.service';
-import { MAX_CURSOR_PAGES } from '../../../core/data/identity-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
-import { AuditStore, EMPTY_AUDIT_FILTERS, type AuditFilters } from './audit.store';
+import {
+  AUDIT_EXPORT_MAX_PAGES,
+  AUDIT_MAX_PAGES,
+  AuditStore,
+  EMPTY_AUDIT_FILTERS,
+  type AuditFilters,
+} from './audit.store';
 
 /** One typed refusal, as `ApiGateway` builds it from a server envelope. */
 function typedFailure(): ApiRequestError {
@@ -307,17 +319,47 @@ describe('AuditStore (09.7.1-T6)', () => {
       await expect(store.loadMore('o-1')).rejects.toThrow(/repeated cursor "same"/);
     });
 
-    it('stops at the shared page cap', async () => {
-      data.all = rows(2_000);
+    it('stops at its own page bound as a bounded list, not a failure', async () => {
+      data.all = rows(AUDIT_MAX_PAGES * 50 + 500);
       await store.load('o-1');
-      for (let page = 1; page < MAX_CURSOR_PAGES; page += 1) {
+      for (let page = 1; page < AUDIT_MAX_PAGES; page += 1) {
         await store.loadMore('o-1');
       }
 
-      expect(store.rows()).toHaveLength(MAX_CURSOR_PAGES * 50);
-      await expect(store.loadMore('o-1')).rejects.toThrow(
-        new RegExp(`did not finish within ${MAX_CURSOR_PAGES} pages`),
-      );
+      expect(store.rows()).toHaveLength(AUDIT_MAX_PAGES * 50);
+      // The log goes on, but the list is at its bound: the cursor stays, the control goes.
+      expect(store.nextCursor()).not.toBeNull();
+      expect(store.browseCapped()).toBe(true);
+      expect(store.hasMore()).toBe(false);
+      expect(store.pagingError()).toBeNull();
+
+      // A further click neither throws nor reads: there is nothing left the tab may offer.
+      const calls = data.calls.length;
+      await expect(store.loadMore('o-1')).resolves.toBeUndefined();
+      expect(data.calls).toHaveLength(calls);
+      expect(store.browseCapped()).toBe(true);
+
+      // A reload is the way back: the bound belongs to the list it was reached on.
+      await store.load('o-1');
+      expect(store.browseCapped()).toBe(false);
+      expect(store.hasMore()).toBe(true);
+    });
+
+    it('marks a short-page list capped at the bound with the rows it holds', async () => {
+      // 20-row pages: 200 pages is 4,000 rows, not the 10,000 the table limit would give, and the
+      // bound is the page count — the state must report what it holds, not a fixed row total.
+      data.all = rows(5_000);
+      data.pageSizeOverride = 20;
+      await store.load('o-1');
+      for (let page = 1; page < AUDIT_MAX_PAGES; page += 1) {
+        await store.loadMore('o-1');
+      }
+
+      expect(store.rows()).toHaveLength(AUDIT_MAX_PAGES * 20);
+      expect(store.rows().at(-1)?.seq).toBe(AUDIT_MAX_PAGES * 20);
+      expect(store.nextCursor()).not.toBeNull();
+      expect(store.browseCapped()).toBe(true);
+      expect(store.hasMore()).toBe(false);
     });
 
     it('ignores a page for an org this store is not showing', async () => {
@@ -417,15 +459,34 @@ describe('AuditStore (09.7.1-T6)', () => {
       expect(store.exportState().phase).toBe('failed');
     });
 
-    it('refuses an endless short-page list instead of paging forever', async () => {
+    it('exports a 50-row-page list whole, uncapped, past the row cap', async () => {
+      data.all = rows(3_000);
+      data.pageSizeOverride = 50;
+
+      const csv = await store.exportCsv('o-1');
+
+      // 60 pages of 50: more than the 50 pages 10,000 rows cost at the wire maximum, and complete.
+      expect(csv?.split('\r\n')).toHaveLength(3_002);
+      expect(data.calls).toHaveLength(60);
+      expect(data.calls.every((call) => call.query.limit === 200)).toBe(true);
+      expect(store.exportState()).toEqual({ phase: 'done', rows: 3_000, capped: false });
+    });
+
+    it('caps a server that never ends at the page bound, without failing', async () => {
       data.all = rows(1_000);
       data.pageSizeOverride = 1;
 
       const csv = await store.exportCsv('o-1');
 
-      expect(csv).toBeNull();
-      expect(data.calls).toHaveLength(50);
-      expect(store.exportState()).toMatchObject({ phase: 'failed' });
+      // Header + the rows read + the trailing newline: one row per page, one page past the bound.
+      expect(csv?.split('\r\n')).toHaveLength(AUDIT_EXPORT_MAX_PAGES + 2);
+      expect(data.calls).toHaveLength(AUDIT_EXPORT_MAX_PAGES);
+      // Capped, and the count the banner must print is the real one — below the 10,000-row cap.
+      expect(store.exportState()).toEqual({
+        phase: 'done',
+        rows: AUDIT_EXPORT_MAX_PAGES,
+        capped: true,
+      });
     });
 
     it('ignores a second export while one is running, and resets to idle', async () => {
@@ -443,6 +504,79 @@ describe('AuditStore (09.7.1-T6)', () => {
 
       store.resetExport();
       expect(store.exportState()).toEqual({ phase: 'idle' });
+    });
+  });
+
+  describe('exportCsv supersession (org switch, reset, lifetime)', () => {
+    it('publishes nothing and reads no further page after a reset', async () => {
+      data.manual = true;
+      const running = store.exportCsv('o-1');
+      expect(store.exportState()).toEqual({ phase: 'running', rows: 0 });
+
+      store.resetExport();
+      expect(store.exportState()).toEqual({ phase: 'idle' });
+
+      // The in-flight page arrives with a cursor: the reset loop must neither publish nor follow it.
+      data.pending[0]?.resolve({ items: rows(2), next_cursor: 'next' });
+      expect(await running).toBeNull();
+      expect(store.exportState()).toEqual({ phase: 'idle' });
+      expect(data.calls).toHaveLength(1);
+    });
+
+    it('leaves the new org idle when the org switched mid-export', async () => {
+      data.manual = true;
+      const stale = store.exportCsv('o-1');
+      expect(data.pending).toHaveLength(1);
+
+      // Exactly what audit.page.ts does on an org switch: drop the export, then load the new org.
+      store.resetExport();
+      const reload = store.load('o-2');
+      expect(data.pending).toHaveLength(2);
+
+      data.pending[0]?.resolve({ items: rows(4), next_cursor: 'more' });
+      expect(await stale).toBeNull();
+      expect(store.exportState()).toEqual({ phase: 'idle' });
+
+      data.pending[1]?.resolve({ items: rows(1), next_cursor: null });
+      await reload;
+      // The new org's list is in state; the old org's export left no banner and read no more.
+      expect(store.rows()).toHaveLength(1);
+      expect(store.exportState()).toEqual({ phase: 'idle' });
+      expect(data.calls).toHaveLength(2);
+      expect(data.calls[1]?.orgId).toBe('o-2');
+    });
+
+    it('lets a second export start after the reset and publishes only that one', async () => {
+      data.manual = true;
+      const first = store.exportCsv('o-1');
+      store.resetExport();
+      const second = store.exportCsv('o-1');
+      expect(store.exportState()).toEqual({ phase: 'running', rows: 0 });
+      expect(data.pending).toHaveLength(2);
+
+      data.pending[0]?.resolve({ items: rows(5), next_cursor: 'stale' });
+      expect(await first).toBeNull();
+
+      data.pending[1]?.resolve({ items: rows(2), next_cursor: null });
+      const csv = await second;
+      expect(csv?.split('\r\n')).toHaveLength(4);
+      expect(store.exportState()).toEqual({ phase: 'done', rows: 2, capped: false });
+      expect(data.calls).toHaveLength(2);
+    });
+
+    it('stops a running export when its owner is destroyed', async () => {
+      data.manual = true;
+      const running = store.exportCsv('o-1');
+      expect(store.exportState()).toEqual({ phase: 'running', rows: 0 });
+
+      // The tab unmounts and the store's injection context goes with it.
+      TestBed.resetTestingModule();
+
+      data.pending[0]?.resolve({ items: rows(3), next_cursor: 'next' });
+      expect(await running).toBeNull();
+      // No banner for a store nobody renders, and no page after the in-flight one.
+      expect(store.exportState()).toEqual({ phase: 'running', rows: 0 });
+      expect(data.calls).toHaveLength(1);
     });
   });
 

@@ -34,6 +34,75 @@ describe('AuditTableComponent (AC8)', () => {
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
+  it.each([
+    ['user', 'User'],
+    ['ci_producer', 'CI producer'],
+    ['agent', 'Agent'],
+    ['platform_operator', 'Platform staff'],
+    ['system', 'System'],
+  ])('renders the localized actor label for %s', async (actorType, label) => {
+    const { root } = await render([row('actor', { actor_type: actorType })]);
+    expect(root.querySelector('tbody td app-status-pill')?.textContent?.trim()).toBe(label);
+  });
+  it.each(['future_actor', 'constructor', '__proto__'])(
+    'keeps an unknown actor type verbatim: %s',
+    async (actorType) => {
+      const { root } = await render([row('unknown', { actor_type: actorType })]);
+      expect(root.querySelector('tbody td app-status-pill')?.textContent?.trim()).toBe(actorType);
+      expect(root.querySelector('[data-audit-support="true"]')).toBeNull();
+    },
+  );
+  it('dismisses the support description with Escape and restores it on refocus', async () => {
+    const { fixture, root } = await render([
+      row('operator', { actor_type: 'platform_operator' }),
+      row('other', { metadata: { support_grant_id: 'grant-other' } }),
+    ]);
+    const chip = root.querySelector<HTMLElement>('.support-access')!;
+    const description = root.querySelector<HTMLElement>('#audit-support-operator')!;
+    const other = root.querySelector<HTMLElement>('#audit-support-other')!;
+    chip.focus();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(chip);
+    expect(description.hidden).toBe(false);
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await fixture.whenStable();
+    expect(description.hidden).toBe(false);
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await fixture.whenStable();
+    expect(description.hidden).toBe(true);
+    expect(document.activeElement).toBe(chip);
+    expect(other.hidden).toBe(false);
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await fixture.whenStable();
+    expect(description.hidden).toBe(true);
+    chip.blur();
+    chip.focus();
+    await fixture.whenStable();
+    expect(description.hidden).toBe(false);
+    expect(chip.getAttribute('aria-describedby')).toBe(description.id);
+  });
+  it('keeps Escape dismissal until hover re-entry, not movement inside the chip', async () => {
+    const { fixture, root } = await render([row('operator', { actor_type: 'platform_operator' })]);
+    const chip = root.querySelector<HTMLElement>('.support-access')!;
+    const description = root.querySelector<HTMLElement>('#audit-support-operator')!;
+    chip.dispatchEvent(new MouseEvent('mouseenter'));
+    await fixture.whenStable();
+    expect(description.hidden).toBe(false);
+    description.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    await fixture.whenStable();
+    expect(description.hidden).toBe(false);
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await fixture.whenStable();
+    expect(description.hidden).toBe(true);
+    description.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    chip.dispatchEvent(new MouseEvent('mousemove'));
+    await fixture.whenStable();
+    expect(description.hidden).toBe(true);
+    chip.dispatchEvent(new MouseEvent('mouseleave'));
+    chip.dispatchEvent(new MouseEvent('mouseenter'));
+    await fixture.whenStable();
+    expect(description.hidden).toBe(false);
+  });
   it('flags only support rows with a keyboard reachable grant description and row marker', async () => {
     const { root } = await render([
       row('ordinary'),

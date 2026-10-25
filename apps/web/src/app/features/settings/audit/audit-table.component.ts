@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, inject, input } from '@angular/core';
 import type { AuditEntryDto } from '@evidgate/sdk';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
 import { supportAccessOf } from './support-access';
 
 @Component({
@@ -37,7 +38,7 @@ import { supportAccessOf } from './support-access';
                 <time [attr.datetime]="row.created_at">{{ row.created_at }}</time>
               </th>
               <td>
-                <app-status-pill [tone]="'neutral'" [label]="row.actor_type" /><span
+                <app-status-pill [tone]="'neutral'" [label]="actorLabel(row.actor_type)" /><span
                   class="identifier"
                   >{{ row.actor_id }}</span
                 >
@@ -56,9 +57,13 @@ import { supportAccessOf } from './support-access';
                     tabindex="0"
                     [attr.aria-label]="copy.support"
                     [attr.aria-describedby]="'audit-support-' + row.id"
+                    (mouseenter)="description.hidden = false"
+                    (focusin)="description.hidden = false"
+                    (keydown.escape)="description.hidden = true; $event.stopPropagation()"
                   >
                     <app-status-pill [tone]="'warning'" [label]="copy.support" />
                     <span
+                      #description
                       class="support-description"
                       role="tooltip"
                       [id]="'audit-support-' + row.id"
@@ -90,6 +95,12 @@ export class AuditTableComponent {
     support: $localize`:@@settings.audit.support:Support access`,
     absent: $localize`:@@settings.audit.absent:—`,
   };
+
+  protected actorLabel(actorType: string): string {
+    return Object.hasOwn(AUDIT_ACTOR_TYPE_LABELS, actorType)
+      ? AUDIT_ACTOR_TYPE_LABELS[actorType as keyof typeof AUDIT_ACTOR_TYPE_LABELS]
+      : actorType;
+  }
 
   protected supportDescription(grantId: string | null): string {
     return grantId

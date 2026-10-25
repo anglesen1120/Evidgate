@@ -1,12 +1,24 @@
+import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  LOCALE_ID,
   computed,
   inject,
   input,
 } from '@angular/core';
-import { AUDIT_EXPORT_CAP, AuditStore } from './audit.store';
+import { AuditStore } from './audit.store';
+
+/**
+ * P3 review: `URL.revokeObjectURL()` in the same task as `anchor.click()` can cancel the download
+ * in engines that start the navigation asynchronously, so the revoke is deferred by one task. The
+ * anchor is still detached synchronously in `finally`, so a throwing `click()` leaves no residue,
+ * and a component destroyed before the timer fires still revokes its own URL instead of leaking it.
+ */
+function revokeDeferred(url: string): void {
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 @Component({
   selector: 'app-audit-export',
@@ -32,7 +44,9 @@ import { AUDIT_EXPORT_CAP, AuditStore } from './audit.store';
           }
           @if (state.phase === 'done') {
             @if (state.capped) {
-              <p class="banner" role="status" data-audit-export-capped>{{ cappedMessage }}</p>
+              <p class="banner" role="status" data-audit-export-capped>
+                {{ cappedMessage(state.rows) }}
+              </p>
             } @else {
               <p role="status" data-audit-export-done>{{ completed(state.rows) }}</p>
             }
@@ -57,12 +71,22 @@ export class AuditExportComponent {
   readonly orgId = input.required<string>();
   protected readonly store = inject(AuditStore);
   private readonly lifetime = inject(DestroyRef);
+  /** The active build/app locale: the banner's count is a number, so the locale groups it. */
+  private readonly locale = inject(LOCALE_ID);
   protected readonly running = computed(() => this.store.exportState().phase === 'running');
   protected readonly copy = {
     export: $localize`:@@settings.audit.export:Export CSV`,
     retry: $localize`:@@settings.audit.retry:Retry`,
   };
-  protected readonly cappedMessage = $localize`:@@settings.audit.export-capped:First ${AUDIT_EXPORT_CAP.toLocaleString('en-US')}:cap: rows exported — narrow the filter for a complete export.`;
+  // A5 review: the number is formatted through the active locale (`10,000` en, `10.000` vi)
+  // instead of `toLocaleString('en-US')`, which printed `10,000` in every locale's banner.
+  // F-4: the banner prints the rows actually exported, not `AUDIT_EXPORT_CAP` — `capped` is also
+  // true when the export stops at its safety page bound with a cursor still named, and then only a
+  // few hundred rows were collected. At the row cap the two are the same number, so the en copy of
+  // AC7 is unchanged. The placeholder id is `rows` in both catalogs.
+  protected cappedMessage(rows: number): string {
+    return $localize`:@@settings.audit.export-capped:First ${formatNumber(rows, this.locale)}:rows: rows exported — narrow the filter for a complete export.`;
+  }
   protected progress(rows: number): string {
     return $localize`:@@settings.audit.export-progress:Exporting… ${rows}:rows: rows`;
   }
@@ -84,7 +108,7 @@ export class AuditExportComponent {
       anchor.click();
     } finally {
       anchor.remove();
-      URL.revokeObjectURL(url);
+      revokeDeferred(url);
     }
   }
 }

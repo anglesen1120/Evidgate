@@ -109,6 +109,9 @@
         {{ copy.loadingMore }}
       }
     </p>
+    @if (store.browseCapped()) {
+      <p role="status" data-audit-browse-capped>{{ browseCappedText(store.rows().length) }}</p>
+    }
     <nav class="pagination" [attr.aria-label]="copy.pagination">
       <button
         type="button"

@@ -1,7 +1,9 @@
+import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  LOCALE_ID,
   computed,
   effect,
   inject,
@@ -12,6 +14,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
 import { AuditExportComponent } from './audit-export.component';
 import { AuditTableComponent } from './audit-table.component';
 import { AuditStore, EMPTY_AUDIT_FILTERS, type AuditFilters } from './audit.store';
@@ -52,17 +55,19 @@ export class AuditPage {
   );
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('heading');
   private readonly table = viewChild(AuditTableComponent);
+  /** The active build locale: the browse bound is a number, grouped the way that locale does. */
+  private readonly locale = inject(LOCALE_ID);
   protected readonly copy = {
     title: $localize`:@@settings.audit.title:Audit log`,
     description: $localize`:@@settings.audit.description:Review organization activity and support access. Audit records cannot be edited here.`,
     filters: $localize`:@@settings.audit.filters:Filter activity`,
     actorType: $localize`:@@settings.audit.actor-type:Actor type`,
     anyActor: $localize`:@@settings.audit.any-actor:Any actor`,
-    user: $localize`:@@settings.audit.actor-user:User`,
-    ciProducer: $localize`:@@settings.audit.actor-ci:CI producer`,
-    agent: $localize`:@@settings.audit.actor-agent:Agent`,
-    operator: $localize`:@@settings.audit.actor-operator:Platform staff`,
-    system: $localize`:@@settings.audit.actor-system:System`,
+    user: AUDIT_ACTOR_TYPE_LABELS.user,
+    ciProducer: AUDIT_ACTOR_TYPE_LABELS.ci_producer,
+    agent: AUDIT_ACTOR_TYPE_LABELS.agent,
+    operator: AUDIT_ACTOR_TYPE_LABELS.platform_operator,
+    system: AUDIT_ACTOR_TYPE_LABELS.system,
     action: $localize`:@@settings.audit.filter-action:Action`,
     objectType: $localize`:@@settings.audit.object-type:Object type`,
     from: $localize`:@@settings.audit.from:From (inclusive)`,
@@ -159,6 +164,16 @@ export class AuditPage {
       if (this.session.currentOrg()?.id === org.id && this.store.filters() === filters)
         this.pagingFailure.set(true);
     }
+  }
+  /**
+   * The browse-bound hint. The count is the rows the tab actually holds, not a fixed
+   * page-count product: the bound is a number of PAGES, so a server that returns pages shorter
+   * than `AUDIT_PAGE_LIMIT` reaches it with fewer rows, and a constant would then claim more rows
+   * than are on screen — the same reasoning the export banner applies to its own row count. The
+   * number is grouped through the active locale, so `vi` prints `10.000`, not `10,000`.
+   */
+  protected browseCappedText(rows: number): string {
+    return $localize`:@@settings.audit.browse-capped:Showing the newest ${formatNumber(rows, this.locale)}:rows: rows. Narrow the filters or export CSV to review older activity.`;
   }
   private resetWindow(): void {
     this.offset.set(0);
