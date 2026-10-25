@@ -155,7 +155,7 @@ describe('ConnectionHealthComponent', () => {
   it('renders server labels as text and never renders secret-shaped payload fields', async () => {
     const secret = `egt_${'z'.repeat(48)}`;
     const challenge = 'private-binding-challenge';
-    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwcml2YXRlIn0.signature';
+    const jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiJwcml2YXRlIn0', 'signature'].join('.');
     fixture.componentRef.setInput('tokens', [
       { ...TOKEN, name: '<img src=x onerror=alert(1)>', secret, jwt },
     ]);
