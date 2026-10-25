@@ -21,6 +21,8 @@ namespace Identity.IntegrationTests.Login.Google;
 /// capturing <see cref="ILoggerProvider"/>, so the assertion is on the exact strings the shipping code
 /// would emit.
 /// </remarks>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class LogRedactionTests
 {
     private static readonly string[] ClosedFailureCategories =

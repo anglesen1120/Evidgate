@@ -19,6 +19,8 @@ namespace Identity.IntegrationTests.Login.Google;
 /// Pure: the validator and the option validators are exercised directly, and the composition test only
 /// builds the service provider (no request leaves the process).
 /// </remarks>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class GoogleIssuerAndAbsentSettingsTests
 {
     // -----------------------------------------------------------------------------------------------

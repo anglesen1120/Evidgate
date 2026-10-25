@@ -25,6 +25,8 @@ namespace Identity.IntegrationTests.Login.Google;
 /// suite is deterministic. The shared test helpers of the whole Google login suite live at the bottom of
 /// this file: it owns the key and token factories the other files use.
 /// </remarks>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class TokenValidationTests
 {
     [Fact]

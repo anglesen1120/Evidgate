@@ -22,6 +22,8 @@ namespace Identity.IntegrationTests.Login.Google;
 /// only the two primary handlers are replaced, so no socket is opened while the pipeline under test stays
 /// exactly as the host builds it.
 /// </remarks>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class GoogleResiliencePipelineTests
 {
     /// <summary>A test that hangs fails here instead of blocking the suite until it is killed.</summary>

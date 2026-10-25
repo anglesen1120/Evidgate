@@ -27,6 +27,8 @@ namespace Identity.IntegrationTests.Login.Google;
 /// built directly, so no resilience pipeline is involved here (see
 /// <see cref="GoogleResiliencePipelineTests"/> for that).
 /// </remarks>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class GoogleTimeoutTests
 {
     private static readonly TimeSpan TestDeadline = TimeSpan.FromSeconds(30);

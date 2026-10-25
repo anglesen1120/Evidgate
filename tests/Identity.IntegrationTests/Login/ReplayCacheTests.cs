@@ -9,6 +9,8 @@ namespace Identity.IntegrationTests.Login;
 /// fails closed at <see cref="LoginReplayCache.MaxEntries"/>, a live record is never dropped by a sweep (that
 /// would readmit a replay) and an expired one is purged, so a set that filled up recovers on its own.
 /// </summary>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class ReplayCacheTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);

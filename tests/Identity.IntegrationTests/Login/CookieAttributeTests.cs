@@ -11,6 +11,8 @@ namespace Identity.IntegrationTests.Login;
 /// <c>SameSite=Lax</c> and a bounded <c>Max-Age</c>, its value is unreadable, both routes are
 /// <c>no-store</c>, and every callback outcome deletes it.
 /// </summary>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class CookieAttributeTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);

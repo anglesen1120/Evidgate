@@ -20,6 +20,8 @@ namespace Identity.IntegrationTests.Login.Google;
 /// Pure: both provider endpoints are <see cref="GoogleTestHttpHandler"/> stand-ins on the real allowlisted
 /// hosts, so no socket is opened and the code is never retried (a single-use code would be burned).
 /// </remarks>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class GoogleProviderFlowTests
 {
     [Fact]

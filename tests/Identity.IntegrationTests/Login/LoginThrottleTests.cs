@@ -20,6 +20,8 @@ namespace Identity.IntegrationTests.Login;
 /// that calls the provider, and the fact that another client address keeps its own window — plus the
 /// redirect sink guard of F4/CR5.
 /// </summary>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class LoginThrottleTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);

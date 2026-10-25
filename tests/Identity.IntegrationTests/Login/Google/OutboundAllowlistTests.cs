@@ -17,6 +17,8 @@ namespace Identity.IntegrationTests.Login.Google;
 /// <remarks>
 /// Pure: the primary handler is a <see cref="GoogleTestHttpHandler"/>, so nothing here opens a socket.
 /// </remarks>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class OutboundAllowlistTests
 {
     private static readonly string[] AllowedOutboundUris =

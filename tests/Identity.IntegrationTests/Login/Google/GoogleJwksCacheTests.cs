@@ -20,6 +20,8 @@ namespace Identity.IntegrationTests.Login.Google;
 /// Pure: the JWKS endpoint is a <see cref="GoogleTestHttpHandler"/> and the clock is
 /// <see cref="MutableTimeProvider"/>, so the TTL and refresh-window boundaries are exact.
 /// </remarks>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class GoogleJwksCacheTests
 {
     [Fact]

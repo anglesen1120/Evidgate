@@ -10,6 +10,8 @@ namespace Identity.IntegrationTests.Login;
 /// instrumentation copies the callback's query string into the span, so
 /// <see cref="LoginTraceRedaction"/> takes it off again on those two routes only.
 /// </summary>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class LoginTraceRedactionTests
 {
     private const string CallbackPath = "/v1/auth/oidc/google/callback";

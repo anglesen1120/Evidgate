@@ -10,6 +10,8 @@ namespace Identity.IntegrationTests.Login.Qa;
 /// QA pass over 02.3.1-T1.1/T1.2 (negative, boundary and exploratory probes through the real routes).
 /// Not part of the author's suite: each probe proves a property the author's tests do not reach.
 /// </summary>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class LoginQaTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);

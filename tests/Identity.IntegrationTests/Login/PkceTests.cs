@@ -13,6 +13,8 @@ namespace Identity.IntegrationTests.Login;
 /// S256 challenge of the verifier the cookie carries, the one-time <c>state</c>, and the 401
 /// <c>token_invalid</c> every mismatch, replay or tampered cookie gets (AC2's replay half, AC8's shape).
 /// </summary>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class PkceTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);

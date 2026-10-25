@@ -9,6 +9,8 @@ namespace Identity.IntegrationTests.Login;
 /// only. Anything that could leave the origin — in any percent-encoded form, with any separator a browser
 /// might reinterpret — is replaced by the app root rather than turned into an error.
 /// </summary>
+// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+[Trait("Category", "Docker")]
 public sealed class ReturnUrlPolicyTests
 {
     [Theory]
