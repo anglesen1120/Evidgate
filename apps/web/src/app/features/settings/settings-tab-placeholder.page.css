@@ -1,0 +1,8 @@
+/* 09.7.1-T1.1: a subordinate destination heading within the Settings page. */
+h2 {
+  margin: 0;
+  font-family: var(--eg-font-display);
+  font-size: var(--eg-text-lg);
+  line-height: var(--eg-leading-lg);
+  font-weight: var(--eg-weight-semibold);
+}

@@ -5,10 +5,11 @@
 // server-declared set, not what the server answers.
 //
 // What is stubbed, and why: `app.routes.ts` is imported unchanged and walked, replacing only the
-// *shell components* (the shell host and the five pattern pages, which belong to the layout slice
-// and are exercised by their own specs) with marker components. Every route, guard, `data.entryId`
-// and lazy boundary in the table under test is the production one; `RouteStubPage` and
-// `ProjectOverviewPage` are rendered for real.
+// *components* whose own specs cover their templates — the shell host, the pattern pages and the
+// Settings shell's three pages (09.7.1-T1) — with marker components. Every route, guard,
+// `data.entryId` and lazy boundary in the table under test is the production one; `RouteStubPage`
+// and `ProjectOverviewPage` are rendered for real, and the Settings shell table is reached through
+// its real `ENTRY_ROUTES` override.
 //
 // The five behaviours AC4 names:
 //   - a route whose permission the server-declared set lacks is not matched → `/forbidden`;
@@ -27,7 +28,14 @@ import {
   type Type,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Router, RouterOutlet, provideRouter, type Route, type Routes } from '@angular/router';
+import {
+  ActivatedRoute,
+  Router,
+  RouterOutlet,
+  provideRouter,
+  type Route,
+  type Routes,
+} from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { OrganizationSummaryDto, PermissionView, ProjectDto } from '@evidgate/sdk';
 
@@ -35,6 +43,9 @@ import { routes } from './app.routes';
 import { IdentityDataService } from './core/data/identity-data.service';
 import { ApiRequestError, type ApiError } from './core/http/api-error';
 import { EffectivePermissionsSource } from './core/session/effective-permissions.source';
+import { SettingsNoTabsPage } from './features/settings/settings-no-tabs.page';
+import { SettingsShellPage } from './features/settings/settings-shell.page';
+import { SettingsTabPlaceholderPage } from './features/settings/settings-tab-placeholder.page';
 import { ShellComponent } from './shell/layout/shell.component';
 import { ACTIVE_PHASE } from './shell/nav/product-phase';
 import type { NavEntry } from './shell/nav/nav.models';
@@ -102,32 +113,83 @@ class LoginStub {
   readonly marker = 'login-stub';
 }
 
+/** The Settings shell without its strip: the tab routes render into this outlet. */
+@Component({
+  selector: 'app-spec-settings-shell',
+  imports: [RouterOutlet],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '<router-outlet />',
+})
+class SettingsShellStub {}
+
+/** A Settings tab body that prints the id its route carried in `data.settingsTabId`. */
+@Component({
+  selector: 'app-spec-settings-tab',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '<p class="marker" [attr.data-settings-tab-body]="tabId">{{ tabId }}</p>',
+})
+class SettingsTabStub {
+  private readonly route = inject(ActivatedRoute);
+
+  readonly tabId = settingsTabIdOf(this.route);
+}
+
+/** The `settingsTabId` an activated route carried, or a marker naming the missing datum. */
+function settingsTabIdOf(route: ActivatedRoute): string {
+  const id: unknown = route.snapshot.data['settingsTabId'];
+  return typeof id === 'string' ? id : 'missing-settings-tab-id';
+}
+
+/** The Settings no-tabs state. */
+@Component({
+  selector: 'app-spec-settings-no-tabs',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '<p class="marker">{{ marker }}</p>',
+})
+class SettingsNoTabsStub {
+  protected readonly marker = 'no-tabs-stub';
+}
+
 /**
- * The layout slice's components, replaced by the markers above. Keyed by the production class, so a
- * route the table stops mounting through one of them simply renders the real thing instead.
+ * The production components this spec replaces with markers: the layout slice's shell and pattern
+ * pages, plus the Settings shell's three pages (09.7.1-T1) whose templates their own specs cover.
+ * Keyed by the production class, so a route the table stops mounting through one of them simply
+ * renders the real thing instead.
  */
-const LAYOUT_STUBS = new Map<unknown, Type<unknown>>([
+const COMPONENT_STUBS = new Map<unknown, Type<unknown>>([
   [ShellComponent, ShellHostStub],
   [ForbiddenPage, ForbiddenStub],
   [NotFoundPage, NotFoundStub],
   [NoOrganizationPage, WelcomeStub],
   [ServiceUnavailablePage, UnavailableStub],
   [SignInRequiredPage, LoginStub],
+  [SettingsShellPage, SettingsShellStub],
+  [SettingsTabPlaceholderPage, SettingsTabStub],
+  [SettingsNoTabsPage, SettingsNoTabsStub],
 ]);
 
 /**
- * The production table with only its layout components swapped; every guard and lazy route stays.
- * The copy is mutated through `Route`'s own optional members (`exactOptionalPropertyTypes` forbids
- * writing `component: undefined`), and nothing else about a route changes.
+ * The production table with only the components above swapped; every guard, `data` entry and lazy
+ * boundary stays. The copy is mutated through `Route`'s own optional members
+ * (`exactOptionalPropertyTypes` forbids writing `component: undefined`), and nothing else about a
+ * route changes.
+ *
+ * A `loadChildren` loader is wrapped so the table it returns gets the same stubs: the Settings
+ * shell is one such table (`ENTRY_ROUTES`), and it must not drag the UI slice's templates into this
+ * spec. Every loader in the table returns a promise of `Routes`.
  */
-function withLayoutStubs(table: readonly Route[]): Routes {
+function withComponentStubs(table: readonly Route[]): Routes {
   return table.map((route) => {
     const next: Route = { ...route };
     if (route.component !== undefined) {
-      next.component = LAYOUT_STUBS.get(route.component) ?? route.component;
+      next.component = COMPONENT_STUBS.get(route.component) ?? route.component;
     }
     if (route.children !== undefined) {
-      next.children = withLayoutStubs(route.children);
+      next.children = withComponentStubs(route.children);
+    }
+    if (typeof route.loadChildren === 'function') {
+      const load = route.loadChildren as () => Promise<Routes>;
+      next.loadChildren = async () => withComponentStubs(await load());
     }
     return next;
   });
@@ -245,10 +307,20 @@ async function setUp(
 ): Promise<Harness> {
   const permitted = new PermittedCodes(codes);
   await TestBed.configureTestingModule({
-    imports: [ShellHostStub, ForbiddenStub, NotFoundStub, WelcomeStub, UnavailableStub, LoginStub],
+    imports: [
+      ShellHostStub,
+      ForbiddenStub,
+      NotFoundStub,
+      WelcomeStub,
+      UnavailableStub,
+      LoginStub,
+      SettingsShellStub,
+      SettingsTabStub,
+      SettingsNoTabsStub,
+    ],
     providers: [
       provideZonelessChangeDetection(),
-      provideRouter(withLayoutStubs(routes)),
+      provideRouter(withComponentStubs(routes)),
       { provide: IdentityDataService, useValue: identity },
       { provide: PermittedCodes, useValue: permitted },
       { provide: EffectivePermissionsSource, useClass: FakePermissionsSource },
@@ -353,6 +425,8 @@ describe('App routes (09.1.1-T4.1)', () => {
       (candidate) =>
         candidate.phase === ACTIVE_PHASE &&
         candidate.id !== 'overview' &&
+        // `settings` owns a route table of its own (`ENTRY_ROUTES`), covered by the cases below.
+        candidate.id !== 'settings' &&
         BASE_PERMISSIONS.has(candidate.permission),
     );
     if (entry === undefined) {
@@ -385,5 +459,61 @@ describe('App routes (09.1.1-T4.1)', () => {
       await harness.navigateByUrl(urlOf(entry));
       expect(router.url, `entry '${entry.id}' should have been refused`).toBe('/forbidden');
     }
+  });
+});
+
+describe('Settings shell entry override (09.7.1-T1.1)', () => {
+  /** The registry row a case names, or a failure naming the missing row. */
+  function entryOf(id: string): NavEntry {
+    const entry = NAV_ENTRIES.find((candidate) => candidate.id === id);
+    if (entry === undefined) {
+      throw new Error(`NAV_ENTRIES has no '${id}' entry`);
+    }
+    return entry;
+  }
+
+  it('mounts the Settings shell table for the settings entry, landing on the first available tab', async () => {
+    const { harness } = await setUp();
+    const router = TestBed.inject(Router);
+
+    await harness.navigateByUrl(urlOf(entryOf('settings')));
+
+    // `BASE_PERMISSIONS` holds `project:read`, so Quota & Retention is the first tab in strip order
+    // the caller may open: the shell table answered, not the area's stub table.
+    expect(router.url).toBe(`/orgs/${ORG.id}/settings/quota-retention`);
+    expect(
+      document.querySelector('[data-settings-tab-body]')?.getAttribute('data-settings-tab-body'),
+    ).toBe('quota-retention');
+    expect(document.querySelector('app-route-stub')).toBeNull();
+  });
+
+  it('renders not found, never /forbidden, for a Settings tab the caller may not open (AC1)', async () => {
+    const { harness } = await setUp();
+    const router = TestBed.inject(Router);
+    const url = `/orgs/${ORG.id}/settings/members`;
+
+    // `membership:read` is absent: the tab is absent, and its route is as unmatched as an unknown
+    // segment — the app's single wildcard renders the 404 pattern with the URL untouched.
+    await harness.navigateByUrl(url);
+
+    expect(renderedMarker()).toBe(NOT_FOUND_MARKER);
+    expect(router.url).toBe(url);
+    expect(router.url).not.toBe('/forbidden');
+  });
+
+  it('keeps the area stub table for the other settings destinations', async () => {
+    const members = entryOf('members');
+    const { harness } = await setUp(
+      new FakeIdentityData(),
+      new Set(['organization:read', 'membership:read']),
+    );
+
+    await harness.navigateByUrl(urlOf(members));
+
+    // `members` is gated by `membership:read` and served by `features/settings/settings.routes.ts`,
+    // which this story must not change: the placeholder table is still its destination.
+    expect(TestBed.inject(Router).url).toBe(`/orgs/${ORG.id}/members`);
+    expect(document.querySelector('app-route-stub')).not.toBeNull();
+    expect(document.querySelector('h1')?.textContent?.trim()).toBe(members.label);
   });
 });

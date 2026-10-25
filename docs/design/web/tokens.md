@@ -543,7 +543,7 @@ declaration text out of the string or template literal:
 
 | Limitation or review nit | Disposition |
 | --- | --- |
-| Template `style="…"` attributes and `[style.x]` bindings | Handed to 09.1.1-T7 (plan `09.1.1-app-scaffold-and-build-acceptance-npm.md:179`, STATUS §6 row "09.1.1-T7 `style-tokens` coverage gaps") |
+| Template `style="…"` attributes and `[style.x]` bindings | Handed to 09.1.1-T7 (plan `09.1.1-app-scaffold-and-build-acceptance-npm.md:181`, STATUS §6 row "09.1.1-T7 `style-tokens` coverage gaps") |
 | Motion durations (`transition`/`animation`) | Closed in 09.1.1-T8: `rawDuration` now reports a non-zero `ms`/`s` time in the six duration properties, in every custom property and in an interpolated `${duration}ms`/`${duration}s` (this section). T7's hand-over note said the T8 patterns animate nothing, so the lint rule and this contract are the pattern the hand-over owed |
 | `border-spacing` | Handed to 09.1.1-T7 (same note and row; the shared list table picks the gap) |
 | Style string imported, built by a function, or held in `let`/`var` | Accepted by design, not handed over: resolving it needs whole-program analysis and would guess runtime values; code review is the net |

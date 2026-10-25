@@ -1,0 +1,54 @@
+<!-- 09.7.1-T1.1/T1.2 (AC1): hidden destinations have no DOM representation. -->
+<header class="settings-header">
+  <h1 i18n="@@settings.title">Settings</h1>
+  @if (session.currentOrg(); as org) {
+    <p i18n="@@settings.scope">Organization: {{ org.name }}</p>
+  }
+</header>
+<div class="settings-layout" [class.settings-layout--empty]="tabs().length === 0">
+  @if (tabs().length > 0) {
+    <nav
+      class="settings-nav"
+      aria-label="Settings destinations"
+      i18n-aria-label="@@settings.navigation"
+    >
+      <div class="settings-mobile">
+        <label for="settings-destination" i18n="@@settings.choose"
+          >Choose a settings destination</label
+        >
+        <select #destination id="settings-destination" (change)="selectDestination(destination)">
+          @if (!activeSegment()) {
+            <option value="" disabled i18n="@@settings.choose">
+              Choose a settings destination
+            </option>
+          }
+          @for (tab of tabs(); track tab.id) {
+            <!-- `[selected]` is the one source of the select's value: it survives options being
+                 created or replaced, which a `[value]` binding on the select does not. -->
+            <option [value]="tab.segment" [selected]="activeSegment() === tab.segment">
+              {{ tab.label }}
+            </option>
+          }
+        </select>
+      </div>
+      <ul class="settings-links">
+        @for (tab of tabs(); track tab.id) {
+          <li>
+            <a
+              [routerLink]="[tab.segment]"
+              routerLinkActive="settings-link--active"
+              [routerLinkActiveOptions]="{ exact: true }"
+              [ariaCurrentWhenActive]="'page'"
+              [attr.data-settings-tab]="tab.id"
+            >
+              {{ tab.label }}
+            </a>
+          </li>
+        }
+      </ul>
+    </nav>
+  }
+  <div class="settings-content">
+    <router-outlet />
+  </div>
+</div>
