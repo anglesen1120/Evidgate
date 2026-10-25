@@ -48,11 +48,15 @@ internal static class AuthoringImportEndpoints
         // the header a spreadsheet or browser upload actually sends and the accepted list is matched literally. The
         // other two are declared bare, which matches any charset.
         authoring.MapPost("/import", ImportAsync)
-            .WithMetadata(new AcceptsMetadata([
-                ImportFormats.CsvMediaType,
-                ImportFormats.CsvContentType,
-                ImportFormats.JsonContentType,
-                ImportFormats.XlsxContentType]))
+            .WithMetadata(new AcceptsMetadata(
+                [
+                    ImportFormats.CsvMediaType,
+                    ImportFormats.CsvContentType,
+                    ImportFormats.JsonContentType,
+                    ImportFormats.XlsxContentType,
+                ],
+                typeof(byte[]),
+                isOptional: false))
             .Produces<ImportResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status403Forbidden)

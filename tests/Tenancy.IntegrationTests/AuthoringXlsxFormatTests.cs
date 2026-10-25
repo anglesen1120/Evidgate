@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 using Evidgate.Modules.Authoring.Application.Import;
 using Evidgate.Modules.Authoring.Application.Import.Formats;
@@ -499,6 +500,16 @@ public sealed class AuthoringXlsxFormatTests
         parse.TooLarge.ShouldBeFalse();
         parse.Rows.ShouldBeEmpty();
         parse.Issues.ShouldBe([new ImportIssue(1, "/description", "value_invalid")]);
+
+        // The refusal above fires with or without the truncation, so the bound itself is asserted here (delta R3): one
+        // text node of any size leaves at most the budget plus the one character the caller compares against.
+        using var node = XmlReader.Create(new StringReader("<t>" + new string('x', 200_000) + "</t>"));
+        node.MoveToContent();
+
+        var bounded = XlsxReader.ReadElementText(node, maxChars: 64);
+
+        bounded.Length.ShouldBe(65);
+        bounded.ShouldBe(new string('x', 65));
     }
 
     [Fact]

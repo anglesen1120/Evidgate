@@ -1713,7 +1713,7 @@ export type Case = {
     steps: Steps;
     priority: ItemPriority;
     /**
-     * Optional state; absent means the creation default (draft).
+     * Optional state of a case row. An empty or absent cell means "keep the stored state" for a row that already exists, and the creation default (draft) for a new one. A non-empty value must be a move the state routes themselves allow, otherwise the row is refused at /state and nothing is written; a restore of a soft-deleted case always writes draft, whatever the file says, and a retired row stays unwritable. A move into retired needs a reason, which a row has no column for, so an import never retires an existing row (it is refused at /state); a new row takes the file's state, so an export that carries a retired case re-imports unchanged. Use the item or case state route to retire a row that already exists.
      */
     state?: 'draft' | 'approved' | 'retired';
     /**
@@ -1743,7 +1743,7 @@ export type Item = {
     description?: string;
     priority: ItemPriority;
     /**
-     * Optional state; absent means the creation default of AC3 (active for an authored row). A transition into retired without a reason is not an import concern — import writes the stated state or the default, and never moves an existing row's state.
+     * Optional state of an item row. An empty or absent cell means "keep the stored state" for a row that already exists, and the creation default of AC3 (active) for a new one. A non-empty value must be a move the state routes themselves allow (the same state machine the authoring writes use), otherwise the row is refused at /state and nothing is written; a new row takes the file's value so an export re-imports unchanged, and an item that already exists cannot be retired by a file: a move into retired needs a reason, which a row has no column for, so it is refused at /state.
      */
     state?: 'draft' | 'active' | 'retired';
     position?: Position;

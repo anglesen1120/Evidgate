@@ -81,33 +81,46 @@ internal static class ImportApplySql
           left join item_state s on s.parent_id = g.parent_id
         """;
 
-    /// <summary>The row locks of the entities this file updates or restores, one statement per kind (rank order).</summary>
+    /// <summary>The row locks of the entities this file updates, restores or hangs a created row from, in id order.</summary>
     /// <param name="kind">The entity kind.</param>
-    internal static string LockEntities(AuthoringEntityKind kind) => kind switch
+    /// <param name="share">
+    /// True to take the rows <c>for share</c>: a row this file only <em>reads</em> — the parent item of a case row — is
+    /// locked that way, because the case writer takes its case <c>for update</c> and then the parent item <c>for share</c>
+    /// (<see cref="AuthoringVersionWriter"/>'s <c>LockBatchAsync</c>). A <c>for update</c> of such a parent would make the
+    /// import hold the item and wait for the case while that writer holds the case and waits for the item: a lock cycle
+    /// that ends in <c>40P01</c> or the 5 s <c>lock_timeout</c>, i.e. a spurious 503 (delta R1). Share and share never
+    /// conflict, so the writer always obtains the item and finishes, and the import's case lock then follows.
+    /// </param>
+    internal static string LockEntities(AuthoringEntityKind kind, bool share = false)
     {
-        AuthoringEntityKind.FeatureNode => """
-            select n.id, n.version, n.deleted_at
-              from public.feature_node n
-             where n.org_id = @org_id and n.project_id = @project_id and n.id = any(@ids)
-             order by n.id
-               for update
-            """,
-        AuthoringEntityKind.ChecklistItem => """
-            select i.id, i.version, i.deleted_at, i.state
-              from public.checklist_item i
-             where i.org_id = @org_id and i.project_id = @project_id and i.id = any(@ids)
-             order by i.id
-               for update
-            """,
-        AuthoringEntityKind.ManualTestCase => """
-            select m.id, m.version, m.deleted_at
-              from public.manual_test_case m
-             where m.org_id = @org_id and m.project_id = @project_id and m.id = any(@ids)
-             order by m.id
-               for update
-            """,
-        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown authoring entity kind"),
-    };
+        var clause = share ? "for share" : "for update";
+
+        return kind switch
+        {
+            AuthoringEntityKind.FeatureNode => $"""
+                select n.id, n.version, n.deleted_at
+                  from public.feature_node n
+                 where n.org_id = @org_id and n.project_id = @project_id and n.id = any(@ids)
+                 order by n.id
+                   {clause}
+                """,
+            AuthoringEntityKind.ChecklistItem => $"""
+                select i.id, i.version, i.deleted_at, i.state
+                  from public.checklist_item i
+                 where i.org_id = @org_id and i.project_id = @project_id and i.id = any(@ids)
+                 order by i.id
+                   {clause}
+                """,
+            AuthoringEntityKind.ManualTestCase => $"""
+                select m.id, m.version, m.deleted_at
+                  from public.manual_test_case m
+                 where m.org_id = @org_id and m.project_id = @project_id and m.id = any(@ids)
+                 order by m.id
+                   {clause}
+                """,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown authoring entity kind"),
+        };
+    }
 
     /// <summary>The creates of one kind, one statement for all of them (the entity rows of the import).</summary>
     /// <param name="kind">The entity kind.</param>

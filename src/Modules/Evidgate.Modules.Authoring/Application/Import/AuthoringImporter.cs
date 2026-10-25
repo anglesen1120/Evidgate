@@ -410,7 +410,7 @@ internal sealed class AuthoringImporter(
             createdItems.Select(item => (Guid?)item.FeatureNodeId));
         // Every parent item this file's cases hang under, created cases and update/restore cases alike: a case may only be
         // written under a live, non-retired item, so the lock set has to carry the parent itself and not just the item row
-        // the file edits (N1/N3).
+        // the file edits (N1/N3). The parents this file does not write are locked `for share` below, never `for update`.
         var caseParents = createdCases
             .Select(item => (Guid?)item.ChecklistItemId)
             .Concat(rows
@@ -552,14 +552,25 @@ internal sealed class AuthoringImporter(
         Guid[] caseIds,
         CancellationToken cancellationToken)
     {
-        var ranks = new[]
+        // Items split by mode: the ones this file writes are locked `for update`, the parent items it only reads `for share`
+        // (delta R1). Two statements, and no inversion is possible: every transaction that touches the item table takes at
+        // most one of the two modes — the batch writer takes `for share` only (AuthoringVersionWriter.LockBatchAsync), the
+        // item routes take `for update` only — and this one takes all of its `for update` ids (ascending) before any
+        // `for share` id (ascending), so no second transaction can take item share before item update.
+        var writtenItems = rows
+            .Where(row => row.Row.Kind == ImportRowKind.Item && row.Outcome is ImportOutcome.Update or ImportOutcome.Restore)
+            .Select(row => row.EntityId)
+            .ToHashSet();
+
+        var ranks = new (AuthoringEntityKind Kind, Guid[] Ids, bool Share)[]
         {
-            (Kind: AuthoringEntityKind.FeatureNode, Ids: nodeIds),
-            (Kind: AuthoringEntityKind.ChecklistItem, Ids: itemIds),
-            (Kind: AuthoringEntityKind.ManualTestCase, Ids: caseIds),
+            (AuthoringEntityKind.FeatureNode, nodeIds, false),
+            (AuthoringEntityKind.ChecklistItem, [.. itemIds.Where(writtenItems.Contains)], false),
+            (AuthoringEntityKind.ChecklistItem, [.. itemIds.Where(id => !writtenItems.Contains(id))], true),
+            (AuthoringEntityKind.ManualTestCase, caseIds, false),
         };
 
-        foreach (var (kind, ids) in ranks)
+        foreach (var (kind, ids, share) in ranks)
         {
             if (ids.Length == 0)
             {
@@ -567,7 +578,7 @@ internal sealed class AuthoringImporter(
             }
 
             var locked = await db.QueryAsync<ImportApplySql.LockedRow>(
-                ImportApplySql.LockEntities(kind),
+                ImportApplySql.LockEntities(kind, share),
                 new { org_id = orgId, project_id = projectId, ids },
                 cancellationToken).ConfigureAwait(false);
 
@@ -607,6 +618,13 @@ internal sealed class AuthoringImporter(
                 // concurrent retire would otherwise let this file create, restore or update a case under a terminal item.
                 // An unchanged row is never in a lock set, so a round trip of a retired item still imports (N1/N3).
                 return AuthoringErrors.Fail<bool>(AuthoringErrors.Unavailable());
+            }
+
+            // Only an `for update` pass can hold a row this file writes, so only it has versions to prove: a share pass
+            // carries parents that no planned row matches, and checking them here would read a missing key as a stale plan.
+            if (share)
+            {
+                continue;
             }
 
             foreach (var row in rows.Where(row => row.Row.Kind == rowKind

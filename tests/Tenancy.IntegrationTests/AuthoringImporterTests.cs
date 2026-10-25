@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -558,6 +559,104 @@ public sealed class AuthoringImporterTests
     }
 
     /// <summary>
+    /// Delta R1/R2: the parent item of a case row is locked <c>for share</c> — the file does not write it — so a writer that
+    /// holds that row <c>for update</c> still serialises the import: the wait meets the writer's 5 s <c>lock_timeout</c> and
+    /// the answer is the retryable 503, with nothing written.
+    /// </summary>
+    [Fact]
+    public async Task ParentItemHeldForUpdate_ImportAnswers503()
+    {
+        await using var world = await StartAsync();
+
+        (await ImportAsync(world, world.Project, Single())).IsSuccess.ShouldBeTrue();
+        var (_, itemId, code) = await CaseIdentityAsync(world);
+        var versions = await VersionCountAsync(world);
+
+        await using var holder = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database), world.Org);
+        await holder.ExecuteAsync(
+            "select 1 from public.checklist_item where id = @id for update",
+            ("id", itemId));
+
+        var clock = Stopwatch.StartNew();
+        var refused = await ImportAsync(world, world.Project, Single(code: code, title: "Case 1.1 edited"));
+        clock.Stop();
+
+        refused.IsSuccess.ShouldBeFalse("a held parent item is not a reason to wait for ever");
+        refused.Error!.Status.ShouldBe(503);
+        clock.Elapsed.ShouldBeGreaterThan(
+            TimeSpan.FromSeconds(4),
+            "the refusal is the writer's 5 s lock_timeout on the parent item, not an earlier contention");
+        (await VersionCountAsync(world)).ShouldBe(versions, "the refused import wrote nothing");
+        (await CaseTitlesAsync(world)).ShouldBe(["Case 1.1"]);
+    }
+
+    /// <summary>
+    /// Delta R1, the mixed case the two item passes exist for: one item row this file <em>writes</em> and one parent item it
+    /// only <em>reads</em> (an updated case hangs under the second). Both passes must run, and the share pass must not read a
+    /// written item's absence from its own result as a stale plan.
+    /// </summary>
+    [Fact]
+    public async Task WrittenItemAndReadParentItem_AreLockedInTheirOwnPasses()
+    {
+        await using var world = await StartAsync();
+        var prefix = await PrefixAsync(world, world.Project);
+
+        // An item is identified by its node and title, so an item *update* row is a content change under one title — a
+        // priority here — never a rename (a rename is a create, AC15).
+        IReadOnlyList<ImportRow> TwoLadders(string firstItemPriority, string secondCase) =>
+        [
+            ImportSample.Node(1, "m1", null, "module", "Module 1"),
+            ImportSample.Node(2, "f1", "m1", "feature", "Feature 1"),
+            ImportSample.Node(3, "n1", "f1", "category", "Category 1"),
+            ImportSample.Item(4, "i1", "n1", "Item 1", priority: firstItemPriority),
+            ImportSample.Case(5, "c1", "i1", "Case 1", ImportSample.Steps, code: prefix + "-001"),
+            ImportSample.Node(6, "m2", null, "module", "Module 2"),
+            ImportSample.Node(7, "f2", "m2", "feature", "Feature 2"),
+            ImportSample.Node(8, "n2", "f2", "category", "Category 2"),
+            ImportSample.Item(9, "i2", "n2", "Item 2"),
+            ImportSample.Case(10, "c2", "i2", secondCase, ImportSample.Steps, code: prefix + "-002"),
+        ];
+
+        var created = await ImportAsync(world, world.Project, TwoLadders("high", "Case 2"));
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+
+        // `Item 1` is written (an item update row); `Item 2` is only the parent of the updated case (a share-pass parent).
+        var updated = await ImportAsync(world, world.Project, TwoLadders("low", "Case 2 edited"));
+
+        updated.IsSuccess.ShouldBeTrue(updated.Error?.Message);
+        updated.Value!.Counts.ShouldBe(new ImportCounts(Created: 0, Updated: 2, Restored: 0, Unchanged: 8));
+    }
+
+    /// <summary>
+    /// Delta R1: a concurrent <c>for share</c> holder of the parent item does not block an import that only reads it —
+    /// share and share never conflict, which is exactly why the read-only parent is locked that way instead of
+    /// <c>for update</c>. This is the test that fails if the item rank goes back to one <c>for update</c> pass.
+    /// </summary>
+    [Fact]
+    public async Task ParentItemHeldForShare_ImportProceeds()
+    {
+        await using var world = await StartAsync();
+
+        (await ImportAsync(world, world.Project, Single())).IsSuccess.ShouldBeTrue();
+        var (_, itemId, code) = await CaseIdentityAsync(world);
+
+        await using var holder = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database), world.Org);
+        await holder.ExecuteAsync(
+            "select 1 from public.checklist_item where id = @id for share",
+            ("id", itemId));
+
+        var clock = Stopwatch.StartNew();
+        var updated = await ImportAsync(world, world.Project, Single(code: code, title: "Case 1.1 edited"));
+        clock.Stop();
+
+        updated.IsSuccess.ShouldBeTrue(updated.Error?.Message);
+        clock.Elapsed.ShouldBeLessThan(
+            TimeSpan.FromSeconds(4),
+            "share and share never conflict, so the import must not wait on the lock bound at all");
+        (await CaseTitlesAsync(world)).ShouldBe(["Case 1.1 edited"]);
+    }
+
+    /// <summary>
     /// AC10: a file that carries another project's case codes can neither update nor collide with that project's rows — a
     /// code is unique per project, and the prefix rule refuses one that is not this project's.
     /// </summary>
@@ -704,19 +803,23 @@ public sealed class AuthoringImporterTests
         var (_, _, code) = await CaseIdentityAsync(world);
         var versions = await VersionCountAsync(world);
 
-        // `retired` is a legal case state but the move needs a reason, which the row table cannot carry (Code F1/F3).
+        // `retired` is a legal case state but the move needs a reason, which the row table cannot carry (Code F1/F3). Index 5
+        // is the case row, so this cannot pass on the item refusal below.
         var retire = await ImportAsync(world, world.Project, Single(code: code, state: "retired"));
 
         retire.IsSuccess.ShouldBeFalse();
         retire.Error!.Details.ShouldNotBeNull();
-        retire.Error.Details.ShouldContain(detail => detail.Path == "/state" && detail.Reason == "value_invalid");
+        retire.Error.Details.ShouldContain(
+            detail => detail.Index == 5 && detail.Path == "/state" && detail.Reason == "value_invalid");
 
-        // `approved` is not a checklist-item state at all.
-        var illegal = await ImportAsync(world, world.Project, Single(code: code, itemState: "approved"));
+        // The item's own reasonless retire: `retired` is a state the schema accepts (so the row reaches the state machine,
+        // unlike a value outside the enum), and the machine still refuses the move for want of a reason. Index 4.
+        var illegal = await ImportAsync(world, world.Project, Single(code: code, itemState: "retired"));
 
         illegal.IsSuccess.ShouldBeFalse();
         illegal.Error!.Details.ShouldNotBeNull();
-        illegal.Error.Details.ShouldContain(detail => detail.Path == "/state" && detail.Reason == "value_invalid");
+        illegal.Error.Details.ShouldContain(
+            detail => detail.Index == 4 && detail.Path == "/state" && detail.Reason == "value_invalid");
 
         (await VersionCountAsync(world)).ShouldBe(versions, "a refused row writes nothing");
     }

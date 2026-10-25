@@ -976,7 +976,7 @@ internal static class XlsxReader
     /// most one character past the budget, which is what the caller compares against the cell cap.
     /// </param>
     /// <returns>The element's text, whitespace included.</returns>
-    private static string ReadElementText(XmlReader reader, int maxChars)
+    internal static string ReadElementText(XmlReader reader, int maxChars)
     {
         if (reader.IsEmptyElement)
         {

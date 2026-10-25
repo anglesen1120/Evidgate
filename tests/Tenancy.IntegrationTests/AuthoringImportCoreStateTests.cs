@@ -87,9 +87,13 @@ public sealed class AuthoringImportCoreStateTests
         issues[0].Reason.ShouldBe("value_invalid");
     }
 
-    /// <summary>A state outside the kind's set is refused the same way, for an item row.</summary>
+    /// <summary>
+    /// The item half of the same rule: <c>retired</c> is a legal item state the schema accepts, and the move into it is
+    /// refused all the same because the import carries no reason. The name says which refusal this is — a reasonless
+    /// retire, not an unknown state (delta R4).
+    /// </summary>
     [Fact]
-    public void MoveToAnItemStateTheMachineDoesNotAllow_IsRefused()
+    public void MoveAnItemIntoRetiredWithoutAReason_IsRefused()
     {
         var issues = new List<ImportIssue>();
 
