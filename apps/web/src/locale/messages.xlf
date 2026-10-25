@@ -1960,19 +1960,19 @@
         <source>Allowed Git ref patterns</source>
       </trans-unit>
       <trans-unit id="onboarding.connect.refs-hint" datatype="html">
-        <source>One per line, for example refs/heads/your-branch. Enter 1–32 patterns.</source>
+        <source>One per line, for example refs/heads/your-branch. Enter 1–<x id="MAX_REF_ENTRIES" equiv-text="${MAX_REF_ENTRIES}"/> patterns.</source>
       </trans-unit>
       <trans-unit id="onboarding.connect.refs-error" datatype="html">
-        <source>Enter between 1 and 32 non-empty ref patterns.</source>
+        <source>Enter between 1 and <x id="MAX_REF_ENTRIES" equiv-text="${MAX_REF_ENTRIES}"/> non-empty ref patterns.</source>
       </trans-unit>
       <trans-unit id="onboarding.connect.workflows" datatype="html">
         <source>Allowed workflow refs</source>
       </trans-unit>
       <trans-unit id="onboarding.connect.workflows-hint" datatype="html">
-        <source>One per line, for example owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Enter 1–32 refs.</source>
+        <source>One per line, for example owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Enter 1–<x id="MAX_REF_ENTRIES" equiv-text="${MAX_REF_ENTRIES}"/> refs.</source>
       </trans-unit>
       <trans-unit id="onboarding.connect.workflows-error" datatype="html">
-        <source>Enter between 1 and 32 non-empty workflow refs.</source>
+        <source>Enter between 1 and <x id="MAX_REF_ENTRIES" equiv-text="${MAX_REF_ENTRIES}"/> non-empty workflow refs.</source>
       </trans-unit>
       <trans-unit id="onboarding.connect.binding-submit" datatype="html">
         <source>Create CI binding</source>
@@ -1990,7 +1990,7 @@
         <source>Token name</source>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-name-error" datatype="html">
-        <source>Enter a token name between 1 and 128 characters.</source>
+        <source>Enter a token name between 1 and <x id="MAX_TOKEN_NAME_LENGTH" equiv-text="${MAX_TOKEN_NAME_LENGTH}"/> characters.</source>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-submit" datatype="html">
         <source>Create ingest token</source>
@@ -2089,7 +2089,139 @@
         <source>A one-time value is shown. Save it before leaving this step.</source>
       </trans-unit>
       <trans-unit id="onboarding.connect.list-truncated" datatype="html">
-        <source>Showing the first 10; more exist, so a newer entry may not appear here.</source>
+        <source>Showing the first <x id="CONNECT_LIST_LIMIT" equiv-text="${CONNECT_LIST_LIMIT}"/> entries; more exist, so a newer entry may not appear here.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.rotate-named" datatype="html">
+        <source>Rotate token <x id="TOKEN_NAME" equiv-text="${name}"/></source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.title" datatype="html">
+        <source>Connection health</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.expires" datatype="html">
+        <source>Expires (UTC):</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.overlap" datatype="html">
+        <source>Rotation overlap ends (UTC):</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.last-use" datatype="html">
+        <source>Last successful token use (UTC)</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.not-recorded" datatype="html">
+        <source>Not recorded</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.last-use-hint" datatype="html">
+        <source>Token use is not a project-wide ingest timestamp. OIDC-only activity is not shown, and token-use timestamps are updated at most once every 60 seconds.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.lower-bound" datatype="html">
+        <source>The token list is incomplete. The latest token use shown may be older than the newest use; an unlisted token may have been used more recently.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.truncated" datatype="html">
+        <source>Only part of the credential list is shown. Health reflects the listed credentials; an unlisted credential may still be usable.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.state-healthy" datatype="html">
+        <source>Healthy</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.state-pending" datatype="html">
+        <source>Pending</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.state-unhealthy" datatype="html">
+        <source>Unhealthy</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.state-unknown" datatype="html">
+        <source>Unknown</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-usable" datatype="html">
+        <source>At least one listed credential is usable. This does not confirm a successful ingest.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-rotating" datatype="html">
+        <source>Only tokens in their rotation overlap are usable. Update CI to use the replacement before the overlap ends.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-pending" datatype="html">
+        <source>No listed credential is usable yet. Run the first CI exchange to verify the pending binding.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-truncated" datatype="html">
+        <source>No usable credential is shown, but the list is incomplete. Connection health cannot be determined from this list.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-unusable" datatype="html">
+        <source>None of the listed credentials is usable. Create an ingest token or enable a CI binding.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-empty" datatype="html">
+        <source>No connection credentials are recorded. Create a CI binding or an ingest token.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-active" datatype="html">
+        <source>Active</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-pending" datatype="html">
+        <source>Pending verification</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-disabled" datatype="html">
+        <source>Disabled</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-rotated" datatype="html">
+        <source>Rotated</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-expired" datatype="html">
+        <source>Expired</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-revoked" datatype="html">
+        <source>Revoked</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-active" datatype="html">
+        <source>Usable.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-rotating" datatype="html">
+        <source>Usable during the rotation overlap. Switch CI to the replacement token before it ends.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-pending" datatype="html">
+        <source>Not usable until the first CI exchange verifies this binding.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-expired" datatype="html">
+        <source>Not usable: the token has expired.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-revoked" datatype="html">
+        <source>Not usable: the token has been revoked.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-disabled" datatype="html">
+        <source>Not usable: the binding is disabled.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-rotated-ended" datatype="html">
+        <source>Not usable: the rotation overlap has ended. Use the replacement token.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.variables" datatype="html">
+        <source>Set EVIDGATE_API_URL and EVIDGATE_PROJECT as non-secret CI variables.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.token-reference" datatype="html">
+        <source>Ingest token: <x id="TOKEN_NAME" equiv-text="${name}"/> (prefix: <x id="TOKEN_PREFIX" equiv-text="${prefix}"/>).</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.token-injection" datatype="html">
+        <source>Inject EVIDGATE_INGEST_TOKEN from your CI masked secret store. Never paste its value here.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.binding-reference" datatype="html">
+        <source>GitHub OIDC repository: <x id="REPOSITORY" equiv-text="${repository}"/>.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.binding-variable" datatype="html">
+        <source>Pass the EVIDGATE_BINDING_CHALLENGE repository variable by name; keep its value out of this file.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.oidc-permission" datatype="html">
+        <source>Grant id-token: write in the CI job so the CLI can request GitHub OIDC credentials.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.create-token" datatype="html">
+        <source>Create an ingest token first, then inject EVIDGATE_INGEST_TOKEN from your CI masked secret store.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.title" datatype="html">
+        <source>CLI quickstart</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.hint" datatype="html">
+        <source>Replace the API URL placeholder with your API root, without /v1. Run these commands with your CI variables and credentials injected. This snippet contains metadata only, not credentials.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.copy" datatype="html">
+        <source>Copy CLI quickstart commands</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.copied" datatype="html">
+        <source>CLI quickstart commands copied.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.copy-failed" datatype="html">
+        <source>Copy was unavailable. Select the commands above and copy them manually.</source>
       </trans-unit>
     </body>
   </file>

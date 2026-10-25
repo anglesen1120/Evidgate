@@ -28,9 +28,13 @@ import ingestTokenRotate from '../../../../../../fixtures/web-api/ingest-token-r
 import ingestTokenRotateConflict from '../../../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
 import ingestTokensList from '../../../../../../fixtures/web-api/ingest-tokens-list/input.json';
 import ingestTokensListOnboardingConnected from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-connected/input.json';
+import ingestTokensListOnboardingForbidden from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-forbidden/input.json';
 import ingestTokensListOnboardingProject from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-project/input.json';
+import ingestTokensListOnboardingProjectNotFound from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-project-not-found/input.json';
 import ingestTokensListOnboardingRun from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-run/input.json';
 import ingestTokensListOnboardingToken from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
+import ingestTokensListOnboardingTokenUsed from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token-used/input.json';
+import ingestTokensListOnboardingUnusable from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-unusable/input.json';
 import membershipCreateInviteExists from '../../../../../../fixtures/web-api/membership-create-invite-exists/input.json';
 import membershipCreateOk from '../../../../../../fixtures/web-api/membership-create-ok/input.json';
 import membershipRemoveInvalidTransition from '../../../../../../fixtures/web-api/membership-remove-invalid-transition/input.json';
@@ -215,6 +219,25 @@ export interface FixtureDocument {
  * suite can prove the invite and remove controls are absent from the DOM rather than disabled.
  * Error variants are named after the state (`invite-exists`, `last-admin`, `invalid-transition`),
  * not after the wire code, matching the corpus's `settings-*` rows.
+ *
+ * 09.2.1-T7 added four `listIngestTokens` rows for step 2's connection-health panel and its CLI
+ * quickstart, each a variant of the same operation the wizard already reads:
+ *
+ *   `onboarding-token-used`     one `active` token (never used before: `last_used_at` set to
+ *                               2026-10-24T09:12:34Z), so the panel has a healthy credential and a
+ *                               recorded use, and the quickstart names that token's metadata;
+ *   `onboarding-unusable`       a `revoked` and an `expired` token and nothing else — both lists
+ *                               non-empty, so the step-2 derivation still completes on presence,
+ *                               while the health panel has no usable credential (`unhealthy`);
+ *   `onboarding-forbidden`      the 403 of that same read;
+ *   `onboarding-project-not-found` its 404.
+ *
+ * The two refusals exist because the credential read is one of the three project reads
+ * `OnboardingProgressService.load` issues together: a request the server refuses must reject the
+ * resume (the shell renders the forbidden / not-found pattern) instead of publishing a step with an
+ * empty health panel — a wrong step is exactly what 00 §9.2 forbids. Their `X-Request-Id` values
+ * (`…f1`–`…f4`) are distinct from the older onboarding rows so a page that echoes one can only echo
+ * the answer it actually received.
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
@@ -234,9 +257,25 @@ export const FIXTURE_CATALOG: readonly {
     name: 'ingest-tokens-list-onboarding-connected',
     document: ingestTokensListOnboardingConnected,
   },
+  {
+    name: 'ingest-tokens-list-onboarding-forbidden',
+    document: ingestTokensListOnboardingForbidden,
+  },
   { name: 'ingest-tokens-list-onboarding-project', document: ingestTokensListOnboardingProject },
+  {
+    name: 'ingest-tokens-list-onboarding-project-not-found',
+    document: ingestTokensListOnboardingProjectNotFound,
+  },
   { name: 'ingest-tokens-list-onboarding-run', document: ingestTokensListOnboardingRun },
   { name: 'ingest-tokens-list-onboarding-token', document: ingestTokensListOnboardingToken },
+  {
+    name: 'ingest-tokens-list-onboarding-token-used',
+    document: ingestTokensListOnboardingTokenUsed,
+  },
+  {
+    name: 'ingest-tokens-list-onboarding-unusable',
+    document: ingestTokensListOnboardingUnusable,
+  },
   { name: 'membership-create-invite-exists', document: membershipCreateInviteExists },
   { name: 'membership-create-ok', document: membershipCreateOk },
   { name: 'membership-remove-invalid-transition', document: membershipRemoveInvalidTransition },

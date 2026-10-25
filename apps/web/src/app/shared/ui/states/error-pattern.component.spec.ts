@@ -124,6 +124,39 @@ describe('ErrorPatternComponent', () => {
     expect(root.querySelector('h2')?.textContent).toBe(heading);
   });
 
+  it('keeps the default heading level at h2 and renders no other level', () => {
+    expect(root.querySelector('.state-panel__title')?.tagName).toBe('H2');
+    expect(root.querySelector('h3, h4')).toBeNull();
+  });
+
+  it('renders the requested heading level and drops the default h2', () => {
+    fixture.componentRef.setInput('headingLevel', 3);
+    fixture.detectChanges();
+    expect(root.querySelector('h3.state-panel__title')?.textContent).toBe('Service unavailable');
+    expect(root.querySelector('h2')).toBeNull();
+
+    fixture.componentRef.setInput('headingLevel', 4);
+    fixture.detectChanges();
+    expect(root.querySelector('h4.state-panel__title')?.textContent).toBe('Service unavailable');
+    expect(root.querySelector('h2, h3')).toBeNull();
+  });
+
+  it('applies the requested heading level to the empty variant without an announcement', () => {
+    fixture.componentRef.setInput('error', null);
+    fixture.componentRef.setInput('headingLevel', 3);
+    fixture.detectChanges();
+    expect(root.querySelector('[role="alert"]')).toBeNull();
+    expect(root.querySelector('h3.state-panel__title')?.textContent).toBe('Something went wrong');
+    expect(root.querySelector('h2')).toBeNull();
+  });
+
+  it('exposes the request id through its test id on the existing metadata element', () => {
+    const requestId = root.querySelector('[data-testid="error-request-id"]');
+    expect(requestId?.textContent).toContain('request-001');
+    expect(requestId?.classList.contains('error-pattern__request-id')).toBe(true);
+    expect(requestId?.classList.contains('state-panel__metadata')).toBe(true);
+  });
+
   it('omits a missing request id and exposes no request headers, bodies or details', () => {
     fixture.componentRef.setInput('error', {
       ...failure,

@@ -5,8 +5,8 @@
 //
 // What is pinned here:
 //   - the three project reads are issued together, not one after another (a resume is one round
-//     trip after the project, not three), each with the page size the panel needs (`limit: 10` for
-//     step 2's two lists, `limit: 1` for the oldest run);
+//     trip after the project, not three), each with the page size the panel needs
+//     (`CONNECT_LIST_LIMIT` rows for step 2's two lists, `limit: 1` for the oldest run);
 //   - step 2 completes on *presence* — a binding with no token, a token with no binding — and the
 //     progress carries the rows themselves, in server order, so step 2's panel can render metadata
 //     for a project it resumed on (AC2, AC7: a resume re-issues nothing); each list also reports
@@ -41,7 +41,11 @@ import {
   isApiRequestError,
   type ApiErrorKind,
 } from '../../../core/http/api-error';
-import { OnboardingProgressService, type OnboardingProgress } from './onboarding-progress.service';
+import {
+  CONNECT_LIST_LIMIT,
+  OnboardingProgressService,
+  type OnboardingProgress,
+} from './onboarding-progress.service';
 
 type ProjectListQuery = NonNullable<ListProjectsData['query']>;
 
@@ -307,8 +311,8 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     // two lists are read with the page size the panel shows; the run read still asks for one row.
     expect(data.projectReadIds).toEqual(['p-1']);
     expect(data.projectCalls).toEqual([]);
-    expect(data.bindingQueries).toEqual([{ limit: 10 }]);
-    expect(data.tokenQueries).toEqual([{ limit: 10 }]);
+    expect(data.bindingQueries).toEqual([{ limit: CONNECT_LIST_LIMIT }]);
+    expect(data.tokenQueries).toEqual([{ limit: CONNECT_LIST_LIMIT }]);
     expect(data.runQueries).toEqual([{ limit: 1 }]);
   });
 

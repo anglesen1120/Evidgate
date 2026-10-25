@@ -13,10 +13,11 @@
 //   - `getRun` follows `listRuns`, because its run id is what the list answered (step 4 reads
 //     `current_evidence_revision_id`, which the list row does not carry).
 //
-// Step 2's two lists are read with `limit: 10`: step 2's panel shows the rows it created or
-// resumed with (T2.2: metadata only — neither list carries a secret), while the done-condition
-// stays presence — `done[2]` is "either list is not empty", exactly as T1 shipped it — so a token
-// without a binding (or a binding without a token) completes step 2 either way (AC2). Because the
+// Step 2's two lists are read with `CONNECT_LIST_LIMIT` rows: step 2's panel shows the rows it
+// created or resumed with (T2.2: metadata only — neither list carries a secret), and the health
+// panel derives its state from those rows (09.2.1-T7), while the done-condition stays presence —
+// `done[2]` is "either list is not empty", exactly as T1 shipped it — so a token without a
+// binding (or a binding without a token) completes step 2 either way (AC2). Because the
 // panel renders one page, each list also reports whether the server held more rows than that page
 // (`bindingsTruncated` / `tokensTruncated`: the response carried a `next_cursor`), so the panel can
 // say the rows shown are not all of them instead of implying the project has exactly these.
@@ -59,6 +60,18 @@ const STEP_THREE_DONE: Partial<Record<RunStateDto['state'], true>> = {
   incomplete: true,
 };
 
+/**
+ * The page size of step 2's two lists (`listCiBindings`, `listIngestTokens`), which is the
+ * contract's own default: `Limit` in `contracts/openapi.yaml` is `default: 50`, `maximum: 200`,
+ * and both list operations declare it, so naming it explicitly changes what the server answers
+ * by nothing. The rows are rendered, not merely counted — the health panel derives its state from
+ * them (09.2.1-T7) — so one page has to be the inventory the panel shows; a project that outgrows
+ * it answers a `next_cursor`, which the progress reports as `bindingsTruncated`/`tokensTruncated`
+ * instead of silently shortening the list. Exported so the two reads and the spec that pins them
+ * agree on one value.
+ */
+export const CONNECT_LIST_LIMIT = 50;
+
 /** What the wizard knows after one resume: the project and the five done-conditions. */
 export interface OnboardingProgress {
   /** The project the wizard resumes on; `null` only when the org has none (step 1). */
@@ -72,8 +85,9 @@ export interface OnboardingProgress {
    * The project's CI bindings and ingest tokens, in the order the server answered them. Step 2's
    * panel renders these rows as metadata (a binding's `status`, a token's `prefix` and `status`);
    * neither list carries a secret, so resuming a project that has one of them shows what exists
-   * without re-issuing anything (AC2, AC7). The reads ask for `limit: 10` — the page a panel
-   * shows — because the rows are rendered, not merely counted.
+   * without re-issuing anything (AC2, AC7). The reads ask for `CONNECT_LIST_LIMIT` rows — the
+   * page a panel shows — because the rows are rendered, not merely counted, and step 2's health
+   * panel derives its state from them (09.2.1-T7).
    */
   readonly bindings: readonly CiBindingView[];
   readonly tokens: readonly IngestTokenView[];
@@ -124,8 +138,8 @@ export class OnboardingProgressService {
     // Issued together: the array is built before `Promise.all` subscribes, so all three requests
     // are in flight while the first one is still pending.
     const [bindings, tokens, runs] = await Promise.all([
-      this.data.listCiBindings(project.id, { limit: 10 }),
-      this.data.listIngestTokens(project.id, { limit: 10 }),
+      this.data.listCiBindings(project.id, { limit: CONNECT_LIST_LIMIT }),
+      this.data.listIngestTokens(project.id, { limit: CONNECT_LIST_LIMIT }),
       this.data.listRuns(project.id, { limit: 1 }),
     ]);
     const oldest = pickOldestRun(runs.items);

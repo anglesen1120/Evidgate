@@ -12,6 +12,7 @@ import { OnboardingDataService } from '../../../core/data/onboarding-data.servic
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
+import { CONNECT_LIST_LIMIT } from '../data/onboarding-progress.service';
 import { OnboardingStore } from '../onboarding.store';
 import { ConnectCiPage } from './connect-ci.page';
 
@@ -64,6 +65,7 @@ describe('ConnectCiPage', () => {
   const tokens = signal<readonly IngestTokenView[]>([]);
   const bindingsTruncated = signal(false);
   const tokensTruncated = signal(false);
+  const project = signal<{ readonly slug: string } | null>({ slug: 'acme-web' });
   const refreshFailure = signal<'unavailable' | null>(null);
   const done = computed(() => ({ 2: bindings().length + tokens().length > 0 }));
   const canGoNext = computed(() => done()[2]);
@@ -78,6 +80,7 @@ describe('ConnectCiPage', () => {
     tokens.set([]);
     bindingsTruncated.set(false);
     tokensTruncated.set(false);
+    project.set({ slug: 'acme-web' });
     refreshFailure.set(null);
     createCiBinding
       .mockReset()
@@ -110,6 +113,7 @@ describe('ConnectCiPage', () => {
             tokens,
             bindingsTruncated,
             tokensTruncated,
+            project,
             done,
             canGoNext,
             refreshFailure,
@@ -317,6 +321,12 @@ describe('ConnectCiPage', () => {
       expect(error?.querySelectorAll('[role="alert"]')).toHaveLength(1);
       expect(error?.querySelector('[role="alert"] [role="alert"]')).toBeNull();
       expect(error?.querySelector('button')).toBeNull();
+      expect(error?.querySelector('[data-testid="error-request-id"]')?.textContent).toContain(
+        'request-1',
+      );
+      // The step shell already owns the h2; the refusal title is one level below it.
+      expect(error?.querySelector('h3.state-panel__title')).not.toBeNull();
+      expect(error?.querySelector('h2')).toBeNull();
       expect(error?.textContent).toContain('/repository_id');
       expect(error?.textContent).toContain('Exact field reason.');
       expect(
@@ -630,6 +640,11 @@ describe('ConnectCiPage', () => {
       'connect-token-name-token-1',
       'connect-token-name-token-2',
     ]);
+    // The visible label is the same on every row, so each button names its own token.
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Rotate token Build upload',
+      'Rotate token Other workflow',
+    ]);
     for (const button of buttons) {
       const row = button.closest('[data-testid="connect-token-row"]')!;
       expect(row.querySelector(`#${button.getAttribute('aria-describedby')}`)).toBe(
@@ -647,7 +662,9 @@ describe('ConnectCiPage', () => {
       '[data-testid="connect-oidc-panel"] [data-testid="connect-bindings-truncated"]',
     );
     expect(bindingNotice).not.toBeNull();
-    expect(bindingNotice?.textContent?.trim()).not.toBe('');
+    // The page size the service reads is the one the notice names; no second literal.
+    expect(bindingNotice?.textContent).toContain(String(CONNECT_LIST_LIMIT));
+    expect(bindingNotice?.textContent).not.toContain('first 10');
     expect(root.querySelector('[data-testid="connect-tokens-truncated"]')).toBeNull();
     bindingsTruncated.set(false);
     tokensTruncated.set(true);
@@ -657,6 +674,79 @@ describe('ConnectCiPage', () => {
       '[data-testid="connect-token-panel"] [data-testid="connect-tokens-truncated"]',
     );
     expect(tokenNotice).not.toBeNull();
-    expect(tokenNotice?.textContent?.trim()).not.toBe('');
+    expect(tokenNotice?.textContent).toContain(String(CONNECT_LIST_LIMIT));
+  });
+
+  it('derives connection health from the loaded lists and mounts the CLI quickstart', async () => {
+    bindings.set([BINDING]);
+    // A token without an expiry stays usable whatever the wall clock says on the test host.
+    tokens.set([{ ...TOKEN, expires_at: null }]);
+    await fixture.whenStable();
+    const health = root.querySelector('[data-testid="connection-health"]');
+    expect(health).not.toBeNull();
+    expect(health?.getAttribute('data-health-state')).toBe('healthy');
+    expect(root.querySelectorAll('[data-testid="connection-health-credential"]')).toHaveLength(2);
+    const quickstart = root.querySelector('[data-testid="cli-quickstart"]');
+    expect(quickstart).not.toBeNull();
+    const snippet = quickstart?.querySelector('[data-testid="cli-quickstart-snippet"]');
+    // Metadata only: the token by name and prefix, and the loaded project slug.
+    expect(snippet?.textContent).toContain('Build upload');
+    expect(snippet?.textContent).toContain('egt_prefix');
+    expect(snippet?.textContent).toContain('acme-web');
+    expect(createCiBinding).not.toHaveBeenCalled();
+    expect(createIngestToken).not.toHaveBeenCalled();
+    expect(rotateIngestToken).not.toHaveBeenCalled();
+  });
+
+  it('references an OIDC binding by repository name when no token is usable', async () => {
+    bindings.set([BINDING]);
+    await fixture.whenStable();
+    expect(
+      root.querySelector('[data-testid="connection-health"]')?.getAttribute('data-health-state'),
+    ).toBe('pending');
+    const snippet = root.querySelector('[data-testid="cli-quickstart-snippet"]');
+    expect(snippet?.textContent).toContain('acme/web');
+    expect(snippet?.textContent).toContain('EVIDGATE_BINDING_CHALLENGE');
+    // The challenge value itself is never in this snippet, only the variable name.
+    expect(snippet?.textContent).not.toContain(CHALLENGE);
+  });
+
+  it('shows an unhealthy connection for a revoked-only project while step 2 stays done', async () => {
+    tokens.set([{ ...TOKEN, status: 'revoked' }]);
+    await fixture.whenStable();
+    const health = root.querySelector('[data-testid="connection-health"]');
+    expect(health?.getAttribute('data-health-state')).toBe('unhealthy');
+    // Presence still completes step 2 (plan §6): the health panel reports, it does not gate.
+    expect(canGoNext()).toBe(true);
+    expect(root.querySelector('[data-testid="connect-token-row"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="connect-token-rotate"]')).toBeNull();
+    expect(root.querySelector('[data-testid="cli-quickstart"]')?.textContent).toContain(
+      'Create an ingest token first',
+    );
+  });
+
+  it('names the token in the quickstart and keeps the one-time secret inside the reveal', async () => {
+    refresh.mockImplementationOnce(() => {
+      tokens.set([{ ...TOKEN, expires_at: null }]);
+      return Promise.resolve();
+    });
+    await fill({ 'connect-token-name': 'Build upload' });
+    await submit('token');
+    expect(slot.current()).toEqual({ source: 'ingest-token', value: SECRET });
+    expect(root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')?.value).toBe(
+      SECRET,
+    );
+    const quickstart = root.querySelector('[data-testid="cli-quickstart"]')!;
+    const snippet = quickstart.querySelector('[data-testid="cli-quickstart-snippet"]');
+    expect(snippet?.textContent).toContain('Build upload');
+    expect(snippet?.textContent).toContain('egt_prefix');
+    expect(snippet?.textContent).not.toContain(SECRET);
+    expect(quickstart.textContent).not.toContain(SECRET);
+    expect(root.querySelector('[data-testid="connection-health"]')?.textContent).not.toContain(
+      SECRET,
+    );
+    // The only place the value exists is the component-scoped reveal input.
+    expect(root.outerHTML).not.toContain(SECRET);
+    expect(root.querySelector('[data-testid="connect-reveal"]')).not.toBeNull();
   });
 });
