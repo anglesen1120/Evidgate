@@ -1,0 +1,9 @@
+{
+  "operation_id": "cancelMembershipInvite",
+  "variant": "ok",
+  "status": 204,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000da"
+  },
+  "latency_ms": 0
+}

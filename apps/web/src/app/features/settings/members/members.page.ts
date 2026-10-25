@@ -18,6 +18,8 @@ import { MemberListComponent, MEMBERS_COPY } from './member-list.component';
 import { MembersStore } from './members.store';
 import { RemoveDialogComponent } from './remove-dialog.component';
 import { RoleMatrixComponent } from './role-matrix.component';
+import { ResendInviteDialogComponent } from './resend-invite-dialog.component';
+import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
 
 /** Org-scoped in both the Settings tab and the Members sidebar destination. */
 @Component({
@@ -29,6 +31,8 @@ import { RoleMatrixComponent } from './role-matrix.component';
     InviteDialogComponent,
     RemoveDialogComponent,
     EditRolesDialogComponent,
+    ResendInviteDialogComponent,
+    CancelInviteDialogComponent,
   ],
   providers: [MembersStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -92,6 +96,8 @@ export class MembersPage {
   private readonly inviteDialog = viewChild(InviteDialogComponent);
   private readonly removeDialog = viewChild(RemoveDialogComponent);
   private readonly editDialog = viewChild(EditRolesDialogComponent);
+  private readonly resendDialog = viewChild(ResendInviteDialogComponent);
+  private readonly cancelInviteDialog = viewChild(CancelInviteDialogComponent);
 
   constructor() {
     effect(() => {
@@ -100,9 +106,7 @@ export class MembersPage {
       this.saved.set(false);
       untracked(() => {
         this.clearPagingAlert();
-        this.inviteDialog()?.close();
-        this.removeDialog()?.close();
-        this.editDialog()?.close();
+        this.closeDialogs();
         if (org) void this.store.load(org.id);
       });
     });
@@ -125,14 +129,41 @@ export class MembersPage {
     }
   }
   protected openInvite(event: Event): void {
-    if (this.canWrite() && event.currentTarget instanceof HTMLElement)
+    if (this.canWrite() && event.currentTarget instanceof HTMLElement) {
+      this.closeDialogs();
       this.inviteDialog()?.open(event.currentTarget);
+    }
   }
   protected openRemove(event: { member: MembershipView; opener: HTMLElement }): void {
-    if (this.canWrite()) this.removeDialog()?.open(event.member, event.opener);
+    if (this.canWrite()) {
+      this.closeDialogs();
+      this.removeDialog()?.open(event.member, event.opener);
+    }
   }
   protected openEditRoles(event: { member: MembershipView; opener: HTMLElement }): void {
-    if (this.canWrite()) this.editDialog()?.open(event.member, event.opener);
+    if (this.canWrite()) {
+      this.closeDialogs();
+      this.editDialog()?.open(event.member, event.opener);
+    }
+  }
+  protected openResend(event: { member: MembershipView; opener: HTMLElement }): void {
+    if (this.canWrite()) {
+      this.closeDialogs();
+      this.resendDialog()?.open(event.member, event.opener);
+    }
+  }
+  protected openCancelInvite(event: { member: MembershipView; opener: HTMLElement }): void {
+    if (this.canWrite()) {
+      this.closeDialogs();
+      this.cancelInviteDialog()?.open(event.member, event.opener);
+    }
+  }
+  private closeDialogs(): void {
+    this.inviteDialog()?.close();
+    this.removeDialog()?.close();
+    this.editDialog()?.close();
+    this.resendDialog()?.close();
+    this.cancelInviteDialog()?.close();
   }
   protected completed(removed = false): void {
     this.saved.set(true);

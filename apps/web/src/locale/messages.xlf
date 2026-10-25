@@ -2359,6 +2359,62 @@
       <trans-unit id="settings.audit.paging-retry" datatype="html"><source>Retry loading more</source></trans-unit>
       <trans-unit id="settings.audit.paging-failed" datatype="html"><source>The next audit page could not be loaded. The rows already shown are unchanged.</source></trans-unit>
       <trans-unit id="settings.audit.browse-capped" datatype="html"><source>Showing the newest <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> rows. Narrow the filters to review older activity.</source></trans-unit>
+      <trans-unit id="settings.members.resend" datatype="html"><source>Resend invite</source></trans-unit>
+      <trans-unit id="settings.members.cancel-invite" datatype="html"><source>Cancel invite</source></trans-unit>
+      <trans-unit id="settings.members.resend-title" datatype="html"><source>Renew this invitation?</source></trans-unit>
+      <trans-unit id="settings.members.resend-description" datatype="html"><source>The previous invite token will stop working. Copy the new token and share it with the invitee securely.</source></trans-unit>
+      <trans-unit id="settings.members.cancel-invite-title" datatype="html"><source>Cancel this invitation?</source></trans-unit>
+      <trans-unit id="settings.members.cancel-invite-description" datatype="html"><source>The invite token will stop working. This person will not be able to accept the invitation.</source></trans-unit>
+      <trans-unit id="settings.members.reveal-title" datatype="html"><source>Invite token</source></trans-unit>
+      <trans-unit id="settings.members.reveal-warning" datatype="html"><source>Shown once. Copy this token now and share it securely with the invitee, who needs it to accept. If Copy fails, select and copy the value manually.</source></trans-unit>
+      <trans-unit id="settings.members.replay-title" datatype="html"><source>Invitation ready</source></trans-unit>
+      <trans-unit id="settings.members.replay-notice" datatype="html"><source>The invitation was created or renewed, but its token can no longer be shown. Use Resend on the member row to get a new one.</source></trans-unit>
+      <trans-unit id="settings.members.copy" datatype="html"><source>Copy</source></trans-unit>
+      <trans-unit id="settings.members.copied" datatype="html"><source>Copied</source></trans-unit>
+      <trans-unit id="settings.members.dismiss" datatype="html"><source>Dismiss</source></trans-unit>
+      <trans-unit id="settings.members.close" datatype="html"><source>Close</source></trans-unit>
+      <trans-unit id="settings.secrets.reveal-title" datatype="html"><source>Credential rotated</source></trans-unit>
+      <trans-unit id="settings.secrets.reveal-heading" datatype="html"><source>Copy the new credential once</source></trans-unit>
+      <trans-unit id="settings.secrets.reveal-warning" datatype="html"><source>This value is shown only once. Store it securely and update your CI. If copying fails, select and copy the value manually before dismissing.</source></trans-unit>
+      <trans-unit id="settings.secrets.reveal-copy" datatype="html"><source>Copy credential</source></trans-unit>
+      <trans-unit id="settings.secrets.reveal-copied" datatype="html"><source>Credential copied.</source></trans-unit>
+      <trans-unit id="settings.secrets.reveal-dismiss" datatype="html"><source>Dismiss and clear credential</source></trans-unit>
+      <trans-unit id="settings.secrets.reveal-overlap" datatype="html"><source>The previous token keeps working until</source></trans-unit>
+      <trans-unit id="settings.secrets.expires-soon" datatype="html"><source>Expires soon</source></trans-unit>
+      <trans-unit id="settings.secrets.expired" datatype="html"><source>Expired</source></trans-unit>
+      <trans-unit id="settings.secrets.title" datatype="html"><source>Secret references</source></trans-unit>
+      <trans-unit id="settings.secrets.description" datatype="html"><source>Inspect reference metadata and rotation timing. Current credential values cannot be fetched or displayed.</source></trans-unit>
+      <trans-unit id="settings.secrets.project" datatype="html"><source>Project</source></trans-unit>
+      <trans-unit id="settings.secrets.scope" datatype="html"><source>Resolution scope</source></trans-unit>
+      <trans-unit id="settings.secrets.prefix" datatype="html"><source>Token prefix</source></trans-unit>
+      <trans-unit id="settings.secrets.status" datatype="html"><source>Rotation state</source></trans-unit>
+      <trans-unit id="settings.secrets.expires" datatype="html"><source>Expires · UTC</source></trans-unit>
+      <trans-unit id="settings.secrets.overlap" datatype="html"><source>Overlap ends · UTC</source></trans-unit>
+      <trans-unit id="settings.secrets.used" datatype="html"><source>Last used · UTC</source></trans-unit>
+      <trans-unit id="settings.secrets.created" datatype="html"><source>Created · UTC</source></trans-unit>
+      <trans-unit id="settings.secrets.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
+      <trans-unit id="settings.secrets.no-expiry" datatype="html"><source>No expiry</source></trans-unit>
+      <trans-unit id="settings.secrets.no-overlap" datatype="html"><source>No overlap window</source></trans-unit>
+      <trans-unit id="settings.secrets.never-used" datatype="html"><source>Not used yet</source></trans-unit>
+      <trans-unit id="settings.secrets.rotate" datatype="html"><source>Rotate credential</source></trans-unit>
+      <trans-unit id="settings.secrets.submitting" datatype="html"><source>Rotating…</source></trans-unit>
+      <trans-unit id="settings.secrets.empty-title" datatype="html"><source>No secret references</source></trans-unit>
+      <trans-unit id="settings.secrets.empty-description" datatype="html"><source>Ingest token references will appear here for the selected project.</source></trans-unit>
+      <trans-unit id="settings.secrets.no-projects" datatype="html"><source>No projects available in this organization.</source></trans-unit>
+      <trans-unit id="settings.secrets.more" datatype="html"><source>Load more references</source></trans-unit>
+      <trans-unit id="settings.secrets.previous" datatype="html"><source>Previous references</source></trans-unit>
+      <trans-unit id="settings.secrets.next" datatype="html"><source>Next references</source></trans-unit>
+      <trans-unit id="settings.secrets.paging-failure" datatype="html"><source>The next page could not be loaded. References already shown are unchanged.</source></trans-unit>
+      <trans-unit id="settings.secrets.saved" datatype="html"><source>Rotation recorded. Update your downstream CI with the new credential and verify it there.</source></trans-unit>
+      <trans-unit id="settings.secrets.narrow" datatype="html"><source>Use a wider screen to rotate credentials.</source></trans-unit>
+      <trans-unit id="settings.secrets.status-active" datatype="html"><source>Active</source></trans-unit>
+      <trans-unit id="settings.secrets.status-rotated" datatype="html"><source>Rotated</source></trans-unit>
+      <trans-unit id="settings.secrets.status-revoked" datatype="html"><source>Revoked</source></trans-unit>
+      <trans-unit id="settings.secrets.status-expired" datatype="html"><source>Expired</source></trans-unit>
+      <trans-unit id="settings.secrets.rotate-named" datatype="html"><source>Rotate credential <x id="name" equiv-text="name"/></source></trans-unit>
+      <trans-unit id="settings.secrets.pages-label" datatype="html"><source>Secret references pages</source></trans-unit>
+      <trans-unit id="settings.secrets.rotate-unavailable-hint" datatype="html"><source>The rotation may have been applied. Reload the list and check the status before rotating again.</source></trans-unit>
+      <trans-unit id="settings.secrets.reload" datatype="html"><source>Reload</source></trans-unit>
     </body>
   </file>
 </xliff>

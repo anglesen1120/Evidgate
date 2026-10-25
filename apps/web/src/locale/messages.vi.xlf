@@ -2342,6 +2342,62 @@
       <trans-unit id="settings.audit.paging-retry" datatype="html"><source>Retry loading more</source><target>Thử tải thêm lần nữa</target></trans-unit>
       <trans-unit id="settings.audit.paging-failed" datatype="html"><source>The next audit page could not be loaded. The rows already shown are unchanged.</source><target>Không thể tải trang kiểm toán tiếp theo. Các dòng đã hiển thị được giữ nguyên.</target></trans-unit>
       <trans-unit id="settings.audit.browse-capped" datatype="html"><source>Showing the newest <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> rows. Narrow the filters to review older activity.</source><target>Đang hiển thị <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> dòng mới nhất. Thu hẹp bộ lọc để xem hoạt động cũ hơn.</target></trans-unit>
+      <trans-unit id="settings.members.resend" datatype="html"><source>Resend invite</source><target>Gửi lại lời mời</target></trans-unit>
+      <trans-unit id="settings.members.cancel-invite" datatype="html"><source>Cancel invite</source><target>Huỷ lời mời</target></trans-unit>
+      <trans-unit id="settings.members.resend-title" datatype="html"><source>Renew this invitation?</source><target>Làm mới lời mời này?</target></trans-unit>
+      <trans-unit id="settings.members.resend-description" datatype="html"><source>The previous invite token will stop working. Copy the new token and share it with the invitee securely.</source><target>Mã mời trước đó sẽ ngừng hoạt động. Hãy sao chép mã mới và gửi cho người được mời một cách an toàn.</target></trans-unit>
+      <trans-unit id="settings.members.cancel-invite-title" datatype="html"><source>Cancel this invitation?</source><target>Huỷ lời mời này?</target></trans-unit>
+      <trans-unit id="settings.members.cancel-invite-description" datatype="html"><source>The invite token will stop working. This person will not be able to accept the invitation.</source><target>Mã mời sẽ ngừng hoạt động. Người này sẽ không thể chấp nhận lời mời.</target></trans-unit>
+      <trans-unit id="settings.members.reveal-title" datatype="html"><source>Invite token</source><target>Mã mời</target></trans-unit>
+      <trans-unit id="settings.members.reveal-warning" datatype="html"><source>Shown once. Copy this token now and share it securely with the invitee, who needs it to accept. If Copy fails, select and copy the value manually.</source><target>Chỉ hiển thị một lần. Hãy sao chép mã này ngay và gửi an toàn cho người được mời, họ cần mã để chấp nhận. Nếu nút Sao chép lỗi, hãy chọn và sao chép giá trị thủ công.</target></trans-unit>
+      <trans-unit id="settings.members.replay-title" datatype="html"><source>Invitation ready</source><target>Lời mời đã sẵn sàng</target></trans-unit>
+      <trans-unit id="settings.members.replay-notice" datatype="html"><source>The invitation was created or renewed, but its token can no longer be shown. Use Resend on the member row to get a new one.</source><target>Lời mời đã được tạo hoặc làm mới, nhưng mã của nó không thể hiển thị lại. Dùng Gửi lại trên dòng thành viên để lấy mã mới.</target></trans-unit>
+      <trans-unit id="settings.members.copy" datatype="html"><source>Copy</source><target>Sao chép</target></trans-unit>
+      <trans-unit id="settings.members.copied" datatype="html"><source>Copied</source><target>Đã sao chép</target></trans-unit>
+      <trans-unit id="settings.members.dismiss" datatype="html"><source>Dismiss</source><target>Đóng và xoá giá trị</target></trans-unit>
+      <trans-unit id="settings.members.close" datatype="html"><source>Close</source><target>Đóng</target></trans-unit>
+      <trans-unit id="settings.secrets.reveal-title" datatype="html"><source>Credential rotated</source><target>Đã xoay thông tin xác thực</target></trans-unit>
+      <trans-unit id="settings.secrets.reveal-heading" datatype="html"><source>Copy the new credential once</source><target>Sao chép thông tin xác thực mới, chỉ một lần</target></trans-unit>
+      <trans-unit id="settings.secrets.reveal-warning" datatype="html"><source>This value is shown only once. Store it securely and update your CI. If copying fails, select and copy the value manually before dismissing.</source><target>Giá trị này chỉ hiển thị một lần. Hãy lưu trữ an toàn và cập nhật CI của bạn. Nếu sao chép lỗi, hãy chọn và sao chép giá trị thủ công trước khi đóng.</target></trans-unit>
+      <trans-unit id="settings.secrets.reveal-copy" datatype="html"><source>Copy credential</source><target>Sao chép thông tin xác thực</target></trans-unit>
+      <trans-unit id="settings.secrets.reveal-copied" datatype="html"><source>Credential copied.</source><target>Đã sao chép thông tin xác thực.</target></trans-unit>
+      <trans-unit id="settings.secrets.reveal-dismiss" datatype="html"><source>Dismiss and clear credential</source><target>Đóng và xoá thông tin xác thực</target></trans-unit>
+      <trans-unit id="settings.secrets.reveal-overlap" datatype="html"><source>The previous token keeps working until</source><target>Token trước đó vẫn hoạt động đến</target></trans-unit>
+      <trans-unit id="settings.secrets.expires-soon" datatype="html"><source>Expires soon</source><target>Sắp hết hạn</target></trans-unit>
+      <trans-unit id="settings.secrets.expired" datatype="html"><source>Expired</source><target>Đã hết hạn</target></trans-unit>
+      <trans-unit id="settings.secrets.title" datatype="html"><source>Secret references</source><target>Tham chiếu bí mật</target></trans-unit>
+      <trans-unit id="settings.secrets.description" datatype="html"><source>Inspect reference metadata and rotation timing. Current credential values cannot be fetched or displayed.</source><target>Xem siêu dữ liệu tham chiếu và thời điểm xoay. Không thể lấy hay hiển thị giá trị thông tin xác thực hiện tại.</target></trans-unit>
+      <trans-unit id="settings.secrets.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
+      <trans-unit id="settings.secrets.scope" datatype="html"><source>Resolution scope</source><target>Phạm vi áp dụng</target></trans-unit>
+      <trans-unit id="settings.secrets.prefix" datatype="html"><source>Token prefix</source><target>Tiền tố token</target></trans-unit>
+      <trans-unit id="settings.secrets.status" datatype="html"><source>Rotation state</source><target>Trạng thái xoay</target></trans-unit>
+      <trans-unit id="settings.secrets.expires" datatype="html"><source>Expires · UTC</source><target>Hết hạn · UTC</target></trans-unit>
+      <trans-unit id="settings.secrets.overlap" datatype="html"><source>Overlap ends · UTC</source><target>Hết thời gian chồng lấn · UTC</target></trans-unit>
+      <trans-unit id="settings.secrets.used" datatype="html"><source>Last used · UTC</source><target>Dùng lần cuối · UTC</target></trans-unit>
+      <trans-unit id="settings.secrets.created" datatype="html"><source>Created · UTC</source><target>Tạo lúc · UTC</target></trans-unit>
+      <trans-unit id="settings.secrets.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="settings.secrets.no-expiry" datatype="html"><source>No expiry</source><target>Không hết hạn</target></trans-unit>
+      <trans-unit id="settings.secrets.no-overlap" datatype="html"><source>No overlap window</source><target>Không có thời gian chồng lấn</target></trans-unit>
+      <trans-unit id="settings.secrets.never-used" datatype="html"><source>Not used yet</source><target>Chưa dùng</target></trans-unit>
+      <trans-unit id="settings.secrets.rotate" datatype="html"><source>Rotate credential</source><target>Xoay thông tin xác thực</target></trans-unit>
+      <trans-unit id="settings.secrets.submitting" datatype="html"><source>Rotating…</source><target>Đang xoay…</target></trans-unit>
+      <trans-unit id="settings.secrets.empty-title" datatype="html"><source>No secret references</source><target>Chưa có tham chiếu bí mật</target></trans-unit>
+      <trans-unit id="settings.secrets.empty-description" datatype="html"><source>Ingest token references will appear here for the selected project.</source><target>Các tham chiếu ingest token sẽ hiện ở đây cho dự án đã chọn.</target></trans-unit>
+      <trans-unit id="settings.secrets.no-projects" datatype="html"><source>No projects available in this organization.</source><target>Tổ chức này chưa có dự án nào.</target></trans-unit>
+      <trans-unit id="settings.secrets.more" datatype="html"><source>Load more references</source><target>Tải thêm tham chiếu</target></trans-unit>
+      <trans-unit id="settings.secrets.previous" datatype="html"><source>Previous references</source><target>Tham chiếu trước</target></trans-unit>
+      <trans-unit id="settings.secrets.next" datatype="html"><source>Next references</source><target>Tham chiếu tiếp theo</target></trans-unit>
+      <trans-unit id="settings.secrets.paging-failure" datatype="html"><source>The next page could not be loaded. References already shown are unchanged.</source><target>Không tải được trang tiếp theo. Các tham chiếu đang hiển thị không đổi.</target></trans-unit>
+      <trans-unit id="settings.secrets.saved" datatype="html"><source>Rotation recorded. Update your downstream CI with the new credential and verify it there.</source><target>Đã ghi nhận việc xoay. Hãy cập nhật CI hạ nguồn bằng thông tin xác thực mới và kiểm tra ở đó.</target></trans-unit>
+      <trans-unit id="settings.secrets.narrow" datatype="html"><source>Use a wider screen to rotate credentials.</source><target>Dùng màn hình rộng hơn để xoay thông tin xác thực.</target></trans-unit>
+      <trans-unit id="settings.secrets.status-active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
+      <trans-unit id="settings.secrets.status-rotated" datatype="html"><source>Rotated</source><target>Đã xoay</target></trans-unit>
+      <trans-unit id="settings.secrets.status-revoked" datatype="html"><source>Revoked</source><target>Đã thu hồi</target></trans-unit>
+      <trans-unit id="settings.secrets.status-expired" datatype="html"><source>Expired</source><target>Đã hết hạn</target></trans-unit>
+      <trans-unit id="settings.secrets.rotate-named" datatype="html"><source>Rotate credential <x id="name" equiv-text="name"/></source><target>Xoay thông tin xác thực <x id="name" equiv-text="name"/></target></trans-unit>
+      <trans-unit id="settings.secrets.pages-label" datatype="html"><source>Secret references pages</source><target>Các trang tham chiếu bí mật</target></trans-unit>
+      <trans-unit id="settings.secrets.rotate-unavailable-hint" datatype="html"><source>The rotation may have been applied. Reload the list and check the status before rotating again.</source><target>Việc xoay có thể đã được áp dụng. Hãy tải lại danh sách và kiểm tra trạng thái trước khi xoay lần nữa.</target></trans-unit>
+      <trans-unit id="settings.secrets.reload" datatype="html"><source>Reload</source><target>Tải lại</target></trans-unit>
     </body>
   </file>
 </xliff>

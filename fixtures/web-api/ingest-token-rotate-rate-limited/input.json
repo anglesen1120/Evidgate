@@ -1,0 +1,19 @@
+{
+  "operation_id": "rotateIngestToken",
+  "variant": "rate-limited",
+  "status": 429,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000f6",
+    "Retry-After": "30"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "rate_limited",
+      "message": "Fixture rotation burst limit reached; wait before requesting another rotation.",
+      "request_id": "018f0000-0000-7000-8000-0000000000f6",
+      "retryable": true,
+      "details": []
+    }
+  }
+}
