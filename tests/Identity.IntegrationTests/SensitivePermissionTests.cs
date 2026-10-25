@@ -70,6 +70,13 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // Login/ProviderOutageTests.
         "/v1/auth/oidc/{provider}/start",
         "/v1/auth/oidc/{provider}/callback",
+
+        // 02.3.1-T2's staged second-provider link is the caller's own session state, not a
+        // resource: it reads the `__Host-evidgate_link` cookie this suite never stages, so it
+        // answers the typed 503 `unavailable` (no session pepper in this host) or 404 `not_found`
+        // and carries no body a member could read. Its refusals are asserted in
+        // Login/Linking/IdentityLinkingTests.
+        "/v1/auth/link/pending",
     ];
 
     /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>

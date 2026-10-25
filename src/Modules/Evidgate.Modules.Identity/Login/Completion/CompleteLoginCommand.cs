@@ -20,18 +20,25 @@ namespace Evidgate.Modules.Identity.Login.Completion;
 /// </para>
 /// <para>
 /// <b>No outbound call, no shared transaction (P5).</b> Every provider call already happened in the
-/// callback; these are three independent statements in the order of 02.3.1 §5, each with its own failure.
+/// callback; these are independent statements in the order of 02.3.1 §5, each with its own failure — and the
+/// bind and the audit of 02.3.1-T2 open their own per-org transaction, so this command owns none.
 /// </para>
 /// </remarks>
 /// <param name="Identity">The provider-verified identity; <c>(Provider, Subject)</c> is the only key (D3).</param>
 /// <param name="ReturnUrl">The allowlisted app path the browser lands on after the login.</param>
 /// <param name="ClientIpAddress">The client address as the request reported it (sanitised before the write).</param>
 /// <param name="UserAgent">The client's user agent, already bounded by the callback (never logged).</param>
+/// <param name="InviteToken">
+/// The invite token the browser staged before the login (<c>POST /v1/auth/invite-token</c>, 02.3.1-T2 Q1), or
+/// null when it staged none. It is the single-use half an invite binds with (AC4) and reaches the binder and
+/// nothing else: never the session row, a log line, a metric label, an error body or the <c>returnUrl</c>.
+/// </param>
 internal sealed record CompleteLoginCommand(
     VerifiedIdentity Identity,
     string ReturnUrl,
     string? ClientIpAddress,
-    string? UserAgent);
+    string? UserAgent,
+    string? InviteToken = null);
 
 /// <summary>What a completed login hands back to the protocol: the session to cookie and where to redirect.</summary>
 /// <param name="UserId">The platform user the identity resolved to (the same one a later login reuses).</param>

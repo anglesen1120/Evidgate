@@ -404,6 +404,20 @@ public sealed class IsolationWorld
             // Org + founder (tenant_admin) through the tenantless create route.
             var adminUser = Guid.CreateVersion7();
             var adminEmail = "admin@example.test";
+
+            // 0044's `membership_user_fk` (membership.user_id -> public."user") makes the founder's
+            // membership name a real account, so the row the login upsert would have written is seeded
+            // first — the same owner seam as every other row of this world.
+            await using (var connection = await OpenOwnerAsync().ConfigureAwait(false))
+            await using (var insert = new NpgsqlCommand(
+                """insert into public."user" (id, email) values (@id, @email) on conflict (id) do nothing""",
+                connection))
+            {
+                insert.Parameters.AddWithValue("id", adminUser);
+                insert.Parameters.AddWithValue("email", adminEmail);
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             var org = (await SendAsync(
                 HttpMethod.Post, "/v1/orgs", adminUser, adminEmail, org: null, new { name = DisplayName, slug }, HttpStatusCode.Created).ConfigureAwait(false))
                 .GetProperty("id").GetGuid();
@@ -930,6 +944,16 @@ public sealed class IsolationWorld
 
             await using var connection = await OpenOwnerAsync().ConfigureAwait(false);
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+            await using (var insert = new NpgsqlCommand(
+                """insert into public."user" (id, email) values (@id, @email)""",
+                connection,
+                transaction))
+            {
+                insert.Parameters.AddWithValue("id", user);
+                insert.Parameters.AddWithValue("email", email);
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             await using (var insert = new NpgsqlCommand(
                 """

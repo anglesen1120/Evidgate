@@ -232,6 +232,7 @@ public sealed class ProjectCasePrefixTests
         await _fixture.ExecuteAsync(
             database,
             $"""
+            insert into public."user" (id, email) values ('{userId}', 'member-{userId:N}@example.test');
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values ('{membershipId}', '{org}', '{userId}', 'member-{userId:N}@example.test', 'active')
             """);

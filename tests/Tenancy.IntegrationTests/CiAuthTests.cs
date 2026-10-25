@@ -79,7 +79,10 @@ public sealed class CiAuthTests
         var bare = Guid.CreateVersion7();
         await _fixture.ExecuteAsync(
             _database!,
-            $"insert into public.membership (id, org_id, user_id, invited_email, status) values (gen_random_uuid(), '{org}', '{bare}', 'bare@example.test', 'active')");
+            $"""
+            insert into public."user" (id, email) values ('{bare}', 'bare@example.test');
+            insert into public.membership (id, org_id, user_id, invited_email, status) values (gen_random_uuid(), '{org}', '{bare}', 'bare@example.test', 'active')
+            """);
         (await CreateBindingAsync(client, bare, org, project)).Status.ShouldBe(HttpStatusCode.Forbidden);
 
         (await _fixture.ScalarAsync<long>(_database!, "select count(*) from public.ci_binding")).ShouldBe(0);
@@ -551,7 +554,10 @@ public sealed class CiAuthTests
         var bare = Guid.CreateVersion7();
         await _fixture.ExecuteAsync(
             _database!,
-            $"insert into public.membership (id, org_id, user_id, invited_email, status) values (gen_random_uuid(), '{org}', '{bare}', 'bare@example.test', 'active')");
+            $"""
+            insert into public."user" (id, email) values ('{bare}', 'bare@example.test');
+            insert into public.membership (id, org_id, user_id, invited_email, status) values (gen_random_uuid(), '{org}', '{bare}', 'bare@example.test', 'active')
+            """);
         (await CreateTokenAsync(client, bare, org, project)).Status.ShouldBe(HttpStatusCode.Forbidden);
         (await client.SendAsync(HttpMethod.Get, $"/v1/projects/{project}/ingest-tokens", Admin(bare, org))).Status.ShouldBe(HttpStatusCode.Forbidden);
 

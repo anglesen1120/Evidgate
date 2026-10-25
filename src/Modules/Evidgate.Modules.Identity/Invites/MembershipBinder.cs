@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Contracts;
@@ -38,9 +39,39 @@ namespace Evidgate.Modules.Identity.Invites;
 /// (<see cref="InviteSecrets.Verify"/>). Nothing here logs, and the token, the secret and the
 /// address never leave this object.
 /// </para>
+/// <para>
+/// <b>Two per-org gates of 02.3.1-T2 join that list (D-S81-Q2, D-S81-Q3).</b> A <c>google</c>
+/// identity may bind only inside an org whose <c>allowed_email_domains</c> admits the verified
+/// address (<see cref="EmailDomainAllowlist"/>); and no identity may bind an invite addressed to
+/// an alias of the inviter's own mailbox (<see cref="EmailAlias"/>), which is how a
+/// <c>+tag</c> or Gmail-dot address would otherwise reach the inviter's own seat and defeat the
+/// invite role ceiling. Both refuse exactly like every other refusal for that org — empty result,
+/// row still <c>pending</c>, no seat consumed, no extra answer shape — and both are decided
+/// inside the org's own transaction, the domain one under the org row lock
+/// <see cref="SeatQuota"/> takes.
+/// </para>
+/// <para>
+/// <b>One audit row per bind, in the bind's own transaction (D-S81-Q5).</b> A committed bind
+/// appends one <c>membership.bind</c> entry (actor <c>user</c>, object <c>membership</c>,
+/// metadata <c>via</c> only) to that org's chain just before the commit, through the same
+/// <see cref="IAuditTrail"/> the pipeline's tenant stage uses. A refused bind appends nothing:
+/// its transaction rolls back, and the trail is never asked. The metadata carries no address and
+/// no secret. The binder is called outside any open tenant scope and so outside any open audit
+/// unit, which is what makes the unit it opens its own (a nested contract would join the caller's
+/// buffer instead).
+/// </para>
 /// </remarks>
 internal sealed class MembershipBinder : IMembershipBinder
 {
+    /// <summary>The audit action of one activated membership (<c>audit_log.action</c>).</summary>
+    internal const string BindAuditAction = "membership.bind";
+
+    /// <summary>The allowlisted audit metadata key that names the bind path (<see cref="AuditMetadata.AllowedKeys"/>).</summary>
+    internal const string ViaMetadataKey = "via";
+
+    /// <summary>The <c>audit_log.object_type</c> of the row a bind activates.</summary>
+    internal const string MembershipObjectType = "membership";
+
     /// <summary><c>BoundMembership.Via</c> of the invite-secret path.</summary>
     internal const string ViaInviteSecret = "invite_secret";
 
@@ -61,6 +92,7 @@ internal sealed class MembershipBinder : IMembershipBinder
     private readonly ITenantDb _db;
     private readonly InviteSecrets _secrets;
     private readonly TimeProvider _clock;
+    private readonly IAuditTrail _audit;
 
     /// <summary>Creates the binder over the app-role data source, the tenant scope factory and the invite key material.</summary>
     /// <param name="dataSource">The app-role data source the pre-tenant invite resolvers run on.</param>
@@ -68,27 +100,55 @@ internal sealed class MembershipBinder : IMembershipBinder
     /// <param name="db">The Dapper path over the ambient scope.</param>
     /// <param name="secrets">The invite pepper; without one no secret can verify.</param>
     /// <param name="clock">The clock the expiry check reads, so a test can move it.</param>
+    /// <param name="audit">
+    /// The audit buffer the bind's <c>membership.bind</c> entry is recorded on and flushed into the
+    /// org's own transaction (D-S81-Q5); the production singleton, so it is the same buffer the
+    /// pipeline's tenant stage flushes.
+    /// </param>
     public MembershipBinder(
         NpgsqlDataSource dataSource,
         ITenantScopeFactory scopes,
         ITenantDb db,
         InviteSecrets secrets,
-        TimeProvider clock)
+        TimeProvider clock,
+        IAuditTrail audit)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentNullException.ThrowIfNull(scopes);
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(secrets);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(audit);
 
         _resolver = new NpgsqlMembershipBinderResolver(dataSource);
         _scopes = scopes;
         _db = db;
         _secrets = secrets;
         _clock = clock;
+        _audit = audit;
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// <para>
+    /// <b>A full org refuses only its own seat (F1).</b> A candidate whose org is at <c>max_seats</c>
+    /// answers 429 <c>quota_exceeded</c>, and that refusal is <i>not</i> the end of the call: every
+    /// remaining candidate — the rest of the auto-bind list, and the auto-bind phase after the
+    /// secret path — is still attempted inside its own transaction, in the resolver's order
+    /// (<c>org_id</c>). The reason is a login that holds opt-in invites in two orgs: the full one may
+    /// sort first, and stopping there would refuse the login over an org the identity can never join
+    /// while the other org's open seat stays unused (the handler sees 403 <c>no_membership</c> after
+    /// the invite cookie is already spent).
+    /// </para>
+    /// <para>
+    /// <b>What the call returns when an org binds and another is full.</b> The first refusal met is
+    /// remembered and the call still ends in that failure value (429 <c>quota_exceeded</c>, the
+    /// binder's only failing outcome), so the caller's contract is unchanged: the login treats that
+    /// code as non-fatal, and the orgs that bound are committed and visible to it through
+    /// <c>evidgate_resolve.member_orgs</c>, not through this result. A refusal is therefore never
+    /// swallowed silently — it just no longer truncates the call.
+    /// </para>
+    /// </remarks>
     public async ValueTask<Result<BindPendingMembershipsResult>> BindAsync(
         BindPendingMembershipsRequest request,
         CancellationToken cancellationToken)
@@ -114,6 +174,15 @@ internal sealed class MembershipBinder : IMembershipBinder
         var bound = new List<BoundMembership>(1);
         var attempted = new HashSet<Guid>();
 
+        // F1: the first full-org refusal is remembered, not returned, so a full org that sorts before
+        // an org this identity can join does not cost it the login. Only SeatQuota produces an Error
+        // here (429 quota_exceeded), and it is reported after every candidate has been attempted.
+        Error? refusal = null;
+
+        // The domain allowlist restricts Google logins only (D-S81-Q3, AC5): a GitHub identity is
+        // never gated, whatever its address. The flag is the provider the caller already told us.
+        var domainGated = string.Equals(request.Provider, GoogleProvider, StringComparison.Ordinal);
+
         // (a) The invite secret: the only path that binds with any provider. A token that
         // does not parse is skipped like an absent one, and so is every secret while no
         // pepper is configured — nothing could verify it (InviteSecrets.CanHash false).
@@ -132,12 +201,13 @@ internal sealed class MembershipBinder : IMembershipBinder
                     request.UserId,
                     email,
                     secret,
+                    via: ViaInviteSecret,
+                    domainGated,
                     cancellationToken).ConfigureAwait(false);
 
-                if (attempt.Error is { } error)
-                {
-                    return Result.Failure<BindPendingMembershipsResult>(error);
-                }
+                // A full org refuses its own row only: the auto-bind phase below still runs, and its
+                // orgs may be the ones this identity can join (F1).
+                refusal ??= attempt.Error;
 
                 if (attempt.IsBound)
                 {
@@ -168,18 +238,28 @@ internal sealed class MembershipBinder : IMembershipBinder
                     request.UserId,
                     email,
                     secret: null,
+                    via: ViaVerifiedDomain,
+                    domainGated,
                     cancellationToken).ConfigureAwait(false);
 
-                if (attempt.Error is { } error)
-                {
-                    return Result.Failure<BindPendingMembershipsResult>(error);
-                }
+                // The same rule inside the list: a full org does not end the loop, so a later org with
+                // an open seat still binds this login (F1).
+                refusal ??= attempt.Error;
 
                 if (attempt.IsBound)
                 {
                     bound.Add(new BoundMembership(candidate.OrgId, candidate.MembershipId, ViaVerifiedDomain));
                 }
             }
+        }
+
+        // F1: refuse only after every candidate has had its chance. The orgs that bound are committed
+        // and visible to the caller through evidgate_resolve.member_orgs (which is what the login
+        // reads), so reporting the 429 here keeps the caller's contract — it treats this code as
+        // non-fatal — without hiding that an org was full.
+        if (refusal is { } fullOrg)
+        {
+            return Result.Failure<BindPendingMembershipsResult>(fullOrg);
         }
 
         return Result.Success(new BindPendingMembershipsResult(bound));
@@ -214,19 +294,24 @@ internal sealed class MembershipBinder : IMembershipBinder
 
     /// <summary>
     /// Binds one pending membership inside its org's own transaction: re-read under RLS,
-    /// check every condition, take the seat lock, then the single-use update. Nothing is
-    /// committed unless the update changed exactly one row.
+    /// check every condition, take the seat lock, then the single-use update, and append the
+    /// bind's audit row before the commit. Nothing is committed unless the update changed
+    /// exactly one row.
     /// </summary>
     /// <param name="candidate">The org and membership the pre-tenant resolver named.</param>
     /// <param name="userId">The signed-in user.</param>
     /// <param name="email">The normalised verified address.</param>
     /// <param name="secret">The presented invite secret, or null for the auto-bind path.</param>
+    /// <param name="via">Which path this is (<see cref="ViaInviteSecret"/> or <see cref="ViaVerifiedDomain"/>); also the audit row's <c>via</c>.</param>
+    /// <param name="domainGated">Whether the org's <c>allowed_email_domains</c> gate applies (a <c>google</c> identity only).</param>
     /// <param name="cancellationToken">Cancellation.</param>
     private async ValueTask<BindAttempt> BindOneAsync(
         InviteCandidate candidate,
         Guid userId,
         string email,
         string? secret,
+        string via,
+        bool domainGated,
         CancellationToken cancellationToken)
     {
         await using var scope = await _scopes
@@ -235,7 +320,7 @@ internal sealed class MembershipBinder : IMembershipBinder
 
         var row = await _db.QuerySingleOrDefaultAsync<PendingInviteRow>(
             """
-            select status, invited_email, invite_token_hash, invite_pepper_version, invite_expires_at
+            select status, invited_email, invited_by, invite_token_hash, invite_pepper_version, invite_expires_at
               from public.membership
              where org_id = @org_id and id = @membership_id
             """,
@@ -272,8 +357,37 @@ internal sealed class MembershipBinder : IMembershipBinder
             return BindAttempt.NotBound;
         }
 
+        // The alias ceiling (D-S81-Q2, precondition D-S78-M1): an address that is a `+tag` or
+        // Gmail-dot form of the inviter's own mailbox is the inviter, so binding it would hand
+        // them the seat and the roles the invite names — past the role ceiling SelfEscalation
+        // enforces at invite time. The read runs whenever the invite names an inviter, whether or
+        // not it ends in a refusal, so this refusal has the shape of every other one.
+        var inviterEmail = row.InvitedBy is { } inviter
+            ? await _db.ScalarAsync<string>(
+                """
+                select invited_email
+                  from public.membership
+                 where org_id = @org_id
+                   and user_id = @inviter_user_id
+                """,
+                new { org_id = candidate.OrgId, inviter_user_id = inviter },
+                cancellationToken).ConfigureAwait(false)
+            : null;
+
+        if (row.InvitedBy is { } inviterUserId
+            && (inviterUserId == userId
+                || (inviterEmail is not null
+                    && string.Equals(
+                        EmailAlias.Canonical(inviterEmail),
+                        EmailAlias.Canonical(email),
+                        StringComparison.Ordinal))))
+        {
+            return BindAttempt.NotBound;
+        }
+
         // The org row lock taken here is what serialises concurrent binds of one org; a full
-        // org fails the whole call, with this org's transaction rolled back uncommitted. F4: the
+        // org refuses its own row — this org's transaction rolls back uncommitted, and the call
+        // reports that refusal only after its other candidates have had their chance (F1). F4: the
         // same statement reads the org's status, and a `suspended` or `deleted` org binds nothing —
         // the same rule as the auto-bind resolver's `o.status = 'active'` (0043) — answered like
         // every other refusal (empty result, no oracle, row untouched, no seat consumed), and
@@ -285,6 +399,30 @@ internal sealed class MembershipBinder : IMembershipBinder
         if (!seats.IsOrgActive)
         {
             return BindAttempt.NotBound;
+        }
+
+        // The per-org domain allowlist (D-S81-Q3, AC5), read here because `SeatQuota.CheckAsync`
+        // has just taken the org row's `FOR NO KEY UPDATE` lock: the read is part of that same
+        // locked critical section, so a concurrent edit of the list cannot slip between the check
+        // and the bind (an `update` of the org row would have to wait for this transaction).
+        // Off-list means this org stays `pending` while the call's other orgs still bind; the
+        // seat answer is never reached, so a restricted identity learns nothing about the limit.
+        if (domainGated)
+        {
+            var organization = await _db
+                .QuerySingleOrDefaultAsync<OrganizationDomainRow>(
+                    """
+                    select allowed_email_domains
+                      from public.organization
+                     where id = @org_id
+                    """,
+                    new { org_id = candidate.OrgId },
+                    cancellationToken).ConfigureAwait(false);
+
+            if (!EmailDomainAllowlist.Admits(organization?.AllowedEmailDomains, email))
+            {
+                return BindAttempt.NotBound;
+            }
         }
 
         if (!seats.HasRoom)
@@ -327,6 +465,22 @@ internal sealed class MembershipBinder : IMembershipBinder
             return BindAttempt.NotBound;
         }
 
+        // D-S81-Q5: the bind's audit row joins this org's chain in this very transaction, the way
+        // the pipeline's tenant stage flushes a handler's entry (BeginUnit → Describe → Record →
+        // FlushAsync → commit). Only a bind reaches here, so a refusal writes nothing; the
+        // metadata is the allowlisted `via` and nothing else — no address, no secret, no token.
+        // A using declaration, like the pipeline's and IdentityAuditWriter's: it ends after the commit.
+        using var auditUnit = _audit.BeginUnit();
+
+        _audit.Describe(new AuditObject(
+            MembershipObjectType,
+            candidate.MembershipId.ToString("D"),
+            Metadata: new Dictionary<string, string>(StringComparer.Ordinal) { [ViaMetadataKey] = via }));
+
+        _audit.Record(BindAuditAction, new AuditActor(AuditActorTypes.User, userId.ToString("D")));
+
+        await _audit.FlushAsync(candidate.OrgId, _db, cancellationToken).ConfigureAwait(false);
+
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         return BindAttempt.Bound;
@@ -338,19 +492,29 @@ internal sealed class MembershipBinder : IMembershipBinder
     /// </summary>
     /// <param name="Status">The row's status; only <c>pending</c> can bind.</param>
     /// <param name="InvitedEmail">The stored, normalised address.</param>
+    /// <param name="InvitedBy">The inviter's user id, or null when the invite names none (the alias ceiling reads their membership's address).</param>
     /// <param name="InviteTokenHash">The HMAC of the secret half, or null while the invite has none.</param>
     /// <param name="InvitePepperVersion">The pepper version of that hash, or null.</param>
     /// <param name="InviteExpiresAt">When the invite stops being bindable, or null.</param>
     private sealed record PendingInviteRow(
         string Status,
         string InvitedEmail,
+        Guid? InvitedBy,
         byte[]? InviteTokenHash,
         int? InvitePepperVersion,
         DateTimeOffset? InviteExpiresAt);
 
-    /// <summary>What one row's attempt produced: bound, not bound, or the refusal that ends the call.</summary>
+    /// <summary>
+    /// The one <c>organization</c> column the domain gate reads, bound by property name
+    /// (<c>MatchNamesWithUnderscores</c>) with the <c>text[]</c> type handler the tenant path
+    /// registers (<c>StringArrayTypeHandler</c>).
+    /// </summary>
+    /// <param name="AllowedEmailDomains">The org's allowlist, or null when it restricts nothing.</param>
+    private sealed record OrganizationDomainRow(string[]? AllowedEmailDomains);
+
+    /// <summary>What one row's attempt produced: bound, not bound, or the refusal the call reports.</summary>
     /// <param name="IsBound">True when the row became <c>active</c> and its org committed.</param>
-    /// <param name="Error">The refusal that ends the whole call, or null.</param>
+    /// <param name="Error">The org-is-full refusal, or null; the caller reports the first one it met.</param>
     private readonly record struct BindAttempt(bool IsBound, Error? Error)
     {
         /// <summary>The row stayed <c>pending</c> and the caller must not learn why.</summary>
@@ -359,7 +523,7 @@ internal sealed class MembershipBinder : IMembershipBinder
         /// <summary>The row became <c>active</c> and its org's transaction committed.</summary>
         internal static BindAttempt Bound => new(true, null);
 
-        /// <summary>The org is full: the whole call answers 429, nothing in this org is bound.</summary>
+        /// <summary>The org is full: nothing in this org is bound, and the call answers 429 once its other candidates ran (F1).</summary>
         internal static BindAttempt Refused(Error error) => new(false, error);
     }
 }

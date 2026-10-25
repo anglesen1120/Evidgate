@@ -54,9 +54,22 @@ internal interface ILoginCompletion
 /// <param name="UserAgent">The client's user agent, already bounded by the callback, for the session row;
 /// never logged.</param>
 /// <param name="HttpContext">The callback's response, which the session cookie is written on.</param>
+/// <param name="InviteToken">
+/// The invite token the browser staged before the login (<c>POST /v1/auth/invite-token</c>, 02.3.1-T2 Q1), or
+/// null when it staged none. It reaches this record once, from the integrity-protected
+/// <c>__Host-evidgate_invite</c> cookie the callback deletes on every outcome, and it must never be stored on
+/// the session row, written to a log or a metric, put in an error body or copied into the <c>returnUrl</c>.
+/// </param>
+/// <param name="LinkUserId">
+/// The account an explicit second-provider link was started for (02.3.1-T2 Q4), or null for a sign-in. It is
+/// only ever set on a state cookie whose purpose is <c>link</c>, and the callback refuses such a state
+/// unless the link seam is composed.
+/// </param>
 internal sealed record LoginCompletionRequest(
     VerifiedIdentity Identity,
     string ReturnUrl,
     string? ClientIpAddress,
     string? UserAgent,
-    HttpContext HttpContext);
+    HttpContext HttpContext,
+    string? InviteToken = null,
+    Guid? LinkUserId = null);

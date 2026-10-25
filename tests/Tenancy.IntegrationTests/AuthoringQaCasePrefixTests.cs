@@ -136,6 +136,7 @@ public sealed class AuthoringQaCasePrefixTests
         await _fixture.ExecuteAsync(
             database,
             $"""
+            insert into public."user" (id, email) values ('{viewer}', 'viewer-{viewer:N}@example.test');
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values ('{membership}', '{org}', '{viewer}', 'viewer-{viewer:N}@example.test', 'active')
             """);

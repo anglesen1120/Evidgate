@@ -74,6 +74,10 @@ public sealed class QuarantineQaTests
 
         await using (var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
+            // 0044's `membership_user_fk` makes the membership's user_id name a real account.
+            await scope.ExecuteAsync(
+                """insert into public."user" (id, email) values (@id, @email)""",
+                ("id", maintainer), ("email", $"maintainer-{maintainer:N}@example.test"));
             await scope.ExecuteAsync(
                 "insert into public.membership (id, org_id, user_id, invited_email, status) values (@id, @org_id, @user_id, @email, 'active')",
                 ("id", membership), ("org_id", org), ("user_id", maintainer), ("email", $"maintainer-{maintainer:N}@example.test"));
@@ -133,6 +137,7 @@ public sealed class QuarantineQaTests
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
+            insert into public."user" (id, email) values ('{userId}', 'member-{userId:N}@example.test');
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values ('{membershipId}', '{world.Org}', '{userId}', 'member-{userId:N}@example.test', 'active')
             """);

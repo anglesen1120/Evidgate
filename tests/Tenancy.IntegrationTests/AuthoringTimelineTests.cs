@@ -667,6 +667,7 @@ public sealed class AuthoringTimelineTests
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
+            insert into public."user" (id, email) values ('{user:D}', 'member-{user:N}@example.test');
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values ('{membership:D}', '{world.Org:D}', '{user:D}', 'member-{user:N}@example.test', 'active')
             """);

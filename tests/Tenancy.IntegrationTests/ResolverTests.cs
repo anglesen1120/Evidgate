@@ -63,6 +63,7 @@ public sealed class ResolverTests
         await _fixture.ExecuteAsync(
             database,
             $"""
+            insert into public."user" (id, email) values ('{user}', 'u@example.test');
             insert into public.organization (id, name, slug)
               select gen_random_uuid(), 'o' || i, 'org-' || i from generate_series(1, 205) i;
             insert into public.membership (id, org_id, user_id, invited_email, status)
@@ -231,8 +232,17 @@ public sealed class ResolverTests
         return id;
     }
 
-    private Task SeedMembershipAsync(string database, Guid org, Guid user, string status) =>
-        ExecOwnerAsync(
+    private async Task SeedMembershipAsync(string database, Guid org, Guid user, string status)
+    {
+        // 0044's `membership_user_fk` makes the membership's user_id name a real account; the
+        // `on conflict` keeps the helper usable for one user across several orgs.
+        await ExecOwnerAsync(
+            database,
+            """insert into public."user" (id, email) values (@id, @email) on conflict (id) do nothing""",
+            ("id", user),
+            ("email", $"u{user:N}@example.test"));
+
+        await ExecOwnerAsync(
             database,
             "insert into public.membership (id, org_id, user_id, invited_email, status) values (@id, @org, @user, @email, @status)",
             ("id", Guid.CreateVersion7()),
@@ -240,6 +250,7 @@ public sealed class ResolverTests
             ("user", user),
             ("email", $"u{user:N}@example.test"),
             ("status", status));
+    }
 
     private async Task ExecOwnerAsync(string database, string sql, params (string Name, object Value)[] parameters)
     {

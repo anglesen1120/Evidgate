@@ -65,6 +65,16 @@ public sealed class CiProducerScopeTests(DatabaseFixture fixture) : CatalogueTes
                 "x-permission is 'none' (pre-tenant login start, 02.3.1-T1.1: no tenant, no principal, no session yet)",
             [("GET", "/v1/auth/oidc/{provider}/callback")] =
                 "x-permission is 'none' (pre-tenant login callback, 02.3.1-T1.1: the browser holds only the pending-login cookie)",
+            [("POST", "/v1/auth/invite-token")] =
+                "x-permission is 'none' (pre-tenant invite staging, 02.3.1-T2: no session, no principal, no tenant yet)",
+            [("POST", "/v1/auth/link/{provider}")] =
+                "x-permission is 'none' (the link start acts only on the caller's own session cookie, 02.3.1-T2: no catalogue permission exists for it)",
+            [("GET", "/v1/auth/link/pending")] =
+                "x-permission is 'none' (the staged link is the caller's own session state, 02.3.1-T2: no catalogue permission exists for it)",
+            [("DELETE", "/v1/auth/link/pending")] =
+                "x-permission is 'none' (discarding the caller's own staged link, 02.3.1-T2: no catalogue permission exists for it)",
+            [("POST", "/v1/auth/link/confirm")] =
+                "x-permission is 'none' (confirming the caller's own staged link, 02.3.1-T2: it writes no tenant row and holds no catalogue permission)",
             [("POST", "/v1/slice/run")] =
                 "01.1.2 run-only slice dev surface, absent from the spec (ServedRouteTable.ServedNotInSpec)",
         };

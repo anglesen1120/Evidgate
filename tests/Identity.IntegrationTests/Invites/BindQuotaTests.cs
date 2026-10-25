@@ -37,7 +37,7 @@ public sealed class BindQuotaTests : BindTestBase
         var invite = await SeedInviteAsync(org, "invitee@example.com");
 
         var result = await CreateBinder().BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
             Token);
 
         result.IsSuccess.ShouldBeFalse();
@@ -74,11 +74,23 @@ public sealed class BindQuotaTests : BindTestBase
         }
 
         var binder = CreateBinder();
-        var attempts = invites
-            .Select(invite => Task.Run(
-                () => binder.BindAsync(
-                    new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
-                    Token).AsTask(),
+        var requests = new List<BindPendingMembershipsRequest>(invites.Count);
+        foreach (var invite in invites)
+        {
+            // Seeded on the arranging path, never inside the racing lambda: the bind's `user_id`
+            // needs its `public."user"` row (0044's membership_user_fk) before the race starts.
+            requests.Add(new BindPendingMembershipsRequest(
+                await SeedUserAsync(),
+                "github",
+                invite.Email,
+                EmailVerified: true,
+                invite.Token,
+                HostedDomain: null));
+        }
+
+        var attempts = requests
+            .Select(request => Task.Run(
+                () => binder.BindAsync(request, Token).AsTask(),
                 Token))
             .ToArray();
 

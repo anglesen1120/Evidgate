@@ -361,6 +361,7 @@ public sealed partial class AuthoringManualCaseTests
         await _fixture.ExecuteAsync(
             database,
             $"""
+            insert into public."user" (id, email) values ('{viewer}', 'viewer-{viewer:N}@example.test');
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values ('{Guid.CreateVersion7()}', '{org}', '{viewer}', 'viewer-{viewer:N}@example.test', 'active')
             """);

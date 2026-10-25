@@ -1,4 +1,5 @@
 using System.Globalization;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Contracts;
 using Microsoft.AspNetCore.Http;
@@ -15,25 +16,26 @@ namespace Evidgate.Modules.Identity.Login.Completion;
 /// <remarks>
 /// <para>
 /// This class is the only place the login seam meets HTTP: the command is HTTP-free (it is the business
-/// order of the three writes), and the protocol route above it stays a browser-flow component. The seam
+/// order of the login's own writes), and the protocol route above it stays a browser-flow component. The seam
 /// answers a <see cref="Result{T}"/> either way and never a 200, so a verified identity can never be reported
 /// as a signed-in one.
 /// </para>
 /// <para>
 /// <b>One cookie, one redirect, one refusal.</b> The cookie is written only after the session row exists —
-/// a refusal leaves the browser with the deleted pending-login cookie and nothing else. A database fault
-/// (<see cref="NpgsqlException"/>, <see cref="TimeoutException"/>, or a cancellation that is not the client
-/// hanging up) is 503 <c>unavailable</c> with <c>Retry-After</c>, the same fixed message and header the
-/// provider-outage path uses: no database text, no SQL, no host name ever reaches the body. That 503 ends
-/// the attempt — the header says when to sign in again, because the callback it answered is already spent
-/// (cookie deleted, <c>state</c> consumed) and replaying it is 401 <c>token_invalid</c>.
+/// a refusal leaves the browser with the deleted pending-login and staged-invite cookies and nothing else. A
+/// database fault (<see cref="NpgsqlException"/>, <see cref="TimeoutException"/>, a busy audit chain
+/// (<see cref="AuditBusyException"/>, 02.3.1-T2.2), or a cancellation that is not the client hanging up) is
+/// 503 <c>unavailable</c> with <c>Retry-After</c>, the same fixed message and header the provider-outage path
+/// uses: no database text, no SQL, no host name ever reaches the body. That 503 ends the attempt — the header
+/// says when to sign in again, because the callback it answered is already spent (cookies deleted,
+/// <c>state</c> consumed) and replaying it is 401 <c>token_invalid</c>.
 /// </para>
 /// <para>
 /// Telemetry is not recorded here: the callback counts the attempt from the failure's code, so an outcome is
 /// counted once, at the single recording point.
 /// </para>
 /// </remarks>
-/// <param name="handler">The command's handler (three ordered writes, typed refusals).</param>
+/// <param name="handler">The command's handler (ordered writes, typed refusals).</param>
 /// <param name="options">The bound login options (<see cref="LoginOptions.RetryAfterSeconds"/>).</param>
 internal sealed class LoginCommandCompletion(
     CompleteLoginCommandHandler handler,
@@ -56,7 +58,8 @@ internal sealed class LoginCommandCompletion(
                         request.Identity,
                         request.ReturnUrl,
                         request.ClientIpAddress,
-                        request.UserAgent),
+                        request.UserAgent,
+                        request.InviteToken),
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -66,6 +69,12 @@ internal sealed class LoginCommandCompletion(
         }
         catch (TimeoutException)
         {
+            return Fail(LoginErrors.ProviderUnavailable, request.HttpContext);
+        }
+        catch (AuditBusyException)
+        {
+            // The audit chain of one of the user's orgs held its lock too long (02.3.1-T2.2, Q5): fail-closed
+            // with the same 503 the database faults get, so no session is issued for an unrecorded login.
             return Fail(LoginErrors.ProviderUnavailable, request.HttpContext);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)

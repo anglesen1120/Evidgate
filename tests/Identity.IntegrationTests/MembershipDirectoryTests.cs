@@ -91,6 +91,13 @@ public sealed class MembershipDirectoryTests : CatalogueTestBase
         var membershipId = Guid.CreateVersion7();
         var userId = Guid.CreateVersion7();
 
+        // 0044's `membership_user_fk` (membership.user_id -> public."user") makes the bound
+        // membership name a real account, so the account is seeded before the membership.
+        await Fixture.SeedAsync(
+            """insert into public."user" (id, email) values (@id, @email)""",
+            [("id", userId), ("email", email)],
+            Token);
+
         await Fixture.SeedAsync(
             "insert into public.membership (id, org_id, user_id, invited_email, status) values (@id, @org_id, @user_id, @email, 'active')",
             [("id", membershipId), ("org_id", orgId), ("user_id", userId), ("email", email)],

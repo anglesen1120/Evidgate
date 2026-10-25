@@ -1,4 +1,5 @@
 using System.Text;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Identity.Domain;
 using Evidgate.Modules.Identity.Invites;
@@ -60,7 +61,15 @@ public abstract class BindTestBase : InviteTestBase
             Fixture.Scopes,
             Fixture.Db,
             Secrets,
-            clockOffset is { } offset ? new OffsetClock(offset) : TimeProvider.System);
+            clockOffset is { } offset ? new OffsetClock(offset) : TimeProvider.System,
+            Audit);
+
+    /// <summary>
+    /// The audit buffer every binder in these suites records on: the production
+    /// <see cref="AuditTrail"/> (an ambient buffer per async flow), independent of the harness's
+    /// service provider so a suite can inspect what one bind appended.
+    /// </summary>
+    private protected AuditTrail Audit { get; } = new();
 
     /// <summary>Seeds one pending invite with a freshly minted token and its expiry.</summary>
     /// <param name="orgId">The org.</param>
@@ -103,7 +112,7 @@ public abstract class BindTestBase : InviteTestBase
         string email,
         Guid? userId = null)
     {
-        var boundUserId = userId ?? Guid.CreateVersion7();
+        var boundUserId = userId ?? await SeedUserAsync().ConfigureAwait(false);
         var membershipId = await SeedMembershipAsync(
             orgId,
             InviteEmail.Normalize(email),
@@ -115,6 +124,26 @@ public abstract class BindTestBase : InviteTestBase
             Token);
 
         return (membershipId, boundUserId);
+    }
+
+    /// <summary>
+    /// Seeds the <c>public."user"</c> row a <c>membership.user_id</c> now needs and returns the
+    /// id: 0044 adds and validates <c>membership_user_fk</c> (<c>membership.user_id →
+    /// public."user"</c>), so a bind — or any fixture that writes a bound user — fails 23503
+    /// unless the user row exists, exactly as in production, where the login upsert writes the
+    /// <c>user</c> before the binder writes the <c>user_id</c>.
+    /// </summary>
+    /// <param name="userId">The id to seed, or null for a fresh UUIDv7.</param>
+    protected async Task<Guid> SeedUserAsync(Guid? userId = null)
+    {
+        var id = userId ?? Guid.CreateVersion7();
+
+        await Fixture.SeedAsync(
+            """insert into public."user" (id, email) values (@id, @email)""",
+            [("id", id), ("email", $"user-{id:N}@example.test")],
+            Token);
+
+        return id;
     }
 
     /// <summary>Sets the org's seat limit; null means unlimited.</summary>
