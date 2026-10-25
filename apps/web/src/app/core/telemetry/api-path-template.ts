@@ -79,6 +79,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'reprocess',
   'rerun',
   'resend',
+  'restore',
   'revisions',
   'revoke',
   'roles',
@@ -96,6 +97,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'tree',
   'upload-url',
   'usage',
+  'versions',
   'waivers',
   'webhooks',
 ]);

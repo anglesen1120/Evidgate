@@ -1377,6 +1377,78 @@ export type MoveManualCaseResponse = {
 };
 
 /**
+ * One row of the version timeline (13.1.1 §5 route 22, AC9): the entity, the change kind, the source, the content digest and who wrote it. The list projection carries no `content`.
+ */
+export type AuthoringVersionListItemDto = {
+    version_id: string;
+    /**
+     * The entity the version describes (13.1.1 §4).
+     */
+    entity_kind: 'feature_node' | 'checklist_item' | 'manual_test_case';
+    entity_id: string;
+    /**
+     * The entity's version number at the time of the change (AC5/AC8).
+     */
+    version_no: number;
+    /**
+     * The change this row belongs to; one batch is one version in the UI.
+     */
+    batch_id: string;
+    change_kind: 'create' | 'update' | 'delete' | 'restore' | 'import';
+    source: 'manual' | 'ai' | 'import';
+    /**
+     * The digest of the stored content, also the ETag of route 23.
+     */
+    content_hash: string;
+    /**
+     * The authoring membership that wrote the change, or null (an import or an AI run).
+     */
+    author: string | null;
+    reason: string | null;
+    ai_run_id: string | null;
+    created_at: string;
+};
+
+/**
+ * 00 §9.1 keyset page of `AuthoringVersionListItemDto`, ordered `(created_at desc, id desc)` (13.1.1 §5 route 22).
+ */
+export type AuthoringVersionListResponse = {
+    items: Array<AuthoringVersionListItemDto>;
+    next_cursor: string | null;
+};
+
+/**
+ * The 200 body of route 23 (13.1.1-T3): the twelve row members of route 22 plus `content`, the stored document verbatim. The response's `ETag` is `content_hash` in quotes.
+ */
+export type AuthoringVersionDetailDto = {
+    version_id: string;
+    entity_kind: 'feature_node' | 'checklist_item' | 'manual_test_case';
+    entity_id: string;
+    version_no: number;
+    batch_id: string;
+    change_kind: 'create' | 'update' | 'delete' | 'restore' | 'import';
+    source: 'manual' | 'ai' | 'import';
+    content_hash: string;
+    author: string | null;
+    reason: string | null;
+    ai_run_id: string | null;
+    created_at: string;
+    /**
+     * The stored snapshot exactly as the writer hashed it — one of the three entity content shapes of 13.1.1 §4 — never re-serialised through a typed model.
+     */
+    content: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * The 200 body of the four restore routes (13.1.1 §5 routes 6, 11, 18 and 24): the entity's `version` after the call, which is the tag the next write must present (AC8/AC19).
+ */
+export type AuthoringRestoreResponse = {
+    version: number;
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -1829,6 +1901,46 @@ export type AuthoringQuery = string;
  * Opaque cursor from `next_cursor`; the order is the one the route declares (`(position, id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
  */
 export type AuthoringCursor = string;
+
+/**
+ * The `authoring_version` id (13.1.1 §5 routes 23 and 24).
+ */
+export type AuthoringVersionId = string;
+
+/**
+ * Which entity the versions describe (13.1.1 §5 route 22): `feature_node`, `checklist_item` or `manual_test_case`. Any other value is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = value_invalid`. Required whenever `entity_id` is sent: the entity key index starts `(org_id, project_id, entity_kind, entity_id, version_no)`, so an id on its own is 422 (see `entity_id`). `entity_kind` alone is valid.
+ */
+export type AuthoringVersionEntityKindFilter = 'feature_node' | 'checklist_item' | 'manual_test_case';
+
+/**
+ * The entity's id (13.1.1 §5 route 22); combined with `entity_kind` it is one entity's history. Sending it without `entity_kind` is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = required_with_entity_id`. A malformed uuid is 422 `request_invalid` with `details[].path = /entity_id`.
+ */
+export type AuthoringVersionEntityIdFilter = string;
+
+/**
+ * Where the change came from (13.1.1 §5 route 22): `manual`, `ai` or `import`. Any other value is 422 `request_invalid` with `details[].path = /source` and `reason = value_invalid`.
+ */
+export type AuthoringVersionSourceFilter = 'manual' | 'ai' | 'import';
+
+/**
+ * The authoring membership that wrote the change (13.1.1 §5 route 22). A malformed uuid is 422 `request_invalid` with `details[].path = /actor`.
+ */
+export type AuthoringVersionActorFilter = string;
+
+/**
+ * Inclusive lower bound of the window (13.1.1 §5 route 22): an RFC 3339 instant with an explicit offset (`Z` or `±hh:mm`), normalised to UTC before it is bound (the stored instants are UTC). A bare date, a local time without an offset or `from` later than `to` is 422 `request_invalid` — `details[].path = /from` with `reason = value_invalid` or `invalid_range`.
+ */
+export type AuthoringVersionFrom = string;
+
+/**
+ * Exclusive upper bound of the window (13.1.1 §5 route 22), the same RFC 3339 rule as `from` and normalised to UTC the same way; a malformed value is 422 `request_invalid` with `details[].path = /to`.
+ */
+export type AuthoringVersionTo = string;
+
+/**
+ * Opaque cursor from `next_cursor` of the version timeline (13.1.1 §5 route 22); the keyset is the `(created_at, id)` pair of the page's last row, ordered `(created_at desc, id desc)`. A value this endpoint did not issue is 422 `request_invalid` with `details[].path = /cursor` and `reason = malformed`.
+ */
+export type AuthoringVersionCursor = string;
 
 /**
  * Order tag of the sibling set, `"order:sha256:<hex>"` — `AuthoringHashes.OrderHash` over the sorted `(id, version)` pairs of the parent's live siblings (13.1.1-T2) — never a row `version`. Absent or malformed is 422 `request_invalid` with `details[].path = /If-Match` (`required` / `invalid`); a stale tag is 412 `precondition_failed` with the current tag in `error.details`, and nothing is written.
@@ -7516,6 +7628,83 @@ export type ReorderAuthoringNodesResponses = {
 
 export type ReorderAuthoringNodesResponse = ReorderAuthoringNodesResponses[keyof ReorderAuthoringNodesResponses];
 
+export type RestoreAuthoringNodeData = {
+    body?: never;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Feature-tree node id (13.1.1).
+         */
+        n: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/nodes/{n}/restore';
+};
+
+export type RestoreAuthoringNodeErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RestoreAuthoringNodeError = RestoreAuthoringNodeErrors[keyof RestoreAuthoringNodeErrors];
+
+export type RestoreAuthoringNodeResponses = {
+    /**
+     * The node's version after the restore
+     */
+    200: AuthoringRestoreResponse;
+};
+
+export type RestoreAuthoringNodeResponse = RestoreAuthoringNodeResponses[keyof RestoreAuthoringNodeResponses];
+
 export type ListChecklistItemsData = {
     body?: never;
     path: {
@@ -7811,6 +8000,83 @@ export type UpdateChecklistItemResponses = {
 };
 
 export type UpdateChecklistItemResponse = UpdateChecklistItemResponses[keyof UpdateChecklistItemResponses];
+
+export type RestoreChecklistItemData = {
+    body?: never;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Checklist item id (13.1.1).
+         */
+        i: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/checklist-items/{i}/restore';
+};
+
+export type RestoreChecklistItemErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RestoreChecklistItemError = RestoreChecklistItemErrors[keyof RestoreChecklistItemErrors];
+
+export type RestoreChecklistItemResponses = {
+    /**
+     * The item's version after the restore
+     */
+    200: AuthoringRestoreResponse;
+};
+
+export type RestoreChecklistItemResponse = RestoreChecklistItemResponses[keyof RestoreChecklistItemResponses];
 
 export type ListManualCasesData = {
     body?: never;
@@ -8324,3 +8590,273 @@ export type MoveManualCaseResponses = {
 };
 
 export type MoveManualCaseResponse2 = MoveManualCaseResponses[keyof MoveManualCaseResponses];
+
+export type RestoreManualCaseData = {
+    body?: never;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Manual test case id (13.1.1).
+         */
+        m: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/manual-cases/{m}/restore';
+};
+
+export type RestoreManualCaseErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RestoreManualCaseError = RestoreManualCaseErrors[keyof RestoreManualCaseErrors];
+
+export type RestoreManualCaseResponses = {
+    /**
+     * The case's version after the restore
+     */
+    200: AuthoringRestoreResponse;
+};
+
+export type RestoreManualCaseResponse = RestoreManualCaseResponses[keyof RestoreManualCaseResponses];
+
+export type ListAuthoringVersionsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Which entity the versions describe (13.1.1 §5 route 22): `feature_node`, `checklist_item` or `manual_test_case`. Any other value is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = value_invalid`. Required whenever `entity_id` is sent: the entity key index starts `(org_id, project_id, entity_kind, entity_id, version_no)`, so an id on its own is 422 (see `entity_id`). `entity_kind` alone is valid.
+         */
+        entity_kind?: 'feature_node' | 'checklist_item' | 'manual_test_case';
+        /**
+         * The entity's id (13.1.1 §5 route 22); combined with `entity_kind` it is one entity's history. Sending it without `entity_kind` is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = required_with_entity_id`. A malformed uuid is 422 `request_invalid` with `details[].path = /entity_id`.
+         */
+        entity_id?: string;
+        /**
+         * Where the change came from (13.1.1 §5 route 22): `manual`, `ai` or `import`. Any other value is 422 `request_invalid` with `details[].path = /source` and `reason = value_invalid`.
+         */
+        source?: 'manual' | 'ai' | 'import';
+        /**
+         * The authoring membership that wrote the change (13.1.1 §5 route 22). A malformed uuid is 422 `request_invalid` with `details[].path = /actor`.
+         */
+        actor?: string;
+        /**
+         * Inclusive lower bound of the window (13.1.1 §5 route 22): an RFC 3339 instant with an explicit offset (`Z` or `±hh:mm`), normalised to UTC before it is bound (the stored instants are UTC). A bare date, a local time without an offset or `from` later than `to` is 422 `request_invalid` — `details[].path = /from` with `reason = value_invalid` or `invalid_range`.
+         */
+        from?: string;
+        /**
+         * Exclusive upper bound of the window (13.1.1 §5 route 22), the same RFC 3339 rule as `from` and normalised to UTC the same way; a malformed value is 422 `request_invalid` with `details[].path = /to`.
+         */
+        to?: string;
+        /**
+         * Opaque cursor from `next_cursor` of the version timeline (13.1.1 §5 route 22); the keyset is the `(created_at, id)` pair of the page's last row, ordered `(created_at desc, id desc)`. A value this endpoint did not issue is 422 `request_invalid` with `details[].path = /cursor` and `reason = malformed`.
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/authoring/versions';
+};
+
+export type ListAuthoringVersionsErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListAuthoringVersionsError = ListAuthoringVersionsErrors[keyof ListAuthoringVersionsErrors];
+
+export type ListAuthoringVersionsResponses = {
+    /**
+     * Page of authoring versions
+     */
+    200: AuthoringVersionListResponse;
+};
+
+export type ListAuthoringVersionsResponse = ListAuthoringVersionsResponses[keyof ListAuthoringVersionsResponses];
+
+export type GetAuthoringVersionData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * The `authoring_version` id (13.1.1 §5 routes 23 and 24).
+         */
+        v: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/versions/{v}';
+};
+
+export type GetAuthoringVersionErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetAuthoringVersionError = GetAuthoringVersionErrors[keyof GetAuthoringVersionErrors];
+
+export type GetAuthoringVersionResponses = {
+    /**
+     * One authoring version with its content and `ETag: "<content_hash>"`
+     */
+    200: AuthoringVersionDetailDto;
+};
+
+export type GetAuthoringVersionResponse = GetAuthoringVersionResponses[keyof GetAuthoringVersionResponses];
+
+export type RestoreAuthoringVersionData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * The `authoring_version` id (13.1.1 §5 routes 23 and 24).
+         */
+        v: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/versions/{v}/restore';
+};
+
+export type RestoreAuthoringVersionErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RestoreAuthoringVersionError = RestoreAuthoringVersionErrors[keyof RestoreAuthoringVersionErrors];
+
+export type RestoreAuthoringVersionResponses = {
+    /**
+     * The entity's version after the restore
+     */
+    200: AuthoringRestoreResponse;
+};
+
+export type RestoreAuthoringVersionResponse = RestoreAuthoringVersionResponses[keyof RestoreAuthoringVersionResponses];

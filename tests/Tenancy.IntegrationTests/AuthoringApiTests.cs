@@ -44,6 +44,10 @@ public sealed class AuthoringApiTests
 
         public string Case(Guid m) => $"{Cases}/{m:D}";
 
+        public string Versions => $"/v1/projects/{Project}/authoring/versions";
+
+        public string Version(Guid v) => $"{Versions}/{v:D}";
+
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
@@ -85,11 +89,11 @@ public sealed class AuthoringApiTests
     }
 
     /// <summary>
-    /// 13.1.1 §5/AC10: every one of the sixteen authoring routes asks for the permission §5 assigns it. A member holding
-    /// only the <c>viewer</c> role (which carries <c>authoring:read</c>, never <c>authoring:write</c>) is refused 403
-    /// <c>forbidden</c> on the twelve writes and served 200 on the four reads; a member holding no role at all is refused
-    /// 403 on a read too, so no route is ungated; the founder, who holds the permission, is never refused. The refused
-    /// writes leave no entity row, no version row and no audit row behind.
+    /// 13.1.1 §5/AC10: every one of the twenty-two authoring routes asks for the permission §5 assigns it. A member
+    /// holding only the <c>viewer</c> role (which carries <c>authoring:read</c>, never <c>authoring:write</c>) is refused
+    /// 403 <c>forbidden</c> on the sixteen writes and served 200 on the six reads; a member holding no role at all is
+    /// refused 403 on a read too, so no route is ungated; the founder, who holds the permission, is never refused. The
+    /// refused writes leave no entity row, no version row and no audit row behind.
     /// </summary>
     /// <remarks>
     /// The route delegates parse <c>If-Match</c> and member-check the body before <c>mediator.Send</c> (the
@@ -113,6 +117,9 @@ public sealed class AuthoringApiTests
             steps = new[] { new { no = 1, action = "open", expected = "shown" } },
             priority = "high",
         }, "case_id");
+
+        // Route 23 (and 24) name one stored version: the ladder's newest row, read back through route 22 as the founder.
+        var version = await FirstVersionAsync(world);
 
         var routes = new List<Route>
         {
@@ -138,10 +145,20 @@ public sealed class AuthoringApiTests
             new("case state", HttpMethod.Post, $"{world.Case(manualCase)}/state", new { state = "approved" }, "\"1\""),
             new("case item move", HttpMethod.Post, $"{world.Case(manualCase)}/item", new { checklist_item_id = item }, "\"1\""),
             new("delete case", HttpMethod.Delete, world.Case(manualCase), null, "\"1\""),
+
+            // T3's six routes: the four restores (§5 routes 6/11/18 take If-Match, route 24 only Idempotency-Key) and the
+            // two version reads (22 and 23). The 403 assertion needs no tombstone: the C2 stage refuses before any state
+            // is read, so a live id passes the edge's own header checks and the refusal can only be the permission.
+            new("restore node", HttpMethod.Post, $"{world.Node(feature)}/restore", null, "\"1\""),
+            new("restore item", HttpMethod.Post, $"{world.Item(item)}/restore", null, "\"1\""),
+            new("restore case", HttpMethod.Post, $"{world.Case(manualCase)}/restore", null, "\"1\""),
+            new("list versions", HttpMethod.Get, world.Versions),
+            new("version detail", HttpMethod.Get, world.Version(version)),
+            new("restore version", HttpMethod.Post, $"{world.Version(version)}/restore"),
         };
 
-        routes.Count.ShouldBe(16, "13.1.1 §5 numbers sixteen routes for this task");
-        routes.Count(route => route.IsWrite).ShouldBe(12, "§5 has twelve write routes and four reads in this task");
+        routes.Count.ShouldBe(22, "13.1.1 §5 numbers twenty-two routes for this task");
+        routes.Count(route => route.IsWrite).ShouldBe(16, "§5 has sixteen write routes and six reads in this task");
 
         var viewer = await AddMemberAsync(world, "viewer");
         var stranger = await AddMemberAsync(world, roleCode: null);
@@ -184,6 +201,15 @@ public sealed class AuthoringApiTests
             granted.Status.ShouldNotBe(HttpStatusCode.Forbidden, $"{route.Label}: the granted caller must not be refused");
             granted.Status.ShouldNotBe(HttpStatusCode.Unauthorized, route.Label);
         }
+    }
+
+    /// <summary>The newest stored version id of the world's project, read through route 22 as the founder.</summary>
+    private static async Task<Guid> FirstVersionAsync(World world)
+    {
+        var page = await world.Client.SendAsync(HttpMethod.Get, world.Versions, world.As);
+        page.Status.ShouldBe(HttpStatusCode.OK, page.ErrorMessage);
+
+        return page.Body.GetProperty("items")[0].GetProperty("version_id").GetGuid();
     }
 
     /// <summary>An active member of the org, optionally holding one built-in role, granted by the founder through the API.</summary>
