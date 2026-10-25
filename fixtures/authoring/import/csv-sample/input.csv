@@ -1,0 +1,6 @@
+kind,key,parent_key,item_key,node_kind,title,description,precondition,steps,priority,state,code,position
+node,n1,,,module,Shop,,,,,,,0
+node,n2,n1,,feature,Checkout,,,,,,,0
+node,n3,n2,,category,Payment,,,,,,,0
+item,i1,n3,,,Pay with a card,The customer pays with a card,,,high,active,,0
+case,c1,,i1,,Declined card,,,"{""steps"":[{""no"":1,""action"":""Pay with a declined card"",""expected"":""the payment is refused""}]}",high,draft,SHOP-001,0

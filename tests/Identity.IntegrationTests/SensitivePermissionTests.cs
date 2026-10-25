@@ -429,6 +429,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/authoring/checklist-items"] = $"/v1/projects/{project}/authoring/checklist-items",
             ["/v1/projects/{p}/authoring/manual-cases"] = $"/v1/projects/{project}/authoring/manual-cases",
             ["/v1/projects/{p}/authoring/versions"] = $"/v1/projects/{project}/authoring/versions",
+            // 13.1.1-T5's export: a CSV of a project with no authoring rows is the header line alone, so the download is
+            // callable here like the lists above (no seeded tree, no secret in the file).
+            ["/v1/projects/{p}/authoring/export"] = $"/v1/projects/{project}/authoring/export?format=csv",
             ["/v1/cases/{c}"] = $"/v1/cases/{seeded.CaseId}",
             ["/v1/cases/{c}/revisions"] = $"/v1/cases/{seeded.CaseId}/revisions",
             ["/v1/suites/{s}"] = $"/v1/suites/{seeded.SuiteId}",

@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authoring-import.v1.json",
+  "title": "Feature tree import document v1",
+  "description": "The import/export table of 13.1.1-T5 (route 25, AC13/AC14/AC15): one flat row set that carries the whole feature tree — nodes, their checklist items and each item's manual test cases — in a single document. The same table is what the CSV and XLSX readers produce and what every exporter writes, so the three formats validate against one contract; the CSV/XLSX column order is the CSV header (kind,key,parent_key,item_key,node_kind,title,description,precondition,steps,priority,state,code,position) and a JSON member of a row is that column name. Rows are ordered parent-first: a node's parent_key names a node row above it, an item's parent_key names its node, a case's item_key names its item. 'steps' is the stored {\"steps\":[…]} document of contracts/schemas/authoring-steps.v1.json, inlined here as $defs.steps because a row member is not a reference to another contract file: the two shapes must stay identical (1..100 steps, 2000 characters per field, closed members), which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered asserts field by field. Bounds: 1..5000 rows — the same 5000-row cap the route enforces with 413 payload_too_large (plan 13.1.1 §5 route 25, AC16) — a node title of 1..200 and an item/case title of 1..500 code points, a description and a precondition of at most 4000, and the priority/state/node_kind sets of plan 13.1.1 §4. No member is ever evaluated as a formula: the JSON format is never neutralised, because a JSON consumer does not evaluate cell text (AC16 covers CSV and XLSX only).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "version", "rows"],
+  "properties": {
+    "format": {
+      "const": "authoring-import",
+      "description": "The document discriminator, so a file of the wrong kind is one refusal at /format (reason unsupported_format) rather than a hundred per-row ones."
+    },
+    "version": {
+      "const": 1,
+      "description": "The document version; a later format is a new file (authoring-import.v2.json), never a reinterpretation of this one."
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5000,
+      "description": "The data rows, in file order. At least one: an import of nothing is a mistake, and the route answers 422 with value_invalid at /rows. At most 5000: the route refuses a longer file with 413 payload_too_large before this schema runs, and the reader counts rows before materialising them.",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": {
+            "enum": ["node", "item", "case"],
+            "description": "The row's kind, and the member every if/then branch below selects on. A row with any other value is refused here rather than by the branches, so an unknown kind is one refusal at this member."
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "const": "node" } }, "required": ["kind"] },
+            "then": { "$ref": "#/$defs/node" }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "item" } }, "required": ["kind"] },
+            "then": { "$ref": "#/$defs/item" }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "case" } }, "required": ["kind"] },
+            "then": { "$ref": "#/$defs/case" }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
+      "description": "A row's file-local key: nodes n1…, items i1…, cases c1… on export, numbered in depth-first tree order (node by position,id; its items by position,id; each item's cases by code,id), so an unchanged tree exports byte-identically. A key is only ever compared with another key of the same file, which is why it is restricted to characters that survive every format unchanged (no commas, quotes, line breaks or leading spaces) and to 64 characters."
+    },
+    "position": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000,
+      "description": "The sibling position of a NEW row only: absent means append at the group's max + 1, and a position a live sibling already holds is refused with value_invalid at /position. Import never reorders an existing sibling. The upper bound is the sanity ceiling of a hand-written file — a sibling group holds at most 1000 nodes (NodeLimits.MaximumSiblingsPerGroup), so a position above 1e6 names nothing this module could ever store."
+    },
+    "itemPriority": {
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "The priority CHECK of checklist_item and manual_test_case (plan 13.1.1 §4)."
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "key", "node_kind", "title"],
+      "description": "One feature_node row: a module at the root (no parent_key), or a feature/category/sub_category under the node named by parent_key.",
+      "properties": {
+        "kind": { "const": "node" },
+        "key": { "$ref": "#/$defs/key" },
+        "parent_key": {
+          "$ref": "#/$defs/key",
+          "description": "The parent node's key, or absent for a module. A key naming no node above this row is unknown_parent; a module carrying one is unknown_parent too (the depth ladder of AC1)."
+        },
+        "node_kind": {
+          "enum": ["module", "feature", "category", "sub_category"],
+          "description": "The kind ladder of AC1: module at the root, feature under module, category under feature, sub_category under category."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The node title, 1..200 code points (plan 13.1.1 §4, the feature_node_title_check bound)."
+        },
+        "position": { "$ref": "#/$defs/position" }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "key", "parent_key", "title", "priority"],
+      "description": "One checklist_item row under the node named by parent_key (a category or a sub_category, AC3).",
+      "properties": {
+        "kind": { "const": "item" },
+        "key": { "$ref": "#/$defs/key" },
+        "parent_key": {
+          "$ref": "#/$defs/key",
+          "description": "The owning node's key; it must be a node row above this one and of kind category or sub_category (AC3)."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "The item title, 1..500 code points (plan 13.1.1 §4, checklist_item_title_check)."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Optional item description, at most 4000 code points (checklist_item_description_check)."
+        },
+        "priority": { "$ref": "#/$defs/itemPriority" },
+        "state": {
+          "enum": ["draft", "active", "retired"],
+          "description": "Optional state; absent means the creation default of AC3 (active for an authored row). A transition into retired without a reason is not an import concern — import writes the stated state or the default, and never moves an existing row's state."
+        },
+        "position": { "$ref": "#/$defs/position" }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "key", "item_key", "title", "priority", "steps"],
+      "description": "One manual_test_case row under the item named by item_key.",
+      "properties": {
+        "kind": { "const": "case" },
+        "key": { "$ref": "#/$defs/key" },
+        "item_key": {
+          "$ref": "#/$defs/key",
+          "description": "The owning item's key; it must be an item row above this one (a case names its item, never a node)."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "The case title, 1..500 code points (plan 13.1.1 §4, manual_test_case_title_check)."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Optional case description, at most 4000 code points (manual_test_case_description_check)."
+        },
+        "precondition": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Optional case precondition, at most 4000 code points (manual_test_case_precondition_check)."
+        },
+        "steps": {
+          "$ref": "#/$defs/steps",
+          "description": "The steps document; required because manual_test_case.steps is NOT NULL and the writer validates every case snapshot through authoring-steps.v1 (Notes, OI-13-115)."
+        },
+        "priority": { "$ref": "#/$defs/itemPriority" },
+        "state": {
+          "enum": ["draft", "approved", "retired"],
+          "description": "Optional state; absent means the creation default (draft)."
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^([A-Z][A-Z0-9]{1,7}-[0-9]{3,10})?$",
+          "description": "The case code, which is how a re-import finds its row (AC15): present must carry the project's own case_prefix (the manual_test_case code CHECK), absent or empty means 'allocate a fresh number'. A code that matches a live case updates it, one that matches a soft-deleted case restores it, and one whose prefix is not this project's prefix is code_conflict."
+        },
+        "position": { "$ref": "#/$defs/position" }
+      }
+    },
+    "steps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["steps"],
+      "description": "The manual test case steps document of contracts/schemas/authoring-steps.v1.json, inlined (a cross-file $ref would tie this contract to the steps file's own $id, and the two documents are validated by the same registry anyway). The bounds here are that file's bounds: a change to one must change the other, which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered checks member by member.",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "description": "The steps in the order the tester performs them; the array order is the step order, 'no' is the number shown to the tester.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["no", "action", "expected"],
+            "properties": {
+              "no": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000,
+                "description": "The step number shown to the tester (1..1000, the same inference as authoring-steps.v1)."
+              },
+              "action": {
+                "type": "string",
+                "maxLength": 2000,
+                "description": "What the tester does, at most 2000 characters."
+              },
+              "expected": {
+                "type": "string",
+                "maxLength": 2000,
+                "description": "What the tester must observe, at most 2000 characters."
+              },
+              "data": {
+                "type": "string",
+                "maxLength": 2000,
+                "description": "Test data used by the step, optional and always text, at most 2000 characters."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

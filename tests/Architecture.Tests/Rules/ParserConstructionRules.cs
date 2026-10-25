@@ -60,6 +60,39 @@ public static class ParserConstructionRules
     ];
 
     /// <summary>
+    /// The write direction of an archive is not a parse: <c>new ZipArchive(output, ZipArchiveMode.Create)</c> builds an
+    /// export (13.1.1-T5 XLSX writer) and reads no untrusted bytes, so a construction whose statement names
+    /// <c>ZipArchiveMode.Create</c> is not a violation. Every other construct, and every read/update-mode archive,
+    /// still is.
+    /// </summary>
+    private static bool ContainsParse(string text, string construct)
+    {
+        var from = 0;
+        while (true)
+        {
+            var at = text.IndexOf(construct, from, StringComparison.Ordinal);
+            if (at < 0)
+            {
+                return false;
+            }
+
+            if (!string.Equals(construct, "new ZipArchive(", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var end = text.IndexOf(';', at);
+            var statement = end < 0 ? text[at..] : text[at..end];
+            if (!statement.Contains("ZipArchiveMode.Create", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            from = at + construct.Length;
+        }
+    }
+
+    /// <summary>
     /// One violation per construct found outside the profile, naming the file and the construct. Paths are
     /// repository-relative with '/'.
     /// </summary>
@@ -84,7 +117,7 @@ public static class ParserConstructionRules
 
             foreach (var construct in RepositoryWideConstructs)
             {
-                if (text.Contains(construct, StringComparison.Ordinal))
+                if (ContainsParse(text, construct))
                 {
                     violations.Add(
                         $"{path} constructs {construct}: the untrusted-parser profile in {profileDirectory} is the "

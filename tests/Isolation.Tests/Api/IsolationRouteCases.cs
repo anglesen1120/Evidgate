@@ -436,6 +436,14 @@ public static class IsolationRouteCases
             (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{id}/restore"), (_, _) => [],
             own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{p.AuthoringVersionId}/restore")),
 
+        // 13.1.1-T5: route 25, the import/export pair. The import probe is a dry run of a one-row JSON document, so a
+        // caller who turned out to be authorized would still write nothing; an org-B credential naming an org-A project
+        // is invisible to the project probe, exactly like the tree routes above (404 `not_found`).
+        ProjectCase("POST", "/v1/projects/{p}/authoring/import", p => new(HttpMethod.Post,
+            $"/v1/projects/{p}/authoring/import?format=json&dry_run=true", ImportDocument())),
+        ProjectCase("GET", "/v1/projects/{p}/authoring/export", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/authoring/export?format=csv")),
+
         // ---- Membership (MembershipEndpoints.cs:49-75) ---------------------------------------------------------
         OrgCase("POST", "/v1/orgs/{o}/memberships", o => new(HttpMethod.Post, $"/v1/orgs/{o}/memberships", Invite())),
         OrgCase("GET", "/v1/orgs/{o}/memberships", o => new(HttpMethod.Get, $"/v1/orgs/{o}/memberships"),
@@ -606,6 +614,27 @@ public static class IsolationRouteCases
             new(route, "naming org A's project echoes no org-A data", runner => runner.SliceNamingAsync(route, w.Acme.Projects[0].Id)),
         ]),
     ];
+
+    // ---------------------------------------------------------------------------------------------------- helpers
+    /// <summary>
+    /// A minimal valid <c>authoring-import.v1</c> document (one module node, no children): the import route refuses a
+    /// body it cannot parse before the pipeline runs, so an isolation probe has to send a file the readers accept.
+    /// </summary>
+    private static JsonObject ImportDocument() => new()
+    {
+        ["format"] = "authoring-import",
+        ["version"] = 1,
+        ["rows"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["kind"] = "node",
+                ["key"] = "n1",
+                ["node_kind"] = "module",
+                ["title"] = "intruder module",
+            },
+        },
+    };
 
     // ------------------------------------------------------------------------------------------------ case shapes
 

@@ -1449,6 +1449,36 @@ export type AuthoringRestoreResponse = {
 };
 
 /**
+ * The 200 body of the import route (13.1.1 §5 route 25, AC13/AC15): one `batch_id` for every `authoring_version` row the file wrote, the per-outcome totals and one row report per input row in file order. `batch_id` is null on a dry run and on a file whose every row is unchanged; no cell text travels back.
+ */
+export type ImportResponse = {
+    batch_id: string | null;
+    counts: ImportCountsDto;
+    rows: Array<ImportRowDto>;
+};
+
+/**
+ * The per-outcome totals of one import (13.1.1 AC13/AC15).
+ */
+export type ImportCountsDto = {
+    created: number;
+    updated: number;
+    restored: number;
+    unchanged: number;
+};
+
+/**
+ * One row of the import report: the row's 1-based position, its file-local key, its kind and its outcome — never its text (S3).
+ */
+export type ImportRowDto = {
+    index: number;
+    key: string;
+    kind: 'node' | 'item' | 'case';
+    outcome: 'create' | 'update' | 'restore' | 'unchanged';
+    code: string | null;
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -1565,6 +1595,158 @@ export type TargetEnv = string;
 
 export type Variant = {
     params: Params;
+};
+
+/**
+ * Feature tree import document v1
+ *
+ * The import/export table of 13.1.1-T5 (route 25, AC13/AC14/AC15): one flat row set that carries the whole feature tree — nodes, their checklist items and each item's manual test cases — in a single document. The same table is what the CSV and XLSX readers produce and what every exporter writes, so the three formats validate against one contract; the CSV/XLSX column order is the CSV header (kind,key,parent_key,item_key,node_kind,title,description,precondition,steps,priority,state,code,position) and a JSON member of a row is that column name. Rows are ordered parent-first: a node's parent_key names a node row above it, an item's parent_key names its node, a case's item_key names its item. 'steps' is the stored {"steps":[…]} document of contracts/schemas/authoring-steps.v1.json, inlined here as $defs.steps because a row member is not a reference to another contract file: the two shapes must stay identical (1..100 steps, 2000 characters per field, closed members), which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered asserts field by field. Bounds: 1..5000 rows — the same 5000-row cap the route enforces with 413 payload_too_large (plan 13.1.1 §5 route 25, AC16) — a node title of 1..200 and an item/case title of 1..500 code points, a description and a precondition of at most 4000, and the priority/state/node_kind sets of plan 13.1.1 §4. No member is ever evaluated as a formula: the JSON format is never neutralised, because a JSON consumer does not evaluate cell text (AC16 covers CSV and XLSX only).
+ */
+export type AuthoringImportV1 = {
+    /**
+     * The document discriminator, so a file of the wrong kind is one refusal at /format (reason unsupported_format) rather than a hundred per-row ones.
+     */
+    format: 'authoring-import';
+    /**
+     * The document version; a later format is a new file (authoring-import.v2.json), never a reinterpretation of this one.
+     */
+    version: 1;
+    /**
+     * The data rows, in file order. At least one: an import of nothing is a mistake, and the route answers 422 with value_invalid at /rows. At most 5000: the route refuses a longer file with 413 payload_too_large before this schema runs, and the reader counts rows before materialising them.
+     */
+    rows: Array<unknown & {
+        /**
+         * The row's kind, and the member every if/then branch below selects on. A row with any other value is refused here rather than by the branches, so an unknown kind is one refusal at this member.
+         */
+        kind: 'node' | 'item' | 'case';
+    }>;
+};
+
+/**
+ * One manual_test_case row under the item named by item_key.
+ */
+export type Case = {
+    kind: 'case';
+    key: Key;
+    /**
+     * The owning item's key; it must be an item row above this one (a case names its item, never a node).
+     */
+    item_key: Key;
+    /**
+     * The case title, 1..500 code points (plan 13.1.1 §4, manual_test_case_title_check).
+     */
+    title: string;
+    /**
+     * Optional case description, at most 4000 code points (manual_test_case_description_check).
+     */
+    description?: string;
+    /**
+     * Optional case precondition, at most 4000 code points (manual_test_case_precondition_check).
+     */
+    precondition?: string;
+    /**
+     * The steps document; required because manual_test_case.steps is NOT NULL and the writer validates every case snapshot through authoring-steps.v1 (Notes, OI-13-115).
+     */
+    steps: Steps;
+    priority: ItemPriority;
+    /**
+     * Optional state; absent means the creation default (draft).
+     */
+    state?: 'draft' | 'approved' | 'retired';
+    /**
+     * The case code, which is how a re-import finds its row (AC15): present must carry the project's own case_prefix (the manual_test_case code CHECK), absent or empty means 'allocate a fresh number'. A code that matches a live case updates it, one that matches a soft-deleted case restores it, and one whose prefix is not this project's prefix is code_conflict.
+     */
+    code?: string;
+    position?: Position;
+};
+
+/**
+ * One checklist_item row under the node named by parent_key (a category or a sub_category, AC3).
+ */
+export type Item = {
+    kind: 'item';
+    key: Key;
+    /**
+     * The owning node's key; it must be a node row above this one and of kind category or sub_category (AC3).
+     */
+    parent_key: Key;
+    /**
+     * The item title, 1..500 code points (plan 13.1.1 §4, checklist_item_title_check).
+     */
+    title: string;
+    /**
+     * Optional item description, at most 4000 code points (checklist_item_description_check).
+     */
+    description?: string;
+    priority: ItemPriority;
+    /**
+     * Optional state; absent means the creation default of AC3 (active for an authored row). A transition into retired without a reason is not an import concern — import writes the stated state or the default, and never moves an existing row's state.
+     */
+    state?: 'draft' | 'active' | 'retired';
+    position?: Position;
+};
+
+/**
+ * The priority CHECK of checklist_item and manual_test_case (plan 13.1.1 §4).
+ */
+export type ItemPriority = 'critical' | 'high' | 'medium' | 'low';
+
+/**
+ * A row's file-local key: nodes n1…, items i1…, cases c1… on export, numbered in depth-first tree order (node by position,id; its items by position,id; each item's cases by code,id), so an unchanged tree exports byte-identically. A key is only ever compared with another key of the same file, which is why it is restricted to characters that survive every format unchanged (no commas, quotes, line breaks or leading spaces) and to 64 characters.
+ */
+export type Key = string;
+
+/**
+ * One feature_node row: a module at the root (no parent_key), or a feature/category/sub_category under the node named by parent_key.
+ */
+export type Node = {
+    kind: 'node';
+    key: Key;
+    /**
+     * The parent node's key, or absent for a module. A key naming no node above this row is unknown_parent; a module carrying one is unknown_parent too (the depth ladder of AC1).
+     */
+    parent_key?: Key;
+    /**
+     * The kind ladder of AC1: module at the root, feature under module, category under feature, sub_category under category.
+     */
+    node_kind: 'module' | 'feature' | 'category' | 'sub_category';
+    /**
+     * The node title, 1..200 code points (plan 13.1.1 §4, the feature_node_title_check bound).
+     */
+    title: string;
+    position?: Position;
+};
+
+/**
+ * The sibling position of a NEW row only: absent means append at the group's max + 1, and a position a live sibling already holds is refused with value_invalid at /position. Import never reorders an existing sibling. The upper bound is the sanity ceiling of a hand-written file — a sibling group holds at most 1000 nodes (NodeLimits.MaximumSiblingsPerGroup), so a position above 1e6 names nothing this module could ever store.
+ */
+export type Position = number;
+
+/**
+ * The manual test case steps document of contracts/schemas/authoring-steps.v1.json, inlined (a cross-file $ref would tie this contract to the steps file's own $id, and the two documents are validated by the same registry anyway). The bounds here are that file's bounds: a change to one must change the other, which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered checks member by member.
+ */
+export type Steps = {
+    /**
+     * The steps in the order the tester performs them; the array order is the step order, 'no' is the number shown to the tester.
+     */
+    steps: Array<{
+        /**
+         * The step number shown to the tester (1..1000, the same inference as authoring-steps.v1).
+         */
+        no: number;
+        /**
+         * What the tester does, at most 2000 characters.
+         */
+        action: string;
+        /**
+         * What the tester must observe, at most 2000 characters.
+         */
+        expected: string;
+        /**
+         * Test data used by the step, optional and always text, at most 2000 characters.
+         */
+        data?: string;
+    }>;
 };
 
 /**
@@ -1876,6 +2058,21 @@ export type AuthoringItemIdFilter = string;
  * Comma-separated tokens. `path` adds `path` (the addressed node's ancestors, root first); `counts` is always present and needs no token. Any other token is 422 `request_invalid` with `details[].path = /include`.
  */
 export type AuthoringInclude = string;
+
+/**
+ * The file format of route 25: `csv`, `json` or `xlsx`. An absent or unknown value is 422 `request_invalid` with `details[].path = /format` and reason `unsupported_format` (13.1.1-T5).
+ */
+export type AuthoringFormat = 'csv' | 'json' | 'xlsx';
+
+/**
+ * `true` answers the import report without writing anything — no version row, no code allocation, no audit row (13.1.1 AC13).
+ */
+export type AuthoringDryRun = boolean;
+
+/**
+ * Comma-separated tokens `nodes`, `items`, `cases`; absent or empty means all three. Any other token is 422 `request_invalid` with `details[].path = /include` (13.1.1 §5 route 25).
+ */
+export type AuthoringExportInclude = string;
 
 /**
  * Checklist item state filter (13.1.1 §6).
@@ -8860,3 +9057,145 @@ export type RestoreAuthoringVersionResponses = {
 };
 
 export type RestoreAuthoringVersionResponse = RestoreAuthoringVersionResponses[keyof RestoreAuthoringVersionResponses];
+
+export type ImportAuthoringData = {
+    body: AuthoringImportV1;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query: {
+        /**
+         * The file format of route 25: `csv`, `json` or `xlsx`. An absent or unknown value is 422 `request_invalid` with `details[].path = /format` and reason `unsupported_format` (13.1.1-T5).
+         */
+        format: 'csv' | 'json' | 'xlsx';
+        /**
+         * `true` answers the import report without writing anything — no version row, no code allocation, no audit row (13.1.1 AC13).
+         */
+        dry_run?: boolean;
+    };
+    url: '/projects/{p}/authoring/import';
+};
+
+export type ImportAuthoringErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ImportAuthoringError = ImportAuthoringErrors[keyof ImportAuthoringErrors];
+
+export type ImportAuthoringResponses = {
+    /**
+     * The import report — one batch id, the per-outcome totals and one row per input row
+     */
+    200: ImportResponse;
+};
+
+export type ImportAuthoringResponse = ImportAuthoringResponses[keyof ImportAuthoringResponses];
+
+export type ExportAuthoringData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query: {
+        /**
+         * The file format of route 25: `csv`, `json` or `xlsx`. An absent or unknown value is 422 `request_invalid` with `details[].path = /format` and reason `unsupported_format` (13.1.1-T5).
+         */
+        format: 'csv' | 'json' | 'xlsx';
+        /**
+         * Address one node (route 1) or narrow a list to this node's entries (13.1.1).
+         */
+        node_id?: string;
+        /**
+         * Comma-separated tokens `nodes`, `items`, `cases`; absent or empty means all three. Any other token is 422 `request_invalid` with `details[].path = /include` (13.1.1 §5 route 25).
+         */
+        include?: string;
+    };
+    url: '/projects/{p}/authoring/export';
+};
+
+export type ExportAuthoringErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ExportAuthoringError = ExportAuthoringErrors[keyof ExportAuthoringErrors];
+
+export type ExportAuthoringResponses = {
+    /**
+     * The export file in the requested format
+     */
+    200: AuthoringImportV1;
+};
+
+export type ExportAuthoringResponse = ExportAuthoringResponses[keyof ExportAuthoringResponses];

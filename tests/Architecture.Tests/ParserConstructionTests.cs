@@ -127,6 +127,39 @@ public class ParserConstructionTests
     }
 
     [Fact]
+    public void Write_Mode_Archive_Outside_The_Profile_Is_Not_A_Parse()
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", "using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);"),
+        };
+
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("using var archive = new ZipArchive(stream, ZipArchiveMode.Update);")]
+    [InlineData("using var archive = new ZipArchive(stream);")]
+    [InlineData("var a = new ZipArchive(output, ZipArchiveMode.Create); using var b = new ZipArchive(input, ZipArchiveMode.Read);")]
+    public void Non_Create_Mode_Archive_Next_To_A_Write_Mode_One_Is_Still_Detected(string text)
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),
+        };
+
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public void Mentions_Of_The_Reader_Names_Outside_The_Profile_Are_Detected()
     {
         // The rule matches the construct, not the file: a module that merely mentions XmlReaderSettings is
