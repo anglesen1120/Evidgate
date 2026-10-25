@@ -69,13 +69,32 @@ internal static class AuthoringLockGuard
         ITenantDb db,
         Guid projectId,
         Guid? parentId,
+        CancellationToken cancellationToken) =>
+        LockSiblingGroupAsync(db, projectId, parentId, SiblingGroup.FeatureNode, cancellationToken);
+
+    /// <summary>
+    /// Takes the advisory lock of one group of <paramref name="group"/>'s kind: the sibling set AC2 orders (feature
+    /// nodes under one parent), the checklist items under one node, or the manual cases under one item. The key carries
+    /// the kind (<see cref="SiblingGroupKey(ITenantDb, Guid, Guid?)"/> below builds it), so an item group under node
+    /// <c>X</c> never serialises against the child-node group of the same <c>X</c>.
+    /// </summary>
+    /// <param name="db">The tenant-bound database of the open command scope.</param>
+    /// <param name="projectId">The project of the group.</param>
+    /// <param name="parentId">The parent the group hangs under, or null for a project-wide group of that kind.</param>
+    /// <param name="group">Which kind's sibling set is locked.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal static Task LockSiblingGroupAsync(
+        ITenantDb db,
+        Guid projectId,
+        Guid? parentId,
+        SiblingGroup group,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(db);
 
         return db.ExecuteAsync(
             AuthoringSql.LockSiblingGroup,
-            new { group_key = SiblingGroupKey(projectId, parentId) },
+            new { group_key = SiblingGroupKey(projectId, parentId, group) },
             cancellationToken);
     }
 
@@ -87,5 +106,40 @@ internal static class AuthoringLockGuard
     /// <param name="projectId">The project.</param>
     /// <param name="parentId">The parent node, or null for the root group.</param>
     internal static string SiblingGroupKey(Guid projectId, Guid? parentId) =>
-        "authoring_group:" + projectId.ToString("D") + ":" + (parentId?.ToString("D") ?? "root");
+        SiblingGroupKey(projectId, parentId, SiblingGroup.FeatureNode);
+
+    /// <summary>
+    /// The advisory key of one group of one kind. The feature-node prefix is the one create, move-into-group and the
+    /// reorder already share (<c>authoring_group:</c>); the two child kinds carry their own prefix, because their parent
+    /// id is an id of another table and the two groups are not the same set of rows.
+    /// </summary>
+    /// <param name="projectId">The project.</param>
+    /// <param name="parentId">The parent the group hangs under, or null for its project-wide group.</param>
+    /// <param name="group">Which kind's sibling set the key names.</param>
+    internal static string SiblingGroupKey(Guid projectId, Guid? parentId, SiblingGroup group) =>
+        (group switch
+        {
+            SiblingGroup.FeatureNode => "authoring_group:",
+            SiblingGroup.ChecklistItem => "authoring_group_item:",
+            SiblingGroup.ManualTestCase => "authoring_group_case:",
+            _ => throw new ArgumentOutOfRangeException(nameof(group), group, "unknown sibling group"),
+        })
+        + projectId.ToString("D") + ":" + (parentId?.ToString("D") ?? "root");
+
+    /// <summary>
+    /// Which sibling set a lock addresses: the three live sets an authoring write orders — feature nodes under one
+    /// parent (AC2), checklist items under one node (route 7's <c>(position, id)</c>), manual cases under one item
+    /// (route 12's <c>(code, id)</c>).
+    /// </summary>
+    internal enum SiblingGroup
+    {
+        /// <summary>The <c>feature_node</c> children of one parent, or the project's roots (AC2's group).</summary>
+        FeatureNode,
+
+        /// <summary>The <c>checklist_item</c> rows of one node.</summary>
+        ChecklistItem,
+
+        /// <summary>The <c>manual_test_case</c> rows of one checklist item.</summary>
+        ManualTestCase,
+    }
 }

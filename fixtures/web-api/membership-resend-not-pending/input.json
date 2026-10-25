@@ -1,0 +1,18 @@
+{
+  "operation_id": "resendMembershipInvite",
+  "variant": "not-pending",
+  "status": 409,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d9"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "invite_not_pending",
+      "message": "the membership has no pending invite: it is already bound, cancelled or expired",
+      "request_id": "018f0000-0000-7000-8000-0000000000d9",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

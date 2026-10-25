@@ -8,6 +8,7 @@ import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
 import type { RolePreview } from './role-preview';
 import type { RoleChange } from './members.store';
+import type { IssuedInvite } from './members.store';
 
 const role: RoleView = {
   id: 'role1',
@@ -56,6 +57,14 @@ class FakeMembersStore {
   readonly inviteState = signal<Mutation>({ phase: 'idle', error: null });
   readonly removeState = signal<Mutation>({ phase: 'idle', error: null });
   readonly editState = signal<Mutation>({ phase: 'idle', error: null });
+  readonly resendState = signal<Mutation>({ phase: 'idle', error: null });
+  readonly cancelState = signal<Mutation>({ phase: 'idle', error: null });
+  readonly resend = vi.fn<(id: string, intent: Intent) => Promise<IssuedInvite | null>>(() =>
+    Promise.resolve({ membershipId: 'pending', inviteToken: 'page-resend-once' }),
+  );
+  readonly cancel = vi.fn<(id: string, intent: Intent) => Promise<boolean>>(() =>
+    Promise.resolve(true),
+  );
   readonly editApplied = signal<readonly Pick<RoleChange, 'kind' | 'roleId'>[]>([]);
   readonly changeRoles = vi.fn<(id: string, changes: readonly RoleChange[]) => Promise<boolean>>(
     () => Promise.resolve(true),
@@ -64,8 +73,8 @@ class FakeMembersStore {
   readonly load = vi.fn(() => Promise.resolve());
   readonly loadMore = vi.fn(() => Promise.resolve());
   readonly invite = vi.fn<
-    (email: string, roleIds: readonly string[], intent: Intent) => Promise<boolean>
-  >(() => Promise.resolve(true));
+    (email: string, roleIds: readonly string[], intent: Intent) => Promise<IssuedInvite | null>
+  >(() => Promise.resolve({ membershipId: 'new', inviteToken: 'page-create-once' }));
   readonly remove = vi.fn<(id: string, intent: Intent) => Promise<boolean>>(() =>
     Promise.resolve(true),
   );
@@ -97,6 +106,8 @@ class FakeMembersStore {
     this.inviteState.set({ phase: 'idle', error: null });
     this.removeState.set({ phase: 'idle', error: null });
     this.editState.set({ phase: 'idle', error: null });
+    this.resendState.set({ phase: 'idle', error: null });
+    this.cancelState.set({ phase: 'idle', error: null });
     this.editApplied.set([]);
   }
 }
@@ -423,7 +434,7 @@ describe('Members page (09.7.1-T2)', () => {
   it('validates email and reuses an invitation intent on retry; a closed dialog starts a new intent', async () => {
     store.invite.mockImplementation(() => {
       store.inviteState.set({ phase: 'failed', error: { ...lastAdmin, code: 'invite_exists' } });
-      return Promise.resolve(false);
+      return Promise.resolve(null);
     });
     const { fixture, root } = await render();
     const opener = button(root, '[data-members-invite-open]');
@@ -463,7 +474,7 @@ describe('Members page (09.7.1-T2)', () => {
     await fixture.whenStable();
     expect(store.invite.mock.calls[2]?.[2]).not.toBe(store.invite.mock.calls[0]?.[2]);
   });
-  it('closes a successful invitation, announces completion and restores the invoking button', async () => {
+  it('reveals a successful invitation, then dismisses and restores the invoking button', async () => {
     const { fixture, root } = await render();
     const opener = button(root, '[data-members-invite-open]');
     opener.click();
@@ -477,6 +488,12 @@ describe('Members page (09.7.1-T2)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(store.invite).toHaveBeenCalledTimes(1);
+    expect(dialog.open).toBe(true);
+    expect(dialog.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')?.value).toBe(
+      'page-create-once',
+    );
+    button(dialog, '[data-testid="reveal-dismiss"]').click();
+    fixture.detectChanges();
     expect(dialog.open).toBe(false);
     expect(document.activeElement).toBe(opener);
     expect(root.textContent).toContain('Membership updated.');
@@ -497,5 +514,58 @@ describe('Members page (09.7.1-T2)', () => {
     expect(dialog.querySelector('[data-members-error] p')?.textContent).toBe(lastAdmin.message);
     button(dialog, '[data-members-submit]').click();
     expect(store.remove).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['invite', 'org'],
+    ['invite', 'another-dialog'],
+    ['invite', 'destroy'],
+    ['resend', 'org'],
+    ['resend', 'another-dialog'],
+    ['resend', 'destroy'],
+  ] as const)('clears an open %s reveal on %s', async (source, exit) => {
+    const { fixture, root } = await render();
+    button(
+      root,
+      source === 'invite' ? '[data-members-invite-open]' : '[data-members-resend-open]',
+    ).click();
+    fixture.detectChanges();
+    const dialog = root.querySelector<HTMLDialogElement>(`[data-members-dialog="${source}"]`)!;
+    if (source === 'invite') {
+      const email = dialog.querySelector<HTMLInputElement>('input[type="email"]')!;
+      email.value = 'new@example.test';
+      email.dispatchEvent(new Event('input'));
+    }
+    button(dialog, '[data-members-submit]').click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const control = dialog.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')!;
+    const once = source === 'invite' ? 'page-create-once' : 'page-resend-once';
+    expect(control.value).toBe(once);
+    if (exit === 'org') {
+      const session = TestBed.inject(SessionStore);
+      (session.currentOrg as unknown as WritableSignal<{ id: string }>).set({ id: 'org2' });
+    } else if (exit === 'another-dialog')
+      button(
+        root,
+        source === 'invite' ? '[data-members-resend-open]' : '[data-members-invite-open]',
+      ).click();
+    else fixture.destroy();
+    if (exit !== 'destroy') fixture.detectChanges();
+    expect(control.value).toBe('');
+    expect(root.outerHTML).not.toContain(once);
+    expect(dialog.open).toBe(false);
+  });
+
+  it('wires pending Cancel invite to its own confirmation and closes on success', async () => {
+    const { fixture, root } = await render();
+    button(root, '[data-members-cancel-invite-open]').click();
+    fixture.detectChanges();
+    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="cancel-invite"]')!;
+    expect(dialog.open).toBe(true);
+    button(dialog, '[data-members-submit]').click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(store.cancel).toHaveBeenCalledWith('pending', expect.anything());
+    expect(dialog.open).toBe(false);
   });
 });

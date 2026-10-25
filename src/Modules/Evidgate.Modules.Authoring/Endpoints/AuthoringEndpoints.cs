@@ -48,6 +48,8 @@ public static class AuthoringEndpoints
         AuthoringNodeEndpoints.MapAuthoringNodeEndpoints(authoring);
         AuthoringChecklistEndpoints.MapAuthoringChecklistEndpoints(authoring);
         AuthoringManualCaseEndpoints.MapAuthoringManualCaseEndpoints(authoring);
+        AuthoringVersionEndpoints.MapAuthoringVersionEndpoints(authoring);
+        AuthoringRestoreEndpoints.MapAuthoringRestoreEndpoints(authoring);
 
         return group;
     }

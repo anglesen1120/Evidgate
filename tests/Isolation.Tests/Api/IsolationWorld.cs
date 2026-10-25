@@ -134,6 +134,33 @@ public sealed class IsolationProject
 
     /// <summary>The project's second manual test case, listed after <see cref="AuthoringManualCaseId"/>.</summary>
     public required Guid AuthoringSecondManualCaseId { get; init; }
+
+    /// <summary>
+    /// The project's newest <c>authoring_version</c> id (13.1.1-T3): <c>{v}</c> of
+    /// <c>…/authoring/versions/{v}</c> (route 23) and of <c>…/authoring/versions/{v}/restore</c> (route 24).
+    /// </summary>
+    public required Guid AuthoringVersionId { get; init; }
+
+    /// <summary>
+    /// A soft-deleted leaf <c>sub_category</c> node under <see cref="AuthoringChildNodeId"/> — the tombstone route 6
+    /// restores (13.1.1-T3).
+    /// </summary>
+    public required Guid AuthoringDeletedNodeId { get; init; }
+
+    /// <summary>The version <see cref="AuthoringDeletedNodeId"/> keeps while soft-deleted: the <c>If-Match</c> route 6 needs (AC19).</summary>
+    public required int AuthoringDeletedNodeVersion { get; init; }
+
+    /// <summary>A soft-deleted checklist item that holds no case — the tombstone route 11 restores (13.1.1-T3).</summary>
+    public required Guid AuthoringDeletedItemId { get; init; }
+
+    /// <summary>The version <see cref="AuthoringDeletedItemId"/> keeps: the <c>If-Match</c> route 11 needs (AC19).</summary>
+    public required int AuthoringDeletedItemVersion { get; init; }
+
+    /// <summary>A soft-deleted manual test case under <see cref="AuthoringSecondItemId"/> — the tombstone route 18 restores (13.1.1-T3).</summary>
+    public required Guid AuthoringDeletedManualCaseId { get; init; }
+
+    /// <summary>The version <see cref="AuthoringDeletedManualCaseId"/> keeps: the <c>If-Match</c> route 18 needs (AC19).</summary>
+    public required int AuthoringDeletedManualCaseVersion { get; init; }
 }
 
 /// <summary>One seeded org: its admin, members, projects and every id a route can name.</summary>
@@ -694,6 +721,73 @@ public sealed class IsolationWorld
                 },
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("case_id").GetGuid();
 
+            // 13.1.1-T3: the version timeline (routes 22/23) and one tombstone per entity restore route (6, 11, 18).
+            // Every row is produced through a route, and each tombstone's version is read back through route 22 instead
+            // of being assumed: the delete routes answer 204 without a body, and the timeline is where a caller learns
+            // the tag `If-Match` must present (AC19). A soft-deleted row still counts in neither list (the walks above
+            // expect exactly the two live rows), and the node is a leaf under the `category`, so nothing else moves.
+            var authoringRestorableNode = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/nodes",
+                admin,
+                org,
+                new { parent_id = authoringNodes[2], kind = "sub_category", title = "isolation restorable node" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("node_id").GetGuid();
+            await SendIfMatchAsync(
+                HttpMethod.Delete,
+                $"/v1/projects/{project}/authoring/nodes/{authoringRestorableNode}",
+                admin,
+                org,
+                "\"1\"",
+                HttpStatusCode.NoContent).ConfigureAwait(false);
+            var authoringRestorableNodeVersion = await DeletedVersionAsync(project, "feature_node", authoringRestorableNode, admin, org).ConfigureAwait(false);
+
+            var authoringRestorableItem = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/checklist-items",
+                admin,
+                org,
+                new { node_id = authoringNodes[2], title = "isolation restorable item", priority = "high" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("item_id").GetGuid();
+            await SendIfMatchAsync(
+                HttpMethod.Delete,
+                $"/v1/projects/{project}/authoring/checklist-items/{authoringRestorableItem}",
+                admin,
+                org,
+                "\"1\"",
+                HttpStatusCode.NoContent).ConfigureAwait(false);
+            var authoringRestorableItemVersion = await DeletedVersionAsync(project, "checklist_item", authoringRestorableItem, admin, org).ConfigureAwait(false);
+
+            var authoringRestorableCase = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/manual-cases",
+                admin,
+                org,
+                new
+                {
+                    checklist_item_id = authoringSecondItem,
+                    title = "isolation restorable case",
+                    steps = new[] { new { no = 1, action = "open", expected = "shown" } },
+                    priority = "high",
+                },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("case_id").GetGuid();
+            await SendIfMatchAsync(
+                HttpMethod.Delete,
+                $"/v1/projects/{project}/authoring/manual-cases/{authoringRestorableCase}",
+                admin,
+                org,
+                "\"1\"",
+                HttpStatusCode.NoContent).ConfigureAwait(false);
+            var authoringRestorableCaseVersion = await DeletedVersionAsync(project, "manual_test_case", authoringRestorableCase, admin, org).ConfigureAwait(false);
+
+            var authoringVersion = (await SendAsync(
+                HttpMethod.Get,
+                $"/v1/projects/{project}/authoring/versions?limit=1",
+                admin,
+                org,
+                body: null,
+                HttpStatusCode.OK).ConfigureAwait(false)).GetProperty("items")[0].GetProperty("version_id").GetGuid();
+
             return new IsolationProject
             {
                 Id = project,
@@ -726,6 +820,13 @@ public sealed class IsolationWorld
                 AuthoringSecondRootNodeId = authoringSecondRoot,
                 AuthoringSecondItemId = authoringSecondItem,
                 AuthoringSecondManualCaseId = authoringSecondCase,
+                AuthoringVersionId = authoringVersion,
+                AuthoringDeletedNodeId = authoringRestorableNode,
+                AuthoringDeletedNodeVersion = authoringRestorableNodeVersion,
+                AuthoringDeletedItemId = authoringRestorableItem,
+                AuthoringDeletedItemVersion = authoringRestorableItemVersion,
+                AuthoringDeletedManualCaseId = authoringRestorableCase,
+                AuthoringDeletedManualCaseVersion = authoringRestorableCaseVersion,
             };
         }
 
@@ -961,12 +1062,48 @@ public sealed class IsolationWorld
         private Task<JsonElement> SendAsync(HttpMethod method, string url, IsolationUser caller, Guid org, object? body, params HttpStatusCode[] expected) =>
             SendAsync(method, url, caller.UserId, caller.Email, org, body, expected);
 
+        /// <summary>
+        /// One seeding request carrying <c>If-Match</c>: the authoring delete routes of 13.1.1 §5 need the row's
+        /// <c>version</c> (AC19), exactly as the restore routes then need the tombstone's.
+        /// </summary>
+        private Task<JsonElement> SendIfMatchAsync(HttpMethod method, string url, IsolationUser caller, Guid org, string ifMatch, params HttpStatusCode[] expected) =>
+            SendCoreAsync(method, url, caller.UserId, caller.Email, org, bearer: null, body: null, ifMatch, expected);
+
+        /// <summary>
+        /// The <c>version_no</c> a soft-deleted row keeps — the <c>If-Match</c> its restore route needs (13.1.1-T3,
+        /// AC19) — read from route 22's per-entity history, because the delete routes answer 204 without a body.
+        /// </summary>
+        /// <param name="project">The project.</param>
+        /// <param name="entityKind"><c>feature_node</c>, <c>checklist_item</c> or <c>manual_test_case</c>.</param>
+        /// <param name="entityId">The soft-deleted row.</param>
+        /// <param name="admin">The founder, who holds <c>authoring:read</c>.</param>
+        /// <param name="org">The organization.</param>
+        private async Task<int> DeletedVersionAsync(Guid project, string entityKind, Guid entityId, IsolationUser admin, Guid org)
+        {
+            var page = await SendAsync(
+                HttpMethod.Get,
+                $"/v1/projects/{project}/authoring/versions?entity_kind={entityKind}&entity_id={entityId:D}&limit=1",
+                admin,
+                org,
+                body: null,
+                HttpStatusCode.OK).ConfigureAwait(false);
+
+            var items = page.GetProperty("items");
+            if (items.GetArrayLength() == 0)
+            {
+                throw new InvalidOperationException(
+                    $"seed: the timeline of {entityKind} {entityId} is empty after its delete, so no restore tag can be read");
+            }
+
+            return items[0].GetProperty("version_no").GetInt32();
+        }
+
         private Task<JsonElement> SendAsync(HttpMethod method, string url, Guid? user, string? email, Guid? org, object? body, params HttpStatusCode[] expected) =>
-            SendCoreAsync(method, url, user, email, org, bearer: null, body, expected);
+            SendCoreAsync(method, url, user, email, org, bearer: null, body, ifMatch: null, expected);
 
         /// <summary>One seeding request presenting a bearer credential (the OIDC exchange of 02.4.1-T3).</summary>
         private Task<JsonElement> SendBearerAsync(string url, string bearer, object? body, params HttpStatusCode[] expected) =>
-            SendCoreAsync(HttpMethod.Post, url, user: null, email: null, org: null, bearer, body, expected);
+            SendCoreAsync(HttpMethod.Post, url, user: null, email: null, org: null, bearer, body, ifMatch: null, expected);
 
         /// <summary>One seeding request: member headers when a user is given, an <c>Idempotency-Key</c> on every write.</summary>
         private async Task<JsonElement> SendCoreAsync(
@@ -977,6 +1114,7 @@ public sealed class IsolationWorld
             Guid? org,
             string? bearer,
             object? body,
+            string? ifMatch,
             params HttpStatusCode[] expected)
         {
             using var request = new HttpRequestMessage(method, url);
@@ -1002,6 +1140,11 @@ public sealed class IsolationWorld
             if (method != HttpMethod.Get && url != "/v1/ci/token")
             {
                 request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
+            }
+
+            if (ifMatch is not null)
+            {
+                request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
             }
 
             request.Content = body switch

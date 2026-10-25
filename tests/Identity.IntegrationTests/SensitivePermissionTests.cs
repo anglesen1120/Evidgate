@@ -57,6 +57,11 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // assert a state the writer never produced). The three authoring lists are scanned.
         "/v1/projects/{p}/authoring/manual-cases/{m}",
 
+        // 13.1.1-T3's authoring version detail: it only answers for a version id this suite does not have (a version
+        // exists only after an authoring write, and authoring rows are Tenancy.IntegrationTests' subject). The timeline
+        // list is scanned.
+        "/v1/projects/{p}/authoring/versions/{v}",
+
         // 02.3.1-T1.1's pre-tenant login routes answer no resource body: `start` is a 302 to the
         // provider or a 503 `unavailable` envelope (no credential is configured in this host), and
         // `callback` without a pending-login cookie is a 401 `token_invalid` envelope. Neither
@@ -424,10 +429,13 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/quarantine"] = $"/v1/projects/{project}/quarantine",
             ["/v1/projects/{p}/runs"] = $"/v1/projects/{project}/runs",
             // 13.1.1-T2's three authoring lists: one page each, empty for a project with no authoring rows, so the
-            // scan covers them like every other list (their detail route is the one skipped entry).
+            // scan covers them like every other list (their detail route is the one skipped entry). 13.1.1-T3's
+            // version timeline list is the same shape — an empty page carries no secret — while its detail route
+            // needs a version this suite does not seed.
             ["/v1/projects/{p}/authoring/tree"] = $"/v1/projects/{project}/authoring/tree",
             ["/v1/projects/{p}/authoring/checklist-items"] = $"/v1/projects/{project}/authoring/checklist-items",
             ["/v1/projects/{p}/authoring/manual-cases"] = $"/v1/projects/{project}/authoring/manual-cases",
+            ["/v1/projects/{p}/authoring/versions"] = $"/v1/projects/{project}/authoring/versions",
             ["/v1/cases/{c}"] = $"/v1/cases/{seeded.CaseId}",
             ["/v1/cases/{c}/revisions"] = $"/v1/cases/{seeded.CaseId}/revisions",
             ["/v1/suites/{s}"] = $"/v1/suites/{seeded.SuiteId}",

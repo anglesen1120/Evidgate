@@ -3,7 +3,8 @@
   "variant": "ok",
   "status": 201,
   "headers": {
-    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d0"
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d0",
+    "Cache-Control": "no-store"
   },
   "latency_ms": 0,
   "body": {
@@ -15,6 +16,7 @@
     "roles": [],
     "created_at": "2026-10-20T11:30:00Z",
     "updated_at": "2026-10-20T11:30:00Z",
-    "version": 1
+    "version": 1,
+    "invite_token": "evgi_FIXTURE_ONLY_not_a_real_invite_token"
   }
 }

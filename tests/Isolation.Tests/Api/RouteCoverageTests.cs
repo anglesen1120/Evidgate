@@ -177,8 +177,8 @@ public sealed class RouteCoverageTests
     }
 
     /// <summary>
-    /// The sixteen authoring operations of 13.1.1 §5 (13.1.1-T2.4), with the permission each documents: reads carry
-    /// <c>authoring:read</c>, every write <c>authoring:write</c>.
+    /// The twenty-two authoring operations of 13.1.1 §5 (13.1.1-T2.4 and 13.1.1-T3), with the permission each
+    /// documents: reads carry <c>authoring:read</c>, every write <c>authoring:write</c>.
     /// </summary>
     private static readonly (string Method, string Template, string Permission)[] AuthoringOperations =
     [
@@ -198,11 +198,18 @@ public sealed class RouteCoverageTests
         ("DELETE", "/v1/projects/{p}/authoring/manual-cases/{m}", "authoring:write"),
         ("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/state", "authoring:write"),
         ("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/item", "authoring:write"),
+        // 13.1.1-T3: the version timeline (routes 22, 23) and the four restore routes (6, 11, 18, 24).
+        ("GET", "/v1/projects/{p}/authoring/versions", "authoring:read"),
+        ("GET", "/v1/projects/{p}/authoring/versions/{v}", "authoring:read"),
+        ("POST", "/v1/projects/{p}/authoring/nodes/{n}/restore", "authoring:write"),
+        ("POST", "/v1/projects/{p}/authoring/checklist-items/{i}/restore", "authoring:write"),
+        ("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/restore", "authoring:write"),
+        ("POST", "/v1/projects/{p}/authoring/versions/{v}/restore", "authoring:write"),
     ];
 
     /// <summary>
     /// 13.1.1-T2.4: every operation of <c>contracts/openapi.yaml</c> declares the <c>x-permission</c> that gates it, and
-    /// the sixteen authoring operations of 13.1.1 §5 are in the inventory with the permission §5 assigns — so an
+    /// the twenty-two authoring operations of 13.1.1 §5 are in the inventory with the permission §5 assigns — so an
     /// authoring route can never ship without its gate, and a spec addition cannot slip in without one.
     /// </summary>
     [Fact]

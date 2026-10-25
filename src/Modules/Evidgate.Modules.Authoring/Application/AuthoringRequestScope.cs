@@ -49,10 +49,12 @@ internal static class AuthoringRequestScope
     /// <summary>
     /// 412 <c>precondition_failed</c> for a stale <c>If-Match</c> (AC19): the same code, status and shape the
     /// catalog's <c>CatalogErrors.Stale</c> answers, so one client rule covers both modules. The current version
-    /// travels in <c>error.details</c> so a retry needs no extra GET. The path is the JSON-pointer spelling
-    /// <c>/If-Match</c> — the one <c>AuthoringEndpointSupport.IfMatchVersion</c> and <c>IfMatchOrder</c> already answer
-    /// for the absent and malformed cases, so every authoring precondition detail names the header identically (the
-    /// catalog's unrooted <c>If-Match</c> is its own surface's spelling).
+    /// travels in <c>error.details</c> so a retry needs no extra GET. Both detail paths are rooted JSON pointers —
+    /// <c>/If-Match</c> for the header the caller sent and <c>/version</c> for the member it must re-read — so every
+    /// authoring version <c>412</c> carries one wire shape (hand-over (c) of 13.1.1, OI-13-130; the bare <c>version</c>
+    /// name this helper used to answer, and the one <c>ManualCaseCommands.Stale</c> duplicated, were the divergence).
+    /// The reorder's 412 is not one of these: its <c>If-Match</c> is the group's order hash, not an entity version
+    /// (see the slice's hand-over for that pointer).
     /// </summary>
     /// <param name="what">The entity kind, e.g. <c>checklist item</c>.</param>
     /// <param name="currentVersion">The row's version now.</param>
@@ -65,6 +67,6 @@ internal static class AuthoringRequestScope
         Details:
         [
             new ErrorDetail("/If-Match", "stale"),
-            new ErrorDetail("version", currentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new ErrorDetail("/version", currentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
         ]);
 }

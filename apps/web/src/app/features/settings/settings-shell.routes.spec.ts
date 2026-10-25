@@ -22,6 +22,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { SessionStore, type SessionState } from '../../core/session/session.store';
 import { AuditPage } from './audit/audit.page';
 import { MembersPage } from './members/members.page';
+import { SecretsPage } from './secrets/secrets.page';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
@@ -85,6 +86,7 @@ const PAGE_STUBS = new Map<unknown, Type<unknown>>([
   [SettingsNoTabsPage, SettingsNoTabsStub],
   [MembersPage, SettingsTabStub],
   [AuditPage, SettingsTabStub],
+  [SecretsPage, SettingsTabStub],
 ]);
 
 /** The real shell table with only its page components swapped. */
@@ -152,13 +154,18 @@ function refusedTabs(codes: ReadonlySet<string>): readonly string[] {
 }
 
 describe('Settings shell route table (09.7.1-T1.2)', () => {
-  it('mounts the delivered pages only for members and audit and keeps the other tabs as placeholders', async () => {
+  it('mounts delivered members, audit and G2 secrets bodies and keeps other tabs as placeholders', async () => {
     const tabs = shellRoutes[0]?.children?.filter((route) => route.data?.['settingsTabId']);
     expect(tabs?.find((route) => route.path === 'members')?.component).toBe(MembersPage);
     expect(tabs?.find((route) => route.path === 'audit')?.component).toBe(AuditPage);
-    // Only those two rows hold a delivered body, so every other tab still mounts the placeholder.
+    expect(tabs?.find((route) => route.path === 'secrets')?.component).toBe(SecretsPage);
+    // Delivered bodies are independent of phase visibility; Secrets is still hidden in G1.
     const delivered = tabs?.filter((route) => route.component !== SettingsTabPlaceholderPage);
-    expect(delivered?.map((route) => route.path)).toEqual(['members', 'audit']);
+    expect(delivered?.map((route) => route.path)).toEqual(
+      SETTINGS_TABS.filter((tab) => ['members', 'audit', 'secrets'].includes(tab.id)).map(
+        (tab) => tab.segment,
+      ),
+    );
     const harness = await setUp(new Set(['membership:read']));
     await harness.navigateByUrl('/orgs/o1/settings/members');
     expect(

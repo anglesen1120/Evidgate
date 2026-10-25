@@ -191,7 +191,8 @@ public sealed class AuthoringChecklistTests
 
         stale.Status.ShouldBe(HttpStatusCode.PreconditionFailed);
         stale.ErrorCode.ShouldBe("precondition_failed");
-        Details(stale).ShouldContain(detail => detail.Path == "version" && detail.Reason == "2");
+        // Hand-over (c), OI-13-130: every authoring 412 names the current version under the rooted pointer /version.
+        Details(stale).ShouldContain(detail => detail.Path == "/version" && detail.Reason == "2");
 
         // AC19: nothing changed — the refused edit wrote no version row.
         (await VersionCountAsync(world, item)).ShouldBe(2);

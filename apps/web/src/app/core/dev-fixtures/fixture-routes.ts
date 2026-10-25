@@ -19,7 +19,9 @@
 // cannot change a later list read — the wizard's "created" and "resumed" states are separate
 // documents (see `fixture-catalog.ts`). The three secret-bearing creates (`createCiBinding`,
 // `createIngestToken`, `rotateIngestToken`) take no `Idempotency-Key` in `contracts/openapi.yaml`,
-// so the backend ignores the header the app's interceptor still adds.
+// so the backend ignores the header the app's interceptor still adds. The invite pair below takes
+// one (`createMembership`, `resendMembershipInvite`) and answers a secret too; a fixture neither
+// validates nor replays a key, so the header changes nothing here either.
 //
 // 09.7.1-F6 routes the role edit's three calls. They follow the same response-corpus rule, with one
 // consequence worth stating: the `{m}` and `{r}` path parameters are matched against the route
@@ -32,6 +34,16 @@
 // replays a key, so the "a confirmed change is never resent" rule is pinned by the store's own spec
 // rather than here. `revokeMembershipRole` is the second `DELETE` row: five segments, so it cannot
 // collide with `removeMember`'s four.
+//
+// 09.7.1-T3 (F12) routes the pending invite's two lifecycle calls. `resendMembershipInvite`
+// (`POST …/memberships/{m}/resend`) is a secret-bearing answer: its 202 `InviteIssuedView` carries
+// the freshly rotated `invite_token`, and the contract has it take `Idempotency-Key` — the fixture
+// backend neither validates nor replays that key, so the corpus document is the `ok` answer every
+// time and the replay state (`?fixture.variant.resendMembershipInvite=replay`, the stored body with
+// `invite_token: null`) is a separate document a review selects, not something the fixture infers.
+// `cancelMembershipInvite` (`POST …/memberships/{m}/cancel-invite`) answers 204 with no body, like
+// `removeMember`, and its five segments cannot be confused with `resend`'s five: the last segment is
+// a literal of each template, so neither row matches the other's path.
 //
 // Dev-only, like the rest of `core/dev-fixtures`: see the module comment of `fixture-toggles.ts`.
 
@@ -70,6 +82,16 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'getMembership', method: 'GET', path: '/orgs/{o}/memberships/{m}' },
   { operationId: 'createMembership', method: 'POST', path: '/orgs/{o}/memberships' },
   { operationId: 'removeMember', method: 'DELETE', path: '/orgs/{o}/memberships/{m}' },
+  {
+    operationId: 'resendMembershipInvite',
+    method: 'POST',
+    path: '/orgs/{o}/memberships/{m}/resend',
+  },
+  {
+    operationId: 'cancelMembershipInvite',
+    method: 'POST',
+    path: '/orgs/{o}/memberships/{m}/cancel-invite',
+  },
   { operationId: 'grantMembershipRole', method: 'POST', path: '/orgs/{o}/memberships/{m}/roles' },
   {
     operationId: 'revokeMembershipRole',

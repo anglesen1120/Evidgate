@@ -248,9 +248,9 @@ test.describe('a membership:read session never sees an action it may not use', (
   }
 });
 
-test.describe('invite: the 201 closes the dialog, the 409 invite_exists speaks for itself', () => {
+test.describe('invite: the 201 reveals the token then closes, the 409 invite_exists speaks for itself', () => {
   for (const locale of LOCALES) {
-    test(`a successful invite closes the dialog and announces the change (${locale})`, async ({
+    test(`a successful invite reveals its token, closes on dismiss and announces the change (${locale})`, async ({
       page,
     }) => {
       await page.goto(withVariants(membersPath(locale), [SETTINGS_ADMIN_GRANTS]));
@@ -277,7 +277,11 @@ test.describe('invite: the 201 closes the dialog, the 409 invite_exists speaks f
 
       await dialog.locator('[data-members-submit]').click();
 
-      // 201: the dialog closes and the page announces the change in its own status region.
+      // 201 (09.7.1-F12): the dialog turns into the one-time reveal of the raw invite token; the
+      // dialog closes only when the admin dismisses it, and the page then announces the change in
+      // its own status region. The reveal itself is covered by `settings-members-invite.spec.ts`.
+      await expect(dialog.getByTestId('reveal-value')).toBeVisible();
+      await dialog.getByTestId('reveal-dismiss').click();
       await expect(dialog).not.toBeVisible();
       await expect(page.locator('app-members-page > p[role="status"]')).toHaveText(/\S/);
       await expect(page.locator(MEMBER_ROWS)).toHaveCount(MEMBERSHIPS.length);

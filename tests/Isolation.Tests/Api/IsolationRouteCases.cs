@@ -261,10 +261,44 @@ public static class IsolationRouteCases
                 Fixed([bp.AuthoringRootNodeId, bp.AuthoringSecondRootNodeId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/tree?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/authoring/checklist-items"), $"org B project {bp.Slug} checklist items", bAdmin,
                 $"/v1/projects/{bp.Id}/authoring/checklist-items?limit=1", "item_id",
-                Fixed([bp.AuthoringItemId, bp.AuthoringSecondItemId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/checklist-items?limit=1"));
+                // 13.1.1-T3: route 11's own control restores the seeded tombstone, so this list can hold one row more
+                // than the seed names depending on which test ran first (nothing resets between them). The expectation
+                // is the seed's live ids UNION the database's own live rows for the project — the shape the run walk
+                // below uses for a creation positive control. A dropped row, a page from another project or another org,
+                // and a repeated item each still fail the set equality.
+                async runner =>
+                {
+                    var expected = new HashSet<string>(
+                        await runner.OwnerIdsAsync(
+                            "select id::text from public.checklist_item where project_id = @org and deleted_at is null",
+                            bp.Id),
+                        StringComparer.OrdinalIgnoreCase);
+                    expected.UnionWith([bp.AuthoringItemId.ToString("D"), bp.AuthoringSecondItemId.ToString("D")]);
+                    return expected;
+                },
+                aAdmin, $"/v1/projects/{ap.Id}/authoring/checklist-items?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/authoring/manual-cases"), $"org B project {bp.Slug} manual cases", bAdmin,
                 $"/v1/projects/{bp.Id}/authoring/manual-cases?limit=1", "case_id",
-                Fixed([bp.AuthoringManualCaseId, bp.AuthoringSecondManualCaseId]), aAdmin, $"/v1/projects/{ap.Id}/authoring/manual-cases?limit=1"));
+                // 13.1.1-T3, for the same reason: routes 18 and 24 restore the seeded case tombstone (route 24 by
+                // re-applying its delete version), so the live set is the seed's ids union the database's live rows.
+                async runner =>
+                {
+                    var expected = new HashSet<string>(
+                        await runner.OwnerIdsAsync(
+                            "select id::text from public.manual_test_case where project_id = @org and deleted_at is null",
+                            bp.Id),
+                        StringComparer.OrdinalIgnoreCase);
+                    expected.UnionWith([bp.AuthoringManualCaseId.ToString("D"), bp.AuthoringSecondManualCaseId.ToString("D")]);
+                    return expected;
+                },
+                aAdmin, $"/v1/projects/{ap.Id}/authoring/manual-cases?limit=1"));
+            // 13.1.1-T3: the version timeline is append-only and the seed cannot name its ids, so the expectation is the
+            // database's own row set for the project (owner connection), exactly as the audit and run walks derive theirs.
+            // Tombsones are rows too: a version is written for a delete, so the set covers every seeded entity change.
+            walks.Add(new(Get("/v1/projects/{p}/authoring/versions"), $"org B project {bp.Slug} authoring versions", bAdmin,
+                $"/v1/projects/{bp.Id}/authoring/versions?limit=1", "version_id",
+                runner => runner.OwnerIdsAsync("select id::text from public.authoring_version where project_id = @org", bp.Id),
+                aAdmin, $"/v1/projects/{ap.Id}/authoring/versions?limit=1"));
             // The run-create case below is a positive control: it proves that org B's own
             // `POST /v1/projects/{p}/runs` is accepted, so org B's first project can hold one run more than the
             // seed recorded, and whether it does depends on which test of the suite runs first (nothing resets
@@ -374,6 +408,40 @@ public static class IsolationRouteCases
         ObjectCaseWith("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/item", p => [("case", p.AuthoringManualCaseId)],
             (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}/item",
                 new JsonObject { ["checklist_item_id"] = p.AuthoringItemId }, "\"1\""), (_, _) => []),
+
+        // 13.1.1-T3: the version timeline (routes 22 and 23) and the four restore routes (6, 11, 18, 24). A tombstone's
+        // `If-Match` is the version the delete left and the seed reads back through route 22 (IsolationWorld), so a
+        // restore's own control proves the route accepts a real tombstone at the tag it keeps; route 24 declares no
+        // `If-Match` — the version id names the state to re-apply — so its probe carries none.
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/nodes/{n}/restore",
+            p => [("soft-deleted node", p.AuthoringDeletedNodeId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/nodes/{id}/restore",
+                IfMatch: VersionTag(p.AuthoringDeletedNodeVersion)),
+            (_, _) => [],
+            own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/nodes/{p.AuthoringDeletedNodeId}/restore",
+                IfMatch: VersionTag(p.AuthoringDeletedNodeVersion))),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/checklist-items/{i}/restore",
+            p => [("soft-deleted item", p.AuthoringDeletedItemId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/checklist-items/{id}/restore",
+                IfMatch: VersionTag(p.AuthoringDeletedItemVersion)),
+            (_, _) => [],
+            own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/checklist-items/{p.AuthoringDeletedItemId}/restore",
+                IfMatch: VersionTag(p.AuthoringDeletedItemVersion))),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/restore",
+            p => [("soft-deleted case", p.AuthoringDeletedManualCaseId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}/restore",
+                IfMatch: VersionTag(p.AuthoringDeletedManualCaseVersion)),
+            (_, _) => [],
+            own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/manual-cases/{p.AuthoringDeletedManualCaseId}/restore",
+                IfMatch: VersionTag(p.AuthoringDeletedManualCaseVersion))),
+        ProjectCase("GET", "/v1/projects/{p}/authoring/versions", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/authoring/versions?limit=1"), list: true, ownControl: true),
+        ObjectCaseWith("GET", "/v1/projects/{p}/authoring/versions/{v}", p => [("version", p.AuthoringVersionId)],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/versions/{id}"), (_, _) => [],
+            own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/versions/{p.AuthoringVersionId}")),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/versions/{v}/restore", p => [("version", p.AuthoringVersionId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{id}/restore"), (_, _) => [],
+            own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{p.AuthoringVersionId}/restore")),
 
         // ---- Membership (MembershipEndpoints.cs:49-75) ---------------------------------------------------------
         OrgCase("POST", "/v1/orgs/{o}/memberships", o => new(HttpMethod.Post, $"/v1/orgs/{o}/memberships", Invite())),
@@ -1354,6 +1422,13 @@ public static class IsolationRouteCases
     /// <summary>Org B's own object with the same URL shape: the positive control (200) for a GET object case.</summary>
     private static RouteProbe OwnObject(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request) =>
         new(route, name, runner => runner.OwnObjectAsync(route, name, caller, request));
+
+    /// <summary>
+    /// An <c>If-Match</c> value for a row's <c>version</c>: the number in quotes (<c>"2"</c>), the tag shape the
+    /// authoring routes declare — never the order tag of a sibling set (13.1.1-T3).
+    /// </summary>
+    private static string VersionTag(int version) =>
+        string.Create(CultureInfo.InvariantCulture, $"\"{version}\"");
 
     /// <summary>Org B's tenant_admin naming org A in <c>X-Evidgate-Org</c> (the header-vs-route precedence probe).</summary>
     private static ProbeCaller ForeignHeaderCaller(IsolationWorld world) =>
