@@ -124,7 +124,13 @@ is plain configuration, `EVIDGATE__OAUTH__GITHUB__CLIENTSECRET` is `secret: true
 and the response-body cap) keep their code defaults, with the three endpoints refused at boot unless they
 stay on the fixed GitHub allowlist (`github.com` for the browser redirect and the token exchange,
 `api.github.com` for the two profile reads, S4). GitHub is OAuth2 only (ruling T6): there is no ID token,
-so the section carries no issuer, JWKS or clock-skew key.
+so the section carries no issuer, JWKS or clock-skew key. The session group that finishes a login
+(02.3.1-T1.4) has the same shape and is just as optional at boot: `EVIDGATE__SESSION__PEPPER` is
+`secret: true` and resolved through `ISecretProvider` and is the one key a login cannot do without — a
+host without it still serves every route and answers a verified callback 503 `unavailable` rather than
+storing a session nothing can verify (`src/Modules/Evidgate.Modules.Identity/Sessions/SessionStore.cs:84-86`)
+— while `EVIDGATE__SESSION__PEPPERVERSION`, `__IDLESECONDS` and `__ABSOLUTESECONDS` keep their code
+defaults (1, 28 800 and 604 800 seconds; provisional, 02.3.1 plan §10 Notes [DECISION D-S75-Q1]).
 
 `required` is the lint's per-environment rule: the environment must declare the key whatever the boot
 would do without it. That is how a security-relevant default stays visible — every environment declares
