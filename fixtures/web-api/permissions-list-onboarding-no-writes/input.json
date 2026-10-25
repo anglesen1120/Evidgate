@@ -1,0 +1,68 @@
+{
+  "operation_id": "listPermissions",
+  "variant": "onboarding-no-writes",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000e6"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "code": "decision:read",
+        "resource": "decision",
+        "action": "read",
+        "description": "Read a run's or release's exact evaluation revision and its reasons (00 §9.3, 07).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "policy:write",
+        "resource": "policy",
+        "action": "write",
+        "description": "Create or activate a policy revision and create/approve/revoke a waiver (00 §2, 07).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "project:create",
+        "resource": "project",
+        "action": "create",
+        "description": "Create a project in an org (org-level, not per-project; 00 §9.3, T21).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "project:read",
+        "resource": "project",
+        "action": "read",
+        "description": "Read project settings such as retention and capture options (T21: every member role).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "run:create",
+        "resource": "run",
+        "action": "create",
+        "description": "Upload a manifest, create a run, rerun or reprocess, and bind a run to a release (00 §9.3).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "run:read",
+        "resource": "run",
+        "action": "read",
+        "description": "Read run state, the evidence revision, report comparisons and environment revisions (00 §9.3).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      }
+    ],
+    "next_cursor": null
+  }
+}

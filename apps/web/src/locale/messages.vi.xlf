@@ -1896,6 +1896,218 @@
         <source>Creating project…</source>
         <target>Đang tạo dự án…</target>
       </trans-unit>
+      <trans-unit id="onboarding.connect.intro" datatype="html">
+        <source>Choose one connection method. Next becomes available only after the server confirms a binding or token.</source>
+        <target>Chọn một cách kết nối. Bạn chỉ có thể tiếp tục sau khi máy chủ xác nhận liên kết CI hoặc mã nạp dữ liệu.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.oidc-title" datatype="html">
+        <source>GitHub Actions (OIDC)</source>
+        <target>GitHub Actions (OIDC)</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.oidc-hint" datatype="html">
+        <source>Set the one-time challenge as the repository variable EVIDGATE_BINDING_CHALLENGE. The binding becomes active after the first CI exchange; the browser never exchanges CI credentials.</source>
+        <target>Lưu mã xác thực dùng một lần vào biến kho mã EVIDGATE_BINDING_CHALLENGE. Liên kết chỉ hoạt động sau lần trao đổi CI đầu tiên; trình duyệt không trao đổi thông tin xác thực CI.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.workflow-hint" datatype="html">
+        <source>In your workflow, grant permissions: id-token: write. Pass the GitHub OIDC JWT and EVIDGATE_BINDING_CHALLENGE to your CI-side Evidgate exchange. Keep the challenge out of workflow files and logs.</source>
+        <target>Trong quy trình CI, cấp permissions: id-token: write. Truyền JWT OIDC của GitHub và EVIDGATE_BINDING_CHALLENGE cho bước trao đổi Evidgate phía CI. Không ghi mã xác thực vào tệp quy trình hoặc nhật ký.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.repo-id" datatype="html">
+        <source>GitHub numeric repository ID</source>
+        <target>ID dạng số của kho mã GitHub</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.repo-id-error" datatype="html">
+        <source>Enter a positive whole-number repository ID.</source>
+        <target>Nhập ID kho mã là số nguyên dương.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.repo-name" datatype="html">
+        <source>Repository (owner/repo)</source>
+        <target>Kho mã (chủ sở hữu/tên kho)</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.repo-name-error" datatype="html">
+        <source>Enter the repository as owner/repo.</source>
+        <target>Nhập kho mã theo dạng chủ sở hữu/tên kho.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refs" datatype="html">
+        <source>Allowed Git ref patterns</source>
+        <target>Mẫu tham chiếu Git được phép</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refs-hint" datatype="html">
+        <source>One per line, for example refs/heads/your-branch. Enter 1–32 patterns.</source>
+        <target>Mỗi dòng một mẫu, ví dụ refs/heads/your-branch. Nhập từ 1 đến 32 mẫu.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refs-error" datatype="html">
+        <source>Enter between 1 and 32 non-empty ref patterns.</source>
+        <target>Nhập từ 1 đến 32 mẫu tham chiếu không rỗng.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.workflows" datatype="html">
+        <source>Allowed workflow refs</source>
+        <target>Tham chiếu quy trình CI được phép</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.workflows-hint" datatype="html">
+        <source>One per line, for example owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Enter 1–32 refs.</source>
+        <target>Mỗi dòng một tham chiếu, ví dụ owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Nhập từ 1 đến 32 tham chiếu.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.workflows-error" datatype="html">
+        <source>Enter between 1 and 32 non-empty workflow refs.</source>
+        <target>Nhập từ 1 đến 32 tham chiếu quy trình CI không rỗng.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.binding-submit" datatype="html">
+        <source>Create CI binding</source>
+        <target>Tạo liên kết CI</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.binding-permission" datatype="html">
+        <source>Ask your organisation owner for permission to create CI bindings.</source>
+        <target>Liên hệ chủ sở hữu tổ chức để được cấp quyền tạo liên kết CI.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-title" datatype="html">
+        <source>Ingest token</source>
+        <target>Mã nạp dữ liệu</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-hint" datatype="html">
+        <source>Use an ingest token when OIDC is not available. Save the one-time value in your CI secret manager, never in source control.</source>
+        <target>Dùng mã nạp dữ liệu khi không có OIDC. Lưu giá trị chỉ hiển thị một lần vào trình quản lý bí mật CI, không lưu trong mã nguồn.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-name" datatype="html">
+        <source>Token name</source>
+        <target>Tên mã</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-name-error" datatype="html">
+        <source>Enter a token name between 1 and 128 characters.</source>
+        <target>Nhập tên mã dài từ 1 đến 128 ký tự.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-submit" datatype="html">
+        <source>Create ingest token</source>
+        <target>Tạo mã nạp dữ liệu</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-permission" datatype="html">
+        <source>Ask your organisation owner for permission to create or rotate ingest tokens.</source>
+        <target>Liên hệ chủ sở hữu tổ chức để được cấp quyền tạo hoặc thay mã nạp dữ liệu.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.busy" datatype="html">
+        <source>Saving connection…</source>
+        <target>Đang lưu kết nối…</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.bindings" datatype="html">
+        <source>CI bindings</source>
+        <target>Liên kết CI</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.tokens" datatype="html">
+        <source>Ingest tokens</source>
+        <target>Mã nạp dữ liệu</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.empty-bindings" datatype="html">
+        <source>No CI bindings yet.</source>
+        <target>Chưa có liên kết CI.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.empty-tokens" datatype="html">
+        <source>No ingest tokens yet.</source>
+        <target>Chưa có mã nạp dữ liệu.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.status" datatype="html">
+        <source>Status</source>
+        <target>Trạng thái</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.created" datatype="html">
+        <source>Created (UTC)</source>
+        <target>Ngày tạo (UTC)</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.prefix" datatype="html">
+        <source>Prefix</source>
+        <target>Tiền tố</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.scopes" datatype="html">
+        <source>Scopes</source>
+        <target>Phạm vi quyền</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.expires" datatype="html">
+        <source>Expires (UTC)</source>
+        <target>Hết hạn (UTC)</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.last-used" datatype="html">
+        <source>Last used (UTC)</source>
+        <target>Lần dùng gần nhất (UTC)</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.not-set" datatype="html">
+        <source>Not set</source>
+        <target>Chưa có</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.rotate" datatype="html">
+        <source>Rotate token</source>
+        <target>Thay mã</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.overlap" datatype="html">
+        <source>The previous token continues verifying until (UTC):</source>
+        <target>Mã cũ tiếp tục được chấp nhận đến (UTC):</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.challenge-heading" datatype="html">
+        <source>Save your binding challenge</source>
+        <target>Lưu mã xác thực liên kết</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-heading" datatype="html">
+        <source>Save your ingest token</source>
+        <target>Lưu mã nạp dữ liệu</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.reveal-warning" datatype="html">
+        <source>Shown only once. Save this value before leaving this step. If copying fails, select and copy the value manually.</source>
+        <target>Chỉ hiển thị một lần. Lưu giá trị này trước khi rời bước này. Nếu sao chép không thành công, hãy chọn và sao chép thủ công.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.copy" datatype="html">
+        <source>Copy value</source>
+        <target>Sao chép giá trị</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.copied" datatype="html">
+        <source>Value copied.</source>
+        <target>Đã sao chép giá trị.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.dismiss" datatype="html">
+        <source>Dismiss secret</source>
+        <target>Ẩn giá trị bí mật</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refresh-failed" datatype="html">
+        <source>The connection was saved, but progress could not be refreshed. Retry loading metadata; do not create the connection again.</source>
+        <target>Đã lưu kết nối nhưng chưa tải lại được tiến độ. Hãy thử tải lại thông tin; không tạo lại kết nối.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refresh" datatype="html">
+        <source>Retry loading metadata</source>
+        <target>Thử tải lại thông tin</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.pending" datatype="html">
+        <source>Pending verification</source>
+        <target>Chờ xác minh</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.active" datatype="html">
+        <source>Active</source>
+        <target>Đang hoạt động</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.disabled" datatype="html">
+        <source>Disabled</source>
+        <target>Đã vô hiệu hóa</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.rotated" datatype="html">
+        <source>Rotated</source>
+        <target>Đã thay mã</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.expired" datatype="html">
+        <source>Expired</source>
+        <target>Đã hết hạn</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.revoked" datatype="html">
+        <source>Revoked</source>
+        <target>Đã thu hồi</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.response-uncertain" datatype="html">
+        <source>It may have been saved. Reload the connection data before trying again.</source>
+        <target>Kết nối có thể đã được lưu. Hãy tải lại dữ liệu kết nối trước khi thử lại.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.reveal-shown" datatype="html">
+        <source>A one-time value is shown. Save it before leaving this step.</source>
+        <target>Đang hiển thị giá trị một lần. Hãy lưu giá trị này trước khi rời khỏi bước này.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.list-truncated" datatype="html">
+        <source>Showing the first 10; more exist, so a newer entry may not appear here.</source>
+        <target>Đang hiển thị 10 mục đầu tiên; vẫn còn mục khác nên mục mới hơn có thể không xuất hiện ở đây.</target>
+      </trans-unit>
       <trans-unit id="settings.audit.caption" datatype="html"><source>Audit activity</source><target>Hoạt động kiểm toán</target></trans-unit>
       <trans-unit id="settings.audit.time" datatype="html"><source>Time (UTC)</source><target>Thời gian (UTC)</target></trans-unit>
       <trans-unit id="settings.audit.actor" datatype="html"><source>Actor</source><target>Chủ thể thực hiện</target></trans-unit>

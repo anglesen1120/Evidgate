@@ -1932,6 +1932,165 @@
       <trans-unit id="onboarding.create.submitting" datatype="html">
         <source>Creating project…</source>
       </trans-unit>
+      <trans-unit id="onboarding.connect.intro" datatype="html">
+        <source>Choose one connection method. Next becomes available only after the server confirms a binding or token.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.oidc-title" datatype="html">
+        <source>GitHub Actions (OIDC)</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.oidc-hint" datatype="html">
+        <source>Set the one-time challenge as the repository variable EVIDGATE_BINDING_CHALLENGE. The binding becomes active after the first CI exchange; the browser never exchanges CI credentials.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.workflow-hint" datatype="html">
+        <source>In your workflow, grant permissions: id-token: write. Pass the GitHub OIDC JWT and EVIDGATE_BINDING_CHALLENGE to your CI-side Evidgate exchange. Keep the challenge out of workflow files and logs.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.repo-id" datatype="html">
+        <source>GitHub numeric repository ID</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.repo-id-error" datatype="html">
+        <source>Enter a positive whole-number repository ID.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.repo-name" datatype="html">
+        <source>Repository (owner/repo)</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.repo-name-error" datatype="html">
+        <source>Enter the repository as owner/repo.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refs" datatype="html">
+        <source>Allowed Git ref patterns</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refs-hint" datatype="html">
+        <source>One per line, for example refs/heads/your-branch. Enter 1–32 patterns.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refs-error" datatype="html">
+        <source>Enter between 1 and 32 non-empty ref patterns.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.workflows" datatype="html">
+        <source>Allowed workflow refs</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.workflows-hint" datatype="html">
+        <source>One per line, for example owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Enter 1–32 refs.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.workflows-error" datatype="html">
+        <source>Enter between 1 and 32 non-empty workflow refs.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.binding-submit" datatype="html">
+        <source>Create CI binding</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.binding-permission" datatype="html">
+        <source>Ask your organisation owner for permission to create CI bindings.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-title" datatype="html">
+        <source>Ingest token</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-hint" datatype="html">
+        <source>Use an ingest token when OIDC is not available. Save the one-time value in your CI secret manager, never in source control.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-name" datatype="html">
+        <source>Token name</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-name-error" datatype="html">
+        <source>Enter a token name between 1 and 128 characters.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-submit" datatype="html">
+        <source>Create ingest token</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-permission" datatype="html">
+        <source>Ask your organisation owner for permission to create or rotate ingest tokens.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.busy" datatype="html">
+        <source>Saving connection…</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.bindings" datatype="html">
+        <source>CI bindings</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.tokens" datatype="html">
+        <source>Ingest tokens</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.empty-bindings" datatype="html">
+        <source>No CI bindings yet.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.empty-tokens" datatype="html">
+        <source>No ingest tokens yet.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.status" datatype="html">
+        <source>Status</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.created" datatype="html">
+        <source>Created (UTC)</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.prefix" datatype="html">
+        <source>Prefix</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.scopes" datatype="html">
+        <source>Scopes</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.expires" datatype="html">
+        <source>Expires (UTC)</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.last-used" datatype="html">
+        <source>Last used (UTC)</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.not-set" datatype="html">
+        <source>Not set</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.rotate" datatype="html">
+        <source>Rotate token</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.overlap" datatype="html">
+        <source>The previous token continues verifying until (UTC):</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.challenge-heading" datatype="html">
+        <source>Save your binding challenge</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.token-heading" datatype="html">
+        <source>Save your ingest token</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.reveal-warning" datatype="html">
+        <source>Shown only once. Save this value before leaving this step. If copying fails, select and copy the value manually.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.copy" datatype="html">
+        <source>Copy value</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.copied" datatype="html">
+        <source>Value copied.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.dismiss" datatype="html">
+        <source>Dismiss secret</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refresh-failed" datatype="html">
+        <source>The connection was saved, but progress could not be refreshed. Retry loading metadata; do not create the connection again.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.refresh" datatype="html">
+        <source>Retry loading metadata</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.pending" datatype="html">
+        <source>Pending verification</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.active" datatype="html">
+        <source>Active</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.disabled" datatype="html">
+        <source>Disabled</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.rotated" datatype="html">
+        <source>Rotated</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.expired" datatype="html">
+        <source>Expired</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.revoked" datatype="html">
+        <source>Revoked</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.response-uncertain" datatype="html">
+        <source>It may have been saved. Reload the connection data before trying again.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.reveal-shown" datatype="html">
+        <source>A one-time value is shown. Save it before leaving this step.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.list-truncated" datatype="html">
+        <source>Showing the first 10; more exist, so a newer entry may not appear here.</source>
+      </trans-unit>
       <trans-unit id="settings.audit.caption" datatype="html"><source>Audit activity</source></trans-unit>
       <trans-unit id="settings.audit.time" datatype="html"><source>Time (UTC)</source></trans-unit>
       <trans-unit id="settings.audit.actor" datatype="html"><source>Actor</source></trans-unit>

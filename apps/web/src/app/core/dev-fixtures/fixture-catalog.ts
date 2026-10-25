@@ -17,6 +17,8 @@
 //
 // Dev-only, like the rest of `core/dev-fixtures`: see the module comment of `fixture-toggles.ts`.
 
+import ciBindingCreate from '../../../../../../fixtures/web-api/ci-binding-create/input.json';
+import ciBindingCreateConflict from '../../../../../../fixtures/web-api/ci-binding-create-conflict/input.json';
 import auditList from '../../../../../../fixtures/web-api/audit-list/input.json';
 import auditListEmpty from '../../../../../../fixtures/web-api/audit-list-empty/input.json';
 import auditListSupport from '../../../../../../fixtures/web-api/audit-list-support/input.json';
@@ -24,10 +26,14 @@ import ciBindingsList from '../../../../../../fixtures/web-api/ci-bindings-list/
 import ciBindingsListOnboardingConnected from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-connected/input.json';
 import ciBindingsListOnboardingProject from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-project/input.json';
 import ciBindingsListOnboardingRun from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-run/input.json';
+import ingestTokenCreate from '../../../../../../fixtures/web-api/ingest-token-create/input.json';
+import ingestTokenRotate from '../../../../../../fixtures/web-api/ingest-token-rotate/input.json';
+import ingestTokenRotateConflict from '../../../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
 import ingestTokensList from '../../../../../../fixtures/web-api/ingest-tokens-list/input.json';
 import ingestTokensListOnboardingConnected from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-connected/input.json';
 import ingestTokensListOnboardingProject from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-project/input.json';
 import ingestTokensListOnboardingRun from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-run/input.json';
+import ingestTokensListOnboardingToken from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import membershipCreateInviteExists from '../../../../../../fixtures/web-api/membership-create-invite-exists/input.json';
 import membershipCreateOk from '../../../../../../fixtures/web-api/membership-create-ok/input.json';
 import membershipRemoveInvalidTransition from '../../../../../../fixtures/web-api/membership-remove-invalid-transition/input.json';
@@ -41,6 +47,7 @@ import orgsListUnavailable from '../../../../../../fixtures/web-api/orgs-list-un
 import permissionsList from '../../../../../../fixtures/web-api/permissions-list/input.json';
 import permissionsListLimited from '../../../../../../fixtures/web-api/permissions-list-limited/input.json';
 import permissionsListOnboarding from '../../../../../../fixtures/web-api/permissions-list-onboarding/input.json';
+import permissionsListOnboardingNoWrites from '../../../../../../fixtures/web-api/permissions-list-onboarding-no-writes/input.json';
 import permissionsListSettingsAdmin from '../../../../../../fixtures/web-api/permissions-list-settings-admin/input.json';
 import permissionsListSettingsAuditOnly from '../../../../../../fixtures/web-api/permissions-list-settings-audit-only/input.json';
 import permissionsListSettingsMembersReadonly from '../../../../../../fixtures/web-api/permissions-list-settings-members-readonly/input.json';
@@ -123,6 +130,8 @@ export interface FixtureDocument {
  *
  *   `onboarding-empty`            no project (`listProjects` empty, `getProject` 404) → step 1;
  *   `onboarding-project`          project, empty binding/token pages → step 2;
+ *   `onboarding-token`            that project with one active `ingest_token` and an empty
+ *                                 binding page → step 3 (either connect path satisfies step 2);
  *   `onboarding-connected`        one active `ci_binding`, no run → step 3;
  *   `onboarding-run`              those bindings plus one `complete` run with decision `FAIL`,
  *                                 so the AC6 no-PASS/FAIL check runs on a failing run;
@@ -141,9 +150,44 @@ export interface FixtureDocument {
  * the wizard navigating to a plain `/orgs/<org>/onboarding/<projectId>` — resolves the created
  * project from that one read. `project-detail`, `ci-bindings-list`, `ingest-tokens-list` and
  * `run-state` are the `ok` defaults the same reload falls back to (the `Storefront web` project,
- * empty binding/token pages, the run of the default `runs-list` page). The ingest-token page is
- * pinned empty in every seed: no seed mints a token,
- * so step 2 can only be satisfied by the binding, and 09.2.1-T2 owns the token-path fixture.
+ * empty binding/token pages, the run of the default `runs-list` page). `onboarding-token` is the
+ * one seed whose ingest-token page is not empty; every other seed pins it empty, so that seed is
+ * the only one deriving step 3 from a token instead of from a `ci_binding`.
+ *
+ * 09.2.1-T2 added the step-2 write path. `ci-binding-create` (`POST /projects/{p}/ci-bindings`,
+ * 201 with a `pending_verification` binding and the one-time `binding_challenge`),
+ * `ingest-token-create` (`POST /projects/{p}/ingest-tokens`, 201 with the token's metadata and its
+ * one-time `egt_…` secret) and `ingest-token-rotate` (`POST /ingest-tokens/{t}/rotate`, 200 with
+ * the successor token, its secret and the `overlap_ends_at` the retired token keeps verifying
+ * until) are each their operation's `ok` answer, so a review reaches all three with no toggle.
+ * What the corpus cannot do is stay stateful: an answer is fixed, so a create cannot add a row to
+ * a later list read. The step-2 states are therefore separate seeds, not one flow — the
+ * `onboarding-token` seed proves the metadata-only resume (one token, never a secret in the page)
+ * and the create documents prove the one-shot reveal. Their secret values are `egt_FIXTURE_ONLY_…`
+ * / `evg_fixture_only_…` placeholders no issuer produces, and only the three documents above carry
+ * one: `CiBindingView` and `IngestTokenView` each say they never hold the challenge or the secret,
+ * so no list page can show a raw value again.
+ *
+ * The two refusal states the browser suite asserts on are documents too, because the `fixtures`
+ * build answers the API in process (`HttpBackend`), so Playwright cannot intercept a submit:
+ * `ci-binding-create-conflict` (variant `conflict` of `createCiBinding`: the binding panel's 409
+ * `binding_exists`) and `ingest-token-rotate-conflict` (variant `conflict` of `rotateIngestToken`:
+ * the token panel's 409 `invalid_transition`, the refusal of the path a token has instead of
+ * "create a second one"). `createIngestToken` pins no 409 on purpose — its operation declares none
+ * (contracts/openapi.yaml:2376-2397), so a token create cannot be refused with a status the client
+ * is contracted to map. `permissions-list-onboarding-no-writes` (variant `onboarding-no-writes` of
+ * `listPermissions`) is `permissions-list-onboarding` minus `ci_binding:write` and
+ * `ingest_token:write`, so step 2's two controls render disabled with their localized reason
+ * instead of disappearing.
+ *
+ * One shape note for future rows: `allowed_workflow_refs` holds `job_workflow_ref` values,
+ * `owner/repo/.github/workflows/<file>@refs/heads/main` — what the contract describes
+ * (contracts/openapi.yaml:6654) and what the server's pattern accepts (`Ci/RefGlob.cs:69,77`; a
+ * create with the other spelling is a 422 through `CiBindingCommands.cs:45`).
+ * `ci-binding-create` uses that form; the T1 rows `ci-bindings-list-onboarding-connected` and
+ * `ci-bindings-list-onboarding-run` still spell it `refs/heads/main:<path>` (line 18 of each), which
+ * the server would refuse, so they are an open corpus item handed to 09.2.1-T7.1 rather than an
+ * established convention.
  *
  * 09.7.1-T1 added three rows for the Settings tab strip: `permissions-list-settings-admin`
  * (`?fixture.variant.listPermissions=settings-admin`: the grant set that reaches every tab code of
@@ -197,6 +241,8 @@ export const FIXTURE_CATALOG: readonly {
   readonly name: string;
   readonly document: FixtureDocument;
 }[] = [
+  { name: 'ci-binding-create', document: ciBindingCreate },
+  { name: 'ci-binding-create-conflict', document: ciBindingCreateConflict },
   { name: 'audit-list', document: auditList },
   { name: 'audit-list-empty', document: auditListEmpty },
   { name: 'audit-list-support', document: auditListSupport },
@@ -204,6 +250,9 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'ci-bindings-list-onboarding-connected', document: ciBindingsListOnboardingConnected },
   { name: 'ci-bindings-list-onboarding-project', document: ciBindingsListOnboardingProject },
   { name: 'ci-bindings-list-onboarding-run', document: ciBindingsListOnboardingRun },
+  { name: 'ingest-token-create', document: ingestTokenCreate },
+  { name: 'ingest-token-rotate', document: ingestTokenRotate },
+  { name: 'ingest-token-rotate-conflict', document: ingestTokenRotateConflict },
   { name: 'ingest-tokens-list', document: ingestTokensList },
   {
     name: 'ingest-tokens-list-onboarding-connected',
@@ -211,6 +260,7 @@ export const FIXTURE_CATALOG: readonly {
   },
   { name: 'ingest-tokens-list-onboarding-project', document: ingestTokensListOnboardingProject },
   { name: 'ingest-tokens-list-onboarding-run', document: ingestTokensListOnboardingRun },
+  { name: 'ingest-tokens-list-onboarding-token', document: ingestTokensListOnboardingToken },
   { name: 'membership-create-invite-exists', document: membershipCreateInviteExists },
   { name: 'membership-create-ok', document: membershipCreateOk },
   { name: 'membership-remove-invalid-transition', document: membershipRemoveInvalidTransition },
@@ -224,6 +274,10 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'permissions-list', document: permissionsList },
   { name: 'permissions-list-limited', document: permissionsListLimited },
   { name: 'permissions-list-onboarding', document: permissionsListOnboarding },
+  {
+    name: 'permissions-list-onboarding-no-writes',
+    document: permissionsListOnboardingNoWrites,
+  },
   { name: 'permissions-list-settings-admin', document: permissionsListSettingsAdmin },
   { name: 'permissions-list-settings-audit-only', document: permissionsListSettingsAuditOnly },
   {

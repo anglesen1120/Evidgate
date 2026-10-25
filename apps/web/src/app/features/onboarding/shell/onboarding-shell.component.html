@@ -63,7 +63,11 @@
               <p class="wizard__project-created">{{ projectCreatedLabel }}</p>
               <p class="wizard__project-name">{{ project.name }}</p>
             } @else {
-              <app-onboarding-create-project [orgId]="orgId" />
+              <app-onboarding-create-project [orgId]="orgId()" />
+            }
+          } @else if (store.viewStep() === 2) {
+            @if (store.project(); as project) {
+              <app-onboarding-connect-ci [orgId]="orgId()" [projectId]="project.id" />
             }
           } @else {
             <app-onboarding-step-pending />

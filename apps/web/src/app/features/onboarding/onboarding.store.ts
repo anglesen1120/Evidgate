@@ -1,8 +1,9 @@
-// 09.2.1-T1.1 (plan 09.2.1 §6, §10 T1.1; decisions (d) and (f)): the wizard's view state as a
-// SignalStore. It holds no progress of its own — `OnboardingProgressService` derives that from the
-// server on every `load` (T63) — and it holds no secret.
+// 09.2.1-T1.1/T2 (plan 09.2.1 §6, §10 T1.1/T2; decisions (d) and (f); AC2, AC7): the wizard's
+// view state as a SignalStore. It holds no progress of its own — `OnboardingProgressService`
+// derives that from the server on every `load` or `refresh` (T63) — and it holds no secret: step
+// 2's one-time values live in the page's component-scoped `RevealSlot`, never here.
 //
-// Five behaviours the shell depends on:
+// Six behaviours the shell depends on:
 //
 // 1. `load` never throws. Every failure becomes `status: 'error'` plus one of the fixed
 //    `failure` values the shell renders as the T8 patterns (forbidden / not-found / error), so a
@@ -12,7 +13,8 @@
 //    failure — is dropped, because it describes a project nobody is looking at any more.
 // 3. The viewed step is gated by the derived one: `selectStep` cannot open a step the server has
 //    not reached, and `next` cannot pass a step whose done-condition is unmet (T1.3's disabled
-//    `onboarding-next`). Nothing here advances the wizard: only a new `load` moves it.
+//    `onboarding-next`). Nothing here advances the wizard except the derivation: only a new `load`
+//    moves it.
 // 4. This store is a route-level singleton, not a per-activation one: the route's `providers`
 //    keep one instance for the app's lifetime, so a state that is still `ready` says nothing
 //    about the activation on screen. The only thing reusable across activations is the one-shot
@@ -20,13 +22,25 @@
 //    takes it exactly once, for exactly that scope. That spares the activation the create's URL
 //    change causes a second fan-out (S71 F1), while every other activation — a revisit, a
 //    different org or project, a Retry — loads and re-derives from the server (S71 N1).
+//    `clearCreated` drops the marker for a create whose URL change never happened (N2).
 // 5. `focusToken` counts the step moves the *user* caused (`next`, `back`, `selectStep`, and the
 //    step a create opens). The shell moves focus to the step heading on a new token only, so the
 //    first ready render of a page load and a Retry leave focus alone (S71 F2).
+// 6. `refresh` re-derives without touching the view: it patches `progress` only, never sets
+//    `status: 'loading'`, never changes `viewStep` or `focusToken`, and on failure keeps the
+//    derivation it had while publishing `refreshFailure`. That is what step 2 needs after a
+//    create: the page stays mounted — with the one-time secret it is revealing — while `done[2]`
+//    flips and `canGoNext` enables Next (AC2). It owns its sequence, separate from `load`'s
+//    (F4): a refresh never supersedes a load, so a refresh asked for while the resume is still in
+//    flight cannot leave the store loading forever; a refresh drops its own answer when a newer
+//    refresh started, or when a newer load did (that read describes a page nobody is on any
+//    more). And a step move — `selectStep`, `next`, `back` — clears `refreshFailure`: the notice
+//    belongs to the step the refresh failed on, so a step 2 that is re-entered after a failure
+//    must not show a banner for it.
 
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
-import type { ProjectDto } from '@evidgate/sdk';
+import type { CiBindingView, IngestTokenView, ProjectDto } from '@evidgate/sdk';
 
 import { isApiRequestError } from '../../core/http/api-error';
 import { SessionStore } from '../../core/session/session.store';
@@ -65,6 +79,12 @@ export interface OnboardingViewState {
   failure: OnboardingFailure;
   /** The last published derivation; `null` before the first successful load and after a failure. */
   progress: OnboardingProgress | null;
+  /**
+   * Why the last `refresh` failed, or `null`. Separate from `failure` because a refresh keeps the
+   * page and its derivation: the panel renders this beside the rows it still shows instead of the
+   * full-page pattern a failed `load` earns.
+   */
+  refreshFailure: OnboardingFailure;
   /** The step whose panel is rendered; gated by `currentStep()`. */
   viewStep: StepNumber;
   /** Counts the step moves a user caused; the shell's cue to move focus (see the header). */
@@ -72,8 +92,19 @@ export interface OnboardingViewState {
 }
 
 function initialState(): OnboardingViewState {
-  return { status: 'loading', failure: null, progress: null, viewStep: 1, focusToken: 0 };
+  return {
+    status: 'loading',
+    failure: null,
+    progress: null,
+    refreshFailure: null,
+    viewStep: 1,
+    focusToken: 0,
+  };
 }
+
+/** The empty step 2 answer for a store that has no derivation yet — shared, and never mutated. */
+const NO_BINDINGS: readonly CiBindingView[] = [];
+const NO_TOKENS: readonly IngestTokenView[] = [];
 
 export const OnboardingStore = signalStore(
   withState<OnboardingViewState>(initialState),
@@ -83,6 +114,18 @@ export const OnboardingStore = signalStore(
     done: computed<StepsDone>(() => progress()?.done ?? NO_STEPS_DONE),
     /** The project the wizard resumes on; `null` only for an org with no project yet. */
     project: computed<ProjectDto | null>(() => progress()?.project ?? null),
+    /**
+     * Step 2's rows, as the server answered them: binding metadata and token metadata, never a
+     * secret. Empty before the first derivation and for a project that has neither.
+     */
+    bindings: computed<readonly CiBindingView[]>(() => progress()?.bindings ?? NO_BINDINGS),
+    tokens: computed<readonly IngestTokenView[]>(() => progress()?.tokens ?? NO_TOKENS),
+    /**
+     * Whether step 2's list is the whole list or the first page of a longer one. False before a
+     * derivation answers: no rows have been read, so nothing is being left out either.
+     */
+    bindingsTruncated: computed<boolean>(() => progress()?.bindingsTruncated ?? false),
+    tokensTruncated: computed<boolean>(() => progress()?.tokensTruncated ?? false),
     /** True when the viewed step's done-condition holds and there is a step after it. */
     canGoNext: computed<boolean>(() => {
       const step = viewStep();
@@ -95,10 +138,18 @@ export const OnboardingStore = signalStore(
     const session = inject(SessionStore);
     /**
      * The sequence number of the newest `load`, per store instance (this store is a route-level
-     * singleton, so two activations can overlap across a route change). An answer whose sequence
-     * is no longer the newest is dropped.
+     * singleton, so two activations can overlap across a route change). A load's answer — success
+     * or failure — is dropped when a newer load started meanwhile.
      */
     let newestLoad = 0;
+    /**
+     * The sequence number of the newest `refresh`, deliberately separate from `newestLoad` (F4).
+     * Sharing one counter made a refresh that started during an in-flight load supersede that
+     * load: the load dropped its answer, nothing else published, and the store stayed `loading`
+     * for the rest of the activation. A refresh is an in-place re-derivation of a page that is
+     * already on screen, so it never outranks the resume that decides what is on screen.
+     */
+    let newestRefresh = 0;
     /**
      * The scope a create just published, for the one activation its URL change causes. It is not
      * state: nothing renders it, and it must never outlive the next `load` (S71 N1).
@@ -111,7 +162,7 @@ export const OnboardingStore = signalStore(
       // Any load invalidates the create marker: a revisit, a route change or a Retry is a fresh
       // read, and the activation after it must not inherit a skip meant for another one.
       createdScope = null;
-      patchState(store, { status: 'loading', failure: null });
+      patchState(store, { status: 'loading', failure: null, refreshFailure: null });
       try {
         const progress = await progressService.load(orgId, projectId);
         if (loadSequence !== newestLoad) {
@@ -142,7 +193,43 @@ export const OnboardingStore = signalStore(
       if (step === store.viewStep()) {
         return;
       }
-      patchState(store, { viewStep: step, focusToken: store.focusToken() + 1 });
+      // A move dismisses a refresh notice: it reports a read that failed for the step that was on
+      // screen, and a step re-entered later must not open with a banner for that earlier read.
+      patchState(store, {
+        viewStep: step,
+        focusToken: store.focusToken() + 1,
+        refreshFailure: null,
+      });
+    }
+
+    /**
+     * Re-derives the position without disturbing the view (header, 6). Its answer is dropped when
+     * a newer refresh started, or when a load started after it did: this is a re-derivation of the
+     * page on screen, so a resume that began later describes a page nobody is on any more.
+     */
+    async function refresh(orgId: string, projectId: string): Promise<void> {
+      newestRefresh += 1;
+      const refreshSequence = newestRefresh;
+      // The load counter this refresh found. A load that starts afterwards bumps it, which is
+      // what makes this answer stale — and the reverse is not true: this refresh leaves `newestLoad`
+      // alone, so the in-flight load it overlaps still publishes (F4).
+      const loadAtStart = newestLoad;
+      try {
+        const progress = await progressService.load(orgId, projectId);
+        if (refreshSequence !== newestRefresh || loadAtStart !== newestLoad) {
+          return;
+        }
+        // Only the derivation and its own failure marker: `status`, `viewStep`, `focusToken` and
+        // the create marker belong to the activation on screen, which a refresh does not change.
+        patchState(store, { progress, refreshFailure: null });
+      } catch (error) {
+        if (refreshSequence !== newestRefresh || loadAtStart !== newestLoad) {
+          return;
+        }
+        // The page keeps what it renders — including the one-time secret it is revealing — and
+        // shows that the refresh did not land (the shell has no full-page pattern for this).
+        patchState(store, { refreshFailure: failureFor(error) });
+      }
     }
 
     return {
@@ -151,6 +238,21 @@ export const OnboardingStore = signalStore(
        * derivation and opens the first step that is not done. Never rejects (see the header).
        */
       load,
+
+      /**
+       * Re-derives the position in place: keeps `status`, `viewStep` and `focusToken`, patches
+       * the derivation on success, and publishes `refreshFailure` instead of throwing. Never
+       * rejects (see the header, 6).
+       */
+      refresh,
+
+      /**
+       * Drops the one-shot create marker without consuming it. A create whose URL navigation did
+       * not happen must not leave a skip behind for an activation nobody made (N2).
+       */
+      clearCreated(): void {
+        createdScope = null;
+      },
 
       /**
        * Take the one-shot create marker, if this is the activation the create caused. True only
