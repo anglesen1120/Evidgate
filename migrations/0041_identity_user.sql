@@ -162,6 +162,23 @@ create table if not exists public.session (
 create index if not exists session_user_revoked_expires_idx
   on public.session (user_id, revoked_at, expires_at);
 
+-- 02.3.2-T1's rotation chain: one row's successor is found by `rotated_from`, so
+-- the referential check of `session_rotated_from_fk` (the self-FK declared above)
+-- needs an index instead of a sequential scan per deleted row — the header's
+-- `session-cleanup` note records that the sweep hard-deletes in bulk. Partial,
+-- because a first login's row has no predecessor and the chain query only ever
+-- asks for the linked rows.
+--
+-- Which index serves a sliding `expires_at` is 02.3.2-T1's decision, not this
+-- file's: `session_user_revoked_expires_idx` above (it carries `expires_at`)
+-- stays exactly as shipped here, because it also serves the per-request lookup;
+-- whether its shape — the alternative being `(user_id) where revoked_at is null`
+-- — should change once 02.3.2-T1's rotation updates `expires_at` on every request
+-- (an indexed-column update, so no HOT) is decided with that task's writes.
+create index if not exists session_rotated_from_idx
+  on public.session (rotated_from)
+  where rotated_from is not null;
+
 alter table public."user" enable row level security;
 alter table public."user" force row level security;
 alter table public.user_identity enable row level security;

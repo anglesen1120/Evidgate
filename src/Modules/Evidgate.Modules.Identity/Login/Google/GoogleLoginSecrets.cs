@@ -26,13 +26,21 @@ internal sealed class GoogleLoginOptionsSecretPostConfigure : IPostConfigureOpti
 }
 
 /// <summary>
-/// Boot validation of the Google login options: every endpoint must still be an https address of the
-/// fixed S4 allowlist (an override pointing anywhere else is a configuration attack, not a preference),
-/// the issuer must be Google's, and present credentials must be single non-empty values.
+/// Boot validation of the Google login options: every endpoint that is present must still be an https
+/// address of the fixed S4 allowlist (an override pointing anywhere else is a configuration attack, not a
+/// preference), the issuer must be one of Google's two forms, and present credentials must be single
+/// non-empty values.
 /// </summary>
 /// <remarks>
+/// <para>
+/// Null, empty and whitespace are one case here: ABSENT. A deployment that injects an empty value for an
+/// optional key leaves the provider unconfigured (the routes answer 503) instead of failing the host at
+/// boot, exactly like a key that was never set.
+/// </para>
+/// <para>
 /// A message names the configuration key only. It never repeats a value, because the client secret and
 /// the client id travel through the same object.
+/// </para>
 /// </remarks>
 internal sealed class GoogleLoginOptionsValidator : IValidateOptions<GoogleLoginOptions>
 {
@@ -53,8 +61,8 @@ internal sealed class GoogleLoginOptionsValidator : IValidateOptions<GoogleLogin
         CheckUri(failures, nameof(GoogleLoginOptions.AuthorizationEndpoint), options.AuthorizationEndpoint, GoogleEndpoints.IsAllowlistedAuthorization,
             "must be an https address of accounts.google.com with no userinfo and the default port");
 
-        if (!string.Equals(options.Issuer, GoogleEndpoints.Issuer, StringComparison.Ordinal)
-            && !string.Equals(options.Issuer, GoogleEndpoints.IssuerAlias, StringComparison.Ordinal))
+        if (!string.IsNullOrWhiteSpace(options.Issuer)
+            && !Array.Exists(GoogleEndpoints.IssuerAliases, allowed => string.Equals(allowed, options.Issuer, StringComparison.Ordinal)))
         {
             failures.Add($"{GoogleLoginOptions.SectionName}:{nameof(GoogleLoginOptions.Issuer)} must be {GoogleEndpoints.Issuer} (or its bare {GoogleEndpoints.IssuerAlias} alias)");
         }
@@ -67,7 +75,13 @@ internal sealed class GoogleLoginOptionsValidator : IValidateOptions<GoogleLogin
 
     private static void CheckUri(List<string> failures, string property, string? value, Func<Uri, bool> allowlisted, string rule)
     {
-        if (string.IsNullOrWhiteSpace(value) || !Uri.TryCreate(value, UriKind.Absolute, out var uri) || !allowlisted(uri))
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            // Absent: the provider reports itself unconfigured and the routes answer 503.
+            return;
+        }
+
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || !allowlisted(uri))
         {
             failures.Add($"{GoogleLoginOptions.SectionName}:{property} {rule}");
         }
@@ -75,13 +89,13 @@ internal sealed class GoogleLoginOptionsValidator : IValidateOptions<GoogleLogin
 
     private static void CheckCredential(List<string> failures, string property, string? value, int maxLength)
     {
-        if (value is null)
+        if (string.IsNullOrWhiteSpace(value))
         {
             // Absent credentials leave the provider unconfigured, which the routes answer with 503.
             return;
         }
 
-        if (value.Length == 0 || value.Length > maxLength || value.AsSpan().ContainsAny(" \t\r\n"))
+        if (value.Length > maxLength || value.AsSpan().ContainsAny(" \t\r\n"))
         {
             failures.Add($"{GoogleLoginOptions.SectionName}:{property} must be a single non-empty value of at most {maxLength} characters");
         }

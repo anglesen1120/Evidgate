@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text;
-using System.Text.Json;
 using Evidgate.BuildingBlocks.Observability;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,7 +18,11 @@ internal interface IGoogleJwksProvider
     /// </summary>
     /// <param name="keyId">The token header's <c>kid</c>.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    /// <exception cref="HttpRequestException">The document could not be fetched and no earlier key set still answers for <paramref name="keyId"/>.</exception>
+    /// <exception cref="HttpRequestException">
+    /// The document could not be fetched — a transport error, a timeout of the client's resilience pipeline,
+    /// or a document that cannot be used — and no earlier key set still answers for <paramref name="keyId"/>.
+    /// A provider failure always surfaces as this one type, so no caller has to know which layer timed out.
+    /// </exception>
     ValueTask<SecurityKey?> GetKeyAsync(string keyId, CancellationToken cancellationToken);
 }
 
@@ -160,27 +163,32 @@ internal sealed partial class HttpGoogleJwksCache : IGoogleJwksProvider, IDispos
 
             if (now - snapshot.LastAttemptAt >= minRefresh)
             {
+                // Stamp the attempt BEFORE awaiting the fetch: whatever ends it — the pipeline's timeout,
+                // a transport error or cancellation — the minimum refresh window then applies, so a
+                // hanging endpoint is not hit again by every waiter in turn.
+                _snapshot = snapshot with { LastAttemptAt = now };
+
                 try
                 {
-                    snapshot = await FetchAsync(cancellationToken);
+                    snapshot = await FetchAsync();
                     _snapshot = snapshot;
                     GoogleLoginMetrics.JwksRefreshed(succeeded: true);
 
                     return snapshot.Keys.TryGetValue(keyId, out var fetched) ? fetched : null;
                 }
-                catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or ArgumentException or FormatException
-                                               || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+                catch (Exception ex) when (GoogleProviderFailure.IsUnavailable(ex, cancellationToken))
                 {
-                    _snapshot = snapshot with { LastAttemptAt = _clock.GetUtcNow(), LastFailureAt = _clock.GetUtcNow() };
+                    var failedAt = _clock.GetUtcNow();
+                    _snapshot = snapshot with { LastAttemptAt = failedAt, LastFailureAt = failedAt };
                     GoogleLoginMetrics.JwksRefreshed(succeeded: false);
                     LogRefreshFailed();
 
-                    now = _clock.GetUtcNow();
-                    if (snapshot.Keys.TryGetValue(keyId, out var held) && now - snapshot.FetchedAt < StaleGrace)
+                    if (snapshot.Keys.TryGetValue(keyId, out var held) && failedAt - snapshot.FetchedAt < StaleGrace)
                     {
                         return held;
                     }
 
+                    // FetchAsync already normalized this to the one failure type the provider contract names.
                     throw;
                 }
             }
@@ -194,7 +202,7 @@ internal sealed partial class HttpGoogleJwksCache : IGoogleJwksProvider, IDispos
             // Throttled after a failure and holding nothing for this kid: the provider is unavailable,
             // not the token invalid, so the caller answers 503 instead of steering the user to a retry
             // that cannot work.
-            if (now - snapshot.LastFailureAt < minRefresh)
+            if (_clock.GetUtcNow() - snapshot.LastFailureAt < minRefresh)
             {
                 throw new HttpRequestException("no usable Google OIDC key set (the JWKS fetch is backing off)");
             }
@@ -217,9 +225,38 @@ internal sealed partial class HttpGoogleJwksCache : IGoogleJwksProvider, IDispos
         _http.Dispose();
     }
 
-    private async Task<Snapshot> FetchAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Fetches the document and normalizes every provider failure to <see cref="HttpRequestException"/>, the
+    /// one failure type <see cref="IGoogleJwksProvider"/> documents.
+    /// </summary>
+    private async Task<Snapshot> FetchAsync()
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        try
+        {
+            return await FetchDocumentAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (GoogleProviderFailure.IsUnavailable(ex, CancellationToken.None))
+        {
+            // A transport error, the pipeline's timeout (Polly's TimeoutRejectedException), the fetch's own
+            // deadline or a document that cannot be parsed: all of them are the provider being unavailable.
+            // The filter reads no caller token on purpose: the fetch already owns its budget, so any
+            // cancellation here is a timeout of ours, not a caller leaving.
+            if (ex is HttpRequestException)
+            {
+                // Already the documented type, and its message names what was wrong with the document.
+                throw;
+            }
+
+            throw new HttpRequestException("the Google OIDC JWKS document could not be fetched", ex);
+        }
+    }
+
+    private async Task<Snapshot> FetchDocumentAsync()
+    {
+        // The fetch is shared single-flight work, so it must NOT run under the first caller's request
+        // token: one client disconnecting would cancel the document the other waiters are holding the gate
+        // for. Each waiter already observed its own token on the gate above; this budget bounds the rest.
+        using var timeout = new CancellationTokenSource();
 
         // A backstop above the client's own budget (per attempt plus one retry), never below it: a shorter
         // bound here would abort the pipeline before its per-attempt timeout and retry could run.

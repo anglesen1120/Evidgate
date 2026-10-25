@@ -1879,6 +1879,10 @@ export type StartFederatedLoginErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
      * 503 unavailable — always `Retry-After` (00 §9.2)
      */
     503: ErrorEnvelope;
@@ -1920,6 +1924,10 @@ export type CompleteFederatedLoginErrors = {
      * 404 not found — also for other-tenant ids (00 §9.2)
      */
     404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
     /**
      * 501 `login_not_completed` — the provider verified the identity, but completing the login (the `user`/`user_identity` upsert, the `session` row and the `__Host-evidgate` session cookie) is 02.3.1-T1.4's task (02.3.1 §5). This build answers a typed failure rather than a silent success, so a caller can never mistake "verified" for "signed in"; the code leaves the API when 02.3.1-T1.4 replaces the `ILoginCompletion` seam.
      */

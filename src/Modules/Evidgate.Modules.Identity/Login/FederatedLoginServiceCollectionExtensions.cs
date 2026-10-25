@@ -17,6 +17,12 @@ namespace Evidgate.Modules.Identity.Login;
 /// Called by <c>IdentityModule.AddIdentityModule</c> in both entry points, before the provider
 /// registrations, so a provider can rely on the cookie and options already being registered. A host without
 /// any provider still boots: both routes then answer 404 <c>not_found</c> for every route value.
+/// </para>
+/// <para>
+/// The two routes also resolve the CI exchange limiter (<c>ExchangeRateLimiter</c>), which
+/// <c>IdentityModule.AddCiAuthentication</c> registers earlier in the same composition: the login routes
+/// spend that limiter's per-client budget instead of introducing a second throttle with its own options.
+/// </para>
 /// </remarks>
 internal static class FederatedLoginServiceCollectionExtensions
 {
@@ -40,8 +46,11 @@ internal static class FederatedLoginServiceCollectionExtensions
         // nothing has to be provisioned before the first login), it gives confidentiality AND integrity in
         // one step, and it is already available through this module's Microsoft.AspNetCore.App framework
         // reference. The application name is fixed so every host of the deployment derives the same
-        // purposes; no shared ring is configured yet (no PersistKeysTo…), so replicas cannot read each
-        // other's state cookies — the open item for the 10.x deployment work.
+        // purposes. No ring is configured here (no PersistKeysTo…), so the key ring is the default one:
+        // persisted only where the key directory is writable, and in-memory (thus lost on every restart)
+        // where it is not. Either way replicas do not share a ring, so a persisted, shared ring is a deploy
+        // requirement tracked as its own item in STATUS (10.x deployment work), not a setting of this
+        // composition.
         services.AddDataProtection().SetApplicationName(LoginStateCookie.ApplicationName);
 
         services.TryAddSingleton(TimeProvider.System);

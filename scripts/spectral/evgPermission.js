@@ -1,7 +1,10 @@
 // Spectral custom function (no imports — spectral loads functions in isolation).
 // AC3/T51: every operation must declare `x-permission`. The literal value
-// `none` is reserved for the two non-permission routes of 00 §9.3
-// (POST /v1/ci/token, POST /v1/webhooks/github) and then requires `x-auth`
+// `none` is reserved for the non-permission routes of 00 §9.3 — the two
+// credential-authenticated routes (POST /v1/ci/token, POST /v1/webhooks/github)
+// and the two pre-tenant federated-login routes of 02.3.1
+// (GET /v1/auth/oidc/{provider}/start, GET /v1/auth/oidc/{provider}/callback),
+// which run before any session or tenant exists — and then requires `x-auth`
 // naming the credential. The literal `authenticated` is reserved for
 // POST /v1/orgs (02.1.1 §5): any signed-in user, no tenant permission yet (the
 // tenant is being created); it too requires `x-auth`. See contracts/README.md.

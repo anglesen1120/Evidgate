@@ -11,10 +11,10 @@ namespace Evidgate.Modules.Identity.Login.Google;
 /// <summary>
 /// Verifies a Google ID token (02.3.1-T1.2, AC2): RS256 only (an <c>alg</c> of <c>none</c> or HS256 is
 /// never accepted, which closes algorithm confusion), the signature against the issuer's JWKS, the
-/// issuer spellings Google publishes, the audience (with <c>azp</c> when <c>aud</c> has several
-/// entries), the lifetime with the configured skew, the nonce in constant time, and the subject, email
-/// and <c>email_verified</c> claims the identity needs. A false or missing <c>email_verified</c> never
-/// yields an identity (D3/T6).
+/// configured issuer plus the other spelling of the same host (Google publishes both), the audience (with
+/// <c>azp</c> when <c>aud</c> has several entries), the lifetime with the configured skew, the nonce in
+/// constant time, and the subject, email and <c>email_verified</c> claims the identity needs. A false or
+/// missing <c>email_verified</c> never yields an identity (D3/T6).
 /// </summary>
 /// <remarks>
 /// No failure carries provider text: the result is a typed <see cref="LoginProviderResult"/> whose
@@ -41,6 +41,9 @@ internal sealed class GoogleIdTokenValidator(IGoogleJwksProvider keys, IOptions<
     private static readonly JsonWebTokenHandler Handler = new() { MapInboundClaims = false };
 
     private readonly GoogleLoginOptions _options = options.Value;
+
+    /// <summary>The accepted <c>iss</c> values, derived once from <see cref="GoogleLoginOptions.Issuer"/>.</summary>
+    private readonly string[] _issuerSpellings = IssuerSpellings(options.Value.Issuer);
 
     /// <summary>Verifies <paramref name="idToken"/> against <paramref name="expectedNonce"/>.</summary>
     /// <param name="idToken">The compact ID token the token endpoint returned.</param>
@@ -79,8 +82,7 @@ internal sealed class GoogleIdTokenValidator(IGoogleJwksProvider keys, IOptions<
         {
             key = await keys.GetKeyAsync(unverified.Kid, cancellationToken);
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or ArgumentException or FormatException
-                                       || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        catch (Exception ex) when (GoogleProviderFailure.IsUnavailable(ex, cancellationToken))
         {
             return LoginProviderResult.Fail(LoginFailure.ProviderUnavailable);
         }
@@ -113,9 +115,9 @@ internal sealed class GoogleIdTokenValidator(IGoogleJwksProvider keys, IOptions<
 
     private TokenValidationParameters ValidationParameters(SecurityKey key) => new()
     {
-        // The two spellings Google publishes are the whole allowlist; the configured issuer only says
-        // which one is expected, and the boot validator keeps it inside this pair.
-        ValidIssuers = GoogleEndpoints.IssuerAliases,
+        // The configured issuer and the other spelling of the same host: the option decides which form is
+        // canonical, and the boot validator keeps it inside GoogleEndpoints.IssuerAliases.
+        ValidIssuers = _issuerSpellings,
         ValidAudience = _options.ClientId,
         IssuerSigningKey = key,
         ValidAlgorithms = [SecurityAlgorithms.RsaSha256],
@@ -128,6 +130,33 @@ internal sealed class GoogleIdTokenValidator(IGoogleJwksProvider keys, IOptions<
         LifetimeValidator = (notBefore, expires, _, parameters) =>
             LifetimeCheck.IsWithin(clock.GetUtcNow(), notBefore, expires, parameters.ClockSkew),
     };
+
+    /// <summary>
+    /// Every <c>iss</c> an ID token may carry: the configured issuer plus the other spelling of the same
+    /// host, because Google publishes both the <c>https://</c> URL and the bare host form. A blank
+    /// configuration accepts no issuer at all, which fails closed.
+    /// </summary>
+    /// <param name="configuredIssuer">The configured <see cref="GoogleLoginOptions.Issuer"/>.</param>
+    private static string[] IssuerSpellings(string? configuredIssuer)
+    {
+        var configured = configuredIssuer?.Trim();
+        if (string.IsNullOrEmpty(configured))
+        {
+            return [];
+        }
+
+        const string scheme = "https://";
+
+        if (configured.StartsWith(scheme, StringComparison.Ordinal))
+        {
+            var bare = configured[scheme.Length..].TrimEnd('/');
+
+            return bare.Length == 0 ? [configured] : [configured, bare];
+        }
+
+        // An absolute address of another scheme is not Google's at all: only the value itself.
+        return configured.Contains("://", StringComparison.Ordinal) ? [configured] : [configured, scheme + configured.TrimEnd('/')];
+    }
 
     private VerifiedIdentity? Extract(JsonWebToken jwt, string expectedNonce)
     {

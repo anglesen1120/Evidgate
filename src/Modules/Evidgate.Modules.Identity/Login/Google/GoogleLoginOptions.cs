@@ -9,10 +9,18 @@ namespace Evidgate.Modules.Identity.Login.Google;
 /// (<see cref="GoogleLoginProvider.IsConfigured"/>).
 /// </summary>
 /// <remarks>
+/// <para>
 /// <see cref="ClientSecret"/> has an internal setter, so the configuration binder skips it; it is
 /// resolved through <c>ISecretProvider</c> by <see cref="GoogleLoginOptionsSecretPostConfigure"/>
 /// (10.1.1-T2). <see cref="GoogleLoginOptionsValidator"/> refuses at boot an endpoint that leaves the
 /// fixed S4 allowlist of <see cref="GoogleEndpoints"/>, and validation names the key only, never a value.
+/// </para>
+/// <para>
+/// A null, empty or whitespace value counts as ABSENT for every member: the deployment left the key out.
+/// An absent credential or endpoint leaves the provider unconfigured — the routes then answer 503
+/// <c>unavailable</c> with <c>Retry-After</c> — instead of failing the host at boot, which is why no
+/// member is <c>[Required]</c>. A present value is still validated.
+/// </para>
 /// </remarks>
 internal sealed class GoogleLoginOptions
 {
@@ -28,20 +36,20 @@ internal sealed class GoogleLoginOptions
     /// </summary>
     public string? ClientSecret { get; internal set; }
 
-    /// <summary>Expected <c>iss</c> of the ID token; the bare <see cref="GoogleEndpoints.IssuerAlias"/> form is accepted beside it.</summary>
-    [Required]
+    /// <summary>
+    /// Expected <c>iss</c> of the ID token. The validator accepts this value and the other spelling of the
+    /// same host (Google publishes both the <c>https://</c> URL and the bare host form); the boot validator
+    /// keeps the setting to the two forms of <see cref="GoogleEndpoints.IssuerAliases"/>.
+    /// </summary>
     public string Issuer { get; init; } = GoogleEndpoints.Issuer;
 
     /// <summary>Authorization endpoint the browser is sent to (never called by the server).</summary>
-    [Required]
     public string AuthorizationEndpoint { get; init; } = "https://accounts.google.com/o/oauth2/v2/auth";
 
     /// <summary>Token endpoint of the authorization-code exchange; must stay on the outbound allowlist.</summary>
-    [Required]
     public string TokenEndpoint { get; init; } = "https://oauth2.googleapis.com/token";
 
     /// <summary>JWKS document that publishes the ID-token signing keys; must stay on the outbound allowlist.</summary>
-    [Required]
     public string JwksUri { get; init; } = "https://www.googleapis.com/oauth2/v3/certs";
 
     /// <summary>Tolerance applied to <c>exp</c> and <c>nbf</c>, in seconds (02.3.1 AC2 fixes 60; 0..300).</summary>
@@ -82,7 +90,11 @@ internal static class GoogleEndpoints
     /// <summary>Host of the browser-facing authorization endpoint (target of a redirect, never of a server call).</summary>
     internal const string AuthorizationHost = "accounts.google.com";
 
-    /// <summary>Every <c>iss</c> the ID token may carry: the configured issuer plus the bare alias.</summary>
+    /// <summary>
+    /// The two values <see cref="GoogleLoginOptions.Issuer"/> may hold: the <c>https://</c> issuer and its
+    /// legacy bare-host alias. This is the boot-time allowlist of that setting, not the set an ID token may
+    /// carry — the validator accepts whichever form is configured plus the other spelling of the same host.
+    /// </summary>
     internal static readonly string[] IssuerAliases = [Issuer, IssuerAlias];
 
     /// <summary>The only hosts the server itself may call over https: the token and JWKS endpoints.</summary>

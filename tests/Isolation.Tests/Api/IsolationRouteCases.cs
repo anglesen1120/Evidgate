@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Http;
 using Npgsql;
 using Xunit;
 
@@ -162,6 +163,19 @@ public sealed record ListWalk(
 /// </remarks>
 public static class IsolationRouteCases
 {
+    /// <summary>
+    /// The 00 §9.2 <c>error.code</c> of the pre-tenant login routes' designed answers in this host
+    /// (<c>ApiErrorCode.Unavailable</c>, ErrorEnvelope.cs:92): no provider credential is configured, so
+    /// <c>start</c> refuses with 503 before any tenant or session exists.
+    /// </summary>
+    private const string UnavailableCode = "unavailable";
+
+    /// <summary>
+    /// The 00 §9.2 <c>error.code</c> of a callback that carries no pending-login cookie
+    /// (<c>ApiErrorCode.TokenInvalid</c>, ErrorEnvelope.cs:59): 401, checked before the provider's configuration.
+    /// </summary>
+    private const string TokenInvalidCode = "token_invalid";
+
     /// <summary>Every case, one per served route.</summary>
     public static IReadOnlyList<RouteCase> All { get; } = Build();
 
@@ -415,15 +429,27 @@ public static class IsolationRouteCases
         ]),
 
         // ---- Federated login (LoginEndpoints.cs:22-34, 02.3.1-T1.1): pre-tenant, no tenant data, no database -----
+        // The isolation host configures no provider credential, so the two designed answers are exact and provable:
+        // start refuses with 503 unavailable (unconfigured provider), callback with 401 token_invalid (no pending cookie).
         Case("GET", "/v1/auth/oidc/{provider}/start", (route, w) =>
         [
             new(route, "start stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantLoginAsync(
-                route, "start stays pre-tenant: org B's member headers cannot select a tenant", w, "/v1/auth/oidc/google/start")),
+                route,
+                "start stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                "/v1/auth/oidc/google/start",
+                StatusCodes.Status503ServiceUnavailable,
+                UnavailableCode)),
         ]),
         Case("GET", "/v1/auth/oidc/{provider}/callback", (route, w) =>
         [
             new(route, "callback stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantLoginAsync(
-                route, "callback stays pre-tenant: org B's member headers cannot select a tenant", w, "/v1/auth/oidc/google/callback?code=probe&state=probe")),
+                route,
+                "callback stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                "/v1/auth/oidc/google/callback?code=probe&state=probe",
+                StatusCodes.Status401Unauthorized,
+                TokenInvalidCode)),
         ]),
 
         // ---- Catalog (CatalogEndpoints.cs:39-83) ---------------------------------------------------------------
@@ -1803,32 +1829,63 @@ public sealed class RouteProbeRunner
     }
 
     /// <summary>
-    /// A pre-tenant federated-login route (02.3.1-T1.1: <c>GET /v1/auth/oidc/{provider}/start|callback</c>): the
-    /// answer is never a server error, carries no org-A id, and org B's member headers change nothing — a route that
+    /// A pre-tenant federated-login route (02.3.1-T1.1: <c>GET /v1/auth/oidc/{provider}/start|callback</c>): both answers are
+    /// the exact status this host yields, carry no org-A id, and org B's member headers change nothing — a route that
     /// resolves no tenant cannot be pointed at one, and neither route touches the database.
     /// </summary>
+    /// <remarks>
+    /// The expected status is exact, not a range: the isolation host registers <c>google</c> without a client credential,
+    /// so <c>start</c> answers 503 <c>unavailable</c> (LoginEndpoints.cs:115-118) and <c>callback</c> answers 401
+    /// <c>token_invalid</c> at the pending-login check that precedes its configuration check (LoginEndpoints.cs:190-194).
+    /// Both are designed answers of a pre-tenant route, so anything else fails the case: a 2xx would mean the request
+    /// reached a completion, another 5xx a real fault, and a 404 would mean the provider is no longer registered here —
+    /// the spec's own answer for an unknown route value, but a change of this host's premise rather than of the tenant,
+    /// so the case must be revisited instead of passing.
+    /// </remarks>
     /// <param name="route">The served login route.</param>
     /// <param name="name">What the probe proves.</param>
     /// <param name="world">The isolation world (org B's <c>tenant_admin</c> supplies the member headers).</param>
     /// <param name="url">The request URL (a registered provider route value, with the query a refused callback carries).</param>
-    public async Task<IReadOnlyList<string>> PreTenantLoginAsync(ApiRoute route, string name, IsolationWorld world, string url)
+    /// <param name="expectedStatus">The exact status both callers must receive in this host.</param>
+    /// <param name="expectedCode">The exact 00 §9.2 <c>error.code</c> both callers must receive.</param>
+    public async Task<IReadOnlyList<string>> PreTenantLoginAsync(
+        ApiRoute route,
+        string name,
+        IsolationWorld world,
+        string url,
+        int expectedStatus,
+        string expectedCode)
     {
         ArgumentNullException.ThrowIfNull(world);
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedCode);
 
         var request = new ProbeRequest(HttpMethod.Get, url);
+        var caller = IsolationRouteCases.OrgBAdmin(world);
         var anonymous = await SendAsync(ProbeCaller.Anonymous, request).ConfigureAwait(false);
-        var named = await SendAsync(IsolationRouteCases.OrgBAdmin(world), request).ConfigureAwait(false);
+        var named = await SendAsync(caller, request).ConfigureAwait(false);
         var violations = new List<string>();
 
-        if (anonymous.Status >= 500 || named.Status >= 500)
+        if (anonymous.Status != expectedStatus || !string.Equals(anonymous.Code, expectedCode, StringComparison.Ordinal))
         {
-            violations.Add(Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {anonymous} anonymously / {named} naming org B, expected no server error: {Brief(anonymous)}"));
+            violations.Add(Describe(
+                route, name, ProbeCaller.Anonymous,
+                $"{request} answered {anonymous} anonymously, expected {expectedStatus} {expectedCode}: {Brief(anonymous)}"));
         }
-        else if (anonymous.Status != named.Status
-            || !string.Equals(anonymous.Code, named.Code, StringComparison.Ordinal)
-            || !string.Equals(Shape(anonymous), Shape(named), StringComparison.Ordinal))
+
+        if (named.Status != expectedStatus || !string.Equals(named.Code, expectedCode, StringComparison.Ordinal))
         {
-            violations.Add(Describe(route, name, ProbeCaller.Anonymous, $"org-B member headers changed a pre-tenant answer: anonymous {anonymous}, naming org B {named}"));
+            violations.Add(Describe(
+                route, name, caller,
+                $"{request} answered {named} naming org B, expected {expectedStatus} {expectedCode}: {Brief(named)}"));
+        }
+
+        // Even with both statuses right, the body must be the same answer: a member
+        // header that changes the envelope's members is a select that happened.
+        if (!string.Equals(Shape(anonymous), Shape(named), StringComparison.Ordinal))
+        {
+            violations.Add(Describe(
+                route, name, ProbeCaller.Anonymous,
+                $"org-B member headers changed a pre-tenant answer: anonymous {anonymous}, naming org B {named}"));
         }
 
         violations.AddRange(ForeignIdsIn(named.Text).Select(id => Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {named} carrying org-A id {id}")));

@@ -25,7 +25,9 @@ namespace Evidgate.Modules.Identity.Login.Google;
 /// <para>
 /// The typed client it is constructed with has a hard timeout, no redirect following and the fixed S4
 /// allowlist in front of it, and its authorization code is single-use, so the token POST is never
-/// retried (the JWKS GET is the only retried call).
+/// retried (the JWKS GET is the only retried call). The exchange also bounds the response body itself:
+/// the client timeout stops at the headers, so the code reads the body under a deadline of its own and a
+/// body that stalls after the headers is <see cref="LoginFailure.ProviderUnavailable"/>, never a hang.
 /// </para>
 /// </remarks>
 internal sealed partial class GoogleLoginProvider(
@@ -52,7 +54,20 @@ internal sealed partial class GoogleLoginProvider(
     public string Name => ProviderName;
 
     /// <inheritdoc />
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.ClientId) && !string.IsNullOrWhiteSpace(_options.ClientSecret);
+    /// <remarks>
+    /// Every value must be present and non-blank: a blank deployment setting counts as absent, and a blank
+    /// endpoint would make the URLs built from it invalid, so the provider reports itself unconfigured and
+    /// the routes answer 503 <c>unavailable</c> instead of failing the request with a 500.
+    /// </remarks>
+    public bool IsConfigured =>
+        Configured(_options.ClientId)
+        && Configured(_options.ClientSecret)
+        && Configured(_options.Issuer)
+        && Configured(_options.AuthorizationEndpoint)
+        && Configured(_options.TokenEndpoint)
+        && Configured(_options.JwksUri);
+
+    private static bool Configured(string? value) => !string.IsNullOrWhiteSpace(value);
 
     /// <inheritdoc />
     public Uri BuildAuthorizationUrl(LoginAuthorizationRequest request)
@@ -131,68 +146,79 @@ internal sealed partial class GoogleLoginProvider(
             ["code_verifier"] = request.CodeVerifier,
         };
 
+        // One linked deadline for the send AND the body read: with ResponseHeadersRead the client's own
+        // timeout stops at the headers, so a body that stalls after them would otherwise hold the request,
+        // the pooled connection and the caller's slot until the client disconnects.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(_options.HttpTimeoutSeconds));
+
         HttpResponseMessage response;
         try
         {
             // ResponseHeadersRead, not PostAsync: with PostAsync the whole provider body would be buffered
             // before MaxResponseBytes could be checked, so a huge or unbounded body would win. Here the body
-            // is only read below, under the cap.
+            // is only read below, under the cap and under the same deadline.
             using var post = new HttpRequestMessage(HttpMethod.Post, new Uri(_options.TokenEndpoint, UriKind.Absolute))
             {
                 Content = new FormUrlEncodedContent(form),
             };
 
-            response = await http.SendAsync(post, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            response = await http.SendAsync(post, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
         }
-        catch (HttpRequestException)
-        {
-            return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (GoogleProviderFailure.IsUnavailable(ex, cancellationToken))
         {
             return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
         }
 
         using (response)
         {
-            if (!response.IsSuccessStatusCode)
-            {
-                var status = (int)response.StatusCode;
-
-                // 429 is the provider protecting itself (unavailable, retry later); any other 4xx is the
-                // provider refusing this code (invalid_grant, invalid_client, ...): a token failure.
-                if (status == 429)
-                {
-                    return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-                }
-
-                return status is >= 400 and < 500
-                    ? (null, LoginFailure.TokenInvalid, CategoryTokenEndpointRejected)
-                    : (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-            }
-
-            if (response.Content.Headers.ContentLength is { } declared && declared > _options.MaxResponseBytes)
-            {
-                return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-            }
-
-            string? json;
             try
             {
-                json = await ReadCappedAsync(response.Content, _options.MaxResponseBytes, cancellationToken).ConfigureAwait(false);
+                return await ReadTokenResponseAsync(response, timeout.Token).ConfigureAwait(false);
             }
-            catch (HttpRequestException)
+            catch (Exception ex) when (GoogleProviderFailure.IsUnavailable(ex, cancellationToken))
             {
+                // The deadline above bounds this read too, so a stalled body lands here as unavailable
+                // instead of hanging the callback or surfacing as a 500.
                 return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
             }
-
-            if (json is null)
-            {
-                return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-            }
-
-            return ReadIdToken(json);
         }
+    }
+
+    /// <summary>
+    /// Reads the token response: status mapping, the size cap and the <c>id_token</c> extraction. The
+    /// caller's deadline bounds the body read.
+    /// </summary>
+    private async Task<(string? IdToken, LoginFailure? Failure, string Category)> ReadTokenResponseAsync(
+        HttpResponseMessage response,
+        CancellationToken bodyToken)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            var status = (int)response.StatusCode;
+
+            // 429 is the provider protecting itself (unavailable, retry later); any other 4xx is the
+            // provider refusing this code (invalid_grant, invalid_client, ...): a token failure.
+            if (status == 429)
+            {
+                return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
+            }
+
+            return status is >= 400 and < 500
+                ? (null, LoginFailure.TokenInvalid, CategoryTokenEndpointRejected)
+                : (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
+        }
+
+        if (response.Content.Headers.ContentLength is { } declared && declared > _options.MaxResponseBytes)
+        {
+            return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
+        }
+
+        var json = await ReadCappedAsync(response.Content, _options.MaxResponseBytes, bodyToken).ConfigureAwait(false);
+
+        return json is null
+            ? (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable)
+            : ReadIdToken(json);
     }
 
     /// <summary>Reads <c>id_token</c> from the token response; anything else in the body is ignored, never logged.</summary>

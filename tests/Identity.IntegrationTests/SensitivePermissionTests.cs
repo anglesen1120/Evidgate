@@ -44,15 +44,28 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     private static readonly string[] MustHoldNothing = ["viewer", "ci_producer", "agent"];
 
     /// <summary>
-    /// The served GET routes this scan cannot call. It holds one route: the manual test case
-    /// detail of 13.1.1-T2, which only answers for a case this suite does not create (authoring
-    /// rows are the subject of <c>Tenancy.IntegrationTests</c>, and a seeded case here would
-    /// assert a state the writer never produced). The three authoring lists are scanned like
-    /// every other list. The set is kept, and asserted against the served table, so a route
-    /// that cannot be addressed must be named here with its reason instead of slipping
-    /// past the scan silently.
+    /// The served GET routes this scan excludes from its body scan, one reason per entry.
+    /// The scan reads the body of every route it calls and requires a 200, because AC5 is about
+    /// what a member can read; an excluded route is one whose answer is not a readable resource
+    /// body. The set is kept, and asserted against the served table, so a route that cannot be
+    /// scanned must be named here with its reason instead of slipping past the scan silently.
     /// </summary>
-    private static readonly string[] SkippedGetRoutes = ["/v1/projects/{p}/authoring/manual-cases/{m}"];
+    private static readonly string[] SkippedGetRoutes =
+    [
+        // 13.1.1-T2's manual case detail: it only answers for a case this suite does not create
+        // (authoring rows are Tenancy.IntegrationTests' subject, and a seeded case here would
+        // assert a state the writer never produced). The three authoring lists are scanned.
+        "/v1/projects/{p}/authoring/manual-cases/{m}",
+
+        // 02.3.1-T1.1's pre-tenant login routes answer no resource body: `start` is a 302 to the
+        // provider or a 503 `unavailable` envelope (no credential is configured in this host), and
+        // `callback` without a pending-login cookie is a 401 `token_invalid` envelope. Neither
+        // carries data a member could read, and both have no secret to leak (AC7: no password field
+        // exists in the flow); their refusal and outage bodies are asserted in
+        // Login/ProviderOutageTests.
+        "/v1/auth/oidc/{provider}/start",
+        "/v1/auth/oidc/{provider}/callback",
+    ];
 
     /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>
     private static readonly JsonSerializerOptions Wire = new()

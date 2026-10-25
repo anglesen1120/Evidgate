@@ -17,6 +17,7 @@ using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Identity;
 using Evidgate.Modules.Identity.Endpoints;
+using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Ingestion.Endpoints;
 using Evidgate.Modules.Orchestrator;
@@ -59,7 +60,14 @@ public static partial class ApiHost
         builder.Services.AddEvidgateSecrets(builder.Configuration);
 
         var otel = builder.AddEvidgateTelemetry(ServiceName);
-        otel.WithTracing(tracing => tracing.AddAspNetCoreInstrumentation());
+        otel.WithTracing(tracing =>
+            tracing.AddAspNetCoreInstrumentation(options =>
+                // 00 §5.7 S3 / 02.3.1 §5: the browser reaches the login callback with `code` and `state`
+                // in the query string. Neither may reach a trace backend, so the query is taken off the
+                // span on those two routes only (`LoginTraceRedaction`: `url.query` deleted, the query
+                // stripped from `url.full`/`http.url`).
+                options.EnrichWithHttpRequest = (activity, request) =>
+                    LoginTraceRedaction.Redact(activity, request.Path.Value)));
         otel.WithMetrics(metrics => metrics.AddPrometheusExporter());
 
         builder.Services.AddHealthChecks()

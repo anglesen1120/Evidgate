@@ -55,10 +55,14 @@ internal sealed partial class LoginStateJsonContext : JsonSerializerContext
 /// <para>
 /// <b>Single node:</b> nothing configures a shared ring (<c>PersistKeysTo…</c> or a distributed store), so
 /// the default ring stays in each host's own key directory and its keys never reach a sibling replica: a
-/// callback served by another replica cannot read a cookie the first one wrote (a restart on the same host
-/// keeps working, because the default ring is persisted there). That is an open item for the 10.x
-/// deployment work (see the story's FINAL-REPORT); until a shared ring exists, a login attempt must reach
-/// the node that wrote the cookie, which a sticky-session rule provides.
+/// callback served by another replica cannot read a cookie the first one wrote. The default ring is
+/// persisted only where that key directory is writable; where it is not (a read-only or otherwise unusable
+/// key directory, which a deployment can produce without any code change), the framework keeps the ring in
+/// memory instead, and then a restart of the same host also invalidates every pending login (the cookie is
+/// refused as an invalid login, never repaired). A persisted, shared ring is therefore a deploy requirement,
+/// not a property of this code, tracked as its own item in the project's STATUS (10.x deployment work);
+/// until it exists, a login attempt must reach the node that wrote the cookie, which a sticky-session rule
+/// provides.
 /// </para>
 /// </remarks>
 internal sealed class LoginStateCookie(

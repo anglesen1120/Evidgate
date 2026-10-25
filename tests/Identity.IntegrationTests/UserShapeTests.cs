@@ -311,6 +311,49 @@ public sealed class UserShapeTests : CatalogueTestBase
             """)).ShouldBe(0, "no unique index may cover the normalised address");
     }
 
+    /// <summary>
+    /// The rotation chain of 02.3.2-T1: <c>session.rotated_from</c> is a self
+    /// reference, and the successor lookup goes through it, so the reference is
+    /// indexed here — partial, because a first login's row has no predecessor —
+    /// and enforced, so a successor always names a session that exists. The
+    /// sliding-expiry index shape is 02.3.2-T1's own migration (it names
+    /// <c>session_user_revoked_expires_idx</c>); this assertion only pins what 0041
+    /// ships, so that task can add its indexes without silently changing this one.
+    /// </summary>
+    [Fact]
+    public async Task Session_Rotation_Index_Covers_The_Self_Reference()
+    {
+        var definition = await OwnerScalarAsync<string>(
+            "select indexdef from pg_indexes where schemaname = 'public' and indexname = 'session_rotated_from_idx'");
+
+        definition.ShouldContain("on public.session", Case.Insensitive, "the chain lives on the session table");
+        definition.ShouldContain("(rotated_from)", Case.Insensitive, "the successor lookup is on rotated_from");
+        definition.ShouldContain("is not null", Case.Insensitive, "the index is partial: a first login has no predecessor");
+
+        // The reference it covers exists as the named constraint, so a dropped key
+        // fails here instead of leaving an index over a column nothing enforces.
+        (await ConstraintNamesAsync("session")).ShouldContain("session_rotated_from_fk");
+
+        // …and it is enforced, which is what makes the index load-bearing: a
+        // successor naming a session that does not exist is refused by the server,
+        // a successor naming a real predecessor is accepted.
+        var userId = await SeedUserAsync("rotated@example.com");
+        var predecessor = await SeedSessionAsync(userId);
+        await SeedRotatedSessionAsync(userId, predecessor);
+
+        var orphan = await RefusalAsync(
+            "insert into public.session (id, user_id, expires_at, absolute_expires_at, rotated_from) "
+            + "values (@id, @user_id, @expires_at, @absolute_expires_at, @rotated_from)",
+            ("id", Guid.CreateVersion7()),
+            ("user_id", userId),
+            ("expires_at", AbsoluteExpiry.AddHours(-1)),
+            ("absolute_expires_at", AbsoluteExpiry),
+            ("rotated_from", Guid.CreateVersion7()));
+
+        orphan.SqlState.ShouldBe(PostgresErrorCodes.ForeignKeyViolation);
+        orphan.ConstraintName.ShouldBe("session_rotated_from_fk");
+    }
+
     /// <summary>Seeds one user through the owner seam and returns its app-generated id.</summary>
     private async Task<Guid> SeedUserAsync(string email)
     {
@@ -355,6 +398,23 @@ public sealed class UserShapeTests : CatalogueTestBase
             Token);
         return id;
     }
+
+    /// <summary>
+    /// Seeds the successor of a session: <c>rotated_from</c> names its predecessor,
+    /// which is the only kind of row the partial index holds.
+    /// </summary>
+    private async Task SeedRotatedSessionAsync(Guid userId, Guid predecessor) =>
+        await Fixture.SeedAsync(
+            "insert into public.session (id, user_id, expires_at, absolute_expires_at, ip, user_agent, rotated_from) "
+            + "values (@id, @user_id, @expires_at, @absolute_expires_at, '203.0.113.7', 'xunit', @rotated_from)",
+            [
+                ("id", Guid.CreateVersion7()),
+                ("user_id", userId),
+                ("expires_at", AbsoluteExpiry.AddHours(-1)),
+                ("absolute_expires_at", AbsoluteExpiry),
+                ("rotated_from", predecessor),
+            ],
+            Token);
 
     /// <summary>The table's columns in ordinal order, as <c>information_schema</c> reports them.</summary>
     private async Task<string[]> ColumnsAsync(string table) =>
