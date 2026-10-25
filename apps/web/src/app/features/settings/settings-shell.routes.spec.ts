@@ -1,6 +1,6 @@
 // 09.7.1-T1.2 (plan 09.7.1 §2 AC1, §5 route table; 00 §9.2; D-S68-Q4): the match table of the
-// Settings shell, exercised through a real `Router` on the real table with only the three page
-// components replaced by markers.
+// Settings shell, exercised through a real `Router` on the real table with only its page components
+// replaced by markers.
 //
 // AC1 is a routing fact, not a styling one: a tab the caller may not use must be as absent as an
 // unknown segment. So every refusal here is asserted the same way — the wildcard route renders the
@@ -20,6 +20,7 @@ import {
 import { RouterTestingHarness } from '@angular/router/testing';
 
 import { SessionStore, type SessionState } from '../../core/session/session.store';
+import { AuditPage } from './audit/audit.page';
 import { MembersPage } from './members/members.page';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
@@ -83,6 +84,7 @@ const PAGE_STUBS = new Map<unknown, Type<unknown>>([
   [SettingsTabPlaceholderPage, SettingsTabStub],
   [SettingsNoTabsPage, SettingsNoTabsStub],
   [MembersPage, SettingsTabStub],
+  [AuditPage, SettingsTabStub],
 ]);
 
 /** The real shell table with only its page components swapped. */
@@ -150,14 +152,13 @@ function refusedTabs(codes: ReadonlySet<string>): readonly string[] {
 }
 
 describe('Settings shell route table (09.7.1-T1.2)', () => {
-  it('mounts the Members page only for members and keeps the other tabs as placeholders', async () => {
+  it('mounts the delivered pages only for members and audit and keeps the other tabs as placeholders', async () => {
     const tabs = shellRoutes[0]?.children?.filter((route) => route.data?.['settingsTabId']);
     expect(tabs?.find((route) => route.path === 'members')?.component).toBe(MembersPage);
-    expect(
-      tabs
-        ?.filter((route) => route.path !== 'members')
-        .every((route) => route.component === SettingsTabPlaceholderPage),
-    ).toBe(true);
+    expect(tabs?.find((route) => route.path === 'audit')?.component).toBe(AuditPage);
+    // Only those two rows hold a delivered body, so every other tab still mounts the placeholder.
+    const delivered = tabs?.filter((route) => route.component !== SettingsTabPlaceholderPage);
+    expect(delivered?.map((route) => route.path)).toEqual(['members', 'audit']);
     const harness = await setUp(new Set(['membership:read']));
     await harness.navigateByUrl('/orgs/o1/settings/members');
     expect(
@@ -165,13 +166,15 @@ describe('Settings shell route table (09.7.1-T1.2)', () => {
     ).toBe('members');
   });
   it('renders the placeholder of a tab the caller may use, with its id in the route data', async () => {
-    const harness = await setUp(new Set(['audit:read']));
+    // Quota & Retention is G1 and has no delivered body yet, so it still mounts the placeholder;
+    // Members and Audit have real pages (asserted above, and their own specs cover the bodies).
+    const harness = await setUp(new Set(['project:read']));
 
-    await harness.navigateByUrl('/orgs/o1/settings/audit');
+    await harness.navigateByUrl('/orgs/o1/settings/quota-retention');
 
     const body = document.querySelector('[data-settings-tab-body]');
-    expect(body?.getAttribute('data-settings-tab-body')).toBe('audit');
-    expect(TestBed.inject(Router).url).toBe('/orgs/o1/settings/audit');
+    expect(body?.getAttribute('data-settings-tab-body')).toBe('quota-retention');
+    expect(TestBed.inject(Router).url).toBe('/orgs/o1/settings/quota-retention');
   });
 
   it.each(refusedTabs(new Set(['audit:read'])).map((segment) => ({ segment })))(

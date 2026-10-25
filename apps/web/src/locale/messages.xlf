@@ -1932,6 +1932,50 @@
       <trans-unit id="onboarding.create.submitting" datatype="html">
         <source>Creating project…</source>
       </trans-unit>
+      <trans-unit id="settings.audit.caption" datatype="html"><source>Audit activity</source></trans-unit>
+      <trans-unit id="settings.audit.time" datatype="html"><source>Time (UTC)</source></trans-unit>
+      <trans-unit id="settings.audit.actor" datatype="html"><source>Actor</source></trans-unit>
+      <trans-unit id="settings.audit.action" datatype="html"><source>Action</source></trans-unit>
+      <trans-unit id="settings.audit.object" datatype="html"><source>Object</source></trans-unit>
+      <trans-unit id="settings.audit.request" datatype="html"><source>Request id</source></trans-unit>
+      <trans-unit id="settings.audit.support" datatype="html"><source>Support access</source></trans-unit>
+      <trans-unit id="settings.audit.absent" datatype="html"><source>—</source></trans-unit>
+      <trans-unit id="settings.audit.support-description" datatype="html"><source>Platform staff access under support grant <x id="grantId" equiv-text="grantId"/></source></trans-unit>
+      <trans-unit id="settings.audit.support-unrecorded" datatype="html"><source>Platform staff access (grant id not recorded on this row)</source></trans-unit>
+      <trans-unit id="settings.audit.export" datatype="html"><source>Export CSV</source></trans-unit>
+      <trans-unit id="settings.audit.retry" datatype="html"><source>Retry</source></trans-unit>
+      <trans-unit id="settings.audit.export-capped" datatype="html"><source>First <x id="cap" equiv-text="AUDIT_EXPORT_CAP.toLocaleString('en-US')"/> rows exported — narrow the filter for a complete export.</source></trans-unit>
+      <trans-unit id="settings.audit.export-progress" datatype="html"><source>Exporting… <x id="rows" equiv-text="rows"/> rows</source></trans-unit>
+      <trans-unit id="settings.audit.export-done" datatype="html"><source>Exported <x id="rows" equiv-text="rows"/> rows.</source></trans-unit>
+      <trans-unit id="settings.audit.title" datatype="html"><source>Audit log</source></trans-unit>
+      <trans-unit id="settings.audit.description" datatype="html"><source>Review organization activity and support access. Audit records cannot be edited here.</source></trans-unit>
+      <trans-unit id="settings.audit.filters" datatype="html"><source>Filter activity</source></trans-unit>
+      <trans-unit id="settings.audit.actor-type" datatype="html"><source>Actor type</source></trans-unit>
+      <trans-unit id="settings.audit.any-actor" datatype="html"><source>Any actor</source></trans-unit>
+      <trans-unit id="settings.audit.actor-user" datatype="html"><source>User</source></trans-unit>
+      <trans-unit id="settings.audit.actor-ci" datatype="html"><source>CI producer</source></trans-unit>
+      <trans-unit id="settings.audit.actor-agent" datatype="html"><source>Agent</source></trans-unit>
+      <trans-unit id="settings.audit.actor-operator" datatype="html"><source>Platform staff</source></trans-unit>
+      <trans-unit id="settings.audit.actor-system" datatype="html"><source>System</source></trans-unit>
+      <trans-unit id="settings.audit.filter-action" datatype="html"><source>Action</source></trans-unit>
+      <trans-unit id="settings.audit.object-type" datatype="html"><source>Object type</source></trans-unit>
+      <trans-unit id="settings.audit.from" datatype="html"><source>From (inclusive)</source></trans-unit>
+      <trans-unit id="settings.audit.to" datatype="html"><source>To (exclusive)</source></trans-unit>
+      <trans-unit id="settings.audit.date-hint" datatype="html"><source>Enter times in your local time zone; results and exports use UTC.</source></trans-unit>
+      <trans-unit id="settings.audit.apply" datatype="html"><source>Apply filters</source></trans-unit>
+      <trans-unit id="settings.audit.clear" datatype="html"><source>Clear filters</source></trans-unit>
+      <trans-unit id="settings.audit.range-error" datatype="html"><source>Enter a valid time range with From no later than To.</source></trans-unit>
+      <trans-unit id="settings.audit.empty-title" datatype="html"><source>No activity recorded</source></trans-unit>
+      <trans-unit id="settings.audit.empty-description" datatype="html"><source>Audit events will appear here when activity is recorded.</source></trans-unit>
+      <trans-unit id="settings.audit.no-match-title" datatype="html"><source>No results match these filters</source></trans-unit>
+      <trans-unit id="settings.audit.no-match-description" datatype="html"><source>Clear or narrow the filters to review audit activity.</source></trans-unit>
+      <trans-unit id="settings.audit.pagination" datatype="html"><source>Audit activity pages</source></trans-unit>
+      <trans-unit id="settings.audit.previous" datatype="html"><source>Previous rows</source></trans-unit>
+      <trans-unit id="settings.audit.next" datatype="html"><source>Next rows</source></trans-unit>
+      <trans-unit id="settings.audit.load-more" datatype="html"><source>Load more</source></trans-unit>
+      <trans-unit id="settings.audit.loading-more" datatype="html"><source>Loading more activity…</source></trans-unit>
+      <trans-unit id="settings.audit.paging-retry" datatype="html"><source>Retry loading more</source></trans-unit>
+      <trans-unit id="settings.audit.paging-failed" datatype="html"><source>The next audit page could not be loaded. The rows already shown are unchanged.</source></trans-unit>
     </body>
   </file>
 </xliff>

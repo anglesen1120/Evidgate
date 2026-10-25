@@ -1,0 +1,156 @@
+{
+  "operation_id": "listAudit",
+  "variant": "support",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d2"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-000000000248",
+        "seq": 1048,
+        "actor_type": "user",
+        "actor_id": "018f0000-0000-7000-8000-0000000000e1",
+        "action": "member.read",
+        "object_type": "membership",
+        "object_id": "018f0000-0000-7000-8000-0000000000c1",
+        "before_hash": null,
+        "after_hash": null,
+        "request_id": "018f0000-0000-7000-8000-000000000108",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4708",
+        "metadata": {
+          "support_grant_id": "018f0000-0000-7000-8000-0000000000d5"
+        },
+        "prev_hash": "c4ffaeafdd55c53bd6bc1eb82789a4ee06c24f53ae65395427d7d194686baa0e",
+        "entry_hash": "8b2d349a060b7a360e6190b50af0cca617df9c007be8fb543a95a88d5b8d2ea7",
+        "created_at": "2026-10-18T12:31:44Z"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000247",
+        "seq": 1047,
+        "actor_type": "user",
+        "actor_id": "018f0000-0000-7000-8000-0000000000e2",
+        "action": "run.read",
+        "object_type": "run",
+        "object_id": "018f0000-0000-7000-8000-0000000000a1",
+        "before_hash": null,
+        "after_hash": null,
+        "request_id": "018f0000-0000-7000-8000-000000000107",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4707",
+        "metadata": {
+          "support_grant_id": "018f0000-0000-7000-8000-0000000000d6"
+        },
+        "prev_hash": "f531715982d4f1b73a77b2a759b4afb1a051477f505f50531cc18017d365c869",
+        "entry_hash": "c4ffaeafdd55c53bd6bc1eb82789a4ee06c24f53ae65395427d7d194686baa0e",
+        "created_at": "2026-10-18T12:12:05Z"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000246",
+        "seq": 1046,
+        "actor_type": "user",
+        "actor_id": "018f0000-0000-7000-8000-0000000000e1",
+        "action": "role.grant",
+        "object_type": "membership",
+        "object_id": "018f0000-0000-7000-8000-0000000000c2",
+        "before_hash": null,
+        "after_hash": null,
+        "request_id": "018f0000-0000-7000-8000-000000000101",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4701",
+        "metadata": null,
+        "prev_hash": "34c2996298dbcf27ec7fbccd9635810c2707ece7a97b7087180ee7783b3be892",
+        "entry_hash": "f531715982d4f1b73a77b2a759b4afb1a051477f505f50531cc18017d365c869",
+        "created_at": "2026-10-18T11:42:07Z"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000245",
+        "seq": 1045,
+        "actor_type": "user",
+        "actor_id": "018f0000-0000-7000-8000-0000000000e3",
+        "action": "role.revoke",
+        "object_type": "membership",
+        "object_id": "018f0000-0000-7000-8000-0000000000c3",
+        "before_hash": null,
+        "after_hash": null,
+        "request_id": "018f0000-0000-7000-8000-000000000102",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4702",
+        "metadata": {
+          "role_code": "qa_engineer"
+        },
+        "prev_hash": "698b8931d8f3e7278b80a429605092961020e09568f3ce5b15f9dae8617f2bf0",
+        "entry_hash": "34c2996298dbcf27ec7fbccd9635810c2707ece7a97b7087180ee7783b3be892",
+        "created_at": "2026-10-18T10:15:52Z"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000244",
+        "seq": 1044,
+        "actor_type": "ci_producer",
+        "actor_id": "018f0000-0000-7000-8000-0000000000b1",
+        "action": "run.create",
+        "object_type": "run",
+        "object_id": "018f0000-0000-7000-8000-0000000000a1",
+        "before_hash": null,
+        "after_hash": null,
+        "request_id": "018f0000-0000-7000-8000-000000000103",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4703",
+        "metadata": null,
+        "prev_hash": "e79001a08b67596d8b3779ceed7d4a13547f9841a4c411240a61480ac16e8d23",
+        "entry_hash": "698b8931d8f3e7278b80a429605092961020e09568f3ce5b15f9dae8617f2bf0",
+        "created_at": "2026-10-17T18:03:41Z"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000243",
+        "seq": 1043,
+        "actor_type": "user",
+        "actor_id": "018f0000-0000-7000-8000-0000000000e2",
+        "action": "run.cancel",
+        "object_type": "run",
+        "object_id": "018f0000-0000-7000-8000-0000000000a2",
+        "before_hash": null,
+        "after_hash": null,
+        "request_id": "018f0000-0000-7000-8000-000000000104",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4704",
+        "metadata": null,
+        "prev_hash": "d6c8f5368a1b77b4a644ac63418dbfed4b40cd3701b46b2f790e714929b747cd",
+        "entry_hash": "e79001a08b67596d8b3779ceed7d4a13547f9841a4c411240a61480ac16e8d23",
+        "created_at": "2026-10-17T16:27:19Z"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000242",
+        "seq": 1042,
+        "actor_type": "system",
+        "actor_id": "scheduler",
+        "action": "audit.prune",
+        "object_type": "audit_log",
+        "object_id": null,
+        "before_hash": null,
+        "after_hash": null,
+        "request_id": "018f0000-0000-7000-8000-000000000105",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4705",
+        "metadata": null,
+        "prev_hash": "4656f5d356c59b42315b2c0be048e840056c7b4225f70dfeec86c3f444cac62c",
+        "entry_hash": "d6c8f5368a1b77b4a644ac63418dbfed4b40cd3701b46b2f790e714929b747cd",
+        "created_at": "2026-10-16T09:08:33Z"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000241",
+        "seq": 1041,
+        "actor_type": "user",
+        "actor_id": "018f0000-0000-7000-8000-0000000000e5",
+        "action": "token.renew",
+        "object_type": "token",
+        "object_id": "018f0000-0000-7000-8000-0000000000b2",
+        "before_hash": null,
+        "after_hash": null,
+        "request_id": "018f0000-0000-7000-8000-000000000106",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4706",
+        "metadata": null,
+        "prev_hash": "1fff7c8c0fce82737316cc727dbdda951c2a3932b9f9cfa1fc8d627b5704cf13",
+        "entry_hash": "4656f5d356c59b42315b2c0be048e840056c7b4225f70dfeec86c3f444cac62c",
+        "created_at": "2026-10-15T14:55:02Z"
+      }
+    ],
+    "next_cursor": null
+  }
+}

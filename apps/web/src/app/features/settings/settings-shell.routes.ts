@@ -10,26 +10,35 @@
 //                not-found pattern answers — never a 403, never a redirect (AC1, 00 §9.2).
 //
 // Both the strip and this table read `SETTINGS_TABS`, so a tab can never be offered without a route
-// or routed without being offered. Members has its real org-scoped screen; other tab bodies remain
-// placeholders until their stories land. Other sidebar destinations retain `settings.routes.ts`.
+// or routed without being offered. Members and Audit have their real org-scoped screens; other tab
+// bodies remain placeholders until their stories land. Other sidebar destinations retain
+// `settings.routes.ts`.
 //
 // W1 holds: only `app.routes.ts` imports this module, through the per-entry `ENTRY_ROUTES` override.
 
+import type { Type } from '@angular/core';
 import type { Route, Routes } from '@angular/router';
 
+import { AuditPage } from './audit/audit.page';
 import { MembersPage } from './members/members.page';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
 import { settingsIndexGuard } from './settings-index.guard';
 import { settingsTabGuard } from './settings-tab.guard';
-import { SETTINGS_TABS } from './settings-tabs';
+import { SETTINGS_TABS, type SettingsTabId } from './settings-tabs';
+
+/** The tab id -> body component map; tabs without a delivered body mount the placeholder. */
+const TAB_BODIES: Readonly<Partial<Record<SettingsTabId, Type<unknown>>>> = {
+  members: MembersPage,
+  audit: AuditPage,
+};
 
 /** One child route per tab, in strip order (the id reaches the body through `data.settingsTabId`). */
 const TAB_ROUTES: readonly Route[] = SETTINGS_TABS.map((tab) => ({
   path: tab.segment,
   canMatch: [settingsTabGuard(tab)],
-  component: tab.id === 'members' ? MembersPage : SettingsTabPlaceholderPage,
+  component: TAB_BODIES[tab.id] ?? SettingsTabPlaceholderPage,
   data: { settingsTabId: tab.id },
 }));
 

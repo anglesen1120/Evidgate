@@ -1896,6 +1896,50 @@
         <source>Creating project…</source>
         <target>Đang tạo dự án…</target>
       </trans-unit>
+      <trans-unit id="settings.audit.caption" datatype="html"><source>Audit activity</source><target>Hoạt động kiểm toán</target></trans-unit>
+      <trans-unit id="settings.audit.time" datatype="html"><source>Time (UTC)</source><target>Thời gian (UTC)</target></trans-unit>
+      <trans-unit id="settings.audit.actor" datatype="html"><source>Actor</source><target>Chủ thể thực hiện</target></trans-unit>
+      <trans-unit id="settings.audit.action" datatype="html"><source>Action</source><target>Hành động</target></trans-unit>
+      <trans-unit id="settings.audit.object" datatype="html"><source>Object</source><target>Đối tượng</target></trans-unit>
+      <trans-unit id="settings.audit.request" datatype="html"><source>Request id</source><target>Mã yêu cầu</target></trans-unit>
+      <trans-unit id="settings.audit.support" datatype="html"><source>Support access</source><target>Truy cập hỗ trợ</target></trans-unit>
+      <trans-unit id="settings.audit.absent" datatype="html"><source>—</source><target>—</target></trans-unit>
+      <trans-unit id="settings.audit.support-description" datatype="html"><source>Platform staff access under support grant <x id="grantId" equiv-text="grantId"/></source><target>Nhân viên vận hành nền tảng truy cập theo quyền hỗ trợ <x id="grantId" equiv-text="grantId"/></target></trans-unit>
+      <trans-unit id="settings.audit.support-unrecorded" datatype="html"><source>Platform staff access (grant id not recorded on this row)</source><target>Nhân viên vận hành nền tảng truy cập (dòng này không ghi nhận mã quyền hỗ trợ)</target></trans-unit>
+      <trans-unit id="settings.audit.export" datatype="html"><source>Export CSV</source><target>Xuất CSV</target></trans-unit>
+      <trans-unit id="settings.audit.retry" datatype="html"><source>Retry</source><target>Thử lại</target></trans-unit>
+      <trans-unit id="settings.audit.export-capped" datatype="html"><source>First <x id="cap" equiv-text="AUDIT_EXPORT_CAP.toLocaleString('en-US')"/> rows exported — narrow the filter for a complete export.</source><target>Đã xuất <x id="cap" equiv-text="AUDIT_EXPORT_CAP.toLocaleString('en-US')"/> dòng đầu tiên — thu hẹp bộ lọc để xuất đầy đủ.</target></trans-unit>
+      <trans-unit id="settings.audit.export-progress" datatype="html"><source>Exporting… <x id="rows" equiv-text="rows"/> rows</source><target>Đang xuất… <x id="rows" equiv-text="rows"/> dòng</target></trans-unit>
+      <trans-unit id="settings.audit.export-done" datatype="html"><source>Exported <x id="rows" equiv-text="rows"/> rows.</source><target>Đã xuất <x id="rows" equiv-text="rows"/> dòng.</target></trans-unit>
+      <trans-unit id="settings.audit.title" datatype="html"><source>Audit log</source><target>Nhật ký kiểm toán</target></trans-unit>
+      <trans-unit id="settings.audit.description" datatype="html"><source>Review organization activity and support access. Audit records cannot be edited here.</source><target>Xem hoạt động của tổ chức và truy cập hỗ trợ. Không thể chỉnh sửa bản ghi kiểm toán tại đây.</target></trans-unit>
+      <trans-unit id="settings.audit.filters" datatype="html"><source>Filter activity</source><target>Lọc hoạt động</target></trans-unit>
+      <trans-unit id="settings.audit.actor-type" datatype="html"><source>Actor type</source><target>Loại chủ thể</target></trans-unit>
+      <trans-unit id="settings.audit.any-actor" datatype="html"><source>Any actor</source><target>Tất cả chủ thể</target></trans-unit>
+      <trans-unit id="settings.audit.actor-user" datatype="html"><source>User</source><target>Người dùng</target></trans-unit>
+      <trans-unit id="settings.audit.actor-ci" datatype="html"><source>CI producer</source><target>Nguồn tạo CI</target></trans-unit>
+      <trans-unit id="settings.audit.actor-agent" datatype="html"><source>Agent</source><target>Tác nhân</target></trans-unit>
+      <trans-unit id="settings.audit.actor-operator" datatype="html"><source>Platform staff</source><target>Nhân viên vận hành nền tảng</target></trans-unit>
+      <trans-unit id="settings.audit.actor-system" datatype="html"><source>System</source><target>Hệ thống</target></trans-unit>
+      <trans-unit id="settings.audit.filter-action" datatype="html"><source>Action</source><target>Hành động</target></trans-unit>
+      <trans-unit id="settings.audit.object-type" datatype="html"><source>Object type</source><target>Loại đối tượng</target></trans-unit>
+      <trans-unit id="settings.audit.from" datatype="html"><source>From (inclusive)</source><target>Từ (bao gồm)</target></trans-unit>
+      <trans-unit id="settings.audit.to" datatype="html"><source>To (exclusive)</source><target>Đến (không bao gồm)</target></trans-unit>
+      <trans-unit id="settings.audit.date-hint" datatype="html"><source>Enter times in your local time zone; results and exports use UTC.</source><target>Nhập thời gian theo múi giờ địa phương; kết quả và bản xuất sử dụng UTC.</target></trans-unit>
+      <trans-unit id="settings.audit.apply" datatype="html"><source>Apply filters</source><target>Áp dụng bộ lọc</target></trans-unit>
+      <trans-unit id="settings.audit.clear" datatype="html"><source>Clear filters</source><target>Xóa bộ lọc</target></trans-unit>
+      <trans-unit id="settings.audit.range-error" datatype="html"><source>Enter a valid time range with From no later than To.</source><target>Nhập khoảng thời gian hợp lệ với mốc Từ không muộn hơn mốc Đến.</target></trans-unit>
+      <trans-unit id="settings.audit.empty-title" datatype="html"><source>No activity recorded</source><target>Chưa ghi nhận hoạt động</target></trans-unit>
+      <trans-unit id="settings.audit.empty-description" datatype="html"><source>Audit events will appear here when activity is recorded.</source><target>Sự kiện kiểm toán sẽ xuất hiện tại đây khi hoạt động được ghi nhận.</target></trans-unit>
+      <trans-unit id="settings.audit.no-match-title" datatype="html"><source>No results match these filters</source><target>Không có kết quả khớp bộ lọc</target></trans-unit>
+      <trans-unit id="settings.audit.no-match-description" datatype="html"><source>Clear or narrow the filters to review audit activity.</source><target>Xóa hoặc thu hẹp bộ lọc để xem hoạt động kiểm toán.</target></trans-unit>
+      <trans-unit id="settings.audit.pagination" datatype="html"><source>Audit activity pages</source><target>Các trang hoạt động kiểm toán</target></trans-unit>
+      <trans-unit id="settings.audit.previous" datatype="html"><source>Previous rows</source><target>Các dòng trước</target></trans-unit>
+      <trans-unit id="settings.audit.next" datatype="html"><source>Next rows</source><target>Các dòng tiếp theo</target></trans-unit>
+      <trans-unit id="settings.audit.load-more" datatype="html"><source>Load more</source><target>Tải thêm</target></trans-unit>
+      <trans-unit id="settings.audit.loading-more" datatype="html"><source>Loading more activity…</source><target>Đang tải thêm hoạt động…</target></trans-unit>
+      <trans-unit id="settings.audit.paging-retry" datatype="html"><source>Retry loading more</source><target>Thử tải thêm lần nữa</target></trans-unit>
+      <trans-unit id="settings.audit.paging-failed" datatype="html"><source>The next audit page could not be loaded. The rows already shown are unchanged.</source><target>Không thể tải trang kiểm toán tiếp theo. Các dòng đã hiển thị được giữ nguyên.</target></trans-unit>
     </body>
   </file>
 </xliff>
