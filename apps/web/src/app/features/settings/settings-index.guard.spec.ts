@@ -1,7 +1,8 @@
 // 09.7.1-T1.2 (plan 09.7.1 §5 route table; docs/design/web/settings.md `empty` state): the shell's
 // landing decision, exercised through a real `Router` on the real table (`settings-shell.routes.ts`)
-// with only the three page components replaced by markers — the redirect target is a URL, so a unit
-// call to the guard could not prove it.
+// with only its page components (the shell, the landing state, the placeholder and the tab pages)
+// replaced by markers — the redirect target is a URL, so a unit call to the guard could not prove
+// it.
 //
 // Three behaviours: the first available tab in strip order is the target; a later tab never wins
 // over an earlier one the caller may use; no available tab leaves the index route to render the
@@ -20,6 +21,7 @@ import {
 import { RouterTestingHarness } from '@angular/router/testing';
 
 import { SessionStore, type SessionState } from '../../core/session/session.store';
+import { AuditPage } from './audit/audit.page';
 import { MembersPage } from './members/members.page';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
@@ -69,6 +71,7 @@ const PAGE_STUBS = new Map<unknown, Type<unknown>>([
   [SettingsTabPlaceholderPage, SettingsTabStub],
   [SettingsNoTabsPage, SettingsNoTabsStub],
   [MembersPage, SettingsTabStub],
+  [AuditPage, SettingsTabStub],
 ]);
 
 /** The real shell table with only its page components swapped. */
