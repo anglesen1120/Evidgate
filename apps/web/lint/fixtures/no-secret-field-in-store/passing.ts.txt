@@ -1,0 +1,69 @@
+// 09.7.1-T1 fixture (plan 09.7.1 §8 S3, T1.1, AC3): the same positions as failing.ts.txt, named
+// the way the Settings screens actually name them — metadata only — plus the shapes the rule must
+// leave alone: prose in an inline template and an HTTP payload inside a `withMethods` closure.
+// The rule reports nothing in this file.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains: the app lint block types every `.ts`
+// under apps/web against apps/web/tsconfig.json, which includes only `src/**/*.ts`.
+//
+// No `@ngrx/signals` import for the reason failing.ts.txt gives: the callee name is what the
+// rule matches, and the workspace has no such dependency.
+import { Component, signal } from '@angular/core';
+
+export interface SecretsState {
+  tokenPrefix: string;
+  tokenName: string;
+  secretRef: string;
+  secretName: string;
+  tokenCount: number;
+  tokenExpiresAt: string;
+  expiresAt: string;
+  hasSecret: boolean;
+  hasToken: boolean;
+  rotationState: string;
+  last4: string;
+}
+
+export const SecretsStore = signalStore(
+  withState({
+    token_prefix: '',
+    secret_reference: '',
+    ingestTokens: [] as string[],
+    ciBindings: [] as string[],
+    lastRotatedAt: null as string | null,
+  }),
+  withMethods(() => ({
+    // The request body is what the API receives, not what this store holds: the walk stops at
+    // the function boundary, so a payload field named after the value is not a state field.
+    request(token: string): unknown {
+      return { endpoint: '/v1/settings/secrets', body: { token } };
+    },
+  })),
+);
+
+export class IntegrationsStore extends SecretsStore {
+  readonly tokenPrefix = signal('');
+  readonly lastRotatedAt = signal<string | null>(null);
+
+  get rotationStateLabel(): string {
+    return '';
+  }
+}
+
+@Component({
+  selector: 'app-secret-summary',
+  template: `<p>Rotate the key. Token is shown once.</p>
+    <p>Copy it now. Secret values are hidden.</p>
+    <p>Format, e.g. token — see the column.</p>
+    <p>{{ token }}</p>
+    <p>{{ summary?.tokenPrefix }}</p>`,
+})
+export class SecretsPanel {
+  // A component field named like the value is only reported inside a `/Store$/` class; this one
+  // is a panel, so the rule leaves it alone (its blind spot, documented in apps/web/README.md).
+  readonly token = signal('');
+}
+
+// A top-level signal is not store state, and the rule deliberately leaves it alone: reporting
+// every `signal(...)` would make the rule unusable.
+export const token = signal('');

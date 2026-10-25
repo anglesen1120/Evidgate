@@ -235,3 +235,62 @@ export async function expectNoA11yViolations(page: Page, context: string): Promi
   ).toBeGreaterThan(0);
   expect(axeViolations(results), `axe violations on ${context}`).toEqual([]);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Settings shell (09.7.1-T1). The tab strip's DOM contract is fixed by the plan (09.7.1 §10 T1.1):
+// `app-settings-shell` hosts the strip, each visible tab is a link carrying
+// `data-settings-tab="<tab.id>"`, the active one carries `aria-current="page"`, the tab body is
+// `app-settings-tab-placeholder[data-settings-tab-body="<tab.id>"]` and a session with no tab at
+// all gets `app-settings-no-tabs`. The three grant sets below are corpus variants
+// (`fixtures/web-api/permissions-list-settings-*`), never a role name: the client derives the
+// grants from the `tenant_assignable` catalogue rows alone.
+// ---------------------------------------------------------------------------------------------
+
+/** `?fixture.variant.listPermissions=settings-admin` — every tab code of the strip is granted. */
+export const SETTINGS_ADMIN_GRANTS = '?fixture.variant.listPermissions=settings-admin';
+
+/** `?fixture.variant.listPermissions=settings-audit-only` — `organization:read` + `audit:read`. */
+export const SETTINGS_AUDIT_ONLY_GRANTS = '?fixture.variant.listPermissions=settings-audit-only';
+
+/** `?fixture.variant.listPermissions=settings-no-tab` — `organization:read` alone, so no tab. */
+export const SETTINGS_NO_TAB_GRANTS = '?fixture.variant.listPermissions=settings-no-tab';
+
+/** `/orgs/:orgId/settings` — the shell's index address, which redirects to the first open tab. */
+export function settingsPath(locale: ShellLocale, orgId: string = ORG_ACME): string {
+  return localePath(locale, `/orgs/${orgId}/settings`);
+}
+
+/** `/orgs/:orgId/settings/:tab` — one tab of the shell; `tab` is a `SettingsTabId` segment. */
+export function settingsTabPath(
+  locale: ShellLocale,
+  tab: string,
+  orgId: string = ORG_ACME,
+): string {
+  return localePath(locale, `/orgs/${orgId}/settings/${tab}`);
+}
+
+/**
+ * The `data-settings-tab` values of the strip, in DOM order — the exact set and order the session
+ * may see. Read from the attribute, never from a label, so both locale bundles answer the same.
+ */
+export async function settingsTabIds(page: Page): Promise<string[]> {
+  return page
+    .locator('app-settings-shell [data-settings-tab]')
+    .evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('data-settings-tab') ?? ''));
+}
+
+/** The `data-settings-tab` of the active tab (`aria-current="page"`), or `null` when none is. */
+export async function activeSettingsTabId(page: Page): Promise<string | null> {
+  const active = await page
+    .locator('app-settings-shell [data-settings-tab][aria-current="page"]')
+    .evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('data-settings-tab') ?? ''));
+  return active[0] ?? null;
+}
+
+/** The `data-settings-tab-body` of the rendered tab body, or `null` when no body is rendered. */
+export async function settingsTabBodyId(page: Page): Promise<string | null> {
+  const bodies = await page
+    .locator('app-settings-tab-placeholder[data-settings-tab-body]')
+    .evaluateAll((list) => list.map((body) => body.getAttribute('data-settings-tab-body') ?? ''));
+  return bodies[0] ?? null;
+}

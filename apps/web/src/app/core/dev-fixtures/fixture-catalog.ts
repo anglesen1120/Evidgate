@@ -31,6 +31,9 @@ import orgsListUnavailable from '../../../../../../fixtures/web-api/orgs-list-un
 import permissionsList from '../../../../../../fixtures/web-api/permissions-list/input.json';
 import permissionsListLimited from '../../../../../../fixtures/web-api/permissions-list-limited/input.json';
 import permissionsListOnboarding from '../../../../../../fixtures/web-api/permissions-list-onboarding/input.json';
+import permissionsListSettingsAdmin from '../../../../../../fixtures/web-api/permissions-list-settings-admin/input.json';
+import permissionsListSettingsAuditOnly from '../../../../../../fixtures/web-api/permissions-list-settings-audit-only/input.json';
+import permissionsListSettingsNoTab from '../../../../../../fixtures/web-api/permissions-list-settings-no-tab/input.json';
 import projectCreate from '../../../../../../fixtures/web-api/project-create/input.json';
 import projectDetail from '../../../../../../fixtures/web-api/project-detail/input.json';
 import projectDetailOnboardingConnected from '../../../../../../fixtures/web-api/project-detail-onboarding-connected/input.json';
@@ -130,6 +133,14 @@ export interface FixtureDocument {
  * empty binding/token pages, the run of the default `runs-list` page). The ingest-token page is
  * pinned empty in every seed: no seed mints a token,
  * so step 2 can only be satisfied by the binding, and 09.2.1-T2 owns the token-path fixture.
+ *
+ * 09.7.1-T1 added three rows for the Settings tab strip: `permissions-list-settings-admin`
+ * (`?fixture.variant.listPermissions=settings-admin`: the grant set that reaches every tab code of
+ * the strip, G1 and later phases alike), `permissions-list-settings-audit-only` (`audit` is the one
+ * tab left) and `permissions-list-settings-no-tab` (`organization:read` alone, so the shell renders
+ * its empty state). Every row is copied verbatim from `contracts/permissions.json`, and the client
+ * side derives the grants from the `tenant_assignable` rows of this catalogue, never from a role
+ * name (`core/session/effective-permissions.source.ts`).
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
@@ -152,6 +163,9 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'permissions-list', document: permissionsList },
   { name: 'permissions-list-limited', document: permissionsListLimited },
   { name: 'permissions-list-onboarding', document: permissionsListOnboarding },
+  { name: 'permissions-list-settings-admin', document: permissionsListSettingsAdmin },
+  { name: 'permissions-list-settings-audit-only', document: permissionsListSettingsAuditOnly },
+  { name: 'permissions-list-settings-no-tab', document: permissionsListSettingsNoTab },
   { name: 'project-create', document: projectCreate },
   { name: 'project-detail', document: projectDetail },
   { name: 'project-detail-onboarding-connected', document: projectDetailOnboardingConnected },

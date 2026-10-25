@@ -2,6 +2,66 @@
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
   <file source-language="en" target-language="vi" datatype="plaintext" original="ng2.template">
     <body>
+      <trans-unit id="settings.title" datatype="html">
+        <source>Settings</source>
+        <target>Cài đặt</target>
+      </trans-unit>
+      <trans-unit id="settings.scope" datatype="html">
+        <source>Organization: <x id="INTERPOLATION" equiv-text="{{ org.name }}"/></source>
+        <target>Tổ chức: <x id="INTERPOLATION" equiv-text="{{ org.name }}"/></target>
+      </trans-unit>
+      <trans-unit id="settings.navigation" datatype="html">
+        <source>Settings destinations</source>
+        <target>Đích cài đặt</target>
+      </trans-unit>
+      <trans-unit id="settings.choose" datatype="html">
+        <source>Choose a settings destination</source>
+        <target>Chọn đích cài đặt</target>
+      </trans-unit>
+      <trans-unit id="settings.placeholder.body" datatype="html">
+        <source>This tab arrives with its own feature story.</source>
+        <target>Thẻ này sẽ ra mắt cùng câu chuyện tính năng riêng.</target>
+      </trans-unit>
+      <trans-unit id="settings.empty.title" datatype="html">
+        <source>No settings destinations</source>
+        <target>Không có đích cài đặt</target>
+      </trans-unit>
+      <trans-unit id="settings.empty.description" datatype="html">
+        <source>No settings destinations are available with your permissions. Ask an administrator.</source>
+        <target>Không có đích cài đặt nào khả dụng với quyền của bạn. Hãy hỏi quản trị viên.</target>
+      </trans-unit>
+      <trans-unit id="settings.tab.members" datatype="html">
+        <source>Members</source>
+        <target>Thành viên</target>
+      </trans-unit>
+      <trans-unit id="settings.tab.secrets" datatype="html">
+        <source>Secrets</source>
+        <target>Bí mật</target>
+      </trans-unit>
+      <trans-unit id="settings.tab.policy" datatype="html">
+        <source>Policy</source>
+        <target>Chính sách</target>
+      </trans-unit>
+      <trans-unit id="settings.tab.quota-retention" datatype="html">
+        <source>Quota &amp; retention</source>
+        <target>Hạn mức và lưu giữ</target>
+      </trans-unit>
+      <trans-unit id="settings.tab.audit" datatype="html">
+        <source>Audit</source>
+        <target>Kiểm toán</target>
+      </trans-unit>
+      <trans-unit id="settings.tab.security-events" datatype="html">
+        <source>Security events</source>
+        <target>Sự kiện bảo mật</target>
+      </trans-unit>
+      <trans-unit id="settings.tab.integrations" datatype="html">
+        <source>Integrations</source>
+        <target>Tích hợp</target>
+      </trans-unit>
+      <trans-unit id="settings.tab.agents" datatype="html">
+        <source>Agents</source>
+        <target>Tác nhân</target>
+      </trans-unit>
       <trans-unit id="shell.overview.arriving" datatype="html">
         <source> This project&apos;s runs, authoring and releases arrive with their own stories. For now this page shows the project the URL resolved to. </source>
         <target>Các lượt chạy, phần soạn kiểm thử và bản phát hành của dự án này sẽ ra mắt cùng câu chuyện riêng của chúng. Hiện tại trang này chỉ hiển thị dự án mà URL đã phân giải.</target>
