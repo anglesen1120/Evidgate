@@ -1,0 +1,27 @@
+{
+  "operation_id": "createCiBinding",
+  "variant": "ok",
+  "status": 201,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000e0"
+  },
+  "latency_ms": 0,
+  "body": {
+    "binding": {
+      "id": "018f0000-0000-7000-8000-00000000003a",
+      "project_id": "018f0000-0000-7000-8000-000000000011",
+      "provider": "github_actions",
+      "repository_id": 5012345,
+      "repository_full_name": "acme/storefront-web",
+      "allowed_ref_patterns": ["refs/heads/main"],
+      "allowed_workflow_refs": [
+        "acme/storefront-web/.github/workflows/evidgate.yml@refs/heads/main"
+      ],
+      "status": "pending_verification",
+      "activated_at": null,
+      "created_at": "2026-10-25T06:00:00Z",
+      "version": 1
+    },
+    "binding_challenge": "evg_fixture_only_binding_challenge_not_a_real_value"
+  }
+}

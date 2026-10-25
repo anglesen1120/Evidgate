@@ -1,0 +1,18 @@
+{
+  "operation_id": "rotateIngestToken",
+  "variant": "conflict",
+  "status": 409,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000e5"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "invalid_transition",
+      "message": "this ingest token has already been rotated; create a new token instead of rotating it again",
+      "request_id": "018f0000-0000-7000-8000-0000000000e5",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

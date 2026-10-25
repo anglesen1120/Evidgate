@@ -11,6 +11,11 @@
 // 2. **No localized string identifies an element.** Every assertion keys on the DOM contract the
 //    wizard publishes (`data-testid` values, `aria-current="step"`, `data-done`, the native
 //    `disabled` attribute), so the same spec passes on the `en` and the `vi` bundle.
+//
+// 09.2.1-T2 added step 2's write path: the `onboarding-token` seed (step 2 satisfied by a token
+// instead of a binding) and `seedQueryWith` / `writeVariantToggle`, which pin a create answer
+// explicitly. The three create answers are their operation's default, so a spec reaches them with
+// no toggle at all; `SEED_TOGGLES`'s own comment says why no seed can prove them statefully.
 import { expect, type Page } from '@playwright/test';
 
 import { localePath, ORG_ACME, type ShellLocale, withVariant } from './support';
@@ -41,6 +46,7 @@ export type StepNumber = (typeof STEP_NUMBERS)[number];
 export type OnboardingSeed =
   | 'onboarding-empty'
   | 'onboarding-project'
+  | 'onboarding-token'
   | 'onboarding-connected'
   | 'onboarding-run-complete'
   | 'onboarding-evidence';
@@ -48,13 +54,14 @@ export type OnboardingSeed =
 /**
  * The step each seed resolves to, by the plan §6 derivation:
  *
- * | seed                    | server state                                  | current step |
- * | ----------------------- | --------------------------------------------- | ------------ |
- * | `onboarding-empty`      | no project in the org                          | 1            |
- * | `onboarding-project`    | project, no binding/token                      | 2            |
- * | `onboarding-connected`  | project + one active `ci_binding`, no run      | 3            |
- * | `onboarding-run-complete` | … and a `complete` run without an evidence   | 4            |
- * | `onboarding-evidence`   | … and an evidence revision on that run         | 5            |
+ * | seed                      | server state                                    | current step |
+ * | ------------------------- | ----------------------------------------------- | ------------ |
+ * | `onboarding-empty`        | no project in the org                           | 1            |
+ * | `onboarding-project`      | project, no binding/token                       | 2            |
+ * | `onboarding-token`        | project + one active `ingest_token`, no binding | 3            |
+ * | `onboarding-connected`    | project + one active `ci_binding`, no run       | 3            |
+ * | `onboarding-run-complete` | … and a `complete` run without an evidence      | 4            |
+ * | `onboarding-evidence`     | … and an evidence revision on that run          | 5            |
  *
  * Step 5 stays current in `onboarding-evidence`: the contract has no project-keyed read of a
  * `policy_activation`, so the wizard reports activation as unreadable and never as done (decision
@@ -63,6 +70,7 @@ export type OnboardingSeed =
 export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
   'onboarding-empty': 1,
   'onboarding-project': 2,
+  'onboarding-token': 3,
   'onboarding-connected': 3,
   'onboarding-run-complete': 4,
   'onboarding-evidence': 5,
@@ -70,8 +78,17 @@ export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
 
 /**
  * The toggles one seed needs. Every operation the wizard reads is pinned by the seed that makes it
- * decisive, and the ingest-token page is pinned empty everywhere: nothing in this corpus mints a
- * token, so step 2 can only be satisfied by the `ci_binding` (09.2.1-T2 owns the token path).
+ * decisive. `onboarding-token` (09.2.1-T2) is the one seed whose ingest-token page carries a token
+ * — the account created by step 2's token path — and it keeps the binding page empty, so it proves
+ * step 2 is satisfied by *either* connect path; every other seed pins the token page empty and is
+ * satisfied by the `ci_binding` alone.
+ *
+ * What no seed can prove is a stateful flow: the fixture backend answers a fixed document per
+ * (operation, variant), so a create's answer cannot add a row to the list read that follows it.
+ * The step-2 specs therefore split the behaviour — the create answers (the `ok` default of
+ * `createCiBinding` / `createIngestToken` / `rotateIngestToken`, no toggle needed) prove the
+ * one-shot reveal and its clearing on navigation, and `onboarding-token` proves the resume: the
+ * panel re-rendered from server metadata only, with Next enabled because `done[2]` already holds.
  */
 const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
   'onboarding-empty': [
@@ -86,6 +103,13 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.getProject=onboarding-project',
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-project',
+    'fixture.variant.listRuns=onboarding-project',
+  ],
+  // The token path: one active token, an empty binding page, no run.
+  'onboarding-token': [
+    'fixture.variant.getProject=onboarding-project',
+    'fixture.variant.listCiBindings=onboarding-project',
+    'fixture.variant.listIngestTokens=onboarding-token',
     'fixture.variant.listRuns=onboarding-project',
   ],
   'onboarding-connected': [
@@ -122,8 +146,46 @@ export type OnboardingFailure = 'onboarding-forbidden' | 'onboarding-project-not
  * `/orgs/<org>/onboarding/<projectId>`, which is the address a completed step navigates to.
  */
 export function seedQuery(seed: OnboardingSeed): string {
-  return `?${[WIZARD_GRANTS, ...SEED_TOGGLES[seed]].join('&')}`;
+  return seedQueryWith(seed, []);
 }
+
+/**
+ * One seed's query plus extra toggles, for a spec that wants another answer than the seed's own —
+ * e.g. `seedQueryWith('onboarding-project', [writeVariantToggle('createIngestToken')])` to pin the
+ * create answer a step-2 spec submits against. The seed's toggles come first, so an extra one can
+ * override an operation the seed pins.
+ */
+export function seedQueryWith(seed: OnboardingSeed, extra: readonly string[]): string {
+  return `?${[WIZARD_GRANTS, ...SEED_TOGGLES[seed], ...extra].join('&')}`;
+}
+
+/**
+ * The three write operations step 2 performs, named as `contracts/openapi.yaml` names them. Each
+ * one's `ok` answer is a `fixtures/web-api/` document (`ci-binding-create`, `ingest-token-create`,
+ * `ingest-token-rotate`), so a spec reaches the reveal with no toggle at all: those three answers
+ * are the default the backend serves, and step 2's controls are enabled by the wizard grants every
+ * seed already carries (`WIZARD_GRANTS` holds `ci_binding:write` and `ingest_token:write`).
+ */
+export type StepTwoWrite = 'createCiBinding' | 'createIngestToken' | 'rotateIngestToken';
+
+/**
+ * A variant toggle for one step-2 write, to append to a seed's query through `seedQueryWith`. `ok`
+ * is what the backend serves by default; the corpus also pins `conflict` for `createCiBinding` and
+ * `rotateIngestToken` (`ci-binding-create-conflict`, `ingest-token-rotate-conflict`), so a refused
+ * submit is reachable in the browser too. `createIngestToken` has no `conflict`: its operation
+ * declares no 409 (contracts/openapi.yaml:2376-2397), so a token create has no refusal document.
+ */
+export function writeVariantToggle(write: StepTwoWrite, variant = 'ok'): string {
+  return `fixture.variant.${write}=${variant}`;
+}
+
+/**
+ * The wizard grants with `ci_binding:write` and `ingest_token:write` removed
+ * (`permissions-list-onboarding-no-writes`): step 2's two controls render disabled, with their
+ * localized reason, instead of disappearing. Pass it as an extra toggle to `seedQueryWith`, whose
+ * extras come last and therefore override `WIZARD_GRANTS`.
+ */
+export const NO_WRITE_GRANTS_TOGGLE = 'fixture.variant.listPermissions=onboarding-no-writes';
 
 /**
  * The query of a wizard whose own project read refuses, at `/orgs/<org>/onboarding/<projectId>`.
@@ -194,7 +256,8 @@ export function stepItem(page: Page, step: StepNumber) {
 
 /**
  * Every stepper item, scoped to the stepper itself: `[data-testid^="onboarding-step-"]` alone would
- * also match the pending panel (`onboarding-step-pending`) the steps 2–5 content renders.
+ * also match the pending panel (`onboarding-step-pending`) the steps no page owns yet render — 3–5
+ * since 09.2.1-T2 replaced step 2's placeholder with the connect page.
  */
 export function stepperItems(page: Page) {
   return page.locator('[data-testid="onboarding-stepper"] [data-testid^="onboarding-step-"]');
@@ -288,4 +351,151 @@ export async function expectNoStepInStorage(page: Page, context: string): Promis
     await stepNamedStorageEntries(page),
     `${context} kept the wizard's resume point in browser storage`,
   ).toEqual([]);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Step 2 (09.2.1-T2, plan §2 AC2/AC7, §8 "Secret handling"). The one-time values below are not
+// typed here from memory: each is the exact string in the corpus document named above it, and the
+// assertions fail loudly if the fixture and this suite ever disagree.
+//
+// Why these specs assert *effects* rather than the wire: the fixtures build installs the dev
+// backend as Angular's `HttpBackend` (`src/app/core/dev-fixtures/fixture-backend.ts`), so the SDK's
+// requests never reach the network and Playwright's `page.route`/`page.on('request')` see nothing.
+// Every create path in `ConnectCiPage` ends in exactly one of two renders — the `connect-reveal`
+// slot (2xx) or `connect-ci-error` (>= 400) — so "no create happened" is provable from the DOM,
+// and which answer the server gave is provable from the fixture's own document.
+// ---------------------------------------------------------------------------------------------
+
+/** `fixtures/web-api/ingest-token-create/input.json` → `body.secret`. */
+export const FIXTURE_TOKEN_SECRET = 'egt_FIXTURE_ONLY_not_a_real_token';
+
+/** `fixtures/web-api/ingest-token-rotate/input.json` → `body.secret`. */
+export const FIXTURE_ROTATED_TOKEN_SECRET = 'egt_FIXTURE_ONLY_not_a_real_rotated_token';
+
+/** `fixtures/web-api/ci-binding-create/input.json` → `body.binding_challenge`. */
+export const FIXTURE_BINDING_CHALLENGE = 'evg_fixture_only_binding_challenge_not_a_real_value';
+
+/** The step-2 page (`app-onboarding-connect-ci`), rendered for `viewStep === 2` with a project. */
+export function connectCiPage(page: Page) {
+  return page.locator('[data-testid="connect-ci-page"]');
+}
+
+/**
+ * The one-time reveal wrapper — the single subtree allowed to hold a secret, and only while the
+ * component-scoped `RevealSlot` holds one.
+ */
+export function revealSlot(page: Page) {
+  return page.locator('[data-testid="connect-reveal"]');
+}
+
+/** The read-only control the reveal renders the one-time value in. */
+export function revealValue(page: Page) {
+  return page.locator('[data-testid="reveal-value"]');
+}
+
+/**
+ * AC2/§8: a one-time value lives in exactly one place — the `connect-reveal` subtree — and only for
+ * as long as that subtree is mounted. This is the whole-page scan behind that claim, and it looks
+ * in the three places a value can hide, because a text-only scan would pass vacuously:
+ *
+ *   - **every attribute** of every element (a title, an `aria-label`, a `data-*`, the `[value]`
+ *     binding of any input);
+ *   - **every form control's `value` property** — Angular's `[value]` sets the property, not the
+ *     attribute, so an input that kept a copy is invisible to an attribute scan;
+ *   - **every rendered text node**, skipping `<script>`/`<style>`, whose text is source, not render.
+ *
+ * Plus the four out-of-document places a secret should never reach: both storages, `document.cookie`,
+ * the address bar and `history.state`.
+ *
+ * `holders` names every element that holds the value (should be exactly the reveal's control while
+ * the slot is open, and nothing at all after it closes); `outside` names those of them — and those
+ * out-of-document places — that are NOT inside `connect-reveal`, which must always be empty.
+ */
+export async function secretFootprint(
+  page: Page,
+  secret: string,
+): Promise<{ holders: readonly string[]; outside: readonly string[] }> {
+  return page.evaluate((value) => {
+    const reveal = '[data-testid="connect-reveal"]';
+    const holders = new Set<string>();
+    const outside = new Set<string>();
+    const name = (element: Element): string => {
+      const testId = element.getAttribute('data-testid');
+      if (testId !== null) return `${element.tagName.toLowerCase()}[${testId}]`;
+      return element.id === ''
+        ? element.tagName.toLowerCase()
+        : `${element.tagName.toLowerCase()}#${element.id}`;
+    };
+    const record = (element: Element, where: string): void => {
+      holders.add(`${name(element)} ${where}`);
+      if (element.closest(reveal) === null) outside.add(`${name(element)} ${where}`);
+    };
+    for (const element of Array.from(document.querySelectorAll('*'))) {
+      if (element.tagName === 'SCRIPT' || element.tagName === 'STYLE') continue;
+      for (const attribute of Array.from(element.attributes)) {
+        if (attribute.value.includes(value)) record(element, attribute.name);
+      }
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        if (element.value.includes(value)) record(element, 'value');
+      }
+      if (element instanceof HTMLSelectElement && element.value.includes(value)) {
+        record(element, 'value');
+      }
+      for (const node of Array.from(element.childNodes)) {
+        if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').includes(value)) {
+          record(element, 'text');
+        }
+      }
+    }
+    for (const [label, store] of [
+      ['localStorage', window.localStorage],
+      ['sessionStorage', window.sessionStorage],
+    ] as const) {
+      for (let index = 0; index < store.length; index += 1) {
+        const key = store.key(index) ?? '';
+        if (key.includes(value) || (store.getItem(key) ?? '').includes(value)) {
+          outside.add(`${label}[${key}]`);
+        }
+      }
+    }
+    if (document.cookie.includes(value)) outside.add('document.cookie');
+    if (document.location.href.includes(value)) outside.add('location.href');
+    if (JSON.stringify(window.history.state ?? null).includes(value)) outside.add('history.state');
+    return { holders: Array.from(holders), outside: Array.from(outside) };
+  }, secret);
+}
+
+/** Asserts a one-time value appears nowhere outside the reveal slot. */
+export async function expectSecretAbsent(
+  page: Page,
+  secret: string,
+  context: string,
+): Promise<void> {
+  const footprint = await secretFootprint(page, secret);
+  expect(footprint.outside, `${context} leaked the one-time value`).toEqual([]);
+}
+
+/**
+ * Asserts the stronger half of §8 while the reveal is open: the value is held by exactly one
+ * element, and it is inside the reveal slot. One holder is the whole point — a second copy in a
+ * hidden field, a cache attribute or a second input would make "shown once" false even though
+ * nothing leaked *outside* the slot.
+ */
+export async function expectSecretOnlyInReveal(
+  page: Page,
+  secret: string,
+  context: string,
+): Promise<void> {
+  const footprint = await secretFootprint(page, secret);
+  expect(footprint.outside, `${context} leaked the one-time value`).toEqual([]);
+  expect(
+    footprint.holders,
+    `${context} did not hold the one-time value in exactly one place`,
+  ).toHaveLength(1);
+}
+
+/** Asserts the reveal slot is closed: no wrapper, no rendered value. */
+export async function expectNoReveal(page: Page): Promise<void> {
+  await expect(revealSlot(page)).toHaveCount(0);
+  await expect(revealValue(page)).toHaveCount(0);
 }

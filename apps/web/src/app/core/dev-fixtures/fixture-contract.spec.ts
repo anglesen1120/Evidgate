@@ -21,6 +21,11 @@
 // plus the 403 and 412 fixtures AC10 names. The 01.6.1-T3 corpus shape (`web-api` /
 // `api-response`) is checked as well.
 //
+// 09.2.1-T2 added step 2's write path and its pin: the two one-time secret members of the whole
+// contract (`binding_challenge`, `secret`) may appear in the three documents whose operation mints
+// one and in no other, which is "metadata only after the reveal" held on the wire rather than in a
+// component.
+//
 // The last three tests are the negative controls of test 3 and of the header check above: they
 // take the `runs-list` page, break it the way a contract change would (a removed `required` run
 // member, a non-uuid uuid) and answer a header the contract does not declare, each of which must
@@ -54,6 +59,28 @@ const NOT_A_UUID = 'not-a-uuid';
 
 /** A header name no response of `contracts/openapi.yaml` declares, used by the third one. */
 const UNDECLARED_HEADER = 'X-Fixture-Undeclared';
+
+/**
+ * 09.2.1-T2: the two body members a step-2 response can carry a one-time secret in —
+ * `CiBindingCreatedResponse.binding_challenge` and `IngestTokenCreatedResponse.secret`
+ * (contracts/openapi.yaml:6607-6615, 6708-6719). Only the three creates the wizard's step 2 calls
+ * answer with them; no list or detail read may carry either, which is what AC2's "metadata only on
+ * resume" reduces to on the wire. (The contract's other secret-bearing body is the CI-side
+ * `CiTokenResponse.token`, answered by `POST /v1/ci/token` — a pre-tenant route the browser never
+ * calls, `contracts/openapi.yaml:71-81`, kept out of the web by decision (2) of the task's §10
+ * entry.)
+ */
+const ONE_TIME_SECRET_MEMBERS: readonly string[] = ['binding_challenge', 'secret'];
+
+/** The operations that mint one, and the only ones allowed to answer with a secret member. */
+const SECRET_MINTING_OPERATIONS: readonly string[] = [
+  'createCiBinding',
+  'createIngestToken',
+  'rotateIngestToken',
+];
+
+/** The seed page that derives step 3 from a token: one active token, its metadata and no secret. */
+const ONBOARDING_TOKEN_FIXTURE = 'ingest-tokens-list-onboarding-token';
 
 /**
  * How many `$ref` hops a response or header object may take before the check calls it
@@ -155,6 +182,24 @@ const FIXTURE_ROUTE_ROWS: readonly FixtureRouteShape[] = FIXTURE_ROUTES;
 /** The one shape guard this spec needs for two documents it does not own. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Every one-time secret member a response body carries, at any depth: a member named in
+ * `ONE_TIME_SECRET_MEMBERS` whose value is not `null` (the contract types both as a plain
+ * `string`, so a `null` is a body the schema refuses and the validation test reports it).
+ */
+function oneTimeSecretMembers(value: unknown): readonly string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => oneTimeSecretMembers(item));
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+  return Object.entries(value).flatMap(([member, memberValue]) => [
+    ...(ONE_TIME_SECRET_MEMBERS.includes(member) && memberValue !== null ? [member] : []),
+    ...oneTimeSecretMembers(memberValue),
+  ]);
 }
 
 /** Resolve a local `#/...` JSON pointer inside `contracts/openapi.yaml`. */
@@ -415,6 +460,18 @@ function requiredRunUuidField(): string {
 }
 
 /**
+ * One corpus document by directory name (09.2.1-T2). A missing directory fails with a message that
+ * names it, so a renamed fixture cannot make the step-2 pin below vacuous.
+ */
+function corpusDocument(name: string): FixtureDocumentShape {
+  const fixture = CORPUS.find((entry) => entry.name === name);
+  if (fixture === undefined) {
+    throw new Error(`fixtures/web-api/${name} is missing; the step-2 corpus needs it`);
+  }
+  return readDocument(fixture);
+}
+
+/**
  * The `runs-list` fixture document — the subject of every negative control. `readDocument`
  * re-parses `input.json` on every call, so a document handed out here is never shared.
  */
@@ -650,6 +707,76 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       preconditionFailed.map(({ document }) => document.variant),
       "the 412 fixture must be the selectable 'precondition_failed' variant",
     ).toContain('precondition_failed');
+  });
+
+  it('answers the one-time step-2 secrets in the create documents alone (09.2.1-T2)', () => {
+    // 1. Every document of an operation that mints no secret is secret-free. This is AC2's
+    //    "metadata only on resume" on the wire: the wizard's lists and detail reads can only show
+    //    metadata when the corpus itself has no member that could carry a secret.
+    for (const fixture of CORPUS) {
+      const document = readDocument(fixture);
+      if (SECRET_MINTING_OPERATIONS.includes(document.operation_id)) {
+        continue;
+      }
+      expect(
+        oneTimeSecretMembers(document.body),
+        `fixtures/web-api/${fixture.name} (${document.operation_id}) answers with a one-time secret; only ${SECRET_MINTING_OPERATIONS.join(', ')} mint one`,
+      ).toEqual([]);
+    }
+
+    // 2. The three creates do carry theirs, and their values are obviously fake: the corpus has no
+    //    real issuer, and 00 §5.7 S3 forbids a credential-shaped value.
+    const bindingCreate = corpusDocument('ci-binding-create');
+    expect([bindingCreate.operation_id, bindingCreate.status]).toEqual(['createCiBinding', 201]);
+    const bindingBody = bindingCreate.body as {
+      binding: { status: string };
+      binding_challenge: string;
+    };
+    expect(bindingBody.binding.status).toBe('pending_verification');
+    expect(bindingBody.binding_challenge).toContain('fixture_only');
+    // A JWT carries three dot-separated segments; a challenge that looked like one would read as
+    // a bearer credential in a page that shows it.
+    expect(bindingBody.binding_challenge.split('.')).toHaveLength(1);
+    expect(bindingBody.binding_challenge).not.toContain('eyJ');
+
+    const tokenCreate = corpusDocument('ingest-token-create');
+    expect([tokenCreate.operation_id, tokenCreate.status]).toEqual(['createIngestToken', 201]);
+    const tokenBody = tokenCreate.body as {
+      token: { status: string };
+      secret: string;
+      overlap_ends_at: string | null;
+    };
+    expect(tokenBody.token.status).toBe('active');
+    expect(tokenBody.secret.startsWith('egt_')).toBe(true);
+    expect(tokenBody.secret).toContain('FIXTURE_ONLY');
+    expect(tokenBody.secret.split('.')).toHaveLength(1);
+    // A freshly issued token retires nothing, so there is no overlap window yet.
+    expect(tokenBody.overlap_ends_at).toBeNull();
+
+    const tokenRotate = corpusDocument('ingest-token-rotate');
+    expect([tokenRotate.operation_id, tokenRotate.status]).toEqual(['rotateIngestToken', 200]);
+    const rotatedBody = tokenRotate.body as {
+      token: { overlap_ends_at: string | null };
+      secret: string;
+      overlap_ends_at: string | null;
+    };
+    expect(rotatedBody.secret.startsWith('egt_')).toBe(true);
+    expect(rotatedBody.secret).toContain('FIXTURE_ONLY');
+    // A rotation is the one answer that carries a window: the retired token keeps verifying until
+    // `overlap_ends_at`, both on the successor (its own retirement date) and at the top level.
+    expect(rotatedBody.overlap_ends_at).not.toBeNull();
+    expect(rotatedBody.token.overlap_ends_at).toBe(rotatedBody.overlap_ends_at);
+
+    // 3. The seed that derives step 3 from a token shows exactly one active token's metadata.
+    const tokenPage = corpusDocument(ONBOARDING_TOKEN_FIXTURE);
+    expect([tokenPage.operation_id, tokenPage.variant]).toEqual([
+      'listIngestTokens',
+      'onboarding-token',
+    ]);
+    const page = tokenPage.body as { items: { status: string }[]; next_cursor: string | null };
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]?.status).toBe('active');
+    expect(page.next_cursor).toBeNull();
   });
 
   it('fails on the runs-list page when a required run member is removed (AC10)', () => {
