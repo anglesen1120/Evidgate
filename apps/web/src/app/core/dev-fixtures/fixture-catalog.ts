@@ -31,6 +31,13 @@ import ingestTokensListOnboardingConnected from '../../../../../../fixtures/web-
 import ingestTokensListOnboardingProject from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-project/input.json';
 import ingestTokensListOnboardingRun from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-run/input.json';
 import ingestTokensListOnboardingToken from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
+import membershipCreateInviteExists from '../../../../../../fixtures/web-api/membership-create-invite-exists/input.json';
+import membershipCreateOk from '../../../../../../fixtures/web-api/membership-create-ok/input.json';
+import membershipRemoveInvalidTransition from '../../../../../../fixtures/web-api/membership-remove-invalid-transition/input.json';
+import membershipRemoveLastAdmin from '../../../../../../fixtures/web-api/membership-remove-last-admin/input.json';
+import membershipRemoveOk from '../../../../../../fixtures/web-api/membership-remove-ok/input.json';
+import membershipsList from '../../../../../../fixtures/web-api/memberships-list/input.json';
+import membershipsListEmpty from '../../../../../../fixtures/web-api/memberships-list-empty/input.json';
 import orgsList from '../../../../../../fixtures/web-api/orgs-list/input.json';
 import orgsListUnauthenticated from '../../../../../../fixtures/web-api/orgs-list-unauthenticated/input.json';
 import orgsListUnavailable from '../../../../../../fixtures/web-api/orgs-list-unavailable/input.json';
@@ -40,6 +47,7 @@ import permissionsListOnboarding from '../../../../../../fixtures/web-api/permis
 import permissionsListOnboardingNoWrites from '../../../../../../fixtures/web-api/permissions-list-onboarding-no-writes/input.json';
 import permissionsListSettingsAdmin from '../../../../../../fixtures/web-api/permissions-list-settings-admin/input.json';
 import permissionsListSettingsAuditOnly from '../../../../../../fixtures/web-api/permissions-list-settings-audit-only/input.json';
+import permissionsListSettingsMembersReadonly from '../../../../../../fixtures/web-api/permissions-list-settings-members-readonly/input.json';
 import permissionsListSettingsNoTab from '../../../../../../fixtures/web-api/permissions-list-settings-no-tab/input.json';
 import projectCreate from '../../../../../../fixtures/web-api/project-create/input.json';
 import projectDetail from '../../../../../../fixtures/web-api/project-detail/input.json';
@@ -185,6 +193,28 @@ export interface FixtureDocument {
  * its empty state). Every row is copied verbatim from `contracts/permissions.json`, and the client
  * side derives the grants from the `tenant_assignable` rows of this catalogue, never from a role
  * name (`core/session/effective-permissions.source.ts`).
+ *
+ * 09.7.1-T2 adds the Members and roles tab's own states. `memberships-list` is the `listMemberships`
+ * page the tab opens with: one sole active `tenant_admin` (`owner@acme.test`, the row the
+ * last-admin guard protects), two other active memberships with different built-in roles (one of
+ * them holding two roles, so the matrix has a multi-role row), one `pending` invite and one
+ * `removed` row — the state whose Remove button the page must not offer. `memberships-list-empty`
+ * (`?fixture.variant.listMemberships=empty`) is the empty page the shared empty pattern answers.
+ * `membership-create-ok` is the `createMembership` 201 (`pending`, no initial roles);
+ * `membership-create-invite-exists` (`?fixture.variant.createMembership=invite-exists`) is the
+ * 409 `invite_exists` AC2's invite path surfaces verbatim. `membership-remove-ok` is the
+ * `removeMember` 204 — the corpus's first bodyless document, which the T12.1 document contract
+ * already allows (`body` is optional). `membership-remove-last-admin`
+ * (`?fixture.variant.removeMember=last-admin`) is the 409 `last_admin` of AC2 and
+ * `membership-remove-invalid-transition` (`?fixture.variant.removeMember=invalid-transition`) the
+ * 409 `invalid_transition` a `pending` invite answers. This row also grows `settings-admin` by
+ * `membership:write`: administering the Settings area includes inviting and removing members, and
+ * `permissions-list-settings-members-readonly`
+ * (`?fixture.variant.listPermissions=settings-members-readonly`) is the set that holds
+ * `membership:read` (plus `organization:read` and `role:read`) but not `membership:write`, so the
+ * suite can prove the invite and remove controls are absent from the DOM rather than disabled.
+ * Error variants are named after the state (`invite-exists`, `last-admin`, `invalid-transition`),
+ * not after the wire code, matching the corpus's `settings-*` rows.
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
@@ -207,6 +237,13 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'ingest-tokens-list-onboarding-project', document: ingestTokensListOnboardingProject },
   { name: 'ingest-tokens-list-onboarding-run', document: ingestTokensListOnboardingRun },
   { name: 'ingest-tokens-list-onboarding-token', document: ingestTokensListOnboardingToken },
+  { name: 'membership-create-invite-exists', document: membershipCreateInviteExists },
+  { name: 'membership-create-ok', document: membershipCreateOk },
+  { name: 'membership-remove-invalid-transition', document: membershipRemoveInvalidTransition },
+  { name: 'membership-remove-last-admin', document: membershipRemoveLastAdmin },
+  { name: 'membership-remove-ok', document: membershipRemoveOk },
+  { name: 'memberships-list', document: membershipsList },
+  { name: 'memberships-list-empty', document: membershipsListEmpty },
   { name: 'orgs-list', document: orgsList },
   { name: 'orgs-list-unauthenticated', document: orgsListUnauthenticated },
   { name: 'orgs-list-unavailable', document: orgsListUnavailable },
@@ -219,6 +256,10 @@ export const FIXTURE_CATALOG: readonly {
   },
   { name: 'permissions-list-settings-admin', document: permissionsListSettingsAdmin },
   { name: 'permissions-list-settings-audit-only', document: permissionsListSettingsAuditOnly },
+  {
+    name: 'permissions-list-settings-members-readonly',
+    document: permissionsListSettingsMembersReadonly,
+  },
   { name: 'permissions-list-settings-no-tab', document: permissionsListSettingsNoTab },
   { name: 'project-create', document: projectCreate },
   { name: 'project-detail', document: projectDetail },

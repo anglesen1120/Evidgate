@@ -502,18 +502,18 @@ describe('Settings shell entry override (09.7.1-T1.1)', () => {
   });
 
   it('keeps the area stub table for the other settings destinations', async () => {
-    const members = entryOf('members');
+    const quota = entryOf('quota');
     const { harness } = await setUp(
       new FakeIdentityData(),
-      new Set(['organization:read', 'membership:read']),
+      new Set(['organization:read', 'usage:read']),
     );
 
-    await harness.navigateByUrl(urlOf(members));
+    await harness.navigateByUrl(urlOf(quota));
 
-    // `members` is gated by `membership:read` and served by `features/settings/settings.routes.ts`,
-    // which this story must not change: the placeholder table is still its destination.
-    expect(TestBed.inject(Router).url).toBe(`/orgs/${ORG.id}/members`);
+    // `quota` is gated by `usage:read` and served by `features/settings/settings.routes.ts`, which
+    // no tab task has replaced yet: the placeholder table is still its destination.
+    expect(TestBed.inject(Router).url).toBe(`/orgs/${ORG.id}/usage`);
     expect(document.querySelector('app-route-stub')).not.toBeNull();
-    expect(document.querySelector('h1')?.textContent?.trim()).toBe(members.label);
+    expect(document.querySelector('h1')?.textContent?.trim()).toBe(quota.label);
   });
 });
