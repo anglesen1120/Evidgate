@@ -477,7 +477,8 @@ describe('MembersStore (09.7.1-T2)', () => {
       await store.load('o-2');
       data.pendingInvites[0]?.resolve(CREATED);
 
-      await expect(inFlight).resolves.toBe(true);
+      // The success notice belongs to the org the user left: the dialogs must not announce it.
+      await expect(inFlight).resolves.toBe(false);
 
       // The invitation landed on o-1; its reload must not write into o-2's list.
       expect(data.invites.map((entry) => entry.orgId)).toEqual(['o-1']);
@@ -507,7 +508,7 @@ describe('MembersStore (09.7.1-T2)', () => {
       await store.load('o-2');
       data.pendingRemovals[0]?.resolve();
 
-      await expect(inFlight).resolves.toBe(true);
+      await expect(inFlight).resolves.toBe(false);
 
       expect(data.removals.map((entry) => entry.orgId)).toEqual(['o-1']);
       expect(data.membershipOrgs).toEqual(['o-1', 'o-2']);

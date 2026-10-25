@@ -279,9 +279,11 @@ export class MembersStore {
    * `orgId`, the generation and the rows that org's own read already put there. The invitation
    * landed server-side either way, so the mutation state still settles.
    *
-   * @returns `true` when the server created the membership; `false` when it refused, or when the
-   *   rejection was not the server's answer at all (a cancellation or a bug), which is reported as
-   *   the generic `unexpected` failure so the dialog is never left submitting.
+   * @returns `true` when the server created the membership and the list on screen is still this
+   *   org's; `false` when it refused, when the rejection was not the server's answer at all (a
+   *   cancellation or a bug, reported as the generic `unexpected` failure so the dialog is never
+   *   left submitting), or when the scope switched during the round trip (the success notice
+   *   belongs to the org the user left, not to the list now on screen).
    */
   async invite(email: string, roleIds: readonly string[], intent: Intent): Promise<boolean> {
     const orgId = this.orgId;
@@ -303,9 +305,10 @@ export class MembersStore {
       return false;
     }
     this.inviteStateSignal.set(SUBMITTED);
-    if (this.orgId === orgId) {
-      await this.load(orgId);
+    if (this.orgId !== orgId) {
+      return false;
     }
+    await this.load(orgId);
     return true;
   }
 
@@ -317,9 +320,9 @@ export class MembersStore {
    * is left exactly as it was because only a success reloads it — and only while the same org still
    * owns the state (a scope switch during the round trip skips the reload, see {@link invite}).
    *
-   * @returns `true` when the server removed the membership; `false` when it refused, or when the
-   *   rejection was not the server's answer at all (a cancellation or a bug), reported as the
-   *   generic `unexpected` failure so the dialog is never left submitting.
+   * @returns `true` when the server removed the membership and the list on screen is still this
+   *   org's; `false` when it refused, when the rejection was not the server's answer at all (see
+   *   {@link invite}), or when the scope switched during the round trip.
    */
   async remove(membershipId: string, intent: Intent): Promise<boolean> {
     const orgId = this.orgId;
@@ -337,9 +340,10 @@ export class MembersStore {
       return false;
     }
     this.removeStateSignal.set(SUBMITTED);
-    if (this.orgId === orgId) {
-      await this.load(orgId);
+    if (this.orgId !== orgId) {
+      return false;
     }
+    await this.load(orgId);
     return true;
   }
 
