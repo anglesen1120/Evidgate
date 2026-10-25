@@ -52,7 +52,8 @@ internal sealed class RevokeRoleCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
-    IAuditTrail audit)
+    IAuditTrail audit,
+    ISessionPrivilegeChange privilegeChanges)
     : ICommandHandler<RevokeRoleCommand, Result>
 {
     /// <inheritdoc />
@@ -135,6 +136,16 @@ internal sealed class RevokeRoleCommandHandler(
         }
 
         audit.Describe(new AuditObject("membership", membership.Id.ToString("D"), Metadata: new Dictionary<string, string> { ["role_id"] = command.RoleId.ToString("D") }));
+
+        // 02.3.2-T1 (AC7, D5b): the revoke committed, so every live session of the member is flagged for
+        // rotation in the same transaction — otherwise a session opened with the revoked role keeps it until
+        // it expires. Revoking ALL the user's sessions is 02.1.2-T3's (ISessionRevocation); this is only the
+        // rotation trigger and is safe to call now.
+        if (membership.UserId is { } changedUser)
+        {
+            _ = await privilegeChanges.RequireRotationForUserAsync(changedUser, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         return Result.Success(StatusCodes.Status204NoContent);
     }

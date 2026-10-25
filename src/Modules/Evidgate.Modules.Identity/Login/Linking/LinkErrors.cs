@@ -44,16 +44,6 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 internal static class LinkErrors
 {
     /// <summary>
-    /// 401 <c>unauthenticated</c>: no <c>__Host-evidgate_session</c> cookie, or one that is unknown,
-    /// expired, revoked or belongs to an account disabled after it was minted (the resolver's
-    /// <c>user.status = 'active'</c> filter makes the last two indistinguishable, and both answer this).
-    /// </summary>
-    public static Error Unauthenticated { get; } = new(
-        ApiErrorCode.Unauthenticated,
-        "sign in to link another sign-in provider",
-        StatusCodes.Status401Unauthorized);
-
-    /// <summary>
     /// 404 <c>not_found</c>: nothing is pending for this session — no confirm cookie, an expired one, or one
     /// this browser never received. The route also deletes a presented value it cannot use.
     /// </summary>
@@ -92,21 +82,9 @@ internal static class LinkErrors
         StatusCodes.Status409Conflict);
 
     /// <summary>
-    /// 403 <c>account_disabled</c>: the account the link would attach the identity to is <c>disabled</c>
-    /// (02.3.1 §6). Reachable only where the database reports the status itself
-    /// (<c>login_link_identity</c>'s <c>disabled</c> outcome, i.e. the account was disabled between the
-    /// session check and the confirm); the routes' own session lookup cannot tell a disabled account from
-    /// an absent session and answers 401 there.
-    /// </summary>
-    public static Error AccountDisabled { get; } = new(
-        ApiErrorCode.AccountDisabled,
-        "this account is disabled; contact an administrator",
-        StatusCodes.Status403Forbidden);
-
-    /// <summary>
     /// 503 <c>unavailable</c>, retryable: a database fault, an audit write that could not commit, or a
-    /// deployment without a session pepper. <see cref="Unavailable(HttpContext, LoginOptions)"/> is what the
-    /// routes answer with, so <c>Retry-After</c> is always set.
+    /// deployment without a session pepper. <see cref="UnavailableWithRetryAfter(HttpContext, LoginOptions)"/> is
+    /// what the routes answer with, so <c>Retry-After</c> is always set.
     /// </summary>
     public static Error ServiceUnavailable { get; } = new(
         ApiErrorCode.Unavailable,

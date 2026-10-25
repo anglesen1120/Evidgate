@@ -48,7 +48,8 @@ internal sealed class RemoveMemberCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
-    IAuditTrail audit)
+    IAuditTrail audit,
+    ISessionPrivilegeChange privilegeChanges)
     : ICommandHandler<RemoveMemberCommand, Result>
 {
     /// <inheritdoc />
@@ -126,6 +127,16 @@ internal sealed class RemoveMemberCommandHandler(
         }
 
         audit.Describe(new AuditObject("membership", membership.Id.ToString("D")));
+
+        // 02.3.2-T1 (AC7, D5b): losing the membership is a privilege change, so the user's live sessions are
+        // flagged for rotation here and now. Revoking them (the real kill) stays with 02.1.2-T3, which wires
+        // ISessionRevocation.RevokeAllForUserAsync into this same path — that call is deliberately NOT added
+        // by this story.
+        if (membership.UserId is { } changedUser)
+        {
+            _ = await privilegeChanges.RequireRotationForUserAsync(changedUser, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         return Result.Success(StatusCodes.Status204NoContent);
     }

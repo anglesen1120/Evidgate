@@ -916,6 +916,46 @@
       "note": "`EVIDGATE:SESSION:AbsoluteSeconds` (02.3.1-T1.3/T1.4 session group): absolute lifetime of a session, in seconds, after which it cannot be refreshed at all; the provisional default 604800 (7 d) is a [DECISION] value, not a contract figure. No environment provides it."
     },
     {
+      "key": "EVIDGATE__SESSION__PREVIOUSPEPPER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:SESSION:PreviousPepper` (02.3.2-T1.1, D4 the pepper-rotation window): base64 pepper that was current before the last rotation of `EVIDGATE__SESSION__PEPPER`, kept only while the sessions it signed drain. While both are set, `SessionSecrets.Candidates` returns the current hash first and the previous one second, so one lookup verifies either and the session statement re-hashes a previous-pepper row with the current pepper (`session_authenticate`'s `rehashed`). Declared once in `SecretNames` (`SessionPreviousPepper`), resolved through `ISecretProvider` by the session options post-configurer, never logged. Absent (the normal state): only current-pepper sessions verify and the cost of a lookup is one probe. Rotation procedure: set the previous kernel to today's current value, set the current kernel to the new one and bump `EVIDGATE__SESSION__PEPPERVERSION`, then drop the previous value once the absolute lifetime of the oldest session signed by it has passed. A value here that equals the current pepper is refused at boot."
+    },
+    {
+      "key": "EVIDGATE__SESSION__PREVIOUSPEPPERVERSION",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:SESSION:PreviousPepperVersion` (02.3.2-T1.1): the `session.pepper_version` the previous pepper signed with, so the re-hash in `session_authenticate` writes the current version beside the current hash. Only meaningful with `EVIDGATE__SESSION__PREVIOUSPEPPER`: a half-set pair is refused at BOOT by `SessionOptionsValidator` under `ValidateOnStart` (a version without its pepper, a pepper without its version, both peppers equal, or a version below 1 all fail host start), so the request path never sees an inconsistent window and never has to answer a half-configured one."
+    },
+    {
       "key": "EVIDGATE__INVITE__PEPPER",
       "scope": "runtime",
       "consumers": ["api", "worker"],

@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Invites;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Modules.Identity.Sessions.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -73,7 +74,15 @@ internal static class InviteTokenEndpoints
         // Same reason as the protocol routes: with a declared non-200 status ASP.NET infers a 200 response from
         // the delegate's `Result` return type, which would put the wrapper's schema in the served document. The
         // bodiless `.Produces(200)` replaces that inference; the 204 is the real answer.
+        //
+        // 02.3.2-T1 (D6, AC5): the ONE exemption besides anonymous/bearer routes. This route SETS a cookie rather
+        // than authenticating with one, so there is no session for a token to be bound to and no ambient authority
+        // a forged request could borrow. Its defence is the body contract below, not a header check: the route
+        // refuses anything that is not `application/json`, so a cross-site form post cannot reach it and a
+        // cross-site JSON fetch needs a preflight the app's CORS policy refuses. A member who still holds a live
+        // session while staging an invite must not be refused as `csrf_failed`.
         group.MapPost("/invite-token", StageAsync)
+            .WithMetadata(XsrfExemptMetadata.Instance)
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status200OK)
             .WithSummary("Stage an invite token in a short-lived __Host- cookie for the next federated login (02.3.1-T2)");

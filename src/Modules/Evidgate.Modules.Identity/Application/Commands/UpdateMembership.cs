@@ -77,7 +77,8 @@ internal sealed class UpdateMembershipCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
-    IAuditTrail audit)
+    IAuditTrail audit,
+    ISessionPrivilegeChange privilegeChanges)
     : ICommandHandler<UpdateMembershipCommand, Result<MembershipView>>
 {
     /// <inheritdoc />
@@ -149,6 +150,15 @@ internal sealed class UpdateMembershipCommandHandler(
                 .ConfigureAwait(false);
 
             return Result.Failure<MembershipView>(Stale(latest?.Version ?? membership.Version));
+        }
+
+        // 02.3.2-T1 (AC7, D5b): a status change alters what the user may do in this org, so every live session
+        // of the member is flagged for rotation in this transaction — the active -> removed / revoked / expired
+        // transitions alike. Revoking ALL of the user's sessions stays with 02.1.2-T3 (ISessionRevocation).
+        if (membership.UserId is { } changedUser)
+        {
+            _ = await privilegeChanges.RequireRotationForUserAsync(changedUser, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         var view = await MembershipReader.ReadAsync(db, orgId, membership.Id, cancellationToken)

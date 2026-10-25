@@ -69,7 +69,7 @@ export const stageInviteToken = <ThrowOnError extends boolean = false>(options: 
 export const startProviderLink = <ThrowOnError extends boolean = false>(options: Options<StartProviderLinkData, ThrowOnError>): RequestResult<StartProviderLinkResponses, StartProviderLinkErrors, ThrowOnError> => (options.client ?? client).post<StartProviderLinkResponses, StartProviderLinkErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }],
     url: '/auth/link/{provider}',
@@ -88,7 +88,7 @@ export const startProviderLink = <ThrowOnError extends boolean = false>(options:
 export const discardPendingProviderLink = <ThrowOnError extends boolean = false>(options?: Options<DiscardPendingProviderLinkData, ThrowOnError>): RequestResult<DiscardPendingProviderLinkResponses, DiscardPendingProviderLinkErrors, ThrowOnError> => (options?.client ?? client).delete<DiscardPendingProviderLinkResponses, DiscardPendingProviderLinkErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }],
     url: '/auth/link/pending',
@@ -103,7 +103,7 @@ export const discardPendingProviderLink = <ThrowOnError extends boolean = false>
 export const getPendingProviderLink = <ThrowOnError extends boolean = false>(options?: Options<GetPendingProviderLinkData, ThrowOnError>): RequestResult<GetPendingProviderLinkResponses, GetPendingProviderLinkErrors, ThrowOnError> => (options?.client ?? client).get<GetPendingProviderLinkResponses, GetPendingProviderLinkErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }],
     url: '/auth/link/pending',
@@ -118,7 +118,7 @@ export const getPendingProviderLink = <ThrowOnError extends boolean = false>(opt
 export const confirmProviderLink = <ThrowOnError extends boolean = false>(options?: Options<ConfirmProviderLinkData, ThrowOnError>): RequestResult<ConfirmProviderLinkResponses, ConfirmProviderLinkErrors, ThrowOnError> => (options?.client ?? client).post<ConfirmProviderLinkResponses, ConfirmProviderLinkErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }],
     url: '/auth/link/confirm',
@@ -133,7 +133,7 @@ export const confirmProviderLink = <ThrowOnError extends boolean = false>(option
 export const createManifest = <ThrowOnError extends boolean = false>(options: Options<CreateManifestData, ThrowOnError>): RequestResult<CreateManifestResponses, CreateManifestErrors, ThrowOnError> => (options.client ?? client).post<CreateManifestResponses, CreateManifestErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/manifests',
@@ -152,7 +152,7 @@ export const createManifest = <ThrowOnError extends boolean = false>(options: Op
 export const listRuns = <ThrowOnError extends boolean = false>(options: Options<ListRunsData, ThrowOnError>): RequestResult<ListRunsResponses, ListRunsErrors, ThrowOnError> => (options.client ?? client).get<ListRunsResponses, ListRunsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/runs',
@@ -167,7 +167,7 @@ export const listRuns = <ThrowOnError extends boolean = false>(options: Options<
 export const createRun = <ThrowOnError extends boolean = false>(options: Options<CreateRunData, ThrowOnError>): RequestResult<CreateRunResponses, CreateRunErrors, ThrowOnError> => (options.client ?? client).post<CreateRunResponses, CreateRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/runs',
@@ -186,7 +186,7 @@ export const createRun = <ThrowOnError extends boolean = false>(options: Options
 export const getRun = <ThrowOnError extends boolean = false>(options: Options<GetRunData, ThrowOnError>): RequestResult<GetRunResponses, GetRunErrors, ThrowOnError> => (options.client ?? client).get<GetRunResponses, GetRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/runs/{r}',
@@ -199,7 +199,7 @@ export const getRun = <ThrowOnError extends boolean = false>(options: Options<Ge
 export const cancelRun = <ThrowOnError extends boolean = false>(options: Options<CancelRunData, ThrowOnError>): RequestResult<CancelRunResponses, CancelRunErrors, ThrowOnError> => (options.client ?? client).post<CancelRunResponses, CancelRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/runs/{r}/cancel',
@@ -214,7 +214,7 @@ export const cancelRun = <ThrowOnError extends boolean = false>(options: Options
 export const postRunEvents = <ThrowOnError extends boolean = false>(options: Options<PostRunEventsData, ThrowOnError>): RequestResult<PostRunEventsResponses, PostRunEventsErrors, ThrowOnError> => (options.client ?? client).post<PostRunEventsResponses, PostRunEventsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/runs/{r}/events',
@@ -233,7 +233,7 @@ export const postRunEvents = <ThrowOnError extends boolean = false>(options: Opt
 export const finalizeRun = <ThrowOnError extends boolean = false>(options: Options<FinalizeRunData, ThrowOnError>): RequestResult<FinalizeRunResponses, FinalizeRunErrors, ThrowOnError> => (options.client ?? client).post<FinalizeRunResponses, FinalizeRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/runs/{r}/finalize',
@@ -252,7 +252,7 @@ export const finalizeRun = <ThrowOnError extends boolean = false>(options: Optio
 export const createArtifactUploadUrl = <ThrowOnError extends boolean = false>(options: Options<CreateArtifactUploadUrlData, ThrowOnError>): RequestResult<CreateArtifactUploadUrlResponses, CreateArtifactUploadUrlErrors, ThrowOnError> => (options.client ?? client).post<CreateArtifactUploadUrlResponses, CreateArtifactUploadUrlErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/artifacts/upload-url',
@@ -271,7 +271,7 @@ export const createArtifactUploadUrl = <ThrowOnError extends boolean = false>(op
 export const completeArtifact = <ThrowOnError extends boolean = false>(options: Options<CompleteArtifactData, ThrowOnError>): RequestResult<CompleteArtifactResponses, CompleteArtifactErrors, ThrowOnError> => (options.client ?? client).post<CompleteArtifactResponses, CompleteArtifactErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/artifacts/{a}/complete',
@@ -284,7 +284,7 @@ export const completeArtifact = <ThrowOnError extends boolean = false>(options: 
 export const getRunDecision = <ThrowOnError extends boolean = false>(options: Options<GetRunDecisionData, ThrowOnError>): RequestResult<GetRunDecisionResponses, GetRunDecisionErrors, ThrowOnError> => (options.client ?? client).get<GetRunDecisionResponses, GetRunDecisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/runs/{r}/decision',
@@ -297,7 +297,7 @@ export const getRunDecision = <ThrowOnError extends boolean = false>(options: Op
 export const rerunRun = <ThrowOnError extends boolean = false>(options: Options<RerunRunData, ThrowOnError>): RequestResult<RerunRunResponses, RerunRunErrors, ThrowOnError> => (options.client ?? client).post<RerunRunResponses, RerunRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/runs/{r}/rerun',
@@ -316,7 +316,7 @@ export const rerunRun = <ThrowOnError extends boolean = false>(options: Options<
 export const createEnvironmentRevision = <ThrowOnError extends boolean = false>(options: Options<CreateEnvironmentRevisionData, ThrowOnError>): RequestResult<CreateEnvironmentRevisionResponses, CreateEnvironmentRevisionErrors, ThrowOnError> => (options.client ?? client).post<CreateEnvironmentRevisionResponses, CreateEnvironmentRevisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/environments/{e}/revisions',
@@ -333,7 +333,7 @@ export const createEnvironmentRevision = <ThrowOnError extends boolean = false>(
 export const getEnvironmentRevision = <ThrowOnError extends boolean = false>(options: Options<GetEnvironmentRevisionData, ThrowOnError>): RequestResult<GetEnvironmentRevisionResponses, GetEnvironmentRevisionErrors, ThrowOnError> => (options.client ?? client).get<GetEnvironmentRevisionResponses, GetEnvironmentRevisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/environment-revisions/{id}',
@@ -348,7 +348,7 @@ export const getEnvironmentRevision = <ThrowOnError extends boolean = false>(opt
 export const activatePolicyRevision = <ThrowOnError extends boolean = false>(options: Options<ActivatePolicyRevisionData, ThrowOnError>): RequestResult<ActivatePolicyRevisionResponses, ActivatePolicyRevisionErrors, ThrowOnError> => (options.client ?? client).post<ActivatePolicyRevisionResponses, ActivatePolicyRevisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/policy-activation',
@@ -367,7 +367,7 @@ export const activatePolicyRevision = <ThrowOnError extends boolean = false>(opt
 export const createPolicyRevision = <ThrowOnError extends boolean = false>(options: Options<CreatePolicyRevisionData, ThrowOnError>): RequestResult<CreatePolicyRevisionResponses, CreatePolicyRevisionErrors, ThrowOnError> => (options.client ?? client).post<CreatePolicyRevisionResponses, CreatePolicyRevisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/policies',
@@ -386,7 +386,7 @@ export const createPolicyRevision = <ThrowOnError extends boolean = false>(optio
 export const getPolicyRevision = <ThrowOnError extends boolean = false>(options: Options<GetPolicyRevisionData, ThrowOnError>): RequestResult<GetPolicyRevisionResponses, GetPolicyRevisionErrors, ThrowOnError> => (options.client ?? client).get<GetPolicyRevisionResponses, GetPolicyRevisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/policies/{id}',
@@ -401,7 +401,7 @@ export const getPolicyRevision = <ThrowOnError extends boolean = false>(options:
 export const listPolicyRevisions = <ThrowOnError extends boolean = false>(options: Options<ListPolicyRevisionsData, ThrowOnError>): RequestResult<ListPolicyRevisionsResponses, ListPolicyRevisionsErrors, ThrowOnError> => (options.client ?? client).get<ListPolicyRevisionsResponses, ListPolicyRevisionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/policies/{id}/revisions',
@@ -416,7 +416,7 @@ export const listPolicyRevisions = <ThrowOnError extends boolean = false>(option
 export const getReportComparison = <ThrowOnError extends boolean = false>(options: Options<GetReportComparisonData, ThrowOnError>): RequestResult<GetReportComparisonResponses, GetReportComparisonErrors, ThrowOnError> => (options.client ?? client).get<GetReportComparisonResponses, GetReportComparisonErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/runs/{r}/reports/{report_id}/comparison',
@@ -431,7 +431,7 @@ export const getReportComparison = <ThrowOnError extends boolean = false>(option
 export const reprocessRun = <ThrowOnError extends boolean = false>(options: Options<ReprocessRunData, ThrowOnError>): RequestResult<ReprocessRunResponses, ReprocessRunErrors, ThrowOnError> => (options.client ?? client).post<ReprocessRunResponses, ReprocessRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/runs/{r}/reprocess',
@@ -448,7 +448,7 @@ export const reprocessRun = <ThrowOnError extends boolean = false>(options: Opti
 export const createRelease = <ThrowOnError extends boolean = false>(options: Options<CreateReleaseData, ThrowOnError>): RequestResult<CreateReleaseResponses, CreateReleaseErrors, ThrowOnError> => (options.client ?? client).post<CreateReleaseResponses, CreateReleaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/releases',
@@ -465,7 +465,7 @@ export const createRelease = <ThrowOnError extends boolean = false>(options: Opt
 export const getRelease = <ThrowOnError extends boolean = false>(options: Options<GetReleaseData, ThrowOnError>): RequestResult<GetReleaseResponses, GetReleaseErrors, ThrowOnError> => (options.client ?? client).get<GetReleaseResponses, GetReleaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/releases/{id}',
@@ -480,7 +480,7 @@ export const getRelease = <ThrowOnError extends boolean = false>(options: Option
 export const bindReleaseRun = <ThrowOnError extends boolean = false>(options: Options<BindReleaseRunData, ThrowOnError>): RequestResult<BindReleaseRunResponses, BindReleaseRunErrors, ThrowOnError> => (options.client ?? client).post<BindReleaseRunResponses, BindReleaseRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/releases/{id}/runs',
@@ -497,7 +497,7 @@ export const bindReleaseRun = <ThrowOnError extends boolean = false>(options: Op
 export const getReleaseDecision = <ThrowOnError extends boolean = false>(options: Options<GetReleaseDecisionData, ThrowOnError>): RequestResult<GetReleaseDecisionResponses, GetReleaseDecisionErrors, ThrowOnError> => (options.client ?? client).get<GetReleaseDecisionResponses, GetReleaseDecisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/releases/{id}/decision',
@@ -512,7 +512,7 @@ export const getReleaseDecision = <ThrowOnError extends boolean = false>(options
 export const getArtifactDownloadUrl = <ThrowOnError extends boolean = false>(options: Options<GetArtifactDownloadUrlData, ThrowOnError>): RequestResult<GetArtifactDownloadUrlResponses, GetArtifactDownloadUrlErrors, ThrowOnError> => (options.client ?? client).get<GetArtifactDownloadUrlResponses, GetArtifactDownloadUrlErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/artifacts/{a}/download-url',
@@ -527,7 +527,7 @@ export const getArtifactDownloadUrl = <ThrowOnError extends boolean = false>(opt
 export const listMyOrganizations = <ThrowOnError extends boolean = false>(options?: Options<ListMyOrganizationsData, ThrowOnError>): RequestResult<ListMyOrganizationsResponses, ListMyOrganizationsErrors, ThrowOnError> => (options?.client ?? client).get<ListMyOrganizationsResponses, ListMyOrganizationsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs',
@@ -542,7 +542,7 @@ export const listMyOrganizations = <ThrowOnError extends boolean = false>(option
 export const createOrganization = <ThrowOnError extends boolean = false>(options: Options<CreateOrganizationData, ThrowOnError>): RequestResult<CreateOrganizationResponses, CreateOrganizationErrors, ThrowOnError> => (options.client ?? client).post<CreateOrganizationResponses, CreateOrganizationErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs',
@@ -559,7 +559,7 @@ export const createOrganization = <ThrowOnError extends boolean = false>(options
 export const getOrganization = <ThrowOnError extends boolean = false>(options: Options<GetOrganizationData, ThrowOnError>): RequestResult<GetOrganizationResponses, GetOrganizationErrors, ThrowOnError> => (options.client ?? client).get<GetOrganizationResponses, GetOrganizationErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}',
@@ -574,7 +574,7 @@ export const getOrganization = <ThrowOnError extends boolean = false>(options: O
 export const updateOrganization = <ThrowOnError extends boolean = false>(options: Options<UpdateOrganizationData, ThrowOnError>): RequestResult<UpdateOrganizationResponses, UpdateOrganizationErrors, ThrowOnError> => (options.client ?? client).patch<UpdateOrganizationResponses, UpdateOrganizationErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}',
@@ -593,7 +593,7 @@ export const updateOrganization = <ThrowOnError extends boolean = false>(options
 export const listProjects = <ThrowOnError extends boolean = false>(options: Options<ListProjectsData, ThrowOnError>): RequestResult<ListProjectsResponses, ListProjectsErrors, ThrowOnError> => (options.client ?? client).get<ListProjectsResponses, ListProjectsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/projects',
@@ -608,7 +608,7 @@ export const listProjects = <ThrowOnError extends boolean = false>(options: Opti
 export const createProject = <ThrowOnError extends boolean = false>(options: Options<CreateProjectData, ThrowOnError>): RequestResult<CreateProjectResponses, CreateProjectErrors, ThrowOnError> => (options.client ?? client).post<CreateProjectResponses, CreateProjectErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/projects',
@@ -627,7 +627,7 @@ export const createProject = <ThrowOnError extends boolean = false>(options: Opt
 export const getProject = <ThrowOnError extends boolean = false>(options: Options<GetProjectData, ThrowOnError>): RequestResult<GetProjectResponses, GetProjectErrors, ThrowOnError> => (options.client ?? client).get<GetProjectResponses, GetProjectErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}',
@@ -642,7 +642,7 @@ export const getProject = <ThrowOnError extends boolean = false>(options: Option
 export const updateProject = <ThrowOnError extends boolean = false>(options: Options<UpdateProjectData, ThrowOnError>): RequestResult<UpdateProjectResponses, UpdateProjectErrors, ThrowOnError> => (options.client ?? client).patch<UpdateProjectResponses, UpdateProjectErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}',
@@ -661,7 +661,7 @@ export const updateProject = <ThrowOnError extends boolean = false>(options: Opt
 export const listMemberships = <ThrowOnError extends boolean = false>(options: Options<ListMembershipsData, ThrowOnError>): RequestResult<ListMembershipsResponses, ListMembershipsErrors, ThrowOnError> => (options.client ?? client).get<ListMembershipsResponses, ListMembershipsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships',
@@ -676,7 +676,7 @@ export const listMemberships = <ThrowOnError extends boolean = false>(options: O
 export const createMembership = <ThrowOnError extends boolean = false>(options: Options<CreateMembershipData, ThrowOnError>): RequestResult<CreateMembershipResponses, CreateMembershipErrors, ThrowOnError> => (options.client ?? client).post<CreateMembershipResponses, CreateMembershipErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships',
@@ -695,7 +695,7 @@ export const createMembership = <ThrowOnError extends boolean = false>(options: 
 export const removeMember = <ThrowOnError extends boolean = false>(options: Options<RemoveMemberData, ThrowOnError>): RequestResult<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError> => (options.client ?? client).delete<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships/{m}',
@@ -708,7 +708,7 @@ export const removeMember = <ThrowOnError extends boolean = false>(options: Opti
 export const getMembership = <ThrowOnError extends boolean = false>(options: Options<GetMembershipData, ThrowOnError>): RequestResult<GetMembershipResponses, GetMembershipErrors, ThrowOnError> => (options.client ?? client).get<GetMembershipResponses, GetMembershipErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships/{m}',
@@ -723,7 +723,7 @@ export const getMembership = <ThrowOnError extends boolean = false>(options: Opt
 export const updateMembership = <ThrowOnError extends boolean = false>(options: Options<UpdateMembershipData, ThrowOnError>): RequestResult<UpdateMembershipResponses, UpdateMembershipErrors, ThrowOnError> => (options.client ?? client).patch<UpdateMembershipResponses, UpdateMembershipErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships/{m}',
@@ -742,7 +742,7 @@ export const updateMembership = <ThrowOnError extends boolean = false>(options: 
 export const resendMembershipInvite = <ThrowOnError extends boolean = false>(options: Options<ResendMembershipInviteData, ThrowOnError>): RequestResult<ResendMembershipInviteResponses, ResendMembershipInviteErrors, ThrowOnError> => (options.client ?? client).post<ResendMembershipInviteResponses, ResendMembershipInviteErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships/{m}/resend',
@@ -757,7 +757,7 @@ export const resendMembershipInvite = <ThrowOnError extends boolean = false>(opt
 export const cancelMembershipInvite = <ThrowOnError extends boolean = false>(options: Options<CancelMembershipInviteData, ThrowOnError>): RequestResult<CancelMembershipInviteResponses, CancelMembershipInviteErrors, ThrowOnError> => (options.client ?? client).post<CancelMembershipInviteResponses, CancelMembershipInviteErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships/{m}/cancel-invite',
@@ -772,7 +772,7 @@ export const cancelMembershipInvite = <ThrowOnError extends boolean = false>(opt
 export const grantMembershipRole = <ThrowOnError extends boolean = false>(options: Options<GrantMembershipRoleData, ThrowOnError>): RequestResult<GrantMembershipRoleResponses, GrantMembershipRoleErrors, ThrowOnError> => (options.client ?? client).post<GrantMembershipRoleResponses, GrantMembershipRoleErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships/{m}/roles',
@@ -791,7 +791,7 @@ export const grantMembershipRole = <ThrowOnError extends boolean = false>(option
 export const revokeMembershipRole = <ThrowOnError extends boolean = false>(options: Options<RevokeMembershipRoleData, ThrowOnError>): RequestResult<RevokeMembershipRoleResponses, RevokeMembershipRoleErrors, ThrowOnError> => (options.client ?? client).delete<RevokeMembershipRoleResponses, RevokeMembershipRoleErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/memberships/{m}/roles/{r}',
@@ -806,7 +806,7 @@ export const revokeMembershipRole = <ThrowOnError extends boolean = false>(optio
 export const listPermissions = <ThrowOnError extends boolean = false>(options?: Options<ListPermissionsData, ThrowOnError>): RequestResult<ListPermissionsResponses, ListPermissionsErrors, ThrowOnError> => (options?.client ?? client).get<ListPermissionsResponses, ListPermissionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/permissions',
@@ -821,7 +821,7 @@ export const listPermissions = <ThrowOnError extends boolean = false>(options?: 
 export const listRoles = <ThrowOnError extends boolean = false>(options?: Options<ListRolesData, ThrowOnError>): RequestResult<ListRolesResponses, ListRolesErrors, ThrowOnError> => (options?.client ?? client).get<ListRolesResponses, ListRolesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/roles',
@@ -836,7 +836,7 @@ export const listRoles = <ThrowOnError extends boolean = false>(options?: Option
 export const createRole = <ThrowOnError extends boolean = false>(options: Options<CreateRoleData, ThrowOnError>): RequestResult<CreateRoleResponses, CreateRoleErrors, ThrowOnError> => (options.client ?? client).post<CreateRoleResponses, CreateRoleErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/roles',
@@ -855,7 +855,7 @@ export const createRole = <ThrowOnError extends boolean = false>(options: Option
 export const updateRole = <ThrowOnError extends boolean = false>(options: Options<UpdateRoleData, ThrowOnError>): RequestResult<UpdateRoleResponses, UpdateRoleErrors, ThrowOnError> => (options.client ?? client).patch<UpdateRoleResponses, UpdateRoleErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/roles/{r}',
@@ -872,7 +872,7 @@ export const updateRole = <ThrowOnError extends boolean = false>(options: Option
 export const listCiBindings = <ThrowOnError extends boolean = false>(options: Options<ListCiBindingsData, ThrowOnError>): RequestResult<ListCiBindingsResponses, ListCiBindingsErrors, ThrowOnError> => (options.client ?? client).get<ListCiBindingsResponses, ListCiBindingsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/ci-bindings',
@@ -887,7 +887,7 @@ export const listCiBindings = <ThrowOnError extends boolean = false>(options: Op
 export const createCiBinding = <ThrowOnError extends boolean = false>(options: Options<CreateCiBindingData, ThrowOnError>): RequestResult<CreateCiBindingResponses, CreateCiBindingErrors, ThrowOnError> => (options.client ?? client).post<CreateCiBindingResponses, CreateCiBindingErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/ci-bindings',
@@ -904,7 +904,7 @@ export const createCiBinding = <ThrowOnError extends boolean = false>(options: O
 export const disableCiBinding = <ThrowOnError extends boolean = false>(options: Options<DisableCiBindingData, ThrowOnError>): RequestResult<DisableCiBindingResponses, DisableCiBindingErrors, ThrowOnError> => (options.client ?? client).delete<DisableCiBindingResponses, DisableCiBindingErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/ci-bindings/{b}',
@@ -917,7 +917,7 @@ export const disableCiBinding = <ThrowOnError extends boolean = false>(options: 
 export const updateCiBinding = <ThrowOnError extends boolean = false>(options: Options<UpdateCiBindingData, ThrowOnError>): RequestResult<UpdateCiBindingResponses, UpdateCiBindingErrors, ThrowOnError> => (options.client ?? client).patch<UpdateCiBindingResponses, UpdateCiBindingErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/ci-bindings/{b}',
@@ -934,7 +934,7 @@ export const updateCiBinding = <ThrowOnError extends boolean = false>(options: O
 export const listIngestTokens = <ThrowOnError extends boolean = false>(options: Options<ListIngestTokensData, ThrowOnError>): RequestResult<ListIngestTokensResponses, ListIngestTokensErrors, ThrowOnError> => (options.client ?? client).get<ListIngestTokensResponses, ListIngestTokensErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/ingest-tokens',
@@ -949,7 +949,7 @@ export const listIngestTokens = <ThrowOnError extends boolean = false>(options: 
 export const createIngestToken = <ThrowOnError extends boolean = false>(options: Options<CreateIngestTokenData, ThrowOnError>): RequestResult<CreateIngestTokenResponses, CreateIngestTokenErrors, ThrowOnError> => (options.client ?? client).post<CreateIngestTokenResponses, CreateIngestTokenErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/ingest-tokens',
@@ -968,7 +968,7 @@ export const createIngestToken = <ThrowOnError extends boolean = false>(options:
 export const rotateIngestToken = <ThrowOnError extends boolean = false>(options: Options<RotateIngestTokenData, ThrowOnError>): RequestResult<RotateIngestTokenResponses, RotateIngestTokenErrors, ThrowOnError> => (options.client ?? client).post<RotateIngestTokenResponses, RotateIngestTokenErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/ingest-tokens/{t}/rotate',
@@ -981,7 +981,7 @@ export const rotateIngestToken = <ThrowOnError extends boolean = false>(options:
 export const revokeIngestToken = <ThrowOnError extends boolean = false>(options: Options<RevokeIngestTokenData, ThrowOnError>): RequestResult<RevokeIngestTokenResponses, RevokeIngestTokenErrors, ThrowOnError> => (options.client ?? client).delete<RevokeIngestTokenResponses, RevokeIngestTokenErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/ingest-tokens/{t}',
@@ -996,7 +996,7 @@ export const revokeIngestToken = <ThrowOnError extends boolean = false>(options:
 export const listAudit = <ThrowOnError extends boolean = false>(options: Options<ListAuditData, ThrowOnError>): RequestResult<ListAuditResponses, ListAuditErrors, ThrowOnError> => (options.client ?? client).get<ListAuditResponses, ListAuditErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/audit',
@@ -1011,7 +1011,7 @@ export const listAudit = <ThrowOnError extends boolean = false>(options: Options
 export const exportAudit = <ThrowOnError extends boolean = false>(options: Options<ExportAuditData, ThrowOnError>): RequestResult<ExportAuditResponses, ExportAuditErrors, ThrowOnError> => (options.client ?? client).get<ExportAuditResponses, ExportAuditErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/audit/export',
@@ -1024,7 +1024,7 @@ export const exportAudit = <ThrowOnError extends boolean = false>(options: Optio
 export const requestSupportGrant = <ThrowOnError extends boolean = false>(options: Options<RequestSupportGrantData, ThrowOnError>): RequestResult<RequestSupportGrantResponses, RequestSupportGrantErrors, ThrowOnError> => (options.client ?? client).post<RequestSupportGrantResponses, RequestSupportGrantErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/support-grants',
@@ -1041,7 +1041,7 @@ export const requestSupportGrant = <ThrowOnError extends boolean = false>(option
 export const approveSupportGrant = <ThrowOnError extends boolean = false>(options: Options<ApproveSupportGrantData, ThrowOnError>): RequestResult<ApproveSupportGrantResponses, ApproveSupportGrantErrors, ThrowOnError> => (options.client ?? client).post<ApproveSupportGrantResponses, ApproveSupportGrantErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/support-grants/{g}/approve',
@@ -1056,7 +1056,7 @@ export const approveSupportGrant = <ThrowOnError extends boolean = false>(option
 export const revokeSupportGrant = <ThrowOnError extends boolean = false>(options: Options<RevokeSupportGrantData, ThrowOnError>): RequestResult<RevokeSupportGrantResponses, RevokeSupportGrantErrors, ThrowOnError> => (options.client ?? client).post<RevokeSupportGrantResponses, RevokeSupportGrantErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/support-grants/{g}/revoke',
@@ -1071,7 +1071,7 @@ export const revokeSupportGrant = <ThrowOnError extends boolean = false>(options
 export const listSecurityEvents = <ThrowOnError extends boolean = false>(options: Options<ListSecurityEventsData, ThrowOnError>): RequestResult<ListSecurityEventsResponses, ListSecurityEventsErrors, ThrowOnError> => (options.client ?? client).get<ListSecurityEventsResponses, ListSecurityEventsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/security-events',
@@ -1086,7 +1086,7 @@ export const listSecurityEvents = <ThrowOnError extends boolean = false>(options
 export const listCases = <ThrowOnError extends boolean = false>(options: Options<ListCasesData, ThrowOnError>): RequestResult<ListCasesResponses, ListCasesErrors, ThrowOnError> => (options.client ?? client).get<ListCasesResponses, ListCasesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/cases',
@@ -1101,7 +1101,7 @@ export const listCases = <ThrowOnError extends boolean = false>(options: Options
 export const getCase = <ThrowOnError extends boolean = false>(options: Options<GetCaseData, ThrowOnError>): RequestResult<GetCaseResponses, GetCaseErrors, ThrowOnError> => (options.client ?? client).get<GetCaseResponses, GetCaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/cases/{c}',
@@ -1116,7 +1116,7 @@ export const getCase = <ThrowOnError extends boolean = false>(options: Options<G
 export const updateCase = <ThrowOnError extends boolean = false>(options: Options<UpdateCaseData, ThrowOnError>): RequestResult<UpdateCaseResponses, UpdateCaseErrors, ThrowOnError> => (options.client ?? client).patch<UpdateCaseResponses, UpdateCaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/cases/{c}',
@@ -1135,7 +1135,7 @@ export const updateCase = <ThrowOnError extends boolean = false>(options: Option
 export const listCaseRevisions = <ThrowOnError extends boolean = false>(options: Options<ListCaseRevisionsData, ThrowOnError>): RequestResult<ListCaseRevisionsResponses, ListCaseRevisionsErrors, ThrowOnError> => (options.client ?? client).get<ListCaseRevisionsResponses, ListCaseRevisionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/cases/{c}/revisions',
@@ -1148,7 +1148,7 @@ export const listCaseRevisions = <ThrowOnError extends boolean = false>(options:
 export const listSuites = <ThrowOnError extends boolean = false>(options: Options<ListSuitesData, ThrowOnError>): RequestResult<ListSuitesResponses, ListSuitesErrors, ThrowOnError> => (options.client ?? client).get<ListSuitesResponses, ListSuitesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/suites',
@@ -1163,7 +1163,7 @@ export const listSuites = <ThrowOnError extends boolean = false>(options: Option
 export const createSuite = <ThrowOnError extends boolean = false>(options: Options<CreateSuiteData, ThrowOnError>): RequestResult<CreateSuiteResponses, CreateSuiteErrors, ThrowOnError> => (options.client ?? client).post<CreateSuiteResponses, CreateSuiteErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/suites',
@@ -1182,7 +1182,7 @@ export const createSuite = <ThrowOnError extends boolean = false>(options: Optio
 export const getSuite = <ThrowOnError extends boolean = false>(options: Options<GetSuiteData, ThrowOnError>): RequestResult<GetSuiteResponses, GetSuiteErrors, ThrowOnError> => (options.client ?? client).get<GetSuiteResponses, GetSuiteErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/suites/{s}',
@@ -1197,7 +1197,7 @@ export const getSuite = <ThrowOnError extends boolean = false>(options: Options<
 export const createSuiteRevision = <ThrowOnError extends boolean = false>(options: Options<CreateSuiteRevisionData, ThrowOnError>): RequestResult<CreateSuiteRevisionResponses, CreateSuiteRevisionErrors, ThrowOnError> => (options.client ?? client).post<CreateSuiteRevisionResponses, CreateSuiteRevisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/suites/{s}/revisions',
@@ -1214,7 +1214,7 @@ export const createSuiteRevision = <ThrowOnError extends boolean = false>(option
 export const getSuiteRevision = <ThrowOnError extends boolean = false>(options: Options<GetSuiteRevisionData, ThrowOnError>): RequestResult<GetSuiteRevisionResponses, GetSuiteRevisionErrors, ThrowOnError> => (options.client ?? client).get<GetSuiteRevisionResponses, GetSuiteRevisionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/suite-revisions/{r}',
@@ -1229,7 +1229,7 @@ export const getSuiteRevision = <ThrowOnError extends boolean = false>(options: 
 export const getSuiteRevisionDiff = <ThrowOnError extends boolean = false>(options: Options<GetSuiteRevisionDiffData, ThrowOnError>): RequestResult<GetSuiteRevisionDiffResponses, GetSuiteRevisionDiffErrors, ThrowOnError> => (options.client ?? client).get<GetSuiteRevisionDiffResponses, GetSuiteRevisionDiffErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/suite-revisions/{r}/diff',
@@ -1253,7 +1253,7 @@ export const receiveGithubWebhook = <ThrowOnError extends boolean = false>(optio
 export const dryRunDraft = <ThrowOnError extends boolean = false>(options: Options<DryRunDraftData, ThrowOnError>): RequestResult<DryRunDraftResponses, DryRunDraftErrors, ThrowOnError> => (options.client ?? client).post<DryRunDraftResponses, DryRunDraftErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/drafts/{d}/dry-run',
@@ -1268,7 +1268,7 @@ export const dryRunDraft = <ThrowOnError extends boolean = false>(options: Optio
 export const openDraftPullRequest = <ThrowOnError extends boolean = false>(options: Options<OpenDraftPullRequestData, ThrowOnError>): RequestResult<OpenDraftPullRequestResponses, OpenDraftPullRequestErrors, ThrowOnError> => (options.client ?? client).post<OpenDraftPullRequestResponses, OpenDraftPullRequestErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/drafts/{d}/pull-request',
@@ -1281,7 +1281,7 @@ export const openDraftPullRequest = <ThrowOnError extends boolean = false>(optio
 export const listIncidents = <ThrowOnError extends boolean = false>(options: Options<ListIncidentsData, ThrowOnError>): RequestResult<ListIncidentsResponses, ListIncidentsErrors, ThrowOnError> => (options.client ?? client).get<ListIncidentsResponses, ListIncidentsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/incidents',
@@ -1294,7 +1294,7 @@ export const listIncidents = <ThrowOnError extends boolean = false>(options: Opt
 export const getIncident = <ThrowOnError extends boolean = false>(options: Options<GetIncidentData, ThrowOnError>): RequestResult<GetIncidentResponses, GetIncidentErrors, ThrowOnError> => (options.client ?? client).get<GetIncidentResponses, GetIncidentErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/incidents/{i}',
@@ -1307,7 +1307,7 @@ export const getIncident = <ThrowOnError extends boolean = false>(options: Optio
 export const labelIncident = <ThrowOnError extends boolean = false>(options: Options<LabelIncidentData, ThrowOnError>): RequestResult<LabelIncidentResponses, LabelIncidentErrors, ThrowOnError> => (options.client ?? client).post<LabelIncidentResponses, LabelIncidentErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/incidents/{i}/label',
@@ -1324,7 +1324,7 @@ export const labelIncident = <ThrowOnError extends boolean = false>(options: Opt
 export const getUsageSummary = <ThrowOnError extends boolean = false>(options: Options<GetUsageSummaryData, ThrowOnError>): RequestResult<GetUsageSummaryResponses, GetUsageSummaryErrors, ThrowOnError> => (options.client ?? client).get<GetUsageSummaryResponses, GetUsageSummaryErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/usage/summary',
@@ -1337,7 +1337,7 @@ export const getUsageSummary = <ThrowOnError extends boolean = false>(options: O
 export const getUsageLedger = <ThrowOnError extends boolean = false>(options: Options<GetUsageLedgerData, ThrowOnError>): RequestResult<GetUsageLedgerResponses, GetUsageLedgerErrors, ThrowOnError> => (options.client ?? client).get<GetUsageLedgerResponses, GetUsageLedgerErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/orgs/{o}/usage/ledger',
@@ -1380,7 +1380,7 @@ export const heartbeatJob = <ThrowOnError extends boolean = false>(options: Opti
 export const approveHealingCandidate = <ThrowOnError extends boolean = false>(options: Options<ApproveHealingCandidateData, ThrowOnError>): RequestResult<ApproveHealingCandidateResponses, ApproveHealingCandidateErrors, ThrowOnError> => (options.client ?? client).post<ApproveHealingCandidateResponses, ApproveHealingCandidateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/healing/candidates/{c}/approve',
@@ -1397,7 +1397,7 @@ export const approveHealingCandidate = <ThrowOnError extends boolean = false>(op
 export const revokeHealingCandidate = <ThrowOnError extends boolean = false>(options: Options<RevokeHealingCandidateData, ThrowOnError>): RequestResult<RevokeHealingCandidateResponses, RevokeHealingCandidateErrors, ThrowOnError> => (options.client ?? client).post<RevokeHealingCandidateResponses, RevokeHealingCandidateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/healing/candidates/{c}/revoke',
@@ -1414,7 +1414,7 @@ export const revokeHealingCandidate = <ThrowOnError extends boolean = false>(opt
 export const listHealingCandidates = <ThrowOnError extends boolean = false>(options: Options<ListHealingCandidatesData, ThrowOnError>): RequestResult<ListHealingCandidatesResponses, ListHealingCandidatesErrors, ThrowOnError> => (options.client ?? client).get<ListHealingCandidatesResponses, ListHealingCandidatesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/healing/candidates',
@@ -1427,7 +1427,7 @@ export const listHealingCandidates = <ThrowOnError extends boolean = false>(opti
 export const getHealingCandidate = <ThrowOnError extends boolean = false>(options: Options<GetHealingCandidateData, ThrowOnError>): RequestResult<GetHealingCandidateResponses, GetHealingCandidateErrors, ThrowOnError> => (options.client ?? client).get<GetHealingCandidateResponses, GetHealingCandidateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/healing/candidates/{c}',
@@ -1440,7 +1440,7 @@ export const getHealingCandidate = <ThrowOnError extends boolean = false>(option
 export const rejectHealingCandidate = <ThrowOnError extends boolean = false>(options: Options<RejectHealingCandidateData, ThrowOnError>): RequestResult<RejectHealingCandidateResponses, RejectHealingCandidateErrors, ThrowOnError> => (options.client ?? client).post<RejectHealingCandidateResponses, RejectHealingCandidateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/healing/candidates/{c}/reject',
@@ -1457,7 +1457,7 @@ export const rejectHealingCandidate = <ThrowOnError extends boolean = false>(opt
 export const getHealingSwitch = <ThrowOnError extends boolean = false>(options?: Options<GetHealingSwitchData, ThrowOnError>): RequestResult<GetHealingSwitchResponses, GetHealingSwitchErrors, ThrowOnError> => (options?.client ?? client).get<GetHealingSwitchResponses, GetHealingSwitchErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/healing/switch',
@@ -1470,7 +1470,7 @@ export const getHealingSwitch = <ThrowOnError extends boolean = false>(options?:
 export const setHealingSwitch = <ThrowOnError extends boolean = false>(options: Options<SetHealingSwitchData, ThrowOnError>): RequestResult<SetHealingSwitchResponses, SetHealingSwitchErrors, ThrowOnError> => (options.client ?? client).put<SetHealingSwitchResponses, SetHealingSwitchErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/healing/switch',
@@ -1489,7 +1489,7 @@ export const setHealingSwitch = <ThrowOnError extends boolean = false>(options: 
 export const createWaiver = <ThrowOnError extends boolean = false>(options: Options<CreateWaiverData, ThrowOnError>): RequestResult<CreateWaiverResponses, CreateWaiverErrors, ThrowOnError> => (options.client ?? client).post<CreateWaiverResponses, CreateWaiverErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/waivers',
@@ -1508,7 +1508,7 @@ export const createWaiver = <ThrowOnError extends boolean = false>(options: Opti
 export const approveWaiver = <ThrowOnError extends boolean = false>(options: Options<ApproveWaiverData, ThrowOnError>): RequestResult<ApproveWaiverResponses, ApproveWaiverErrors, ThrowOnError> => (options.client ?? client).post<ApproveWaiverResponses, ApproveWaiverErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/waivers/{w}/approve',
@@ -1523,7 +1523,7 @@ export const approveWaiver = <ThrowOnError extends boolean = false>(options: Opt
 export const revokeWaiver = <ThrowOnError extends boolean = false>(options: Options<RevokeWaiverData, ThrowOnError>): RequestResult<RevokeWaiverResponses, RevokeWaiverErrors, ThrowOnError> => (options.client ?? client).post<RevokeWaiverResponses, RevokeWaiverErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/waivers/{w}/revoke',
@@ -1538,7 +1538,7 @@ export const revokeWaiver = <ThrowOnError extends boolean = false>(options: Opti
 export const listProjectWaivers = <ThrowOnError extends boolean = false>(options: Options<ListProjectWaiversData, ThrowOnError>): RequestResult<ListProjectWaiversResponses, ListProjectWaiversErrors, ThrowOnError> => (options.client ?? client).get<ListProjectWaiversResponses, ListProjectWaiversErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/waivers',
@@ -1553,7 +1553,7 @@ export const listProjectWaivers = <ThrowOnError extends boolean = false>(options
 export const createQuarantineEntry = <ThrowOnError extends boolean = false>(options: Options<CreateQuarantineEntryData, ThrowOnError>): RequestResult<CreateQuarantineEntryResponses, CreateQuarantineEntryErrors, ThrowOnError> => (options.client ?? client).post<CreateQuarantineEntryResponses, CreateQuarantineEntryErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/quarantine',
@@ -1572,7 +1572,7 @@ export const createQuarantineEntry = <ThrowOnError extends boolean = false>(opti
 export const removeQuarantineEntry = <ThrowOnError extends boolean = false>(options: Options<RemoveQuarantineEntryData, ThrowOnError>): RequestResult<RemoveQuarantineEntryResponses, RemoveQuarantineEntryErrors, ThrowOnError> => (options.client ?? client).delete<RemoveQuarantineEntryResponses, RemoveQuarantineEntryErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/quarantine/{q}',
@@ -1587,7 +1587,7 @@ export const removeQuarantineEntry = <ThrowOnError extends boolean = false>(opti
 export const listQuarantineEntries = <ThrowOnError extends boolean = false>(options: Options<ListQuarantineEntriesData, ThrowOnError>): RequestResult<ListQuarantineEntriesResponses, ListQuarantineEntriesErrors, ThrowOnError> => (options.client ?? client).get<ListQuarantineEntriesResponses, ListQuarantineEntriesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/quarantine',
@@ -1602,7 +1602,7 @@ export const listQuarantineEntries = <ThrowOnError extends boolean = false>(opti
 export const listAuthoringTree = <ThrowOnError extends boolean = false>(options: Options<ListAuthoringTreeData, ThrowOnError>): RequestResult<ListAuthoringTreeResponses, ListAuthoringTreeErrors, ThrowOnError> => (options.client ?? client).get<ListAuthoringTreeResponses, ListAuthoringTreeErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/tree',
@@ -1617,7 +1617,7 @@ export const listAuthoringTree = <ThrowOnError extends boolean = false>(options:
 export const createAuthoringNode = <ThrowOnError extends boolean = false>(options: Options<CreateAuthoringNodeData, ThrowOnError>): RequestResult<CreateAuthoringNodeResponses, CreateAuthoringNodeErrors, ThrowOnError> => (options.client ?? client).post<CreateAuthoringNodeResponses, CreateAuthoringNodeErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/nodes',
@@ -1636,7 +1636,7 @@ export const createAuthoringNode = <ThrowOnError extends boolean = false>(option
 export const deleteAuthoringNode = <ThrowOnError extends boolean = false>(options: Options<DeleteAuthoringNodeData, ThrowOnError>): RequestResult<DeleteAuthoringNodeResponses, DeleteAuthoringNodeErrors, ThrowOnError> => (options.client ?? client).delete<DeleteAuthoringNodeResponses, DeleteAuthoringNodeErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/nodes/{n}',
@@ -1655,7 +1655,7 @@ export const deleteAuthoringNode = <ThrowOnError extends boolean = false>(option
 export const updateAuthoringNode = <ThrowOnError extends boolean = false>(options: Options<UpdateAuthoringNodeData, ThrowOnError>): RequestResult<UpdateAuthoringNodeResponses, UpdateAuthoringNodeErrors, ThrowOnError> => (options.client ?? client).patch<UpdateAuthoringNodeResponses, UpdateAuthoringNodeErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/nodes/{n}',
@@ -1674,7 +1674,7 @@ export const updateAuthoringNode = <ThrowOnError extends boolean = false>(option
 export const reorderAuthoringNodes = <ThrowOnError extends boolean = false>(options: Options<ReorderAuthoringNodesData, ThrowOnError>): RequestResult<ReorderAuthoringNodesResponses, ReorderAuthoringNodesErrors, ThrowOnError> => (options.client ?? client).post<ReorderAuthoringNodesResponses, ReorderAuthoringNodesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/nodes/{n}/reorder',
@@ -1693,7 +1693,7 @@ export const reorderAuthoringNodes = <ThrowOnError extends boolean = false>(opti
 export const restoreAuthoringNode = <ThrowOnError extends boolean = false>(options: Options<RestoreAuthoringNodeData, ThrowOnError>): RequestResult<RestoreAuthoringNodeResponses, RestoreAuthoringNodeErrors, ThrowOnError> => (options.client ?? client).post<RestoreAuthoringNodeResponses, RestoreAuthoringNodeErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/nodes/{n}/restore',
@@ -1708,7 +1708,7 @@ export const restoreAuthoringNode = <ThrowOnError extends boolean = false>(optio
 export const listChecklistItems = <ThrowOnError extends boolean = false>(options: Options<ListChecklistItemsData, ThrowOnError>): RequestResult<ListChecklistItemsResponses, ListChecklistItemsErrors, ThrowOnError> => (options.client ?? client).get<ListChecklistItemsResponses, ListChecklistItemsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/checklist-items',
@@ -1723,7 +1723,7 @@ export const listChecklistItems = <ThrowOnError extends boolean = false>(options
 export const createChecklistItem = <ThrowOnError extends boolean = false>(options: Options<CreateChecklistItemData, ThrowOnError>): RequestResult<CreateChecklistItemResponses, CreateChecklistItemErrors, ThrowOnError> => (options.client ?? client).post<CreateChecklistItemResponses, CreateChecklistItemErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/checklist-items',
@@ -1742,7 +1742,7 @@ export const createChecklistItem = <ThrowOnError extends boolean = false>(option
 export const deleteChecklistItem = <ThrowOnError extends boolean = false>(options: Options<DeleteChecklistItemData, ThrowOnError>): RequestResult<DeleteChecklistItemResponses, DeleteChecklistItemErrors, ThrowOnError> => (options.client ?? client).delete<DeleteChecklistItemResponses, DeleteChecklistItemErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/checklist-items/{i}',
@@ -1761,7 +1761,7 @@ export const deleteChecklistItem = <ThrowOnError extends boolean = false>(option
 export const updateChecklistItem = <ThrowOnError extends boolean = false>(options: Options<UpdateChecklistItemData, ThrowOnError>): RequestResult<UpdateChecklistItemResponses, UpdateChecklistItemErrors, ThrowOnError> => (options.client ?? client).patch<UpdateChecklistItemResponses, UpdateChecklistItemErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/checklist-items/{i}',
@@ -1780,7 +1780,7 @@ export const updateChecklistItem = <ThrowOnError extends boolean = false>(option
 export const restoreChecklistItem = <ThrowOnError extends boolean = false>(options: Options<RestoreChecklistItemData, ThrowOnError>): RequestResult<RestoreChecklistItemResponses, RestoreChecklistItemErrors, ThrowOnError> => (options.client ?? client).post<RestoreChecklistItemResponses, RestoreChecklistItemErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/checklist-items/{i}/restore',
@@ -1795,7 +1795,7 @@ export const restoreChecklistItem = <ThrowOnError extends boolean = false>(optio
 export const listManualCases = <ThrowOnError extends boolean = false>(options: Options<ListManualCasesData, ThrowOnError>): RequestResult<ListManualCasesResponses, ListManualCasesErrors, ThrowOnError> => (options.client ?? client).get<ListManualCasesResponses, ListManualCasesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/manual-cases',
@@ -1810,7 +1810,7 @@ export const listManualCases = <ThrowOnError extends boolean = false>(options: O
 export const createManualCase = <ThrowOnError extends boolean = false>(options: Options<CreateManualCaseData, ThrowOnError>): RequestResult<CreateManualCaseResponses, CreateManualCaseErrors, ThrowOnError> => (options.client ?? client).post<CreateManualCaseResponses, CreateManualCaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/manual-cases',
@@ -1829,7 +1829,7 @@ export const createManualCase = <ThrowOnError extends boolean = false>(options: 
 export const deleteManualCase = <ThrowOnError extends boolean = false>(options: Options<DeleteManualCaseData, ThrowOnError>): RequestResult<DeleteManualCaseResponses, DeleteManualCaseErrors, ThrowOnError> => (options.client ?? client).delete<DeleteManualCaseResponses, DeleteManualCaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/manual-cases/{m}',
@@ -1848,7 +1848,7 @@ export const deleteManualCase = <ThrowOnError extends boolean = false>(options: 
 export const getManualCase = <ThrowOnError extends boolean = false>(options: Options<GetManualCaseData, ThrowOnError>): RequestResult<GetManualCaseResponses, GetManualCaseErrors, ThrowOnError> => (options.client ?? client).get<GetManualCaseResponses, GetManualCaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/manual-cases/{m}',
@@ -1863,7 +1863,7 @@ export const getManualCase = <ThrowOnError extends boolean = false>(options: Opt
 export const updateManualCase = <ThrowOnError extends boolean = false>(options: Options<UpdateManualCaseData, ThrowOnError>): RequestResult<UpdateManualCaseResponses, UpdateManualCaseErrors, ThrowOnError> => (options.client ?? client).patch<UpdateManualCaseResponses, UpdateManualCaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/manual-cases/{m}',
@@ -1882,7 +1882,7 @@ export const updateManualCase = <ThrowOnError extends boolean = false>(options: 
 export const setManualCaseState = <ThrowOnError extends boolean = false>(options: Options<SetManualCaseStateData, ThrowOnError>): RequestResult<SetManualCaseStateResponses, SetManualCaseStateErrors, ThrowOnError> => (options.client ?? client).post<SetManualCaseStateResponses, SetManualCaseStateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/manual-cases/{m}/state',
@@ -1901,7 +1901,7 @@ export const setManualCaseState = <ThrowOnError extends boolean = false>(options
 export const moveManualCase = <ThrowOnError extends boolean = false>(options: Options<MoveManualCaseData, ThrowOnError>): RequestResult<MoveManualCaseResponses, MoveManualCaseErrors, ThrowOnError> => (options.client ?? client).post<MoveManualCaseResponses, MoveManualCaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/manual-cases/{m}/item',
@@ -1920,7 +1920,7 @@ export const moveManualCase = <ThrowOnError extends boolean = false>(options: Op
 export const restoreManualCase = <ThrowOnError extends boolean = false>(options: Options<RestoreManualCaseData, ThrowOnError>): RequestResult<RestoreManualCaseResponses, RestoreManualCaseErrors, ThrowOnError> => (options.client ?? client).post<RestoreManualCaseResponses, RestoreManualCaseErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/manual-cases/{m}/restore',
@@ -1935,7 +1935,7 @@ export const restoreManualCase = <ThrowOnError extends boolean = false>(options:
 export const listAuthoringVersions = <ThrowOnError extends boolean = false>(options: Options<ListAuthoringVersionsData, ThrowOnError>): RequestResult<ListAuthoringVersionsResponses, ListAuthoringVersionsErrors, ThrowOnError> => (options.client ?? client).get<ListAuthoringVersionsResponses, ListAuthoringVersionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/versions',
@@ -1950,7 +1950,7 @@ export const listAuthoringVersions = <ThrowOnError extends boolean = false>(opti
 export const getAuthoringVersion = <ThrowOnError extends boolean = false>(options: Options<GetAuthoringVersionData, ThrowOnError>): RequestResult<GetAuthoringVersionResponses, GetAuthoringVersionErrors, ThrowOnError> => (options.client ?? client).get<GetAuthoringVersionResponses, GetAuthoringVersionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/versions/{v}',
@@ -1965,7 +1965,7 @@ export const getAuthoringVersion = <ThrowOnError extends boolean = false>(option
 export const restoreAuthoringVersion = <ThrowOnError extends boolean = false>(options: Options<RestoreAuthoringVersionData, ThrowOnError>): RequestResult<RestoreAuthoringVersionResponses, RestoreAuthoringVersionErrors, ThrowOnError> => (options.client ?? client).post<RestoreAuthoringVersionResponses, RestoreAuthoringVersionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/versions/{v}/restore',

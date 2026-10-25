@@ -139,10 +139,16 @@ internal sealed class CompleteLoginCommandHandler(
                 cancellationToken)
             .ConfigureAwait(false);
 
-        // 5. The session: the store owns the row, the HMAC of the cookie value and the expiry pair.
+        // 5. The session: the store owns the row, the HMAC of the cookie value and the expiry pair. D5a: the
+        //    value the browser presented to this callback travels with the creation, so the store revokes that row
+        //    in the same transaction and chains `rotated_from` — a sign-in never leaves the previous session alive.
         var ticket = await sessions
             .CreateAsync(
-                new SessionCreation(user.UserId, ClientAddress.Sanitise(command.ClientIpAddress), command.UserAgent),
+                new SessionCreation(
+                    user.UserId,
+                    ClientAddress.Sanitise(command.ClientIpAddress),
+                    command.UserAgent,
+                    command.PredecessorCookieValue),
                 cancellationToken)
             .ConfigureAwait(false);
 

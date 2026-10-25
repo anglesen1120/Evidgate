@@ -12,6 +12,7 @@ using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Login.GitHub;
 using Evidgate.Modules.Identity.Login.Google;
 using Evidgate.Modules.Identity.Options;
+using Evidgate.Modules.Identity.Sessions.Http;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -124,6 +125,19 @@ internal static class IdentityModule
         services.AddFederatedLogin(configuration);
         services.AddGoogleLogin(configuration);
         services.AddGitHubLogin(configuration);
+
+        // 02.3.2-T1 (D2/D6): the request-path session layer. The antiforgery pair and its session binding, the
+        // authenticator that reads the `__Host-evidgate_session` cookie (one statement per request, memoized in
+        // HttpContext.Items, rotating first when the row demands it) and the caller seam that turns a live session
+        // into a Member principal — which is also the host's typed refusal (`ICallerRefusalAuthenticator`), so a
+        // revoked or expired cookie answers its own 401 instead of the pipeline's generic one.
+        //
+        // The caller seam is host-neutral (BuildingBlocks.Pipeline has no ASP.NET reference), so the current
+        // request reaches it through IHttpContextAccessor.
+        services.AddSessionAntiforgery();
+        services.AddHttpContextAccessor();
+        services.TryAddSingleton<ISessionRequestAuthenticator, SessionRequestAuthenticator>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ICallerAuthenticator, SessionCallerAuthenticator>());
 
         // 02.4.1-T4.1: the daily purge of the OIDC replay cache. Registered in both hosts like every module
         // piece; only the Worker runs a consumer and a schedule runner.

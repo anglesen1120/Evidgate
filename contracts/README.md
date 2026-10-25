@@ -98,10 +98,13 @@ Shared `components/parameters` carry the 00 §9.1 conventions: `cursor` and
 `If-Match` and `X-XSRF-TOKEN`. Mutations must reference `Idempotency-Key`
 unless listed in the exemption list (below); every cookie-authenticated
 mutation references `X-XSRF-TOKEN`, while bearer-only routes (e.g. the V2
-agent job routes) must not (T38). The server-side validation filter for that header is owned by
-02.3.2-T1.2 and is not merged yet, so today the header is a documented requirement of every
-cookie-authenticated mutation (the `POST`/`DELETE /v1/auth/link/*` routes included; invite staging
-is exempt because it _sets_ a cookie rather than authenticating with one), not an enforced one. All
+agent job routes) must not (T38). The server enforces that header host-wide
+(02.3.2-T1: middleware in `ApiHost`, so a new mutating route is covered the
+moment it is served): a cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE`
+without a validating pair answers 403 `csrf_failed`, the `POST`/`DELETE
+/v1/auth/link/*` routes included. `POST /v1/auth/invite-token` is the one
+exemption, because it _sets_ a cookie rather than authenticating with one (its
+mandatory `application/json` body is the defence). All
 error responses reference
 `components/schemas/ErrorEnvelope`; a 429 and a 503 always carry `Retry-After` — the route's own
 value where it has one (`EVIDGATE__LOGIN__RETRYAFTERSECONDS` on the pre-tenant auth routes),

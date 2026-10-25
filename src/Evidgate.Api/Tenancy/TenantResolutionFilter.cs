@@ -2,6 +2,7 @@ using Evidgate.Api.Endpoints;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 
 namespace Evidgate.Api.Tenancy;
 
@@ -37,6 +38,16 @@ public sealed class TenantResolutionFilter(
         }
 
         var http = context.HttpContext;
+
+        // 02.3.2-T1 (D2): a credential the host RECOGNISES and refuses answers its own code — 401
+        // session_expired / session_revoked, 403 account_disabled — instead of the generic 401 the pipeline
+        // produces for a caller it never resolved. Asked before authentication, because authenticating would
+        // only say "no caller" and lose the reason.
+        if (await RefusalAsync(http).ConfigureAwait(false) is { } refusal)
+        {
+            return Result.Failure(refusal).ToHttpResult(http);
+        }
+
         var caller = await AuthenticateAsync(http).ConfigureAwait(false);
 
         if (caller is null)
@@ -77,6 +88,26 @@ public sealed class TenantResolutionFilter(
             if (await authenticator.AuthenticateAsync(new HttpCallerRequest(http), http.RequestAborted).ConfigureAwait(false) is { } caller)
             {
                 return caller;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The typed refusal of the request's credential (02.3.2-T1): the first
+    /// <see cref="ICallerRefusalAuthenticator"/> among the registered authenticators that refuses it, or null
+    /// when none does. Deliberately the SAME set the host authenticates with, so a substituted authenticator
+    /// cannot leave a stale refusal behind.
+    /// </summary>
+    private async ValueTask<Error?> RefusalAsync(HttpContext http)
+    {
+        foreach (var authenticator in authenticators)
+        {
+            if (authenticator is ICallerRefusalAuthenticator refusal
+                && await refusal.RefuseAsync(new HttpCallerRequest(http), http.RequestAborted).ConfigureAwait(false) is { } error)
+            {
+                return error;
             }
         }
 
