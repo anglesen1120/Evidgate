@@ -22,6 +22,9 @@ import orgsListUnauthenticated from '../../../../../../fixtures/web-api/orgs-lis
 import orgsListUnavailable from '../../../../../../fixtures/web-api/orgs-list-unavailable/input.json';
 import permissionsList from '../../../../../../fixtures/web-api/permissions-list/input.json';
 import permissionsListLimited from '../../../../../../fixtures/web-api/permissions-list-limited/input.json';
+import permissionsListSettingsAdmin from '../../../../../../fixtures/web-api/permissions-list-settings-admin/input.json';
+import permissionsListSettingsAuditOnly from '../../../../../../fixtures/web-api/permissions-list-settings-audit-only/input.json';
+import permissionsListSettingsNoTab from '../../../../../../fixtures/web-api/permissions-list-settings-no-tab/input.json';
 import projectUpdatePreconditionFailed from '../../../../../../fixtures/web-api/project-update-precondition-failed/input.json';
 import projectsList from '../../../../../../fixtures/web-api/projects-list/input.json';
 import rolesList from '../../../../../../fixtures/web-api/roles-list/input.json';
@@ -75,6 +78,14 @@ export interface FixtureDocument {
  * suite asserts its 403 (`apps/web/e2e/shell/adversarial.spec.ts`). The T12 leak gate
  * (`scripts/check-no-fixture-code.mjs`) no longer forces the omission: it skips a catalogue row's
  * `code`, `resource` and `action` as protocol vocabulary the production registry shares.
+ *
+ * 09.7.1-T1 added three rows for the Settings tab strip: `permissions-list-settings-admin`
+ * (`?fixture.variant.listPermissions=settings-admin`: the grant set that reaches every tab code of
+ * the strip, G1 and later phases alike), `permissions-list-settings-audit-only` (`audit` is the one
+ * tab left) and `permissions-list-settings-no-tab` (`organization:read` alone, so the shell renders
+ * its empty state). Every row is copied verbatim from `contracts/permissions.json`, and the client
+ * side derives the grants from the `tenant_assignable` rows of this catalogue, never from a role
+ * name (`core/session/effective-permissions.source.ts`).
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
@@ -85,6 +96,9 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'orgs-list-unavailable', document: orgsListUnavailable },
   { name: 'permissions-list', document: permissionsList },
   { name: 'permissions-list-limited', document: permissionsListLimited },
+  { name: 'permissions-list-settings-admin', document: permissionsListSettingsAdmin },
+  { name: 'permissions-list-settings-audit-only', document: permissionsListSettingsAuditOnly },
+  { name: 'permissions-list-settings-no-tab', document: permissionsListSettingsNoTab },
   { name: 'project-update-precondition-failed', document: projectUpdatePreconditionFailed },
   { name: 'projects-list', document: projectsList },
   { name: 'roles-list', document: rolesList },
