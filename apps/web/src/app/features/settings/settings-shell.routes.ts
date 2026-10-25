@@ -10,15 +10,14 @@
 //                not-found pattern answers — never a 403, never a redirect (AC1, 00 §9.2).
 //
 // Both the strip and this table read `SETTINGS_TABS`, so a tab can never be offered without a route
-// or routed without being offered. The tab body is `SettingsTabPlaceholderPage` until its own story
-// fills it: the placeholders are a few hundred bytes, so they are statically imported and the whole
-// shell is one lazy chunk (the area's other ten destinations keep the placeholder table in
-// `settings.routes.ts`, which this file does not replace).
+// or routed without being offered. Members has its real org-scoped screen; other tab bodies remain
+// placeholders until their stories land. Other sidebar destinations retain `settings.routes.ts`.
 //
 // W1 holds: only `app.routes.ts` imports this module, through the per-entry `ENTRY_ROUTES` override.
 
 import type { Route, Routes } from '@angular/router';
 
+import { MembersPage } from './members/members.page';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
@@ -30,7 +29,7 @@ import { SETTINGS_TABS } from './settings-tabs';
 const TAB_ROUTES: readonly Route[] = SETTINGS_TABS.map((tab) => ({
   path: tab.segment,
   canMatch: [settingsTabGuard(tab)],
-  component: SettingsTabPlaceholderPage,
+  component: tab.id === 'members' ? MembersPage : SettingsTabPlaceholderPage,
   data: { settingsTabId: tab.id },
 }));
 

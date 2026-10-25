@@ -1,0 +1,18 @@
+{
+  "operation_id": "removeMember",
+  "variant": "invalid-transition",
+  "status": 409,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d5"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "invalid_transition",
+      "message": "a pending invitation cannot be removed; cancel the invitation instead",
+      "request_id": "018f0000-0000-7000-8000-0000000000d5",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

@@ -997,6 +997,95 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       expect(ruleIds(code, SETTINGS_SECRETS_FILE)).toEqual([SECRET_FIELD]);
     });
 
+    // 09.7.1-T2 (plan 09.7.1-T2 Notes, from the 09.7.1-T1 delta review): a state factory or
+    // updater hands the literal it RETURNS over as state, so the argument is walked too — a
+    // concise body, a block body's top-level `return`, and a `signal({ ... })` inside the factory.
+    // One finding per occurrence: the factory literal, the nested literal, the wrapped one and the
+    // three middle-of-name keys are all reported once, and nothing twice.
+    it('reports a secret-shaped field of a state factory or updater', () => {
+      const extended = secretFixture('failing-extended.ts.txt');
+      const expected = [
+        SECRET_FIELD,
+        SECRET_FIELD,
+        SECRET_FIELD,
+        SECRET_FIELD,
+        SECRET_FIELD,
+        SECRET_FIELD,
+        SECRET_FIELD,
+        SECRET_FIELD,
+        SECRET_FIELD,
+      ];
+      expect(ruleIds(extended, SETTINGS_SECRETS_FILE)).toEqual(expected);
+      for (const message of lint(extended, SETTINGS_SECRETS_FILE)) {
+        expect(message.message).toContain(
+          'a Settings store holds metadata only (plan 09.7.1 §8 S3)',
+        );
+      }
+    });
+
+    // The same extension must not turn a metadata factory, a neutral word or a payload into a
+    // finding: `withState(() => ({...}))` writes the ordinary metadata names, a method's request
+    // body and a nested arrow's object are still not state, and `tokenizer`, `secretary`,
+    // `passwordless`/`passwordLess` and the pagination cursor fields stay legal.
+    it('accepts a factory or updater that hands over metadata only', () => {
+      expect(lint(secretFixture('passing-extended.ts.txt'), SETTINGS_SECRETS_FILE)).toEqual([]);
+    });
+
+    // A secret word behind a value word is the value itself, wherever it stands in the name:
+    // position is not what decides it, the word behind it is. A secret word followed by anything
+    // else is metadata (`rawTokenMaterial`, `nextTokenRefreshAt` — see the README blind spots).
+    it('reports a secret word in the middle of a name', () => {
+      const reported = [
+        'rawTokenValue',
+        'signingSecretText',
+        'passwordRawText',
+        'pageTokenText',
+        // The trailing position was already reported before T2 and still is: `pageToken` is not a
+        // neutral name.
+        'pageToken',
+      ];
+      for (const name of reported) {
+        const code = [`export const state = withState({ ${name}: '' });`, ''].join('\n');
+        expect(ruleIds(code, SETTINGS_SECRETS_FILE), name).toEqual([SECRET_FIELD]);
+      }
+
+      const neutral = [
+        'tokenizer',
+        'secretary',
+        'passwordless',
+        'passwordLess',
+        'hasTokenValue',
+        'rawTokenMaterial',
+        'nextTokenRefreshAt',
+        'cursor',
+        'next_cursor',
+      ];
+      for (const name of neutral) {
+        const code = [`export const state = withState({ ${name}: '' });`, ''].join('\n');
+        expect(lint(code, SETTINGS_SECRETS_FILE), name).toEqual([]);
+      }
+    });
+
+    // 09.7.1-T2: the split is bounded. A name longer than 128 characters is examined in its first
+    // and last 64, so the work per identifier stays constant; a secret word outside both windows
+    // is not seen, which the README lists as a blind spot rather than implying it is covered.
+    it('bounds the name it splits', () => {
+      const head = `tokenValue_${'a'.repeat(140)}`;
+      const tail = `${'a'.repeat(140)}_tokenValue`;
+      const buried = `${'a'.repeat(70)}token${'b'.repeat(70)}`;
+      expect(head.length).toBeGreaterThan(128);
+      expect(tail.length).toBeGreaterThan(128);
+      expect(buried.length).toBeGreaterThan(128);
+
+      for (const name of [head, tail]) {
+        const code = [`export const state = withState({ ${name}: '' });`, ''].join('\n');
+        expect(ruleIds(code, SETTINGS_SECRETS_FILE), name).toEqual([SECRET_FIELD]);
+      }
+
+      const code = [`export const state = withState({ ${buried}: '' });`, ''].join('\n');
+      expect(lint(code, SETTINGS_SECRETS_FILE), buried).toEqual([]);
+    });
+
     it('reports a withState type argument literal', () => {
       const code = [
         'export const feature = withState<{ token: string; tokenPrefix: string }>({',

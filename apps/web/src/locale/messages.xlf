@@ -16,6 +16,265 @@
           <context context-type="linenumber">29,34</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="settings.members.title" datatype="html">
+        <source>Members and roles</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.directory" datatype="html">
+        <source>Members and invitations</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.description" datatype="html">
+        <source>Manage organization membership. The server decides actual access.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">8</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.member" datatype="html">
+        <source>Member</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">9</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.status" datatype="html">
+        <source>Status</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">10</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.roles" datatype="html">
+        <source>Organization roles</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">11</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.actions" datatype="html">
+        <source>Actions</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">12</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.remove" datatype="html">
+        <source>Remove member</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">13</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.invite" datatype="html">
+        <source>Invite member</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">14</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.cancel" datatype="html">
+        <source>Cancel</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.email" datatype="html">
+        <source>Email</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.optional-roles" datatype="html">
+        <source>Initial roles (optional)</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">17</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.send" datatype="html">
+        <source>Send invitation</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">18</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.submitting" datatype="html">
+        <source>Submitting…</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">19</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.remove-title" datatype="html">
+        <source>Remove this member?</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">20</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.remove-description" datatype="html">
+        <source>Organization access will be revoked. Authored history stays attributed.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">21</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.matrix" datatype="html">
+        <source>Organization-wide role matrix</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">22</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.granted" datatype="html">
+        <source>Granted</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">23</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.not-granted" datatype="html">
+        <source>Not granted</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">24</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.no-roles" datatype="html">
+        <source>No roles assigned</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">25</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.roles-unavailable" datatype="html">
+        <source>Role catalogue unavailable. Memberships remain visible.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">26</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.preview" datatype="html">
+        <source>Role scope preview</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">27</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.preview-unavailable" datatype="html">
+        <source>Preview unavailable for this role</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">28</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.authority" datatype="html">
+        <source>Display only. The server decides actual access.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">29</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.sensitive" datatype="html">
+        <source>Sensitive</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">30</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.omitted" datatype="html">
+        <source>Permissions omitted because they are missing from the live catalogue:</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">31</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.empty-title" datatype="html">
+        <source>No members yet</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">32</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.empty-description" datatype="html">
+        <source>Members and pending invitations will appear here.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">33</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.next" datatype="html">
+        <source>Next members</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">34</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.previous" datatype="html">
+        <source>Previous members</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">35</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.saved" datatype="html">
+        <source>Membership updated.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.narrow" datatype="html">
+        <source>Use a wider screen to invite or remove members.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">37</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.pending" datatype="html">
+        <source>Pending invitation</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">38</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.active" datatype="html">
+        <source>Active</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">39</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.removed" datatype="html">
+        <source>Removed</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.revoked" datatype="html">
+        <source>Revoked</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">41</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.expired" datatype="html">
+        <source>Expired</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
+          <context context-type="linenumber">42</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="settings.empty.title" datatype="html">
         <source>No settings destinations</source>
         <context-group purpose="location">
@@ -55,11 +314,11 @@
         <source>Choose a settings destination</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-shell.page.html</context>
-          <context context-type="linenumber">16,20</context>
+          <context context-type="linenumber">17,19</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-shell.page.html</context>
-          <context context-type="linenumber">24,27</context>
+          <context context-type="linenumber">22,25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.placeholder.body" datatype="html">
@@ -73,56 +332,56 @@
         <source>Members</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">58</context>
+          <context context-type="linenumber">55</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.secrets" datatype="html">
         <source>Secrets</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">66</context>
+          <context context-type="linenumber">62</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.policy" datatype="html">
         <source>Policy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">74</context>
+          <context context-type="linenumber">69</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.quota-retention" datatype="html">
         <source>Quota &amp; retention</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">82</context>
+          <context context-type="linenumber">76</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.audit" datatype="html">
         <source>Audit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">90</context>
+          <context context-type="linenumber">83</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.security-events" datatype="html">
         <source>Security events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">98</context>
+          <context context-type="linenumber">90</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.integrations" datatype="html">
         <source>Integrations</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">106</context>
+          <context context-type="linenumber">97</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.agents" datatype="html">
         <source>Agents</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">114</context>
+          <context context-type="linenumber">104</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.label-chip.flaky" datatype="html">

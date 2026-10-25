@@ -20,6 +20,7 @@ import {
 import { RouterTestingHarness } from '@angular/router/testing';
 
 import { SessionStore, type SessionState } from '../../core/session/session.store';
+import { MembersPage } from './members/members.page';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
@@ -67,6 +68,7 @@ const PAGE_STUBS = new Map<unknown, Type<unknown>>([
   [SettingsShellPage, SettingsShellStub],
   [SettingsTabPlaceholderPage, SettingsTabStub],
   [SettingsNoTabsPage, SettingsNoTabsStub],
+  [MembersPage, SettingsTabStub],
 ]);
 
 /** The real shell table with only its page components swapped. */

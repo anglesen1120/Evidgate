@@ -5,7 +5,9 @@
 //
 // Every assertion keys on the strip's DOM contract (plan §10 T1.1) — `app-settings-shell`,
 // `data-settings-tab`, `aria-current="page"`, `app-settings-tab-placeholder[data-settings-tab-body]`
-// and `app-settings-no-tabs` — never on a localized label, so the same specs hold on both bundles.
+// for a tab whose story has not shipped a body yet, `app-members-page` for the one that has
+// (09.7.1-T2), and `app-settings-no-tabs` — never on a localized label, so the same specs hold on
+// both bundles.
 // The session's grants come from corpus variants (`permissions-list-settings-*`), never from a role
 // name: the client derives them from the `tenant_assignable` catalogue rows alone
 // (`core/session/effective-permissions.source.ts`).
@@ -13,9 +15,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 import {
   activeSettingsTabId,
+  expectIndistinguishableNotFound,
   expectNoA11yViolations,
   LOCALES,
-  mainText,
   SETTINGS_ADMIN_GRANTS,
   SETTINGS_AUDIT_ONLY_GRANTS,
   seedStoredTheme,
@@ -42,49 +44,6 @@ const TAB_IDS: readonly string[] = [
 
 /** The tabs whose CR-D-2 phase this build reached (G1): the only ones a grant set can reveal. */
 const G1_TABS: readonly string[] = ['members', 'quota-retention', 'audit'];
-
-/** What an address rendered, for the identity comparison a 404 claim needs. */
-interface RenderedAddress {
-  readonly pathname: string;
-  readonly url: string;
-  readonly heading: string;
-  readonly text: string;
-}
-
-/**
- * Opens each address, records what the page says, and asserts each one rendered the not-found
- * pattern IN PLACE: same address still in the bar, one heading and one body text for all of them,
- * and never the forbidden page (a refusal leaking into the 404 copy would confirm the tab exists).
- */
-async function expectIndistinguishableNotFound(
-  page: Page,
-  attempts: readonly string[],
-): Promise<readonly RenderedAddress[]> {
-  const rendered: RenderedAddress[] = [];
-  for (const attempted of attempts) {
-    const address = new URL(attempted, 'http://127.0.0.1');
-    await page.goto(attempted);
-    await expect(page.locator('#main-content h1')).toHaveCount(1);
-    await expect(page.locator('app-not-found-pattern')).toHaveCount(1);
-    await expect(page.locator('app-forbidden-pattern')).toHaveCount(0);
-    rendered.push({
-      pathname: address.pathname,
-      url: page.url(),
-      heading: (await page.locator('#main-content h1').innerText()).trim(),
-      text: await mainText(page),
-    });
-  }
-
-  for (const [index, entry] of rendered.entries()) {
-    const landed = new URL(entry.url).pathname;
-    expect(landed, `attempt ${index} kept the address it was given`).toBe(entry.pathname);
-    expect(landed.endsWith('/forbidden'), `attempt ${index} is not the refusal page`).toBe(false);
-  }
-
-  expect(new Set(rendered.map((entry) => entry.heading)).size).toBe(1);
-  expect(new Set(rendered.map((entry) => entry.text)).size).toBe(1);
-  return rendered;
-}
 
 /**
  * The `data-settings-tab` ids focus visits, in the order the keyboard hands them out. Stops on
@@ -148,7 +107,10 @@ test.describe('the tab strip names only tabs the caller may open (AC1)', () => {
       await expect(strip).toHaveCount(1);
       await expect(strip).toHaveAttribute('aria-label', /\S/);
       await expect.poll(() => activeSettingsTabId(page)).toBe('members');
-      await expect.poll(() => settingsTabBodyId(page)).toBe('members');
+      // 09.7.1-T2 shipped the members tab body: the host is the real page, not the placeholder, so
+      // `settingsTabBodyId` (which answers placeholder bodies) must return null here.
+      await expect(page.locator('app-members-page')).toHaveCount(1);
+      expect(await settingsTabBodyId(page)).toBeNull();
     });
   }
 
@@ -226,13 +188,17 @@ test.describe('the strip is operable from the keyboard (negative control)', () =
 test.describe('the Settings shell is WCAG 2.2 AA clean (AC1, 00 §5.6 W9)', () => {
   for (const locale of LOCALES) {
     for (const theme of THEMES) {
-      test(`tab strip and placeholder body, ${locale} bundle, ${theme} tokens`, async ({
-        page,
-      }) => {
+      test(`tab strip and members body, ${locale} bundle, ${theme} tokens`, async ({ page }) => {
         await seedStoredTheme(page, theme);
         await page.goto(withVariant(settingsTabPath(locale, 'members'), SETTINGS_ADMIN_GRANTS));
         await expect(page.locator('app-settings-shell')).toHaveCount(1);
         await expect.poll(() => settingsTabIds(page)).toEqual(G1_TABS);
+
+        // The members body is a live page since 09.7.1-T2, not a static placeholder: scan it once
+        // its first page of memberships has landed, so the audit sees the table and the role matrix
+        // instead of the loading skeleton.
+        const members = page.locator('app-members-page');
+        await expect(members).toHaveAttribute('data-members-phase', 'ready');
 
         await expectNoA11yViolations(page, `settings ${locale}/${theme}`);
       });
@@ -250,6 +216,10 @@ test.describe('the Settings shell is WCAG 2.2 AA clean (AC1, 00 §5.6 W9)', () =
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto(withVariant(settingsTabPath('en', 'members'), SETTINGS_ADMIN_GRANTS));
     await expect(page.locator('app-settings-shell')).toHaveCount(1);
+    // The widest body of the strip: the real members table, so the overflow measurement is of the
+    // table in its ready state rather than of a placeholder (09.7.1-T2).
+    const members = page.locator('app-members-page');
+    await expect(members).toHaveAttribute('data-members-phase', 'ready');
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

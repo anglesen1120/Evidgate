@@ -1,0 +1,18 @@
+{
+  "operation_id": "createMembership",
+  "variant": "invite-exists",
+  "status": 409,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d2"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "invite_exists",
+      "message": "a pending invitation already exists for this address",
+      "request_id": "018f0000-0000-7000-8000-0000000000d2",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

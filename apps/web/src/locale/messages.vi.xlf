@@ -2,6 +2,43 @@
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
   <file source-language="en" target-language="vi" datatype="plaintext" original="ng2.template">
     <body>
+      <trans-unit id="settings.members.title" datatype="html"><source>Members and roles</source><target>Thành viên và vai trò</target></trans-unit>
+      <trans-unit id="settings.members.directory" datatype="html"><source>Members and invitations</source><target>Thành viên và lời mời</target></trans-unit>
+      <trans-unit id="settings.members.description" datatype="html"><source>Manage organization membership. The server decides actual access.</source><target>Quản lý thành viên tổ chức. Máy chủ quyết định quyền truy cập thực tế.</target></trans-unit>
+      <trans-unit id="settings.members.member" datatype="html"><source>Member</source><target>Thành viên</target></trans-unit>
+      <trans-unit id="settings.members.status" datatype="html"><source>Status</source><target>Trạng thái</target></trans-unit>
+      <trans-unit id="settings.members.roles" datatype="html"><source>Organization roles</source><target>Vai trò tổ chức</target></trans-unit>
+      <trans-unit id="settings.members.actions" datatype="html"><source>Actions</source><target>Hành động</target></trans-unit>
+      <trans-unit id="settings.members.remove" datatype="html"><source>Remove member</source><target>Xoá thành viên</target></trans-unit>
+      <trans-unit id="settings.members.invite" datatype="html"><source>Invite member</source><target>Mời thành viên</target></trans-unit>
+      <trans-unit id="settings.members.cancel" datatype="html"><source>Cancel</source><target>Huỷ</target></trans-unit>
+      <trans-unit id="settings.members.email" datatype="html"><source>Email</source><target>Email</target></trans-unit>
+      <trans-unit id="settings.members.optional-roles" datatype="html"><source>Initial roles (optional)</source><target>Vai trò ban đầu (không bắt buộc)</target></trans-unit>
+      <trans-unit id="settings.members.send" datatype="html"><source>Send invitation</source><target>Gửi lời mời</target></trans-unit>
+      <trans-unit id="settings.members.submitting" datatype="html"><source>Submitting…</source><target>Đang gửi…</target></trans-unit>
+      <trans-unit id="settings.members.remove-title" datatype="html"><source>Remove this member?</source><target>Xoá thành viên này?</target></trans-unit>
+      <trans-unit id="settings.members.remove-description" datatype="html"><source>Organization access will be revoked. Authored history stays attributed.</source><target>Quyền truy cập tổ chức sẽ bị thu hồi. Lịch sử đã tạo vẫn giữ tên tác giả.</target></trans-unit>
+      <trans-unit id="settings.members.matrix" datatype="html"><source>Organization-wide role matrix</source><target>Ma trận vai trò toàn tổ chức</target></trans-unit>
+      <trans-unit id="settings.members.granted" datatype="html"><source>Granted</source><target>Đã cấp</target></trans-unit>
+      <trans-unit id="settings.members.not-granted" datatype="html"><source>Not granted</source><target>Chưa cấp</target></trans-unit>
+      <trans-unit id="settings.members.no-roles" datatype="html"><source>No roles assigned</source><target>Chưa có vai trò</target></trans-unit>
+      <trans-unit id="settings.members.roles-unavailable" datatype="html"><source>Role catalogue unavailable. Memberships remain visible.</source><target>Danh mục vai trò không khả dụng. Danh sách thành viên vẫn hiển thị.</target></trans-unit>
+      <trans-unit id="settings.members.preview" datatype="html"><source>Role scope preview</source><target>Xem trước phạm vi vai trò</target></trans-unit>
+      <trans-unit id="settings.members.preview-unavailable" datatype="html"><source>Preview unavailable for this role</source><target>Không thể xem trước vai trò này</target></trans-unit>
+      <trans-unit id="settings.members.authority" datatype="html"><source>Display only. The server decides actual access.</source><target>Chỉ để tham khảo. Máy chủ quyết định quyền truy cập thực tế.</target></trans-unit>
+      <trans-unit id="settings.members.sensitive" datatype="html"><source>Sensitive</source><target>Nhạy cảm</target></trans-unit>
+      <trans-unit id="settings.members.omitted" datatype="html"><source>Permissions omitted because they are missing from the live catalogue:</source><target>Quyền bị lược bỏ vì không có trong danh mục trực tiếp:</target></trans-unit>
+      <trans-unit id="settings.members.empty-title" datatype="html"><source>No members yet</source><target>Chưa có thành viên</target></trans-unit>
+      <trans-unit id="settings.members.empty-description" datatype="html"><source>Members and pending invitations will appear here.</source><target>Thành viên và lời mời đang chờ sẽ hiển thị tại đây.</target></trans-unit>
+      <trans-unit id="settings.members.next" datatype="html"><source>Next members</source><target>Thành viên tiếp theo</target></trans-unit>
+      <trans-unit id="settings.members.previous" datatype="html"><source>Previous members</source><target>Thành viên trước đó</target></trans-unit>
+      <trans-unit id="settings.members.saved" datatype="html"><source>Membership updated.</source><target>Đã cập nhật thành viên.</target></trans-unit>
+      <trans-unit id="settings.members.narrow" datatype="html"><source>Use a wider screen to invite or remove members.</source><target>Dùng màn hình rộng hơn để mời hoặc xoá thành viên.</target></trans-unit>
+      <trans-unit id="settings.members.pending" datatype="html"><source>Pending invitation</source><target>Lời mời đang chờ</target></trans-unit>
+      <trans-unit id="settings.members.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
+      <trans-unit id="settings.members.removed" datatype="html"><source>Removed</source><target>Đã xoá</target></trans-unit>
+      <trans-unit id="settings.members.revoked" datatype="html"><source>Revoked</source><target>Đã thu hồi</target></trans-unit>
+      <trans-unit id="settings.members.expired" datatype="html"><source>Expired</source><target>Đã hết hạn</target></trans-unit>
       <trans-unit id="settings.title" datatype="html">
         <source>Settings</source>
         <target>Cài đặt</target>
