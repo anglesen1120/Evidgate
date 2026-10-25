@@ -1,0 +1,23 @@
+{
+  "operation_id": "getProject",
+  "variant": "onboarding-connected",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d7"
+  },
+  "latency_ms": 0,
+  "body": {
+    "id": "018f0000-0000-7000-8000-000000000011",
+    "org_id": "018f0000-0000-7000-8000-000000000001",
+    "name": "Storefront web",
+    "slug": "storefront-web",
+    "status": "active",
+    "default_environment_id": null,
+    "created_at": "2026-10-02T09:00:00Z",
+    "updated_at": "2026-10-18T11:20:00Z",
+    "version": 3,
+    "retention_days": null,
+    "monthly_run_quota": 5000,
+    "case_prefix": "STOR"
+  }
+}

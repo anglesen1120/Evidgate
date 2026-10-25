@@ -1,0 +1,13 @@
+{
+  "operation_id": "listProjects",
+  "variant": "onboarding-empty",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000cb"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [],
+    "next_cursor": null
+  }
+}

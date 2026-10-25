@@ -116,7 +116,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     scope: 'org',
     segment: 'onboarding',
     permission: 'project:create',
-    area: 'project',
+    area: 'onboarding',
     label: $localize`:@@shell.nav.onboarding:Onboarding`,
   },
 
