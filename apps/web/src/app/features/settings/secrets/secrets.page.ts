@@ -170,6 +170,11 @@ export class SecretsPage {
   protected readonly selectedProject = signal<string | null>(null);
   protected readonly canWrite = computed(() => this.session.has('ingest_token:write'));
   protected readonly canReadBindings = computed(() => this.session.has('project:read'));
+  /** Boolean view of the project list, so a re-emitted list cannot re-run the bindings read. */
+  private readonly selectedProjectListed = computed(() => {
+    const id = this.selectedProject();
+    return id !== null && this.session.projects().some((project) => project.id === id);
+  });
   protected readonly bindingsPaging = signal(false);
   protected readonly bindingsPagingFailure = signal(false);
   protected readonly offset = signal(0);
@@ -217,7 +222,9 @@ export class SecretsPage {
     effect(() => {
       const id = this.selectedProject();
       const permitted = this.canReadBindings();
-      const listed = this.session.projects().some((project) => project.id === id);
+      // Only the derived boolean is tracked: the project list re-emits on unrelated session
+      // changes, and re-reading bindings for the same project would drop already loaded pages.
+      const listed = this.selectedProjectListed();
       untracked(() => {
         this.bindingsPaging.set(false);
         this.bindingsPagingFailure.set(false);

@@ -179,11 +179,20 @@ constant, relative `templateUrl:` names, which the rule resolves against the com
 directory and reads with `node:fs` (never fetched, never over 256 KiB) — such as
 `{{ store.token() }}` or `[value]="x.signing_secret"`. Since F16 it also reports a BARE identifier
 read in a template expression, inline or in the `templateUrl` file: `{{ token }}`,
-`[value]="signingSecret"`, `@if (password)`, the right-hand side of `@let label = signingSecret;`,
-`@for (row of pendingToken; track …)` and `*ngIf="secretValue"`, while the root of an object access
+`[value]="signingSecret"`, `@if (password)`, `@case (credential)`, `@defer (when password)`, the
+right-hand side of `@let label = signingSecret;`, `@for (row of pendingToken; track …)` — whose `of`
+may be wrapped onto the next line — and `*ngIf="secretValue"`, while the root of an object access
 (`token.prefix` — its members are what is checked), a template reference (`#token`), an object key
-(`{ token: true }`), a quoted string, an `@for` declaration variable and HTML text outside a
-binding stay legal. It finally reports a one-time RESULT type held in state (`secretCarryingType`):
+(`{ token: true }`, `[ngClass]="{ token: active }"`), a quoted string, the identifier a `let`/`as`
+clause of a `*` microsyntax declares (`*ngFor="let token of tokens"`), an `@for` declaration
+variable and HTML text outside a binding stay legal. Two shapes a `:` does not excuse: a ternary
+BRANCH is a read (`{{ ok ? token : '' }}`, `[title]="a ? secret : b"`), because a name in front of a
+`:` is a key only when the last non-blank character before it opens an object member (`{` or `,`)
+with no `?` awaiting its `:`; and a string that is the DIRECT subscript of a member access names
+the member, so `store['token']()` and `row["signing_secret"]` are reported while every other string
+stays masked. A loop variable named like a value (`*ngFor="let token of tokens"`) is skipped where
+it is DECLARED and still reported where the body READS it (`{{ token }}`), so rename the variable.
+It finally reports a one-time RESULT type held in state (`secretCarryingType`):
 `IssuedInvite`, `RotationResult`, `IngestTokenCreatedResponse`, `InviteIssuedView` and
 `CiBindingCreatedResponse` in a `/Store$/` class field, accessor or constructor parameter property
 (at any depth, so `Signal<IssuedInvite | null>` is caught), in a `signal`/`computed`/`withState`
@@ -203,11 +212,25 @@ deliberate — lint is defence in depth, not the only defence:
   literal with `${}` is not folded) and `templateUrl:` must be a constant, RELATIVE path — an
   absolute path, `http(s)`/`data:` URL and a computed URL are skipped, a missing file is skipped
   silently, and a file over 256 KiB is not read at all;
+- a QUOTED string is masked before the bare read, backticks included: a `${token}` interpolation
+  inside a template literal in a binding is blanked with it, so that read is not reported. Only the
+  direct subscript of a member access (`store['token']`) is unmasked — a run-time key
+  (`row[key]`, `store[this.field]`) still has no name in the source to match;
+- the RESULT-type check covers exactly three positions plus an ANNOTATED field: a
+  `signal`/`computed`/`withState` type argument, a `…State`/`…Store` member and a `/Store$/` class
+  field, accessor or constructor parameter property. `signal(x as IssuedInvite)`,
+  `linkedSignal(...)`, `model(...)`, a `BehaviorSubject` or `resource` field without the result type
+  in its annotation, and an unannotated field (`readonly last = make()`) are not seen;
 - the scan is bounded per template: a binding expression is read only up to 4 000 characters and a
   template contributes at most 4 096 expressions, so a violation past either bound is not seen.
-  The `track` clause of an `@for`, the `; as alias` clause of an `@if` and a `let-`/`ref-`
-  microsyntax alias are not scanned either — only the iterated expression, the condition and the
-  binding value are;
+  A `templateUrl` file past the 256 KiB cap is skipped SILENTLY (no message says the template went
+  unscanned) and the resolved path is not confined to the component's own directory — a
+  `templateUrl: '../shared/x.html'` is read from wherever it resolves. The `track` clause of an
+  `@for`, the `; as alias` clause of an `@if` and the `let`/`as` declaration of a `*` microsyntax
+  are not scanned either — only the iterated expression, the condition, the `when` clause of a
+  `@defer` and the binding value are, and a `@placeholder`/`@loading`/`@error` block carries no
+  header to scan at all. A loop variable named like a value is skipped only where it is declared,
+  so reading it in the body still fails lint;
 - a component field named like a value is still not store state: a `SecretsPanel` field named
   `token` is reported only where a template READS it (the bare-read check above) or where its type
   is a one-time result type, and a component (non-`…Store`) class field annotated with one of

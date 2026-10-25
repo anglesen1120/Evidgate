@@ -37,10 +37,13 @@
 //    returned as soon as the server confirmed it; re-reading the list is a background read it
 //    neither awaits nor can fail, because a slow or refused list must never cost the user the
 //    revision the server has already stored.
-// 8. Every body read passes the two checks rule 1 states (D1 delta finding). The `412` envelope's
-//    head id is server text and reaches a read without going through `open`, so `loadBody` applies
-//    the same UUID shape check (no request at all when it fails) and refuses a body whose
-//    `project_id` is not the project on screen, as `not_found` and without caching it.
+// 8. Every body read passes the two checks rule 1 states (D1 delta finding; R9). The `412`
+//    envelope's head id is server text and reaches a read without going through `open`, so
+//    `loadBody` applies the same UUID shape check (no request at all when it fails) and refuses a
+//    body whose `project_id` is not the project the READ WAS ASKED FOR, as `not_found` and without
+//    caching it. That project is captured when the call is made, never re-read when the answer
+//    lands (R9): a page that switched project mid-read still gets the legitimate body of the
+//    project that asked, and a call made with nothing on screen compares against nothing.
 
 import { computed, inject, Injectable, signal } from '@angular/core';
 import type {
@@ -189,9 +192,10 @@ const MALFORMED_REVISION_FAILURE: ApiError = {
 
 /**
  * The typed refusal a body read answers with when the revision it DID read belongs to another
- * project than the one on screen (delta finding D1). Exactly the same state a `404` renders
- * ({@link REFUSAL_KINDS}), so a body cannot be used to learn that an id of another project exists,
- * and the answer is never cached: it belongs to a view this store does not own.
+ * project than the one THE READ WAS ASKED FOR (delta finding D1; the captured project is R9).
+ * Exactly the same state a `404` renders ({@link REFUSAL_KINDS}), so a body cannot be used to learn
+ * that an id of another project exists, and such an answer is never cached: it belongs to a view
+ * this store does not own.
  */
 const FOREIGN_REVISION_FAILURE: ApiError = {
   kind: 'not_found',
@@ -443,19 +447,28 @@ export class PolicyStore {
    * {@link MAX_CACHED_BODIES} bodies, the oldest dropped. A cached body is returned without a
    * request (a stored revision is immutable) and re-inserted so it counts as the newest.
    *
-   * Two checks run BEFORE a body is handed to a caller (delta finding D1). The id must be
-   * revision-shaped ({@link REVISION_ID_SHAPE}), exactly as {@link open} requires of the page's own
-   * key: a body read is the one path a `412` envelope's head id reaches, so a malformed answer is
-   * refused with no request at all. And a body the server answers for a revision of ANOTHER project
-   * than the one on screen is refused like a missing one and never cached — the same existence
-   * promise {@link open} keeps, and the check applies only when a project is open (nothing is on
-   * screen to compare against before that).
+   * Two checks run BEFORE a body is handed to a caller (delta finding D1, refined by R9). The id
+   * must be revision-shaped ({@link REVISION_ID_SHAPE}), exactly as {@link open} requires of the
+   * page's own key: a body read is the one path a `412` envelope's head id reaches, so a malformed
+   * answer is refused with no request at all. And a body the server answers for a revision of
+   * ANOTHER project than the one the READ WAS ASKED FOR is refused like a missing one and never
+   * cached — the same existence promise {@link open} keeps.
+   *
+   * The project is captured when the CALL is made, before anything is read (R9), and the answer is
+   * compared against that captured value — never against the signal at arrival. The page may switch
+   * project while the answer is on its way, and the body of the project that asked is still that
+   * caller's; comparing at arrival refused exactly that legitimate body, and a reset or a switch in
+   * the same window skipped the check altogether. A call made while NOTHING is open captures
+   * nothing and so compares against nothing: there is no project to compare with, and the tab asks
+   * for a body only after a list already named the project. A cached body passes the same check on
+   * every call, against the project that call is for, so the cache is never a way around it.
    *
    * Concurrent calls for the same id share ONE read ({@link bodyReads}): the dialog and the diff
-   * often ask in the same tick, and the second request would only repeat the first. A read that
-   * settles after a {@link reset} or after the page moved to another revision still answers its own
-   * caller — it was asked for exactly that revision — but its body is NOT cached: the cache belongs
-   * to the view that is gone.
+   * often ask in the same tick, and the second request would only repeat the first. Each caller
+   * still has its own captured project checked, because the joined call was asked for it too. A
+   * read that settles after a {@link reset} or after the page moved to another revision still
+   * answers its own caller — it was asked for exactly that revision — but its body is NOT cached:
+   * the cache belongs to the view that is gone.
    *
    * REJECTS with the server's `ApiRequestError` when the read is refused, and with this store's own
    * typed refusals for the two cases above: both callers (the diff and the publish dialog) have a
@@ -468,27 +481,30 @@ export class PolicyStore {
       // No request: the id is the server's own text in the `412` case, and it is not a revision id.
       throw new ApiRequestError(MALFORMED_REVISION_FAILURE);
     }
+    // R9: the project THIS CALL is for, captured before anything is read — never the project on
+    // screen when an answer happens to land. A page that switches project mid-read still gets the
+    // legitimate body of the project that asked, and a call made with nothing open has nothing to
+    // compare against (`null`).
+    const expectedProjectId = this.projectIdSignal();
     const cached = this.bodyCache.get(id);
     if (cached !== undefined) {
+      const body = this.bodyOfRequestedProject(cached, expectedProjectId);
       this.bodyCache.delete(id);
       this.bodyCache.set(id, cached);
-      return cached;
+      return body;
     }
     const shared = this.bodyReads.get(id);
     if (shared !== undefined) {
-      return shared;
+      // The joined caller was asked for this revision too, so its own captured project decides.
+      return shared.then((revision) => this.bodyOfRequestedProject(revision, expectedProjectId));
     }
     const generation = this.generation;
     const read = this.data.getRevision(id).then((revision) => {
-      const projectId = this.projectIdSignal();
-      if (projectId !== null && revision.project_id !== projectId) {
-        // Another project's revision: the same state as a missing one, and nothing is cached.
-        throw new ApiRequestError(FOREIGN_REVISION_FAILURE);
-      }
+      const body = this.bodyOfRequestedProject(revision, expectedProjectId);
       if (generation === this.generation) {
         this.cacheBody(revision);
       }
-      return revision;
+      return body;
     });
     this.bodyReads.set(id, read);
     try {
@@ -499,6 +515,29 @@ export class PolicyStore {
         this.bodyReads.delete(id);
       }
     }
+  }
+
+  /**
+   * The check rule 8 states, applied to ONE body (delta finding D1, refined by R9).
+   *
+   * `expectedProjectId` is the project the CALL was made for, captured by {@link loadBody} before
+   * anything is read: a body of any other project is refused as `not_found` — the state a `404`
+   * renders — so a hostile `412` head id, or a buggy answer, can neither reach the diff nor be
+   * probed for. `null` means the call was made with NOTHING on screen, so there is no project to
+   * compare against and the answer is its caller's.
+   *
+   * Comparing against the signal at ARRIVAL was the R9 bug: a page that switched project while the
+   * read was out refused the legitimate body of the project that asked, and a reset in that window
+   * dropped the check entirely because the signal had gone back to `null`.
+   */
+  private bodyOfRequestedProject(
+    revision: PolicyRevisionDto,
+    expectedProjectId: string | null,
+  ): PolicyRevisionDto {
+    if (expectedProjectId !== null && revision.project_id !== expectedProjectId) {
+      throw new ApiRequestError(FOREIGN_REVISION_FAILURE);
+    }
+    return revision;
   }
 
   /**

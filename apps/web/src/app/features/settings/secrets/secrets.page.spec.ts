@@ -506,6 +506,33 @@ describe('SecretsPage (09.7.1-T3)', () => {
     await fixture.whenStable();
     expect(store.loadCiBindings).toHaveBeenCalledTimes(2);
   });
+  it('reads CI bindings once per project scope, ignoring a re-emitted project list', async () => {
+    canReadBindings.set(true);
+    const { fixture } = await render();
+    expect(store.loadCiBindings).toHaveBeenCalledExactlyOnceWith('p1');
+    const loads = store.loadCiBindings.mock.calls.length;
+    const resets = store.resetCiBindings.mock.calls.length;
+    // The session re-emits its project list on unrelated changes: same ids, new array identity.
+    projects.set(projects().map((project) => ({ ...project })));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    projects.set([...projects()]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    // Same scope: no second read, so already loaded cursor pages survive.
+    expect(store.loadCiBindings.mock.calls.length).toBe(loads);
+    expect(store.resetCiBindings.mock.calls.length).toBe(resets);
+    // A permission change is still a scope change: it resets, then reads again.
+    canReadBindings.set(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(store.resetCiBindings.mock.calls.length).toBe(resets + 1);
+    canReadBindings.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(store.loadCiBindings.mock.calls.length).toBe(loads + 1);
+    expect(store.loadCiBindings).toHaveBeenLastCalledWith('p1');
+  });
   it('removes the CI section and resets its state when project:read is revoked', async () => {
     canReadBindings.set(true);
     const { root, fixture } = await render();

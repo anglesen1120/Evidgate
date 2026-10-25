@@ -1,4 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  afterRenderEffect,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import type { CiBindingView } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
@@ -43,7 +56,7 @@ export const CI_BINDINGS_COPY = {
       [attr.aria-busy]="loading() || loadingMore()"
     >
       <header class="page-header">
-        <h2 id="ci-bindings-heading">{{ copy.title }}</h2>
+        <h2 #heading id="ci-bindings-heading" tabindex="-1">{{ copy.title }}</h2>
         <p>{{ copy.description }}</p>
       </header>
       @if (forbidden()) {
@@ -69,7 +82,7 @@ export const CI_BINDINGS_COPY = {
               type="button"
               data-ci-retry
               [disabled]="loading() || loadingMore()"
-              (click)="retry.emit()"
+              (click)="requestRetry($event)"
             >
               {{ copy.retry }}
             </button>
@@ -165,14 +178,15 @@ export const CI_BINDINGS_COPY = {
               data-ci-load-more
               [disabled]="loading() || loadingMore()"
               [attr.aria-busy]="loadingMore()"
-              (click)="loadMore.emit()"
+              (click)="requestLoadMore($event)"
             >
               {{ loadingMore() ? copy.loadingMore : copy.more }}
             </button>
           </div>
         }
-        <p class="binding-status" role="status">{{ loadingMore() ? copy.loadingMore : '' }}</p>
       }
+      <!-- Outside the state branch: the live region must exist in every phase, forbidden included. -->
+      <p class="binding-status" role="status">{{ loadingMore() ? copy.loadingMore : '' }}</p>
     </section>
   `,
 })
@@ -193,6 +207,48 @@ export class CiBindingListComponent {
     () => this.phase() === 'forbidden' || this.error()?.kind === 'forbidden',
   );
   private readonly expanded = signal<ReadonlySet<string>>(new Set());
+  private readonly heading = viewChild.required<ElementRef<HTMLElement>>('heading');
+  private readonly document = inject(DOCUMENT);
+  /** The control whose click started the read; it may be removed before the read settles. */
+  private focusAnchor: HTMLElement | null = null;
+  private restoreFocusPending = false;
+
+  constructor() {
+    // A settled Load more or Retry can remove the control that had focus (the last page, or the
+    // error block), which drops focus to the document body. Run after the DOM update, and only
+    // move focus when the control is really gone, so a surviving control keeps the user's focus.
+    afterRenderEffect(() => {
+      const busy = this.loading() || this.loadingMore();
+      untracked(() => {
+        if (busy || !this.restoreFocusPending) return;
+        this.restoreFocusPending = false;
+        const anchor = this.focusAnchor;
+        this.focusAnchor = null;
+        if (anchor?.isConnected) return;
+        // Focus is only "lost" when the browser dropped it to the document: any element still
+        // holding focus was put there deliberately, so never yank it back into this section.
+        const active = this.document.activeElement;
+        if (active && active !== this.document.body && active !== this.document.documentElement)
+          return;
+        this.heading().nativeElement.focus();
+      });
+    });
+  }
+
+  protected requestLoadMore(event: Event): void {
+    if (this.loading() || this.loadingMore()) return;
+    this.armFocusRestore(event);
+    this.loadMore.emit();
+  }
+  protected requestRetry(event: Event): void {
+    if (this.loading() || this.loadingMore()) return;
+    this.armFocusRestore(event);
+    this.retry.emit();
+  }
+  private armFocusRestore(event: Event): void {
+    this.focusAnchor = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    this.restoreFocusPending = true;
+  }
 
   protected statusLabel(status: CiBindingView['status']): string {
     return status === 'active'

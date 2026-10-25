@@ -23,6 +23,10 @@
 //   existence-hiding refusals become `not_found`;
 // - concurrent `loadBody` calls for one revision share one read, and a read that settles after a
 //   reset answers its caller without filling a cache that belongs to a view that is gone;
+// - a body read is checked against the project it was ASKED FOR, captured when the call is made
+//   (R9): a page that switches project mid-read still gets the legitimate body of the project that
+//   asked, a body of another project than the one asked is refused as `not_found` — a cached one
+//   included — and a call made with nothing on screen compares against nothing and is its caller's;
 // - `reload` retries the open that failed before the list, from the id that open was asked for;
 // - the mode chip renders exactly `policy_activation.mode`: the four mappings are proved here
 //   through `applyActivation`, and nothing is derived from a revision's `state`.
@@ -799,6 +803,115 @@ describe('PolicyStore (09.7.1-T4)', () => {
       // Nothing was cached: the next call is a real read again, not the refused answer.
       await expect(store.loadBody(HEAD_ID)).rejects.toMatchObject({ error: { kind: 'not_found' } });
       expect(data.getCalls).toEqual([ANCHOR_ID, HEAD_ID, HEAD_ID]);
+    });
+
+    it('answers the project that asked when the page switched project mid-read', async () => {
+      // R9: the check compared the answer with the project on screen WHEN IT LANDED, so a page that
+      // switched project while the read was out refused the legitimate body of the project it had
+      // asked from. The project the READ was made for is what the answer must match.
+      session.rows = [{ id: PROJECT_ID }, { id: OTHER_PROJECT_ID }];
+      await store.open(ANCHOR_ID);
+      expect(store.projectId()).toBe(PROJECT_ID);
+
+      data.getManual = true;
+      const reading = store.loadBody(HEAD_ID);
+      const switching = store.open(SECOND_ID);
+      data.settleGet(1, revision(SECOND_ID, OTHER_PROJECT_ID, 4, 'active'));
+      await switching;
+      expect(store.projectId()).toBe(OTHER_PROJECT_ID);
+
+      const stored = revision(HEAD_ID, PROJECT_ID, 3, 'draft');
+      data.settleGet(0, stored);
+
+      await expect(reading).resolves.toBe(stored);
+
+      // The body belongs to the view that is gone, so it was not cached: the next call is a real
+      // read, and it is refused because the project now on screen is the other one.
+      data.getManual = false;
+      data.revisions.set(HEAD_ID, stored);
+      const readsBefore = data.getCalls.length;
+      await expect(store.loadBody(HEAD_ID)).rejects.toMatchObject({ error: { kind: 'not_found' } });
+      expect(data.getCalls).toHaveLength(readsBefore + 1);
+    });
+
+    it('refuses the on-screen project’s body when another project was the one asked', async () => {
+      // The captured project decides, not the arrival-time one: after the switch this body's
+      // project IS the one on screen, and it is still not the body this read was asked for.
+      session.rows = [{ id: PROJECT_ID }, { id: OTHER_PROJECT_ID }];
+      await store.open(ANCHOR_ID);
+
+      data.getManual = true;
+      const reading = store.loadBody(HEAD_ID);
+      const switching = store.open(SECOND_ID);
+      data.settleGet(1, revision(SECOND_ID, OTHER_PROJECT_ID, 4, 'active'));
+      await switching;
+      expect(store.projectId()).toBe(OTHER_PROJECT_ID);
+
+      data.settleGet(0, revision(HEAD_ID, OTHER_PROJECT_ID, 3, 'draft'));
+
+      await expect(reading).rejects.toMatchObject({
+        error: { kind: 'not_found', code: 'policy_revision_not_found' },
+      });
+    });
+
+    it('answers its caller when a reset lands mid-read of that project’s body', async () => {
+      // The other half of R9: a reset sends the signal back to `null`, which SKIPPED the check and
+      // hid, behind a passing test, that the check was reading arrival-time state at all.
+      await store.open(ANCHOR_ID);
+      const stored = revision(HEAD_ID, PROJECT_ID, 3, 'draft');
+      data.getManual = true;
+      const reading = store.loadBody(HEAD_ID);
+      store.reset();
+      expect(store.projectId()).toBeNull();
+
+      data.settleGet(0, stored);
+
+      // The captured project still says this answer is the caller's.
+      await expect(reading).resolves.toBe(stored);
+
+      // Nothing was cached: the cache was dropped with the view, so the next call reads again.
+      data.getManual = false;
+      data.revisions.set(HEAD_ID, stored);
+      const readsBefore = data.getCalls.length;
+      await expect(store.loadBody(HEAD_ID)).resolves.toBe(stored);
+      expect(data.getCalls).toHaveLength(readsBefore + 1);
+    });
+
+    it('accepts a body of any project when nothing was open when the read was asked', async () => {
+      // The documented no-project case: the request carried no project, because there was none to
+      // compare against. This is where capture-at-request and the old arrival-time check diverge —
+      // a project that OPENS while the body is on its way must not turn a legitimate answer into a
+      // refusal. (An unfixed store compares with `OTHER` vs the project now on screen, PROJECT_ID.)
+      data.getManual = true;
+      const reading = store.loadBody(HEAD_ID);
+      const opening = store.open(ANCHOR_ID);
+      data.settleGet(1, revision(ANCHOR_ID, PROJECT_ID, 2, 'active'));
+      await opening;
+      expect(store.projectId()).toBe(PROJECT_ID);
+
+      const stored = revision(HEAD_ID, OTHER_PROJECT_ID, 3, 'draft');
+      data.settleGet(0, stored);
+
+      await expect(reading).resolves.toBe(stored);
+    });
+
+    it('refuses a cached body of another project once a project is on screen', async () => {
+      // The cache is keyed by revision, not by project: a body read while nothing was open must not
+      // become the way around the check once a project is.
+      const foreign = revision(HEAD_ID, OTHER_PROJECT_ID, 3, 'draft');
+      data.revisions.set(HEAD_ID, foreign);
+      // While nothing is open the read is its caller's and the body is cached.
+      await expect(store.loadBody(HEAD_ID)).resolves.toBe(foreign);
+
+      await store.open(ANCHOR_ID);
+      expect(store.projectId()).toBe(PROJECT_ID);
+      const readsBefore = data.getCalls.length;
+
+      await expect(store.loadBody(HEAD_ID)).rejects.toMatchObject({
+        error: { kind: 'not_found', code: 'policy_revision_not_found' },
+      });
+      // Refused from the cache: no new request went out for it.
+      expect(data.getCalls).toHaveLength(readsBefore);
     });
   });
 

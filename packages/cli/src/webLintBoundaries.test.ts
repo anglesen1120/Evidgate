@@ -1445,6 +1445,74 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       ]);
     });
 
+    // QA defect R1 (S86): a ternary BRANCH is a read. The identifier in front of a `:` used to be
+    // skipped as an object key, so `{{ ok ? token : '' }}` and `[title]="a ? secret : b"` were
+    // never reported.
+    it('reports a bare read in a ternary branch', () => {
+      const messages = lint(
+        secretFixture('failing-template-ternary.ts.txt'),
+        SETTINGS_SECRETS_FILE,
+      );
+      expect(messages.map((message) => message.ruleId)).toEqual([SECRET_FIELD, SECRET_FIELD]);
+      expect(quoted('Do not bind ', messages)).toEqual(['token', 'secret']);
+
+      // A `,` in front of the name is not an object member either when a `?` is still awaiting its
+      // `:`: the branch is a read, so a call inside it cannot hide one behind its argument list.
+      const commaInCall = [
+        '@Component({',
+        "  selector: 'app-secrets',",
+        `  template: \`<p>{{ ok ? pick(a, token) : '' }}</p>\`,`,
+        '})',
+        'export class SecretsPanel {}',
+        '',
+      ].join('\n');
+      expect(quoted('Do not bind ', lint(commaInCall, SETTINGS_SECRETS_FILE))).toEqual(['token']);
+    });
+
+    // The key position is unchanged: `{ token: active }` declares a class name, and an array
+    // literal of strings is not a subscript. A `@defer` block with no header evaluates nothing.
+    it('accepts a secret-shaped name as an object key', () => {
+      expect(lint(secretFixture('passing-template-keys.ts.txt'), SETTINGS_SECRETS_FILE)).toEqual(
+        [],
+      );
+    });
+
+    // QA defects R2 and R4 (S86): `@case (...)` and `@defer (when ...)` are headers Angular
+    // evaluates, and an `@for` whose `of` is wrapped onto the next line still names its iterated
+    // expression.
+    it('reports a bare read in an @case, an @defer and a wrapped @for header', () => {
+      const messages = lint(
+        secretFixture('failing-template-block-headers.ts.txt'),
+        SETTINGS_SECRETS_FILE,
+      );
+      expect(messages.map((message) => message.ruleId)).toEqual([
+        SECRET_FIELD,
+        SECRET_FIELD,
+        SECRET_FIELD,
+      ]);
+      expect(quoted('Do not bind ', messages)).toEqual(['credential', 'password', 'pendingToken']);
+    });
+
+    // QA defect R5 (S86): the identifier a `let` clause declares in a `*` structural directive is a
+    // declaration, not a read, and so is the alias of an `index as name` clause.
+    it('accepts a structural directive let declaration and its index alias', () => {
+      expect(
+        lint(secretFixture('passing-template-loop-let.ts.txt'), SETTINGS_SECRETS_FILE),
+      ).toEqual([]);
+    });
+
+    // QA defect O5 (S86): a quoted string that is the DIRECT subscript of a member access names the
+    // member, so `store['token']()` and `row["signing_secret"]` are reads. Every other string —
+    // prose, an array literal, a template reference — stays masked.
+    it('reports a bracket-quoted secret member read', () => {
+      const messages = lint(
+        secretFixture('failing-template-subscript.ts.txt'),
+        SETTINGS_SECRETS_FILE,
+      );
+      expect(messages.map((message) => message.ruleId)).toEqual([SECRET_FIELD, SECRET_FIELD]);
+      expect(quoted('Do not bind ', messages)).toEqual(['token', 'signing_secret']);
+    });
+
     // A member read of a metadata name, an `@for` alias, a template ref, a quoted string, an
     // object key, an `@let` declaration, a presence name and HTML text stay legal.
     it('accepts metadata, aliased and quoted template bindings', () => {

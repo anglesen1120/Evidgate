@@ -171,4 +171,102 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(root.querySelector('[data-ci-retry]')).not.toBeNull();
     expect(root.querySelector('[data-ci-load-more]')).toBeNull();
   });
+
+  it('moves focus to the section heading when the last page removes Load more', async () => {
+    const first = rows[0];
+    if (!first) throw new Error('Expected binding fixture');
+    const { fixture, root } = await render();
+    fixture.componentRef.setInput('hasMore', true);
+    fixture.detectChanges();
+    const more = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
+    if (!more) throw new Error('Expected Load more');
+    const emitted = vi.fn();
+    fixture.componentInstance.loadMore.subscribe(emitted);
+    more.click();
+    expect(emitted).toHaveBeenCalledTimes(1);
+    fixture.componentRef.setInput('loadingMore', true);
+    fixture.detectChanges();
+    // The read settles as the last page: the focused control is gone, so focus must not fall to body.
+    fixture.componentRef.setInput('rows', [...rows, { ...first, id: 'appended-binding' }]);
+    fixture.componentRef.setInput('hasMore', false);
+    fixture.componentRef.setInput('loadingMore', false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-ci-load-more]')).toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('h2'));
+  });
+
+  it('leaves focus on Load more when another page remains', async () => {
+    const { fixture, root } = await render();
+    fixture.componentRef.setInput('hasMore', true);
+    fixture.detectChanges();
+    const more = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
+    if (!more) throw new Error('Expected Load more');
+    more.focus();
+    more.click();
+    fixture.componentRef.setInput('loadingMore', true);
+    fixture.detectChanges();
+    fixture.componentRef.setInput('loadingMore', false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-ci-load-more]')).toBe(more);
+    expect(document.activeElement).toBe(more);
+  });
+
+  it('never pulls focus back from an element the user moved to while the page loaded', async () => {
+    const { fixture, root } = await render();
+    fixture.componentRef.setInput('hasMore', true);
+    fixture.detectChanges();
+    const more = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
+    if (!more) throw new Error('Expected Load more');
+    more.click();
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    try {
+      // The user tabbed out of the section while the read was in flight.
+      elsewhere.focus();
+      fixture.componentRef.setInput('loadingMore', true);
+      fixture.detectChanges();
+      fixture.componentRef.setInput('hasMore', false);
+      fixture.componentRef.setInput('loadingMore', false);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(root.querySelector('[data-ci-load-more]')).toBeNull();
+      expect(document.activeElement).toBe(elsewhere);
+    } finally {
+      elsewhere.remove();
+    }
+  });
+
+  it('moves focus to the section heading when Retry clears the error block', async () => {
+    const { fixture, root } = await render('error', []);
+    fixture.componentRef.setInput('error', failure);
+    fixture.detectChanges();
+    const retry = root.querySelector<HTMLButtonElement>('[data-ci-retry]');
+    if (!retry) throw new Error('Expected Retry');
+    const emitted = vi.fn();
+    fixture.componentInstance.retry.subscribe(emitted);
+    retry.click();
+    expect(emitted).toHaveBeenCalledTimes(1);
+    fixture.componentRef.setInput('loadingMore', true);
+    fixture.detectChanges();
+    fixture.componentRef.setInput('error', null);
+    fixture.componentRef.setInput('phase', 'ready');
+    fixture.componentRef.setInput('rows', rows);
+    fixture.componentRef.setInput('loadingMore', false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-ci-retry]')).toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('h2'));
+  });
+
+  it.each(['idle', 'loading', 'ready', 'empty', 'forbidden', 'unavailable', 'error'] as const)(
+    'keeps the role=status live region mounted in the %s phase',
+    async (phase) => {
+      const { root } = await render(phase, phase === 'ready' ? rows : []);
+      const region = root.querySelector<HTMLElement>('.binding-status');
+      expect(region?.getAttribute('role')).toBe('status');
+      expect(region?.closest('[data-ci-bindings]')).not.toBeNull();
+    },
+  );
 });
