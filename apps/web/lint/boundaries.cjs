@@ -20,6 +20,7 @@ const noBypassSecurityTrust = require('./rules/no-bypass-security-trust.cjs');
 const noFeatureCrossImport = require('./rules/no-feature-cross-import.cjs');
 const noHandWrittenWireDto = require('./rules/no-hand-written-wire-dto.cjs');
 const noHttpOutsideCore = require('./rules/no-http-outside-core.cjs');
+const noSecretFieldInStore = require('./rules/no-secret-field-in-store.cjs');
 
 const plugin = {
   meta: { name: '@evidgate/web-lint' },
@@ -28,6 +29,7 @@ const plugin = {
     'no-feature-cross-import': noFeatureCrossImport,
     'no-hand-written-wire-dto': noHandWrittenWireDto,
     'no-http-outside-core': noHttpOutsideCore,
+    'no-secret-field-in-store': noSecretFieldInStore,
   },
 };
 
@@ -46,6 +48,14 @@ const HTTP_OWNERS = [
 
 /** Added by ESLint's own globals rule after "Unexpected use of '<name>'." */
 const HTTP_GLOBAL_MESSAGE = 'Call a data service (or the ApiGateway) instead: core owns HTTP.';
+
+/**
+ * 09.7.1-T1 (plan §8 S3, T1.1, AC3): the folders whose stores show secrets metadata only, so a
+ * secret-shaped field name fails lint. This is a folder list, not a file list, on purpose: a new
+ * file in an already-covered folder needs no config change, and a later story that adds a store
+ * folder of its own appends one glob here (09.7.2's Integrations tab is the next candidate).
+ */
+const SECRET_STORE_FILES = ['apps/web/src/app/features/settings/**/*.ts'];
 
 module.exports = [
   {
@@ -97,5 +107,16 @@ module.exports = [
     files: APPLICATION_FILES,
     plugins: { evidgate: plugin },
     rules: { 'evidgate/no-bypass-security-trust': 'error' },
+  },
+  // 09.7.1-T1 (plan §8 S3, T1.1, AC3): a Settings store holds metadata only — `token_prefix`,
+  // `rotation_state`, `last_rotated_at` — and the value is revealed once by the shared reveal
+  // dialog and never stored. A secret-shaped field name fails lint. The block is scoped to the
+  // Settings feature (spec files and the reveal component are the rule's own allow-list), so
+  // every other feature stays free of it.
+  {
+    name: 'evidgate/web-no-secret-field-in-store',
+    files: SECRET_STORE_FILES,
+    plugins: { evidgate: plugin },
+    rules: { 'evidgate/no-secret-field-in-store': 'error' },
   },
 ];

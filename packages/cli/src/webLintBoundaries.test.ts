@@ -5,6 +5,9 @@
 // block registers) and the typescript-eslint parser, exactly as eslint.config.js does.
 // 09.1.1-T10 (AC7) adds the fourth rule here: `evidgate/no-bypass-security-trust`, which
 // holds every DomSanitizer bypass except the one reviewed artifact-viewer bridge.
+// 09.7.1-T1 (plan 09.7.1 §8 S3, T1.1, AC3) adds the fifth: `evidgate/no-secret-field-in-store`,
+// which holds a Settings store to metadata-only field names and is registered for the Settings
+// feature alone.
 //
 // This spec lives in @evidgate/cli, not in apps/web, on purpose: `ng test` compiles its
 // specs with the Angular application builder for the browser, so a spec there cannot load
@@ -12,6 +15,7 @@
 // boundary rule). The Vitest `node` workspaces are the only test runner an existing
 // scripts/verify.sh stage (`vitest`) executes in Node, and this package already hosts the
 // repository-level checks over other workspaces (parity.test.ts, schemaParity.test.ts).
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -64,6 +68,7 @@ const HTTP_GLOBALS = 'no-restricted-globals';
 const WIRE_DTO = 'evidgate/no-hand-written-wire-dto';
 const FEATURE_BOUNDARY = 'evidgate/no-feature-cross-import';
 const BYPASS_TRUST = 'evidgate/no-bypass-security-trust';
+const SECRET_FIELD = 'evidgate/no-secret-field-in-store';
 
 const FEATURE_FILE = 'apps/web/src/app/features/runs/x.ts';
 const CORE_HTTP_FILE = 'apps/web/src/app/core/http/x.ts';
@@ -71,6 +76,23 @@ const CORE_DATA_FILE = 'apps/web/src/app/core/data/x.ts';
 const CORE_FILE = 'apps/web/src/app/core/routes.ts';
 const SHARED_FILE = 'apps/web/src/app/shared/x.ts';
 const APP_CONFIG_FILE = 'apps/web/src/app/app.config.ts';
+
+// 09.7.1-T1 (plan 09.7.1 §8 S3, T1.1): the Settings feature is the one folder where a store may
+// hold metadata only, so a secret-shaped field name fails lint there and nowhere else.
+const SETTINGS_SECRETS_FILE = 'apps/web/src/app/features/settings/secrets/secrets.store.ts';
+const SECRET_FIXTURE_DIR = new URL(
+  '../../../apps/web/lint/fixtures/no-secret-field-in-store/',
+  import.meta.url,
+);
+
+/**
+ * A fixture's source text. The two fixtures are `.ts.txt` files, not `.ts`: eslint.config.js's
+ * block for every `.ts` under apps/web types them against apps/web/tsconfig.json, which includes
+ * only `src`, so a deliberate violation named `.ts` would fail the lint job instead of this spec.
+ */
+function secretFixture(name: string): string {
+  return readFileSync(new URL(name, SECRET_FIXTURE_DIR), 'utf8');
+}
 
 function lint(code: string, filename: string): readonly LintMessage[] {
   return new Linter({ cwd: REPO_ROOT }).verify(code, [PARSER_BLOCK, ...boundaries], filename);
@@ -109,10 +131,14 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       WIRE_DTO,
       FEATURE_BOUNDARY,
       BYPASS_TRUST,
+      SECRET_FIELD,
     ]);
     expect(new Set(boundaries.flatMap((block) => block.files ?? []))).toEqual(
-      new Set(['apps/web/src/**/*.ts']),
+      new Set(['apps/web/src/**/*.ts', 'apps/web/src/app/features/settings/**/*.ts']),
     );
+    // The Settings-only rule is one additive block of its own, and its narrower glob is the
+    // whole scoping mechanism: dropping it would report every feature's stores.
+    expect(boundaries.filter((block) => block.rules?.[SECRET_FIELD] !== undefined)).toHaveLength(1);
   });
 
   describe('no-http-outside-core', () => {
@@ -748,6 +774,390 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
         '',
       ].join('\n');
       expect(lint(otherKey, FEATURE_FILE)).toEqual([]);
+    });
+  });
+
+  // 09.7.1-T1 (plan 09.7.1 §8 S3 "secrets never in logs/UI", T1.1, AC3): a Settings store holds
+  // metadata only — `token_prefix`, `rotation_state`, `last_rotated_at` — and the value is
+  // revealed exactly once by the shared reveal dialog, never stored, re-fetched or bound.
+  describe('no-secret-field-in-store', () => {
+    const failing = secretFixture('failing.ts.txt');
+    const passing = secretFixture('passing.ts.txt');
+
+    it('rejects a secret-shaped field in a state interface, a state literal and a store class', () => {
+      // One finding per reported position: the interface member, the state literal key, the field,
+      // the private field and the constructor parameter property, in source order.
+      const expected = [SECRET_FIELD, SECRET_FIELD, SECRET_FIELD, SECRET_FIELD, SECRET_FIELD];
+      expect(ruleIds(failing, SETTINGS_SECRETS_FILE)).toEqual(expected);
+      for (const message of lint(failing, SETTINGS_SECRETS_FILE)) {
+        expect(message.message).toContain(
+          'a Settings store holds metadata only (plan 09.7.1 §8 S3): keep the value server-side or in the one-time reveal component',
+        );
+      }
+    });
+
+    it('accepts the metadata-only names of the same positions', () => {
+      expect(lint(passing, SETTINGS_SECRETS_FILE)).toEqual([]);
+    });
+
+    // The scope is the block's `files` glob, not the rule: a store outside Settings keeps its
+    // own naming, and the rule must not creep into other features.
+    it('leaves a store outside the Settings feature alone', () => {
+      expect(ruleIds(failing, 'apps/web/src/app/features/runs/runs.store.ts')).toEqual([]);
+      expect(
+        ruleIds(failing, 'apps/web/src/app/features/settings-adjacent/secrets.store.ts'),
+      ).toEqual([]);
+    });
+
+    // A spec has to spell the forbidden name to assert its absence, and the one-time reveal
+    // component is the single reviewed place allowed to hold a value in memory.
+    it('exempts a spec file and the one-time reveal component', () => {
+      expect(
+        ruleIds(failing, 'apps/web/src/app/features/settings/secrets/secrets.store.spec.ts'),
+      ).toEqual([]);
+      expect(
+        ruleIds(failing, 'apps/web/src/app/features/settings/secrets/reveal/reveal-dialog.ts'),
+      ).toEqual([]);
+      expect(
+        ruleIds(
+          failing,
+          'apps/web/src/app/features/settings/secrets/signing-secret-reveal.component.ts',
+        ),
+      ).toEqual([]);
+      // `reveal` must be a whole word of the basename: a longer word that merely contains it
+      // (`revealed`, `unrevealed`, `secrets-revealed-store`) cannot switch the rule off.
+      const allFive = [SECRET_FIELD, SECRET_FIELD, SECRET_FIELD, SECRET_FIELD, SECRET_FIELD];
+      expect(
+        ruleIds(failing, 'apps/web/src/app/features/settings/secrets/secrets-revealed-store.ts'),
+      ).toEqual(allFive);
+      expect(ruleIds(failing, 'apps/web/src/app/features/settings/secrets/unrevealed.ts')).toEqual(
+        allFive,
+      );
+      expect(
+        ruleIds(failing, 'apps/web/src/app/features/settings/secrets/revealed.store.ts'),
+      ).toEqual(allFive);
+      // Only an exact directory segment or a `reveal` word of the basename exempts: a look-alike
+      // directory and a `..` that leaves the reveal one stay reportable.
+      expect(
+        ruleIds(failing, 'apps/web/src/app/features/settings/secrets/not-reveal/secrets.store.ts'),
+      ).toEqual(allFive);
+      expect(
+        ruleIds(failing, 'apps/web/src/app/features/settings/secrets/reveal/../secrets.store.ts'),
+      ).toEqual(allFive);
+    });
+
+    it('reports every secret-shaped row of the name table', () => {
+      const objectKeys = [
+        'token',
+        'secret',
+        'password',
+        'passwd',
+        'plaintext',
+        'credential',
+        'apikey',
+        'API_KEY',
+        'apiKey',
+        'signing_secret',
+        'signingSecret',
+        'secretValue',
+        'private_key',
+        'privateKey',
+        'accessToken',
+        'refreshToken',
+        'bearerToken',
+        'clientSecret',
+        'tokenValue',
+        'secret_text',
+        'passwordRaw',
+        // A secret word in the trailing position names the value, whatever the leading words are.
+        'ingestToken',
+        'apiToken',
+        'webhookSecret',
+        'rawToken',
+        'plainSecret',
+        'secretKey',
+      ];
+      for (const name of objectKeys) {
+        const code = [`export const state = withState({ ${name}: '' });`, ''].join('\n');
+        expect(ruleIds(code, SETTINGS_SECRETS_FILE), name).toEqual([SECRET_FIELD]);
+      }
+
+      // The same table in the declaration position, where camelCase keeps the wire-DTO rule
+      // quiet: `interface SecretsState` is what makes its members store state.
+      const signatures = [
+        'token',
+        'secret',
+        'password',
+        'passwd',
+        'plaintext',
+        'credential',
+        'apikey',
+        'apiKey',
+        'signingSecret',
+        'secretValue',
+        'privateKey',
+        'accessToken',
+        'refreshToken',
+        'bearerToken',
+        'clientSecret',
+        'tokenValue',
+        'secretRaw',
+        'passwordText',
+      ];
+      for (const name of signatures) {
+        const code = [
+          'export interface SecretsState {',
+          `  readonly ${name}: string;`,
+          '}',
+          '',
+        ].join('\n');
+        expect(ruleIds(code, SETTINGS_SECRETS_FILE), name).toEqual([SECRET_FIELD]);
+      }
+    });
+
+    it('accepts every metadata row of the name table', () => {
+      const signatures = [
+        'tokenPrefix',
+        'tokenName',
+        'last4',
+        'rotationState',
+        'secretRef',
+        'secretName',
+        'ingestTokens',
+        'tokenCount',
+        'expiresAt',
+        'hasSecret',
+        'hasToken',
+        'tokenExpiresAt',
+        'lastRotatedAt',
+        'ciBindings',
+        'passwordHash',
+        'tokens',
+      ];
+      for (const name of signatures) {
+        const code = [
+          'export interface SecretsState {',
+          `  readonly ${name}: string;`,
+          '}',
+          '',
+        ].join('\n');
+        expect(lint(code, SETTINGS_SECRETS_FILE), name).toEqual([]);
+      }
+
+      const objectKeys = ['token_prefix', 'secret_reference', 'last_rotated_at', 'ingest_tokens'];
+      for (const name of objectKeys) {
+        const code = [`export const state = withState({ ${name}: '' });`, ''].join('\n');
+        expect(lint(code, SETTINGS_SECRETS_FILE), name).toEqual([]);
+      }
+    });
+
+    // No import: the rule matches the callee name, and the workspace has no `@ngrx/signals`
+    // dependency (the app's own store seam is shaped like a signalStore without the package).
+    it('reports a state literal of withState, patchState and signalStore at any depth', () => {
+      const code = [
+        'export const Store = signalStore(withState({ meta: { plaintext: "" } }));',
+        '',
+        'export function save(store: unknown): void {',
+        '  patchState(store, { token: "" });',
+        '}',
+        '',
+      ].join('\n');
+      expect(ruleIds(code, SETTINGS_SECRETS_FILE)).toEqual([SECRET_FIELD, SECRET_FIELD]);
+    });
+
+    // A request body is what the API receives, not what the store holds, and a nested `withState`
+    // is the literal its own call reports: the walk stops at both boundaries.
+    it('walks only the state literal, not a payload inside a closure or a nested withState', () => {
+      const code = [
+        'export const Store = signalStore(',
+        '  withState({ tokenPrefix: "" }),',
+        '  withMethods((store) => {',
+        '    return {',
+        '      save(token: string): void {',
+        "        post('/v1/settings/secrets', { token });",
+        '      },',
+        '    };',
+        '  }),',
+        '  withState({ secretRef: "" }),',
+        ');',
+        '',
+      ].join('\n');
+      expect(lint(code, SETTINGS_SECRETS_FILE)).toEqual([]);
+
+      // The nested literal is still reported once, from its own `withState` call.
+      const nested = [
+        'export const Store = signalStore(withState({ meta: { token: "" } }));',
+        '',
+      ].join('\n');
+      expect(ruleIds(nested, SETTINGS_SECRETS_FILE)).toEqual([SECRET_FIELD]);
+    });
+
+    it('reports a signalState literal', () => {
+      const code = ['export const state = signalState({ password: "" });', ''].join('\n');
+      expect(ruleIds(code, SETTINGS_SECRETS_FILE)).toEqual([SECRET_FIELD]);
+    });
+
+    it('reports a withState type argument literal', () => {
+      const code = [
+        'export const feature = withState<{ token: string; tokenPrefix: string }>({',
+        "  tokenPrefix: '',",
+        '});',
+        '',
+      ].join('\n');
+      expect(ruleIds(code, SETTINGS_SECRETS_FILE)).toEqual([SECRET_FIELD]);
+    });
+
+    // Position 3: the members of a `/Store$/` class, getters included. The top-level signal and
+    // the non-store class are here so the narrow scope is pinned, not implied.
+    it('reports a store class field, accessor and getter, and nothing else', () => {
+      const code = [
+        "import { signal } from '@angular/core';",
+        '',
+        'export class SecretsStore {',
+        "  readonly token = signal('');",
+        "  accessor password = '';",
+        '  get signingSecret(): string {',
+        "    return '';",
+        '  }',
+        '}',
+        '',
+        "export const token = signal('');",
+        '',
+        'export class SecretsPanel {',
+        "  readonly token = '';",
+        '}',
+        '',
+      ].join('\n');
+      expect(ruleIds(code, SETTINGS_SECRETS_FILE)).toEqual([
+        SECRET_FIELD,
+        SECRET_FIELD,
+        SECRET_FIELD,
+      ]);
+    });
+
+    // A private field and a constructor parameter property are fields of the instance too, and
+    // they are where a value is easiest to hide from review.
+    it('reports a private field and a constructor parameter property of a store class', () => {
+      const code = [
+        'export class SecretsStore {',
+        "  #token = '';",
+        '',
+        '  #helper = 0;',
+        '',
+        '  constructor(private readonly password: string, scope: string) {',
+        '    this.#helper = scope.length;',
+        '  }',
+        '}',
+        '',
+        'export class SecretsPanel {',
+        "  #token = '';",
+        '',
+        '  constructor(private readonly password: string) {}',
+        '}',
+        '',
+      ].join('\n');
+      // The private field, then the parameter property: a plain `scope` parameter and a private
+      // field of a non-store class are not fields a Settings template binds as state.
+      expect(ruleIds(code, SETTINGS_SECRETS_FILE)).toEqual([SECRET_FIELD, SECRET_FIELD]);
+    });
+
+    it('does not report a declaration that is neither a state nor a store', () => {
+      const code = [
+        'export interface SecretRow {',
+        '  token: string;',
+        '}',
+        '',
+        'export type SecretList = { password: string };',
+        '',
+      ].join('\n');
+      expect(lint(code, SETTINGS_SECRETS_FILE)).toEqual([]);
+    });
+
+    // Position 4: an inline template is source text, so the binding never reaches a visitor that
+    // could see a property name — the template property's value is scanned by content instead.
+    it('reports a secret-shaped member read in an inline template', () => {
+      const templates = [
+        '<p>{{ store.token() }}</p>',
+        '<p>{{ row.secret }}</p>',
+        '<input [value]="x.signing_secret" />',
+        '<p>{{ store.plaintext }}</p>',
+        '<p>{{ a.b.token }}</p>',
+        '<p>{{ store?.token }}</p>',
+        '<p>{{ rows[0]?.secret }}</p>',
+      ];
+      for (const template of templates) {
+        const code = [
+          '@Component({',
+          "  selector: 'app-secrets',",
+          `  template: \`${template}\`,`,
+          '})',
+          'export class SecretsPanel {}',
+          '',
+        ].join('\n');
+        const messages = lint(code, SETTINGS_SECRETS_FILE);
+        expect(
+          messages.map((message) => message.ruleId),
+          template,
+        ).toEqual([SECRET_FIELD]);
+        expect(messages[0]?.message).toContain(
+          'keep the value server-side or in the one-time reveal component',
+        );
+      }
+    });
+
+    // The copy of a secret row mentions the word; a sentence period is not a member read.
+    it('accepts prose around the word in an inline template', () => {
+      const prose = [
+        'Rotate the key. Token is shown once.',
+        'Copy it now. Secret values are hidden.',
+        'Format, e.g. token — see the column.',
+      ];
+      for (const sentence of prose) {
+        const code = [
+          '@Component({',
+          "  selector: 'app-secrets',",
+          `  template: \`<p>${sentence}</p><p>{{ token }}</p>\`,`,
+          '})',
+          'export class SecretsPanel {}',
+          '',
+        ].join('\n');
+        expect(lint(code, SETTINGS_SECRETS_FILE), sentence).toEqual([]);
+      }
+
+      // A member read glued to its dot is still reported, and the `(` of a call, the `]` of an
+      // index or the `?` of an optional chain is a member in front of the dot too.
+      for (const read of [
+        '{{ store.token }}',
+        '{{ rows[0].secret }}',
+        '{{ store.token() }}',
+        '{{ store?.token }}',
+      ]) {
+        const code = [
+          '@Component({',
+          "  selector: 'app-secrets',",
+          `  template: \`<p>${read}</p>\`,`,
+          '})',
+          'export class SecretsPanel {}',
+          '',
+        ].join('\n');
+        expect(ruleIds(code, SETTINGS_SECRETS_FILE), read).toEqual([SECRET_FIELD]);
+      }
+    });
+
+    it('accepts a metadata-only inline template', () => {
+      const code = [
+        '@Component({',
+        "  selector: 'app-secrets',",
+        '  template: `<p>{{ row.token_prefix }}</p>',
+        '    <p>{{ store.rotationState() }} — {{ row.last4 }}</p>',
+        '    <input [value]="x.secretRef" />',
+        '    <p>Token rotated</p>`,',
+        "  styleUrl: './x.css',",
+        '})',
+        'export class SecretsPanel {}',
+        '',
+      ].join('\n');
+      expect(lint(code, SETTINGS_SECRETS_FILE)).toEqual([]);
     });
   });
 });

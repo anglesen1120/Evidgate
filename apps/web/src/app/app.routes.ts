@@ -26,6 +26,20 @@
 // loaded through one module per area (the same chunk for all of its entries), and the page inside
 // it reads its entry from the owning route's `data.entryId`. The one entry with a real screen
 // (`overview`) loads that single component instead.
+//
+// An entry can also own a route table of its own instead of its area's (`ENTRY_ROUTES`): the
+// `settings` entry mounts the Settings shell — a tab strip with one gated child route per tab —
+// while the other ten `settings` destinations still render the area's placeholder table, so the
+// override is per entry and never per area. Precedence in `entryRoute`: `ENTRY_PAGES` (a single
+// screen), then `ENTRY_ROUTES` (a table), then the area's table.
+//
+// The entry's own guards are NOT changed by that override: `phaseGuard` and
+// `permissionGuard(entry.permission)` run before the shell table exactly as they do for every other
+// entry. Which code the `settings` sidebar row demands is the registry's decision (today
+// `organization:read`), so a session that lacks it is refused on the entry with `/forbidden` before
+// any tab route is attempted; the per-tab decision of plan 09.7.1 §5 starts from a caller who may
+// open Settings at all. Replacing the entry gate with the tab gates would be a navigation-registry
+// change (the sidebar shows the entry under the same code), not a change to this table.
 
 import type { Type } from '@angular/core';
 import type { Route, Routes } from '@angular/router';
@@ -82,6 +96,16 @@ const ENTRY_PAGES: Readonly<Record<string, () => Promise<Type<unknown>>>> = {
   overview: () => import('./features/project/overview.page').then((m) => m.ProjectOverviewPage),
 };
 
+/**
+ * The entries that own a route table instead of the one their `area` serves (09.7.1-T1.1): the
+ * `settings` entry mounts the Settings shell, whose children are one gated route per tab, while its
+ * ten sibling `settings` entries keep the area's placeholder table. Keyed by entry id, so the
+ * override can never spread to an entry that did not ask for it.
+ */
+const ENTRY_ROUTES: Readonly<Record<string, () => Promise<Routes>>> = {
+  settings: () => import('./features/settings/settings-shell.routes').then((m) => m.routes),
+};
+
 /** The lazy loader of one area, or a load-time failure naming the missing folder. */
 function areaRoutesOf(entry: NavEntry): () => Promise<Routes> {
   const loadArea = AREA_ROUTES[entry.area];
@@ -97,18 +121,21 @@ function areaRoutesOf(entry: NavEntry): () => Promise<Routes> {
 /**
  * One navigation entry as a route: the registry's segment, the phase gate and then the permission
  * gate (both `CanMatchFn`, so a refusal never instantiates the page), and the entry id the page
- * reads its label from.
+ * reads its label from. The page comes from `ENTRY_PAGES` when the entry has a real screen, else
+ * from `ENTRY_ROUTES` when it owns a table, else from its area's placeholder table.
  */
 function entryRoute(entry: NavEntry): Route {
   const page = ENTRY_PAGES[entry.id];
+  const table = ENTRY_ROUTES[entry.id];
   const common = {
     path: entry.segment,
     canMatch: [phaseGuard(entry.phase), permissionGuard(entry.permission)],
     data: { entryId: entry.id },
   };
-  return page === undefined
-    ? { ...common, loadChildren: areaRoutesOf(entry) }
-    : { ...common, loadComponent: page };
+  if (page !== undefined) {
+    return { ...common, loadComponent: page };
+  }
+  return { ...common, loadChildren: table ?? areaRoutesOf(entry) };
 }
 
 /**

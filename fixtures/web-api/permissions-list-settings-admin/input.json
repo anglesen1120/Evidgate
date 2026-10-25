@@ -1,0 +1,95 @@
+{
+  "operation_id": "listPermissions",
+  "variant": "settings-admin",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000b1"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "code": "agent_pool:read",
+        "resource": "agent_pool",
+        "action": "read",
+        "description": "Read agent pool definitions and their capability match (V2, 05.7.3).",
+        "sensitive": false,
+        "reserved": true,
+        "tenant_assignable": true
+      },
+      {
+        "code": "audit:read",
+        "resource": "audit",
+        "action": "read",
+        "description": "Read and export the tenant audit log, support-grant actions included (00 §9.3, 02.7.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "ingest_token:read",
+        "resource": "ingest_token",
+        "action": "read",
+        "description": "List project ingest-token metadata (id, name, prefix, status, last_used_at) — never the secret or its HMAC (02.4.2).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "membership:read",
+        "resource": "membership",
+        "action": "read",
+        "description": "Read org memberships and pending invites (02 §4.2, T59).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "organization:read",
+        "resource": "organization",
+        "action": "read",
+        "description": "Read the organizations the caller is a member of, and one organization's settings (02.1.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "policy:read",
+        "resource": "policy",
+        "action": "read",
+        "description": "Read policy revisions, waivers and quarantine entries — open to every member role, viewer included, so an exception is never hidden (T58, 07.1.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "project:read",
+        "resource": "project",
+        "action": "read",
+        "description": "Read project settings such as retention and capture options (T21: every member role).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "security_event:read",
+        "resource": "security_event",
+        "action": "read",
+        "description": "Read the org's security events: auth failures and support access in V1, injection attempts from V2 (00 §9.3, 11.5.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "webhook:read",
+        "resource": "webhook",
+        "action": "read",
+        "description": "Read outbound webhook endpoints and their delivery log, never the signing secret (T61, 07.6.2).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      }
+    ],
+    "next_cursor": null
+  }
+}

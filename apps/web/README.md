@@ -164,6 +164,38 @@ npm run e2e -w apps/web    # builds first, then runs Playwright incl. e2e/csp.sp
 npm run test -w apps/web   # unit tests incl. scripts/csp.test.mjs
 ```
 
+## Lint blind spots (09.7.1-T1)
+
+`evidgate/no-secret-field-in-store` (`lint/rules/no-secret-field-in-store.cjs`) fails a
+Settings-feature file that names a secret-shaped field in a store: an object-literal key of the
+literal handed to `withState`/`patchState`/`signalState` (nested objects included, never an
+argument of `signalStore` itself or a payload inside a closure), a member of an `interface`/`type`
+named `…State`/`…Store` or of `withState<{…}>`, a field, private field, accessor, getter or
+constructor parameter property of a `…Store` class, or a member read in a constant inline
+`template:` string such as `{{ store.token() }}` (plan 09.7.1 §8 S3, AC3). The header of the rule
+file is the name table it matches (`token`, `secret`, `signing_secret`, `private_key`, `apiKey`,
+`ingestToken`, …) and the metadata names it must let through (`token_prefix`, `tokenPrefix`,
+`secretRef`, `rotationState`, `last4`, `hasToken`, …). Its blind spots are deliberate — lint is
+defence in depth, not the only defence:
+
+- a `templateUrl` `.html` file is not scanned by this rule — only a constant inline `template:`
+  string is read, and the Angular template rules that run over `.html` do not look for a
+  secret-shaped member read;
+- a bare identifier read in a template (`{{ token }}`, no dot) is not scanned by the
+  inline-template check either: a component field named `token` is caught by the class-field check
+  only when the class name ends in `Store`, so a `SecretsPanel` holding one is not reported. The
+  `.html` blind spot above applies to it in the same way;
+- a member read assembled at run time (`row[key]`, `store[this.field]`) has no name in the source
+  to match, and a secret word with a metadata suffix (`tokenCount`, `tokenExpiresAt`,
+  `passwordHash`, `hasToken`) is not reported: the rule stays narrow enough that nobody switches
+  it off;
+- a top-level `const token = signal('')` is not store state and is not reported. The rule's two
+  exemptions — a `*.spec.ts` file and the one-time reveal component (a `reveal/` directory, or
+  `reveal` as a whole word of the file name) — are its own allow-list, reviewed with the rule.
+- a state factory or updater (`withState(() => ({ token: '' }))`, `patchState(store, (s) => ({ token }))`) is not walked, a secret word that is neither first nor last in a name (`rawTokenValue`) is not reported, and a lone very long identifier is split word by word without a length cap; the first store (09.7.1-T2) extends the rule or records why not.
+
+The bypass rule's own blind spots are listed in the CSP section above.
+
 ## Data access (09.1.1-T3)
 
 One SDK client, one gateway, no wire types. `src/app/core/http/api-client.ts` builds the single
