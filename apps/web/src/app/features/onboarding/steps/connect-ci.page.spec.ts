@@ -760,37 +760,28 @@ describe('ConnectCiPage', () => {
   it('clears its scheduled credential-boundary timer on destroy', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
     vi.setSystemTime(new Date('2026-10-25T12:00:00Z'));
-    const schedule = vi.spyOn(globalThis, 'setTimeout');
-    const clear = vi.spyOn(globalThis, 'clearTimeout');
     try {
       tokens.set([{ ...TOKEN, expires_at: '2026-10-25T12:00:01Z' }]);
       fixture.detectChanges();
-      const index = schedule.mock.calls.findIndex((call) => call[1] === 1000);
-      expect(index).toBeGreaterThanOrEqual(0);
-      const timer = schedule.mock.results[index]?.value as unknown;
-      expect(timer).toBeDefined();
-      clear.mockClear();
+      expect(vi.getTimerCount()).toBe(1);
       fixture.destroy();
-      expect(clear).toHaveBeenCalledWith(timer);
+      expect(vi.getTimerCount()).toBe(0);
     } finally {
       fixture.destroy();
-      schedule.mockRestore();
-      clear.mockRestore();
       vi.useRealTimers();
     }
   });
 
-  it('re-arms for changed token metadata and caps long timeout delays', async () => {
+  it('re-arms one timer for changed token metadata, including a far boundary', async () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
     vi.setSystemTime(new Date('2026-10-25T12:00:00Z'));
-    const schedule = vi.spyOn(globalThis, 'setTimeout');
     try {
       tokens.set([{ ...TOKEN, expires_at: '2026-10-25T12:00:01Z' }]);
       fixture.detectChanges();
-      expect(schedule).toHaveBeenCalledWith(expect.any(Function), 1000);
+      expect(vi.getTimerCount()).toBe(1);
       tokens.set([{ ...TOKEN, expires_at: '2099-01-01T00:00:00Z' }]);
       fixture.detectChanges();
-      expect(schedule).toHaveBeenCalledWith(expect.any(Function), 2 ** 31 - 1);
+      expect(vi.getTimerCount()).toBe(1);
       await vi.advanceTimersByTimeAsync(1000);
       fixture.detectChanges();
       expect(
@@ -805,7 +796,6 @@ describe('ConnectCiPage', () => {
       ).toBe('unhealthy');
     } finally {
       fixture.destroy();
-      schedule.mockRestore();
       vi.useRealTimers();
     }
   });
