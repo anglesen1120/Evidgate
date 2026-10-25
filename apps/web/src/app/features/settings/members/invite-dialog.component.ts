@@ -185,12 +185,12 @@ export class InviteDialogComponent {
       return;
     this.intent ??= createIntent();
     const generation = this.generation;
-    if (
-      (await this.store.invite(this.email(), [...this.selected()], this.intent)) &&
-      generation === this.generation
-    ) {
-      this.close();
-      this.completed.emit();
-    }
+    if (!(await this.store.invite(this.email(), [...this.selected()], this.intent))) return;
+    // A success is a fact about the list, not about this dialog: announce it even when the dialog was
+    // closed while the request was in flight, so the page still confirms the invitation. Only the
+    // attempt that is still open closes itself; a late refusal renders inside the closed dialog and
+    // never reopens it, and open() resets the mutation state before the next attempt.
+    if (generation === this.generation) this.close();
+    this.completed.emit();
   }
 }

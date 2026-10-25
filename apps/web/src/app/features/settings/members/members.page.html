@@ -38,6 +38,14 @@
       (remove)="openRemove($event)"
     />
     <app-role-matrix [matrix]="visibleMatrix()" />
+    @if (pagingAlert(); as failure) {
+      <div data-members-load-error role="alert">
+        <p>{{ failure.message }}</p>
+        @if (failure.code) {
+          <code>{{ failure.code }}</code>
+        }
+      </div>
+    }
     <nav class="pagination" [attr.aria-label]="copy.directory">
       <button type="button" [disabled]="offset() === 0 || paging()" (click)="previous()">
         {{ copy.previous }}

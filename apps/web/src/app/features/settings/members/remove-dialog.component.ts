@@ -142,9 +142,11 @@ export class RemoveDialogComponent {
       return;
     this.intent ??= createIntent();
     const generation = this.generation;
-    if ((await this.store.remove(member.id, this.intent)) && generation === this.generation) {
-      this.close();
-      this.completed.emit();
-    }
+    if (!(await this.store.remove(member.id, this.intent))) return;
+    // A success is a fact about the list, not about this dialog: announce it even when the dialog was
+    // closed while the removal was in flight, so the page still confirms it. Only the attempt that is
+    // still open closes itself; a late refusal renders inside the closed dialog and never reopens it.
+    if (generation === this.generation) this.close();
+    this.completed.emit();
   }
 }

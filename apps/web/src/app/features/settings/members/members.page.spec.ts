@@ -208,6 +208,48 @@ describe('Members page (09.7.1-T2)', () => {
     }
   });
 
+  it('announces a refused next page above the pagination and clears it when a page arrives', async () => {
+    store.loadError.set(lastAdmin);
+    store.hasMore.set(true);
+    const { fixture, root } = await render();
+    const alert = root.querySelector('[data-members-load-error]');
+    expect(alert?.getAttribute('role')).toBe('alert');
+    expect(alert?.querySelector('p')?.textContent?.trim()).toBe(lastAdmin.message);
+    expect(alert?.querySelector('code')?.textContent?.trim()).toBe('last_admin');
+    expect(root.querySelector('.members-content > [data-members-load-error]')).toBe(alert);
+    // Next is the retry control: the same button asks the server again.
+    const nextButton = button(root, '.pagination button:last-of-type');
+    expect(nextButton.disabled).toBe(false);
+
+    nextButton.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(store.loadMore).toHaveBeenCalledTimes(1);
+    expect(root.querySelector('[data-members-load-error]')).toBeNull();
+  });
+
+  it('turns a contract violation while paging into a generic alert, never the thrown text', async () => {
+    store.hasMore.set(true);
+    store.loadMore.mockImplementation(() =>
+      Promise.reject(new Error('the membership list envelope was malformed')),
+    );
+    const { fixture, root } = await render();
+    const nextButton = button(root, '.pagination button:last-of-type');
+    nextButton.focus();
+    nextButton.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const alert = root.querySelector('[data-members-load-error]');
+    expect(alert?.getAttribute('role')).toBe('alert');
+    expect(alert?.textContent).toContain('The next members page could not be loaded.');
+    expect(alert?.querySelector('code')).toBeNull();
+    expect(root.textContent).not.toContain('envelope was malformed');
+    expect(button(root, '.pagination button:last-of-type').disabled).toBe(false);
+    // Focus stays on the retry control beside the alert, not on a heading whose rows did not move.
+    expect(document.activeElement).toBe(nextButton);
+  });
+
   it('keeps the remove dialog open and renders last_admin verbatim as text with its code (AC2)', async () => {
     store.remove.mockImplementation(() => {
       store.removeState.set({ phase: 'failed', error: lastAdmin });

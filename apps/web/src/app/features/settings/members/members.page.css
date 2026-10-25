@@ -197,14 +197,16 @@ code {
   background: var(--eg-warning-bg);
   padding: var(--eg-space-1);
 }
-[data-members-error] {
+[data-members-error],
+[data-members-load-error] {
   color: var(--eg-danger-fg);
   background: var(--eg-danger-bg);
   padding: var(--eg-space-4);
   border-radius: var(--eg-radius-sm);
   overflow-wrap: anywhere;
 }
-[data-members-error] p {
+[data-members-error] p,
+[data-members-load-error] p {
   color: inherit;
   white-space: pre-wrap;
 }

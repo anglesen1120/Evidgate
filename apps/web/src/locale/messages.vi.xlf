@@ -33,6 +33,7 @@
       <trans-unit id="settings.members.next" datatype="html"><source>Next members</source><target>Thành viên tiếp theo</target></trans-unit>
       <trans-unit id="settings.members.previous" datatype="html"><source>Previous members</source><target>Thành viên trước đó</target></trans-unit>
       <trans-unit id="settings.members.saved" datatype="html"><source>Membership updated.</source><target>Đã cập nhật thành viên.</target></trans-unit>
+      <trans-unit id="settings.members.load-more-failed" datatype="html"><source>The next members page could not be loaded. The members already shown are unchanged.</source><target>Không tải được trang thành viên tiếp theo. Các thành viên đang hiển thị vẫn giữ nguyên.</target></trans-unit>
       <trans-unit id="settings.members.narrow" datatype="html"><source>Use a wider screen to invite or remove members.</source><target>Dùng màn hình rộng hơn để mời hoặc xoá thành viên.</target></trans-unit>
       <trans-unit id="settings.members.pending" datatype="html"><source>Pending invitation</source><target>Lời mời đang chờ</target></trans-unit>
       <trans-unit id="settings.members.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>

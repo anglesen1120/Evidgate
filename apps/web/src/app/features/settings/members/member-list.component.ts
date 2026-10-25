@@ -34,6 +34,7 @@ export const MEMBERS_COPY = {
   next: $localize`:@@settings.members.next:Next members`,
   previous: $localize`:@@settings.members.previous:Previous members`,
   saved: $localize`:@@settings.members.saved:Membership updated.`,
+  loadMoreFailed: $localize`:@@settings.members.load-more-failed:The next members page could not be loaded. The members already shown are unchanged.`,
   narrow: $localize`:@@settings.members.narrow:Use a wider screen to invite or remove members.`,
   pending: $localize`:@@settings.members.pending:Pending invitation`,
   active: $localize`:@@settings.members.active:Active`,
@@ -76,7 +77,7 @@ export const MEMBERS_COPY = {
               <td>
                 <app-status-pill
                   [tone]="member.status === 'active' ? 'success' : 'neutral'"
-                  [label]="copy[member.status]"
+                  [label]="statusLabel(member.status)"
                 />
               </td>
               <td>
@@ -114,5 +115,30 @@ export class MemberListComponent {
   protected requestRemove(member: MembershipView, event: Event): void {
     if (event.currentTarget instanceof HTMLElement)
       this.remove.emit({ member, opener: event.currentTarget });
+  }
+
+  /**
+   * The label of one membership status: a closed switch over the five contract values
+   * (`MembershipView['status']`), never an object keyed by server data — `copy[status]` would
+   * answer a prototype member such as `constructor` or the inherited `toString` for a status the
+   * contract does not define. The parameter is widened to `string` because the value arrives from
+   * the wire, so the fallback branch is genuinely reachable: an unknown status is shown as the
+   * server wrote it, as plain text, rather than as an invented or empty label.
+   */
+  protected statusLabel(status: string): string {
+    switch (status) {
+      case 'pending':
+        return this.copy.pending;
+      case 'active':
+        return this.copy.active;
+      case 'removed':
+        return this.copy.removed;
+      case 'revoked':
+        return this.copy.revoked;
+      case 'expired':
+        return this.copy.expired;
+      default:
+        return status;
+    }
   }
 }

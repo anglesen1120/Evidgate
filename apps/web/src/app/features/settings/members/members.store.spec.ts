@@ -105,9 +105,20 @@ class FakeMembersDataService {
   /** When true, a membership read answers only when the test settles `pending`. */
   manual = false;
   readonly pending: Array<{ orgId: string; resolve: (page: MembershipListResponse) => void }> = [];
+  /** When true, an invite answers only when the test settles `pendingInvites`. */
+  inviteManual = false;
+  readonly pendingInvites: Array<{
+    orgId: string;
+    resolve: (view: MembershipView) => void;
+  }> = [];
+  /** When true, a removal answers only when the test settles `pendingRemovals`. */
+  removeManual = false;
+  readonly pendingRemovals: Array<{ orgId: string; resolve: () => void }> = [];
   readonly invites: Array<{ orgId: string; body: InviteMemberRequest; intent: Intent }> = [];
   readonly removals: Array<{ orgId: string; membershipId: string; intent: Intent }> = [];
   readonly membershipCursors: Array<string | undefined> = [];
+  /** The org of each membership read, so a reload of a stale scope is visible. */
+  readonly membershipOrgs: string[] = [];
   membershipCalls = 0;
   roleCalls = 0;
   catalogueCalls = 0;
@@ -115,6 +126,7 @@ class FakeMembersDataService {
   listMemberships(orgId: string, cursor?: string): Promise<MembershipListResponse> {
     this.membershipCalls += 1;
     this.membershipCursors.push(cursor);
+    this.membershipOrgs.push(orgId);
     if (this.manual) {
       return new Promise<MembershipListResponse>((resolve) => {
         this.pending.push({ orgId, resolve });
@@ -147,6 +159,11 @@ class FakeMembersDataService {
 
   invite(orgId: string, body: InviteMemberRequest, intent: Intent): Promise<MembershipView> {
     this.invites.push({ orgId, body, intent });
+    if (this.inviteManual) {
+      return new Promise<MembershipView>((resolve) => {
+        this.pendingInvites.push({ orgId, resolve });
+      });
+    }
     return this.inviteFailure === null
       ? Promise.resolve(CREATED)
       : Promise.reject(this.inviteFailure);
@@ -154,6 +171,11 @@ class FakeMembersDataService {
 
   remove(orgId: string, membershipId: string, intent: Intent): Promise<void> {
     this.removals.push({ orgId, membershipId, intent });
+    if (this.removeManual) {
+      return new Promise<void>((resolve) => {
+        this.pendingRemovals.push({ orgId, resolve });
+      });
+    }
     return this.removeFailure === null ? Promise.resolve() : Promise.reject(this.removeFailure);
   }
 }
@@ -323,6 +345,19 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.loadError()).toBe(failure.error);
       expect(store.hasMore()).toBe(true);
     });
+
+    it('re-throws a rejection that is not the server’s answer, for the page to catch', async () => {
+      const failure = new Error('adapter bug: the page never arrived');
+      data.pages = [{ items: PAGE.items, next_cursor: '1' }];
+      data.failCursorPagesOnly = true;
+      data.membersFailure = failure;
+      await store.load('o-1');
+
+      // Not a typed refusal: a bug, re-thrown unchanged rather than read as a server decision.
+      await expect(store.loadMore()).rejects.toBe(failure);
+      expect(store.members()).toHaveLength(PAGE.items.length);
+      expect(store.loadError()).toBeNull();
+    });
   });
 
   describe('invite', () => {
@@ -423,6 +458,106 @@ describe('MembersStore (09.7.1-T2)', () => {
       // The rows on screen are exactly the ones read before the attempt.
       expect(store.members()).toBe(before);
       expect(data.membershipCursors).toEqual([undefined]);
+    });
+  });
+
+  describe('a scope change while a mutation is in flight', () => {
+    it('keeps the new org’s rows and points the next calls at it', async () => {
+      await store.load('o-1');
+      data.inviteManual = true;
+      const inFlight = store.invite('newhire@acme.test', [], createIntent());
+      expect(store.inviteState().phase).toBe('submitting');
+
+      // The scope switches (the page closes its dialogs and reads the new org) while the invite
+      // is still on its way to o-1.
+      data.pages = [
+        { items: EMPTY_PAGE.items, next_cursor: '1' },
+        { items: PAGE.items, next_cursor: null },
+      ];
+      await store.load('o-2');
+      data.pendingInvites[0]?.resolve(CREATED);
+
+      await expect(inFlight).resolves.toBe(true);
+
+      // The invitation landed on o-1; its reload must not write into o-2's list.
+      expect(data.invites.map((entry) => entry.orgId)).toEqual(['o-1']);
+      expect(data.membershipOrgs).toEqual(['o-1', 'o-2']);
+      expect(store.members()).toEqual(EMPTY_PAGE.items);
+      expect(store.hasMore()).toBe(true);
+      expect(store.loadError()).toBeNull();
+
+      // The store still addresses o-2 for the next mutation and the next page.
+      data.inviteManual = false;
+      await store.invite('second@acme.test', [], createIntent());
+      expect(data.invites.map((entry) => entry.orgId)).toEqual(['o-1', 'o-2']);
+
+      await store.loadMore();
+      expect(data.membershipOrgs).toEqual(['o-1', 'o-2', 'o-2', 'o-2']);
+      expect(store.members().map((member) => member.id)).toEqual(
+        PAGE.items.map((member) => member.id),
+      );
+    });
+
+    it('skips the reload of a removal addressed to the org that is no longer shown', async () => {
+      await store.load('o-1');
+      data.removeManual = true;
+      const inFlight = store.remove(PAGE.items[0]?.id ?? '', createIntent());
+
+      data.pages = [EMPTY_PAGE];
+      await store.load('o-2');
+      data.pendingRemovals[0]?.resolve();
+
+      await expect(inFlight).resolves.toBe(true);
+
+      expect(data.removals.map((entry) => entry.orgId)).toEqual(['o-1']);
+      expect(data.membershipOrgs).toEqual(['o-1', 'o-2']);
+      expect(store.members()).toEqual(EMPTY_PAGE.items);
+      expect(store.removeState()).toEqual({ phase: 'done', error: null });
+    });
+  });
+
+  describe('a rejection that is not the server’s answer', () => {
+    it('settles a refused-by-nobody invite as a generic unexpected failure', async () => {
+      await store.load('o-1');
+      const before = store.members();
+      data.inviteFailure = new Error('adapter bug: boom');
+
+      await expect(store.invite('newhire@acme.test', [], createIntent())).resolves.toBe(false);
+
+      const state = store.inviteState();
+      expect(state.phase).toBe('failed');
+      expect(state.error?.kind).toBe('unexpected');
+      expect(state.error?.status).toBe(0);
+      expect(state.error?.code).toBe('request_unresolved');
+      // The typed failure is the store's own, never the thrown value's text.
+      expect(state.error?.message).not.toContain('boom');
+      expect(JSON.stringify(state)).not.toContain('boom');
+      // Nothing reloaded and nothing was removed from the screen.
+      expect(data.membershipOrgs).toEqual(['o-1']);
+      expect(store.members()).toBe(before);
+      // The dialog can be reopened: it is no longer busy, and a reset starts a new attempt.
+      store.resetMutations();
+      expect(store.inviteState()).toEqual({ phase: 'idle', error: null });
+    });
+
+    it('settles a refused-by-nobody removal as a generic unexpected failure', async () => {
+      await store.load('o-1');
+      const before = store.members();
+      data.removeFailure = new TypeError('adapter bug: boom');
+
+      await expect(store.remove(PAGE.items[0]?.id ?? '', createIntent())).resolves.toBe(false);
+
+      const state = store.removeState();
+      expect(state.phase).toBe('failed');
+      expect(state.error?.kind).toBe('unexpected');
+      expect(state.error?.status).toBe(0);
+      expect(state.error?.code).toBe('request_unresolved');
+      expect(JSON.stringify(state)).not.toContain('boom');
+      expect(data.membershipOrgs).toEqual(['o-1']);
+      expect(store.members()).toBe(before);
+      // Reopening the remove dialog goes through the same reset.
+      store.resetMutations();
+      expect(store.removeState()).toEqual({ phase: 'idle', error: null });
     });
   });
 

@@ -23,6 +23,11 @@
 //    inviting or removing twice. The store never mints a key of its own.
 // 4. The server decides. A refusal is surfaced verbatim — AC2's 409 `last_admin` is shown as the
 //    server wrote it, and there is no client-side pre-check that could drift from the guard.
+// 5. One scope owns the state. A mutation's reload only runs while the org that mutation addressed
+//    is still the org the list shows: a scope switch during the round trip leaves the request
+//    landed server-side but makes its reload a write into another org's list. And a mutation
+//    always settles its own state, so a rejection that is not the server's answer (a cancellation,
+//    a bug) can never leave the dialog submitting forever.
 
 import { computed, inject, Injectable, signal } from '@angular/core';
 import type { MembershipView, PermissionView, RoleView } from '@evidgate/sdk';
@@ -68,6 +73,24 @@ const SUBMITTED: MutationState = { phase: 'done', error: null };
 
 /** What the preview of an id the store does not know answers, without building a new object. */
 const NO_ROLE_PREVIEW: RolePreview = { kind: 'unavailable', reason: 'unknown-role' };
+
+/**
+ * The typed failure a mutation reports when the rejection is not the server's answer — an adapter
+ * cancellation or a bug. `unexpected` is the classification table's "no UI state for this",
+ * `status: 0` says no response exists, and no text is taken from the thrown value (a thrown value
+ * is not server copy, and its message may carry request data the store must not surface).
+ */
+const UNRESOLVED_FAILURE: ApiError = {
+  kind: 'unexpected',
+  status: 0,
+  code: 'request_unresolved',
+  message: 'The request did not complete, so nothing was confirmed. Try again.',
+  requestId: null,
+  // Retrying the same intent is safe: the dialog replays the original `Idempotency-Key`.
+  retryable: true,
+  details: [],
+  retryAfterSeconds: null,
+};
 
 /** One independent read of `load`, settled so one failure cannot cancel the other two. */
 type SettledRead<T> =
@@ -251,9 +274,14 @@ export class MembersStore {
    * request for "no roles" that the contract's optional member expresses better by absence. The
    * address is passed straight through to the request and is never stored.
    *
-   * @returns `true` when the server created the membership; `false` when it refused. A refusal is
-   *   `inviteState().error` verbatim (409 `invite_exists` included), and a cancellation or a bug is
-   *   re-thrown unchanged, as `ApiGateway` delivers it.
+   * The reload runs only while the org this call addressed still owns the state: a scope switch
+   * during the round trip means the list on screen is another org's, and `load(orgId)` would reset
+   * `orgId`, the generation and the rows that org's own read already put there. The invitation
+   * landed server-side either way, so the mutation state still settles.
+   *
+   * @returns `true` when the server created the membership; `false` when it refused, or when the
+   *   rejection was not the server's answer at all (a cancellation or a bug), which is reported as
+   *   the generic `unexpected` failure so the dialog is never left submitting.
    */
   async invite(email: string, roleIds: readonly string[], intent: Intent): Promise<boolean> {
     const orgId = this.orgId;
@@ -268,14 +296,16 @@ export class MembersStore {
         intent,
       );
     } catch (error) {
-      if (!isApiRequestError(error)) {
-        throw error;
-      }
-      this.inviteStateSignal.set({ phase: 'failed', error: error.error });
+      this.inviteStateSignal.set({
+        phase: 'failed',
+        error: isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE,
+      });
       return false;
     }
     this.inviteStateSignal.set(SUBMITTED);
-    await this.load(orgId);
+    if (this.orgId === orgId) {
+      await this.load(orgId);
+    }
     return true;
   }
 
@@ -284,9 +314,12 @@ export class MembersStore {
    *
    * There is no client-side last-admin pre-check (AC2): the server's 409 `last_admin` is the
    * answer, it reaches `removeState().error` with its own message and code, and the list on screen
-   * is left exactly as it was because only a success reloads it.
+   * is left exactly as it was because only a success reloads it — and only while the same org still
+   * owns the state (a scope switch during the round trip skips the reload, see {@link invite}).
    *
-   * @returns `true` when the server removed the membership; `false` when it refused.
+   * @returns `true` when the server removed the membership; `false` when it refused, or when the
+   *   rejection was not the server's answer at all (a cancellation or a bug), reported as the
+   *   generic `unexpected` failure so the dialog is never left submitting.
    */
   async remove(membershipId: string, intent: Intent): Promise<boolean> {
     const orgId = this.orgId;
@@ -297,14 +330,16 @@ export class MembersStore {
     try {
       await this.data.remove(orgId, membershipId, intent);
     } catch (error) {
-      if (!isApiRequestError(error)) {
-        throw error;
-      }
-      this.removeStateSignal.set({ phase: 'failed', error: error.error });
+      this.removeStateSignal.set({
+        phase: 'failed',
+        error: isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE,
+      });
       return false;
     }
     this.removeStateSignal.set(SUBMITTED);
-    await this.load(orgId);
+    if (this.orgId === orgId) {
+      await this.load(orgId);
+    }
     return true;
   }
 

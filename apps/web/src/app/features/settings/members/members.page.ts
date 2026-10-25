@@ -62,6 +62,30 @@ export class MembersPage {
   protected readonly paging = signal(false);
   protected readonly saved = signal(false);
   protected readonly retryReady = signal(true);
+  /**
+   * A paging attempt the server never answered (a contract violation: a repeated cursor, the page
+   * cap, a malformed envelope). `MembersStore.loadMore` re-throws those instead of recording them,
+   * so the page owns this flag rather than inventing an `ApiError` the server never sent.
+   */
+  private readonly pagingFailure = signal(false);
+  /**
+   * Whether the store's `loadError` is stale. A refused page sets it and keeps `phase` `ready`
+   * (`members.store.ts` `loadMore`), and a later page that arrives does not clear it, so the page
+   * hides it once a page loaded — the store is not edited for this.
+   */
+  private readonly storedErrorCleared = signal(false);
+  /**
+   * The paging alert above the pagination nav: the server's own refusal with its code, or the
+   * generic message for a contract violation. `null` while the request-state owns the read state
+   * (`phase` not `ready`), because there the shared error pattern already speaks for the page.
+   */
+  protected readonly pagingAlert = computed<{ message: string; code: string | null } | null>(() => {
+    if (this.store.phase() !== 'ready') return null;
+    if (this.pagingFailure()) return { message: this.copy.loadMoreFailed, code: null };
+    if (this.storedErrorCleared()) return null;
+    const failure = this.store.loadError();
+    return failure === null ? null : { message: failure.message, code: failure.code };
+  });
   private readonly heading = viewChild.required<ElementRef<HTMLHeadingElement>>('heading');
   private readonly inviteDialog = viewChild(InviteDialogComponent);
   private readonly removeDialog = viewChild(RemoveDialogComponent);
@@ -72,6 +96,7 @@ export class MembersPage {
       this.offset.set(0);
       this.saved.set(false);
       untracked(() => {
+        this.clearPagingAlert();
         this.inviteDialog()?.close();
         this.removeDialog()?.close();
         if (org) void this.store.load(org.id);
@@ -91,6 +116,7 @@ export class MembersPage {
     const org = this.session.currentOrg();
     if (org) {
       this.offset.set(0);
+      this.clearPagingAlert();
       void this.store.load(org.id);
     }
   }
@@ -104,22 +130,51 @@ export class MembersPage {
   protected completed(removed = false): void {
     this.saved.set(true);
     this.offset.set(0);
+    this.clearPagingAlert();
     if (removed) this.heading().nativeElement.focus();
   }
   protected previous(): void {
     this.offset.update((offset) => Math.max(0, offset - 200));
     this.heading().nativeElement.focus();
   }
+  /**
+   * Paging. Next stays the retry control: a refused page leaves the rows and the cursor alone, so
+   * the same button asks again, and this method never rejects — the click handler would otherwise
+   * be an unhandled rejection. A typed server refusal already lives in `loadError`; anything the
+   * store re-throws (a contract violation) becomes the generic alert, never a message built from
+   * the thrown value.
+   */
   protected async next(): Promise<void> {
     if (this.paging()) return;
     this.paging.set(true);
+    const previousError = this.store.loadError();
     try {
-      if (this.offset() + 200 >= this.store.members().length) await this.store.loadMore();
+      if (this.offset() + 200 >= this.store.members().length) {
+        await this.store.loadMore();
+        // The store keeps a refusal in `loadError` and does not clear it when a later page
+        // arrives, so the page clears its own copy: an unchanged error means this read answered.
+        this.storedErrorCleared.set(this.store.loadError() === previousError);
+      } else {
+        this.storedErrorCleared.set(true);
+      }
+      this.pagingFailure.set(false);
       if (this.offset() + 200 < this.store.members().length)
         this.offset.update((offset) => offset + 200);
+    } catch {
+      this.pagingFailure.set(true);
+      this.storedErrorCleared.set(false);
     } finally {
       this.paging.set(false);
     }
-    this.heading().nativeElement.focus();
+    // A page that answered moves the reader to the list heading; a refusal or a violation leaves
+    // focus where it was — on Next, the retry control, next to the alert that just appeared —
+    // instead of scrolling away from the alert to a heading whose rows did not change.
+    if (this.pagingAlert() === null) this.heading().nativeElement.focus();
+  }
+
+  /** Forgets both paging alerts, so a new org, reload or mutation does not inherit one. */
+  private clearPagingAlert(): void {
+    this.pagingFailure.set(false);
+    this.storedErrorCleared.set(false);
   }
 }
