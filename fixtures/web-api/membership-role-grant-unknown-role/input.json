@@ -1,0 +1,18 @@
+{
+  "operation_id": "grantMembershipRole",
+  "variant": "unknown-role",
+  "status": 409,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d8"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "unknown_role",
+      "message": "the role is neither a member role of the catalogue nor a role of this organization",
+      "request_id": "018f0000-0000-7000-8000-0000000000d8",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

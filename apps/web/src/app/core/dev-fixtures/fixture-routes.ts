@@ -21,6 +21,18 @@
 // `createIngestToken`, `rotateIngestToken`) take no `Idempotency-Key` in `contracts/openapi.yaml`,
 // so the backend ignores the header the app's interceptor still adds.
 //
+// 09.7.1-F6 routes the role edit's three calls. They follow the same response-corpus rule, with one
+// consequence worth stating: the `{m}` and `{r}` path parameters are matched against the route
+// template only, never against the body of the document that answers — so
+// `getMembership`/`grantMembershipRole` answer the one membership their fixture describes
+// (`qa@acme.test`, the corpus page's second row) whatever id a request names, and the page shows
+// that document's roles after a confirmed change. `grantMembershipRole` and `revokeMembershipRole`
+// do take `Idempotency-Key` and `X-XSRF-Token` in the contract, and the reference client sends both
+// (`core/http/idempotency.interceptor.ts`, the XSRF interceptor); a fixture neither validates nor
+// replays a key, so the "a confirmed change is never resent" rule is pinned by the store's own spec
+// rather than here. `revokeMembershipRole` is the second `DELETE` row: five segments, so it cannot
+// collide with `removeMember`'s four.
+//
 // Dev-only, like the rest of `core/dev-fixtures`: see the module comment of `fixture-toggles.ts`.
 
 import { API_BASE_PATH } from '../http/api-origin';
@@ -55,8 +67,15 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'listIngestTokens', method: 'GET', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'rotateIngestToken', method: 'POST', path: '/ingest-tokens/{t}/rotate' },
   { operationId: 'listMemberships', method: 'GET', path: '/orgs/{o}/memberships' },
+  { operationId: 'getMembership', method: 'GET', path: '/orgs/{o}/memberships/{m}' },
   { operationId: 'createMembership', method: 'POST', path: '/orgs/{o}/memberships' },
   { operationId: 'removeMember', method: 'DELETE', path: '/orgs/{o}/memberships/{m}' },
+  { operationId: 'grantMembershipRole', method: 'POST', path: '/orgs/{o}/memberships/{m}/roles' },
+  {
+    operationId: 'revokeMembershipRole',
+    method: 'DELETE',
+    path: '/orgs/{o}/memberships/{m}/roles/{r}',
+  },
   { operationId: 'listAudit', method: 'GET', path: '/orgs/{o}/audit' },
   { operationId: 'listRuns', method: 'GET', path: '/projects/{p}/runs' },
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },

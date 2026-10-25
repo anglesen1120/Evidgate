@@ -14,8 +14,12 @@
 // - a failed role or catalogue read degrades the substrate and never hides the memberships, while a
 //   failed member read is the tab's error state with the server's message;
 // - the list follows `next_cursor` once per call, appends, and refuses a cursor it already followed;
-// - both mutations carry the caller's intent, so a retry reuses the `Idempotency-Key`; a refusal is
+// - every mutation carries the caller's intent, so a retry reuses the `Idempotency-Key`; a refusal is
 //   stored verbatim (AC2's 409 `last_admin`) and leaves the list exactly as it was;
+// - a role change is applied one request at a time in the order the dialog built (grants first) and
+//   stops at the first refusal, while `editApplied` keeps what the server did confirm — a partial
+//   apply is reported as one, and the row always comes from a refreshed membership, never from the
+//   dialog's draft;
 // - no signal holds a secret-shaped field (task §8 S3, the `no-secret-field-in-store` rule's
 //   runtime twin), and the invited address is never stored.
 
@@ -58,6 +62,29 @@ const CREATED = membershipCreateOk.body as unknown as MembershipView;
 const LAST_ADMIN = membershipRemoveLastAdmin.body as unknown as ErrorEnvelope;
 /** A second invite while one is pending. */
 const INVITE_EXISTS = membershipCreateInviteExists.body as unknown as ErrorEnvelope;
+/**
+ * The server's 403 of the self-escalation rule (02.1.2 §3b, `SelfEscalation.Refused`): the 00 §9.2
+ * `forbidden` code the 403 already documents, with the rule's own message. It is what a
+ * `tenant_admin` gets when it grants itself a role holding a permission it lacks.
+ */
+const SELF_ESCALATION: ErrorEnvelope = {
+  error: {
+    code: 'forbidden',
+    message:
+      "the request would grant the caller a permission the caller does not hold (00 §2: a role never widens the caller's own access)",
+    request_id: 'c2f0a2b8-0c55-4a4c-9d5f-2f4f6c1f7d31',
+    retryable: false,
+  },
+};
+
+/** One row of the served page by position, so a test never reaches for `!` or `?? ''`. */
+function pageMember(index: number): MembershipView {
+  const member = PAGE.items[index];
+  if (member === undefined) {
+    throw new Error(`the memberships fixture has no row ${index}`);
+  }
+  return member;
+}
 
 function roleId(code: string): string {
   const role = ROLES.find((candidate) => candidate.code === code);
@@ -114,6 +141,43 @@ class FakeMembersDataService {
   /** When true, a removal answers only when the test settles `pendingRemovals`. */
   removeManual = false;
   readonly pendingRemovals: Array<{ orgId: string; resolve: () => void }> = [];
+  /**
+   * The "server's" memberships by id: `getMembership` serves them and the role operations write
+   * to them, so a test's refresh reads the row the server would actually hold.
+   */
+  readonly memberViews = new Map<string, MembershipView>();
+  /** Every refresh read, so a scope switch that skipped one is visible. */
+  readonly membershipGets: Array<{ orgId: string; membershipId: string }> = [];
+  membershipGetFailure: Error | null = null;
+  /** When true, a refresh read answers only when the test settles `pendingGets`. */
+  membershipGetManual = false;
+  readonly pendingGets: Array<{
+    membershipId: string;
+    resolve: (view: MembershipView) => void;
+  }> = [];
+  /** Each role request in the order it reached the fake, so "grants first, then stop" is provable. */
+  readonly roleRequests: string[] = [];
+  readonly grants: Array<{
+    orgId: string;
+    membershipId: string;
+    roleId: string;
+    intent: Intent;
+  }> = [];
+  readonly revokes: Array<{
+    orgId: string;
+    membershipId: string;
+    roleId: string;
+    intent: Intent;
+  }> = [];
+  grantFailure: Error | null = null;
+  revokeFailure: Error | null = null;
+  /** When true, a grant answers only when the test settles it with `settleGrant`. */
+  grantManual = false;
+  readonly pendingGrants: Array<{
+    membershipId: string;
+    roleId: string;
+    resolve: (view: MembershipView) => void;
+  }> = [];
   readonly invites: Array<{ orgId: string; body: InviteMemberRequest; intent: Intent }> = [];
   readonly removals: Array<{ orgId: string; membershipId: string; intent: Intent }> = [];
   readonly membershipCursors: Array<string | undefined> = [];
@@ -178,6 +242,85 @@ class FakeMembersDataService {
     }
     return this.removeFailure === null ? Promise.resolve() : Promise.reject(this.removeFailure);
   }
+
+  getMembership(orgId: string, membershipId: string): Promise<MembershipView> {
+    this.membershipGets.push({ orgId, membershipId });
+    if (this.membershipGetFailure !== null) {
+      return Promise.reject(this.membershipGetFailure);
+    }
+    if (this.membershipGetManual) {
+      return new Promise<MembershipView>((resolve) => {
+        this.pendingGets.push({ membershipId, resolve });
+      });
+    }
+    const view = this.memberViews.get(membershipId);
+    return view === undefined
+      ? Promise.reject(new Error(`the fake holds no membership ${membershipId}`))
+      : Promise.resolve(view);
+  }
+
+  /** Settles the n-th deferred refresh read with the row the "server" holds right now. */
+  settleGet(index: number): void {
+    const pending = this.pendingGets[index];
+    if (pending === undefined) {
+      throw new Error(`the fake holds no pending refresh read ${index}`);
+    }
+    const view = this.memberViews.get(pending.membershipId);
+    if (view === undefined) {
+      throw new Error(`the fake holds no membership ${pending.membershipId}`);
+    }
+    pending.resolve(view);
+  }
+
+  grantRole(
+    orgId: string,
+    membershipId: string,
+    roleId: string,
+    intent: Intent,
+  ): Promise<MembershipView> {
+    this.roleRequests.push(`grant:${roleId}`);
+    this.grants.push({ orgId, membershipId, roleId, intent });
+    if (this.grantManual) {
+      return new Promise<MembershipView>((resolve) => {
+        this.pendingGrants.push({ membershipId, roleId, resolve });
+      });
+    }
+    return this.grantFailure === null
+      ? Promise.resolve(this.applyRole(membershipId, roleId, true))
+      : Promise.reject(this.grantFailure);
+  }
+
+  revokeRole(orgId: string, membershipId: string, roleId: string, intent: Intent): Promise<void> {
+    this.roleRequests.push(`revoke:${roleId}`);
+    this.revokes.push({ orgId, membershipId, roleId, intent });
+    if (this.revokeFailure !== null) {
+      return Promise.reject(this.revokeFailure);
+    }
+    this.applyRole(membershipId, roleId, false);
+    return Promise.resolve();
+  }
+
+  /** Settles the n-th manual grant the way the server does: the row gains that role. */
+  settleGrant(index: number): void {
+    const pending = this.pendingGrants[index];
+    if (pending === undefined) {
+      throw new Error(`the fake holds no pending grant ${index}`);
+    }
+    pending.resolve(this.applyRole(pending.membershipId, pending.roleId, true));
+  }
+
+  /** The server's own role-set write, so a refreshed row already holds the change it confirmed. */
+  private applyRole(membershipId: string, roleId: string, grant: boolean): MembershipView {
+    const current = this.memberViews.get(membershipId);
+    const role = this.roles.find((candidate) => candidate.id === roleId);
+    if (current === undefined || role === undefined) {
+      throw new Error(`the fake cannot change ${roleId} on ${membershipId}`);
+    }
+    const kept = current.roles.filter((held) => held.id !== roleId);
+    const updated: MembershipView = { ...current, roles: grant ? [...kept, role] : kept };
+    this.memberViews.set(membershipId, updated);
+    return updated;
+  }
 }
 
 describe('MembersStore (09.7.1-T2)', () => {
@@ -189,6 +332,9 @@ describe('MembersStore (09.7.1-T2)', () => {
     data.pages = [PAGE];
     data.roles = ROLES;
     data.catalogue = CATALOGUE;
+    for (const member of PAGE.items) {
+      data.memberViews.set(member.id, member);
+    }
     TestBed.configureTestingModule({
       providers: [MembersStore, { provide: MembersDataService, useValue: data }],
     });
@@ -461,6 +607,241 @@ describe('MembersStore (09.7.1-T2)', () => {
     });
   });
 
+  describe('changeRoles', () => {
+    it('applies grants before revokes in the given order and shows the server’s roles', async () => {
+      await store.load('o-1');
+      const target = pageMember(1);
+      const viewer = roleId('viewer');
+      const qa = roleId('qa_engineer');
+      const grantIntent = createIntent();
+      const revokeIntent = createIntent();
+
+      const changed = await store.changeRoles(target.id, [
+        { kind: 'grant', roleId: viewer, intent: grantIntent },
+        { kind: 'revoke', roleId: qa, intent: revokeIntent },
+      ]);
+
+      expect(changed).toBe(true);
+      // One request per role, in the dialog's order, each with its own caller-owned key.
+      expect(data.roleRequests).toEqual([`grant:${viewer}`, `revoke:${qa}`]);
+      expect(data.grants[0]?.intent).toBe(grantIntent);
+      expect(data.revokes[0]?.intent).toBe(revokeIntent);
+      expect(store.editState()).toEqual({ phase: 'done', error: null });
+      expect(store.editApplied()).toEqual([
+        { kind: 'grant', roleId: viewer },
+        { kind: 'revoke', roleId: qa },
+      ]);
+      // The row is the server's row, in its own position, replaced after one refresh read.
+      expect(store.memberById(target.id)?.roles.map((role) => role.id)).toEqual([viewer]);
+      expect(store.members().map((member) => member.id)).toEqual(PAGE.items.map((it) => it.id));
+      expect(data.membershipGets).toEqual([{ orgId: 'o-1', membershipId: target.id }]);
+      // Refreshed in place: no full reload, so the other rows and the cursor state stand.
+      expect(data.membershipOrgs).toEqual(['o-1']);
+    });
+
+    it('forwards each change’s own intent, so two grants never share one key', async () => {
+      await store.load('o-1');
+      const first = createIntent();
+      const second = createIntent();
+
+      await store.changeRoles(pageMember(1).id, [
+        { kind: 'grant', roleId: roleId('viewer'), intent: first },
+        { kind: 'grant', roleId: roleId('ci_producer'), intent: second },
+      ]);
+
+      // The key belongs to the change, not to the attempt: one key on two different grants is the
+      // server's 409 `idempotency_conflict` (00 §9.1, the operation is the command type), so the
+      // store passes each change's own intent through and never mints or reuses one itself.
+      expect(data.grants.map((entry) => entry.intent)).toEqual([first, second]);
+      expect(new Set(data.grants.map((entry) => entry.intent.idempotencyKey)).size).toBe(2);
+      expect(store.editApplied()).toHaveLength(2);
+    });
+
+    it('grant ok then revoke 409 last_admin: stops, keeps the grant and refreshes the row', async () => {
+      await store.load('o-1');
+      const admin = pageMember(0);
+      const viewer = roleId('viewer');
+      const tenantAdmin = roleId('tenant_admin');
+      data.revokeFailure = typedFailure(LAST_ADMIN, 'conflict', 409);
+
+      const changed = await store.changeRoles(admin.id, [
+        { kind: 'grant', roleId: viewer, intent: createIntent() },
+        { kind: 'revoke', roleId: tenantAdmin, intent: createIntent() },
+        // Never reached: the refusal above ends the attempt, so no third call is sent.
+        { kind: 'grant', roleId: roleId('ci_producer'), intent: createIntent() },
+      ]);
+
+      expect(changed).toBe(false);
+      expect(data.roleRequests).toEqual([`grant:${viewer}`, `revoke:${tenantAdmin}`]);
+      expect(data.grants).toHaveLength(1);
+      expect(data.revokes).toHaveLength(1);
+      // The refusal is the server's own, read from `editState` exactly as it arrived.
+      expect(store.editState().phase).toBe('failed');
+      expect(store.editState().error?.status).toBe(409);
+      expect(store.editState().error?.kind).toBe('conflict');
+      expect(store.editState().error?.code).toBe('last_admin');
+      expect(store.editState().error?.message).toBe(LAST_ADMIN.error.message);
+      // The grant landed, so it is named as applied and the row shows it; the revoke did not.
+      expect(store.editApplied()).toEqual([{ kind: 'grant', roleId: viewer }]);
+      expect(store.memberById(admin.id)?.roles.map((role) => role.id)).toEqual([
+        tenantAdmin,
+        viewer,
+      ]);
+      expect(data.membershipGets).toEqual([{ orgId: 'o-1', membershipId: admin.id }]);
+    });
+
+    it('leaves the list exactly as it was when the first change is refused', async () => {
+      await store.load('o-1');
+      const before = store.members();
+      data.revokeFailure = typedFailure(LAST_ADMIN, 'conflict', 409);
+
+      const changed = await store.changeRoles(pageMember(0).id, [
+        { kind: 'revoke', roleId: roleId('tenant_admin'), intent: createIntent() },
+      ]);
+
+      expect(changed).toBe(false);
+      expect(store.editState().error?.code).toBe(LAST_ADMIN.error.code);
+      expect(store.editApplied()).toEqual([]);
+      // Nothing was confirmed, so there is nothing to refresh and nothing to show as applied.
+      expect(store.members()).toBe(before);
+      expect(data.membershipGets).toEqual([]);
+      expect(data.membershipOrgs).toEqual(['o-1']);
+    });
+
+    it('surfaces the 403 of the self-escalation rule verbatim', async () => {
+      await store.load('o-1');
+      const before = store.members();
+      data.grantFailure = typedFailure(SELF_ESCALATION, 'forbidden', 403);
+
+      const changed = await store.changeRoles(pageMember(0).id, [
+        { kind: 'grant', roleId: roleId('release_approver'), intent: createIntent() },
+      ]);
+
+      expect(changed).toBe(false);
+      const state = store.editState();
+      expect(state.phase).toBe('failed');
+      expect(state.error?.kind).toBe('forbidden');
+      expect(state.error?.status).toBe(403);
+      expect(state.error?.code).toBe(SELF_ESCALATION.error.code);
+      expect(state.error?.message).toBe(SELF_ESCALATION.error.message);
+      expect(store.editApplied()).toEqual([]);
+      expect(store.members()).toBe(before);
+    });
+
+    it('reloads the list when the refresh read fails', async () => {
+      await store.load('o-1');
+      const target = pageMember(1);
+      data.membershipGetFailure = typedFailure(SELF_ESCALATION, 'forbidden', 403);
+
+      const changed = await store.changeRoles(target.id, [
+        { kind: 'grant', roleId: roleId('viewer'), intent: createIntent() },
+      ]);
+
+      expect(changed).toBe(true);
+      expect(data.membershipGets).toEqual([{ orgId: 'o-1', membershipId: target.id }]);
+      // The row could not be re-read, so the store re-read the list instead of trusting it.
+      expect(data.membershipOrgs).toEqual(['o-1', 'o-1']);
+      expect(store.phase()).toBe('ready');
+      expect(store.editState()).toEqual({ phase: 'done', error: null });
+      expect(store.editApplied()).toEqual([{ kind: 'grant', roleId: roleId('viewer') }]);
+    });
+
+    it('reloads the list when the refreshed row is no longer on the pages it holds', async () => {
+      await store.load('o-1');
+      const stranger: MembershipView = { ...pageMember(1), id: 'm-not-listed' };
+      data.memberViews.set(stranger.id, stranger);
+
+      const changed = await store.changeRoles(stranger.id, [
+        { kind: 'grant', roleId: roleId('viewer'), intent: createIntent() },
+      ]);
+
+      expect(changed).toBe(true);
+      expect(data.membershipGets).toEqual([{ orgId: 'o-1', membershipId: stranger.id }]);
+      expect(data.membershipOrgs).toEqual(['o-1', 'o-1']);
+      expect(store.members().map((member) => member.id)).toEqual(PAGE.items.map((it) => it.id));
+    });
+
+    it('sends nothing and settles done when the draft equals the server state', async () => {
+      await store.load('o-1');
+
+      await expect(store.changeRoles(pageMember(1).id, [])).resolves.toBe(true);
+
+      expect(data.roleRequests).toEqual([]);
+      expect(data.membershipGets).toEqual([]);
+      expect(store.editState()).toEqual({ phase: 'done', error: null });
+      expect(store.editApplied()).toEqual([]);
+    });
+
+    it('answers false when no org list is loaded, because there is no scope to address', async () => {
+      await expect(store.changeRoles(pageMember(1).id, [])).resolves.toBe(false);
+
+      expect(data.roleRequests).toEqual([]);
+      expect(store.editState()).toEqual({ phase: 'idle', error: null });
+    });
+
+    it('keeps the attempt submitting until the refresh read settles, then publishes it once', async () => {
+      await store.load('o-1');
+      const target = pageMember(1);
+      const viewer = roleId('viewer');
+      // The server confirmed the grant; its own refresh read is the part still on the wire.
+      data.membershipGetManual = true;
+
+      const inFlight = store.changeRoles(target.id, [
+        { kind: 'grant', roleId: viewer, intent: createIntent() },
+      ]);
+      // Let the grant's promise chain advance to the refresh read.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(data.roleRequests).toEqual([`grant:${viewer}`]);
+      expect(data.pendingGets).toHaveLength(1);
+      // Busy() is `phase === 'submitting'`: the dialog's Save and Cancel stay inert, so a second
+      // save cannot re-send the confirmed change while `diff()` still reads the old row.
+      expect(store.editState().phase).toBe('submitting');
+      expect(store.editApplied()).toEqual([]);
+
+      data.settleGet(0);
+      await expect(inFlight).resolves.toBe(true);
+
+      expect(store.editState()).toEqual({ phase: 'done', error: null });
+      expect(store.editApplied()).toEqual([{ kind: 'grant', roleId: viewer }]);
+      expect(store.memberById(target.id)?.roles.map((role) => role.id)).toContain(viewer);
+    });
+
+    it('keeps the row refresh but drops its own state when the dialog closed mid-flight', async () => {
+      await store.load('o-1');
+      const target = pageMember(1);
+      const viewer = roleId('viewer');
+      data.grantManual = true;
+      const inFlight = store.changeRoles(target.id, [
+        { kind: 'grant', roleId: viewer, intent: createIntent() },
+      ]);
+      expect(store.editState().phase).toBe('submitting');
+
+      // The user closes the dialog (or another dialog reopens): the attempt is abandoned.
+      store.resetMutations();
+      data.settleGrant(0);
+
+      await expect(inFlight).resolves.toBe(false);
+      expect(store.editState()).toEqual({ phase: 'idle', error: null });
+      expect(store.editApplied()).toEqual([]);
+      // The change landed server-side, so the row still comes from the server.
+      expect(store.memberById(target.id)?.roles.map((role) => role.id)).toEqual([
+        roleId('qa_engineer'),
+        viewer,
+      ]);
+    });
+  });
+
+  describe('memberById', () => {
+    it('answers the row the list holds, and nothing for an id it does not', async () => {
+      await store.load('o-1');
+
+      expect(store.memberById(pageMember(1).id)).toBe(store.members()[1]);
+      expect(store.memberById('')).toBeUndefined();
+      expect(store.memberById('m-unknown')).toBeUndefined();
+    });
+  });
+
   describe('a scope change while a mutation is in flight', () => {
     it('keeps the new org’s rows and points the next calls at it', async () => {
       await store.load('o-1');
@@ -515,6 +896,32 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.members()).toEqual(EMPTY_PAGE.items);
       expect(store.removeState()).toEqual({ phase: 'done', error: null });
     });
+
+    it('skips the refresh of a role change addressed to the org that is no longer shown', async () => {
+      await store.load('o-1');
+      const target = pageMember(1);
+      const viewer = roleId('viewer');
+      data.grantManual = true;
+      const inFlight = store.changeRoles(target.id, [
+        { kind: 'grant', roleId: viewer, intent: createIntent() },
+      ]);
+      expect(store.editState().phase).toBe('submitting');
+
+      data.pages = [EMPTY_PAGE];
+      await store.load('o-2');
+      data.settleGrant(0);
+
+      await expect(inFlight).resolves.toBe(false);
+
+      expect(data.grants.map((entry) => entry.orgId)).toEqual(['o-1']);
+      // No refresh read and no reload: the list now belongs to another org.
+      expect(data.membershipGets).toEqual([]);
+      expect(data.membershipOrgs).toEqual(['o-1', 'o-2']);
+      expect(store.members()).toEqual(EMPTY_PAGE.items);
+      // The state still settles, with the confirmed change named: the dialog is not left busy.
+      expect(store.editState()).toEqual({ phase: 'done', error: null });
+      expect(store.editApplied()).toEqual([{ kind: 'grant', roleId: viewer }]);
+    });
   });
 
   describe('a rejection that is not the server’s answer', () => {
@@ -560,17 +967,52 @@ describe('MembersStore (09.7.1-T2)', () => {
       store.resetMutations();
       expect(store.removeState()).toEqual({ phase: 'idle', error: null });
     });
+
+    it('settles a refused-by-nobody role change as a generic unexpected failure', async () => {
+      await store.load('o-1');
+      const before = store.members();
+      data.grantFailure = new TypeError('adapter bug: boom');
+
+      await expect(
+        store.changeRoles(pageMember(1).id, [
+          { kind: 'grant', roleId: roleId('viewer'), intent: createIntent() },
+        ]),
+      ).resolves.toBe(false);
+
+      const state = store.editState();
+      expect(state.phase).toBe('failed');
+      expect(state.error?.kind).toBe('unexpected');
+      expect(state.error?.status).toBe(0);
+      expect(state.error?.code).toBe('request_unresolved');
+      // The typed failure is the store's own, never the thrown value's text.
+      expect(JSON.stringify(state)).not.toContain('boom');
+      // Nothing was confirmed, so nothing is reported as applied and nothing was refreshed.
+      expect(store.editApplied()).toEqual([]);
+      expect(data.membershipGets).toEqual([]);
+      expect(data.membershipOrgs).toEqual(['o-1']);
+      expect(store.members()).toBe(before);
+      // Reopening the dialog starts clean instead of inheriting the failed attempt.
+      store.resetMutations();
+      expect(store.editState()).toEqual({ phase: 'idle', error: null });
+    });
   });
 
-  it('resetMutations() returns both dialogs to idle', async () => {
+  it('resetMutations() returns every dialog to idle', async () => {
     await store.load('o-1');
     data.removeFailure = typedFailure(LAST_ADMIN, 'conflict', 409);
     await store.remove(PAGE.items[0]?.id ?? '', createIntent());
+    data.revokeFailure = typedFailure(LAST_ADMIN, 'conflict', 409);
+    await store.changeRoles(pageMember(0).id, [
+      { kind: 'revoke', roleId: roleId('tenant_admin'), intent: createIntent() },
+    ]);
+    expect(store.editState().phase).toBe('failed');
 
     store.resetMutations();
 
     expect(store.inviteState()).toEqual({ phase: 'idle', error: null });
     expect(store.removeState()).toEqual({ phase: 'idle', error: null });
+    expect(store.editState()).toEqual({ phase: 'idle', error: null });
+    expect(store.editApplied()).toEqual([]);
   });
 
   describe('preview', () => {
@@ -627,6 +1069,11 @@ describe('MembersStore (09.7.1-T2)', () => {
     await store.invite('newhire@acme.test', [roleId('viewer')], createIntent());
     data.removeFailure = typedFailure(LAST_ADMIN, 'conflict', 409);
     await store.remove(PAGE.items[0]?.id ?? '', createIntent());
+    data.revokeFailure = typedFailure(LAST_ADMIN, 'conflict', 409);
+    await store.changeRoles(pageMember(0).id, [
+      { kind: 'grant', roleId: roleId('viewer'), intent: createIntent() },
+      { kind: 'revoke', roleId: roleId('tenant_admin'), intent: createIntent() },
+    ]);
 
     const keys = new Set<string>();
     const collect = (value: unknown): void => {
@@ -659,6 +1106,8 @@ describe('MembersStore (09.7.1-T2)', () => {
       store.matrix(),
       store.inviteState(),
       store.removeState(),
+      store.editState(),
+      store.editApplied(),
     ]);
 
     // The state was serialised for real: a member, a role and a refusal are in it.
