@@ -22,7 +22,7 @@ interface QuickstartInput {
 // Metadata only: deliberately pick individual fields rather than serializing credentials.
 export function buildQuickstartSnippet({ projectRef, token, binding }: QuickstartInput): string {
   const project = (projectRef ?? '<project-slug>').replace(/'/g, `'"'"'`);
-  const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, ' ');
+  const comment = (value: string) => value.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, ' ');
   const lines = [
     `# ${$localize`:@@onboarding.quickstart.variables:Set EVIDGATE_API_URL and EVIDGATE_PROJECT as non-secret CI variables.`}`,
     `export EVIDGATE_API_URL='<your-evidgate-api-url>'`,

@@ -244,4 +244,14 @@ describe('buildQuickstartSnippet', () => {
     expect(text).toContain('# Ingest token: ci-main not-a-command');
     expect(text).not.toContain('\nnot-a-command');
   });
+
+  it('turns terminal control and bidi characters in a name into spaces', () => {
+    const text = buildQuickstartSnippet({
+      projectRef: 'project',
+      token: { name: `ci\u001b[201~main\u202Eevil\u0085`, prefix: token.prefix },
+      binding: { repository_full_name: 'acme/re\u0007po' },
+    });
+    expect(text).toContain('# Ingest token: ci [201~main evil');
+    expect([...text].filter((char) => char !== '\n' && /[\p{Cc}\p{Cf}]/u.test(char))).toEqual([]);
+  });
 });
