@@ -21,7 +21,7 @@ import {
 } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { MembershipView, PermissionView, RoleView } from '@evidgate/sdk';
+import type { InviteIssuedView, MembershipView, PermissionView, RoleView } from '@evidgate/sdk';
 
 import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
@@ -34,6 +34,8 @@ const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
 const MEMBERSHIPS_URL = `${API_BASE_URL}/orgs/o-1/memberships`;
 const MEMBER_URL = `${MEMBERSHIPS_URL}/m-1`;
 const MEMBER_ROLES_URL = `${MEMBER_URL}/roles`;
+const RESEND_URL = `${MEMBER_URL}/resend`;
+const CANCEL_URL = `${MEMBER_URL}/cancel-invite`;
 const ROLES_URL = `${API_BASE_URL}/roles`;
 const PERMISSIONS_URL = `${API_BASE_URL}/permissions`;
 
@@ -70,6 +72,18 @@ function membership(id: string, invitedEmail: string, roles: RoleView[]): Member
 }
 
 const OWNER = membership('m-1', 'owner@acme.test', [TENANT_ADMIN]);
+
+/** The one-time link token a mint answers with (`evgi_<prefix>_<secret>`), as a test literal. */
+const INVITE_TOKEN = 'evgi_9f2c41d7b3a5_5c1e0b8a4d2f4a6b9c7d1e3f5a7b9c1d';
+
+/** One minted invite: the membership plus the token only the minting response carries. */
+function issued(
+  base: MembershipView,
+  inviteToken: string | null,
+  status: MembershipView['status'] = 'pending',
+): InviteIssuedView {
+  return { ...base, status, invite_token: inviteToken };
+}
 
 function permission(code: string): PermissionView {
   const [resource = code, action = 'read'] = code.split(':');
@@ -171,6 +185,19 @@ const NOT_FOUND_ENVELOPE = {
     code: 'not_found',
     message: 'the requested resource does not exist',
     request_id: '7d4e8a10-2b93-4f6c-9a07-3c5e1f8d2b64',
+    retryable: false,
+  },
+};
+
+/**
+ * The 409 of the invite lifecycle (02, AC6): the row is no longer `pending`, so there is nothing
+ * to rotate and nothing to cancel. Both routes answer it with the same code.
+ */
+const INVITE_NOT_PENDING_ENVELOPE = {
+  error: {
+    code: 'invite_not_pending',
+    message: 'only a pending invitation can be rotated or cancelled',
+    request_id: '9e5b1c73-4a28-4d6f-8b0a-2c3d4e5f6a7b',
     retryable: false,
   },
 };
@@ -298,9 +325,30 @@ describe('MembersDataService (09.7.1-T2)', () => {
     expect(request.request.body).toBe(
       JSON.stringify({ email: 'new@acme.test', roles: [VIEWER.id] }),
     );
-    const created = { ...membership('m-2', 'new@acme.test', []), status: 'pending' as const };
+    const created = issued(membership('m-2', 'new@acme.test', []), INVITE_TOKEN);
     flushPage(request, created, 201);
     await expect(invited).resolves.toEqual(created);
+  });
+
+  it('invite() answers the one-time invite_token the 201 body carries', async () => {
+    const invited = service.invite('o-1', { email: 'new@acme.test' }, createIntent());
+
+    const created = issued(membership('m-2', 'new@acme.test', []), INVITE_TOKEN);
+    flushPage(await takeRequest(httpMock, MEMBERSHIPS_URL), created, 201);
+
+    await expect(invited).resolves.toEqual(created);
+    await expect(invited).resolves.toMatchObject({ invite_token: INVITE_TOKEN });
+  });
+
+  it('invite() hands back invite_token: null on an Idempotency-Key replay body', async () => {
+    // The replay is the stored body of the original mint, which never held the token: the server
+    // serves a plaintext exactly once, so `null` is the honest answer and not a failure.
+    const invited = service.invite('o-1', { email: 'new@acme.test' }, createIntent());
+
+    const replay = issued(membership('m-2', 'new@acme.test', []), null);
+    flushPage(await takeRequest(httpMock, MEMBERSHIPS_URL), replay, 201);
+
+    await expect(invited).resolves.toEqual(replay);
   });
 
   it('invite() surfaces 409 invite_exists as the typed conflict with the server’s message', async () => {
@@ -315,6 +363,84 @@ describe('MembersDataService (09.7.1-T2)', () => {
       expect(cause.error.code).toBe('invite_exists');
       expect(cause.error.message).toBe(INVITE_EXISTS_ENVELOPE.error.message);
       expect(cause.error.retryable).toBe(false);
+    }
+  });
+
+  it('resendInvite() posts to the resend URL with the intent’s key and answers the new token', async () => {
+    const intent = createIntent();
+    const rotated = service.resendInvite('o-1', 'm-1', intent);
+
+    const request = await takeRequest(httpMock, RESEND_URL);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.url).toBe(RESEND_URL);
+    expect(request.request.urlWithParams).toBe(RESEND_URL);
+    expect(request.request.headers.get('Idempotency-Key')).toBe(intent.idempotencyKey);
+    const next = issued(OWNER, INVITE_TOKEN);
+    flushPage(request, next, 202);
+
+    await expect(rotated).resolves.toEqual(next);
+  });
+
+  it('resendInvite() surfaces 409 invite_not_pending verbatim, never a token', async () => {
+    const rotated = rejected(service.resendInvite('o-1', 'm-1', createIntent()));
+
+    flushPage(await takeRequest(httpMock, RESEND_URL), INVITE_NOT_PENDING_ENVELOPE, 409);
+
+    const cause = await rotated;
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('conflict');
+      expect(cause.error.status).toBe(409);
+      expect(cause.error.code).toBe('invite_not_pending');
+      expect(cause.error.message).toBe(INVITE_NOT_PENDING_ENVELOPE.error.message);
+      expect(cause.error.retryable).toBe(false);
+    }
+  });
+
+  it('cancelInvite() posts to the cancel-invite URL with the intent key and resolves on 204', async () => {
+    const intent = createIntent();
+    const cancelled = service.cancelInvite('o-1', 'm-1', intent);
+
+    const request = await takeRequest(httpMock, CANCEL_URL);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.url).toBe(CANCEL_URL);
+    expect(request.request.urlWithParams).toBe(CANCEL_URL);
+    expect(request.request.headers.get('Idempotency-Key')).toBe(intent.idempotencyKey);
+    request.flush(null, { status: 204, statusText: 'No Content' });
+
+    await expect(cancelled).resolves.toBeUndefined();
+  });
+
+  it('cancelInvite() surfaces 409 invite_not_pending verbatim', async () => {
+    const cancelled = rejected(service.cancelInvite('o-1', 'm-1', createIntent()));
+
+    flushPage(await takeRequest(httpMock, CANCEL_URL), INVITE_NOT_PENDING_ENVELOPE, 409);
+
+    const cause = await cancelled;
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('conflict');
+      expect(cause.error.status).toBe(409);
+      expect(cause.error.code).toBe(INVITE_NOT_PENDING_ENVELOPE.error.code);
+      expect(cause.error.message).toBe(INVITE_NOT_PENDING_ENVELOPE.error.message);
+    }
+  });
+
+  it('cancelInvite() surfaces 404 for an id of another org', async () => {
+    const cancelled = rejected(service.cancelInvite('o-1', 'm-other', createIntent()));
+
+    flushPage(
+      await takeRequest(httpMock, `${MEMBERSHIPS_URL}/m-other/cancel-invite`),
+      NOT_FOUND_ENVELOPE,
+      404,
+    );
+
+    const cause = await cancelled;
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('not_found');
+      expect(cause.error.status).toBe(404);
+      expect(cause.error.code).toBe(NOT_FOUND_ENVELOPE.error.code);
     }
   });
 

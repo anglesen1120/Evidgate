@@ -16,6 +16,20 @@ export const MEMBERS_COPY = {
   email: $localize`:@@settings.members.email:Email`,
   optionalRoles: $localize`:@@settings.members.optional-roles:Initial roles (optional)`,
   send: $localize`:@@settings.members.send:Send invitation`,
+  resend: $localize`:@@settings.members.resend:Resend invite`,
+  cancelInvite: $localize`:@@settings.members.cancel-invite:Cancel invite`,
+  resendTitle: $localize`:@@settings.members.resend-title:Renew this invitation?`,
+  resendDescription: $localize`:@@settings.members.resend-description:The previous invite token will stop working. Copy the new token and share it with the invitee securely.`,
+  cancelInviteTitle: $localize`:@@settings.members.cancel-invite-title:Cancel this invitation?`,
+  cancelInviteDescription: $localize`:@@settings.members.cancel-invite-description:The invite token will stop working. This person will not be able to accept the invitation.`,
+  revealTitle: $localize`:@@settings.members.reveal-title:Invite token`,
+  revealWarning: $localize`:@@settings.members.reveal-warning:Shown once. Copy this token now and share it securely with the invitee, who needs it to accept. If Copy fails, select and copy the value manually.`,
+  replayTitle: $localize`:@@settings.members.replay-title:Invitation ready`,
+  replayNotice: $localize`:@@settings.members.replay-notice:The invitation was created or renewed, but its token can no longer be shown. Use Resend on the member row to get a new one.`,
+  copy: $localize`:@@settings.members.copy:Copy`,
+  copied: $localize`:@@settings.members.copied:Copied`,
+  dismiss: $localize`:@@settings.members.dismiss:Dismiss`,
+  close: $localize`:@@settings.members.close:Close`,
   submitting: $localize`:@@settings.members.submitting:Submitting…`,
   removeTitle: $localize`:@@settings.members.remove-title:Remove this member?`,
   removeDescription: $localize`:@@settings.members.remove-description:Organization access will be revoked. Authored history stays attributed.`,
@@ -111,6 +125,22 @@ export const MEMBERS_COPY = {
                       {{ copy.editRoles }}
                     </button>
                   }
+                  @if (member.status === 'pending') {
+                    <button
+                      type="button"
+                      data-members-resend-open
+                      (click)="requestResend(member, $event)"
+                    >
+                      {{ copy.resend }}
+                    </button>
+                    <button
+                      type="button"
+                      data-members-cancel-invite-open
+                      (click)="requestCancelInvite(member, $event)"
+                    >
+                      {{ copy.cancelInvite }}
+                    </button>
+                  }
                   @if (member.status !== 'removed') {
                     <button
                       type="button"
@@ -134,6 +164,8 @@ export class MemberListComponent {
   readonly canWrite = input(false);
   readonly remove = output<{ member: MembershipView; opener: HTMLElement }>();
   readonly editRoles = output<{ member: MembershipView; opener: HTMLElement }>();
+  readonly resend = output<{ member: MembershipView; opener: HTMLElement }>();
+  readonly cancelInvite = output<{ member: MembershipView; opener: HTMLElement }>();
   protected readonly copy = MEMBERS_COPY;
   protected requestRemove(member: MembershipView, event: Event): void {
     if (event.currentTarget instanceof HTMLElement)
@@ -142,6 +174,22 @@ export class MemberListComponent {
   protected requestEditRoles(member: MembershipView, event: Event): void {
     if (event.currentTarget instanceof HTMLElement)
       this.editRoles.emit({ member, opener: event.currentTarget });
+  }
+  protected requestResend(member: MembershipView, event: Event): void {
+    if (
+      this.canWrite() &&
+      member.status === 'pending' &&
+      event.currentTarget instanceof HTMLElement
+    )
+      this.resend.emit({ member, opener: event.currentTarget });
+  }
+  protected requestCancelInvite(member: MembershipView, event: Event): void {
+    if (
+      this.canWrite() &&
+      member.status === 'pending' &&
+      event.currentTarget instanceof HTMLElement
+    )
+      this.cancelInvite.emit({ member, opener: event.currentTarget });
   }
 
   /**

@@ -17,12 +17,15 @@
 // 2. Only ids and server-returned metadata are kept (task §4 D5). The invited address is personal
 //    data (02.1.2 §8): it travels from the dialog to the request body and is never put in a signal
 //    of its own, never logged, never a telemetry attribute. Nothing secret-shaped is stored at all,
-//    which the `no-secret-field-in-store` rule pins for the whole Settings feature.
-// 3. Every mutation carries the caller's `Intent` (00 §9.1, ADR-0008 rule 2): invite and remove take
-//    one per button press, and a role change takes one PER CHANGE (`RoleChange.intent`, minted by the
-//    edit dialog and keyed by `kind:roleId`), because two different changes under one key are the
-//    server's 409 `idempotency_conflict` — the operation is the command type and the hash covers the
-//    role. A retry of the same action reuses its own `Idempotency-Key`; the store never mints one.
+//    which the `no-secret-field-in-store` rule pins for the whole Settings feature — and the invited
+//    token is the case that matters most: `invite` and `resend` answer it as a RETURN value
+//    ({@link IssuedInvite}) for the one-time reveal, and no signal, map or log ever holds it.
+// 3. Every mutation carries the caller's `Intent` (00 §9.1, ADR-0008 rule 2): invite, resend, cancel
+//    and remove take one per button press, and a role change takes one PER CHANGE
+//    (`RoleChange.intent`, minted by the edit dialog and keyed by `kind:roleId`), because two
+//    different changes under one key are the server's 409 `idempotency_conflict` — the operation is
+//    the command type and the hash covers the role. A retry of the same action reuses its own
+//    `Idempotency-Key`; the store never mints one.
 // 4. The server decides. A refusal is surfaced verbatim — AC2's 409 `last_admin` is shown as the
 //    server wrote it, and there is no client-side pre-check that could drift from the guard.
 // 5. One scope owns the state. A mutation's reload only runs while the org that mutation addressed
@@ -88,6 +91,17 @@ export interface RoleChange {
  */
 export type AppliedRoleChange = Omit<RoleChange, 'intent'>;
 
+/**
+ * What a minted invite answers with (02.1.2 §5): the membership it belongs to and the plaintext
+ * link token the server served once. It is a RETURN value only — no signal holds it, no map
+ * caches it, and the store never logs it. `inviteToken: null` is the honest answer for a replay
+ * (the server never serves a token twice), not a failure.
+ */
+export interface IssuedInvite {
+  readonly membershipId: string;
+  readonly inviteToken: string | null;
+}
+
 /** The frozen empty values, so an empty store and a degraded read share one array identity. */
 const NO_MEMBERS: readonly MembershipView[] = [];
 const NO_ROLES: readonly RoleView[] = [];
@@ -141,6 +155,8 @@ export class MembersStore {
   private readonly loadErrorSignal = signal<ApiError | null>(null);
   private readonly nextCursorSignal = signal<string | null>(null);
   private readonly inviteStateSignal = signal<MutationState>(IDLE);
+  private readonly resendStateSignal = signal<MutationState>(IDLE);
+  private readonly cancelStateSignal = signal<MutationState>(IDLE);
   private readonly removeStateSignal = signal<MutationState>(IDLE);
   private readonly editStateSignal = signal<MutationState>(IDLE);
   private readonly editAppliedSignal = signal<readonly AppliedRoleChange[]>(NO_APPLIED);
@@ -188,6 +204,10 @@ export class MembersStore {
   }));
   /** The invite dialog's state. */
   readonly inviteState = this.inviteStateSignal.asReadonly();
+  /** The rotate action's state; a 409 `invite_not_pending` lands here verbatim. */
+  readonly resendState = this.resendStateSignal.asReadonly();
+  /** The cancel action's state; a 409 `invite_not_pending` lands here verbatim. */
+  readonly cancelState = this.cancelStateSignal.asReadonly();
   /** The remove dialog's state; AC2's `last_admin` refusal lands here verbatim. */
   readonly removeState = this.removeStateSignal.asReadonly();
   /** The edit-roles dialog's state; a refusal of any one change lands here verbatim. */
@@ -321,32 +341,129 @@ export class MembersStore {
    * `orgId`, the generation and the rows that org's own read already put there. The invitation
    * landed server-side either way, so the mutation state still settles.
    *
-   * @returns `true` when the server created the membership and the list on screen is still this
-   *   org's; `false` when it refused, when the rejection was not the server's answer at all (a
+   * @returns the minted invite when the server created the membership and the list on screen is
+   *   still this org's. Its `inviteToken` is the one-time plaintext the caller reveals, or `null`
+   *   when the server's body carried none (an `Idempotency-Key` replay). The call answers `null`
+   *   itself when it refused, when the rejection was not the server's answer at all (a
    *   cancellation or a bug, reported as the generic `unexpected` failure so the dialog is never
    *   left submitting), or when the scope switched during the round trip (the success notice
    *   belongs to the org the user left, not to the list now on screen).
    */
-  async invite(email: string, roleIds: readonly string[], intent: Intent): Promise<boolean> {
+  async invite(
+    email: string,
+    roleIds: readonly string[],
+    intent: Intent,
+  ): Promise<IssuedInvite | null> {
     const orgId = this.orgId;
     if (orgId === null) {
-      return false;
+      return null;
     }
     this.inviteStateSignal.set(SUBMITTING);
+    let issued: IssuedInvite;
     try {
-      await this.data.invite(
+      const view = await this.data.invite(
         orgId,
         roleIds.length === 0 ? { email } : { email, roles: [...roleIds] },
         intent,
       );
+      // Built here and returned, never written to a signal: this local is the only place the
+      // plaintext exists inside the store.
+      issued = { membershipId: view.id, inviteToken: view.invite_token ?? null };
     } catch (error) {
       this.inviteStateSignal.set({
         phase: 'failed',
         error: isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE,
       });
-      return false;
+      return null;
     }
     this.inviteStateSignal.set(SUBMITTED);
+    if (this.orgId !== orgId) {
+      return null;
+    }
+    await this.load(orgId);
+    return issued;
+  }
+
+  /**
+   * Rotates one pending invite (`POST /v1/orgs/{o}/memberships/{m}/resend`), so the previous link
+   * stops working, and re-reads that one row on success — the response carries the membership too,
+   * but the row on screen comes from the server's own read, never from the rotate's body.
+   *
+   * The new `invite_token` is a RETURN value exactly like {@link invite}'s: the response carries
+   * the row too, and only the row is written into the list. A membership that is no longer
+   * `pending` is the server's 409 `invite_not_pending`, which lands in {@link resendState}
+   * verbatim with its own message and code — there is no client-side pre-check.
+   *
+   * A second call while one rotate is already submitting answers `null` without sending a
+   * request: two rotates would mint two tokens and invalidate the one the user is looking at. The
+   * state stays `submitting` until the row refresh has settled, so that guard covers the refresh
+   * too, not only the request.
+   *
+   * @returns the rotated invite when the server answered and the list on screen is still this
+   *   org's; `null` on a refusal, on a rejection that is not the server's answer (see
+   *   {@link invite}), on a scope switch, or for the double submit.
+   */
+  async resend(membershipId: string, intent: Intent): Promise<IssuedInvite | null> {
+    if (this.resendStateSignal().phase === 'submitting') {
+      return null;
+    }
+    const orgId = this.orgId;
+    if (orgId === null) {
+      return null;
+    }
+    this.resendStateSignal.set(SUBMITTING);
+    let issued: IssuedInvite;
+    try {
+      const view = await this.data.resendInvite(orgId, membershipId, intent);
+      issued = { membershipId: view.id, inviteToken: view.invite_token ?? null };
+    } catch (error) {
+      this.resendStateSignal.set({
+        phase: 'failed',
+        error: isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE,
+      });
+      return null;
+    }
+    // Deliberately before publishing `done`: the refresh is part of finishing the rotate, so the
+    // double-submit guard keeps answering `null` while it runs. Publishing `done` first would
+    // reopen that guard, and a second press would rotate the token again — invalidating the one
+    // this call is about to hand back (the same hazard `changeRoles` names for its own refresh).
+    if (this.orgId === orgId) {
+      await this.refreshMember(orgId, membershipId);
+    }
+    this.resendStateSignal.set(SUBMITTED);
+    if (this.orgId !== orgId) {
+      return null;
+    }
+    return issued;
+  }
+
+  /**
+   * Cancels one pending invite (`POST /v1/orgs/{o}/memberships/{m}/cancel-invite`): the row
+   * becomes `revoked` and its stored prefix stops resolving, so the list is reloaded rather than
+   * patched. A membership that is not `pending` (already active, already cancelled, removed) is
+   * the server's 409 `invite_not_pending`, verbatim in {@link cancelState}; nothing here second-
+   * guesses that guard.
+   *
+   * @returns `true` when the server cancelled the invite and the list on screen is still this
+   *   org's; `false` on a refusal, on a rejection that is not the server's answer, or on a scope
+   *   switch during the round trip (see {@link invite}).
+   */
+  async cancel(membershipId: string, intent: Intent): Promise<boolean> {
+    const orgId = this.orgId;
+    if (orgId === null) {
+      return false;
+    }
+    this.cancelStateSignal.set(SUBMITTING);
+    try {
+      await this.data.cancelInvite(orgId, membershipId, intent);
+    } catch (error) {
+      this.cancelStateSignal.set({
+        phase: 'failed',
+        error: isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE,
+      });
+      return false;
+    }
+    this.cancelStateSignal.set(SUBMITTED);
     if (this.orgId !== orgId) {
       return false;
     }
@@ -476,6 +593,8 @@ export class MembersStore {
   resetMutations(): void {
     this.editAttempt += 1;
     this.inviteStateSignal.set(IDLE);
+    this.resendStateSignal.set(IDLE);
+    this.cancelStateSignal.set(IDLE);
     this.removeStateSignal.set(IDLE);
     this.editStateSignal.set(IDLE);
     this.editAppliedSignal.set(NO_APPLIED);

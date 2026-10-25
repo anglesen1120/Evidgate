@@ -1,7 +1,12 @@
 // 09.7.1-T2 (plan 09.7.1 §5 members row, §6 Membership/Invite rows; 02.1.2 §4/§5): the org
 // membership, the role list and the live permission catalogue the Members and roles tab reads, and
-// the mutations it performs — invite by address, remove, and the per-role grant/revoke pair the
-// edit-roles dialog applies (09.7.1-T2's edit-roles row, `F6`).
+// the mutations it performs — invite by address, the invite's own lifecycle (rotate the token,
+// cancel the invite), remove, and the per-role grant/revoke pair the edit roles dialog applies
+// (09.7.1-T2's edit-roles row, `F6`).
+//
+// An invited token (`invite_token`) is the one plaintext secret these operations carry: `invite`
+// and `resendInvite` answer it ONCE, as the request's return value, and this layer never stores,
+// caches or logs it — the caller hands it to the UI's one-time reveal and drops it.
 //
 // It lives in `core/data` with the rest of the data services because `apps/web/lint` owns the HTTP
 // boundary there: a page, store or component never imports an `@evidgate/sdk` operation (the
@@ -22,13 +27,16 @@
 
 import { inject, Injectable } from '@angular/core';
 import {
+  cancelMembershipInvite,
   createMembership,
   getMembership,
   grantMembershipRole,
   listMemberships,
   listRoles,
   removeMember,
+  resendMembershipInvite,
   revokeMembershipRole,
+  type InviteIssuedView,
   type InviteMemberRequest,
   type MembershipListResponse,
   type MembershipView,
@@ -90,16 +98,55 @@ export class MembersDataService {
   }
 
   /**
-   * Invite a member (`POST /v1/orgs/{o}/memberships`). The membership starts `pending`; the server
-   * answers a second invite while one is pending with 409 `invite_exists`, which reaches the caller
-   * as the typed `conflict` failure with that code.
+   * Invite a member (`POST /v1/orgs/{o}/memberships`, `02.1.2-T2 §5`). The membership starts
+   * `pending` and the `201` body also carries `invite_token`: the plaintext link token, served
+   * once by the request that minted it. The server answers a second invite while one is pending
+   * with 409 `invite_exists`, which reaches the caller as the typed `conflict` failure with that
+   * code.
+   *
+   * The token is a return value and nothing else — this layer does not keep it, cache it or log
+   * it, and the response's `Cache-Control: no-store` is the server's half of that rule.
    */
-  invite(orgId: string, body: InviteMemberRequest, intent: Intent): Promise<MembershipView> {
+  invite(orgId: string, body: InviteMemberRequest, intent: Intent): Promise<InviteIssuedView> {
     return this.gateway.call((client) =>
       createMembership({
         client,
         path: { o: orgId },
         body,
+        headers: intentHeaders(intent),
+      }),
+    );
+  }
+
+  /**
+   * Rotate a pending invite's token (`POST /v1/orgs/{o}/memberships/{m}/resend`, `02.1.2 §5`):
+   * `202` with the membership and the NEW `invite_token`, which the previous token stops
+   * answering for. A membership that is not `pending` is 409 `invite_not_pending` and an id of
+   * another org is 404 — both arrive as the typed failure carrying the server's message and code.
+   * An `Idempotency-Key` replay answers the stored body with `invite_token` null, so a retried
+   * rotate never shows a token twice.
+   */
+  resendInvite(orgId: string, membershipId: string, intent: Intent): Promise<InviteIssuedView> {
+    return this.gateway.call((client) =>
+      resendMembershipInvite({
+        client,
+        path: { o: orgId, m: membershipId },
+        headers: intentHeaders(intent),
+      }),
+    );
+  }
+
+  /**
+   * Cancel a pending invite (`POST /v1/orgs/{o}/memberships/{m}/cancel-invite`, `02.1.2 §6`):
+   * `204`, the row becomes `revoked` and its stored prefix stops resolving. A membership that is
+   * not `pending` is 409 `invite_not_pending`; both that and an id of another org (404) arrive as
+   * the typed failure, never as a value this layer could paper over.
+   */
+  async cancelInvite(orgId: string, membershipId: string, intent: Intent): Promise<void> {
+    await this.gateway.call((client) =>
+      cancelMembershipInvite({
+        client,
+        path: { o: orgId, m: membershipId },
         headers: intentHeaders(intent),
       }),
     );

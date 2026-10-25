@@ -26,6 +26,7 @@
 import { TestBed } from '@angular/core/testing';
 import type {
   ErrorEnvelope,
+  InviteIssuedView,
   InviteMemberRequest,
   MembershipListResponse,
   MembershipView,
@@ -56,12 +57,51 @@ const EMPTY_PAGE = membershipsEmpty.body as unknown as MembershipListResponse;
 const ROLES = (rolesList.body as unknown as RoleListResponse).items;
 /** The live catalogue's first page: sixteen rows, two of them `sensitive`. */
 const CATALOGUE = (permissionsList.body as unknown as PermissionListResponse).items;
-/** A pending invite, as `POST /v1/orgs/{o}/memberships` answers one. */
-const CREATED = membershipCreateOk.body as unknown as MembershipView;
+/** The fixture's create response as served: the row plus the one-time plaintext. */
+const SERVED_CREATE = membershipCreateOk.body as unknown as InviteIssuedView;
+/**
+ * A pending invite, as `POST /v1/orgs/{o}/memberships` answers one — WITHOUT the served
+ * `invite_token`: the fixture carries it, a row that can reach a store signal must not. The
+ * plaintext lives only in {@link ISSUED}, which no test puts on a page.
+ */
+function createdRow(): MembershipView {
+  const row: InviteIssuedView = { ...SERVED_CREATE };
+  delete row.invite_token;
+  return row;
+}
+const CREATED: MembershipView = createdRow();
+/**
+ * The plaintext link token a mint serves exactly once (`evgi_<prefix>_<secret>`). It is a test
+ * literal only: the store must never keep it, which the last spec of this file proves.
+ */
+const INVITE_TOKEN = 'evgi_4b7d2e91c6a0_9d3f1a5c8e2b7d4f6a1c3e5b8d0f2a4c';
+/** The token a rotate replaces it with. */
+const ROTATED_TOKEN = 'evgi_c0a1f3d5e7b9_2f4a6c8e0b1d3f5a7c9e1b3d5f7a9c0b';
 /** AC2's refusal: the server's own message and code. */
 const LAST_ADMIN = membershipRemoveLastAdmin.body as unknown as ErrorEnvelope;
 /** A second invite while one is pending. */
 const INVITE_EXISTS = membershipCreateInviteExists.body as unknown as ErrorEnvelope;
+/**
+ * The 409 of the invite lifecycle (02, AC6): the row is no longer `pending`, so there is nothing
+ * to rotate and nothing to cancel — the same code on both routes.
+ */
+const INVITE_NOT_PENDING: ErrorEnvelope = {
+  error: {
+    code: 'invite_not_pending',
+    message: 'only a pending invitation can be rotated or cancelled',
+    request_id: '9e5b1c73-4a28-4d6f-8b0a-2c3d4e5f6a7b',
+    retryable: false,
+  },
+};
+/** A 429 on any mutation: the same server copy the dialogs show, countdown included. */
+const RATE_LIMITED: ErrorEnvelope = {
+  error: {
+    code: 'rate_limited',
+    message: 'too many requests; retry after the interval the response names',
+    request_id: 'b7d1f4a6-2c8e-4f9a-8b3d-5e7f9a1c3b5d',
+    retryable: true,
+  },
+};
 /**
  * The server's 403 of the self-escalation rule (02.1.2 §3b, `SelfEscalation.Refused`): the 00 §9.2
  * `forbidden` code the 403 already documents, with the rule's own message. It is what a
@@ -93,6 +133,15 @@ function roleId(code: string): string {
   }
   return role.id;
 }
+
+/** The pending row of the served page: the one membership an invite can be rotated or cancelled on. */
+const PENDING = pageMember(3);
+
+/** A minted invite: the membership plus the token only the minting response carries. */
+const ISSUED: InviteIssuedView = { ...CREATED, invite_token: INVITE_TOKEN };
+
+/** The rotate answer: the same pending row, with the fresh token that replaced the old one. */
+const ROTATED: InviteIssuedView = { ...PENDING, invite_token: ROTATED_TOKEN };
 
 /** The typed failure `ApiGateway` builds from one fixture envelope. */
 function typedFailure(
@@ -126,6 +175,21 @@ class FakeMembersDataService {
   rolesFailure: Error | null = null;
   catalogueFailure: Error | null = null;
   inviteFailure: Error | null = null;
+  /** The minted invite `invite` answers with; a test swaps it to answer a replay body. */
+  issued: InviteIssuedView = ISSUED;
+  /** When true, a rotate answers only when the test settles `pendingResends`. */
+  resendManual = false;
+  readonly pendingResends: Array<{
+    membershipId: string;
+    resolve: (view: InviteIssuedView) => void;
+  }> = [];
+  resendFailure: Error | null = null;
+  /** When true, a cancel answers only when the test settles `pendingCancels`. */
+  cancelManual = false;
+  readonly pendingCancels: Array<{ membershipId: string; resolve: () => void }> = [];
+  cancelFailure: Error | null = null;
+  readonly resends: Array<{ orgId: string; membershipId: string; intent: Intent }> = [];
+  readonly cancels: Array<{ orgId: string; membershipId: string; intent: Intent }> = [];
   removeFailure: Error | null = null;
   /** When true, every page names a fresh cursor, so the store's page cap is the only stop. */
   endless = false;
@@ -136,7 +200,7 @@ class FakeMembersDataService {
   inviteManual = false;
   readonly pendingInvites: Array<{
     orgId: string;
-    resolve: (view: MembershipView) => void;
+    resolve: (view: InviteIssuedView) => void;
   }> = [];
   /** When true, a removal answers only when the test settles `pendingRemovals`. */
   removeManual = false;
@@ -221,16 +285,42 @@ class FakeMembersDataService {
       : Promise.reject(this.catalogueFailure);
   }
 
-  invite(orgId: string, body: InviteMemberRequest, intent: Intent): Promise<MembershipView> {
+  invite(orgId: string, body: InviteMemberRequest, intent: Intent): Promise<InviteIssuedView> {
     this.invites.push({ orgId, body, intent });
     if (this.inviteManual) {
-      return new Promise<MembershipView>((resolve) => {
+      return new Promise<InviteIssuedView>((resolve) => {
         this.pendingInvites.push({ orgId, resolve });
       });
     }
     return this.inviteFailure === null
-      ? Promise.resolve(CREATED)
+      ? Promise.resolve(this.issued)
       : Promise.reject(this.inviteFailure);
+  }
+
+  resendInvite(orgId: string, membershipId: string, intent: Intent): Promise<InviteIssuedView> {
+    this.resends.push({ orgId, membershipId, intent });
+    if (this.resendManual) {
+      return new Promise<InviteIssuedView>((resolve) => {
+        this.pendingResends.push({ membershipId, resolve });
+      });
+    }
+    if (this.resendFailure !== null) {
+      return Promise.reject(this.resendFailure);
+    }
+    // The rotate writes the row the refresh read serves; the token is only in the answer.
+    const row = this.memberViews.get(membershipId) ?? PENDING;
+    this.memberViews.set(membershipId, row);
+    return Promise.resolve({ ...row, invite_token: ROTATED_TOKEN });
+  }
+
+  cancelInvite(orgId: string, membershipId: string, intent: Intent): Promise<void> {
+    this.cancels.push({ orgId, membershipId, intent });
+    if (this.cancelManual) {
+      return new Promise<void>((resolve) => {
+        this.pendingCancels.push({ membershipId, resolve });
+      });
+    }
+    return this.cancelFailure === null ? Promise.resolve() : Promise.reject(this.cancelFailure);
   }
 
   remove(orgId: string, membershipId: string, intent: Intent): Promise<void> {
@@ -514,7 +604,8 @@ describe('MembersStore (09.7.1-T2)', () => {
 
       const invited = await store.invite('newhire@acme.test', [roleId('viewer')], intent);
 
-      expect(invited).toBe(true);
+      // The token comes back exactly once, on the call: it is a return value, not state.
+      expect(invited).toEqual({ membershipId: CREATED.id, inviteToken: INVITE_TOKEN });
       expect(data.invites).toEqual([
         {
           orgId: 'o-1',
@@ -525,9 +616,22 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.inviteState()).toEqual({ phase: 'done', error: null });
       // The address travels in the body only: the store's own state never carries it.
       expect(JSON.stringify(store.inviteState())).not.toContain('newhire@acme.test');
+      // Neither does any state carry the token the answer just handed back.
+      expect(JSON.stringify(store.inviteState())).not.toContain(INVITE_TOKEN);
       // The reload started from the first page, so the new invite is on screen.
       expect(data.membershipCursors).toEqual([undefined, undefined]);
       expect(store.members().map((member) => member.id)).toContain(CREATED.id);
+    });
+
+    it('answers inviteToken: null when the server replays a body with no token', async () => {
+      await store.load('o-1');
+      // An `Idempotency-Key` replay answers the stored body, which never held the plaintext.
+      data.issued = { ...CREATED, invite_token: null };
+
+      const invited = await store.invite('newhire@acme.test', [], createIntent());
+
+      expect(invited).toEqual({ membershipId: CREATED.id, inviteToken: null });
+      expect(store.inviteState()).toEqual({ phase: 'done', error: null });
     });
 
     it('omits roles when the dialog selected none', async () => {
@@ -545,13 +649,13 @@ describe('MembersStore (09.7.1-T2)', () => {
       data.inviteFailure = refusal;
 
       const refused = await store.invite('newhire@acme.test', [], intent);
-      expect(refused).toBe(false);
+      expect(refused).toBeNull();
       expect(store.inviteState()).toEqual({ phase: 'failed', error: refusal.error });
 
       data.inviteFailure = null;
       const retried = await store.invite('newhire@acme.test', [], intent);
 
-      expect(retried).toBe(true);
+      expect(retried).toEqual({ membershipId: CREATED.id, inviteToken: INVITE_TOKEN });
       expect(data.invites.map((entry) => entry.intent.idempotencyKey)).toEqual([
         intent.idempotencyKey,
         intent.idempotencyKey,
@@ -564,13 +668,168 @@ describe('MembersStore (09.7.1-T2)', () => {
 
       const invited = await store.invite('newhire@acme.test', [], createIntent());
 
-      expect(invited).toBe(false);
+      expect(invited).toBeNull();
       expect(store.inviteState().phase).toBe('failed');
       expect(store.inviteState().error?.code).toBe(INVITE_EXISTS.error.code);
       expect(store.inviteState().error?.message).toBe(INVITE_EXISTS.error.message);
       // No reload: the refused invite changed nothing on screen.
       expect(data.membershipCursors).toEqual([undefined]);
       expect(store.members()).toHaveLength(PAGE.items.length);
+    });
+  });
+
+  describe('resend', () => {
+    it('rotates the invite, answers the new token and refreshes that one row', async () => {
+      await store.load('o-1');
+      const intent = createIntent();
+
+      const rotated = await store.resend(PENDING.id, intent);
+
+      // The new plaintext is the answer and nothing else.
+      expect(rotated).toEqual({ membershipId: PENDING.id, inviteToken: ROTATED_TOKEN });
+      expect(data.resends).toEqual([{ orgId: 'o-1', membershipId: PENDING.id, intent }]);
+      expect(store.resendState()).toEqual({ phase: 'done', error: null });
+      // The row comes from the server's own read, not from patchwork on the rotate response.
+      expect(data.membershipGets).toEqual([{ orgId: 'o-1', membershipId: PENDING.id }]);
+      expect(store.members().map((member) => member.id)).toEqual(
+        PAGE.items.map((member) => member.id),
+      );
+      expect(store.members()[3]?.status).toBe('pending');
+      // No signal holds the token the call just returned.
+      expect(JSON.stringify(store.resendState())).not.toContain(ROTATED_TOKEN);
+    });
+
+    it('surfaces 409 invite_not_pending verbatim and leaves the list alone', async () => {
+      await store.load('o-1');
+      const before = store.members();
+      const refusal = typedFailure(INVITE_NOT_PENDING, 'conflict', 409);
+      data.resendFailure = refusal;
+
+      const rotated = await store.resend(PENDING.id, createIntent());
+
+      expect(rotated).toBeNull();
+      expect(store.resendState()).toEqual({ phase: 'failed', error: refusal.error });
+      expect(store.resendState().error?.code).toBe('invite_not_pending');
+      expect(store.resendState().error?.message).toBe(INVITE_NOT_PENDING.error.message);
+      // Nothing was refreshed: a refused rotate changed nothing on the server.
+      expect(data.membershipGets).toEqual([]);
+      expect(store.members()).toBe(before);
+    });
+
+    it('surfaces a 429 verbatim, so the rotate can offer the server’s countdown', async () => {
+      await store.load('o-1');
+      const refusal = typedFailure(RATE_LIMITED, 'rate_limited', 429);
+      data.resendFailure = refusal;
+
+      await expect(store.resend(PENDING.id, createIntent())).resolves.toBeNull();
+
+      expect(store.resendState()).toEqual({ phase: 'failed', error: refusal.error });
+      expect(store.resendState().error?.kind).toBe('rate_limited');
+      expect(store.resendState().error?.retryable).toBe(true);
+      expect(data.membershipGets).toEqual([]);
+    });
+
+    it('answers null without a second request while one rotate is submitting', async () => {
+      await store.load('o-1');
+      data.resendManual = true;
+      const first = store.resend(PENDING.id, createIntent());
+      expect(store.resendState().phase).toBe('submitting');
+
+      // Two rotates would mint two tokens and kill the one the user is looking at.
+      await expect(store.resend(PENDING.id, createIntent())).resolves.toBeNull();
+      expect(data.resends).toHaveLength(1);
+
+      data.pendingResends[0]?.resolve(ROTATED);
+      await expect(first).resolves.toEqual({
+        membershipId: PENDING.id,
+        inviteToken: ROTATED_TOKEN,
+      });
+      expect(store.resendState()).toEqual({ phase: 'done', error: null });
+    });
+
+    it('holds the rotate submitting through the row refresh, so a second press cannot rotate again', async () => {
+      await store.load('o-1');
+      data.membershipGetManual = true;
+      const first = store.resend(PENDING.id, createIntent());
+      // Let the rotate answer and the refresh start; the refresh is deferred by hand.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(data.membershipGets).toEqual([{ orgId: 'o-1', membershipId: PENDING.id }]);
+      expect(store.resendState().phase).toBe('submitting');
+
+      // The guard is still closed while the refresh is in flight: a second rotate would mint a
+      // second token and kill the one this call is about to return.
+      await expect(store.resend(PENDING.id, createIntent())).resolves.toBeNull();
+      expect(data.resends).toHaveLength(1);
+
+      data.settleGet(0);
+      await expect(first).resolves.toEqual({
+        membershipId: PENDING.id,
+        inviteToken: ROTATED_TOKEN,
+      });
+      expect(store.resendState()).toEqual({ phase: 'done', error: null });
+    });
+
+    it('rejects a non-API rejection as the generic unexpected failure', async () => {
+      await store.load('o-1');
+      data.resendFailure = new TypeError('adapter bug: boom');
+
+      await expect(store.resend(PENDING.id, createIntent())).resolves.toBeNull();
+
+      expect(store.resendState().phase).toBe('failed');
+      expect(store.resendState().error?.kind).toBe('unexpected');
+      expect(store.resendState().error?.status).toBe(0);
+    });
+  });
+
+  describe('cancel', () => {
+    it('cancels with the caller’s intent and reloads the list', async () => {
+      await store.load('o-1');
+      const intent = createIntent();
+      // The server's answer to the cancel: the row is `revoked`, which the reload reads.
+      data.pages = [
+        {
+          items: PAGE.items.map((member) =>
+            member.id === PENDING.id ? { ...member, status: 'revoked' as const } : member,
+          ),
+          next_cursor: null,
+        },
+      ];
+
+      const cancelled = await store.cancel(PENDING.id, intent);
+
+      expect(cancelled).toBe(true);
+      expect(data.cancels).toEqual([{ orgId: 'o-1', membershipId: PENDING.id, intent }]);
+      expect(store.cancelState()).toEqual({ phase: 'done', error: null });
+      expect(data.membershipCursors).toEqual([undefined, undefined]);
+      expect(store.members()[3]?.status).toBe('revoked');
+    });
+
+    it('surfaces 409 invite_not_pending verbatim and keeps the rows unchanged', async () => {
+      await store.load('o-1');
+      const before = store.members();
+      const refusal = typedFailure(INVITE_NOT_PENDING, 'conflict', 409);
+      data.cancelFailure = refusal;
+
+      const cancelled = await store.cancel(PENDING.id, createIntent());
+
+      expect(cancelled).toBe(false);
+      expect(store.cancelState()).toEqual({ phase: 'failed', error: refusal.error });
+      expect(store.cancelState().error?.status).toBe(409);
+      expect(store.cancelState().error?.code).toBe(INVITE_NOT_PENDING.error.code);
+      expect(store.cancelState().error?.message).toBe(INVITE_NOT_PENDING.error.message);
+      // No reload: the refusal left the list exactly as it was.
+      expect(data.membershipCursors).toEqual([undefined]);
+      expect(store.members()).toBe(before);
+    });
+
+    it('rejects a non-API rejection as the generic unexpected failure', async () => {
+      await store.load('o-1');
+      data.cancelFailure = new Error('adapter bug: boom');
+
+      await expect(store.cancel(PENDING.id, createIntent())).resolves.toBe(false);
+
+      expect(store.cancelState().phase).toBe('failed');
+      expect(store.cancelState().error?.kind).toBe('unexpected');
     });
   });
 
@@ -856,10 +1115,11 @@ describe('MembersStore (09.7.1-T2)', () => {
         { items: PAGE.items, next_cursor: null },
       ];
       await store.load('o-2');
-      data.pendingInvites[0]?.resolve(CREATED);
+      data.pendingInvites[0]?.resolve(ISSUED);
 
-      // The success notice belongs to the org the user left: the dialogs must not announce it.
-      await expect(inFlight).resolves.toBe(false);
+      // The success notice belongs to the org the user left: the dialogs must not announce it,
+      // and the token is dropped instead of being handed to a list that is not its own.
+      await expect(inFlight).resolves.toBeNull();
 
       // The invitation landed on o-1; its reload must not write into o-2's list.
       expect(data.invites.map((entry) => entry.orgId)).toEqual(['o-1']);
@@ -897,6 +1157,42 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.removeState()).toEqual({ phase: 'done', error: null });
     });
 
+    it('skips the rotate refresh and drops the token when the scope switched', async () => {
+      await store.load('o-1');
+      data.resendManual = true;
+      const inFlight = store.resend(PENDING.id, createIntent());
+      expect(store.resendState().phase).toBe('submitting');
+
+      data.pages = [EMPTY_PAGE];
+      await store.load('o-2');
+      data.pendingResends[0]?.resolve(ROTATED);
+
+      await expect(inFlight).resolves.toBeNull();
+
+      // No refresh read into another org's list, and the state still settles.
+      expect(data.membershipGets).toEqual([]);
+      expect(data.membershipOrgs).toEqual(['o-1', 'o-2']);
+      expect(store.members()).toEqual(EMPTY_PAGE.items);
+      expect(store.resendState()).toEqual({ phase: 'done', error: null });
+    });
+
+    it('skips the reload of a cancel addressed to the org that is no longer shown', async () => {
+      await store.load('o-1');
+      data.cancelManual = true;
+      const inFlight = store.cancel(PENDING.id, createIntent());
+
+      data.pages = [EMPTY_PAGE];
+      await store.load('o-2');
+      data.pendingCancels[0]?.resolve();
+
+      await expect(inFlight).resolves.toBe(false);
+
+      expect(data.cancels.map((entry) => entry.orgId)).toEqual(['o-1']);
+      expect(data.membershipOrgs).toEqual(['o-1', 'o-2']);
+      expect(store.members()).toEqual(EMPTY_PAGE.items);
+      expect(store.cancelState()).toEqual({ phase: 'done', error: null });
+    });
+
     it('skips the refresh of a role change addressed to the org that is no longer shown', async () => {
       await store.load('o-1');
       const target = pageMember(1);
@@ -930,7 +1226,7 @@ describe('MembersStore (09.7.1-T2)', () => {
       const before = store.members();
       data.inviteFailure = new Error('adapter bug: boom');
 
-      await expect(store.invite('newhire@acme.test', [], createIntent())).resolves.toBe(false);
+      await expect(store.invite('newhire@acme.test', [], createIntent())).resolves.toBeNull();
 
       const state = store.inviteState();
       expect(state.phase).toBe('failed');
@@ -1005,11 +1301,19 @@ describe('MembersStore (09.7.1-T2)', () => {
     await store.changeRoles(pageMember(0).id, [
       { kind: 'revoke', roleId: roleId('tenant_admin'), intent: createIntent() },
     ]);
+    data.resendFailure = typedFailure(INVITE_NOT_PENDING, 'conflict', 409);
+    await store.resend(PENDING.id, createIntent());
+    data.cancelFailure = typedFailure(INVITE_NOT_PENDING, 'conflict', 409);
+    await store.cancel(PENDING.id, createIntent());
     expect(store.editState().phase).toBe('failed');
+    expect(store.resendState().phase).toBe('failed');
+    expect(store.cancelState().phase).toBe('failed');
 
     store.resetMutations();
 
     expect(store.inviteState()).toEqual({ phase: 'idle', error: null });
+    expect(store.resendState()).toEqual({ phase: 'idle', error: null });
+    expect(store.cancelState()).toEqual({ phase: 'idle', error: null });
     expect(store.removeState()).toEqual({ phase: 'idle', error: null });
     expect(store.editState()).toEqual({ phase: 'idle', error: null });
     expect(store.editApplied()).toEqual([]);
@@ -1066,7 +1370,9 @@ describe('MembersStore (09.7.1-T2)', () => {
 
   it('holds no secret-shaped field in any of its signals (D5, S3)', async () => {
     await store.load('o-1');
-    await store.invite('newhire@acme.test', [roleId('viewer')], createIntent());
+    const issued = await store.invite('newhire@acme.test', [roleId('viewer')], createIntent());
+    const rotated = await store.resend(PENDING.id, createIntent());
+    await store.cancel(PENDING.id, createIntent());
     data.removeFailure = typedFailure(LAST_ADMIN, 'conflict', 409);
     await store.remove(PAGE.items[0]?.id ?? '', createIntent());
     data.revokeFailure = typedFailure(LAST_ADMIN, 'conflict', 409);
@@ -1074,6 +1380,10 @@ describe('MembersStore (09.7.1-T2)', () => {
       { kind: 'grant', roleId: roleId('viewer'), intent: createIntent() },
       { kind: 'revoke', roleId: roleId('tenant_admin'), intent: createIntent() },
     ]);
+
+    // The two plaintexts the server served were handed to the caller, exactly once each.
+    expect(issued).toEqual({ membershipId: CREATED.id, inviteToken: INVITE_TOKEN });
+    expect(rotated).toEqual({ membershipId: PENDING.id, inviteToken: ROTATED_TOKEN });
 
     const keys = new Set<string>();
     const collect = (value: unknown): void => {
@@ -1096,7 +1406,7 @@ describe('MembersStore (09.7.1-T2)', () => {
         }
       }
     };
-    collect([
+    const signals = [
       store.members(),
       store.roles(),
       store.catalogue(),
@@ -1105,14 +1415,28 @@ describe('MembersStore (09.7.1-T2)', () => {
       store.hasMore(),
       store.matrix(),
       store.inviteState(),
+      store.resendState(),
+      store.cancelState(),
       store.removeState(),
       store.editState(),
       store.editApplied(),
-    ]);
+    ];
+    collect(signals);
 
     // The state was serialised for real: a member, a role and a refusal are in it.
     expect(keys.has('invited_email')).toBe(true);
     expect(keys.has('code')).toBe(true);
     expect([...keys].filter((key) => /token|secret|password|plaintext/i.test(key))).toEqual([]);
+    // And the plaintexts themselves are nowhere in it — the token is a return value only.
+    const serialized = JSON.stringify(signals);
+    expect(serialized).not.toContain(INVITE_TOKEN);
+    expect(serialized).not.toContain(ROTATED_TOKEN);
+    expect(serialized).not.toContain('evgi_');
+    // No field of the store itself is named like a value.
+    expect(
+      Object.getOwnPropertyNames(store).filter((key) =>
+        /token|secret|password|plaintext/i.test(key),
+      ),
+    ).toEqual([]);
   });
 });
