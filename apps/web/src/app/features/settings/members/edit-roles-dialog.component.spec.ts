@@ -130,6 +130,9 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
   function save(): HTMLButtonElement {
     return root.querySelector<HTMLButtonElement>('[data-members-submit]')!;
   }
+  function cancelControl(): HTMLButtonElement {
+    return root.querySelector<HTMLButtonElement>('footer button:not([data-members-submit])')!;
+  }
   async function submit(): Promise<void> {
     save().click();
     await fixture.whenStable();
@@ -330,6 +333,138 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     fixture.detectChanges();
     expect(dialog.open).toBe(false);
     expect(store.members()[0]!.roles).toEqual([admin, viewer]);
+  });
+
+  it('stays busy through the store’s refresh, so a second Save sends nothing and one outcome lands', async () => {
+    // This project targets ES2022, before Promise.withResolvers.
+    let resolve!: (success: boolean) => void;
+    const attempt = new Promise<boolean>((complete) => {
+      resolve = complete;
+    });
+    const completed = vi.fn();
+    fixture.componentInstance.completed.subscribe(completed);
+    store.changeRoles.mockImplementation(() => {
+      // `submitting` covers the store's own refresh read, so busy() outlives the last request.
+      store.editState.set({ phase: 'submitting', error: null });
+      return attempt;
+    });
+    const dialog = open();
+    select(viewer.id, true);
+    save().click();
+    fixture.detectChanges();
+    expect(store.changeRoles).toHaveBeenCalledTimes(1);
+
+    // The store has not replaced the row yet, so `diff()` still reads the old one: a second click
+    // here would re-send the confirmed grant under the Idempotency-Key the server already answered.
+    expect(dialog.getAttribute('aria-busy')).toBe('true');
+    save().click();
+    fixture.detectChanges();
+    expect(store.changeRoles).toHaveBeenCalledTimes(1);
+    expect(save().disabled).toBe(true);
+
+    store.members.set([{ ...membership, roles: [admin, viewer] }]);
+    store.editState.set({ phase: 'done', error: null });
+    resolve(true);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(store.changeRoles).toHaveBeenCalledTimes(1);
+    expect(completed).toHaveBeenCalledOnce();
+    expect(dialog.open).toBe(false);
+  });
+
+  it('ignores Escape and Cancel while the save is in flight, and Escape closes once it settles', async () => {
+    let resolve!: (success: boolean) => void;
+    const attempt = new Promise<boolean>((complete) => {
+      resolve = complete;
+    });
+    store.changeRoles.mockImplementation(() => {
+      store.editState.set({ phase: 'submitting', error: null });
+      return attempt;
+    });
+    const dialog = open();
+    select(viewer.id, true);
+    save().click();
+    fixture.detectChanges();
+
+    // Cancel is inert and Escape is refused, so the attempt finishes inside its own dialog and no
+    // second attempt can be opened over the row it is about to replace.
+    expect(cancelControl().disabled).toBe(true);
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    fixture.detectChanges();
+    expect(dialog.open).toBe(true);
+    expect(store.editState().phase).toBe('submitting');
+    expect(store.changeRoles).toHaveBeenCalledTimes(1);
+
+    // A refusal settles the attempt: the dialog stays open on the server's error, and closing it is
+    // possible again.
+    store.editState.set({ phase: 'failed', error: lastAdmin });
+    resolve(false);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(dialog.open).toBe(true);
+    expect(cancelControl().disabled).toBe(false);
+
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    fixture.detectChanges();
+    expect(dialog.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('still closes when the page closes it while the save is in flight, and sends nothing more', async () => {
+    let resolve!: (success: boolean) => void;
+    const attempt = new Promise<boolean>((complete) => {
+      resolve = complete;
+    });
+    store.changeRoles.mockImplementation(() => {
+      store.editState.set({ phase: 'submitting', error: null });
+      return attempt;
+    });
+    const dialog = open();
+    select(viewer.id, true);
+    save().click();
+    fixture.detectChanges();
+
+    // An organization switch closes the dialog itself: showing the old org's member over the newly
+    // loaded list is worse than dropping the attempt's view.
+    fixture.componentInstance.close();
+    fixture.detectChanges();
+    expect(dialog.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+
+    // The abandoned attempt settles into nothing: no further request, no reopened dialog.
+    store.editState.set({ phase: 'failed', error: lastAdmin });
+    resolve(false);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(store.changeRoles).toHaveBeenCalledTimes(1);
+    expect(dialog.open).toBe(false);
+  });
+
+  it('moves focus to the first enabled role checkbox when a refusal re-enables the form', async () => {
+    let resolve!: (success: boolean) => void;
+    const attempt = new Promise<boolean>((complete) => {
+      resolve = complete;
+    });
+    store.changeRoles.mockImplementation(() => {
+      store.editState.set({ phase: 'submitting', error: null });
+      return attempt;
+    });
+    const dialog = open();
+    select(admin.id, false);
+    save().focus();
+    save().click();
+    fixture.detectChanges();
+    // Save was the focused control and it is disabled for the request: focus is gone from it.
+    expect(save().disabled).toBe(true);
+
+    store.editState.set({ phase: 'failed', error: lastAdmin });
+    resolve(false);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(dialog.open).toBe(true);
+    expect(document.activeElement).toBe(option(admin.id));
   });
 
   it.each(['rate_limited', 'unavailable'] as const)(

@@ -4,6 +4,8 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -17,7 +19,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { MEMBERS_COPY } from './member-list.component';
 import { wrapDialogFocus } from './dialog-focus-wrap';
-import { MembersStore, type RoleChange } from './members.store';
+import { MembersStore, type MutationState, type RoleChange } from './members.store';
 
 type RoleOperation = Pick<RoleChange, 'kind' | 'roleId'>;
 
@@ -114,7 +116,9 @@ type RoleOperation = Pick<RoleChange, 'kind' | 'roleId'>;
         }
       </div>
       <footer>
-        <button #cancelButton type="button" (click)="close()">{{ copy.cancel }}</button>
+        <button #cancelButton type="button" [disabled]="busy()" (click)="requestClose()">
+          {{ copy.cancel }}
+        </button>
         <button
           class="primary"
           type="button"
@@ -168,11 +172,14 @@ export class EditRolesDialogComponent {
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   private readonly cancelButton = viewChild.required<ElementRef<HTMLButtonElement>>('cancelButton');
   private readonly intents = new Map<string, Intent>();
+  private readonly injector = inject(Injector);
+  /** The edit phase the focus-restore effect saw last, so only a submitting -> failed move acts. */
+  private lastEditPhase: MutationState['phase'] = 'idle';
   private opener: HTMLElement | null = null;
   private generation = 0;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.close());
+    inject(DestroyRef).onDestroy(() => this.finishClose());
     effect((onCleanup) => {
       const seconds = this.store.editState().error?.retryAfterSeconds;
       this.retryReady.set(seconds == null || seconds <= 0);
@@ -180,6 +187,24 @@ export class EditRolesDialogComponent {
         const timer = setTimeout(() => this.retryReady.set(true), seconds * 1000);
         onCleanup(() => clearTimeout(timer));
       }
+    });
+    // A refused save: the fieldset and Save were disabled for the request, so the control that had
+    // focus lost it — put focus back on the first enabled role checkbox, the head of the dialog's
+    // own tab order, once the re-enabled form has rendered.
+    effect(() => {
+      const phase = this.store.editState().phase;
+      const wasSubmitting = this.lastEditPhase === 'submitting';
+      this.lastEditPhase = phase;
+      if (!wasSubmitting || phase !== 'failed' || !this.opened()) return;
+      afterNextRender(
+        () => {
+          const first = this.dialog().nativeElement.querySelector<HTMLInputElement>(
+            '[data-members-role-option]:enabled',
+          );
+          first?.focus();
+        },
+        { injector: this.injector },
+      );
     });
   }
 
@@ -210,7 +235,26 @@ export class EditRolesDialogComponent {
     ).focus();
   }
 
+  /**
+   * Closes the dialog and hands focus back to its opener. Programmatic on purpose: the page closes
+   * it when the organization switches, and that must win over a save in flight — leaving it open
+   * would show the old org's member over the newly loaded list.
+   */
   close(): void {
+    this.finishClose();
+  }
+
+  /**
+   * The user's own cancel (footer Cancel). Refused while a save is in flight, so the attempt
+   * finishes inside its own dialog and no reopened one can race it against the row it replaces.
+   */
+  protected requestClose(): void {
+    if (this.busy()) return;
+    this.close();
+  }
+
+  /** The close itself, also used when the component is destroyed and nothing can be in flight. */
+  private finishClose(): void {
     this.generation++;
     this.opened.set(false);
     this.dialog().nativeElement.close();
@@ -219,8 +263,10 @@ export class EditRolesDialogComponent {
     this.opener = null;
   }
 
+  /** Escape is a cancel only while no save is in flight; otherwise the dialog stays put. */
   protected cancel(event: Event): void {
     event.preventDefault();
+    if (this.busy()) return;
     this.close();
   }
 

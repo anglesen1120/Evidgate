@@ -403,8 +403,12 @@ export class MembersStore {
    *
    * After at least one confirmed change the row is refreshed, never patched optimistically: the
    * server's own membership replaces the row in place (same position, same cursor state), and when
-   * that read fails or the row is no longer in the list the whole list is reloaded. A scope switch
-   * during the round trips skips that write, exactly like {@link invite} and {@link remove}.
+   * that read fails or the row is no longer in the list the whole list is reloaded. The edit state
+   * stays `submitting` until that refresh has settled, so the dialog is still busy: publishing the
+   * outcome first would open a window in which `diff()` reads the pre-change row while Save is
+   * enabled again, and a second save would re-send confirmed changes under their settled
+   * `Idempotency-Key`s. A scope switch during the round trips skips that write, exactly like
+   * {@link invite} and {@link remove}.
    *
    * Never rejects: the dialog awaits it from a click handler.
    *
@@ -437,15 +441,17 @@ export class MembersStore {
       applied.push({ kind: change.kind, roleId: change.roleId });
     }
 
+    // Deliberately before publishing the outcome: the refresh is part of finishing the attempt, so
+    // the dialog stays `submitting` (busy) for its duration.
+    if (applied.length > 0) {
+      await this.refreshMember(orgId, membershipId);
+    }
+
     // A dialog that closed (and reset the state) or a newer attempt owns the edit state now.
     const current = attempt === this.editAttempt;
     if (current) {
       this.editAppliedSignal.set(applied.length === 0 ? NO_APPLIED : applied);
       this.editStateSignal.set(failure === null ? SUBMITTED : { phase: 'failed', error: failure });
-    }
-
-    if (applied.length > 0) {
-      await this.refreshMember(orgId, membershipId);
     }
     return current && failure === null && this.orgId === orgId;
   }
@@ -460,10 +466,12 @@ export class MembersStore {
   }
 
   /**
-   * Clears every mutation state, so closing a dialog starts a new attempt with a new intent. The
-   * edit attempt token moves too: a role change still on its way for the dialog that just closed
-   * settles into nothing, so reopening the dialog never inherits a busy or failed state that
-   * belongs to the abandoned one.
+   * Clears every mutation state, so the next attempt starts from nothing. The edit dialog calls
+   * this from its own `open()`, not from `close()`: the draft, the intents and the state it was
+   * closed with stay readable until a new edit begins, and a reopening dialog always re-initialises
+   * them, so a closed dialog never inherits a busy or failed state that belonged to the previous
+   * one. The edit attempt token moves too: a role change still on its way for the dialog that just
+   * closed settles into nothing.
    */
   resetMutations(): void {
     this.editAttempt += 1;

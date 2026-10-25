@@ -149,6 +149,12 @@ class FakeMembersDataService {
   /** Every refresh read, so a scope switch that skipped one is visible. */
   readonly membershipGets: Array<{ orgId: string; membershipId: string }> = [];
   membershipGetFailure: Error | null = null;
+  /** When true, a refresh read answers only when the test settles `pendingGets`. */
+  membershipGetManual = false;
+  readonly pendingGets: Array<{
+    membershipId: string;
+    resolve: (view: MembershipView) => void;
+  }> = [];
   /** Each role request in the order it reached the fake, so "grants first, then stop" is provable. */
   readonly roleRequests: string[] = [];
   readonly grants: Array<{
@@ -242,10 +248,28 @@ class FakeMembersDataService {
     if (this.membershipGetFailure !== null) {
       return Promise.reject(this.membershipGetFailure);
     }
+    if (this.membershipGetManual) {
+      return new Promise<MembershipView>((resolve) => {
+        this.pendingGets.push({ membershipId, resolve });
+      });
+    }
     const view = this.memberViews.get(membershipId);
     return view === undefined
       ? Promise.reject(new Error(`the fake holds no membership ${membershipId}`))
       : Promise.resolve(view);
+  }
+
+  /** Settles the n-th deferred refresh read with the row the "server" holds right now. */
+  settleGet(index: number): void {
+    const pending = this.pendingGets[index];
+    if (pending === undefined) {
+      throw new Error(`the fake holds no pending refresh read ${index}`);
+    }
+    const view = this.memberViews.get(pending.membershipId);
+    if (view === undefined) {
+      throw new Error(`the fake holds no membership ${pending.membershipId}`);
+    }
+    pending.resolve(view);
   }
 
   grantRole(
@@ -753,6 +777,34 @@ describe('MembersStore (09.7.1-T2)', () => {
 
       expect(data.roleRequests).toEqual([]);
       expect(store.editState()).toEqual({ phase: 'idle', error: null });
+    });
+
+    it('keeps the attempt submitting until the refresh read settles, then publishes it once', async () => {
+      await store.load('o-1');
+      const target = pageMember(1);
+      const viewer = roleId('viewer');
+      // The server confirmed the grant; its own refresh read is the part still on the wire.
+      data.membershipGetManual = true;
+
+      const inFlight = store.changeRoles(target.id, [
+        { kind: 'grant', roleId: viewer, intent: createIntent() },
+      ]);
+      // Let the grant's promise chain advance to the refresh read.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(data.roleRequests).toEqual([`grant:${viewer}`]);
+      expect(data.pendingGets).toHaveLength(1);
+      // Busy() is `phase === 'submitting'`: the dialog's Save and Cancel stay inert, so a second
+      // save cannot re-send the confirmed change while `diff()` still reads the old row.
+      expect(store.editState().phase).toBe('submitting');
+      expect(store.editApplied()).toEqual([]);
+
+      data.settleGet(0);
+      await expect(inFlight).resolves.toBe(true);
+
+      expect(store.editState()).toEqual({ phase: 'done', error: null });
+      expect(store.editApplied()).toEqual([{ kind: 'grant', roleId: viewer }]);
+      expect(store.memberById(target.id)?.roles.map((role) => role.id)).toContain(viewer);
     });
 
     it('keeps the row refresh but drops its own state when the dialog closed mid-flight', async () => {

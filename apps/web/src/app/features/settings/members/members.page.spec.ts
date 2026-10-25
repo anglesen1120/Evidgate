@@ -221,6 +221,44 @@ describe('Members page (09.7.1-T2)', () => {
     expect(store.load).toHaveBeenLastCalledWith('org2');
   });
 
+  it('closes the role dialog on an organization switch even while its save is in flight', async () => {
+    let resolve!: (success: boolean) => void;
+    const attempt = new Promise<boolean>((complete) => {
+      resolve = complete;
+    });
+    store.changeRoles.mockImplementation(() => {
+      store.editState.set({ phase: 'submitting', error: null });
+      return attempt;
+    });
+    const { fixture, root } = await render();
+    button(root, '[data-members-edit-open]').click();
+    fixture.detectChanges();
+    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="edit-roles"]')!;
+    const checkbox = dialog.querySelector<HTMLInputElement>('[data-members-role-option]')!;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    button(dialog, '[data-members-submit]').click();
+    fixture.detectChanges();
+    expect(dialog.open).toBe(true);
+
+    // The scope switch wins over the in-flight attempt: the old org's member must not stay on screen
+    // over the new org's list.
+    const session = TestBed.inject(SessionStore);
+    (session.currentOrg as unknown as WritableSignal<{ id: string }>).set({ id: 'org2' });
+    fixture.detectChanges();
+    expect(dialog.open).toBe(false);
+    expect(store.load).toHaveBeenLastCalledWith('org2');
+
+    // The abandoned attempt settles into nothing: one request for the old org, no reopened dialog.
+    store.editState.set({ phase: 'failed', error: lastAdmin });
+    resolve(false);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(store.changeRoles).toHaveBeenCalledTimes(1);
+    expect(dialog.open).toBe(false);
+  });
+
   it('keeps role chips and the matrix on server data until the role mutation is confirmed', async () => {
     // This project targets ES2022, before Promise.withResolvers.
     let resolve!: (success: boolean) => void;
