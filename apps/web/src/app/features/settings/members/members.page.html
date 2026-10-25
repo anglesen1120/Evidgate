@@ -37,6 +37,8 @@
       [canWrite]="canWrite()"
       (remove)="openRemove($event)"
       (editRoles)="openEditRoles($event)"
+      (resend)="openResend($event)"
+      (cancelInvite)="openCancelInvite($event)"
     />
     <app-role-matrix [matrix]="visibleMatrix()" />
     @if (pagingAlert(); as failure) {
@@ -61,4 +63,6 @@
   <app-invite-dialog (completed)="completed()" />
   <app-remove-dialog (completed)="completed(true)" />
   <app-edit-roles-dialog (completed)="completed()" />
+  <app-resend-invite-dialog (completed)="completed()" />
+  <app-cancel-invite-dialog (completed)="completed(true)" />
 }

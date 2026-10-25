@@ -29,6 +29,7 @@ import ciBindingsListOnboardingRun from '../../../../../../fixtures/web-api/ci-b
 import ingestTokenCreate from '../../../../../../fixtures/web-api/ingest-token-create/input.json';
 import ingestTokenRotate from '../../../../../../fixtures/web-api/ingest-token-rotate/input.json';
 import ingestTokenRotateConflict from '../../../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
+import ingestTokenRotateRateLimited from '../../../../../../fixtures/web-api/ingest-token-rotate-rate-limited/input.json';
 import ingestTokensList from '../../../../../../fixtures/web-api/ingest-tokens-list/input.json';
 import ingestTokensListOnboardingConnected from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-connected/input.json';
 import ingestTokensListOnboardingForbidden from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-forbidden/input.json';
@@ -38,12 +39,19 @@ import ingestTokensListOnboardingRun from '../../../../../../fixtures/web-api/in
 import ingestTokensListOnboardingToken from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import ingestTokensListOnboardingTokenUsed from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token-used/input.json';
 import ingestTokensListOnboardingUnusable from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-unusable/input.json';
+import ingestTokensListSettings from '../../../../../../fixtures/web-api/ingest-tokens-list-settings/input.json';
+import membershipCancelNotPending from '../../../../../../fixtures/web-api/membership-cancel-not-pending/input.json';
+import membershipCancelOk from '../../../../../../fixtures/web-api/membership-cancel-ok/input.json';
 import membershipCreateInviteExists from '../../../../../../fixtures/web-api/membership-create-invite-exists/input.json';
 import membershipCreateOk from '../../../../../../fixtures/web-api/membership-create-ok/input.json';
+import membershipCreateReplay from '../../../../../../fixtures/web-api/membership-create-replay/input.json';
 import membershipGetAfterGrant from '../../../../../../fixtures/web-api/membership-get-after-grant/input.json';
 import membershipRemoveInvalidTransition from '../../../../../../fixtures/web-api/membership-remove-invalid-transition/input.json';
 import membershipRemoveLastAdmin from '../../../../../../fixtures/web-api/membership-remove-last-admin/input.json';
 import membershipRemoveOk from '../../../../../../fixtures/web-api/membership-remove-ok/input.json';
+import membershipResendNotPending from '../../../../../../fixtures/web-api/membership-resend-not-pending/input.json';
+import membershipResendOk from '../../../../../../fixtures/web-api/membership-resend-ok/input.json';
+import membershipResendReplay from '../../../../../../fixtures/web-api/membership-resend-replay/input.json';
 import membershipRoleGrantForbidden from '../../../../../../fixtures/web-api/membership-role-grant-forbidden/input.json';
 import membershipRoleGrantOk from '../../../../../../fixtures/web-api/membership-role-grant-ok/input.json';
 import membershipRoleGrantUnknownRole from '../../../../../../fixtures/web-api/membership-role-grant-unknown-role/input.json';
@@ -62,6 +70,7 @@ import permissionsListSettingsAdmin from '../../../../../../fixtures/web-api/per
 import permissionsListSettingsAuditOnly from '../../../../../../fixtures/web-api/permissions-list-settings-audit-only/input.json';
 import permissionsListSettingsMembersReadonly from '../../../../../../fixtures/web-api/permissions-list-settings-members-readonly/input.json';
 import permissionsListSettingsNoTab from '../../../../../../fixtures/web-api/permissions-list-settings-no-tab/input.json';
+import permissionsListSettingsSecretsWrite from '../../../../../../fixtures/web-api/permissions-list-settings-secrets-write/input.json';
 import projectCreate from '../../../../../../fixtures/web-api/project-create/input.json';
 import projectDetail from '../../../../../../fixtures/web-api/project-detail/input.json';
 import projectDetailOnboardingConnected from '../../../../../../fixtures/web-api/project-detail-onboarding-connected/input.json';
@@ -292,6 +301,42 @@ export interface FixtureDocument {
  * `unknown-role`) rather than the wire code, and each refusal text is the server's current one: the
  * revoke row spells `tenant_admin` with the underscore, unlike the older `membership-remove-*` rows,
  * which are left as they were instead of being rewritten behind their own suite.
+ *
+ * 09.7.1-T3 (with `F12`) adds the Settings area's own pages. `permissions-list-settings-secrets-write`
+ * (`?fixture.variant.listPermissions=settings-secrets-write`) is `permissions-list-settings-admin`
+ * plus `ingest_token:write` — eleven rows copied verbatim from `contracts/permissions.json`, the
+ * write row's `sensitive: true` included — because the Secrets page's rotate control needs
+ * `ingest_token:write` and `settings-admin` holds the read alone: one grant set proves the control
+ * absent, this one proves it present with the same tab strip.
+ * `ingest-tokens-list-settings`
+ * (`?fixture.variant.listIngestTokens=settings`) is the Secrets tab's token page: six
+ * `IngestTokenView` rows on the `Storefront web` project (`…0011`, the first of `projects-list`),
+ * covering an `active` token with a far `expires_at`, one expiring in under fourteen days
+ * (2026-11-05), an `active` row whose `expires_at` has already passed, a `rotated` row carrying the
+ * `overlap_ends_at` it keeps verifying until and the `rotated_to_id` of the row that replaced it,
+ * that successor (`active`, `expires_at: null`) and a `revoked` row. Every `prefix` is a short
+ * `egt_fx_…` placeholder, never a token: the tab renders metadata only, so the page could not show
+ * a credential even if a component asked for one. Every timestamp is a literal, as the corpus
+ * requires — the consequence being that the "expires soon" row is only soon for a review run near
+ * those dates, and the already-expired `active` row is the state a period sweep has not reached
+ * yet, which is exactly what the page's `expired` reminder must report. `ingest-tokens-list` and
+ * every `onboarding-*` row stay byte-identical.
+ *
+ * The Members tab's invite lifecycle is the second half. `membership-create-ok` is now the full
+ * `InviteIssuedView` — the T2 document plus `invite_token` — and `membership-create-replay`
+ * (`?fixture.variant.createMembership=replay`) is the same body with `invite_token: null`, which is
+ * the stored answer an `Idempotency-Key` replay returns. `membership-resend-ok` is
+ * `resendMembershipInvite`'s 202: the `memberships-list` `pending` row (`newhire@acme.test`) with a
+ * rotated token, `updated_at` and `version` 2, plus the `ETag` the contract declares;
+ * `membership-resend-replay` is that body without the token. `membership-cancel-ok` is the 204 —
+ * the corpus's third bodyless document — and `membership-resend-not-pending` /
+ * `membership-cancel-not-pending` (`?fixture.variant.<operationId>=not-pending`) are that pair's 409
+ * `invite_not_pending`, carrying the server's own sentence (`InviteErrors.NotPending`). The
+ * `invite_token` values are `evgi_FIXTURE_ONLY_…` placeholders no issuer produces, and the
+ * one-time-secret pin in `fixture-contract.spec.ts` names both invite operations beside the step-2
+ * three, so no list or detail read may grow the member. Because the catalogue is static, the
+ * lifecycle needs no new list document: `memberships-list` already holds the `pending` row these
+ * calls address.
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
@@ -309,6 +354,7 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'ingest-token-create', document: ingestTokenCreate },
   { name: 'ingest-token-rotate', document: ingestTokenRotate },
   { name: 'ingest-token-rotate-conflict', document: ingestTokenRotateConflict },
+  { name: 'ingest-token-rotate-rate-limited', document: ingestTokenRotateRateLimited },
   { name: 'ingest-tokens-list', document: ingestTokensList },
   {
     name: 'ingest-tokens-list-onboarding-connected',
@@ -333,12 +379,19 @@ export const FIXTURE_CATALOG: readonly {
     name: 'ingest-tokens-list-onboarding-unusable',
     document: ingestTokensListOnboardingUnusable,
   },
+  { name: 'ingest-tokens-list-settings', document: ingestTokensListSettings },
+  { name: 'membership-cancel-not-pending', document: membershipCancelNotPending },
+  { name: 'membership-cancel-ok', document: membershipCancelOk },
   { name: 'membership-create-invite-exists', document: membershipCreateInviteExists },
   { name: 'membership-create-ok', document: membershipCreateOk },
+  { name: 'membership-create-replay', document: membershipCreateReplay },
   { name: 'membership-get-after-grant', document: membershipGetAfterGrant },
   { name: 'membership-remove-invalid-transition', document: membershipRemoveInvalidTransition },
   { name: 'membership-remove-last-admin', document: membershipRemoveLastAdmin },
   { name: 'membership-remove-ok', document: membershipRemoveOk },
+  { name: 'membership-resend-not-pending', document: membershipResendNotPending },
+  { name: 'membership-resend-ok', document: membershipResendOk },
+  { name: 'membership-resend-replay', document: membershipResendReplay },
   { name: 'membership-role-grant-forbidden', document: membershipRoleGrantForbidden },
   { name: 'membership-role-grant-ok', document: membershipRoleGrantOk },
   { name: 'membership-role-grant-unknown-role', document: membershipRoleGrantUnknownRole },
@@ -363,6 +416,10 @@ export const FIXTURE_CATALOG: readonly {
     document: permissionsListSettingsMembersReadonly,
   },
   { name: 'permissions-list-settings-no-tab', document: permissionsListSettingsNoTab },
+  {
+    name: 'permissions-list-settings-secrets-write',
+    document: permissionsListSettingsSecretsWrite,
+  },
   { name: 'project-create', document: projectCreate },
   { name: 'project-detail', document: projectDetail },
   { name: 'project-detail-onboarding-connected', document: projectDetailOnboardingConnected },

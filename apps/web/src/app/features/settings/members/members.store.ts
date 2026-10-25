@@ -17,12 +17,15 @@
 // 2. Only ids and server-returned metadata are kept (task §4 D5). The invited address is personal
 //    data (02.1.2 §8): it travels from the dialog to the request body and is never put in a signal
 //    of its own, never logged, never a telemetry attribute. Nothing secret-shaped is stored at all,
-//    which the `no-secret-field-in-store` rule pins for the whole Settings feature.
-// 3. Every mutation carries the caller's `Intent` (00 §9.1, ADR-0008 rule 2): invite and remove take
-//    one per button press, and a role change takes one PER CHANGE (`RoleChange.intent`, minted by the
-//    edit dialog and keyed by `kind:roleId`), because two different changes under one key are the
-//    server's 409 `idempotency_conflict` — the operation is the command type and the hash covers the
-//    role. A retry of the same action reuses its own `Idempotency-Key`; the store never mints one.
+//    which the `no-secret-field-in-store` rule pins for the whole Settings feature — and the invited
+//    token is the case that matters most: `invite` and `resend` answer it as a RETURN value
+//    ({@link IssuedInvite}) for the one-time reveal, and no signal, map or log ever holds it.
+// 3. Every mutation carries the caller's `Intent` (00 §9.1, ADR-0008 rule 2): invite, resend, cancel
+//    and remove take one per button press, and a role change takes one PER CHANGE
+//    (`RoleChange.intent`, minted by the edit dialog and keyed by `kind:roleId`), because two
+//    different changes under one key are the server's 409 `idempotency_conflict` — the operation is
+//    the command type and the hash covers the role. A retry of the same action reuses its own
+//    `Idempotency-Key`; the store never mints one.
 // 4. The server decides. A refusal is surfaced verbatim — AC2's 409 `last_admin` is shown as the
 //    server wrote it, and there is no client-side pre-check that could drift from the guard.
 // 5. One scope owns the state. A mutation's reload only runs while the org that mutation addressed
@@ -88,6 +91,19 @@ export interface RoleChange {
  */
 export type AppliedRoleChange = Omit<RoleChange, 'intent'>;
 
+/**
+ * What a minted invite answers with (02.1.2 §5): the membership it belongs to and the plaintext
+ * link token the server served once. It is a RETURN value only — no signal holds it, no map
+ * caches it, and the store never logs it. `inviteToken: null` is the honest answer for a replay
+ * (the server never serves a token twice), for an EMPTY or non-string field, and never a failure:
+ * the dialogs read `null` as "show the Resend guidance", so an absent token can never become an
+ * empty one-time reveal.
+ */
+export interface IssuedInvite {
+  readonly membershipId: string;
+  readonly inviteToken: string | null;
+}
+
 /** The frozen empty values, so an empty store and a degraded read share one array identity. */
 const NO_MEMBERS: readonly MembershipView[] = [];
 const NO_ROLES: readonly RoleView[] = [];
@@ -130,6 +146,20 @@ async function settledRead<T>(read: () => Promise<T>): Promise<SettledRead<T>> {
   }
 }
 
+/** The server's code for "this membership holds no pending invitation" (resend and cancel). */
+const INVITE_NOT_PENDING = 'invite_not_pending';
+
+/**
+ * The one-time plaintext of an invite answer as the dialogs must read it: a NON-EMPTY string is
+ * the token, and everything else — `null` (an `Idempotency-Key` replay), `''`, or a non-string a
+ * broken adapter let through — is ABSENCE. Absence is what makes the dialogs show the "resend to
+ * get a new token" notice instead of a one-time reveal of nothing. The value itself stays in the
+ * caller's local: this function returns it and stores nothing.
+ */
+function issuedInviteToken(value: string | null | undefined): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 @Injectable()
 export class MembersStore {
   private readonly data = inject(MembersDataService);
@@ -141,6 +171,8 @@ export class MembersStore {
   private readonly loadErrorSignal = signal<ApiError | null>(null);
   private readonly nextCursorSignal = signal<string | null>(null);
   private readonly inviteStateSignal = signal<MutationState>(IDLE);
+  private readonly resendStateSignal = signal<MutationState>(IDLE);
+  private readonly cancelStateSignal = signal<MutationState>(IDLE);
   private readonly removeStateSignal = signal<MutationState>(IDLE);
   private readonly editStateSignal = signal<MutationState>(IDLE);
   private readonly editAppliedSignal = signal<readonly AppliedRoleChange[]>(NO_APPLIED);
@@ -162,6 +194,15 @@ export class MembersStore {
    * into nothing — the row refresh still runs, because the change landed server-side either way.
    */
   private editAttempt = 0;
+  /**
+   * The rotate's double-submit lock. It is this private flag, not `resendState().phase`, that
+   * decides whether a rotate may start: the state becomes `done` as soon as the server answers
+   * (the token is in the caller's hands by then), while the flag stays closed until the row
+   * refresh that follows has settled — two rotates would mint two tokens and invalidate the one
+   * the user is looking at. `resetMutations()` clears the PUBLISHED state when a dialog closes and
+   * deliberately does not touch this flag: only the work settling releases it.
+   */
+  private resendInFlight = false;
 
   /** The org's memberships, in server order, as many cursor pages as have been followed. */
   readonly members = this.membersSignal.asReadonly();
@@ -188,6 +229,10 @@ export class MembersStore {
   }));
   /** The invite dialog's state. */
   readonly inviteState = this.inviteStateSignal.asReadonly();
+  /** The rotate action's state; a 409 `invite_not_pending` lands here verbatim. */
+  readonly resendState = this.resendStateSignal.asReadonly();
+  /** The cancel action's state; a 409 `invite_not_pending` lands here verbatim. */
+  readonly cancelState = this.cancelStateSignal.asReadonly();
   /** The remove dialog's state; AC2's `last_admin` refusal lands here verbatim. */
   readonly removeState = this.removeStateSignal.asReadonly();
   /** The edit-roles dialog's state; a refusal of any one change lands here verbatim. */
@@ -310,43 +355,150 @@ export class MembersStore {
 
   /**
    * Invites one address, optionally with initial roles (`POST /v1/orgs/{o}/memberships`), and
-   * reloads the list from its first page on success.
+   * reloads the list from its first page AFTER answering.
    *
    * The body carries `roles` only when the dialog selected at least one: an empty array would be a
    * request for "no roles" that the contract's optional member expresses better by absence. The
    * address is passed straight through to the request and is never stored.
    *
-   * The reload runs only while the org this call addressed still owns the state: a scope switch
-   * during the round trip means the list on screen is another org's, and `load(orgId)` would reset
-   * `orgId`, the generation and the rows that org's own read already put there. The invitation
-   * landed server-side either way, so the mutation state still settles.
+   * The token leaves with the answer, and the reload runs behind it (M2): the plaintext is served
+   * exactly once, so a dialog that closes — or a scope that switches — while the list is being read
+   * must not cost the caller the only copy that will ever exist. The way back would be a Resend,
+   * which invalidates the very token this call minted. Nothing about the reload can fail the
+   * mutation: it is a second read of the same list, `load` never rejects, and `load`'s own
+   * generation guard drops it when another org (or a newer reload) took the state meanwhile, so it
+   * is skipped outright when the scope already moved.
    *
-   * @returns `true` when the server created the membership and the list on screen is still this
-   *   org's; `false` when it refused, when the rejection was not the server's answer at all (a
-   *   cancellation or a bug, reported as the generic `unexpected` failure so the dialog is never
-   *   left submitting), or when the scope switched during the round trip (the success notice
-   *   belongs to the org the user left, not to the list now on screen).
+   * @returns the minted invite as soon as the server created the membership, whatever happens to
+   *   the list afterwards. Its `inviteToken` is the one-time plaintext the caller reveals, or
+   *   `null` when the body carried none (an `Idempotency-Key` replay) or carried an empty/non-string
+   *   one — see {@link IssuedInvite}. The call answers `null` itself when it refused, or when the
+   *   rejection was not the server's answer at all (a cancellation or a bug, reported as the
+   *   generic `unexpected` failure so the dialog is never left submitting).
    */
-  async invite(email: string, roleIds: readonly string[], intent: Intent): Promise<boolean> {
+  async invite(
+    email: string,
+    roleIds: readonly string[],
+    intent: Intent,
+  ): Promise<IssuedInvite | null> {
     const orgId = this.orgId;
     if (orgId === null) {
-      return false;
+      return null;
     }
     this.inviteStateSignal.set(SUBMITTING);
+    let issued: IssuedInvite;
     try {
-      await this.data.invite(
+      const view = await this.data.invite(
         orgId,
         roleIds.length === 0 ? { email } : { email, roles: [...roleIds] },
         intent,
       );
+      // Built here and returned, never written to a signal: this local is the only place the
+      // plaintext exists inside the store.
+      issued = { membershipId: view.id, inviteToken: issuedInviteToken(view.invite_token) };
     } catch (error) {
       this.inviteStateSignal.set({
         phase: 'failed',
         error: isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE,
       });
-      return false;
+      return null;
     }
     this.inviteStateSignal.set(SUBMITTED);
+    // Behind the answer, never in front of it — and only for the org this call addressed, because
+    // `load` would otherwise reset the list another org's own read already put there.
+    if (this.orgId === orgId) {
+      void this.load(orgId);
+    }
+    return issued;
+  }
+
+  /**
+   * Rotates one pending invite (`POST /v1/orgs/{o}/memberships/{m}/resend`), so the previous link
+   * stops working, and re-reads that one row AFTER answering — the response carries the membership
+   * too, but the row on screen comes from the server's own read, never from the rotate's body.
+   *
+   * The new `invite_token` is a RETURN value exactly like {@link invite}'s, and it leaves with the
+   * answer (M2): the row refresh runs behind it, so closing the reveal while that read is on its
+   * way cannot lose the token. A membership that is no longer `pending` is the server's 409
+   * `invite_not_pending`, which lands in {@link resendState} verbatim with its own message and
+   * code — there is no client-side pre-check — and that code also means the pending row on screen
+   * is stale, so the list is re-read once to drop it and its Resend action (L5).
+   *
+   * The double-submit guard is {@link resendInFlight}, a private flag and NOT `resendState().phase`:
+   * the state becomes `done` as soon as the server answers, while the flag stays closed until the
+   * row refresh has settled, so a second press within that window answers `null` without sending a
+   * request instead of minting a second token.
+   *
+   * @returns the rotated invite when the server answered; `null` on a refusal, on a rejection that
+   *   is not the server's answer (see {@link invite}), or for the double submit.
+   */
+  async resend(membershipId: string, intent: Intent): Promise<IssuedInvite | null> {
+    if (this.resendInFlight) {
+      return null;
+    }
+    const orgId = this.orgId;
+    if (orgId === null) {
+      return null;
+    }
+    this.resendInFlight = true;
+    this.resendStateSignal.set(SUBMITTING);
+    let issued: IssuedInvite;
+    try {
+      const view = await this.data.resendInvite(orgId, membershipId, intent);
+      issued = { membershipId: view.id, inviteToken: issuedInviteToken(view.invite_token) };
+    } catch (error) {
+      const refusal = isApiRequestError(error) ? error.error : null;
+      this.resendStateSignal.set({ phase: 'failed', error: refusal ?? UNRESOLVED_FAILURE });
+      this.resendInFlight = false;
+      // L5: the server says this membership holds no pending invitation any more, so the pending
+      // row the user just pressed is stale. One re-read drops it; the refusal itself stays in
+      // `resendState` exactly as it arrived, and the read cannot turn it into a success.
+      if (refusal?.code === INVITE_NOT_PENDING && this.orgId === orgId) {
+        await this.load(orgId);
+      }
+      return null;
+    }
+    this.resendStateSignal.set(SUBMITTED);
+    if (this.orgId === orgId) {
+      this.releaseResendWhenSettled(this.refreshMember(orgId, membershipId));
+    } else {
+      // Another org's list is on screen: no refresh read, but the lock still has to open.
+      this.resendInFlight = false;
+    }
+    return issued;
+  }
+
+  /**
+   * Cancels one pending invite (`POST /v1/orgs/{o}/memberships/{m}/cancel-invite`): the row
+   * becomes `revoked` and its stored prefix stops resolving, so the list is reloaded rather than
+   * patched. A membership that is not `pending` (already active, already cancelled, removed) is
+   * the server's 409 `invite_not_pending`, verbatim in {@link cancelState}; that code also means
+   * the pending row on screen is stale, so the list is re-read once to drop it and its Cancel
+   * action (L5). Nothing here second-guesses that guard.
+   *
+   * @returns `true` when the server cancelled the invite and the list on screen is still this
+   *   org's; `false` on a refusal, on a rejection that is not the server's answer, or on a scope
+   *   switch during the round trip (see {@link invite}).
+   */
+  async cancel(membershipId: string, intent: Intent): Promise<boolean> {
+    const orgId = this.orgId;
+    if (orgId === null) {
+      return false;
+    }
+    this.cancelStateSignal.set(SUBMITTING);
+    try {
+      await this.data.cancelInvite(orgId, membershipId, intent);
+    } catch (error) {
+      const refusal = isApiRequestError(error) ? error.error : null;
+      this.cancelStateSignal.set({ phase: 'failed', error: refusal ?? UNRESOLVED_FAILURE });
+      // L5: "no pending invitation" means the row the user pressed Cancel on is stale, so one
+      // re-read drops it. The refusal stays verbatim, and the read cannot turn it into a success.
+      if (refusal?.code === INVITE_NOT_PENDING && this.orgId === orgId) {
+        await this.load(orgId);
+      }
+      return false;
+    }
+    this.cancelStateSignal.set(SUBMITTED);
     if (this.orgId !== orgId) {
       return false;
     }
@@ -471,11 +623,15 @@ export class MembersStore {
    * closed with stay readable until a new edit begins, and a reopening dialog always re-initialises
    * them, so a closed dialog never inherits a busy or failed state that belonged to the previous
    * one. The edit attempt token moves too: a role change still on its way for the dialog that just
-   * closed settles into nothing.
+   * closed settles into nothing. The rotate LOCK ({@link resendInFlight}) is deliberately not
+   * released here: a closing dialog must not reopen the door to a second token from the same
+   * request, so only the work settling releases it.
    */
   resetMutations(): void {
     this.editAttempt += 1;
     this.inviteStateSignal.set(IDLE);
+    this.resendStateSignal.set(IDLE);
+    this.cancelStateSignal.set(IDLE);
     this.removeStateSignal.set(IDLE);
     this.editStateSignal.set(IDLE);
     this.editAppliedSignal.set(NO_APPLIED);
@@ -491,25 +647,45 @@ export class MembersStore {
   }
 
   /**
-   * Re-reads one membership after a confirmed role change and writes the server's row into the
-   * list at its existing position, so the chips and the matrix show what the server holds without
-   * costing the cursors, the phase or the other rows. The list is reloaded instead when the read
-   * fails (a degraded row is worse than a re-read) or when the id is no longer on the pages this
-   * store holds (a row that was removed under us). A scope switch skips both.
+   * Re-reads one membership after a confirmed role change or a rotate, and writes the server's row
+   * into the list at its existing position, so the chips and the matrix show what the server holds
+   * without costing the cursors, the phase or the other rows. The list is reloaded instead when the
+   * read fails (a degraded row is worse than a re-read) or when the id is no longer on the pages
+   * this store holds (a row that was removed under us). A scope switch skips both.
+   *
+   * The read is generation-guarded exactly like {@link loadMore}'s page: a `load` that started while
+   * this read was on the wire owns the list now, and its rows are newer than this one — writing the
+   * read anyway would put a stale row over a fresh list (`resend` fires this refresh detached, so
+   * that overlap is reachable without the caller's ordering). Both the replace and the fallback
+   * reload are therefore dropped when the generation moved.
    */
   private async refreshMember(orgId: string, membershipId: string): Promise<void> {
     if (this.orgId !== orgId) {
       return;
     }
+    const generation = this.generation;
     const read = await settledRead(() => this.data.getMembership(orgId, membershipId));
     // The list on screen may be another org's, or a newer load's, by now.
-    if (this.orgId !== orgId) {
+    if (this.orgId !== orgId || generation !== this.generation) {
       return;
     }
     if (read.ok && this.replaceMember(read.value)) {
       return;
     }
     await this.load(orgId);
+  }
+
+  /**
+   * Releases {@link resendInFlight} when the rotate's background row refresh settles, either way:
+   * the lock exists to keep a second rotate out while this one's work is still open, and a refresh
+   * that failed must never leave it closed (a refresh that cannot read the row falls back to a
+   * full list read, which also settles here).
+   */
+  private releaseResendWhenSettled(work: Promise<void>): void {
+    const release = (): void => {
+      this.resendInFlight = false;
+    };
+    void work.then(release, release);
   }
 
   /** Replaces one row by id, keeping server order; `false` when the list does not hold that id. */

@@ -1,0 +1,308 @@
+// 09.7.1-T3 — plan 09.7.1 §2 AC3 and delivery Notes :177, real Chromium / FIXTURES build.
+// The G2 product tab stays absent in G1. Only the dev-routes file-replacement seam mounts this
+// real page at /dev/settings-secrets/orgs/:orgId, under the normal shell/auth/org/read gates.
+//
+// Fixtures replace HttpBackend in-process: Playwright cannot intercept/count the rotation request
+// or assert its headers. These cases observe the real consumer, SDK error mapping and UI only.
+// The static list remains unchanged after a rotate, so focus returns to the still-connected opener;
+// successor/fallback focus after a changed list and stale-response guards are Vitest's subject.
+// The corpus is six rows with next_cursor:null; this suite asserts the terminal pagination state,
+// not a cursor traversal the static corpus cannot supply. Reminder dates are pinned with a browser
+// clock, not compared to the machine's changing calendar. No source-text assertions or mock UI.
+// Project changes during a native modal are injected as a DOM change event: the modal correctly
+// makes the picker inert to users, but a scope-change event must still clear the reveal immediately.
+// All selectors use component/data hooks, IDs or roles; localized text is asserted, never selected.
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+import rotation from '../../../../fixtures/web-api/ingest-token-rotate/input.json';
+import conflict from '../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
+import rateLimited from '../../../../fixtures/web-api/ingest-token-rotate-rate-limited/input.json';
+import references from '../../../../fixtures/web-api/ingest-tokens-list-settings/input.json';
+import {
+  expectNoA11yViolations,
+  LOCALES,
+  PROJECT_CHECKOUT,
+  PROJECT_STOREFRONT,
+  SECRETS_LIST,
+  SECRETS_ROTATE_CONFLICT,
+  SECRETS_ROTATE_RATE_LIMITED,
+  SECRETS_WRITE_GRANTS,
+  secretsReviewPath,
+  seedStoredTheme,
+  SETTINGS_ADMIN_GRANTS,
+  SETTINGS_NO_TAB_GRANTS,
+  THEMES,
+  UNKNOWN_ORG,
+  withVariants,
+  type ShellLocale,
+} from './support';
+
+const PAGE = 'app-secrets-page';
+const ROWS = `${PAGE} [data-secret-reference]`;
+const DIALOG = 'app-rotate-reveal-dialog dialog';
+const SECRET = rotation.body.secret;
+const TARGET = ((): (typeof references.body.items)[number] => {
+  const first = references.body.items[0];
+  if (first === undefined) {
+    throw new Error('fixtures/web-api/ingest-tokens-list-settings holds no reference');
+  }
+  return first;
+})();
+const STATUS = {
+  en: { active: 'Active', rotated: 'Rotated', revoked: 'Revoked' },
+  vi: { active: 'Đang hoạt động', rotated: 'Đã xoay', revoked: 'Đã thu hồi' },
+} as const;
+
+/** No plaintext in any template sink, control property, address or persistent browser store. */
+async function expectNoPlaintext(page: Page): Promise<void> {
+  const sinks = await page.evaluate(() => ({
+    html: document.documentElement.innerHTML,
+    controls: Array.from(document.querySelectorAll('input, textarea')).map(
+      (element) => (element as HTMLInputElement | HTMLTextAreaElement).value,
+    ),
+    url: location.href,
+    local: JSON.stringify(Object.entries(localStorage)),
+    session: JSON.stringify(Object.entries(sessionStorage)),
+  }));
+  for (const [sink, value] of Object.entries(sinks)) {
+    const text = JSON.stringify(value);
+    expect(text, `${sink} must not retain the one-time credential`).not.toContain(SECRET);
+    expect(text, `${sink} must not contain any fixture plaintext`).not.toMatch(
+      /(?:egt|evgi)_FIXTURE_ONLY_/,
+    );
+  }
+}
+
+function rotateButton(page: Page): Locator {
+  return page.locator(`${PAGE} [data-rotate][data-reference-id="${TARGET.id}"]`);
+}
+
+async function ready(page: Page): Promise<void> {
+  await expect(page.locator(PAGE)).toBeVisible();
+  await expect(page.locator(ROWS)).toHaveCount(references.body.items.length);
+  await expect(page.locator('#secrets-project')).toHaveValue(PROJECT_STOREFRONT);
+}
+
+async function visit(
+  page: Page,
+  locale: ShellLocale,
+  grants = SECRETS_WRITE_GRANTS,
+  variants: readonly string[] = [],
+): Promise<void> {
+  await page.clock.setFixedTime(new Date('2026-10-25T12:00:00Z'));
+  await page.goto(withVariants(secretsReviewPath(locale), [grants, SECRETS_LIST, ...variants]));
+  await ready(page);
+}
+
+async function reveal(page: Page): Promise<Locator> {
+  await expectNoPlaintext(page);
+  await rotateButton(page).click();
+  const dialog = page.locator(DIALOG);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId('reveal-value')).toHaveValue(SECRET);
+  // Plaintext belongs to exactly one live reveal control, never to the metadata list or storage.
+  await expect(page.getByTestId('reveal-value')).toHaveCount(1);
+  await expect(page.locator('app-secret-reference-list')).not.toContainText(SECRET);
+  expect(new URL(page.url()).search).not.toContain(SECRET);
+  expect(
+    await page.evaluate(() =>
+      JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]),
+    ),
+  ).not.toContain(SECRET);
+  return dialog;
+}
+
+for (const locale of LOCALES) {
+  // AC3 / T3.1: every public metadata column, status and reminder is rendered; no current value.
+  test(`metadata, status/reminders and terminal pagination (${locale})`, async ({ page }) => {
+    await visit(page, locale);
+    for (const [index, reference] of references.body.items.entries()) {
+      const row = page.locator(ROWS).nth(index);
+      await expect(row.getByRole('heading')).toHaveText(reference.name);
+      await expect(row.locator('code').filter({ hasText: reference.prefix })).toHaveText(
+        reference.prefix,
+      );
+      await expect(row.locator('.scope')).toHaveText(reference.scopes);
+      await expect(
+        row.locator('.reference-heading > app-status-pill .status-pill__label'),
+      ).toHaveText(STATUS[locale][reference.status as keyof (typeof STATUS)['en']]);
+      for (const date of [
+        reference.expires_at,
+        reference.overlap_ends_at,
+        reference.last_used_at,
+        reference.created_at,
+      ]) {
+        if (date !== null) await expect(row.locator(`time[datetime="${date}"]`)).toHaveText(date);
+      }
+      await expect(row.locator('[data-rotate]')).toHaveCount(reference.status === 'active' ? 1 : 0);
+    }
+    await expect(page.locator(ROWS).nth(0).locator('[data-rotation-reminder]')).toHaveCount(0);
+    await expect(page.locator(ROWS).nth(1).locator('[data-reminder="expires-soon"]')).toBeVisible();
+    await expect(page.locator(ROWS).nth(2).locator('[data-reminder="expired"]')).toBeVisible();
+    await expect(page.locator(ROWS).nth(4).locator('[data-rotation-reminder]')).toHaveCount(0);
+    await expect(page.locator(`${PAGE} [data-load-more]`)).toHaveCount(0);
+    await expectNoPlaintext(page);
+  });
+
+  // AC3 / T3.2: permission-derived mutation absence (not merely disabled) while read stays usable.
+  test(`read-only grant offers no Rotate (${locale})`, async ({ page }) => {
+    await visit(page, locale, SETTINGS_ADMIN_GRANTS);
+    await expect(page.locator(`${PAGE} [data-rotate]`)).toHaveCount(0);
+    await expectNoPlaintext(page);
+  });
+
+  // AC3 / T3.2: a real clipboard write, explicit dismiss, then all browser-visible sinks are empty.
+  test(`rotate, Copy, dismiss and metadata-only reload (${locale})`, async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await visit(page, locale);
+    const dialog = await reveal(page);
+    await dialog.getByTestId('reveal-copy').click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(SECRET);
+    await expect(dialog.getByTestId('reveal-copy-status')).not.toBeEmpty();
+    await dialog.getByTestId('reveal-dismiss').click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByTestId('reveal-value')).toHaveCount(0);
+    await expect(rotateButton(page)).toBeFocused();
+    await expectNoPlaintext(page);
+    // Reload is a metadata-only resume, not a second reveal of the successful rotation response.
+    await page.reload();
+    await ready(page);
+    await expect(page.locator(DIALOG)).not.toBeVisible();
+    await expectNoPlaintext(page);
+  });
+
+  // AC3 / T3.2 and keyboard a11y: Enter, initial focus, full wrap, Copy, Escape, focus restoration.
+  test(`keyboard reveal: trap, Copy, Escape (${locale})`, async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await visit(page, locale);
+    const opener = rotateButton(page);
+    await opener.focus();
+    await page.keyboard.press('Enter');
+    const dialog = page.locator(DIALOG);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('reveal-value')).toHaveValue(SECRET);
+    const focusInside = () =>
+      page.evaluate((selector) => {
+        const modal = document.querySelector(selector);
+        return modal !== null && modal.contains(document.activeElement);
+      }, DIALOG);
+    await expect.poll(focusInside).toBe(true);
+    let reachedCopy = false;
+    // Three interactive stops (value, Copy, dismiss); two full cycles prove the wrapping boundary.
+    for (let stop = 0; stop < 8; stop++) {
+      await page.keyboard.press('Tab');
+      await expect.poll(focusInside).toBe(true);
+      if (
+        await dialog
+          .getByTestId('reveal-copy')
+          .evaluate((button) => button === document.activeElement)
+      ) {
+        reachedCopy = true;
+        await page.keyboard.press('Enter');
+        await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(SECRET);
+      }
+    }
+    expect(reachedCopy, 'Copy must be reachable by Tab, not only pointer').toBe(true);
+    await page.keyboard.press('Shift+Tab');
+    await expect.poll(focusInside).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(opener).toBeFocused();
+    await expect(page.getByTestId('reveal-value')).toHaveCount(0);
+    await expectNoPlaintext(page);
+  });
+
+  // AC3 / delivery Notes P5: the exact server 409 is shown; refusal never opens a reveal.
+  test(`rotate 409 is verbatim, with no reveal (${locale})`, async ({ page }) => {
+    await visit(page, locale, SECRETS_WRITE_GRANTS, [SECRETS_ROTATE_CONFLICT]);
+    await rotateButton(page).click();
+    const alert = page.locator(PAGE).getByRole('alert');
+    await expect(alert.locator('p')).toHaveText(conflict.body.error.message);
+    await expect(alert.locator('code')).toHaveText(conflict.body.error.code);
+    await expect(page.locator(DIALOG)).not.toBeVisible();
+    await expect(rotateButton(page)).toBeEnabled();
+    await expectNoPlaintext(page);
+  });
+
+  // AC3 / delivery Notes P5: 429 is a real SDK-mapped refusal with Retry-After, not a fake success.
+  test(`rotate 429 shows Retry-After and blocks early retry (${locale})`, async ({ page }) => {
+    await visit(page, locale, SECRETS_WRITE_GRANTS, [SECRETS_ROTATE_RATE_LIMITED]);
+    await rotateButton(page).click();
+    const alert = page.locator(PAGE).getByRole('alert');
+    await expect(alert.locator('p')).toHaveText(rateLimited.body.error.message);
+    await expect(alert.locator('code')).toHaveText(rateLimited.body.error.code);
+    const notice = page.locator(`${PAGE} app-retry-after`);
+    await expect(notice).toBeVisible();
+    await expect(notice.getByRole('status')).toContainText('30');
+    await expect(notice.locator('code')).toHaveText([
+      rateLimited.body.error.code,
+      rateLimited.body.error.request_id,
+    ]);
+    await expect(notice.getByRole('button')).toBeDisabled();
+    await expect(rotateButton(page)).toBeDisabled();
+    await expect(page.locator(DIALOG)).not.toBeVisible();
+    await expectNoPlaintext(page);
+  });
+
+  // AC3 / delivery Notes P6: below 768px Settings is inspection-only, never a squeezed mutation UI.
+  test(`360px is inspection-only (${locale})`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await visit(page, locale);
+    await expect(page.locator(`${PAGE} .narrow-notice`)).toBeVisible();
+    await expect(page.locator(`${PAGE} .narrow-notice`)).not.toBeEmpty();
+    await expect(page.locator(`${PAGE} [data-rotate]:visible`)).toHaveCount(0);
+    // CSS-hidden controls must not be keyboard stops either.
+    for (const button of await page.locator(`${PAGE} [data-rotate]`).all()) {
+      await expect(button).toBeHidden();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await expectNoPlaintext(page);
+    await expectNoA11yViolations(page, `Secrets inspection-only ${locale} 360px`);
+  });
+
+  // AC3 / delivery Notes P1/P5: scope changes erase an open reveal even though native modal makes
+  // the background picker inert. Dispatch a real DOM change rather than calling Angular internals.
+  test(`project scope change closes and erases reveal (${locale})`, async ({ page }) => {
+    await visit(page, locale);
+    const dialog = await reveal(page);
+    await page.locator('#secrets-project').evaluate((element, projectId) => {
+      const select = element as HTMLSelectElement;
+      select.value = projectId;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }, PROJECT_CHECKOUT);
+    await expect(page.locator('#secrets-project')).toHaveValue(PROJECT_CHECKOUT);
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByTestId('reveal-value')).toHaveCount(0);
+    await expectNoPlaintext(page);
+  });
+
+  // AC3 / AC1: dev review omits only the phase gate, never authentication/org/read authorization.
+  test(`review route refuses missing read grant and foreign org (${locale})`, async ({ page }) => {
+    await page.goto(withVariants(secretsReviewPath(locale), [SETTINGS_NO_TAB_GRANTS]));
+    await expect(page.locator('app-forbidden-pattern')).toBeVisible();
+    await expect(page.locator(PAGE)).toHaveCount(0);
+    await page.goto(withVariants(secretsReviewPath(locale, UNKNOWN_ORG), [SECRETS_WRITE_GRANTS]));
+    await expect(page.locator('app-not-found-pattern')).toBeVisible();
+    await expect(page.locator(PAGE)).toHaveCount(0);
+  });
+
+  for (const theme of THEMES) {
+    // AC3 / T3.1+T3.2: real-browser WCAG 2.2 AA includes contrast in both list and native modal.
+    test(`axe has no violations on list and open reveal (${locale}, ${theme})`, async ({
+      page,
+    }) => {
+      await seedStoredTheme(page, theme);
+      await visit(page, locale);
+      await expect(page.locator('html')).toHaveAttribute('lang', locale);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expectNoA11yViolations(page, `Secrets list ${locale} ${theme}`);
+      const dialog = await reveal(page);
+      await expectNoA11yViolations(page, `Secrets open reveal ${locale} ${theme}`);
+      await dialog.getByTestId('reveal-dismiss').click();
+      await expect(dialog).not.toBeVisible();
+      await expectNoPlaintext(page);
+    });
+  }
+}

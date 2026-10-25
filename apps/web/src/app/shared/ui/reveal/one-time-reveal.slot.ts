@@ -1,7 +1,8 @@
 // 09.2.1-T2.2: one-time credentials belong to the mounted step, never a route-singleton store.
 import { Injectable, signal, type OnDestroy, type Signal } from '@angular/core';
 
-export type RevealSource = 'binding-challenge' | 'ingest-token' | 'ingest-token-rotation';
+export type RevealSource =
+  'binding-challenge' | 'ingest-token' | 'ingest-token-rotation' | 'invite-token';
 
 export interface RevealEntry {
   readonly source: RevealSource;

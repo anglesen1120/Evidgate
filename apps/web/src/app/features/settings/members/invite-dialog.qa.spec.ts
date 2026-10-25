@@ -2,15 +2,21 @@
 // MembersDataService and SessionStore replaced. The existing page spec replaces the whole store, so
 // the dialog-to-store contract (one request per press, intent reuse, payload freeze) had no test.
 
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { isSignal, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import type { InviteMemberRequest, MembershipView, RoleView } from '@evidgate/sdk';
+import type {
+  InviteIssuedView,
+  InviteMemberRequest,
+  MembershipView,
+  RoleView,
+} from '@evidgate/sdk';
 import { MembersDataService } from '../../../core/data/members-data.service';
 import { ApiRequestError, type ApiErrorKind } from '../../../core/http/api-error';
 import type { Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { InviteDialogComponent } from './invite-dialog.component';
 import { MembersStore } from './members.store';
+import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 
 const ROLE_A: RoleView = {
   id: 'role-a',
@@ -38,6 +44,7 @@ const CREATED: MembershipView = {
   updated_at: '2026-10-25T00:00:00Z',
   version: 1,
 };
+const ISSUED: InviteIssuedView = { ...CREATED, invite_token: 'recognisable-invite-only-once' };
 
 function refusal(
   kind: ApiErrorKind,
@@ -62,7 +69,7 @@ function refusal(
 class FakeData {
   readonly granted = signal(true);
   readonly invites: Array<{ body: InviteMemberRequest; intent: Intent }> = [];
-  readonly outcomes: Array<() => Promise<MembershipView>> = [];
+  readonly outcomes: Array<() => Promise<InviteIssuedView>> = [];
   readonly removals: Array<{ membershipId: string; intent: Intent }> = [];
   listMemberships() {
     return Promise.resolve({ items: [], next_cursor: null });
@@ -73,10 +80,10 @@ class FakeData {
   listPermissions() {
     return Promise.resolve([]);
   }
-  invite(_orgId: string, body: InviteMemberRequest, intent: Intent): Promise<MembershipView> {
+  invite(_orgId: string, body: InviteMemberRequest, intent: Intent): Promise<InviteIssuedView> {
     this.invites.push({ body, intent });
     const next = this.outcomes.shift();
-    return next ? next() : Promise.resolve(CREATED);
+    return next ? next() : Promise.resolve(ISSUED);
   }
   remove(_orgId: string, membershipId: string, intent: Intent): Promise<void> {
     this.removals.push({ membershipId, intent });
@@ -174,7 +181,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
 
   it('a second press while the first invitation is pending sends one request and one completion', async () => {
     let release!: () => void;
-    data.outcomes.push(() => new Promise((resolve) => (release = () => resolve(CREATED))));
+    data.outcomes.push(() => new Promise((resolve) => (release = () => resolve(ISSUED))));
     open();
     setEmail('new@example.test');
     submitButton().click();
@@ -185,7 +192,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     await flush();
     expect(data.invites).toHaveLength(1);
     expect(completed).toBe(1);
-    expect(root.querySelector('dialog')?.open).toBe(false);
+    expect(root.querySelector('dialog')?.open).toBe(true);
   });
 
   it('a retry after a 503 unavailable replays the same Idempotency-Key and the same body', async () => {
@@ -332,7 +339,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   // page's saved notice. The stale-generation guard now only decides who closes the dialog.
   it('closing while an invitation is in flight still announces its completion', async () => {
     let release!: () => void;
-    data.outcomes.push(() => new Promise((resolve) => (release = () => resolve(CREATED))));
+    data.outcomes.push(() => new Promise((resolve) => (release = () => resolve(ISSUED))));
     open();
     setEmail('new@example.test');
     submitButton().click();
@@ -340,5 +347,78 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     release();
     await flush();
     expect(completed).toBe(1);
+  });
+  it.each(['dismiss', 'escape', 'destroy'] as const)(
+    'reveals once, then clears the slot and DOM on %s',
+    async (exit) => {
+      open();
+      setEmail('new@example.test');
+      submitButton().click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const control = root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')!;
+      expect(control.value).toBe(ISSUED.invite_token);
+      expect(root.querySelector('form')).toBeNull();
+      expect(root.querySelector('[data-testid="reveal-copy"]')?.textContent).toContain('Copy');
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      root.querySelector<HTMLButtonElement>('[data-testid="reveal-copy"]')!.click();
+      await fixture.whenStable();
+      expect(writeText).toHaveBeenCalledWith(ISSUED.invite_token);
+      const slot = fixture.debugElement.injector.get(RevealSlot);
+      if (exit === 'destroy') fixture.destroy();
+      else if (exit === 'escape')
+        root.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
+      else root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')!.click();
+      if (exit !== 'destroy') fixture.detectChanges();
+      expect(slot.current()).toBeNull();
+      expect(control.value).toBe('');
+      expect(root.outerHTML).not.toContain(ISSUED.invite_token!);
+      for (const value of Object.values(store)) {
+        if (typeof value === 'function' && isSignal(value))
+          expect(JSON.stringify(value())).not.toContain(ISSUED.invite_token!);
+      }
+    },
+  );
+
+  it('an idempotency replay offers Resend guidance without mounting an empty reveal', async () => {
+    data.outcomes.push(() => Promise.resolve({ ...CREATED, invite_token: null }));
+    open();
+    setEmail('new@example.test');
+    submitButton().click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(root.querySelector('app-connect-step-reveal')).toBeNull();
+    expect(root.querySelector('[data-members-invite-replay]')?.textContent).toContain('Use Resend');
+    expect(root.querySelector('form')).toBeNull();
+    expect(root.querySelector('dialog')?.open).toBe(true);
+  });
+
+  it('an EMPTY served invite_token takes the same replay path, never an empty reveal', async () => {
+    // F2: `''` is absence; the store normalises it, so this dialog must offer Resend guidance.
+    data.outcomes.push(() => Promise.resolve({ ...CREATED, invite_token: '' }));
+    open();
+    setEmail('new@example.test');
+    submitButton().click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(root.querySelector('app-connect-step-reveal')).toBeNull();
+    expect(root.querySelector('[data-testid="reveal-value"]')).toBeNull();
+    expect(root.querySelector('[data-members-invite-replay]')?.textContent).toContain('Use Resend');
+    expect(root.querySelector('dialog')?.open).toBe(true);
+  });
+
+  it('a 422 validation refusal preserves the exact message and code', async () => {
+    data.outcomes.push(() =>
+      Promise.reject(refusal('validation', 422, 'invalid_email', 'Use a valid <email>.', false)),
+    );
+    open();
+    setEmail('new@example.test');
+    submitButton().click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(root.querySelector('[data-members-error] p')?.textContent).toBe('Use a valid <email>.');
+    expect(root.querySelector('[data-members-error-code]')?.textContent).toBe('invalid_email');
+    expect(root.querySelector('app-connect-step-reveal')).toBeNull();
   });
 });

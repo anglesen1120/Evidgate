@@ -422,3 +422,31 @@ export async function expectIndistinguishableNotFound(
   expect(new Set(rendered.map((entry) => entry.text)).size).toBe(1);
   return rendered;
 }
+
+// 09.7.1-F12 invite
+/** A stored create answer carries no one-time invite token. */
+export const MEMBERS_CREATE_REPLAY = '?fixture.variant.createMembership=replay';
+/** The pending invitation's fresh token, answered by the resend corpus document. */
+export const MEMBERS_RESEND_OK = '?fixture.variant.resendMembershipInvite=ok';
+/** A stored resend answer carries no one-time invite token. */
+export const MEMBERS_RESEND_REPLAY = '?fixture.variant.resendMembershipInvite=replay';
+/** The server's 409 when the invitation is no longer pending. */
+export const MEMBERS_RESEND_NOT_PENDING = '?fixture.variant.resendMembershipInvite=not-pending';
+/** The bodyless 204 that confirms the pending invitation was cancelled. */
+export const MEMBERS_CANCEL_OK = '?fixture.variant.cancelMembershipInvite=ok';
+/** The cancel operation's own 409 when the invitation is no longer pending. */
+export const MEMBERS_CANCEL_NOT_PENDING = '?fixture.variant.cancelMembershipInvite=not-pending';
+
+// 09.7.1-T3 secrets
+/** The full read/write grant set; settings-admin intentionally grants metadata read only. */
+export const SECRETS_WRITE_GRANTS = '?fixture.variant.listPermissions=settings-secrets-write';
+/** Six metadata-only references covering active, rotated, revoked and reminder states. */
+export const SECRETS_LIST = '?fixture.variant.listIngestTokens=settings';
+/** The rotation operation's server refusal, not a list-read failure. */
+export const SECRETS_ROTATE_CONFLICT = '?fixture.variant.rotateIngestToken=conflict';
+/** A retryable burst limit with a 30-second Retry-After, without minting a credential. */
+export const SECRETS_ROTATE_RATE_LIMITED = '?fixture.variant.rotateIngestToken=rate-limited';
+/** Review-only address; the real G2 product route remains absent in this G1 build. */
+export function secretsReviewPath(locale: ShellLocale, orgId: string = ORG_ACME): string {
+  return localePath(locale, `/dev/settings-secrets/orgs/${orgId}`);
+}

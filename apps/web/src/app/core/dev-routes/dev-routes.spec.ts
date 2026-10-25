@@ -10,13 +10,17 @@
 import { describe, expect, it } from 'vitest';
 
 import { UiGalleryComponent } from '../../shared/ui/gallery';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
+import { SecretsPage } from '../../features/settings/secrets/secrets.page';
+import { ShellComponent } from '../../shell/layout/shell.component';
+import { authGuard, orgScopeGuard } from '../guards';
 import { devRoutes } from './dev-routes.fixtures';
 
 describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(1);
+    expect(table).toHaveLength(2);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();
@@ -30,5 +34,19 @@ describe('dev routes (review only)', () => {
     }
 
     expect(await loadComponent()).toBe(UiGalleryComponent);
+  });
+
+  it('mounts the real Secrets page under the normal authenticated org shell, review-only', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/settings-secrets');
+    expect(route?.component).toBe(ShellComponent);
+    const orgRoute = route?.children?.[0];
+    expect(orgRoute?.path).toBe('orgs/:orgId');
+    expect(orgRoute?.canMatch?.slice(0, 2)).toEqual([authGuard, orgScopeGuard]);
+    // The remaining gates are the org entry and the Secrets tab read grants; phase is deliberately
+    // not overridden globally. The browser suite also proves both refusal paths.
+    expect(orgRoute?.canMatch).toHaveLength(4);
+    const loadComponent = orgRoute?.loadComponent;
+    if (loadComponent === undefined) throw new Error('no lazy Secrets review route');
+    expect(await loadComponent()).toBe(SecretsPage);
   });
 });

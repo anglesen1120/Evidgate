@@ -26,6 +26,14 @@
 // one and in no other, which is "metadata only after the reveal" held on the wire rather than in a
 // component.
 //
+// 09.7.1-T3 extends that pin to `invite_token` (`InviteIssuedView`, answered by `createMembership`
+// and `resendMembershipInvite`) and adds the Settings area's state pins: the invite lifecycle's
+// documents — the create and its `Idempotency-Key` replay, the rotated resend and its replay, the
+// bodyless 204 cancel and both 409 `invite_not_pending` refusals — and the Secrets tab's token page,
+// whose six rows must cover the reminder window (far, soon, already past, no expiry) and the
+// rotation columns. The reminder window is measured against the fixed date the corpus's literal
+// timestamps were authored around, so the pin describes the corpus instead of the calendar.
+//
 // The last three tests are the negative controls of test 3 and of the header check above: they
 // take the `runs-list` page, break it the way a contract change would (a removed `required` run
 // member, a non-uuid uuid) and answer a header the contract does not declare, each of which must
@@ -69,14 +77,22 @@ const UNDECLARED_HEADER = 'X-Fixture-Undeclared';
  * `CiTokenResponse.token`, answered by `POST /v1/ci/token` — a pre-tenant route the browser never
  * calls, `contracts/openapi.yaml:71-81`, kept out of the web by decision (2) of the task's §10
  * entry.)
+ *
+ * 09.7.1-T3 adds `InviteIssuedView.invite_token` (contracts/openapi.yaml:7299-7304) to the same
+ * pin: `createMembership` and `resendMembershipInvite` answer it once and no other document of the
+ * corpus may carry it, which is the Members tab's "the link is shown once, then only metadata"
+ * held on the wire. An `Idempotency-Key` replay is exactly a body with the member `null`, so the
+ * helper below counts a member only when its value is not `null`.
  */
-const ONE_TIME_SECRET_MEMBERS: readonly string[] = ['binding_challenge', 'secret'];
+const ONE_TIME_SECRET_MEMBERS: readonly string[] = ['binding_challenge', 'secret', 'invite_token'];
 
 /** The operations that mint one, and the only ones allowed to answer with a secret member. */
 const SECRET_MINTING_OPERATIONS: readonly string[] = [
   'createCiBinding',
   'createIngestToken',
   'rotateIngestToken',
+  'createMembership',
+  'resendMembershipInvite',
 ];
 
 /** The seed page that derives step 3 from a token: one active token, its metadata and no secret. */
@@ -519,6 +535,39 @@ function runsListSubject(): {
   return { page: body, row: first };
 }
 
+/**
+ * The fixed date the Secrets tab's token expiries were authored around (09.7.1-T3): the corpus holds
+ * literal timestamps, so the fourteen-day reminder window is measured against this date rather than
+ * against whenever the suite runs.
+ */
+const FIXTURE_REVIEW_NOW = '2026-10-25T00:00:00Z';
+
+/** Fourteen days in milliseconds — the window inside which a token's expiry is `expires-soon`. */
+const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Assert a corpus `invite_token` is an obviously fake placeholder: the `evgi_` prefix the contract
+ * documents, the corpus's own `FIXTURE_ONLY` marker, one dot-free segment so it cannot read as a
+ * JWT, and no `://` — the corpus carries a raw token, never a link a reviewer could paste.
+ */
+function expectInvitePlaceholder(value: string | null): void {
+  expect(value, 'the invite answer carries no token at all').not.toBeNull();
+  expect(value?.startsWith('evgi_')).toBe(true);
+  expect(value).toContain('FIXTURE_ONLY');
+  expect(value?.split('.')).toHaveLength(1);
+  expect(value).not.toContain('://');
+}
+
+/**
+ * A body without its `invite_token`, so a replay document can be compared with the answer it
+ * stored: the two must differ in the token alone.
+ */
+function withoutInviteToken(body: unknown): Record<string, unknown> {
+  const copy: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+  delete copy['invite_token'];
+  return copy;
+}
+
 describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
   it('holds a handcrafted web-api/api-response corpus', () => {
     expect(CORPUS.length, `no fixture directories under ${WEB_API_FIXTURES}`).toBeGreaterThan(0);
@@ -777,6 +826,174 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(page.items).toHaveLength(1);
     expect(page.items[0]?.status).toBe('active');
     expect(page.next_cursor).toBeNull();
+  });
+
+  it('answers the invite token once and only in the invite documents (09.7.1-T3)', () => {
+    // The corpus page's `pending` row is the membership both lifecycle calls address, so the tab has
+    // a row to resend or cancel without a second list document.
+    const membersPage = corpusDocument('memberships-list').body as {
+      items: { id: string; status: string }[];
+    };
+    const pendingRow = membersPage.items.find((item) => item.status === 'pending');
+    expect(
+      pendingRow,
+      'memberships-list carries no pending membership, so the invite lifecycle documents address a row no page shows',
+    ).toBeDefined();
+
+    // 1. `createMembership`'s 201 carries the token, and its `replay` twin is that body without it.
+    const created = corpusDocument('membership-create-ok');
+    expect([created.operation_id, created.status, created.variant]).toEqual([
+      'createMembership',
+      201,
+      'ok',
+    ]);
+    const createdBody = created.body as { status: string; invite_token: string | null };
+    expect(createdBody.status).toBe('pending');
+    expectInvitePlaceholder(createdBody.invite_token);
+
+    const createdReplay = corpusDocument('membership-create-replay');
+    expect([createdReplay.operation_id, createdReplay.status, createdReplay.variant]).toEqual([
+      'createMembership',
+      201,
+      'replay',
+    ]);
+    const createdReplayBody = createdReplay.body as { invite_token: string | null };
+    // A replay is the stored answer: the same membership, the token withheld — never a second one.
+    expect(createdReplayBody.invite_token).toBeNull();
+    expect(withoutInviteToken(createdReplayBody)).toEqual(withoutInviteToken(createdBody));
+
+    // 2. `resendMembershipInvite`'s 202 rotates the pending row's token: same row, new `updated_at`
+    //    and version, so the tab can prove it kept the membership and only reissued the link.
+    const resent = corpusDocument('membership-resend-ok');
+    expect([resent.operation_id, resent.status, resent.variant]).toEqual([
+      'resendMembershipInvite',
+      202,
+      'ok',
+    ]);
+    const resentBody = resent.body as {
+      id: string;
+      status: string;
+      version: number;
+      invite_token: string | null;
+    };
+    expect(resentBody.id).toBe(pendingRow?.id);
+    expect(resentBody.status).toBe('pending');
+    expect(resentBody.version).toBe(2);
+    expectInvitePlaceholder(resentBody.invite_token);
+    // The rotation mints a different token from the create: one value cannot stand for both calls.
+    expect(resentBody.invite_token).not.toBe(createdBody.invite_token);
+
+    const resentReplay = corpusDocument('membership-resend-replay');
+    expect([resentReplay.operation_id, resentReplay.status, resentReplay.variant]).toEqual([
+      'resendMembershipInvite',
+      202,
+      'replay',
+    ]);
+    const resentReplayBody = resentReplay.body as { invite_token: string | null };
+    expect(resentReplayBody.invite_token).toBeNull();
+    expect(withoutInviteToken(resentReplayBody)).toEqual(withoutInviteToken(resentBody));
+
+    // 3. `cancelMembershipInvite`'s answer is bodyless, like `removeMember`'s.
+    const cancelled = corpusDocument('membership-cancel-ok');
+    expect([cancelled.operation_id, cancelled.status, cancelled.variant]).toEqual([
+      'cancelMembershipInvite',
+      204,
+      'ok',
+    ]);
+    expect(cancelled.body, 'a 204 answer carries no body').toBeUndefined();
+
+    // 4. Both lifecycle calls refuse a row that is not pending with the same 409, carrying the
+    //    server's own code — the state the tab must report instead of a rotated or cancelled invite.
+    for (const name of ['membership-resend-not-pending', 'membership-cancel-not-pending']) {
+      const refusal = corpusDocument(name);
+      expect([refusal.status, refusal.variant], `fixtures/web-api/${name}`).toEqual([
+        409,
+        'not-pending',
+      ]);
+      const envelope = refusal.body as { error: { code: string; retryable: boolean } };
+      expect(envelope.error.code, `fixtures/web-api/${name}`).toBe('invite_not_pending');
+      expect(envelope.error.retryable, `fixtures/web-api/${name}`).toBe(false);
+    }
+  });
+
+  it('pins the rotation burst refusal and its bounded retry delay (09.7.1-T3 AC3)', () => {
+    const refusal = corpusDocument('ingest-token-rotate-rate-limited');
+    expect([refusal.operation_id, refusal.status, refusal.variant]).toEqual([
+      'rotateIngestToken',
+      429,
+      'rate-limited',
+    ]);
+    expect(refusal.headers['Retry-After']).toBe('30');
+    const body = refusal.body as { error: { code: string; retryable: boolean } };
+    expect(body.error.code).toBe('rate_limited');
+    expect(body.error.retryable).toBe(true);
+    expect(oneTimeSecretMembers(refusal.body)).toEqual([]);
+  });
+
+  it('pins the Secrets tab’s token page states (09.7.1-T3)', () => {
+    const page = corpusDocument('ingest-tokens-list-settings');
+    expect([page.operation_id, page.variant, page.status]).toEqual([
+      'listIngestTokens',
+      'settings',
+      200,
+    ]);
+    const body = page.body as {
+      items: {
+        id: string;
+        status: string;
+        prefix: string;
+        expires_at: string | null;
+        overlap_ends_at: string | null;
+        rotated_to_id: string | null;
+      }[];
+      next_cursor: string | null;
+    };
+    expect(body.next_cursor).toBeNull();
+    expect(
+      body.items.length,
+      'the Secrets tab page must cover the reminder and rotation states in one read',
+    ).toBeGreaterThanOrEqual(6);
+
+    // The four `active` states the page's reminder chip distinguishes. The corpus dates are
+    // literals (a fixture cannot move with the calendar), so the window is measured against the
+    // fixed date these rows were authored around.
+    const reviewNow = Date.parse(FIXTURE_REVIEW_NOW);
+    const expiries = body.items
+      .filter((item) => item.status === 'active')
+      .map((item) => (item.expires_at === null ? null : Date.parse(item.expires_at)));
+    expect(expiries, 'an active token with no expiry at all').toContain(null);
+    expect(
+      expiries.some((expiry) => expiry !== null && expiry - reviewNow > FOURTEEN_DAYS_MS),
+      'an active token whose expiry is far enough away that no reminder chip shows',
+    ).toBe(true);
+    expect(
+      expiries.some(
+        (expiry) => expiry !== null && expiry > reviewNow && expiry - reviewNow <= FOURTEEN_DAYS_MS,
+      ),
+      'an active token inside the fourteen-day reminder window',
+    ).toBe(true);
+    expect(
+      expiries.some((expiry) => expiry !== null && expiry <= reviewNow),
+      'an active token whose expiry has already passed, the state the `expired` reminder reports',
+    ).toBe(true);
+
+    // The rotation states: a retired row pointing at its successor, and a revoked one.
+    const rotated = body.items.find((item) => item.status === 'rotated');
+    expect(rotated, 'no rotated token, so the page cannot show a retirement window').toBeDefined();
+    expect(rotated?.overlap_ends_at).not.toBeNull();
+    expect(
+      body.items.map((item) => item.id),
+      'the rotated token names a successor the same page does not hold',
+    ).toContain(rotated?.rotated_to_id);
+    expect(body.items.some((item) => item.status === 'revoked')).toBe(true);
+
+    // A prefix is a public identifier, never a credential: short, and far below the length of any
+    // token the contract's `egt_<prefix>_<secret>` form would mint.
+    for (const item of body.items) {
+      expect(item.prefix.length, `${item.id} carries a token-shaped prefix`).toBeLessThan(12);
+      expect(item.prefix.startsWith('egt_')).toBe(true);
+      expect(item.prefix.split('.')).toHaveLength(1);
+    }
   });
 
   it('fails on the runs-list page when a required run member is removed (AC10)', () => {

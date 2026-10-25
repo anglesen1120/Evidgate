@@ -112,4 +112,30 @@ describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
       expect(root.querySelector('[data-members-edit-open]')).toBeNull();
     },
   );
+  it.each([false, true])('only offers pending-invite actions when writable=%s', (writable) => {
+    fixture.componentRef.setInput('canWrite', writable);
+    fixture.componentRef.setInput(
+      'members',
+      ['pending', 'active', 'revoked', 'expired', 'removed'].map(member),
+    );
+    fixture.detectChanges();
+    expect(root.querySelectorAll('[data-members-resend-open]')).toHaveLength(writable ? 1 : 0);
+    expect(root.querySelectorAll('[data-members-cancel-invite-open]')).toHaveLength(
+      writable ? 1 : 0,
+    );
+    if (writable) {
+      const resend = vi.fn();
+      const cancel = vi.fn();
+      fixture.componentInstance.resend.subscribe(resend);
+      fixture.componentInstance.cancelInvite.subscribe(cancel);
+      const resendOpener = root.querySelector<HTMLButtonElement>('[data-members-resend-open]')!;
+      const cancelOpener = root.querySelector<HTMLButtonElement>(
+        '[data-members-cancel-invite-open]',
+      )!;
+      resendOpener.click();
+      cancelOpener.click();
+      expect(resend).toHaveBeenCalledWith({ member: member('pending'), opener: resendOpener });
+      expect(cancel).toHaveBeenCalledWith({ member: member('pending'), opener: cancelOpener });
+    }
+  });
 });
