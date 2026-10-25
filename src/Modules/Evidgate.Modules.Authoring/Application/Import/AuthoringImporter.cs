@@ -84,11 +84,40 @@ internal sealed class AuthoringImporter(
         }
         catch (PostgresException exception) when (exception.SqlState is PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation)
         {
-            // A position, a code or a parent row taken by a concurrent writer between the resolution read and the insert:
-            // the same answer, one retry later, instead of a 23505/23503 surfacing as a 500.
-            return AuthoringErrors.Fail<ImportReport>(AuthoringErrors.Unavailable());
+            // Only the constraints a concurrent writer can take — a sibling position, a case code, a project counter or a
+            // parent row — are retryable: the plan was right when it read, and a second attempt sees the new state. Any
+            // other unique or foreign-key violation is this file's own content, which no retry can fix, so it answers
+            // deterministically instead of inviting a client to spin (finding H).
+            return AuthoringErrors.Fail<ImportReport>(
+                IsContentionConstraint(exception.ConstraintName)
+                    ? AuthoringErrors.Unavailable()
+                    : AuthoringErrors.Invalid(
+                        "/rows",
+                        "value_invalid",
+                        "the file's rows collide with the project's stored rows"));
         }
     }
+
+    /// <summary>
+    /// The constraints a concurrent writer can take between the resolution read and the apply: the ones this import
+    /// answers with the retryable <c>503</c>. Everything else is the file's own content (finding H).
+    /// </summary>
+    private static readonly HashSet<string> ContentionConstraints = new(StringComparer.Ordinal)
+    {
+        "project_org_case_prefix_uq",
+        "feature_node_sibling_position_uq",
+        "manual_test_case_code_key",
+        "feature_node_project_fk",
+        "feature_node_parent_fk",
+        "checklist_item_feature_node_fk",
+        "manual_test_case_checklist_item_fk",
+        "authoring_code_counter_project_fk",
+    };
+
+    /// <summary>True when a unique or foreign-key violation is one a concurrent writer can cause.</summary>
+    /// <param name="constraint">The violated constraint.</param>
+    private static bool IsContentionConstraint(string? constraint) =>
+        constraint is not null && ContentionConstraints.Contains(constraint);
 
     /// <summary>The five phases of one import.</summary>
     /// <param name="orgId">The tenant of the open scope.</param>
@@ -178,8 +207,14 @@ internal sealed class AuthoringImporter(
         }
 
         var batchId = Guid.CreateVersion7();
-        var applied = await ApplyAsync(orgId, projectId, batchId, actorMembershipId, final, cancellationToken)
-            .ConfigureAwait(false);
+        var applied = await ApplyAsync(
+            orgId,
+            projectId,
+            batchId,
+            actorMembershipId,
+            final,
+            plan.Groups,
+            cancellationToken).ConfigureAwait(false);
 
         return applied.IsSuccess
             ? Result.Success(Report(batchId, final))
@@ -274,6 +309,7 @@ internal sealed class AuthoringImporter(
     /// <param name="batchId">The one batch id of every version row.</param>
     /// <param name="actorMembershipId">The authoring member, or null.</param>
     /// <param name="rows">The decided rows, in file order.</param>
+    /// <param name="groups">The sibling groups the plan assigned positions in (finding F).</param>
     /// <param name="cancellationToken">Cancellation.</param>
     private async ValueTask<Result<bool>> ApplyAsync(
         Guid orgId,
@@ -281,6 +317,7 @@ internal sealed class AuthoringImporter(
         Guid batchId,
         Guid? actorMembershipId,
         IReadOnlyList<ImportPlannedRow> rows,
+        IReadOnlyList<ImportGroupExpectation> groups,
         CancellationToken cancellationToken)
     {
         // The writer-wide bound (§5): a holder that never commits answers the retryable 503 instead of parking the import.
@@ -331,7 +368,7 @@ internal sealed class AuthoringImporter(
 
         // The advisory lock of every group this file adds to, before any row lock (the create, move and reorder paths take
         // the same key), so an import cannot meet a parked position of a concurrent renumber.
-        var groups = createdNodes
+        var groupKeys = createdNodes
             .Select(node => AuthoringLockGuard.SiblingGroupKey(projectId, node.ParentId, AuthoringLockGuard.SiblingGroup.FeatureNode))
             .Concat(createdItems.Select(item => AuthoringLockGuard.SiblingGroupKey(
                 projectId,
@@ -341,10 +378,21 @@ internal sealed class AuthoringImporter(
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        if (groups.Length != 0)
+        if (groupKeys.Length != 0)
         {
-            await db.ExecuteAsync(ImportApplySql.LockSiblingGroups, new { group_keys = groups }, cancellationToken)
-                .ConfigureAwait(false);
+            await db.ExecuteAsync(
+                ImportApplySql.LockSiblingGroups,
+                new { group_keys = new ImportSql.TextArrayParameter(groupKeys) },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        // Under the locks, every group this file adds to must still hold what the plan read: a count or a highest position
+        // that moved since the resolution read means another writer renumbered or added to the same sibling set, so the
+        // positions this file assigned are no longer append positions. Retryable, and nothing has been written yet
+        // (finding F).
+        if (!await GroupsUnchangedAsync(orgId, projectId, groups, cancellationToken).ConfigureAwait(false))
+        {
+            return AuthoringErrors.Fail<bool>(AuthoringErrors.Unavailable());
         }
 
         var createdIds = rows
@@ -528,6 +576,16 @@ internal sealed class AuthoringImporter(
                 _ => ImportRowKind.Case,
             };
 
+            if (rowKind != ImportRowKind.Case
+                && locked.Any(row => row.DeletedAt is not null))
+            {
+                // Only a *parent* can be locked and deleted: a soft-deleted node is not in the live tree the plan read, so
+                // it is never an update target, and the same holds for an item. A row created or restored under it would
+                // hang from a parent the project no longer lists: the plan is stale, and a retry after the delete settles
+                // answers truthfully (finding D).
+                return AuthoringErrors.Fail<bool>(AuthoringErrors.Unavailable());
+            }
+
             foreach (var row in rows.Where(row => row.Row.Kind == rowKind
                 && row.Outcome is ImportOutcome.Update or ImportOutcome.Restore))
             {
@@ -544,6 +602,59 @@ internal sealed class AuthoringImporter(
         }
 
         return Result.Success(true);
+    }
+
+    /// <summary>
+    /// Re-reads every sibling group this file adds to, under its advisory lock, and answers false when any of them moved
+    /// since the plan assigned positions from it (finding F). One statement for every group of both kinds.
+    /// </summary>
+    /// <param name="orgId">The tenant.</param>
+    /// <param name="projectId">The project.</param>
+    /// <param name="groups">The groups and the state the plan read.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async ValueTask<bool> GroupsUnchangedAsync(
+        Guid orgId,
+        Guid projectId,
+        IReadOnlyList<ImportGroupExpectation> groups,
+        CancellationToken cancellationToken)
+    {
+        if (groups.Count == 0)
+        {
+            return true;
+        }
+
+        var nodeGroups = groups
+            .Where(group => group.Kind == ImportRowKind.Node)
+            .Select(group => group.ParentId)
+            .Distinct()
+            .ToArray();
+        var itemGroups = groups
+            .Where(group => group.Kind == ImportRowKind.Item)
+            .Select(group => group.ParentId)
+            .Distinct()
+            .ToArray();
+
+        var observed = await db.QueryAsync<ImportApplySql.GroupStateRow>(
+            ImportApplySql.GroupState,
+            new
+            {
+                org_id = orgId,
+                project_id = projectId,
+                root = Guid.Empty,
+                node_groups = nodeGroups,
+                item_groups = itemGroups,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        var state = observed.ToDictionary(
+            row => (Kind: row.Kind, row.ParentId),
+            row => (row.LiveCount, row.Maximum));
+
+        return groups.All(group => state.TryGetValue(
+                (Kind: group.Kind == ImportRowKind.Node ? "feature_node" : "checklist_item", group.ParentId),
+                out var seen)
+            && seen.LiveCount == group.LiveCount
+            && seen.Maximum == group.Maximum);
     }
 
     /// <summary>One set-based insert; returns the refusal when the row count does not match the plan.</summary>

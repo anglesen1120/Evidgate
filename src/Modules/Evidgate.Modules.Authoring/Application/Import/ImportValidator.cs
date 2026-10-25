@@ -43,6 +43,16 @@ internal sealed class ImportValidator(ManualCaseStepsValidator steps)
     internal const int MaximumKeyLength = 200;
 
     /// <summary>
+    /// The highest number a file may bring in an explicit <c>code</c>. The allocator's own bound is
+    /// <see cref="AuthoringCode.MaximumNumber"/> (10⁹) and stays where it is, but an import row would raise the project's
+    /// counter to it through <c>ReserveAtLeastAsync</c>, which commits in its own transaction: one row carrying
+    /// <c>PFX-1000000000</c> would spend the project's whole numbering budget and answer <c>409 quota_exceeded</c> to
+    /// every later create, with no way back short of SQL. A project's code space is therefore bounded here, at the
+    /// six-digit range a person would ever type, so a write-only caller cannot exhaust it through the import route.
+    /// </summary>
+    internal const long MaximumExplicitCodeNumber = 999_999;
+
+    /// <summary>
     /// Validates the whole row set against the file alone.
     /// </summary>
     /// <param name="rows">The rows a reader produced, in file order.</param>
@@ -256,7 +266,8 @@ internal sealed class ImportValidator(ManualCaseStepsValidator steps)
                 item.State,
                 null,
                 row.Position,
-                FeatureNodeKinds.MaximumDepth + 1),
+                FeatureNodeKinds.MaximumDepth + 1,
+                StateGiven: text.State is not null),
             ManualTestCaseSnapshot manual => new ImportValidatedRow(
                 row,
                 kind,
@@ -272,7 +283,8 @@ internal sealed class ImportValidator(ManualCaseStepsValidator steps)
                 manual.State,
                 text.Code is null ? null : manual.Code,
                 row.Position,
-                FeatureNodeKinds.MaximumDepth + 2),
+                FeatureNodeKinds.MaximumDepth + 2,
+                StateGiven: text.State is not null),
             _ => throw new InvalidOperationException("the parsed snapshot is not an authoring entity"),
         };
     }
@@ -417,8 +429,11 @@ internal sealed class ImportValidator(ManualCaseStepsValidator steps)
 
             if (!AuthoringCode.TryParse(code, out var parsed)
                 || !string.Equals(parsed.Prefix, casePrefix, StringComparison.Ordinal)
+                || parsed.Number > MaximumExplicitCodeNumber
                 || !seen.Add(parsed.Value))
             {
+                // One reason for every code the project will not take: another prefix, the grammar, a number above the
+                // import ceiling of the project's code space, or a code the file already used.
                 Issue(issues, row.Source.Index, "/code", "code_conflict");
             }
         }
@@ -631,6 +646,11 @@ internal sealed class ImportValidator(ManualCaseStepsValidator steps)
 /// <param name="Code">The case code, or null when the row asked for one to be allocated.</param>
 /// <param name="Position">The sibling position the row named, or null to append.</param>
 /// <param name="Depth">The row's depth in the file, the order new rows are written in.</param>
+/// <param name="StateGiven">
+/// True when the row's <c>state</c> cell carried a value. An empty cell means "keep the stored state" on a matched row
+/// and "the creation default" on a new one (13.1.1 §6, AC13), so the difference survives phase 1 and is decided by the
+/// planner, which is the only phase that knows what is stored.
+/// </param>
 internal sealed record ImportValidatedRow(
     ImportRow Source,
     ImportRowKind Kind,
@@ -646,7 +666,8 @@ internal sealed record ImportValidatedRow(
     string State,
     string? Code,
     int? Position,
-    int Depth);
+    int Depth,
+    bool StateGiven = false);
 
 /// <summary>The answer of phase 1: the validated rows, or the issues that refuse the whole file.</summary>
 internal sealed class ImportValidation

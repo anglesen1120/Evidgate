@@ -23,14 +23,15 @@ namespace Evidgate.Modules.Authoring.Application.Import.Formats;
 /// </para>
 /// <para>
 /// <b>Formula neutralisation (AC16, 00 §5.7 S5).</b> A spreadsheet evaluates a cell whose text starts with <c>=</c>,
-/// <c>+</c>, <c>-</c>, <c>@</c>, a tab or a carriage return, so an authoring title like <c>=HYPERLINK(…)</c> must never
-/// reach a spreadsheet as a formula. Export writes such a cell with one leading apostrophe (the spreadsheet convention
-/// for literal text) and import strips exactly one apostrophe back — but only where a formula could start, so a genuine
-/// value such as <c>'hello</c> keeps its apostrophe. A value that itself begins with an apostrophe followed by a trigger
-/// character is written with two (<c>'=SUM(1)</c> → <c>''=SUM(1)</c>) and read back as one, so that case round-trips
-/// too; the remaining ambiguity — a genuine <c>''=…</c> reads back as <c>'=…</c> — is stated in the plan's export note
-/// because a one-character prefix cannot express it. Neutralised cells are stored as literal text and are never
-/// evaluated: JSON export is not neutralised at all, because a JSON consumer does not evaluate cell text.
+/// <c>+</c>, <c>-</c>, <c>@</c>, a tab, a carriage return or a line feed, so an authoring title like
+/// <c>=HYPERLINK(…)</c> must never reach a spreadsheet as a formula. Export writes such a cell with one leading
+/// apostrophe (the spreadsheet convention for literal text) and import strips exactly one apostrophe back — but only
+/// where a formula could start, so a genuine value such as <c>'hello</c> keeps its apostrophe. A value that itself
+/// begins with an apostrophe followed by a trigger character is written with two (<c>'=SUM(1)</c> →
+/// <c>''=SUM(1)</c>) and read back as one, so that case round-trips too; the remaining ambiguity — a genuine
+/// <c>''=…</c> reads back as <c>'=…</c> — is stated in the plan's export note because a one-character prefix cannot
+/// express it. Neutralised cells are stored as literal text and are never evaluated: JSON export is not neutralised at
+/// all, because a JSON consumer does not evaluate cell text.
 /// </para>
 /// </remarks>
 internal static class ImportText
@@ -50,12 +51,17 @@ internal static class ImportText
 
     /// <summary>
     /// True when a cell starting with <paramref name="value"/> would be evaluated as a formula by a spreadsheet
-    /// (<c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, tab, carriage return — AC16).
+    /// (<c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, tab, carriage return, line feed — AC16).
     /// </summary>
     /// <param name="value">The first character of a cell.</param>
     /// <returns>True for a formula trigger.</returns>
+    /// <remarks>
+    /// Line feed is in the set because a cell a consumer trims of its line breaks can start with a trigger once the
+    /// break is gone, and because the escaping and un-escaping rules must name one set: a value starting with a line
+    /// break is prefixed on export and stripped on import exactly like <c>=x</c> is.
+    /// </remarks>
     internal static bool IsSpreadsheetTrigger(char value) =>
-        value is '=' or '+' or '-' or '@' or '\t' or '\r';
+        value is '=' or '+' or '-' or '@' or '\t' or '\r' or '\n';
 
     /// <summary>The body without its UTF-8 preamble, or unchanged when it carries none.</summary>
     /// <param name="body">The raw body.</param>
@@ -86,13 +92,57 @@ internal static class ImportText
             return null;
         }
 
-        return AuthoringText.Normalize(value);
+        try
+        {
+            return AuthoringText.Normalize(value);
+        }
+        catch (ArgumentException)
+        {
+            // The process's normaliser refuses text this module's own storable check let through — a code point the
+            // normaliser does not accept. A caller's byte must then be a 422 (invalid_text), never the 500 an escaping
+            // ArgumentException would be, and never text stored in a form the module cannot compose (AC13/AC14).
+            invalid = true;
+            return null;
+        }
     }
 
     /// <summary>
-    /// True when <paramref name="value"/> can be stored at all: no U+0000 and no lone surrogate
-    /// (<see cref="AuthoringText.ContainsNul"/> for the character, the pairing walk for the code points).
+    /// The NFC form of a value an exporter writes: the composed text, or the value unchanged when this process cannot
+    /// compose it (a code point the normaliser refuses).
     /// </summary>
+    /// <remarks>
+    /// The writers read rows the module stored, so the ordinary answer is NFC and this type never repairs an import.
+    /// The unchanged answer exists so an export can never throw on the way out: a value the reader would refuse
+    /// (<see cref="Normalise"/> answers <c>invalid_text</c>) is written as it is, escaped where the carrier needs it,
+    /// and the file round-trips to the same refusal rather than to a 500 on the export.
+    /// </remarks>
+    /// <param name="value">The stored text.</param>
+    /// <returns>The composed text, or the value unchanged.</returns>
+    internal static string Compose(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        try
+        {
+            return AuthoringText.Normalize(value) ?? value;
+        }
+        catch (ArgumentException)
+        {
+            return value;
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="value"/> can be stored at all: no U+0000, no lone surrogate and no noncharacter
+    /// (<see cref="AuthoringText.ContainsNul"/> for the character, the code-point walk for the rest).
+    /// </summary>
+    /// <remarks>
+    /// A noncharacter — any code point whose last UTF-16 unit is U+FFFE or U+FFFF, in every plane — is storable
+    /// column text in PostgreSQL but <em>not</em> composable: the process's normaliser refuses it
+    /// (<c>ArgumentException</c>), and AC14 stores composed text only. It is therefore refused by the same rule as
+    /// U+0000 and a lone surrogate, before any reader reaches <c>AuthoringText.Normalize</c> and long before a
+    /// statement could fail, so the answer is one <c>invalid_text</c> issue rather than a 500.
+    /// </remarks>
     /// <param name="value">The text; <c>null</c> is storable.</param>
     /// <returns>True when every UTF-16 unit of the text belongs to a storable code point.</returns>
     internal static bool IsStorable(string? value)
@@ -113,6 +163,8 @@ internal static class ImportText
             {
                 if (index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]))
                 {
+                    // A well-formed pair is one code point; the noncharacters of planes 1..16 end in U+FFFE/U+FFFF,
+                    // which no surrogate carries, so a pair is storable.
                     index++;
                     continue;
                 }
@@ -121,6 +173,11 @@ internal static class ImportText
             }
 
             if (char.IsLowSurrogate(value[index]))
+            {
+                return false;
+            }
+
+            if (value[index] is '\uFFFE' or '\uFFFF')
             {
                 return false;
             }

@@ -133,6 +133,36 @@ internal static class AuthoringImportCalls
                 return document.RootElement.TryGetProperty("error", out var error) ? error.GetProperty("code").GetString() : null;
             }
         }
+
+        /// <summary>
+        /// The <c>error.details[]</c> of an error envelope as <c>(path, reason)</c> pairs, in the envelope's order — empty
+        /// when the answer is a file rather than a refusal.
+        /// </summary>
+        internal IReadOnlyList<(string? Path, string? Reason)> ErrorDetails
+        {
+            get
+            {
+                if (ErrorCode is null)
+                {
+                    return [];
+                }
+
+                using var document = JsonDocument.Parse(Text);
+                var error = document.RootElement.GetProperty("error");
+
+                if (!error.TryGetProperty("details", out var details) || details.ValueKind != JsonValueKind.Array)
+                {
+                    return [];
+                }
+
+                return
+                [
+                    .. details.EnumerateArray().Select(detail => (
+                        detail.TryGetProperty("path", out var path) ? path.GetString() : null,
+                        detail.TryGetProperty("reason", out var reason) ? reason.GetString() : null)),
+                ];
+            }
+        }
     }
 
     /// <summary>

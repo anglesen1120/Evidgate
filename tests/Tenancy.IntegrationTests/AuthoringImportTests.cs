@@ -173,7 +173,9 @@ public sealed class AuthoringImportTests
 
         var counter = await _fixture.ScalarAsync<long>(
             world.Database, $"select next_value from public.authoring_code_counter where project_id = '{world.Project:D}'");
-        counter.ShouldBeGreaterThan(101L, "the counter is raised past a code the file brought");
+        counter.ShouldBe(
+            102L,
+            "the counter is raised to exactly one past the code the file brought (next_value is the next number to hand out)");
     }
 
     /// <summary>

@@ -31,9 +31,11 @@ namespace Evidgate.Modules.Authoring.Application.Import;
 /// depends on the data.
 /// </para>
 /// <para>
-/// <b>Bounded reads.</b> Every statement carries <c>limit @take</c> with <c>@take = ImportLimits.MaxDataRows + 1</c>, so a
-/// scope over the export cap is <em>detected</em> by the one row past it and never materialised in full (AC16's row cap
-/// applied to the read side).
+/// <b>Bounded reads.</b> Every statement carries <c>limit @take</c>, bound per kind by its caller: a kind the answer
+/// emits stops one row past <c>ImportLimits.MaxDataRows</c>, so a scope over the export row cap is <em>detected</em> by the
+/// one row past it and never materialised in full (AC16's row cap applied to the read side), while a kind that is only
+/// walked for its keys stops one row past the exporter's much larger walk bound
+/// (<c>AuthoringExporter.MaxWalkedRows</c>) and refuses the scope rather than truncating the file.
 /// </para>
 /// <para>
 /// <b>The subtree</b> of <c>node_id</c> is a recursive CTE bounded by the AC1 ladder (<c>s.depth &lt; @max_depth</c>, four
@@ -235,7 +237,8 @@ internal static class ExportSql
     /// <param name="orgId">The tenant of the scope.</param>
     /// <param name="projectId">The project of the URL.</param>
     /// <param name="rootId">The subtree root, or null for a whole-project export.</param>
-    /// <param name="take">The row cap plus one: the read stops one row past the cap.</param>
+    /// <param name="take">The read bound plus one for the statement it is bound to: the row cap plus one for a kind the
+    /// answer emits, the walk bound plus one for a kind it only numbers.</param>
     internal static object Parameters(Guid orgId, Guid projectId, Guid? rootId, int take) => new
     {
         org_id = orgId,

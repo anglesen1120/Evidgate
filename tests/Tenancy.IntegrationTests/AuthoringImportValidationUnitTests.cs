@@ -33,23 +33,26 @@ public sealed class AuthoringImportValidationUnitTests
     private static IReadOnlyList<ImportIssue> Validate(params ImportRow[] rows) =>
         Validator().Validate(rows, ImportSample.Prefix).Issues;
 
-    /// <summary>A valid three-level tree is accepted whatever order the file lists it in (parents are resolved by key).</summary>
+    /// <summary>A valid tree is accepted whatever order the file lists it in (parents are resolved by key).</summary>
     [Fact]
     public void Accepted_TreeInAnyOrder_IsAccepted()
     {
-        // The case names its item before the item exists, and the item names a category that appears last.
+        // The case names its item before the item exists, the item names a category that appears after it, and the
+        // category names a feature that appears last: AC1's ladder is module, feature, category (13.1.1 §4).
         var validation = Validator().Validate(
             [
                 ImportSample.Case(1, "c1", "i1", "login works", ImportSample.Steps),
-                ImportSample.Item(2, "i1", "n2", "login"),
-                ImportSample.Node(3, "n2", "n1", "category", "Authentication"),
-                ImportSample.Node(4, "n1", null, "module", "Accounts"),
+                ImportSample.Item(2, "i1", "n3", "login"),
+                ImportSample.Node(3, "n3", "n2", "category", "Authentication"),
+                ImportSample.Node(4, "n2", "n1", "feature", "Sign-in"),
+                ImportSample.Node(5, "n1", null, "module", "Accounts"),
             ],
             ImportSample.Prefix);
 
         validation.IsAccepted.ShouldBeTrue(string.Join(", ", validation.Issues.Select(issue => issue.Path + " " + issue.Reason)));
-        validation.Rows.Count.ShouldBe(4);
-        validation.Rows.Single(row => row.Key == "n2").Depth.ShouldBe(2);
+        validation.Rows.Count.ShouldBe(5);
+        validation.Rows.Single(row => row.Key == "n2").Depth.ShouldBe(1);
+        validation.Rows.Single(row => row.Key == "n3").Depth.ShouldBe(2);
         validation.Rows.Single(row => row.Key == "c1").StepsJson.ShouldNotBeNull();
     }
 
@@ -123,20 +126,24 @@ public sealed class AuthoringImportValidationUnitTests
         issues.ShouldContain(issue => issue.Index == 2 && issue.Path == "/key" && issue.Reason == "duplicate_key");
     }
 
-    /// <summary>A case code outside the project's prefix, or outside the grammar, is <c>code_conflict</c> (AC4).</summary>
+    /// <summary>A case code outside the project's prefix, the grammar or the explicit-number ceiling is <c>code_conflict</c> (AC4).</summary>
     [Theory]
     [InlineData("CHEQ-001")]
     [InlineData("ACME-1")]
     [InlineData("acme-001")]
     [InlineData("ACME-000")]
+    [InlineData("ACME-1000000")]
+    [InlineData("ACME-999999999")]
     public void CodeConflict_CodeOutsideTheProjectGrammar_IsRefused(string code)
     {
         var issues = Validate(
-            ImportSample.Node(1, "n1", null, "category", "Cart"),
-            ImportSample.Item(2, "i1", "n1", "open cart"),
-            ImportSample.Case(3, "c1", "i1", "opens", ImportSample.Steps, code: code));
+            ImportSample.Node(1, "n1", null, "module", "Cart"),
+            ImportSample.Node(2, "n2", "n1", "feature", "Cart body"),
+            ImportSample.Node(3, "n3", "n2", "category", "Cart items"),
+            ImportSample.Item(4, "i1", "n3", "open cart"),
+            ImportSample.Case(5, "c1", "i1", "opens", ImportSample.Steps, code: code));
 
-        issues.ShouldContain(issue => issue.Index == 3 && issue.Path == "/code" && issue.Reason == "code_conflict");
+        issues.ShouldContain(issue => issue.Index == 5 && issue.Path == "/code" && issue.Reason == "code_conflict");
     }
 
     /// <summary>One code twice in one file is <c>code_conflict</c> on the second row.</summary>
@@ -144,12 +151,14 @@ public sealed class AuthoringImportValidationUnitTests
     public void CodeConflict_SameCodeTwiceInOneFile_IsRefused()
     {
         var issues = Validate(
-            ImportSample.Node(1, "n1", null, "category", "Cart"),
-            ImportSample.Item(2, "i1", "n1", "open cart"),
-            ImportSample.Case(3, "c1", "i1", "opens", ImportSample.Steps, code: "ACME-007"),
-            ImportSample.Case(4, "c2", "i1", "closes", ImportSample.Steps, code: "ACME-007"));
+            ImportSample.Node(1, "n1", null, "module", "Cart"),
+            ImportSample.Node(2, "n2", "n1", "feature", "Cart body"),
+            ImportSample.Node(3, "n3", "n2", "category", "Cart items"),
+            ImportSample.Item(4, "i1", "n3", "open cart"),
+            ImportSample.Case(5, "c1", "i1", "opens", ImportSample.Steps, code: "ACME-007"),
+            ImportSample.Case(6, "c2", "i1", "closes", ImportSample.Steps, code: "ACME-007"));
 
-        issues.ShouldContain(issue => issue.Index == 4 && issue.Path == "/code" && issue.Reason == "code_conflict");
+        issues.ShouldContain(issue => issue.Index == 6 && issue.Path == "/code" && issue.Reason == "code_conflict");
     }
 
     /// <summary>A row that breaks a §4 value rule is <c>value_invalid</c> on the column that broke it.</summary>

@@ -1,6 +1,7 @@
 using System.Buffers;
+using System.Text.Encodings.Web;
 using System.Text.Json;
-using Evidgate.Modules.Authoring.Domain;
+using System.Text.Unicode;
 
 namespace Evidgate.Modules.Authoring.Application.Import.Formats;
 
@@ -92,7 +93,12 @@ internal static class JsonFormat
         // is bounded and a chunked writer would only add a second copy of it.
         var buffer = new ArrayBufferWriter<byte>(64 * 1024);
 
-        using (var writer = new Utf8JsonWriter(buffer))
+        // The writer's default encoder escapes every non-ASCII character, which would turn "Cà phê" into
+        // "C\u00e0 ph\u00ea": the export carries the composed text itself (AC14), so the encoder admits all Unicode.
+        // It is not UnsafeRelaxedJsonEscaping — <, >, &, ' and every control character stay escaped.
+        using (var writer = new Utf8JsonWriter(
+            buffer,
+            new JsonWriterOptions { Indented = false, Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) }))
         {
             writer.WriteStartObject();
             writer.WriteString("format", "authoring-import");
@@ -183,7 +189,9 @@ internal static class JsonFormat
             return;
         }
 
-        writer.WriteString(member, AuthoringText.Normalize(value));
+        // Compose answers the value itself when the process cannot compose it, so an export never throws (see
+        // ImportText.Compose): the value re-imports to the same refusal it would have got as an import.
+        writer.WriteString(member, ImportText.Compose(value));
     }
 
     /// <summary>

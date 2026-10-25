@@ -2,7 +2,6 @@ using System.Buffers;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using Evidgate.Modules.Authoring.Domain;
 
 namespace Evidgate.Modules.Authoring.Application.Import.Formats;
 
@@ -240,8 +239,9 @@ internal static class CsvFormat
             return;
         }
 
-        // Normalize answers null only for null input, which the guard above already refused.
-        var cell = ImportText.NeutraliseForSpreadsheet(AuthoringText.Normalize(value) ?? value);
+        // Compose answers the value itself when the process cannot compose it (a noncharacter), so an export never
+        // throws on the way out and the file re-imports to the same refusal the value would get.
+        var cell = ImportText.NeutraliseForSpreadsheet(ImportText.Compose(value));
         var quote = cell.Contains(',')
             || cell.Contains('"')
             || cell.Contains('\r')
@@ -542,6 +542,11 @@ internal static class CsvFormat
         var malformed = false;
         var insideQuotes = false;
 
+        // A record has at most one field per column plus one: past that the record is over-long, which is a structural
+        // refusal rather than a value one, and the collector must stop allocating for a body that is one 5 MiB line of
+        // commas (AC16: the caps come before the work they bound).
+        var overflowing = false;
+
         while (index < body.Length)
         {
             var current = body[index];
@@ -591,7 +596,7 @@ internal static class CsvFormat
 
             if (current == Comma)
             {
-                fields.Add(new Field(start, index - start, quoted, malformed));
+                overflowing = Add(fields, new Field(start, index - start, quoted, malformed), overflowing);
                 quoted = false;
                 malformed = false;
                 index++;
@@ -601,10 +606,11 @@ internal static class CsvFormat
 
             if (current is CarriageReturn or LineFeed)
             {
-                fields.Add(new Field(start, index - start, quoted, malformed));
+                overflowing = Add(fields, new Field(start, index - start, quoted, malformed), overflowing);
                 position = current == CarriageReturn && index + 1 < body.Length && body[index + 1] == LineFeed
                     ? index + 2
                     : index + 1;
+
                 return true;
             }
 
@@ -613,9 +619,42 @@ internal static class CsvFormat
 
         // The body ended without a record terminator: the last record is the field run up to here, and an unterminated
         // quote makes it malformed.
-        fields.Add(new Field(start, index - start, quoted, malformed || insideQuotes));
+        Add(fields, new Field(start, index - start, quoted, malformed || insideQuotes), overflowing);
         position = index;
         return true;
+    }
+
+    /// <summary>
+    /// Appends one field unless the record already holds more fields than the table has columns, and marks the record
+    /// over-long once it does.
+    /// </summary>
+    /// <param name="fields">The record's field spans.</param>
+    /// <param name="field">The field just scanned.</param>
+    /// <param name="overflowing">True when the record was already over its field cap.</param>
+    /// <returns>True when the record is over its field cap.</returns>
+    private static bool Add(List<Field> fields, Field field, bool overflowing)
+    {
+        var limit = ImportSchema.ColumnNames.Length + 1;
+
+        if (overflowing)
+        {
+            return true;
+        }
+
+        if (fields.Count >= limit)
+        {
+            // The record is over-long: keep the last collected field and flag the record malformed, so the refusal
+            // names the record (`/row`) rather than a column, and no further field is materialised for this record.
+            if (fields.Count > 0)
+            {
+                fields[^1] = fields[^1] with { Malformed = true };
+            }
+
+            return true;
+        }
+
+        fields.Add(field);
+        return false;
     }
 
     /// <summary>One field of a record, as a byte span of the body.</summary>

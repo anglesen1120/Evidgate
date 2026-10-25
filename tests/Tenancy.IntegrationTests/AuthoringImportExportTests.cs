@@ -13,8 +13,8 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// 13.1.1 AC14/AC16 for route 25's export half: a project exports in JSON, CSV and XLSX, an import of that file into an
 /// <b>empty</b> project carrying the same <c>case_prefix</c> reproduces the tree — asserted on the export-normalised
-/// projection of every <c>authoring_version</c> <c>content</c>, with every project-local uuid replaced by that row's
-/// export key — and the two exports are the same file. Export twice from an unchanged tree is byte-identical in every
+/// projection of the <em>latest</em> <c>authoring_version</c> snapshot of each entity, with every project-local uuid
+/// replaced by that row's export key — and the two exports are the same file. Export twice from an unchanged tree is byte-identical in every
 /// format, CSV carries the UTF-8 BOM and its media type, text is written NFC, and a formula-leading cell is neutralised
 /// with one leading <c>'</c> on export and stored literally again on import.
 /// </summary>
@@ -117,7 +117,7 @@ public sealed class AuthoringImportExportTests
 
     /// <summary>
     /// AC14 for the two text formats: the tree of A exports as JSON and as CSV, the file imports into the empty project B,
-    /// and both the export-normalised projection of every version snapshot and the export itself are equal.
+    /// and both the export-normalised projection of each entity's latest version snapshot and the export itself are equal.
     /// </summary>
     /// <param name="format"><c>json</c> or <c>csv</c>.</param>
     [Theory]
@@ -309,6 +309,42 @@ public sealed class AuthoringImportExportTests
         }
     }
 
+    /// <summary>
+    /// AC14's byte half, at the route: a file the import could not accept is refused, not served. A hundred cases whose
+    /// <c>steps</c> each hold 20 000 three-byte characters make a CSV of about 6 MiB out of row text of only 2 million
+    /// characters, so the refusal comes from the bytes the writer produced and not from the row cap or the text budget;
+    /// it is the same 413 envelope, pointer and reason the row cap uses.
+    /// </summary>
+    [Fact]
+    public async Task Export_OverTheBodyCap_413()
+    {
+        await using var world = await StartAsync();
+        await FillAsync(world);
+
+        // Rows are under the cap (and the text under the body cap in characters); only the encoded bytes are over it.
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            insert into public.manual_test_case
+              (id, org_id, project_id, checklist_item_id, code, title, steps, priority, state, source)
+            select gen_random_uuid(), '{world.SourceOrg:D}', '{world.SourceProject:D}',
+                   (select id from public.checklist_item where project_id = '{world.SourceProject:D}' order by position, id limit 1),
+                   'SHOP-' || lpad((1000 + generated.number)::text, 4, '0'),
+                   'Wide ' || generated.number::text,
+                   jsonb_build_object('steps', jsonb_build_array(jsonb_build_object(
+                       'no', 1, 'action', repeat('ằ', 20000), 'expected', 'Kết quả'))),
+                   'medium', 'draft', 'manual'
+              from generate_series(1, 100) as generated(number);
+            """);
+
+        var exported = await ExportAsync(world.Client, world.AsSource, world.SourceProject, "csv");
+
+        exported.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge, exported.Text);
+        exported.ErrorCode.ShouldBe("payload_too_large");
+        exported.ErrorDetails.ShouldBe([("/node_id", "body_too_large")]);
+        exported.Text.ShouldNotContain("ằ", Case.Sensitive, "a refusal names a pointer, never a cell");
+    }
+
     // ------------------------------------------------------------------ the fixture tree
 
     /// <summary>
@@ -471,8 +507,8 @@ public sealed class AuthoringImportExportTests
     private sealed record CaseRow(Guid Id, Guid Item);
 
     /// <summary>
-    /// The export-normalised projection of every <c>authoring_version</c> snapshot of one project, in the export's own key
-    /// order: the §4 field list of each entity with its three project-local uuid members replaced by the row's export key
+    /// The export-normalised projection of each entity's latest <c>authoring_version</c> snapshot in one project, in the
+    /// export's own key order: the §4 field list of each entity with its three project-local uuid members replaced by the row's export key
     /// (<c>n1…</c>, <c>i1…</c>, <c>c1…</c> numbered in depth-first tree order). Two projects are equal when their lists
     /// are, whatever ids the database assigned.
     /// </summary>

@@ -47,6 +47,28 @@ internal sealed record ImportPlannedRow(
     int StoredVersion,
     string? StoredState = null);
 
+/// <summary>
+/// One sibling group this file adds a row to: what the plan read and what it therefore assumed when it assigned the
+/// positions of its new rows. The apply re-reads the same group under the advisory lock and refuses with the retryable
+/// <c>503</c> when the two disagree, so an import can never write a position into a group that moved since the plan
+/// (13.1.1 AC2/AC13).
+/// </summary>
+/// <param name="Kind">The sibling set's entity kind: a node group or an item group.</param>
+/// <param name="ParentId">The group's parent, or <see cref="Guid.Empty"/> for the project's root node group.</param>
+/// <param name="LiveCount">The number of live members the plan saw.</param>
+/// <param name="Maximum">The highest position among them, or −1 for an empty group.</param>
+internal sealed record ImportGroupExpectation(ImportRowKind Kind, Guid ParentId, int LiveCount, int Maximum);
+
+/// <summary>What an item row's <c>item_key</c> resolved to: the entity, and the state it is (or will be) stored in.</summary>
+/// <param name="Id">The item's id: stored, or the id its create will use.</param>
+/// <param name="State">Its state after the row is applied.</param>
+/// <param name="Stored">
+/// True when the item exists in the project already, false when the same file creates it. The writer's retired-parent
+/// rule is about a <em>stored</em> retired item taking new content, so a file that creates an item as retired together
+/// with its cases still imports: that is exactly what a round trip of a live-but-retired item exports (AC14/AC15).
+/// </param>
+internal sealed record ResolvedItem(Guid Id, string State, bool Stored);
+
 /// <summary>The answer of the resolution phase: what the file would change, or the issues that refuse it.</summary>
 internal sealed class ImportPlan
 {
@@ -54,12 +76,14 @@ internal sealed class ImportPlan
         IReadOnlyList<ImportPlannedRow> rows,
         IReadOnlyList<ImportIssue> issues,
         int allocations,
-        long? explicitCodeFloor)
+        long? explicitCodeFloor,
+        IReadOnlyList<ImportGroupExpectation> groups)
     {
         Rows = rows;
         Issues = issues;
         Allocations = allocations;
         ExplicitCodeFloor = explicitCodeFloor;
+        Groups = groups;
     }
 
     /// <summary>One planned row per validated row, in file order.</summary>
@@ -77,6 +101,12 @@ internal sealed class ImportPlan
     /// </summary>
     public long? ExplicitCodeFloor { get; }
 
+    /// <summary>
+    /// Every sibling group this file adds a row to, with the state the plan assigned its positions from: the apply
+    /// re-reads them under the group's advisory lock (F5/F6) and answers the retryable <c>503</c> on a mismatch.
+    /// </summary>
+    public IReadOnlyList<ImportGroupExpectation> Groups { get; }
+
     /// <summary>True when the file may be applied (or reported as a dry run).</summary>
     public bool IsAccepted => Issues.Count == 0;
 
@@ -88,14 +118,16 @@ internal sealed class ImportPlan
     /// <param name="rows">One row per validated row, in file order.</param>
     /// <param name="allocations">The size of the one allocation block.</param>
     /// <param name="explicitCodeFloor">One past the highest explicit number, or null.</param>
+    /// <param name="groups">The sibling groups this file adds to.</param>
     internal static ImportPlan Accepted(
         IReadOnlyList<ImportPlannedRow> rows,
         int allocations,
-        long? explicitCodeFloor) => new(rows, [], allocations, explicitCodeFloor);
+        long? explicitCodeFloor,
+        IReadOnlyList<ImportGroupExpectation> groups) => new(rows, [], allocations, explicitCodeFloor, groups);
 
     /// <summary>A refused file; nothing is applied.</summary>
     /// <param name="issues">The issues that refuse it.</param>
-    internal static ImportPlan Refused(IReadOnlyList<ImportIssue> issues) => new([], issues, 0, null);
+    internal static ImportPlan Refused(IReadOnlyList<ImportIssue> issues) => new([], issues, 0, null, []);
 }
 
 /// <summary>
@@ -140,7 +172,7 @@ internal sealed class ImportPlanner(ITenantDb db)
         var issues = new List<ImportIssue>();
         var planned = new ImportPlannedRow?[rows.Count];
         var resolvedNodes = new Dictionary<string, Guid>(StringComparer.Ordinal);
-        var resolvedItems = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        var resolvedItems = new Dictionary<string, ResolvedItem>(StringComparer.Ordinal);
         var explicitFloor = (long?)null;
 
         // The live tree, one read: every node is matched by identity against it, so no per-row probe is needed.
@@ -165,8 +197,18 @@ internal sealed class ImportPlanner(ITenantDb db)
             return ImportPlan.Refused([.. issues]);
         }
 
-        await ItemsAsync(orgId, projectId, rows, planned, resolvedNodes, resolvedItems, issues, cancellationToken)
-            .ConfigureAwait(false);
+        var itemGroups = new Dictionary<Guid, ImportGroup>();
+
+        await ItemsAsync(
+            orgId,
+            projectId,
+            rows,
+            planned,
+            resolvedNodes,
+            resolvedItems,
+            itemGroups,
+            issues,
+            cancellationToken).ConfigureAwait(false);
 
         if (issues.Count != 0)
         {
@@ -181,8 +223,12 @@ internal sealed class ImportPlanner(ITenantDb db)
             return ImportPlan.Refused([.. issues]);
         }
 
-        var outcomes = await DecideAsync(orgId, projectId, [.. planned.Select(row => row!)], cancellationToken)
-            .ConfigureAwait(false);
+        var outcomes = await DecideAsync(
+            orgId,
+            projectId,
+            [.. planned.Select(row => row!)],
+            resolvedItems,
+            cancellationToken).ConfigureAwait(false);
 
         if (outcomes.Issues.Count != 0)
         {
@@ -193,7 +239,11 @@ internal sealed class ImportPlanner(ITenantDb db)
             && row.Row.Kind == ImportRowKind.Case
             && row.Code is null);
 
-        return ImportPlan.Accepted(outcomes.Rows, allocations, explicitFloor);
+        var groups = Expectations(ImportRowKind.Node, nodeGroups)
+            .Concat(Expectations(ImportRowKind.Item, itemGroups))
+            .ToArray();
+
+        return ImportPlan.Accepted(outcomes.Rows, allocations, explicitFloor, groups);
     }
 
     /// <summary>Resolves every node row, parents first, against the live tree (AC13 identity by parent, kind and title).</summary>
@@ -265,7 +315,8 @@ internal sealed class ImportPlanner(ITenantDb db)
     /// <param name="rows">The validated rows.</param>
     /// <param name="planned">The plan slots.</param>
     /// <param name="resolvedNodes">The node id each file key resolved to.</param>
-    /// <param name="resolvedItems">The item id each file key resolved to.</param>
+    /// <param name="resolvedItems">The item id and state each file key resolved to.</param>
+    /// <param name="groups">The sibling-position state of every item group this file touches.</param>
     /// <param name="issues">The refusals.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     private async ValueTask ItemsAsync(
@@ -274,7 +325,8 @@ internal sealed class ImportPlanner(ITenantDb db)
         IReadOnlyList<ImportValidatedRow> rows,
         ImportPlannedRow?[] planned,
         Dictionary<string, Guid> resolvedNodes,
-        Dictionary<string, Guid> resolvedItems,
+        Dictionary<string, ResolvedItem> resolvedItems,
+        Dictionary<Guid, ImportGroup> groups,
         List<ImportIssue> issues,
         CancellationToken cancellationToken)
     {
@@ -301,7 +353,6 @@ internal sealed class ImportPlanner(ITenantDb db)
             cancellationToken).ConfigureAwait(false);
 
         var identities = new Dictionary<(Guid NodeId, string Title), ImportSql.ItemRow>();
-        var groups = new Dictionary<Guid, ImportGroup>();
 
         foreach (var item in liveItems)
         {
@@ -323,12 +374,21 @@ internal sealed class ImportPlanner(ITenantDb db)
                     continue;
                 }
 
+                if (MatchedState(
+                    row,
+                    stored.State,
+                    (from, to) => ChecklistItemStateMachine.Decide(from, to, null),
+                    issues) is not { } state)
+                {
+                    continue;
+                }
+
                 var unchanged = new ChecklistItemSnapshot(
                     nodeId,
                     row.Title,
                     row.Description,
                     row.Priority,
-                    row.State,
+                    state,
                     stored.Position);
                 planned[slot] = new ImportPlannedRow(
                     row,
@@ -339,7 +399,7 @@ internal sealed class ImportPlanner(ITenantDb db)
                     null,
                     stored.Version,
                     stored.State);
-                resolvedItems[row.Key] = stored.Id;
+                resolvedItems[row.Key] = new ResolvedItem(stored.Id, state, Stored: true);
                 continue;
             }
 
@@ -352,7 +412,7 @@ internal sealed class ImportPlanner(ITenantDb db)
             var id = Guid.CreateVersion7();
             var content = new ChecklistItemSnapshot(nodeId, row.Title, row.Description, row.Priority, row.State, position);
             planned[slot] = new ImportPlannedRow(row, ImportOutcome.Create, id, content, null, null, 0);
-            resolvedItems[row.Key] = id;
+            resolvedItems[row.Key] = new ResolvedItem(id, row.State, Stored: false);
         }
     }
 
@@ -361,7 +421,7 @@ internal sealed class ImportPlanner(ITenantDb db)
     /// <param name="projectId">The project.</param>
     /// <param name="rows">The validated rows.</param>
     /// <param name="planned">The plan slots.</param>
-    /// <param name="resolvedItems">The item id each file key resolved to.</param>
+    /// <param name="resolvedItems">The item id and state each file key resolved to.</param>
     /// <param name="issues">The refusals.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     /// <returns>One past the highest number the file brought, or null when it brought none.</returns>
@@ -370,7 +430,7 @@ internal sealed class ImportPlanner(ITenantDb db)
         Guid projectId,
         IReadOnlyList<ImportValidatedRow> rows,
         ImportPlannedRow?[] planned,
-        Dictionary<string, Guid> resolvedItems,
+        Dictionary<string, ResolvedItem> resolvedItems,
         List<ImportIssue> issues,
         CancellationToken cancellationToken)
     {
@@ -400,7 +460,7 @@ internal sealed class ImportPlanner(ITenantDb db)
         {
             var stored = await db.QueryAsync<ImportSql.CaseRow>(
                 ImportSql.CasesByCode,
-                new { org_id = orgId, project_id = projectId, codes },
+                new { org_id = orgId, project_id = projectId, codes = new ImportSql.TextArrayParameter(codes) },
                 cancellationToken).ConfigureAwait(false);
 
             foreach (var row in stored)
@@ -411,7 +471,7 @@ internal sealed class ImportPlanner(ITenantDb db)
 
         foreach (var (row, slot) in order)
         {
-            var itemId = resolvedItems[row.ItemKey!];
+            var itemId = resolvedItems[row.ItemKey!].Id;
 
             if (row.Code is null)
             {
@@ -462,6 +522,41 @@ internal sealed class ImportPlanner(ITenantDb db)
                 continue;
             }
 
+            // A restore always comes back in §6's restore state (draft), whatever the file's state cell says: the writer's
+            // restore forces it (AC21) and an import must not be the way around the review that a state carries.
+            if (stored.DeletedAt is not null)
+            {
+                var restored = new ManualTestCaseSnapshot(
+                    itemId,
+                    stored.Code,
+                    row.Title,
+                    row.Description,
+                    row.Precondition,
+                    row.StepsJson!,
+                    row.Priority,
+                    ManualTestCaseStateMachine.RestoreState);
+
+                planned[slot] = new ImportPlannedRow(
+                    row,
+                    ImportOutcome.Restore,
+                    stored.Id,
+                    restored,
+                    Restored(stored),
+                    stored.Code,
+                    stored.Version,
+                    stored.State);
+                continue;
+            }
+
+            if (MatchedState(
+                row,
+                stored.State,
+                (from, to) => ManualTestCaseStateMachine.Decide(from, to, null),
+                issues) is not { } state)
+            {
+                continue;
+            }
+
             var desired = new ManualTestCaseSnapshot(
                 itemId,
                 stored.Code,
@@ -470,16 +565,14 @@ internal sealed class ImportPlanner(ITenantDb db)
                 row.Precondition,
                 row.StepsJson!,
                 row.Priority,
-                row.State);
-
-            var restore = stored.DeletedAt is null ? null : Restored(stored);
+                state);
 
             planned[slot] = new ImportPlannedRow(
                 row,
-                stored.DeletedAt is null ? ImportOutcome.Unchanged : ImportOutcome.Restore,
+                ImportOutcome.Unchanged,
                 stored.Id,
                 desired,
-                restore,
+                null,
                 stored.Code,
                 stored.Version,
                 stored.State);
@@ -492,30 +585,35 @@ internal sealed class ImportPlanner(ITenantDb db)
     /// <param name="orgId">The tenant.</param>
     /// <param name="projectId">The project.</param>
     /// <param name="rows">One planned row per validated row, in file order.</param>
+    /// <param name="resolvedItems">The item id and state each file key resolved to.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     private async ValueTask<PlanOutcome> DecideAsync(
         Guid orgId,
         Guid projectId,
         IReadOnlyList<ImportPlannedRow> rows,
+        Dictionary<string, ResolvedItem> resolvedItems,
         CancellationToken cancellationToken)
     {
         var matched = rows.Where(row => row.StoredVersion != 0).ToArray();
 
-        if (matched.Length == 0)
-        {
-            return new PlanOutcome(rows, []);
-        }
+        // One kind and one id per matched row, in the same order: the read pairs the two arrays positionally, so a
+        // distinct-kind set zipped against a distinct-id set would ask for the wrong entities (Perf F1) and a re-import
+        // of more than three matched rows would report every one of them as an update.
+        var kinds = matched.Select(row => AuthoringWireValues.EntityKindName(KindOf(row.Row.Kind))).ToArray();
+        var ids = matched.Select(row => row.EntityId).ToArray();
 
-        var hashes = await db.QueryAsync<ImportSql.VersionHashRow>(
-            ImportSql.LastContentHashes,
-            new
-            {
-                org_id = orgId,
-                project_id = projectId,
-                kinds = matched.Select(row => AuthoringWireValues.EntityKindName(KindOf(row.Row.Kind))).Distinct().ToArray(),
-                ids = matched.Select(row => row.EntityId).Distinct().ToArray(),
-            },
-            cancellationToken).ConfigureAwait(false);
+        var hashes = matched.Length == 0
+            ? []
+            : await db.QueryAsync<ImportSql.VersionHashRow>(
+                ImportSql.LastContentHashes,
+                new
+                {
+                    org_id = orgId,
+                    project_id = projectId,
+                    kinds = new ImportSql.TextArrayParameter(kinds),
+                    ids,
+                },
+                cancellationToken).ConfigureAwait(false);
 
         var storedHashes = new Dictionary<(string Kind, Guid Id), string>();
 
@@ -529,7 +627,19 @@ internal sealed class ImportPlanner(ITenantDb db)
 
         foreach (var row in rows)
         {
-            if (row.Content is null || row.StoredVersion == 0)
+            if (row.StoredVersion == 0)
+            {
+                if (WritesUnderRetiredItem(row, resolvedItems, ImportOutcome.Create))
+                {
+                    RefuseRetiredItem(issues, row);
+                    continue;
+                }
+
+                decided.Add(row);
+                continue;
+            }
+
+            if (row.Content is null)
             {
                 decided.Add(row);
                 continue;
@@ -545,6 +655,12 @@ internal sealed class ImportPlanner(ITenantDb db)
                 // file's content and clears deleted_at. Never "unchanged": the row is still deleted. Folding the content
                 // into the restore keeps one version row per entity per import — the entity's version is trigger-owned
                 // and bumps once — and that is what makes the next identical import converge on `unchanged` (AC15).
+                if (WritesUnderRetiredItem(row, resolvedItems, ImportOutcome.Restore))
+                {
+                    RefuseRetiredItem(issues, row);
+                    continue;
+                }
+
                 decided.Add(row);
                 continue;
             }
@@ -558,12 +674,87 @@ internal sealed class ImportPlanner(ITenantDb db)
                 continue;
             }
 
+            var outcome = same ? ImportOutcome.Unchanged : ImportOutcome.Update;
+
+            if (WritesUnderRetiredItem(row, resolvedItems, outcome))
+            {
+                RefuseRetiredItem(issues, row);
+                continue;
+            }
+
             decided.Add(same
                 ? row with { Outcome = ImportOutcome.Unchanged, Content = null }
                 : row with { Outcome = ImportOutcome.Update });
         }
 
         return new PlanOutcome(decided, issues);
+    }
+
+    /// <summary>
+    /// True when a case row would write content under a checklist item that is <em>stored</em> in its terminal state. The
+    /// writer refuses that placement — <see cref="AuthoringVersionWriter.CheckCaseParentAsync"/>: "a retired checklist
+    /// item takes no new content; restore it first" — and an import must not be the way around it. A row that writes
+    /// nothing (an unchanged row of a round trip) is not a placement and stays accepted, and an item this same file
+    /// creates as retired is not a stored one: refusing that would break the round trip of a live-but-retired item and
+    /// its cases, which is exactly what the exporter emits (AC14/AC15).
+    /// </summary>
+    /// <param name="row">The planned row.</param>
+    /// <param name="resolvedItems">The item each file key resolved to, with its state and whether it is stored.</param>
+    /// <param name="outcome">The outcome the row is heading for.</param>
+    private static bool WritesUnderRetiredItem(
+        ImportPlannedRow row,
+        Dictionary<string, ResolvedItem> resolvedItems,
+        ImportOutcome outcome) =>
+        outcome != ImportOutcome.Unchanged
+        && row.Row.Kind == ImportRowKind.Case
+        && row.Row.ItemKey is { } itemKey
+        && resolvedItems.TryGetValue(itemKey, out var item)
+        && item.Stored
+        && string.Equals(item.State, ChecklistItemStateMachine.Retired, StringComparison.Ordinal);
+
+    /// <summary>Refuses a case row whose item is retired, on the column that names the item.</summary>
+    /// <param name="issues">The refusals.</param>
+    /// <param name="row">The refused row.</param>
+    private static void RefuseRetiredItem(List<ImportIssue> issues, ImportPlannedRow row) =>
+        Issue(issues, row.Row.Source.Index, "/item_key", "value_invalid");
+
+    /// <summary>
+    /// The state a matched row writes (13.1.1 §6, AC13): the stored one when the file's <c>state</c> cell was empty, the
+    /// file's own when the entity's state machine allows exactly that move, and <c>null</c> — with the issue counted —
+    /// when it does not. The import carries no reason, so a move into <c>retired</c> (which needs one) is refused here
+    /// too: an import may not be the path that retires a row without a reason.
+    /// </summary>
+    /// <param name="row">The matched row.</param>
+    /// <param name="stored">The state the entity is stored in.</param>
+    /// <param name="decide">The entity's own <c>Decide</c>, with the reason bound to null.</param>
+    /// <param name="issues">The refusals.</param>
+    private static string? MatchedState(
+        ImportValidatedRow row,
+        string stored,
+        Func<string, string, AuthoringTransition> decide,
+        List<ImportIssue> issues)
+    {
+        if (!row.StateGiven)
+        {
+            // An export that leaves the state column empty describes the stored state, never the creation default: this
+            // is what keeps an import from resetting an approved case to draft (Perf/security F2, findings A/F4).
+            return stored;
+        }
+
+        var transition = decide(stored, row.State);
+
+        switch (transition.Outcome)
+        {
+            case AuthoringTransitionOutcome.Allowed:
+            case AuthoringTransitionOutcome.Unchanged:
+                return transition.ToState;
+
+            default:
+                // A move outside §6's table, a move out of `retired`, and a move into `retired` without a reason are one
+                // refusal on the state column in the import's vocabulary.
+                Issue(issues, row.Source.Index, "/state", "value_invalid");
+                return null;
+        }
     }
 
     /// <summary>True when a matched item or case is stored in its terminal state, which no update path may edit.</summary>
@@ -630,6 +821,21 @@ internal sealed class ImportPlanner(ITenantDb db)
         return group;
     }
 
+    /// <summary>The groups this file adds a row to, as the apply re-reads them under the advisory lock (finding F).</summary>
+    /// <param name="kind">The entity kind of the group.</param>
+    /// <param name="groups">The groups of one phase, keyed by parent id.</param>
+    /// <remarks>
+    /// A group the file only reads (it adds nothing to it) carries no assumption the apply could invalidate, so it is not
+    /// an expectation: the apply locks and re-reads exactly what a file writes into.
+    /// </remarks>
+    private static IEnumerable<ImportGroupExpectation> Expectations(
+        ImportRowKind kind,
+        Dictionary<Guid, ImportGroup> groups) =>
+        groups
+            .Where(entry => entry.Value.AddedCount != 0)
+            .OrderBy(entry => entry.Key)
+            .Select(entry => new ImportGroupExpectation(kind, entry.Key, entry.Value.LiveCount, entry.Value.LiveMaximum));
+
     /// <summary>Counts one issue, bounded like the validation phase.</summary>
     /// <param name="issues">The refusals.</param>
     /// <param name="index">The row's file position.</param>
@@ -663,7 +869,16 @@ internal sealed class ImportPlanner(ITenantDb db)
         /// <summary>The number of rows this file adds to the group.</summary>
         public int AddedCount { get; private set; }
 
-        private int Maximum { get; set; } = -1;
+        /// <summary>
+        /// The highest position among the group's <b>live</b> members, or −1 for an empty group: what the apply must still
+        /// find when it re-reads the group under the advisory lock (finding F). It is deliberately separate from
+        /// <see cref="Maximum"/>: the assignment cursor moves as this file's own rows take positions, and comparing that
+        /// against the live state would make every importing append look like a change by another request.
+        /// </summary>
+        public int LiveMaximum { get; private set; } = -1;
+
+        /// <summary>The highest position the group holds, live or added by this file: the append cursor.</summary>
+        public int Maximum { get; private set; } = -1;
 
         /// <summary>Records one live member.</summary>
         /// <param name="position">Its stored position.</param>
@@ -672,6 +887,7 @@ internal sealed class ImportPlanner(ITenantDb db)
             LiveCount++;
             taken.Add(position);
             Maximum = Math.Max(Maximum, position);
+            LiveMaximum = Math.Max(LiveMaximum, position);
         }
 
         /// <summary>Assigns the position of a row this file adds: the named one when it is free, else the append position.</summary>

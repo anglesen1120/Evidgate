@@ -24,6 +24,9 @@ namespace Evidgate.Modules.Authoring.Application.Import;
 /// handler serialises them into a buffered stream with the writer of <paramref name="Format"/>, so the answer is one
 /// <see cref="IResult"/> the host's <c>ResultEndpointFilter</c> passes through: a successful export is the file, and a
 /// refused one (404 <c>not_found</c>, 413 <c>payload_too_large</c>) is the 00 §9.2 envelope, never a truncated download.
+/// The 413 is the row cap, the walk bound the exporter applies to a filtered file, or this handler's own bound on the
+/// emitted bytes (<c>ImportLimits.MaxBodyBytes</c>, the import's body cap): an export the import could not accept would be
+/// a download a consumer cannot load back (AC14).
 /// Nothing is persisted and nothing is cached (<c>Cache-Control: no-store</c> is the delegate's header).
 /// </para>
 /// </remarks>
@@ -84,6 +87,18 @@ internal sealed class ExportAuthoringQueryHandler(
         // a 200 and half a file (the exporter's row cap is what makes the buffer safely bounded).
         var file = new MemoryStream();
         await ImportFormats.WriteAsync(query.Format, exported.Value!, file, cancellationToken).ConfigureAwait(false);
+
+        // AC14's other half: a file the import could not accept is not an export. The exporter bounds the text of the
+        // rows while it assembles them; this is the same bound on the bytes the writer actually produced (a UTF-8 body is
+        // never smaller than its characters' count and may be several times larger), so a refusal never becomes a
+        // download the consumer cannot re-import.
+        if (file.Length > ImportLimits.MaxBodyBytes)
+        {
+            await file.DisposeAsync().ConfigureAwait(false);
+
+            return Result.Failure<IResult>(AuthoringExporter.BodyTooLarge);
+        }
+
         file.Position = 0;
 
         return Result.Success<IResult>(Results.Stream(

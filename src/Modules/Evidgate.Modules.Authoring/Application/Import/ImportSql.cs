@@ -1,3 +1,8 @@
+using System.Data;
+using Dapper;
+using Npgsql;
+using NpgsqlTypes;
+
 namespace Evidgate.Modules.Authoring.Application.Import;
 
 /// <summary>
@@ -58,13 +63,25 @@ internal static class ImportSql
     /// comparison of the snapshot the file describes with the snapshot the last version recorded, through the same
     /// RFC 8785 hash the writer stores (<c>AuthoringHashes.ContentHash</c>), never a field-by-field guess.
     /// </summary>
+    /// <remarks>
+    /// The two arrays are passed element-for-element, so row <c>i</c> of one is the kind of row <c>i</c> of the other:
+    /// a distinct-kind set zipped against a distinct-id set asks for entities the file never named (Perf F1). The
+    /// lookup is a <c>lateral ... limit 1</c> per entity on <c>authoring_version_entity_key</c> rather than a
+    /// <c>distinct on</c> over every version the project ever wrote (Perf F4).
+    /// </remarks>
     internal const string LastContentHashes = """
-        select distinct on (v.entity_kind, v.entity_id) v.entity_kind, v.entity_id, v.content_hash
-          from public.authoring_version v
-         where v.org_id = @org_id
-           and v.project_id = @project_id
-           and (v.entity_kind, v.entity_id) in (select * from unnest(@kinds::text[], @ids::uuid[]))
-         order by v.entity_kind, v.entity_id, v.version_no desc
+        select h.entity_kind, h.entity_id, v.content_hash
+          from unnest(@kinds::text[], @ids::uuid[]) as h(entity_kind, entity_id)
+          cross join lateral (
+              select v.content_hash
+                from public.authoring_version v
+               where v.org_id = @org_id
+                 and v.project_id = @project_id
+                 and v.entity_kind = h.entity_kind
+                 and v.entity_id = h.entity_id
+               order by v.version_no desc
+               limit 1
+          ) v
         """;
 
     /// <summary>One live feature node of the project (the AC13 identity and sibling-position read).</summary>
@@ -165,5 +182,32 @@ internal static class ImportSql
 
         /// <summary>The <c>sha256:&lt;hex&gt;</c> of the last stored snapshot.</summary>
         public string ContentHash { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// A <c>text[]</c> parameter of one of the reads above, typed explicitly.
+    /// </summary>
+    /// <remarks>
+    /// Dapper cannot send a <c>string[]</c> on this path: the tenant read model registers a read-only <c>string[]</c>
+    /// type handler (<see cref="Evidgate.BuildingBlocks.Persistence.Tenancy.StringArrayTypeHandler"/> — writes are EF
+    /// Core's job), so Dapper's type-handler registry throws before the command is built. Dapper's custom-parameter
+    /// hook runs before that registry. This is the module-local twin of
+    /// <c>Evidgate.BuildingBlocks.Persistence.Tasks.TextArrayParameter</c>, which is internal to its own assembly and so
+    /// is not visible to a module (00 §5.5: a module reaches another only through its <c>.Contracts</c>).
+    /// </remarks>
+    internal sealed class TextArrayParameter(string[] values) : SqlMapper.ICustomQueryParameter
+    {
+        /// <inheritdoc />
+        public void AddParameter(IDbCommand command, string name)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+
+            var parameter = (NpgsqlParameter)command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Text;
+            parameter.Value = values;
+
+            command.Parameters.Add(parameter);
+        }
     }
 }

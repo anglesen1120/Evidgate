@@ -358,11 +358,17 @@ public sealed class AuthoringAllocateManyTests
         small.ModuleStatements.ShouldBe(2);
         large.ModuleStatements.ShouldBe(small.ModuleStatements);
 
-        // The one counter statement is the same text in both runs, so the block size travels as a parameter.
+        // The one counter statement is the same text in both runs, and it is one row-keyed upsert on
+        // `(org_id, project_id)`: the block size travels inside it, so a bigger block is a bigger value and never another
+        // statement. The captured text is wire-level (Dapper's `@n` becomes a positional `$n`), so the shape is what is
+        // asserted here — never a placeholder spelling.
         large.CounterText.ShouldBe(small.CounterText);
-        large.CounterText.ShouldContain("next_value = c.next_value + @n");
+        large.CounterText.ShouldContain("insert into public.authoring_code_counter");
+        large.CounterText.ShouldContain("on conflict (org_id, project_id) do update");
 
+        // And the block did move the counter by exactly its size: 2 then 200 from a fresh project, so 203 is next.
         await scope.CommitAsync(cancellationToken);
+        (await CounterAsync(world)).ShouldBe(203L);
 
         async Task<Measured> MeasureAsync(int count)
         {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 
 namespace Evidgate.Modules.Authoring.Application.Import.Formats;
@@ -119,9 +120,17 @@ internal static class ImportSchema
                 AllowTrailingCommas = false,
             });
 
-        // The member-name chain of the current position. Array indexes are deliberately not part of it: the only index a
-        // report names is the row, which is counted separately (see RowIndex) and never echoed with a member name.
+        // The member-name chain of the containers the walk is inside, and the member name it last read. A container
+        // entered through a member adds that name (an array adds its own name too, so a row is the object inside
+        // "rows"); a container that is an array element or the document root adds nothing, because "rows[3]" is a
+        // position, not a name. The bookkeeping is by entry and exit, never by reader depth: the row members sit three
+        // levels deep and yet are two names deep, which is what makes the row pointer derivable at all.
         var segments = new List<string>(8);
+        var entered = new bool[MaxDocumentDepth + 2];
+        string? member = null;
+
+        // The depth of the "rows" array, so an object directly inside it is a row and an object inside a row is not.
+        var rowsDepth = -1;
 
         // One name set per property depth, reset when a new object starts at that depth: a duplicate is a repeat within
         // one object, not across two siblings.
@@ -139,7 +148,7 @@ internal static class ImportSchema
                 switch (reader.TokenType)
                 {
                     case JsonTokenType.StartObject:
-                        if (segments.Count == 1 && string.Equals(segments[0], "rows", StringComparison.Ordinal))
+                        if (rowsDepth >= 0 && reader.CurrentDepth == rowsDepth + 1)
                         {
                             rowIndex++;
                         }
@@ -149,33 +158,47 @@ internal static class ImportSchema
                             members[reader.CurrentDepth + 1] = null;
                         }
 
+                        member = Enter(segments, entered, reader.CurrentDepth, member);
+                        break;
+
+                    case JsonTokenType.StartArray:
+                        if (member is not null
+                            && reader.CurrentDepth == 1
+                            && string.Equals(member, "rows", StringComparison.Ordinal))
+                        {
+                            rowsDepth = reader.CurrentDepth;
+                        }
+
+                        member = Enter(segments, entered, reader.CurrentDepth, member);
                         break;
 
                     case JsonTokenType.EndObject:
                     case JsonTokenType.EndArray:
-                        Truncate(segments, reader.CurrentDepth);
+                        Leave(segments, entered, reader.CurrentDepth);
+                        member = null;
                         break;
 
                     case JsonTokenType.PropertyName:
                         {
                             var depth = reader.CurrentDepth;
-                            Truncate(segments, depth - 1);
 
                             if (!TryReadString(ref reader, out var name) || !ImportText.IsStorable(name))
                             {
-                                // The name cannot even be decoded (an unpaired surrogate escape) or is unstorable: report it
-                                // without echoing it, because the name is the caller's own text.
-                                Add(issues, rowIndex, NestedPointer(rowIndex, segments), "invalid_text");
+                                // The name cannot even be decoded (an unpaired surrogate escape) or is unstorable: report
+                                // it against the object it sits in, never echoing it, because the name is the caller's own
+                                // text (S3).
+                                Add(issues, rowIndex, NamePointer(segments), "invalid_text");
+                                member = null;
                                 break;
                             }
 
                             var seen = depth < members.Length ? members[depth] ??= new HashSet<string>(StringComparer.Ordinal) : null;
                             if (seen is not null && !seen.Add(name))
                             {
-                                Add(issues, rowIndex, NestedPointer(rowIndex, segments), "value_invalid");
+                                Add(issues, rowIndex, NamePointer(segments), "value_invalid");
                             }
 
-                            segments.Add(name);
+                            member = name;
                             break;
                         }
 
@@ -183,7 +206,9 @@ internal static class ImportSchema
                         if (reader.ValueIsEscaped
                             && (!TryReadString(ref reader, out var value) || !ImportText.IsStorable(value)))
                         {
-                            Add(issues, rowIndex, NestedPointer(rowIndex, segments), "invalid_text");
+                            // The refusal names the member whose value it is — a declared column is a fixed name, so the
+                            // pointer echoes nothing the caller wrote — and falls back to the row or the file.
+                            Add(issues, rowIndex, ValuePointer(segments, member), "invalid_text");
                         }
 
                         break;
@@ -245,8 +270,76 @@ internal static class ImportSchema
     /// </remarks>
     /// <param name="document">The parsed document.</param>
     /// <returns>Every refusal, capped at <see cref="MaxIssues"/>.</returns>
-    internal static IReadOnlyList<ImportIssue> Validate(JsonElement document) =>
-        Map(Schemas.Validate(SchemaKey, document).Errors);
+    internal static IReadOnlyList<ImportIssue> Validate(JsonElement document)
+    {
+        var issues = Map(Schemas.Validate(SchemaKey, document).Errors);
+
+        // A document the schema refused is reported as it is: the caller fixes those and re-sends, and the exact-end
+        // rule below is part of the same acceptance, so it adds nothing to a file that is already refused.
+        return issues.Count > 0 ? issues : ExactEnd(document);
+    }
+
+    /// <summary>
+    /// The contract's two anchored members, applied again with an exact end of input.
+    /// </summary>
+    /// <remarks>
+    /// The schema's <c>pattern</c> is ECMA-262, where <c>$</c> is the end of the input, and Ajv compiles it that way for
+    /// <c>packages/cli</c>. The registry this module validates through evaluates the same pattern with .NET regex
+    /// semantics, where <c>$</c> also matches just before a final line feed — so "n1\n" would pass a pattern written to
+    /// refuse it, and a key is compared literally with the file's other keys while a code is compared with the
+    /// database's own CHECK. Applying <c>\z</c> here is the exact end under both readings and leaves the contract alone.
+    /// </remarks>
+    private static readonly (string Member, string Pointer, Regex Pattern)[] Anchored =
+    [
+        (
+            "key",
+            "/key",
+            new Regex(@"^[A-Za-z0-9][A-Za-z0-9_.:-]*\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1))),
+        (
+            "code",
+            "/code",
+            new Regex(
+                @"^([A-Z][A-Z0-9]{1,7}-[0-9]{3,10})?\z",
+                RegexOptions.CultureInvariant,
+                TimeSpan.FromSeconds(1))),
+    ];
+
+    /// <summary>
+    /// Refuses a <c>key</c> or <c>code</c> that ends in a line feed, which the schema's <c>$</c> tolerates under the
+    /// registry's engine.
+    /// </summary>
+    /// <param name="document">The document the schema accepted.</param>
+    /// <returns>One <c>value_invalid</c> per anchored member that is not matched exactly.</returns>
+    private static List<ImportIssue> ExactEnd(JsonElement document)
+    {
+        var issues = new List<ImportIssue>();
+
+        if (!document.TryGetProperty("rows", out var rows) || rows.ValueKind != JsonValueKind.Array)
+        {
+            return issues;
+        }
+
+        var index = 1;
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (row.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var (member, pointer, pattern) in Anchored)
+                {
+                    if (row.TryGetProperty(member, out var value)
+                        && value.ValueKind == JsonValueKind.String
+                        && !pattern.IsMatch(value.GetString() ?? string.Empty))
+                    {
+                        Add(issues, index, pointer, "value_invalid");
+                    }
+                }
+            }
+
+            index++;
+        }
+
+        return issues;
+    }
 
     /// <summary>
     /// Appends one issue unless the report is full, and turns a row index of <c>0</c> (the header) into a file-level
@@ -265,16 +358,60 @@ internal static class ImportSchema
     }
 
     /// <summary>
-    /// The fixed column pointer for a member the raw scan met at <paramref name="segments"/>: only a declared column is
-    /// named, a <c>steps</c> member is <c>/steps</c>, and anything else (a caller's own member name, a member inside an
-    /// object that is not a row) is reported as <c>/row</c> or <c>/file</c> so no name is echoed (S3).
+    /// Records the container the walk just entered: a container reached through a member name adds that name to the
+    /// chain, an array element or the document root adds nothing.
     /// </summary>
-    /// <param name="rowIndex">The 1-based data row the scan is inside.</param>
-    /// <param name="segments">The member path the scan has walked, starting at <c>rows</c>.</param>
-    /// <returns>The pointer.</returns>
-    internal static string NestedPointer(int rowIndex, List<string> segments)
+    /// <param name="segments">The member-name chain of the containers currently open.</param>
+    /// <param name="entered">One flag per reader depth: whether that container added a segment.</param>
+    /// <param name="depth">The <see cref="Utf8JsonReader.CurrentDepth"/> of the start token.</param>
+    /// <param name="member">The member name that introduced the container, or <c>null</c>.</param>
+    /// <returns>Always <c>null</c>: the pending member name is consumed by its container.</returns>
+    private static string? Enter(List<string> segments, bool[] entered, int depth, string? member)
     {
-        if (rowIndex <= 0 || segments.Count == 0 || !string.Equals(segments[0], "rows", StringComparison.Ordinal))
+        var added = member is not null;
+
+        if (depth < entered.Length)
+        {
+            entered[depth] = added;
+        }
+
+        if (added)
+        {
+            segments.Add(member!);
+        }
+
+        return null;
+    }
+
+    /// <summary>Leaves the container that closes at <paramref name="depth"/>, dropping the name it added.</summary>
+    /// <param name="segments">The member-name chain of the containers currently open.</param>
+    /// <param name="entered">One flag per reader depth: whether that container added a segment.</param>
+    /// <param name="depth">The <see cref="Utf8JsonReader.CurrentDepth"/> of the end token.</param>
+    private static void Leave(List<string> segments, bool[] entered, int depth)
+    {
+        if (depth >= entered.Length || !entered[depth])
+        {
+            return;
+        }
+
+        entered[depth] = false;
+
+        if (segments.Count > 0)
+        {
+            segments.RemoveAt(segments.Count - 1);
+        }
+    }
+
+    /// <summary>
+    /// The fixed pointer for a member <em>name</em> the scan refuses (an unreadable, unstorable or repeated name): the
+    /// object the name sits in — <c>/row</c> for a row object, <c>/steps</c> for a steps document, <c>/file</c> for the
+    /// document or any other object. A caller's own name is never echoed (S3).
+    /// </summary>
+    /// <param name="segments">The member-name chain of the containers currently open.</param>
+    /// <returns>The pointer.</returns>
+    internal static string NamePointer(List<string> segments)
+    {
+        if (segments.Count == 0 || !string.Equals(segments[0], "rows", StringComparison.Ordinal))
         {
             return "/file";
         }
@@ -284,24 +421,39 @@ internal static class ImportSchema
             return "/row";
         }
 
-        if (string.Equals(segments[1], "steps", StringComparison.Ordinal))
+        return string.Equals(segments[1], "steps", StringComparison.Ordinal) ? "/steps" : "/row";
+    }
+
+    /// <summary>
+    /// The fixed pointer for a member <em>value</em> the scan refuses: the declared column the value belongs to, or
+    /// <c>/steps</c> inside a steps document, and <c>/row</c> or <c>/file</c> where no column name is known.
+    /// </summary>
+    /// <param name="segments">The member-name chain of the containers currently open.</param>
+    /// <param name="member">The member whose value is being read, or <c>null</c>.</param>
+    /// <returns>The pointer.</returns>
+    internal static string ValuePointer(List<string> segments, string? member)
+    {
+        if (segments.Count == 0 || !string.Equals(segments[0], "rows", StringComparison.Ordinal))
+        {
+            return "/file";
+        }
+
+        if (segments.Count > 1)
+        {
+            return string.Equals(segments[1], "steps", StringComparison.Ordinal) ? "/steps" : "/row";
+        }
+
+        if (member is null)
+        {
+            return "/row";
+        }
+
+        if (string.Equals(member, "steps", StringComparison.Ordinal))
         {
             return "/steps";
         }
 
-        return segments.Count == 2 && ColumnSet.Contains(segments[1]) ? "/" + segments[1] : "/row";
-    }
-
-    /// <summary>Cuts the walked member path back to <paramref name="count"/> segments when the reader leaves a depth.</summary>
-    /// <param name="segments">The walked path.</param>
-    /// <param name="count">The depth to keep.</param>
-    private static void Truncate(List<string> segments, int count)
-    {
-        var keep = Math.Max(count, 0);
-        if (segments.Count > keep)
-        {
-            segments.RemoveRange(keep, segments.Count - keep);
-        }
+        return ColumnSet.Contains(member) ? "/" + member : "/row";
     }
 
     /// <summary>

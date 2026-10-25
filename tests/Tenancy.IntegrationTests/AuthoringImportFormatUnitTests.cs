@@ -162,7 +162,7 @@ public sealed class AuthoringImportFormatUnitTests
         // The body cap is 5 MiB: without a per-cell cap one cell could ask for a 5 MiB string, so a cell over 64 KiB is
         // refused before it is decoded or allocated.
         var overCap = new string('a', ImportText.MaxCellBytes + 1);
-        var refused = CsvFormat.Read(Utf8($"{Header}\r\nnode,n1,,,module,T,{overCap},,,,,,,0\r\n"));
+        var refused = CsvFormat.Read(Utf8($"{Header}\r\n{string.Join(',', "node", "n1", string.Empty, string.Empty, "module", "T", overCap, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, "0")}\r\n"));
 
         refused.TooLarge.ShouldBeFalse();
         refused.Issues.ShouldBe([new ImportIssue(1, "/description", "value_invalid")]);
@@ -206,14 +206,14 @@ public sealed class AuthoringImportFormatUnitTests
     public void Text_NulAndLoneSurrogate_InvalidText()
     {
         // CSV: a literal NUL byte in a cell. It is valid UTF-8 and valid to every parser, so only this check refuses it.
-        var nulCsv = new List<byte>(Utf8(Header + "\r\nnode,n1,,,module,a"));
+        var nulCsv = new List<byte>(Utf8(Header + "\r\n" + CsvTitleOpen("a")));
         nulCsv.Add(0x00);
         nulCsv.AddRange(Utf8("b,,,,,,,0\r\n"));
         CsvFormat.Read([.. nulCsv]).Issues.ShouldBe([new ImportIssue(1, "/title", "invalid_text")]);
 
         // CSV: a lone surrogate encoded as the three bytes CESU-8 uses for it — not decodable as UTF-8, and refused as
         // unstorable text rather than as an unsupported format, because the cell boundary is still known.
-        var surrogateCsv = new List<byte>(Utf8(Header + "\r\nnode,n1,,,module,a"));
+        var surrogateCsv = new List<byte>(Utf8(Header + "\r\n" + CsvTitleOpen("a")));
         surrogateCsv.AddRange([0xED, 0xA0, 0x80]);
         surrogateCsv.AddRange(Utf8("b,,,,,,,0\r\n"));
         CsvFormat.Read([.. surrogateCsv]).Issues.ShouldBe([new ImportIssue(1, "/title", "invalid_text")]);
@@ -263,13 +263,119 @@ public sealed class AuthoringImportFormatUnitTests
             .ShouldBe([new ImportIssue(1, "/row", "value_invalid")]);
     }
 
+    [Fact]
+    public void Text_Noncharacter_InvalidText()
+    {
+        // U+FFFE and U+FFFF are code points the process's normaliser refuses, so this module cannot store them composed
+        // (AC14). Every carrier answers the same way — one invalid_text issue at the column — and none of them throws,
+        // which is what a reader that called the normaliser unguarded would do.
+        var noncharacter = "a\uFFFFb";
+
+        var csvRow = string.Join(
+            ',',
+            "node",
+            "n1",
+            string.Empty,
+            string.Empty,
+            "module",
+            noncharacter,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            "0");
+
+        CsvFormat.Read(Utf8($"{Header}\r\n{csvRow}\r\n")).Issues.ShouldBe([new ImportIssue(1, "/title", "invalid_text")]);
+
+        // JSON: the escape is what a caller writes, and the scan refuses it before the document is parsed.
+        JsonFormat.Read(Utf8(Document("""{"kind":"node","key":"n1","node_kind":"module","title":"a\uffffb"}"""))).Issues
+            .ShouldBe([new ImportIssue(1, "/title", "invalid_text")]);
+
+        // The same rule for a member name: no name is echoed, so the pointer is the row's own.
+        JsonFormat.Read(Utf8(Document("""{"kind":"node","key":"n1","node_kind":"module","a\uffffb":1}"""))).Issues
+            .ShouldBe([new ImportIssue(1, "/row", "invalid_text")]);
+    }
+
+    [Fact]
+    public void CodeAndKey_TrailingLineFeed_Refused()
+    {
+        // The contract's patterns are anchored with an ECMA-262 `$`, which means end of input; the engine the registry
+        // uses also matches before a final line feed, so the validator applies the same patterns with an exact end. A
+        // key or code carrying one is a different string from the key or code it looks like, so it must not reach the
+        // planner, where "n1" and "n1\n" would be two rows and a code would fail the database's own CHECK instead.
+        JsonFormat.Read(Utf8("""{"format":"authoring-import","version":1,"rows":[{"kind":"node","key":"n1\n","node_kind":"module","title":"Area"}]}"""))
+            .Issues.ShouldBe([new ImportIssue(1, "/key", "value_invalid")]);
+
+        JsonFormat
+            .Read(Utf8(
+                """{"format":"authoring-import","version":1,"rows":[{"kind":"case","key":"c1","item_key":"i1","title":"T","priority":"high","steps":{"steps":[{"no":1,"action":"Pay","expected":"Refused"}]},"code":"SHOP-001\n"}]}"""))
+            .Issues.ShouldBe([new ImportIssue(1, "/code", "value_invalid")]);
+
+        // The CSV cell is the same value: a quoted cell holding the line feed is refused at the same column.
+        var csvKey = string.Join(
+            ',',
+            "node",
+            "\"n1\n\"",
+            string.Empty,
+            string.Empty,
+            "module",
+            "Area",
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            "0");
+
+        CsvFormat.Read(Utf8($"{Header}\r\n{csvKey}\r\n")).Issues.ShouldBe([new ImportIssue(1, "/key", "value_invalid")]);
+    }
+
+    [Fact]
+    public void Csv_RecordOverTheColumnCount_Refused()
+    {
+        // A record with more fields than the table has columns is refused as a record, and the collector stops at the
+        // cap: a 5 MiB line of commas must not become five million field spans before it is refused (AC16).
+        var commas = new string(',', ImportLimits.MaxBodyBytes - Header.Length - 4);
+        var parse = CsvFormat.Read(Utf8($"{Header}\r\n{commas}\r\n"));
+
+        parse.TooLarge.ShouldBeFalse();
+        parse.Rows.ShouldBeEmpty();
+        parse.Issues.ShouldBe([new ImportIssue(1, "/row", "unsupported_format")]);
+
+        // One field past the table — a valid node row with a fourteenth cell — is the count mismatch every reader's
+        // cell twin reports the same way: value_invalid at the row, the same reason the XLSX reader gives a cell past
+        // the last column. Only a record the collector had to stop reading (fifteen or more fields) is unsupported.
+        var fourteen = string.Join(
+            ',',
+            "node",
+            "n1",
+            string.Empty,
+            string.Empty,
+            "module",
+            "T",
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            "0",
+            "extra");
+
+        CsvFormat.Read(Utf8($"{Header}\r\n{fourteen}\r\n")).Issues
+            .ShouldBe([new ImportIssue(1, "/row", "value_invalid")]);
+    }
+
     // ------------------------------------------------------------------ neutralisation (AC16)
 
     [Fact]
     public async Task Neutralise_RoundTrip_BothDirections()
     {
         // Every trigger is prefixed on export and stripped on import: the stored text is literal, never evaluated.
-        foreach (var trigger in new[] { "=", "+", "-", "@", "\t", "\r" })
+        foreach (var trigger in new[] { "=", "+", "-", "@", "\t", "\r", "\n" })
         {
             var value = trigger + "cmd";
 
@@ -441,6 +547,15 @@ public sealed class AuthoringImportFormatUnitTests
     /// <param name="text">The text.</param>
     /// <returns>The bytes.</returns>
     private static byte[] Utf8(string text) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text);
+
+    /// <summary>
+    /// A data row's first six cells — through the start of its <c>title</c> — so a test can inject raw bytes into the
+    /// title cell and close the record with <c>b,,,,,,,0</c> (the six remaining columns and the position).
+    /// </summary>
+    /// <param name="start">The title text before the injected bytes.</param>
+    /// <returns>The record prefix, without a terminator.</returns>
+    private static string CsvTitleOpen(string start) =>
+        string.Join(',', "node", "n1", string.Empty, string.Empty, "module", start);
 
     /// <summary>A body read as text (a BOM prefix is dropped when present).</summary>
     /// <param name="bytes">The body.</param>

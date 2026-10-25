@@ -1,7 +1,9 @@
 using System.Buffers;
 using System.Globalization;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Unicode;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -81,16 +83,30 @@ internal enum ImportInclude
 /// <para>
 /// <b>Failures.</b> A project the tenant cannot see is the tree route's own <c>404</c>
 /// (<see cref="AuthoringRules.ProjectNotFound"/>); an unknown, soft-deleted or other-project <c>node_id</c> is
-/// <c>404 not_found</c> for a feature node (AC10's indistinguishability). A scope that would produce more than
+/// <c>404 not_found</c> for a feature node (AC10's indistinguishability). A scope that would <em>emit</em> more than
 /// <see cref="ImportLimits.MaxDataRows"/> rows is <c>413 payload_too_large</c> with
 /// <c>details[].path = /node_id</c>, never a truncated file: the import cap and the export cap are one number, so every
-/// export this class answers with re-imports, and the refusal names the cap without echoing a row. Every read is bounded
-/// by the cap plus one, so the refusal is reached without materialising an oversized scope.
+/// export this class answers with re-imports, and the refusal names the cap without echoing a row. The cap is on the rows
+/// of <em>this answer</em>: a kind the caller filtered out (<c>include=cases</c>) is never counted against it, and the
+/// larger walk it needs for its keys is bounded separately (<see cref="MaxWalkedRows"/>, refused with the same 413)
+/// instead of silently dropping rows. Two bounds keep the answer re-importable in bytes as well as in rows: the text of
+/// the rows is refused once it passes <see cref="ImportLimits.MaxBodyBytes"/> (the import body cap, checked while the
+/// table is assembled, so a huge file is never built), and the serialised file is checked again by the caller for the
+/// formats whose bytes exceed their text. Every read is bounded by its cap plus one, so each refusal is reached without
+/// materialising an oversized scope.
 /// </para>
 /// </remarks>
 /// <param name="db">The Dapper path over the caller's open tenant scope (the export runs in the caller's read-only transaction).</param>
 internal sealed class AuthoringExporter(ITenantDb db)
 {
+    /// <summary>
+    /// The nodes (and, for a <c>cases</c>-only export, the items) a filtered export has to walk to number its keys. A
+    /// filtered export emits the rows of the kinds it names, but a key is numbered over <em>every</em> row of its kind in
+    /// the full tree walk, so the walk of a kind that is not emitted still has to see the whole scope: the row cap is a
+    /// cap on <em>emitted</em> rows, and this is the separate, much larger bound on the walk itself.
+    /// </summary>
+    private const int MaxWalkedRows = 100_000;
+
     /// <summary>
     /// The 413 of an export scope larger than the import cap (<c>details[].path = /node_id</c>, reason
     /// <c>body_too_large</c> — the shared size token of <see cref="ContractValidationError.BodyTooLargeReason"/>, never the
@@ -99,6 +115,34 @@ internal sealed class AuthoringExporter(ITenantDb db)
     private static Error TooLarge => new(
         ApiErrorCode.PayloadTooLarge,
         string.Create(CultureInfo.InvariantCulture, $"an export carries at most {ImportLimits.MaxDataRows} rows; scope it with node_id"),
+        413,
+        Retryable: false,
+        Details: [new ErrorDetail("/node_id", ContractValidationError.BodyTooLargeReason)]);
+
+    /// <summary>
+    /// The 413 <see cref="ExportQueries"/> answers when the file itself would pass the import body cap: an export that no
+    /// import could accept is not a file (AC14 requires every export to re-import), so it is refused with the same
+    /// pointer and reason as the row cap rather than served as a download the consumer cannot load.
+    /// </summary>
+    internal static Error BodyTooLarge => new(
+        ApiErrorCode.PayloadTooLarge,
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"an export carries at most {ImportLimits.MaxBodyBytes} bytes of text; scope it with node_id"),
+        413,
+        Retryable: false,
+        Details: [new ErrorDetail("/node_id", ContractValidationError.BodyTooLargeReason)]);
+
+    /// <summary>
+    /// The 413 of a filtered export whose <em>walked</em> scope is over <see cref="MaxWalkedRows"/>: a <c>cases</c>-only
+    /// export of a project with more nodes than that cannot number its keys, and a truncated walk would silently drop
+    /// rows, so the scope is refused with the same way through.
+    /// </summary>
+    private static Error ScopeTooLarge => new(
+        ApiErrorCode.PayloadTooLarge,
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"an export walks at most {MaxWalkedRows} rows to number a filtered file; scope it with node_id"),
         413,
         Retryable: false,
         Details: [new ErrorDetail("/node_id", ContractValidationError.BodyTooLargeReason)]);
@@ -152,14 +196,19 @@ internal sealed class AuthoringExporter(ITenantDb db)
             }
         }
 
-        var parameters = ExportSql.Parameters(orgId, projectId, root?.Id, ImportLimits.MaxDataRows + 1);
+        // The row cap is a cap on the rows of the answer, so a kind that is emitted is read one row past the cap and a
+        // kind that is only walked (nodes for a filtered export's keys, items for a cases-only one) is read against the
+        // much larger walk bound: `include=cases` on a project of 6 000 nodes and 100 cases answers 100 rows, and its
+        // keys are still the full tree's keys because the walk saw the whole tree.
+        var nodeTake = wantsNodes ? ImportLimits.MaxDataRows + 1 : MaxWalkedRows + 1;
+        var itemTake = wantsItems ? ImportLimits.MaxDataRows + 1 : MaxWalkedRows + 1;
 
         IReadOnlyList<ExportSql.NodeRow> nodes = [];
         if (readsNodes)
         {
             nodes = await db.QueryAsync<ExportSql.NodeRow>(
                 root is null ? ExportSql.Nodes : ExportSql.NodesOfSubtree,
-                parameters,
+                ExportSql.Parameters(orgId, projectId, root?.Id, nodeTake),
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -168,7 +217,7 @@ internal sealed class AuthoringExporter(ITenantDb db)
         {
             items = await db.QueryAsync<ExportSql.ItemRow>(
                 root is null ? ExportSql.Items : ExportSql.ItemsOfSubtree,
-                parameters,
+                ExportSql.Parameters(orgId, projectId, root?.Id, itemTake),
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -177,15 +226,15 @@ internal sealed class AuthoringExporter(ITenantDb db)
         {
             cases = await db.QueryAsync<ExportSql.CaseRow>(
                 root is null ? ExportSql.Cases : ExportSql.CasesOfSubtree,
-                parameters,
+                ExportSql.Parameters(orgId, projectId, root?.Id, ImportLimits.MaxDataRows + 1),
                 cancellationToken).ConfigureAwait(false);
         }
 
-        if (nodes.Count > ImportLimits.MaxDataRows
-            || items.Count > ImportLimits.MaxDataRows
-            || cases.Count > ImportLimits.MaxDataRows)
+        // A walked set that hit its own bound means the numbering walk is incomplete, and an incomplete walk would drop
+        // rows of the kinds that are emitted: refuse the scope instead of answering a file with a hole in it.
+        if ((!wantsNodes && nodes.Count > MaxWalkedRows) || (!wantsItems && items.Count > MaxWalkedRows))
         {
-            return AuthoringErrors.Fail<IReadOnlyList<ImportRow>>(TooLarge);
+            return AuthoringErrors.Fail<IReadOnlyList<ImportRow>>(ScopeTooLarge);
         }
 
         var emitted = (wantsNodes ? nodes.Count : 0) + (wantsItems ? items.Count : 0) + (wantsCases ? cases.Count : 0);
@@ -194,8 +243,18 @@ internal sealed class AuthoringExporter(ITenantDb db)
             return AuthoringErrors.Fail<IReadOnlyList<ImportRow>>(TooLarge);
         }
 
-        return Result.Success<IReadOnlyList<ImportRow>>(
-            new RowAssembly(nodes, items, cases, include, emitted).Build());
+        var assembly = new RowAssembly(nodes, items, cases, include, emitted);
+        var rows = assembly.Build();
+
+        // The import accepts at most ImportLimits.MaxBodyBytes, so a file of row count under the cap can still be one no
+        // import could read back: refuse it here, on the text it would carry, rather than answering a download that
+        // contradicts AC14's "every export re-imports".
+        if (assembly.OverBudget)
+        {
+            return AuthoringErrors.Fail<IReadOnlyList<ImportRow>>(BodyTooLarge);
+        }
+
+        return Result.Success<IReadOnlyList<ImportRow>>(rows);
     }
 
     /// <summary>
@@ -210,13 +269,26 @@ internal sealed class AuthoringExporter(ITenantDb db)
         using var document = JsonDocument.Parse(stored);
 
         var buffer = new ArrayBufferWriter<byte>(stored.Length);
-        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = false }))
+        using (var writer = new Utf8JsonWriter(buffer, CompactWriterOptions))
         {
             document.RootElement.WriteTo(writer);
         }
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
+
+    /// <summary>
+    /// The writer options of the compact spelling: no indentation, and an encoder that carries the stored text as the
+    /// UTF-8 it already is. The default encoder escapes every non-ASCII character as <c>\uXXXX</c>, which would put a
+    /// decomposed-looking spelling in the file instead of the NFC text the database stores (13.1.1 AC14 asserts the
+    /// export is NFC as <em>text</em>). The encoder still escapes the HTML-significant set (<c>&lt;</c>, <c>&gt;</c>,
+    /// <c>&amp;</c>, <c>'</c>, <c>+</c>) and every control character, so the document stays safe to embed and valid JSON.
+    /// </summary>
+    private static readonly JsonWriterOptions CompactWriterOptions = new()
+    {
+        Indented = false,
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+    };
 
     /// <summary>
     /// One export's row assembly: the tree walk, the key numbering and the field mapping, with no database work, so the
@@ -243,6 +315,7 @@ internal sealed class AuthoringExporter(ITenantDb db)
         private int _nodeNumber;
         private int _itemNumber;
         private int _caseNumber;
+        private long _textChars;
 
         /// <summary>One assembly over the three read sets.</summary>
         /// <param name="nodes">The live nodes in scope, in <c>(position, id)</c> order.</param>
@@ -266,6 +339,12 @@ internal sealed class AuthoringExporter(ITenantDb db)
             _rows = new List<ImportRow>(capacity);
             _nodeKeys = new Dictionary<Guid, string>(nodes.Count);
         }
+
+        /// <summary>
+        /// True when the walk stopped because the file's text passed <see cref="ImportLimits.MaxBodyBytes"/>: the rows
+        /// collected so far are then a prefix and the caller answers 413 instead of serving a file no import accepts.
+        /// </summary>
+        internal bool OverBudget { get; private set; }
 
         /// <summary>Walks the tree and returns the rows in the documented emission order.</summary>
         internal List<ImportRow> Build()
@@ -325,6 +404,11 @@ internal sealed class AuthoringExporter(ITenantDb db)
             // the file whatever the table holds.
             foreach (var node in _nodes)
             {
+                if (OverBudget)
+                {
+                    break;
+                }
+
                 if (_nodeKeys.ContainsKey(node.Id))
                 {
                     continue;
@@ -341,7 +425,7 @@ internal sealed class AuthoringExporter(ITenantDb db)
         /// <param name="stack">The nodes to visit; children are pushed as their parent is visited.</param>
         private void Drain(Stack<ExportSql.NodeRow> stack)
         {
-            while (stack.Count > 0)
+            while (stack.Count > 0 && !OverBudget)
             {
                 var node = stack.Pop();
 
@@ -362,6 +446,47 @@ internal sealed class AuthoringExporter(ITenantDb db)
             }
         }
 
+        /// <summary>
+        /// Records one row and charges its text against the export's body budget: a file carries at most
+        /// <see cref="ImportLimits.MaxBodyBytes"/> of text — the import's own cap — so every export this class answers
+        /// with is one the import accepts (AC14). The walk stops at the first row past it instead of building the rest
+        /// of a file that would be refused.
+        /// </summary>
+        /// <param name="row">The row to record.</param>
+        private void Emit(ImportRow row)
+        {
+            if (OverBudget)
+            {
+                return;
+            }
+
+            _textChars += TextChars(row);
+
+            if (_textChars > ImportLimits.MaxBodyBytes)
+            {
+                OverBudget = true;
+
+                return;
+            }
+
+            _rows.Add(row);
+        }
+
+        /// <summary>The characters of text one row puts in the file: every string member, keys included.</summary>
+        /// <param name="row">The row.</param>
+        private static long TextChars(ImportRow row) =>
+            (long)(row.Key.Length
+                + (row.ParentKey?.Length ?? 0)
+                + (row.ItemKey?.Length ?? 0)
+                + (row.NodeKind?.Length ?? 0)
+                + (row.Title?.Length ?? 0)
+                + (row.Description?.Length ?? 0)
+                + (row.Precondition?.Length ?? 0)
+                + (row.StepsJson?.Length ?? 0)
+                + (row.Priority?.Length ?? 0)
+                + (row.State?.Length ?? 0)
+                + (row.Code?.Length ?? 0));
+
         /// <summary>Emits one node's block: the node row, its items with their cases, then nothing (children follow it).</summary>
         /// <param name="node">The node being visited.</param>
         private void Visit(ExportSql.NodeRow node)
@@ -378,7 +503,7 @@ internal sealed class AuthoringExporter(ITenantDb db)
                     ? known
                     : null;
 
-                _rows.Add(new ImportRow(
+                Emit(new ImportRow(
                     ++_index,
                     ImportRowKind.Node,
                     key,
@@ -402,12 +527,17 @@ internal sealed class AuthoringExporter(ITenantDb db)
 
             foreach (var item in items)
             {
+                if (OverBudget)
+                {
+                    return;
+                }
+
                 _itemNumber++;
                 var itemKey = string.Create(CultureInfo.InvariantCulture, $"i{_itemNumber}");
 
                 if (_wantsItems)
                 {
-                    _rows.Add(new ImportRow(
+                    Emit(new ImportRow(
                         ++_index,
                         ImportRowKind.Item,
                         itemKey,
@@ -431,11 +561,16 @@ internal sealed class AuthoringExporter(ITenantDb db)
 
                 foreach (var testCase in cases)
                 {
+                    if (OverBudget)
+                    {
+                        return;
+                    }
+
                     _caseNumber++;
 
                     if (_wantsCases)
                     {
-                        _rows.Add(new ImportRow(
+                        Emit(new ImportRow(
                             ++_index,
                             ImportRowKind.Case,
                             string.Create(CultureInfo.InvariantCulture, $"c{_caseNumber}"),

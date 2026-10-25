@@ -59,6 +59,20 @@ internal static class XlsxReader
     /// <summary>The pointer a cell beyond the thirteen columns carries; the header has no name for it (S3).</summary>
     private const string ExtraColumnPath = "/extra_column";
 
+    /// <summary>
+    /// The most characters one element's text is allowed to accumulate: one more than a cell may hold, so a value over
+    /// the cell cap is recognised after a single character past it instead of after the whole element is built
+    /// (<see cref="ImportText.MaxCellChars"/> is the cap the row rules apply).
+    /// </summary>
+    private const int TextCharLimit = ImportText.MaxCellChars + 1;
+
+    /// <summary>
+    /// The most characters the whole shared-string table may accumulate: the selected part's byte cap, which no part
+    /// this reader accepts can exceed in characters, because every character of the table came from at least one byte
+    /// of the part. It is the explicit statement of that bound, so raising a cap cannot silently unbound the table.
+    /// </summary>
+    private const long MaxSharedStringChars = XlsxFormat.MaxPartBytes;
+
     /// <summary>The file suffix of the macro part the corpus and every Excel writer use.</summary>
     private const string MacroPartFileName = "vbaproject.bin";
 
@@ -383,6 +397,7 @@ internal static class XlsxReader
         }
 
         var strings = new List<string>();
+        var characters = 0L;
         using var reader = report.OpenReader();
 
         while (reader.Read())
@@ -400,7 +415,19 @@ internal static class XlsxReader
                 return [];
             }
 
-            strings.Add(ReadStringItemText(reader));
+            // Every string is capped at one character past a cell, because a longer one can never fill a cell: the
+            // cap keeps one hostile <t> of up to MaxPartBytes from becoming a 32 M-character string.
+            var text = ReadStringItemText(reader, TextCharLimit);
+            characters += text.Length;
+
+            if (characters > MaxSharedStringChars)
+            {
+                issue = FileIssue(UnsupportedFormat);
+
+                return [];
+            }
+
+            strings.Add(text);
         }
 
         return strings;
@@ -442,6 +469,7 @@ internal static class XlsxReader
         var rowIndex = 0;
         var tooLarge = false;
         var lastRowNumber = 0;
+        var skippedRows = 0;
 
         while (reader.Read())
         {
@@ -497,6 +525,17 @@ internal static class XlsxReader
             if (!hasValues && problems.Count == 0)
             {
                 // A styled but empty row carries no data: it is skipped rather than reported as a row of blank cells.
+                // The count is still bounded, because a worksheet of empty rows — about twelve bytes each, up to the
+                // part cap — would otherwise be walked to its end before any cap could fire (AC16).
+                skippedRows++;
+
+                if (skippedRows > ImportLimits.MaxDataRows)
+                {
+                    tooLarge = true;
+
+                    break;
+                }
+
                 continue;
             }
 
@@ -629,16 +668,20 @@ internal static class XlsxReader
             var reference = reader.GetAttribute("r");
             var type = reader.GetAttribute("t");
             var column = reference is null ? nextColumn : ColumnOf(reference);
-            var text = ReadCellText(reader, type, sharedStrings, out var isText, out var reason);
 
             nextColumn = column + 1;
 
             if (column < 1 || column > ImportSchema.ColumnNames.Length)
             {
+                // The cell is past the last column, so its value can never enter the table: consume the element without
+                // collecting its text, so a 13-column file cannot make this reader materialise a cell of any size.
+                ReadCellText(reader, type, sharedStrings, 0, out _, out _);
                 problems.Add(new CellProblem(0, ValueInvalid));
 
                 continue;
             }
+
+            var text = ReadCellText(reader, type, sharedStrings, TextCharLimit, out var isText, out var reason);
 
             if (reason is not null)
             {
@@ -649,6 +692,15 @@ internal static class XlsxReader
 
             if (text is null)
             {
+                continue;
+            }
+
+            if (text.Length > ImportText.MaxCellChars)
+            {
+                // Refused before it is unescaped or composed: the cap is measured on the text the file carries, so a
+                // shared string referenced by every cell cannot ask for a fresh copy past it.
+                problems.Add(new CellProblem(column, ValueInvalid));
+
                 continue;
             }
 
@@ -663,6 +715,10 @@ internal static class XlsxReader
     /// <param name="reader">The reader, positioned on the <c>c</c> start element.</param>
     /// <param name="type">The cell's <c>t</c> attribute, or null for the numeric default.</param>
     /// <param name="sharedStrings">The shared-string table a <c>t="s"</c> cell indexes into.</param>
+    /// <param name="maxChars">
+    /// The most characters to collect from the cell's text, or <c>0</c> for a cell whose value is never used: the
+    /// element is consumed either way, so the walk keeps its position without materialising the text.
+    /// </param>
     /// <param name="isText">True when the value is text the <c>_xHHHH_</c> escaping applies to.</param>
     /// <param name="reason">The refusal when the cell's content cannot be a value, else null.</param>
     /// <returns>The cell's raw value, or null for an empty or refused cell.</returns>
@@ -670,6 +726,7 @@ internal static class XlsxReader
         XmlReader reader,
         string? type,
         List<string> sharedStrings,
+        int maxChars,
         out bool isText,
         out string? reason)
     {
@@ -697,10 +754,10 @@ internal static class XlsxReader
                 switch (reader.LocalName)
                 {
                     case "v":
-                        value = ReadElementText(reader);
+                        value = ReadElementText(reader, maxChars);
                         break;
                     case "is":
-                        inline = ReadStringItemText(reader);
+                        inline = ReadStringItemText(reader, maxChars);
                         break;
                     default:
                         // A formula, an extension list or anything else carries no value the table can store.
@@ -913,8 +970,13 @@ internal static class XlsxReader
 
     /// <summary>Reads the text of an element that carries text only (a <c>v</c> or a <c>t</c>).</summary>
     /// <param name="reader">The reader, positioned on the element.</param>
+    /// <param name="maxChars">
+    /// The most characters to collect: text past it is skipped rather than appended, so one element of a 32 MiB part
+    /// cannot become a 32 M-character string. The answer may exceed it by one text node, which is what the caller
+    /// compares against the cell cap.
+    /// </param>
     /// <returns>The element's text, whitespace included.</returns>
-    private static string ReadElementText(XmlReader reader)
+    private static string ReadElementText(XmlReader reader, int maxChars)
     {
         if (reader.IsEmptyElement)
         {
@@ -947,8 +1009,13 @@ internal static class XlsxReader
                 case XmlNodeType.CDATA:
                 case XmlNodeType.SignificantWhitespace:
                 case XmlNodeType.Whitespace:
-                    text ??= new StringBuilder();
-                    text.Append(reader.Value);
+                    text ??= new StringBuilder(Math.Min(maxChars, 256));
+
+                    if (text.Length <= maxChars)
+                    {
+                        text.Append(reader.Value);
+                    }
+
                     break;
                 default:
                     break;
@@ -960,8 +1027,9 @@ internal static class XlsxReader
 
     /// <summary>Reads a string item — an <c>si</c> or an <c>is</c> — concatenating its text runs and ignoring phonetics.</summary>
     /// <param name="reader">The reader, positioned on the string item's start element.</param>
+    /// <param name="maxChars">The most characters to collect, as <see cref="ReadElementText"/> applies it.</param>
     /// <returns>The item's text.</returns>
-    private static string ReadStringItemText(XmlReader reader)
+    private static string ReadStringItemText(XmlReader reader, int maxChars)
     {
         if (reader.IsEmptyElement)
         {
@@ -1011,8 +1079,12 @@ internal static class XlsxReader
 
             if (string.Equals(reader.LocalName, "t", StringComparison.Ordinal))
             {
-                text ??= new StringBuilder();
-                text.Append(ReadElementText(reader));
+                text ??= new StringBuilder(Math.Min(maxChars, 256));
+
+                if (text.Length <= maxChars)
+                {
+                    text.Append(ReadElementText(reader, maxChars - text.Length));
+                }
             }
         }
 

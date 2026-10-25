@@ -43,9 +43,16 @@ internal static class AuthoringImportEndpoints
 
         // The body is the file, so the accepted media types are declared without a body schema: the document a JSON
         // import carries is contracts/schemas/authoring-import.v1.json, referenced by the contract operation itself.
+        // They are the contract's own tokens, parameter for parameter (openapi.yaml:6001-6008): the bare `text/csv` is
+        // what the contract declares, and the route accepts the same type with `charset=utf-8` as well, because that is
+        // the header a spreadsheet or browser upload actually sends and the accepted list is matched literally. The
+        // other two are declared bare, which matches any charset.
         authoring.MapPost("/import", ImportAsync)
             .WithMetadata(new AcceptsMetadata([
-                ImportFormats.CsvContentType, ImportFormats.JsonContentType, ImportFormats.XlsxContentType]))
+                ImportFormats.CsvMediaType,
+                ImportFormats.CsvContentType,
+                ImportFormats.JsonContentType,
+                ImportFormats.XlsxContentType]))
             .Produces<ImportResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status403Forbidden)

@@ -40,9 +40,45 @@ internal static class ImportApplySql
     /// set, so two imports of overlapping group sets can never take them in opposite orders).
     /// </summary>
     internal const string LockSiblingGroups = """
-        select pg_advisory_xact_lock(hashtextextended(g.key, 0))
-          from (select unnest(@group_keys::text[]) as key) g
-         order by g.key
+        with keys as materialized (select distinct unnest(@group_keys::text[]) as key order by 1)
+        select pg_advisory_xact_lock(hashtextextended(k.key, 0))
+          from keys k
+         order by k.key
+        """;
+
+    /// <summary>
+    /// The live state of every sibling group this file adds to, re-read <b>under</b> the advisory locks: the count and the
+    /// highest position the apply must find exactly as the plan read them, or the plan is stale and the apply answers the
+    /// retryable <c>503</c> (finding F). The root group travels as <see cref="Guid.Empty"/> and is joined against a null
+    /// <c>parent_id</c>, so a file that adds a module is verified like any other group.
+    /// </summary>
+    internal const string GroupState = """
+        with node_state as (
+            select n.parent_id, count(*)::int as live_count, max(n.position)::int as maximum
+              from public.feature_node n
+             where n.org_id = @org_id
+               and n.project_id = @project_id
+               and n.deleted_at is null
+               and (n.parent_id = any(@node_groups::uuid[])
+                    or (n.parent_id is null and @root = any(@node_groups::uuid[])))
+             group by n.parent_id
+        ), item_state as (
+            select i.feature_node_id as parent_id, count(*)::int as live_count, max(i.position)::int as maximum
+              from public.checklist_item i
+             where i.org_id = @org_id
+               and i.project_id = @project_id
+               and i.deleted_at is null
+               and i.feature_node_id = any(@item_groups::uuid[])
+             group by i.feature_node_id
+        )
+        select 'feature_node'::text as kind, g.parent_id, coalesce(s.live_count, 0)::int as live_count,
+               coalesce(s.maximum, -1)::int as maximum
+          from unnest(@node_groups::uuid[]) as g(parent_id)
+          left join node_state s on s.parent_id is not distinct from nullif(g.parent_id, @root)
+        union all
+        select 'checklist_item'::text, g.parent_id, coalesce(s.live_count, 0)::int, coalesce(s.maximum, -1)::int
+          from unnest(@item_groups::uuid[]) as g(parent_id)
+          left join item_state s on s.parent_id = g.parent_id
         """;
 
     /// <summary>The row locks of the entities this file updates or restores, one statement per kind (rank order).</summary>
@@ -50,7 +86,7 @@ internal static class ImportApplySql
     internal static string LockEntities(AuthoringEntityKind kind) => kind switch
     {
         AuthoringEntityKind.FeatureNode => """
-            select n.id, n.version
+            select n.id, n.version, n.deleted_at
               from public.feature_node n
              where n.org_id = @org_id and n.project_id = @project_id and n.id = any(@ids)
              order by n.id
@@ -162,7 +198,23 @@ internal static class ImportApplySql
         /// <summary>The row's <c>version</c> as the lock read it.</summary>
         public int Version { get; set; }
 
-        /// <summary>The soft-delete stamp (cases and items only; null for a node read).</summary>
+        /// <summary>The soft-delete stamp, or null for a live row.</summary>
         public DateTimeOffset? DeletedAt { get; set; }
+    }
+
+    /// <summary>The re-read of one sibling group under the advisory locks (finding F).</summary>
+    internal sealed class GroupStateRow
+    {
+        /// <summary>The group's entity kind: <c>feature_node</c> or <c>checklist_item</c>.</summary>
+        public string Kind { get; set; } = string.Empty;
+
+        /// <summary>The group's parent, or <see cref="Guid.Empty"/> for the project's root node group.</summary>
+        public Guid ParentId { get; set; }
+
+        /// <summary>The number of live members the apply sees.</summary>
+        public int LiveCount { get; set; }
+
+        /// <summary>The highest live position, or −1 for an empty group.</summary>
+        public int Maximum { get; set; }
     }
 }

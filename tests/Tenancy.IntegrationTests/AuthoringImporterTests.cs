@@ -183,7 +183,11 @@ public sealed class AuthoringImporterTests
         $"select code from public.manual_test_case where org_id = '{world.Org:D}'"
         + $" and project_id = '{(projectId ?? world.Project):D}' and deleted_at is null order by code limit 1");
 
-    /// <summary>A file of <paramref name="groups"/> independent subtrees: one module, one item and three cases each.</summary>
+    /// <summary>
+    /// A file of <paramref name="groups"/> independent subtrees, five rows each: AC1's ladder (module, feature, category),
+    /// then one checklist item under the category and one case under the item — a category cannot stand at the root and an
+    /// item cannot hang under a module (AC1/AC3), so this is the smallest legal subtree.
+    /// </summary>
     /// <param name="groups">How many subtrees, i.e. rows / 5.</param>
     private static List<ImportRow> File(int groups)
     {
@@ -193,30 +197,31 @@ public sealed class AuthoringImporterTests
         for (var group = 1; group <= groups; group++)
         {
             var number = group.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var nodeKey = "n" + number;
+            var moduleKey = "m" + number;
+            var featureKey = "f" + number;
+            var categoryKey = "n" + number;
             var itemKey = "i" + number;
 
-            rows.Add(ImportSample.Node(++index, nodeKey, null, "module", "Module " + number));
-            rows.Add(ImportSample.Item(++index, itemKey, nodeKey, "Item " + number));
-
-            for (var step = 1; step <= 3; step++)
-            {
-                var suffix = number + "." + step.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                rows.Add(ImportSample.Case(++index, "c" + suffix, itemKey, "Case " + suffix, ImportSample.Steps));
-            }
+            rows.Add(ImportSample.Node(++index, moduleKey, null, "module", "Module " + number));
+            rows.Add(ImportSample.Node(++index, featureKey, moduleKey, "feature", "Feature " + number));
+            rows.Add(ImportSample.Node(++index, categoryKey, featureKey, "category", "Category " + number));
+            rows.Add(ImportSample.Item(++index, itemKey, categoryKey, "Item " + number));
+            rows.Add(ImportSample.Case(++index, "c" + number, itemKey, "Case " + number, ImportSample.Steps));
         }
 
         return rows;
     }
 
-    /// <summary>The smallest complete file: one module, one item and one case.</summary>
+    /// <summary>The smallest complete file: AC1's ladder and one case, five rows.</summary>
     /// <param name="code">The case code, or null to have one allocated.</param>
     /// <param name="title">The case title.</param>
     private static IReadOnlyList<ImportRow> Single(string? code = null, string title = "Case 1.1") =>
     [
         ImportSample.Node(1, "n1", null, "module", "Module 1"),
-        ImportSample.Item(2, "i1", "n1", "Item 1"),
-        ImportSample.Case(3, "c1", "i1", title, ImportSample.Steps, code: code),
+        ImportSample.Node(2, "n2", "n1", "feature", "Feature 1"),
+        ImportSample.Node(3, "n3", "n2", "category", "Category 1"),
+        ImportSample.Item(4, "i1", "n3", "Item 1"),
+        ImportSample.Case(5, "c1", "i1", title, ImportSample.Steps, code: code),
     ];
 
     /// <summary>AC13: every version row of one import shares one <c>batch_id</c> and records <c>source = import</c>.</summary>
@@ -232,9 +237,9 @@ public sealed class AuthoringImporterTests
         report.BatchId.ShouldNotBeNull();
         report.Counts.ShouldBe(new ImportCounts(Created: 10, Updated: 0, Restored: 0, Unchanged: 0));
 
-        (await CountAsync(world, "feature_node")).ShouldBe(2);
+        (await CountAsync(world, "feature_node")).ShouldBe(6);
         (await CountAsync(world, "checklist_item")).ShouldBe(2);
-        (await CountAsync(world, "manual_test_case")).ShouldBe(6);
+        (await CountAsync(world, "manual_test_case")).ShouldBe(2);
         (await CountAsync(world, "authoring_version")).ShouldBe(10);
         (await BatchCountAsync(world)).ShouldBe(1);
 
@@ -244,8 +249,8 @@ public sealed class AuthoringImporterTests
             + $" and project_id = '{world.Project:D}' and batch_id = '{report.BatchId:D}' and source = 'import'")
 ).ShouldBe(10);
 
-        // One allocation block for the six code-less cases, so the counter stands just past it.
-        (await CounterAsync(world)).ShouldBe(7L);
+        // One allocation block for the two code-less cases, so the counter stands just past it.
+        (await CounterAsync(world)).ShouldBe(3L);
     }
 
     /// <summary>AC13: one invalid row — the last of 201 — refuses the file and leaves every table as it was.</summary>
@@ -296,8 +301,8 @@ public sealed class AuthoringImporterTests
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         var report = result.Value!;
         report.BatchId.ShouldBeNull();
-        report.Counts.Created.ShouldBe(3);
-        report.Rows.Count.ShouldBe(3);
+        report.Counts.Created.ShouldBe(5);
+        report.Rows.Count.ShouldBe(5);
         report.Rows.ShouldAllBe(row => row.Outcome == "create");
         report.Rows.Single(row => row.Kind == ImportRowKind.Case).Code.ShouldBe(prefix + "-010");
 
@@ -328,19 +333,19 @@ public sealed class AuthoringImporterTests
 
         var code = await CaseCodeAsync(world);
         var versionsAfterFirst = await CountAsync(world, "authoring_version");
-        versionsAfterFirst.ShouldBe(3);
+        versionsAfterFirst.ShouldBe(5);
 
         // 1. The same file, now carrying the code the import allocated: nothing to do.
         var unchanged = await ImportAsync(world, world.Project, Single(code));
         unchanged.IsSuccess.ShouldBeTrue(unchanged.Error?.Message);
         unchanged.Value!.BatchId.ShouldBeNull();
-        unchanged.Value.Counts.ShouldBe(new ImportCounts(Created: 0, Updated: 0, Restored: 0, Unchanged: 3));
+        unchanged.Value.Counts.ShouldBe(new ImportCounts(Created: 0, Updated: 0, Restored: 0, Unchanged: 5));
         (await CountAsync(world, "authoring_version")).ShouldBe(versionsAfterFirst);
 
         // 2. A changed title is one update row for the case and nothing for its parent rows.
         var updated = await ImportAsync(world, world.Project, Single(code, "Case 1.1 retitled"));
         updated.IsSuccess.ShouldBeTrue(updated.Error?.Message);
-        updated.Value!.Counts.ShouldBe(new ImportCounts(Created: 0, Updated: 1, Restored: 0, Unchanged: 2));
+        updated.Value!.Counts.ShouldBe(new ImportCounts(Created: 0, Updated: 1, Restored: 0, Unchanged: 4));
         (await CountAsync(world, "authoring_version")).ShouldBe(versionsAfterFirst + 1);
 
         // 3. A soft-deleted code comes back through change_kind = restore, and the row is live again.
@@ -385,7 +390,7 @@ public sealed class AuthoringImporterTests
         var result = await ImportAsync(world, world.Project, rows);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
-        result.Value!.Counts.ShouldBe(new ImportCounts(Created: 0, Updated: 1, Restored: 0, Unchanged: 2));
+        result.Value!.Counts.ShouldBe(new ImportCounts(Created: 0, Updated: 1, Restored: 0, Unchanged: 4));
         result.Value.Rows.Single(row => row.Kind == ImportRowKind.Item).Outcome.ShouldBe("update");
         (await CountAsync(world, "authoring_version")).ShouldBe(versions + 1);
 
@@ -407,10 +412,13 @@ public sealed class AuthoringImporterTests
         (await ImportAsync(world, world.Project, Single())).IsSuccess.ShouldBeTrue();
         var code = await CaseCodeAsync(world);
 
+        // The item's own node: with AC1's ladder the project has three nodes, and only the item's category parents it.
         var nodeId = await _fixture.ScalarAsync<Guid>(
             world.Database,
-            $"select id from public.feature_node where org_id = '{world.Org:D}' and project_id = '{world.Project:D}'")
+            $"select feature_node_id from public.checklist_item where org_id = '{world.Org:D}'"
+            + $" and project_id = '{world.Project:D}'")
 ;
+        // The item's own node: with the AC1 ladder the project has three nodes, and only the item's category parents it.
         var itemId = await _fixture.ScalarAsync<Guid>(
             world.Database,
             $"select id from public.checklist_item where org_id = '{world.Org:D}' and project_id = '{world.Project:D}'")
@@ -428,7 +436,7 @@ public sealed class AuthoringImporterTests
         refused.IsSuccess.ShouldBeFalse("a retired item may not be rewritten by an import");
         refused.Error!.Status.ShouldBe(422);
         refused.Error.Details.ShouldNotBeNull();
-        refused.Error.Details.ShouldContain(detail => detail.Path == "/state" && detail.Reason == "value_invalid" && detail.Index == 2);
+        refused.Error.Details.ShouldContain(detail => detail.Path == "/state" && detail.Reason == "value_invalid" && detail.Index == 4);
         (await CountAsync(world, "authoring_version")).ShouldBe(versions);
 
         // The row exactly as stored — retired, same text — re-imports as unchanged, so a round trip never trips the guard.
@@ -439,7 +447,7 @@ public sealed class AuthoringImporterTests
         var accepted = await ImportAsync(world, world.Project, same);
 
         accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
-        accepted.Value!.Counts.ShouldBe(new ImportCounts(Created: 0, Updated: 0, Restored: 0, Unchanged: 3));
+        accepted.Value!.Counts.ShouldBe(new ImportCounts(Created: 0, Updated: 0, Restored: 0, Unchanged: 5));
     }
 
     /// <summary>AC15: an unchanged re-import keeps the raw <c>content_hash</c> — one version row, the same digest.</summary>
@@ -458,8 +466,8 @@ public sealed class AuthoringImporterTests
 
         (await HashesAsync(world, "manual_test_case")).ShouldBe(before);
 
-        // The same holds for the node and the item: nothing was appended for either.
-        (await HashesAsync(world, "feature_node")).Count.ShouldBe(1);
+        // The same holds for the three nodes and the item: nothing was appended for any of them.
+        (await HashesAsync(world, "feature_node")).Count.ShouldBe(3);
         (await HashesAsync(world, "checklist_item")).Count.ShouldBe(1);
     }
 
@@ -497,16 +505,47 @@ public sealed class AuthoringImporterTests
         result.Value!.Counts.Created.ShouldBe(5_000);
         stopwatch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(120), "a 5 000-row file applies well inside two minutes");
 
-        (await CountAsync(world, "feature_node")).ShouldBe(1_000);
+        (await CountAsync(world, "feature_node")).ShouldBe(3_000);
         (await CountAsync(world, "checklist_item")).ShouldBe(1_000);
-        (await CountAsync(world, "manual_test_case")).ShouldBe(3_000);
+        (await CountAsync(world, "manual_test_case")).ShouldBe(1_000);
 
-        // One block for the 3 000 code-less cases: the counter stands just past it and no code was handed out twice.
-        (await CounterAsync(world)).ShouldBe(3_001L);
+        // One block for the 1 000 code-less cases: the counter stands just past it and no code was handed out twice.
+        (await CounterAsync(world)).ShouldBe(1_001L);
         (await _fixture.ScalarAsync<int>(
             world.Database,
             $"select count(distinct code)::int from public.manual_test_case where org_id = '{world.Org:D}'"
-            + $" and project_id = '{world.Project:D}'")).ShouldBe(3_000);
+            + $" and project_id = '{world.Project:D}'")).ShouldBe(1_000);
+    }
+
+    /// <summary>
+    /// A sibling group another writer holds is the retryable <c>503</c>, never a hang and never a write: the apply takes
+    /// the same advisory key the create, move and reorder paths take, under the writer-wide <c>lock_timeout</c> (13.1.1
+    /// §5, findings F/I).
+    /// </summary>
+    [Fact]
+    public async Task SiblingGroupLockedElsewhere_ImportAnswers503()
+    {
+        await using var world = await StartAsync();
+
+        // The root node group: the file's module is appended there, so the apply must take this key before it writes.
+        var key = AuthoringLockGuard.SiblingGroupKey(
+            world.Project,
+            null,
+            AuthoringLockGuard.SiblingGroup.FeatureNode);
+
+        await using var holder = await TenantScope.BeginAsync(
+            _fixture.OwnerConnectionString(world.Database),
+            world.Org);
+        await holder.ExecuteAsync(
+            "select pg_advisory_xact_lock(hashtextextended(@key, 0))",
+            ("key", key));
+
+        var result = await ImportAsync(world, world.Project, Single());
+
+        result.IsSuccess.ShouldBeFalse("a held sibling group is not a reason to wait for ever");
+        result.Error!.Status.ShouldBe(503);
+        (await CountAsync(world, "feature_node")).ShouldBe(0);
+        (await CountAsync(world, "authoring_version")).ShouldBe(0);
     }
 
     /// <summary>
@@ -530,7 +569,7 @@ public sealed class AuthoringImporterTests
         refused.IsSuccess.ShouldBeFalse("a code of another project cannot be imported");
         refused.Error!.Status.ShouldBe(422);
         refused.Error.Details.ShouldNotBeNull();
-        refused.Error.Details.ShouldContain(detail => detail.Path == "/code" && detail.Reason == "code_conflict" && detail.Index == 3);
+        refused.Error.Details.ShouldContain(detail => detail.Path == "/code" && detail.Reason == "code_conflict" && detail.Index == 5);
         (await CountAsync(world, "manual_test_case", other)).ShouldBe(0);
         (await CountAsync(world, "authoring_version", other)).ShouldBe(0);
 
@@ -558,7 +597,7 @@ public sealed class AuthoringImporterTests
 
         refused.IsSuccess.ShouldBeFalse();
         refused.Error!.Details.ShouldNotBeNull();
-        refused.Error.Details.ShouldContain(detail => detail.Path == "/code" && detail.Reason == "code_conflict" && detail.Index == 3);
+        refused.Error.Details.ShouldContain(detail => detail.Path == "/code" && detail.Reason == "code_conflict" && detail.Index == 5);
         (await CountAsync(world, "feature_node")).ShouldBe(0);
 
         // 2. An explicit, unknown code of this project is created and the counter is raised past it.
@@ -568,7 +607,7 @@ public sealed class AuthoringImporterTests
         created.Value!.Rows.Single(row => row.Kind == ImportRowKind.Case).Code.ShouldBe(prefix + "-042");
         (await CounterAsync(world)).ShouldBe(43L, "the explicit code raises the counter to max + 1");
 
-        // 3. The cases of a following file come from the block that starts at the raised counter: 043, and never 042.
+        // 3. The case of a following file comes from the block that starts at the raised counter: 043, and never 042.
         var next = File(1);
         (await ImportAsync(world, world.Project, next)).IsSuccess.ShouldBeTrue();
 
@@ -577,7 +616,7 @@ public sealed class AuthoringImporterTests
             $"select code from public.manual_test_case where org_id = '{world.Org:D}'"
             + $" and project_id = '{world.Project:D}' order by code");
 
-        codes.ShouldBe([prefix + "-042", prefix + "-043", prefix + "-044", prefix + "-045"]);
+        codes.ShouldBe([prefix + "-042", prefix + "-043"]);
     }
 
     /// <summary>Moves the imported item to its terminal state through the writer, the one path that may change a state.</summary>

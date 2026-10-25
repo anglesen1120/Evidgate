@@ -515,6 +515,127 @@ public sealed class AuthoringExporterTests
         scoped.Statements.ShouldBe(5);
     }
 
+    // ------------------------------------------------------------------ AC16: the caps on a filtered and a text-heavy file
+
+    /// <summary>
+    /// AC16's row cap is the cap on the rows <em>this answer</em> carries, not on the project: a project of 6 000 nodes,
+    /// one item and 100 cases answers <c>include=cases</c> with its 100 case rows — and with the full tree's keys, because
+    /// the walk that numbers them still saw the whole tree — while the whole-project export of the same tree is the 413.
+    /// </summary>
+    [Fact]
+    public async Task Export_IncludeCases_OnAProjectOverTheRowCap_Succeeds()
+    {
+        await using var world = await StartAsync();
+        var tree = NewTree();
+
+        // The whole project is over the 5 000-row cap (6 000 nodes + 1 item + 100 cases), the cases are not. The item
+        // hangs under the node created *last* (position 5999), so a supporting node read truncated at the row cap would
+        // lose it — and with it every case — which is exactly what this case pins.
+        await ExecuteAsync(world, $$"""
+            insert into public.feature_node (id, org_id, project_id, parent_id, kind, title, position)
+            select case when generated.number = 0 then '{{tree.Shop:D}}'::uuid else gen_random_uuid() end,
+                   '{{world.Org:D}}', '{{world.Project:D}}', null, 'module',
+                   'Node ' || generated.number::text, generated.number::int
+              from generate_series(0, 5999) as generated(number);
+
+            insert into public.checklist_item
+              (id, org_id, project_id, feature_node_id, title, priority, state, source, position)
+            select '{{tree.CardItem:D}}', '{{world.Org:D}}', '{{world.Project:D}}', last_node.id,
+                   'Pay', 'high', 'active', 'manual', 0
+              from (select id from public.feature_node
+                     where project_id = '{{world.Project:D}}' order by position desc, id desc limit 1) as last_node;
+
+            insert into public.manual_test_case
+              (id, org_id, project_id, checklist_item_id, code, title, steps, priority, state, source)
+            select gen_random_uuid(), '{{world.Org:D}}', '{{world.Project:D}}', '{{tree.CardItem:D}}',
+                   'SHOP-' || lpad(generated.number::text, 3, '0'),
+                   'Case ' || generated.number::text,
+                   '{"steps":[{"no":1,"action":"Act","expected":"Result"}]}'::jsonb,
+                   'medium', 'draft', 'manual'
+              from generate_series(1, 100) as generated(number);
+            """);
+
+        var wholeProject = await ExportAsync(world);
+        wholeProject.Result.IsSuccess.ShouldBeFalse("6 101 emitted rows are over the 5 000-row cap");
+        wholeProject.Result.Error!.Status.ShouldBe(413);
+
+        var cases = await ExportAsync(world, include: ImportInclude.Cases);
+
+        cases.Result.IsSuccess.ShouldBeTrue(cases.Result.Error?.Message);
+        cases.Result.Value.Count.ShouldBe(100, "only the rows of the kinds that were asked for are emitted");
+        cases.Result.Value.ShouldAllBe(row => row.Kind == ImportRowKind.Case);
+
+        // Keys are the full tree's keys even in a filtered file: the walk numbered every row of every kind.
+        cases.Result.Value[0].Key.ShouldBe("c1");
+        cases.Result.Value[^1].Key.ShouldBe("c100");
+        cases.Result.Value.ShouldAllBe(row => row.ItemKey == "i1", "a case row still carries its item's key");
+        cases.Statements.ShouldBe(4, "the probe plus one statement per kind: the statement count does not grow");
+    }
+
+    /// <summary>
+    /// AC14's byte half of the same cap: 100 cases whose <c>steps</c> documents are 60 000 characters each make a file of
+    /// six million characters — under the row cap and over the 5 MiB body cap of the import — so the export is the 413
+    /// with the same <c>/node_id</c> pointer and <c>body_too_large</c> reason instead of a download no import accepts. A
+    /// third of the same text still exports, so the bound is a cap and not an over-refusal.
+    /// </summary>
+    [Fact]
+    public async Task Export_TextOverTheBodyCap_413()
+    {
+        await using var world = await StartAsync();
+        var tree = NewTree();
+
+        await ExecuteAsync(world, $$"""
+            insert into public.feature_node (id, org_id, project_id, parent_id, kind, title, position)
+            values ('{{tree.Shop:D}}', '{{world.Org:D}}', '{{world.Project:D}}', null, 'module', 'Shop', 0);
+
+            insert into public.checklist_item
+              (id, org_id, project_id, feature_node_id, title, priority, state, source, position)
+            values ('{{tree.CardItem:D}}', '{{world.Org:D}}', '{{world.Project:D}}', '{{tree.Shop:D}}',
+                    'Pay', 'high', 'active', 'manual', 0);
+
+            insert into public.manual_test_case
+              (id, org_id, project_id, checklist_item_id, code, title, steps, priority, state, source)
+            select gen_random_uuid(), '{{world.Org:D}}', '{{world.Project:D}}', '{{tree.CardItem:D}}',
+                   'SHOP-' || lpad(generated.number::text, 3, '0'),
+                   'Case ' || generated.number::text,
+                   jsonb_build_object('steps', jsonb_build_array(jsonb_build_object(
+                       'no', 1,
+                       'action', repeat('x', 60000),
+                       'expected', 'Result'))),
+                   'medium', 'draft', 'manual'
+              from generate_series(1, 40) as generated(number);
+            """);
+
+        var third = await ExportAsync(world);
+        third.Result.IsSuccess.ShouldBeTrue(third.Result.Error?.Message);
+        third.Result.Value.Count.ShouldBe(42, "the control export is under the byte cap");
+
+        await ExecuteAsync(world, $$"""
+            insert into public.manual_test_case
+              (id, org_id, project_id, checklist_item_id, code, title, steps, priority, state, source)
+            select gen_random_uuid(), '{{world.Org:D}}', '{{world.Project:D}}', '{{tree.CardItem:D}}',
+                   'SHOP-' || lpad(generated.number::text, 3, '0'),
+                   'Case ' || generated.number::text,
+                   jsonb_build_object('steps', jsonb_build_array(jsonb_build_object(
+                       'no', 1,
+                       'action', repeat('x', 60000),
+                       'expected', 'Result'))),
+                   'medium', 'draft', 'manual'
+              from generate_series(41, 100) as generated(number);
+            """);
+
+        var overCap = await ExportAsync(world);
+
+        overCap.Result.IsSuccess.ShouldBeFalse("100 × 60 000 characters is over the 5 MiB body cap");
+        overCap.Result.Error!.Status.ShouldBe(413);
+        overCap.Result.Error.Code.ShouldBe("payload_too_large");
+        overCap.Result.Error.Details.ShouldNotBeNull();
+        overCap.Result.Error.Details!.Count.ShouldBe(1);
+        overCap.Result.Error.Details![0].Path.ShouldBe("/node_id");
+        overCap.Result.Error.Details![0].Reason.ShouldBe("body_too_large");
+        overCap.Result.Error.Message.ShouldNotContain("xxx", Shouldly.Case.Sensitive, "the refusal never echoes a cell");
+    }
+
     /// <summary>The id of one root module of the project, read as the owner.</summary>
     private async Task<Guid> FirstRootAsync(World world)
     {

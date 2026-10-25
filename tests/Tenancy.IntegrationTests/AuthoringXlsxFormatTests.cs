@@ -65,7 +65,7 @@ public sealed class AuthoringXlsxFormatTests
                 stepsJson: "{\"steps\":[{\"no\":1,\"action\":\"Enter a card\",\"expected\":\"Refused\"}]}",
                 priority: "high",
                 state: "draft",
-                code: "SHO-1"),
+                code: "SHO-001"),
             Row(
                 5,
                 ImportRowKind.Case,
@@ -76,7 +76,7 @@ public sealed class AuthoringXlsxFormatTests
                 stepsJson: "{\"steps\":[{\"no\":1,\"action\":\"@mention\",\"expected\":\"ok\"}]}",
                 priority: "low",
                 state: "draft",
-                code: "SHO-2"),
+                code: "SHO-002"),
         };
 
         var bytes = await WriteAsync(rows);
@@ -117,14 +117,22 @@ public sealed class AuthoringXlsxFormatTests
     [Fact]
     public async Task Xlsx_RoundTrip_EscapesXmlProhibitedNoncharacters()
     {
-        // U+FFFE and U+FFFF are storable authoring text but XML 1.0 cannot carry them, so the writer emits the
-        // _xHHHH_ form Excel itself uses and the reader turns it back: a title the JSON carrier accepts exports and
-        // re-imports instead of failing the export with an XmlWriter character check (AC14/AC16).
-        var title = "end \uFFFF and \uFFFE and \u0001";
+        // Two different things live behind the _xHHHH_ escape, and the product answers them differently:
+        //  - U+0001 is a control character XML 1.0 cannot carry but the normaliser accepts, so it is escaped on export
+        //    and comes back as itself: the row round-trips.
+        //  - U+FFFE and U+FFFF are noncharacters the process's normaliser refuses, so this module cannot store them
+        //    composed (AC14). The export must still not throw — it carries them escaped and keeps the file readable —
+        //    and the re-import refuses the cell as invalid_text, exactly as a NUL or a lone surrogate is refused today.
+        var control = "control \u0001 char";
+        var noncharacters = "end \uFFFF and \uFFFE";
 
-        var bytes = await WriteAsync([Row(1, ImportRowKind.Node, "n1", nodeKind: "module", title: title)]);
+        var exported = await WriteAsync(
+        [
+            Row(1, ImportRowKind.Node, "n1", nodeKind: "module", title: control),
+            Row(2, ImportRowKind.Node, "n2", nodeKind: "module", title: noncharacters),
+        ]);
 
-        using (var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        using (var archive = new ZipArchive(new MemoryStream(exported), ZipArchiveMode.Read))
         {
             var entry = archive.GetEntry(XlsxFormat.WorksheetPart).ShouldNotBeNull("the sheet is one package part");
             await using var stream = await entry.OpenAsync(TestContext.Current.CancellationToken);
@@ -132,14 +140,27 @@ public sealed class AuthoringXlsxFormatTests
             var sheet = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
 
             sheet.ShouldNotContain("\uFFFF", Case.Sensitive);
+            sheet.ShouldNotContain("\uFFFE", Case.Sensitive);
             sheet.ShouldContain("_xFFFF_", Case.Sensitive);
             sheet.ShouldContain("_xFFFE_", Case.Sensitive);
+            sheet.ShouldContain("_x0001_", Case.Sensitive);
         }
 
-        var parse = XlsxFormat.Read(bytes, Parsing, TestContext.Current.CancellationToken);
+        // The re-import refuses the row that carries a noncharacter and names the column, never the value; the control
+        // character's row is untouched by that refusal.
+        var parse = XlsxFormat.Read(exported, Parsing, TestContext.Current.CancellationToken);
 
-        parse.Issues.ShouldBeEmpty();
-        parse.Rows.ShouldHaveSingleItem().Title.ShouldBe(title);
+        parse.TooLarge.ShouldBeFalse();
+        parse.Issues.ShouldBe([new ImportIssue(2, "/title", "invalid_text")]);
+
+        // The same file without the noncharacter row is accepted, with U+0001 preserved exactly.
+        var accepted = XlsxFormat.Read(
+            await WriteAsync([Row(1, ImportRowKind.Node, "n1", nodeKind: "module", title: control)]),
+            Parsing,
+            TestContext.Current.CancellationToken);
+
+        accepted.Issues.ShouldBeEmpty();
+        accepted.Rows.ShouldHaveSingleItem().Title.ShouldBe(control);
     }
 
     [Fact]
@@ -219,7 +240,7 @@ public sealed class AuthoringXlsxFormatTests
                 stepsJson: "{\"steps\":[{\"no\":1,\"action\":\"Pay\",\"expected\":\"Refused\"}]}",
                 priority: "high",
                 state: "draft",
-                code: "SHO-1"),
+                code: "SHO-001"),
         };
 
         var first = await WriteAsync(rows);
@@ -241,7 +262,7 @@ public sealed class AuthoringXlsxFormatTests
             // 13.. — the values.
             "node", "n1", "module", "Checkout",
             "item", "i1", "Payment card", "high", "draft",
-            "case", "c1", "{\"steps\":[{\"no\":1,\"action\":\"Pay\",\"expected\":\"Refused\"}]}", "SHO-1",
+            "case", "c1", "{\"steps\":[{\"no\":1,\"action\":\"Pay\",\"expected\":\"Refused\"}]}", "SHO-001",
         };
 
         var sheet = new StringBuilder();
@@ -311,16 +332,17 @@ public sealed class AuthoringXlsxFormatTests
                 title: "Declined card",
                 stepsJson: "{\"steps\":[{\"no\":1,\"action\":\"Pay\",\"expected\":\"Refused\"}]}",
                 priority: "high",
-                code: "SHO-1"),
+                code: "SHO-001"),
         });
     }
 
     [Fact]
     public void Xlsx_RepeatedLargeSharedString_IsCapped()
     {
-        // One 64 KiB shared string referenced by every cell of seven rows: a few-kilobyte file would otherwise ask for
-        // six megabytes of JSON, and the 5 001-row limit alone would allow thirteen times the body budget (AC16). The
-        // string is pseudo-random so the archive stays under the 20:1 ratio guard and only the document cap can fire.
+        // One 64 KiB shared string referenced by the description cell of 400 rows: a few-hundred-kilobyte workbook
+        // would otherwise ask for 26 MiB of JSON, because the 5 001-row limit alone allows thirteen cells per row of
+        // that size (AC16). Each row is a valid item row, so no row rule answers before the document cap does. The string is pseudo-random so the archive stays under the 20:1 ratio guard, and every row is a valid
+        // node row, so the only guard that can answer is the document cap the reader keeps while it builds.
         var seed = 0x2F6E2B1u;
         var big = new StringBuilder(ImportText.MaxCellChars);
 
@@ -347,14 +369,14 @@ public sealed class AuthoringXlsxFormatTests
 
         sheet.Append("</row>");
 
-        for (var row = 2; row <= 8; row++)
+        for (var row = 2; row <= 401; row++)
         {
             sheet.Append(Element("row", row));
-            for (var column = 0; column < XlsxFormat.ColumnCount; column++)
-            {
-                sheet.Append(SharedStringCell(column, row, bigIndex));
-            }
-
+            sheet.Append(InlineCell(0, row, "item"));
+            sheet.Append(InlineCell(1, row, "i" + row.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            sheet.Append(InlineCell(2, row, "n1"));
+            sheet.Append(InlineCell(5, row, "Row " + row.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            sheet.Append(SharedStringCell(6, row, bigIndex));
             sheet.Append("</row>");
         }
 
@@ -368,6 +390,125 @@ public sealed class AuthoringXlsxFormatTests
         parse.TooLarge.ShouldBeTrue("the document the reader builds is capped at the body budget");
         parse.Rows.ShouldBeEmpty();
         parse.Issues.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Xlsx_CellPastTheLastColumn_NotMaterialised()
+    {
+        // A cell past the thirteenth column can never enter the table, so the reader refuses the row and consumes the
+        // cell without collecting its text: a file whose only payload is 4 MiB in column T is refused without that text
+        // ever becoming a string (AC16).
+        var sheet = new StringBuilder();
+        sheet.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
+        sheet.Append(Element("worksheet"));
+        sheet.Append("<sheetData>");
+
+        sheet.Append("<row r=\"1\">");
+        for (var column = 0; column < XlsxFormat.ColumnCount; column++)
+        {
+            sheet.Append(InlineCell(column, 1, XlsxFormat.ColumnNames[column]));
+        }
+
+        sheet.Append("</row>");
+
+        sheet.Append(Element("row", 2));
+        sheet.Append(InlineCell(0, 2, "node"));
+        sheet.Append(InlineCell(1, 2, "n1"));
+        sheet.Append(InlineCell(4, 2, "module"));
+        sheet.Append(InlineCell(5, 2, "Checkout"));
+        sheet.Append(InlineCell(20, 2, new string('t', 4 * 1024 * 1024)));
+        sheet.Append("</row>");
+
+        sheet.Append("</sheetData></worksheet>");
+
+        var parse = XlsxFormat.Read(BuildWorkbook(sheet.ToString()), Parsing, TestContext.Current.CancellationToken);
+
+        parse.TooLarge.ShouldBeFalse();
+        parse.Rows.ShouldBeEmpty();
+        parse.Issues.ShouldBe([new ImportIssue(1, "/extra_column", "value_invalid")]);
+    }
+
+    [Fact]
+    public void Xlsx_CellOver64KiB_Refused()
+    {
+        // The cell cap is the CSV one, measured on the text the file carries: a workbook whose description cell is one
+        // character past it is refused at that column, before the value is unescaped or composed.
+        var sheet = new StringBuilder();
+        sheet.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
+        sheet.Append(Element("worksheet"));
+        sheet.Append("<sheetData>");
+
+        sheet.Append("<row r=\"1\">");
+        for (var column = 0; column < XlsxFormat.ColumnCount; column++)
+        {
+            sheet.Append(InlineCell(column, 1, XlsxFormat.ColumnNames[column]));
+        }
+
+        sheet.Append("</row>");
+
+        sheet.Append(Element("row", 2));
+        sheet.Append(InlineCell(0, 2, "node"));
+        sheet.Append(InlineCell(1, 2, "n1"));
+        sheet.Append(InlineCell(4, 2, "module"));
+        sheet.Append(InlineCell(5, 2, "Checkout"));
+        sheet.Append(InlineCell(6, 2, new string('d', ImportText.MaxCellChars + 1)));
+        sheet.Append("</row>");
+
+        sheet.Append("</sheetData></worksheet>");
+
+        var parse = XlsxFormat.Read(BuildWorkbook(sheet.ToString()), Parsing, TestContext.Current.CancellationToken);
+
+        parse.TooLarge.ShouldBeFalse();
+        parse.Rows.ShouldBeEmpty();
+        parse.Issues.ShouldBe([new ImportIssue(1, "/description", "value_invalid")]);
+    }
+
+    [Fact]
+    public void Xlsx_BlankRowFlood_Refused()
+    {
+        // A worksheet of empty rows is about twelve bytes per row, so a 32 MiB part holds millions of them before the
+        // data-row cap could fire: the skipped rows are counted and the file is the 413 arm once it passes the row cap.
+        static string Sheet(int blankRows)
+        {
+            var sheet = new StringBuilder();
+            sheet.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
+            sheet.Append(Element("worksheet"));
+            sheet.Append("<sheetData>");
+
+            sheet.Append("<row r=\"1\">");
+            for (var column = 0; column < XlsxFormat.ColumnCount; column++)
+            {
+                sheet.Append(InlineCell(column, 1, XlsxFormat.ColumnNames[column]));
+            }
+
+            sheet.Append("</row>");
+
+            for (var row = 2; row <= blankRows + 1; row++)
+            {
+                sheet.Append(Element("row", row)).Append("</row>");
+            }
+
+            sheet.Append("</sheetData></worksheet>");
+
+            return sheet.ToString();
+        }
+
+        var accepted = XlsxFormat.Read(
+            BuildWorkbook(Sheet(ImportLimits.MaxDataRows)),
+            Parsing,
+            TestContext.Current.CancellationToken);
+
+        accepted.TooLarge.ShouldBeFalse("blank rows under the cap are skipped, not refused");
+        accepted.Rows.ShouldBeEmpty();
+
+        var refused = XlsxFormat.Read(
+            BuildWorkbook(Sheet(ImportLimits.MaxDataRows + 1)),
+            Parsing,
+            TestContext.Current.CancellationToken);
+
+        refused.TooLarge.ShouldBeTrue("a worksheet of blank rows past the cap is the 413 arm");
+        refused.Rows.ShouldBeEmpty();
+        refused.Issues.ShouldBeEmpty();
     }
 
     [Fact]

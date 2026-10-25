@@ -193,7 +193,15 @@ internal static class ImportFormats
     /// <summary>The XLSX format token.</summary>
     internal const string Xlsx = "xlsx";
 
-    /// <summary>The CSV media type of an export, with the encoding a spreadsheet expects.</summary>
+    /// <summary>
+    /// The CSV media type the <em>import</em> accepts, exactly as route 25's <c>requestBody</c> declares it in
+    /// <c>contracts/openapi.yaml</c>: <c>text/csv</c> with no parameter, because a media type plus a charset is a
+    /// different media type to the request's own <c>Content-Type</c> matching (a <c>text/csv; charset=utf-8</c> in the
+    /// endpoint's accepted list would answer 415 to a plain <c>text/csv</c> upload).
+    /// </summary>
+    internal const string CsvMediaType = "text/csv";
+
+    /// <summary>The CSV media type of an <em>export</em>, with the encoding a spreadsheet expects.</summary>
     internal const string CsvContentType = "text/csv; charset=utf-8";
 
     /// <summary>The JSON media type of the import document and of the JSON export.</summary>
