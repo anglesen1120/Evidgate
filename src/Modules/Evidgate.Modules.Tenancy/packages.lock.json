@@ -107,7 +107,10 @@
         "type": "Project"
       },
       "evidgate.modules.identity.contracts": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
+        }
       },
       "evidgate.modules.tenancy.contracts": {
         "type": "Project"

@@ -106,6 +106,19 @@ them — every row is `source: default`, `required: false`, `requiredAtBoot: fal
 records the option's `[Range]` bounds (1 MiB..64 MiB and 1..1000), which the lint derives from the
 attributes.
 
+One more shape is a feature that stays **absent until it is configured**: the federated-login rows
+(`EVIDGATE__LOGIN__*`, `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.1/T1.2) are `requiredAtBoot: false` and
+`required: false` in every environment, because a host without them serves every other route and answers
+`GET /v1/auth/oidc/{provider}/start` and `/callback` with 503 `unavailable` plus `Retry-After` — no flag
+enables the routes, only the configuration. `EVIDGATE__LOGIN__PUBLICBASEURL` is the browser-facing https
+origin the provider redirect URI is built from (absent: 503 on both routes; present but not https with no
+path, query or fragment: the boot fails naming the key, never the value), the Google client id is plain
+configuration and `EVIDGATE__OIDC__GOOGLE__CLIENTSECRET` is `secret: true` and resolved through
+`ISecretProvider`. The other eleven rows (`StateLifetimeSeconds`, `RetryAfterSeconds`, the three Google
+endpoints, the clock-skew and JWKS lifetimes, the outbound timeout and the response-body cap) keep their
+code defaults in every environment, and the three provider endpoints are refused at boot unless they stay
+on the fixed Google allowlist (S4).
+
 `required` is the lint's per-environment rule: the environment must declare the key whatever the boot
 would do without it. That is how a security-relevant default stays visible — every environment declares
 the Worker's bind address and the OTLP endpoint even though both have a usable default (or an optional
@@ -128,13 +141,14 @@ they are the existing `EVIDGATE_*` variable names — nothing was renamed: the A
 connection string (`EVIDGATE__DATABASE__CONNECTIONSTRING`), the task sweep connection string
 (`EVIDGATE__TASKS__SWEEPCONNECTIONSTRING`), the CI signing key, pepper and previous pepper
 (`EVIDGATE__CI__SIGNINGKEY`, `EVIDGATE__CI__PEPPER`, `EVIDGATE__CI__PREVIOUSPEPPER`), the object-storage
-identity (`EVIDGATE__OBJECT__ACCESSKEY`, `EVIDGATE__OBJECT__SECRETKEY`) and the Migrator
-connection string (`EVIDGATE_MIGRATOR__CONNECTIONSTRING`). A name outside the registry is refused with an
+identity (`EVIDGATE__OBJECT__ACCESSKEY`, `EVIDGATE__OBJECT__SECRETKEY`), the Migrator
+connection string (`EVIDGATE_MIGRATOR__CONNECTIONSTRING`) and the Google login client secret
+(`EVIDGATE__OIDC__GOOGLE__CLIENTSECRET`, 02.3.1-T1.2). A name outside the registry is refused with an
 `ArgumentException` that names only the name. The registry is not the list of `secret: true` rows in
 `infra/config-matrix.json`: a matrix row that only the dev stack uses (for example the S3 keys in
-`.env.dev.template`) joins `SecretNames` when a process starts to consume it (OIDC 02.3.1-T1), not
-before. The object-storage identity is the worked example: the dev stack's `EVIDGATE_S3_*` keys stay
-`dev-stack`-only, while the runtime options of 06.1.2-T1 resolve `EVIDGATE__OBJECT__ACCESSKEY` and
+`.env.dev.template`) joins `SecretNames` when a process starts to consume it, not before. The
+object-storage identity is the worked example: the dev stack's `EVIDGATE_S3_*` keys stay `dev-stack`-only,
+while the runtime options of 06.1.2-T1 resolve `EVIDGATE__OBJECT__ACCESSKEY` and
 `EVIDGATE__OBJECT__SECRETKEY` through the provider and are declared `secret: true`.
 
 **Api and Worker.** V1 registers `EnvironmentSecretProvider` once, with `TryAddSingleton`, in

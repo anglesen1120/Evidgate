@@ -286,4 +286,11 @@ public static class ApiErrorCode
 
     /// <summary>409: another project of the same organization already uses the requested case-code prefix (13.1.1 AC4, OI-13-101); retryable false, message key <c>error.case_prefix_taken</c>.</summary>
     public const string CasePrefixTaken = "case_prefix_taken";
+
+    /// <summary>
+    /// 501: the provider verified the identity but the login cannot be completed on this deployment yet
+    /// (02.3.1-T1.1's <c>ILoginCompletion</c> seam; 02.3.1-T1.4 supplies the real completion). A typed
+    /// refusal, never a silent success that would report a session which does not exist.
+    /// </summary>
+    public const string LoginNotCompleted = "login_not_completed";
 }

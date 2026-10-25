@@ -98,6 +98,11 @@ class TableRules(unittest.TestCase):
         self.assertEqual(run(sql), [])
         self.assertIn("missing_rls", rules(run(sql.split("alter table")[0])))
 
+    def test_quoted_reserved_word_table_is_qualified_without_quotes(self):
+        sql = GOOD_TABLE.replace("public.widget", 'public."user"')
+        self.assertEqual(run(sql), [])
+        self.assertIn("missing_rls", rules(run(sql.split("alter table")[0])))
+
     def test_policy_without_the_helper_is_not_a_tenant_policy(self):
         sql = GOOD_TABLE.replace("evidgate.current_org_id()", "current_setting('evidgate.org_id')::uuid")
         self.assertEqual(rules(run(sql)), {"missing_policy"})

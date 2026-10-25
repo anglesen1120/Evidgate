@@ -55,7 +55,10 @@ The playbook for changing a table without breaking the running version is
   dedupe backfill, `project_org_case_prefix_uq` and the `project_case_prefix_default` insert
   trigger, and `0040` is 13.1.1-T2.1's authoring permission seed — the four 00 §2:60 strings
   (`authoring:read`, `authoring:write`, `authoring:generate`, `script:generate`) with their default
-  built-in role grants, no DDL (the file header records why); the next free number is `0041`;
+  built-in role grants, no DDL (the file header records why), `0041` is 02.3.1-T1's `user`,
+  `user_identity` and `session` (platform scope, D12: FORCE ROW LEVEL SECURITY with an owner-only
+  policy and no privilege for the app role; access is through `SECURITY DEFINER` `evidgate_resolve`
+  functions added by 02.3.1-T1.4 and 02.3.2); the next free number is `0042`;
   a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
