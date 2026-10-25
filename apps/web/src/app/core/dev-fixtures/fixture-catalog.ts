@@ -29,6 +29,7 @@ import ciBindingsListOnboardingRun from '../../../../../../fixtures/web-api/ci-b
 import ingestTokenCreate from '../../../../../../fixtures/web-api/ingest-token-create/input.json';
 import ingestTokenRotate from '../../../../../../fixtures/web-api/ingest-token-rotate/input.json';
 import ingestTokenRotateConflict from '../../../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
+import ingestTokenRotateRateLimited from '../../../../../../fixtures/web-api/ingest-token-rotate-rate-limited/input.json';
 import ingestTokensList from '../../../../../../fixtures/web-api/ingest-tokens-list/input.json';
 import ingestTokensListOnboardingConnected from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-connected/input.json';
 import ingestTokensListOnboardingForbidden from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-forbidden/input.json';
@@ -353,6 +354,7 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'ingest-token-create', document: ingestTokenCreate },
   { name: 'ingest-token-rotate', document: ingestTokenRotate },
   { name: 'ingest-token-rotate-conflict', document: ingestTokenRotateConflict },
+  { name: 'ingest-token-rotate-rate-limited', document: ingestTokenRotateRateLimited },
   { name: 'ingest-tokens-list', document: ingestTokensList },
   {
     name: 'ingest-tokens-list-onboarding-connected',

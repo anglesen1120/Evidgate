@@ -916,6 +916,20 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     }
   });
 
+  it('pins the rotation burst refusal and its bounded retry delay (09.7.1-T3 AC3)', () => {
+    const refusal = corpusDocument('ingest-token-rotate-rate-limited');
+    expect([refusal.operation_id, refusal.status, refusal.variant]).toEqual([
+      'rotateIngestToken',
+      429,
+      'rate-limited',
+    ]);
+    expect(refusal.headers['Retry-After']).toBe('30');
+    const body = refusal.body as { error: { code: string; retryable: boolean } };
+    expect(body.error.code).toBe('rate_limited');
+    expect(body.error.retryable).toBe(true);
+    expect(oneTimeSecretMembers(refusal.body)).toEqual([]);
+  });
+
   it('pins the Secrets tab’s token page states (09.7.1-T3)', () => {
     const page = corpusDocument('ingest-tokens-list-settings');
     expect([page.operation_id, page.variant, page.status]).toEqual([
