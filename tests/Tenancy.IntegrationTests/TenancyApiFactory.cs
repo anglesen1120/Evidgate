@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.Modules.Identity.Ci;
@@ -199,6 +200,8 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
             {
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
                 ["EVIDGATE:Identity:CustomRolesEnabled"] = "false",
+                // 02.1.2-T2: the invite routes mint a token, so the pepper must exist (see IdentityApiFactory).
+                ["EVIDGATE:Invite:Pepper"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             }));
 
         if (_ci)

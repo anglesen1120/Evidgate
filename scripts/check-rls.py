@@ -35,6 +35,7 @@ from pathlib import Path
 DEFINER_AUDIT_EXEMPT = {
     "evidgate.purge_expired_idempotency": "T80 sweep: bounded delete of expired rows, observed via the task row",
     "evidgate.purge_expired_ci_token_issue": "T7 sweep: bounded delete of expired replay-cache rows, observed via the task row",
+    "evidgate.expire_pending_invites": "T80 sweep: bounded expiry of past-due pending invites, observed via the task row",
     "evidgate.audit_org_ids": "T80 sweep: lists org ids for the chain-verification task, which records its own findings",
 }
 

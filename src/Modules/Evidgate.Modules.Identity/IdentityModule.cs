@@ -7,6 +7,7 @@ using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Identity.Infrastructure.Persistence;
+using Evidgate.Modules.Identity.Invites;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Login.GitHub;
 using Evidgate.Modules.Identity.Login.Google;
@@ -113,6 +114,7 @@ internal static class IdentityModule
         services.TryAddSingleton<IOrganizationFounder, OrganizationFounder>();
 
         services.AddCiAuthentication(configuration);
+        services.AddInviteMinting(configuration);
 
         // 02.3.1-T1 (AC8): the federated login — EVIDGATE:Login and EVIDGATE:SESSION options, the
         // pending-login cookie, the one-time state record, the session store and the completion that issues
@@ -127,6 +129,44 @@ internal static class IdentityModule
         // piece; only the Worker runs a consumer and a schedule runner.
         services.AddTaskHandler<CiTokenIssuePurgePayload, CiTokenIssuePurgeTaskHandler>();
         services.AddTaskSchedule(CiTokenIssueSweeps.Purge);
+
+        return services;
+    }
+
+    /// <summary>
+    /// 02.1.2-T2: the invite flow's pieces — the pepper seam and its options, the token carrier the
+    /// routes read after dispatch, the expiry sweep of §7 (registered in both hosts like every module
+    /// piece; only the Worker runs a schedule runner) and the binder the login flow calls (02.3.1-T2).
+    /// </summary>
+    private static IServiceCollection AddInviteMinting(this IServiceCollection services, IConfiguration configuration)
+    {
+        services
+            .AddOptions<InviteOptions>()
+            .Bind(configuration.GetSection(InviteOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<InviteOptions>, InviteOptionsValidator>());
+        // The pepper is a secret: resolved through ISecretProvider after the binder (which skips the
+        // internal setter) and before validation runs, exactly as the session and CI peppers are.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IPostConfigureOptions<InviteOptions>, InviteOptionsSecretPostConfigure>());
+
+        services.TryAddSingleton<InviteSecrets>();
+
+        // Singleton by necessity: Mediator resolves handlers from the root provider, so the carrier's
+        // slot is an AsyncLocal, not a DI scope (see the type's remarks).
+        services.TryAddSingleton<InviteSecretCarrier>();
+
+        // The expiry sweep (02.1.2 §7): a bounded bulk `pending -> expired` on the database clock.
+        services.AddTaskHandler<InviteExpiryPayload, InviteExpiryTaskHandler>();
+        services.AddTaskSchedule(InviteExpirySweeps.Expire);
+
+        // 02.3.1-T2 calls the binder. It opens and commits its own per-org tenant transactions,
+        // so it must be called outside any open tenant scope (BeginAsync throws inside one;
+        // 02.3.1-T2 hand-over); nothing in this PR calls it.
+        services.TryAddSingleton<MembershipBinder>();
+        services.TryAddSingleton<IMembershipBinder>(
+            provider => provider.GetRequiredService<MembershipBinder>());
 
         return services;
     }

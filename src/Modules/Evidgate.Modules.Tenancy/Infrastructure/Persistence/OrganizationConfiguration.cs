@@ -78,5 +78,12 @@ internal sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organ
 
         builder.Property(organization => organization.MaxSeats)
             .HasColumnName("max_seats");
+
+        // 0043 / 02.1.2-T2: AC8's per-org opt-in for email-only auto-bind. NOT NULL with a
+        // database default (`false`), so a new org never has to set it and the write model
+        // stays equal to the physical column set (WriteModelMappingTests).
+        builder.Property(organization => organization.InviteAutobindVerifiedDomain)
+            .HasColumnName("invite_autobind_verified_domain")
+            .HasDefaultValue(false);
     }
 }

@@ -128,6 +128,12 @@ public static class ApiErrorCode
     /// <summary>The membership's current status does not allow the requested transition (02.1.2 §6: 409).</summary>
     public const string InvalidTransition = "invalid_transition";
 
+    /// <summary>
+    /// The membership carries no pending invite to resend or cancel, because it is already bound,
+    /// cancelled or expired (02.1.2 §5 resend/cancel routes: 409).
+    /// </summary>
+    public const string InviteNotPending = "invite_not_pending";
+
     /// <summary>The slug is already used by another organization, or by another project of the same org (02.1.1 AC2: 409).</summary>
     public const string SlugTaken = "slug_taken";
 
