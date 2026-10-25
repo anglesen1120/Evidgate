@@ -122,6 +122,8 @@ button:disabled {
 table {
   border-collapse: collapse;
   width: 100%;
+  /* Keep short labels readable; narrow viewports scroll inside .table-scroll. */
+  min-inline-size: calc(var(--eg-rail-width) + var(--eg-rail-width));
   background: var(--eg-surface);
 }
 caption {
@@ -135,16 +137,18 @@ td {
   vertical-align: top;
   padding: var(--eg-space-3) var(--eg-space-4);
   border-block-start: var(--eg-border-width) solid var(--eg-border);
-  overflow-wrap: anywhere;
-  min-width: var(--eg-control-touch);
+  overflow-wrap: normal;
+  word-break: normal;
   max-width: var(--eg-rail-width);
 }
 thead {
   background: var(--eg-surface-raised);
 }
 .identifier {
-  display: block;
   overflow-wrap: anywhere;
+}
+span.identifier {
+  display: block;
 }
 [data-audit-support='true'] > :first-child {
   border-inline-start: var(--eg-space-1) solid var(--eg-warning-fg);
