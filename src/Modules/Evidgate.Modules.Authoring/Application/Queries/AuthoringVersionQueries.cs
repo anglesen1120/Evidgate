@@ -27,7 +27,9 @@ namespace Evidgate.Modules.Authoring.Application.Queries;
 /// </remarks>
 /// <param name="ProjectId">The project from the route; another tenant's project is a 404 (AC10).</param>
 /// <param name="EntityKind">Optional filter: <c>feature_node</c>, <c>checklist_item</c> or <c>manual_test_case</c>.</param>
-/// <param name="EntityId">Optional filter: one entity's history.</param>
+/// <param name="EntityId">Optional filter: one entity's history. It requires <paramref name="EntityKind"/> — sent alone it
+/// is a 422 on <c>/entity_kind</c>, because the entity key index starts with the kind and the id would otherwise be a
+/// residual filter over the whole project timeline.</param>
 /// <param name="Source">Optional filter: <c>manual</c>, <c>ai</c> or <c>import</c>.</param>
 /// <param name="ActorMembershipId">Optional filter: the authoring membership that wrote the change.</param>
 /// <param name="From">Optional inclusive lower bound, an RFC 3339 instant.</param>
@@ -48,7 +50,8 @@ internal sealed record ListAuthoringVersionsQuery(
 /// <summary>
 /// Handler of <see cref="ListAuthoringVersionsQuery"/>: the project gate, then <b>two</b> statements in a
 /// <b>read-only</b> transaction (the project-liveness probe and one keyset page) whatever the page size, and a 422 per
-/// unsupported filter value.
+/// unsupported filter value — including the combination the statements cannot serve, <c>entity_id</c> without
+/// <c>entity_kind</c>.
 /// </summary>
 /// <remarks>
 /// The filters are answered here, inside the handler, and the page size and the two uuids at the route edge — the split
@@ -88,6 +91,17 @@ internal sealed class ListAuthoringVersionsQueryHandler(
             return Result.Failure<AuthoringVersionListResponse>(Error.Invalid(
                 "entity_kind is feature_node, checklist_item or manual_test_case (13.1.1 §5 route 22)",
                 [new ErrorDetail("/entity_kind", "value_invalid")]));
+        }
+
+        // `entity_id` alone is refused: without `entity_kind` the entity key index of AC9
+        // (`org_id, project_id, entity_kind, entity_id, version_no`) cannot serve the filter — `entity_id` would be a
+        // residual predicate — so an unknown or another project's id would scan the whole project timeline. The pair is
+        // also the only shape the statements serve (<see cref="AuthoringVersionStatement.Pick"/>).
+        if (query.EntityId is not null && entityKind is null)
+        {
+            return Result.Failure<AuthoringVersionListResponse>(Error.Invalid(
+                "entity_id requires entity_kind (13.1.1 §5 route 22)",
+                [new ErrorDetail("/entity_kind", "required_with_entity_id")]));
         }
 
         var source = AuthoringEndpointText.Blank(query.Source);
@@ -303,11 +317,18 @@ internal static class AuthoringVersionFilters
 /// alternation happens in C#, never in SQL text (00 §5.7 S1, the OI-13-112 rule): a caller-supplied value is a Dapper
 /// parameter only.
 /// </summary>
+/// <remarks>
+/// The handler refuses <c>entity_id</c> without <c>entity_kind</c>, so <paramref name="entityId"/> is never present on
+/// its own and the timeline statement never sees an entity id. The kind shape keeps the shared
+/// <c>@entity_id is null or …</c> form of the one-parameter-set pattern even though the pair now always goes to
+/// <see cref="AuthoringVersionReadSql.EntityPage"/>; the entity shape carries both halves as index conditions.
+/// </remarks>
 internal static class AuthoringVersionStatement
 {
     /// <summary>The statement that serves this filter combination.</summary>
     /// <param name="entityKind">The validated <c>entity_kind</c> filter, or null.</param>
-    /// <param name="entityId">The <c>entity_id</c> filter, or null.</param>
+    /// <param name="entityId">The <c>entity_id</c> filter, or null; never present without
+    /// <paramref name="entityKind"/>.</param>
     internal static string Pick(string? entityKind, Guid? entityId) =>
         entityKind is not null
             ? entityId is not null ? AuthoringVersionReadSql.EntityPage : AuthoringVersionReadSql.EntityKindPage
@@ -315,25 +336,30 @@ internal static class AuthoringVersionStatement
 }
 
 /// <summary>
-/// The parameters of one timeline statement: exactly the names the three statements bind, so no page binds a parameter
-/// its statement does not use (<see cref="AuthoringVersionReadSql"/>). The first page passes the sentinel cursor pair,
-/// so the seek is always the same row comparison.
+/// The parameters of one timeline statement: one shared record for the three statements of
+/// <see cref="AuthoringVersionReadSql"/>, so a page never binds a name a statement does not know. A member a statement's
+/// text does not reference is simply not sent — the timeline shape leaves <c>@entity_id</c> unused, because the handler
+/// refuses that id without <c>entity_kind</c> — and Npgsql ignores a declared named parameter the command never uses.
+/// The first page passes the sentinel cursor pair, so the seek is always the same row comparison.
 /// </summary>
 /// <param name="org_id">The open tenant scope's organization.</param>
 /// <param name="project_id">The project from the route.</param>
 /// <param name="cursor_created_at">The last row's <c>created_at</c>, or the first-page sentinel.</param>
 /// <param name="cursor_id">The last row's id, or the first-page sentinel.</param>
 /// <param name="entity_kind">The validated <c>entity_kind</c> filter, or null.</param>
-/// <param name="entity_id">The <c>entity_id</c> filter, or null.</param>
+/// <param name="entity_id">The <c>entity_id</c> filter, or null; never present without
+/// <paramref name="entity_kind"/> (the handler refuses the pair).</param>
 /// <param name="source">The validated <c>source</c> filter, or null.</param>
 /// <param name="actor">The <c>actor</c> (author membership) filter, or null.</param>
-/// <param name="from_at">The inclusive lower bound, or null.</param>
-/// <param name="to_at">The exclusive upper bound, or null.</param>
+/// <param name="from_at">The inclusive lower bound in UTC, or null.</param>
+/// <param name="to_at">The exclusive upper bound in UTC, or null.</param>
 /// <param name="take">The page size plus one, so the handler can tell a last page from a full one.</param>
 /// <remarks>
 /// The three time members are <see cref="DateTimeOffset"/> on purpose: Npgsql maps that CLR type to
 /// <c>timestamptz</c> unambiguously, whereas a <see cref="DateTime"/> of the wrong <see cref="DateTimeKind"/> is a
-/// <c>timestamp</c> (or a refusal), which would cast the value through the session's zone.
+/// <c>timestamp</c> (or a refusal), which would cast the value through the session's zone. The two bounds arrive with a
+/// zero offset because <see cref="AuthoringVersionInstant"/> normalises whatever offset the caller spelled — Npgsql
+/// refuses a non-zero one for <c>timestamptz</c>.
 /// </remarks>
 internal sealed record AuthoringVersionPageParameters(
     Guid org_id,
@@ -528,8 +554,16 @@ internal static class AuthoringVersionCursor
 
 /// <summary>
 /// The RFC 3339 instant reader of route 22's <c>from</c>/<c>to</c>: an absent value reads as null, anything that is not a
-/// date-time with an explicit offset is a 422 naming the query parameter (never an echoed value).
+/// date-time with an explicit offset is a 422 naming the query parameter (never an echoed value), and an accepted value
+/// is normalised to UTC.
 /// </summary>
+/// <remarks>
+/// <b>Always UTC, never the caller's offset.</b> <c>authoring_version.created_at</c> is <c>timestamptz</c>, which stores
+/// an instant and no zone, and Npgsql refuses to write a <see cref="DateTimeOffset"/> whose offset is not zero to that
+/// type: a bound of <c>2026-10-01T10:00:00+07:00</c> would be a write error instead of a page. The reader therefore keeps
+/// the caller's instant and drops its spelling (<see cref="DateTimeOffset.ToUniversalTime"/>), so <c>+07:00</c>,
+/// <c>-05:30</c> and <c>Z</c> are the same window.
+/// </remarks>
 internal static class AuthoringVersionInstant
 {
     /// <summary>The longest instant this reader accepts (RFC 3339 allows 10 fractional digits; 40 covers them).</summary>
@@ -555,7 +589,9 @@ internal static class AuthoringVersionInstant
                 [new ErrorDetail(path, "value_invalid")]);
         }
 
-        instant = parsed;
+        // UTC, not the caller's spelling: Npgsql binds a DateTimeOffset with a non-zero offset to `timestamptz` as a
+        // write error, so the offset is dropped here and only the instant survives.
+        instant = parsed.ToUniversalTime();
 
         return null;
     }

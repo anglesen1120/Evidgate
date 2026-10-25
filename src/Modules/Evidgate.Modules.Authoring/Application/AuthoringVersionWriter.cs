@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Authoring.Application.Commands;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
@@ -46,8 +47,8 @@ namespace Evidgate.Modules.Authoring.Application;
 /// (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>, the pattern <c>CaseIdentityService</c> uses for
 /// a project's sync), because a <c>for update</c> lock of the parent row would join this order and could form a cycle with
 /// a batch that locks a child before its parent. Every path that takes that lock takes it <em>before</em> its first row
-/// lock (create and move-into-group in their handler, the reorder and the restore in their core), so it is always the
-/// outermost lock of the call. Every lock of a call is bounded by one 5 s <c>lock_timeout</c>,
+/// lock (the node create and move-into-group in their handler, the reorder and the restore in their core), so it is always
+/// the outermost lock of the call. Every lock of a call is bounded by one 5 s <c>lock_timeout</c>,
 /// and a lock timeout (55P03) or a deadlock (40P01) answers the retryable <c>503 unavailable</c> of §5 rather than a
 /// 500, so even an order this comment missed degrades to a retry.
 /// </para>
@@ -422,17 +423,24 @@ internal sealed class AuthoringVersionWriter(
 
     /// <summary>
     /// Re-appends a snapshot as a new version (AC8): clears <c>deleted_at</c>, writes the snapshot back, resolves a
-    /// position clash at <c>max + 1</c>, refuses a parent that is still soft-deleted and sets a restored item to
-    /// <c>active</c> and a restored case to <c>draft</c> (§6).
+    /// position clash at <c>max + 1</c>, refuses a parent that is still soft-deleted, refuses a sibling group already at
+    /// AC2's cap and sets a restored item to <c>active</c> and a restored case to <c>draft</c> (§6).
     /// </summary>
     /// <remarks>
     /// <b>Serialisation (hand-over (a), OI-13-128).</b> The restore takes the sibling group's transaction-scoped advisory
     /// lock (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>) <em>before</em> it resolves <c>max + 1</c>, and it is
-    /// the first lock of the call — create, move-into-group and the reorder take that same lock before any row lock, so
-    /// the advisory lock is the outermost of every path and cannot sit in a cycle with them. Before this, a restore
-    /// resolved its position unlocked and survived a lost race only through the <c>23505</c> → <c>503</c> mapping
-    /// below, which stays as the defence in depth for a writer that does not take the group lock (13.1.2's batch path,
-    /// OI-13-129).
+    /// the first lock of the call — the node create, the node move-into-group and the node reorder take that same
+    /// feature-node lock before any row lock, so the advisory lock is the outermost of every path and cannot sit in a
+    /// cycle with them. Before this, a restore resolved its position unlocked and survived a lost race only through the
+    /// <c>23505</c> → <c>503</c> mapping below, which stays as the defence in depth for a writer that does not take the
+    /// group lock (13.1.2's batch path, OI-13-129).
+    /// <para>
+    /// <b>The group cap (AC2, review F3).</b> A restore that adds a live member to a sibling group — a tombstone coming
+    /// back, or a live row re-applied into another group — is refused with <see cref="NodeLimits.Refusal"/>
+    /// (<c>422 children_limit_exceeded</c>) when that group already holds
+    /// <see cref="NodeLimits.MaximumSiblingsPerGroup"/> live siblings, exactly as a create or a move-in of the group is.
+    /// The count is read under the same group lock, so nothing can slip past it.
+    /// </para>
     /// </remarks>
     /// <param name="orgId">The tenant; must equal the open scope's organization.</param>
     /// <param name="projectId">The project.</param>
@@ -586,17 +594,25 @@ internal sealed class AuthoringVersionWriter(
         var peekedSnapshot = fromVersion ?? SnapshotOf(peeked);
 
         // Hand-over (a) / OI-13-128: the sibling group's advisory lock, and it is the FIRST lock of this call.
-        // Why here: create and move-into-group (NodeCommands) and the reorder (ReorderNodesCoreAsync) all take this lock
-        // before their first row lock, so taking it before the parent's share lock and before the entity's own lock keeps
-        // the advisory lock the outermost of every path and no cycle can include it. Taking it later — after the entity
-        // lock, next to the max + 1 read it protects — would put it behind a row lock a create or a reorder already
-        // holds, which is the one inversion this order forbids.
+        // Why here: the node create and move-into-group (NodeCommands) and the node reorder (ReorderNodesCoreAsync) take
+        // this same feature-node key before their first row lock, so taking it before the parent's share lock and before
+        // the entity's own lock keeps the advisory lock the outermost of every path and no cycle can include it. Taking it
+        // later — after the entity lock, next to the max + 1 read it protects — would put it behind a row lock a create or
+        // a reorder already holds, which is the one inversion this order forbids.
         // Which group: the parent the restored snapshot lands in — a node's parent_id (null = root), an item's
         // feature_node_id, a case's checklist_item_id. The group of the peeked parent is taken even when the lock below
         // finds that the row moved in between: that case answers the retryable 503 (see below) and the retry re-peeks,
         // so locking a group the write does not use can only cost a wait, never a wrong append.
-        // A manual case has no position of its own (route 12 orders by (code, id) and the code is immutable), so its
-        // group lock is the create/merge side of 13.1.2 that can bring a case into the same item, not a position guard.
+        // Who else takes it: for a feature node, the create, the move-in and the reorder of that group. For a checklist
+        // item and a manual test case the only taker today is a restore, so the two child keys serialise concurrent
+        // restores of one group and nothing more (review F5): the item create picks its position from a plain read with no
+        // group lock (ChecklistItemCreate.cs:86-91, AuthoringChecklistReadSql.NextPosition), so a create's number and a
+        // restore's max + 1 can still coincide — and no key catches it either, because only feature_node carries a
+        // sibling-position unique index (migrations/0039_authoring_tree.sql:237-239); the two live items then share a
+        // position, which their reads order deterministically by (position, id). Closing that race means taking this key in
+        // the item create, which is outside this step. A case carries no position at all (route 12 orders by (code, id)
+        // and the code is immutable), so its key guards no append position: it is the key a path that brings cases into one
+        // item must take once one exists (13.1.2's batch path).
         await AuthoringLockGuard
             .LockSiblingGroupAsync(db, projectId, ParentOf(peekedSnapshot), SiblingGroupOf(entityKind), cancellationToken)
             .ConfigureAwait(false);
@@ -654,6 +670,26 @@ internal sealed class AuthoringVersionWriter(
         if (parentFailure is not null)
         {
             return AuthoringErrors.Fail<AuthoringVersionRef>(parentFailure);
+        }
+
+        // AC2's group cap, re-applied to a restore (review F3): a restore re-appends its row as a live member, so it grows
+        // its target group exactly like a create or a move-into-group does. Unchecked it could push a group past
+        // NodeLimits.MaximumSiblingsPerGroup, and such a group could never be renumbered again — the reorder refuses more
+        // than that many ids (ReorderNodesCommandValidator.MaxOrderedIds) — and a restore could not put it back. The count
+        // is read under the group's advisory lock taken above, so a concurrent create or move-in of the same group either
+        // committed before this read or waits for this transaction. Only a feature node has a renumbered group and a
+        // position to protect: a checklist item's position is never renumbered as a set and a case carries none.
+        if (snapshot is FeatureNodeSnapshot restoredNode
+            && AddsGroupMember(stored, restoredNode)
+            && await db.QuerySingleOrDefaultAsync<AuthoringSql.NodeGroupRow>(
+                AuthoringSql.NodeGroupSummary(restoredNode.ParentId is null),
+                new { org_id = orgId, project_id = projectId, parent_id = restoredNode.ParentId },
+                cancellationToken).ConfigureAwait(false) is { } group
+            && group.LiveCount >= NodeLimits.MaximumSiblingsPerGroup)
+        {
+            // Refused before the first UPDATE: the row keeps its tombstone, its position and its history (AC8's "nothing
+            // changes"), and the caller can free a slot — soft delete a sibling or move one out — and retry.
+            return AuthoringErrors.Fail<AuthoringVersionRef>(NodeLimits.Refusal());
         }
 
         snapshot = await ResolveRestorePositionAsync(orgId, projectId, entityId, snapshot, cancellationToken).ConfigureAwait(false);
@@ -1894,6 +1930,17 @@ internal sealed class AuthoringVersionWriter(
     };
 
     /// <summary>
+    /// True when a restore adds a live member to its target group (AC2's cap, review F3): the row is a tombstone, so the
+    /// write brings it back into the group, or it is live in another group, so the write moves it in. A live row restored
+    /// inside its own group keeps its place — it re-appends at <c>max + 1</c> only when a sibling took its number, which
+    /// changes no count.
+    /// </summary>
+    /// <param name="stored">The entity row as locked by the calling restore.</param>
+    /// <param name="target">The snapshot being re-appended.</param>
+    private static bool AddsGroupMember(object stored, FeatureNodeSnapshot target) =>
+        IsDeleted(stored) || (SnapshotOf(stored) is FeatureNodeSnapshot current && current.ParentId != target.ParentId);
+
+    /// <summary>
     /// §6's restore rule, applied to every restore: an item comes back <c>active</c> and a case <c>draft</c>, whatever
     /// the stored state was — a retired item or an approved case never returns retired/approved.
     /// </summary>
@@ -1927,7 +1974,9 @@ internal sealed class AuthoringVersionWriter(
 
     /// <summary>
     /// The sibling group a restore of <paramref name="kind"/> serialises on (hand-over (a)): a node's parent group, an
-    /// item's group under its node, a case's group under its item — the same key its create and reorder take.
+    /// item's group under its node, a case's group under its item. For a feature node that is the key its create, its
+    /// move-into-group and its reorder take; for an item and a case it is a key no other writer takes today, so it
+    /// serialises two restores of one group (the item create and the case create take no group lock — review F5).
     /// </summary>
     /// <param name="kind">The entity kind.</param>
     private static AuthoringLockGuard.SiblingGroup SiblingGroupOf(AuthoringEntityKind kind) => kind switch

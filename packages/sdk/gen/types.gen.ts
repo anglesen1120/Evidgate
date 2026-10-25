@@ -1908,12 +1908,12 @@ export type AuthoringCursor = string;
 export type AuthoringVersionId = string;
 
 /**
- * Which entity the versions describe (13.1.1 §5 route 22): `feature_node`, `checklist_item` or `manual_test_case`. Any other value is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = value_invalid`.
+ * Which entity the versions describe (13.1.1 §5 route 22): `feature_node`, `checklist_item` or `manual_test_case`. Any other value is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = value_invalid`. Required whenever `entity_id` is sent: the entity key index starts `(org_id, project_id, entity_kind, entity_id, version_no)`, so an id on its own is 422 (see `entity_id`). `entity_kind` alone is valid.
  */
 export type AuthoringVersionEntityKindFilter = 'feature_node' | 'checklist_item' | 'manual_test_case';
 
 /**
- * The entity's id (13.1.1 §5 route 22); combined with `entity_kind` it is one entity's history. A malformed uuid is 422 `request_invalid` with `details[].path = /entity_id`.
+ * The entity's id (13.1.1 §5 route 22); combined with `entity_kind` it is one entity's history. Sending it without `entity_kind` is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = required_with_entity_id`. A malformed uuid is 422 `request_invalid` with `details[].path = /entity_id`.
  */
 export type AuthoringVersionEntityIdFilter = string;
 
@@ -1928,12 +1928,12 @@ export type AuthoringVersionSourceFilter = 'manual' | 'ai' | 'import';
 export type AuthoringVersionActorFilter = string;
 
 /**
- * Inclusive lower bound of the window (13.1.1 §5 route 22): an RFC 3339 instant with an explicit offset (`Z` or `±hh:mm`). A bare date, a local time without an offset or `from` later than `to` is 422 `request_invalid` — `details[].path = /from` with `reason = value_invalid` or `invalid_range`.
+ * Inclusive lower bound of the window (13.1.1 §5 route 22): an RFC 3339 instant with an explicit offset (`Z` or `±hh:mm`), normalised to UTC before it is bound (the stored instants are UTC). A bare date, a local time without an offset or `from` later than `to` is 422 `request_invalid` — `details[].path = /from` with `reason = value_invalid` or `invalid_range`.
  */
 export type AuthoringVersionFrom = string;
 
 /**
- * Exclusive upper bound of the window (13.1.1 §5 route 22), the same RFC 3339 rule as `from`; a malformed value is 422 `request_invalid` with `details[].path = /to`.
+ * Exclusive upper bound of the window (13.1.1 §5 route 22), the same RFC 3339 rule as `from` and normalised to UTC the same way; a malformed value is 422 `request_invalid` with `details[].path = /to`.
  */
 export type AuthoringVersionTo = string;
 
@@ -8675,11 +8675,11 @@ export type ListAuthoringVersionsData = {
     };
     query?: {
         /**
-         * Which entity the versions describe (13.1.1 §5 route 22): `feature_node`, `checklist_item` or `manual_test_case`. Any other value is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = value_invalid`.
+         * Which entity the versions describe (13.1.1 §5 route 22): `feature_node`, `checklist_item` or `manual_test_case`. Any other value is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = value_invalid`. Required whenever `entity_id` is sent: the entity key index starts `(org_id, project_id, entity_kind, entity_id, version_no)`, so an id on its own is 422 (see `entity_id`). `entity_kind` alone is valid.
          */
         entity_kind?: 'feature_node' | 'checklist_item' | 'manual_test_case';
         /**
-         * The entity's id (13.1.1 §5 route 22); combined with `entity_kind` it is one entity's history. A malformed uuid is 422 `request_invalid` with `details[].path = /entity_id`.
+         * The entity's id (13.1.1 §5 route 22); combined with `entity_kind` it is one entity's history. Sending it without `entity_kind` is 422 `request_invalid` with `details[].path = /entity_kind` and `reason = required_with_entity_id`. A malformed uuid is 422 `request_invalid` with `details[].path = /entity_id`.
          */
         entity_id?: string;
         /**
@@ -8691,11 +8691,11 @@ export type ListAuthoringVersionsData = {
          */
         actor?: string;
         /**
-         * Inclusive lower bound of the window (13.1.1 §5 route 22): an RFC 3339 instant with an explicit offset (`Z` or `±hh:mm`). A bare date, a local time without an offset or `from` later than `to` is 422 `request_invalid` — `details[].path = /from` with `reason = value_invalid` or `invalid_range`.
+         * Inclusive lower bound of the window (13.1.1 §5 route 22): an RFC 3339 instant with an explicit offset (`Z` or `±hh:mm`), normalised to UTC before it is bound (the stored instants are UTC). A bare date, a local time without an offset or `from` later than `to` is 422 `request_invalid` — `details[].path = /from` with `reason = value_invalid` or `invalid_range`.
          */
         from?: string;
         /**
-         * Exclusive upper bound of the window (13.1.1 §5 route 22), the same RFC 3339 rule as `from`; a malformed value is 422 `request_invalid` with `details[].path = /to`.
+         * Exclusive upper bound of the window (13.1.1 §5 route 22), the same RFC 3339 rule as `from` and normalised to UTC the same way; a malformed value is 422 `request_invalid` with `details[].path = /to`.
          */
         to?: string;
         /**
@@ -8833,9 +8833,9 @@ export type RestoreAuthoringVersionErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
      */
-    412: ErrorEnvelope;
+    409: ErrorEnvelope;
     /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
      */

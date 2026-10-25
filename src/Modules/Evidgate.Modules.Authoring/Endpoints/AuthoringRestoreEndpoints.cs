@@ -63,7 +63,7 @@ internal static class AuthoringRestoreEndpoints
         authoring.MapPost("/versions/{v}/restore", RestoreVersionAsync)
             .Produces<AuthoringRestoreResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
-            .Produces(StatusCodes.Status412PreconditionFailed)
+            .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .Produces(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Re-apply one stored version of the entity it describes (route 24, AC8)");

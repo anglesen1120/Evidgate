@@ -375,10 +375,16 @@ public sealed partial class AuthoringVersionTests
     }
 
     /// <summary>
-    /// Hand-over (a) under real concurrency: a restore racing a create into the same sibling group is serialised by the
-    /// group's advisory lock, so neither answers a 500, the retryable 503 is the only permitted refusal, and no two live
-    /// rows of the group end up on one position.
+    /// Hand-over (a) under real concurrency: a restore racing a create into the same sibling group must not answer a
+    /// <c>500</c> — the retryable <c>503</c> is the only permitted refusal, a lost position is never a <c>409</c> or a
+    /// <c>422</c>, and no two live rows of the group end up on one position.
     /// </summary>
+    /// <remarks>
+    /// This test races two real writers and pins the outcome; it does <b>not</b> prove by itself that the restore takes the
+    /// group lock — two orderings it cannot force end in the same answers. That proof is
+    /// <see cref="Restore_GroupLockHeld_Retryable503"/>, which holds the key in another session and sees the restore park
+    /// on it until the writer's <c>lock_timeout</c>.
+    /// </remarks>
     [Fact]
     public async Task Restore_RacingCreate_SameGroup_NoDuplicatePosition()
     {
@@ -454,6 +460,271 @@ public sealed partial class AuthoringVersionTests
         forbidden.Status.ShouldBe(HttpStatusCode.Forbidden);
         forbidden.ErrorCode.ShouldBe("forbidden");
         (await AuditCountAsync(world, "authoring.node.restore")).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// AC8's parent rule on route 24: re-applying a version whose parent is still soft-deleted is the same
+    /// <c>422 authoring_parent_invalid</c> / <c>details[].reason = parent_deleted</c> the entity routes answer — the named
+    /// version supplies the parent the guard reads — and nothing is written (review F6).
+    /// </summary>
+    [Fact]
+    public async Task Restore_Version_ChildUnderDeletedParent_422()
+    {
+        await using var world = await StartRestoreAsync();
+
+        var module = await CreateNodeAsync(world, parent: null, kind: "module", title: "Checkout");
+        var feature = await CreateNodeAsync(world, parent: module, kind: "feature", title: "Payment");
+
+        // A node under a deleted node: the child is tombstoned first, then the now-empty parent, so both versions the
+        // route can name describe a row whose parent is a tombstone.
+        var category = await CreateNodeAsync(world, parent: feature, kind: "category", title: "Cards");
+        var child = await CreateNodeAsync(world, parent: category, kind: "sub_category", title: "Refunds");
+        var childVersion = await VersionIdAsync(world, child, versionNo: 1);
+        (await DeleteAsync(world, world.Node(child), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+        (await DeleteAsync(world, world.Node(category), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+
+        var orphanNode = await SendAsync(world, world.VersionRestore(childVersion), ifMatch: null);
+        orphanNode.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        orphanNode.ErrorCode.ShouldBe("authoring_parent_invalid");
+        Reasons(orphanNode).ShouldContain("parent_deleted");
+
+        // Nothing written: the child keeps its tombstone at the version its delete left and its two-row history.
+        (await EntityStateAsync(world, "feature_node", child)).ShouldBe("false|0|2");
+        (await RestoreVersionCountAsync(world, "feature_node", child)).ShouldBe(2);
+
+        // The same guard one rank down: an item re-applied by route 24 under a deleted node. Items hang under a
+        // category (13.1.1 AC1), so the deleted node is one.
+        var branch = await CreateNodeAsync(world, parent: feature, kind: "category", title: "Chargebacks");
+        var item = await CreateItemAsync(world, branch, "Refund is visible");
+        var itemVersion = await VersionIdAsync(world, item, versionNo: 1);
+        (await DeleteAsync(world, world.Item(item), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+        (await DeleteAsync(world, world.Node(branch), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+
+        var orphanItem = await SendAsync(world, world.VersionRestore(itemVersion), ifMatch: null);
+        orphanItem.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        orphanItem.ErrorCode.ShouldBe("authoring_parent_invalid");
+        Reasons(orphanItem).ShouldContain("parent_deleted");
+        (await RestoreVersionCountAsync(world, "checklist_item", item)).ShouldBe(2);
+    }
+
+    /// <summary>
+    /// AC19 before AC8's parent rule (review F6): a restore that presents a tag the row no longer has is <c>412</c> even
+    /// when its parent is still soft-deleted — the comparison runs under the entity lock, ahead of the parent guard — on
+    /// all three entity routes, and the same request with the tombstone's tag is then the <c>422 parent_deleted</c>.
+    /// </summary>
+    [Fact]
+    public async Task Restore_StaleTag_BeatsParentDeleted()
+    {
+        await using var world = await StartRestoreAsync();
+
+        // Route 6: a node whose parent is deleted, presented with the create's tag instead of the tombstone's.
+        var module = await CreateNodeAsync(world, parent: null, kind: "module", title: "Checkout");
+        var feature = await CreateNodeAsync(world, parent: module, kind: "feature", title: "Payment");
+        var category = await CreateNodeAsync(world, parent: feature, kind: "category", title: "Cards");
+        var child = await CreateNodeAsync(world, parent: category, kind: "sub_category", title: "Refunds");
+        (await DeleteAsync(world, world.Node(child), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+        (await DeleteAsync(world, world.Node(category), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+
+        var staleNode = await SendAsync(world, world.Restore(world.Node(child)), ifMatch: "\"1\"");
+        staleNode.Status.ShouldBe(HttpStatusCode.PreconditionFailed, "the stale tag answers before the parent rule is consulted");
+        staleNode.ErrorCode.ShouldBe("precondition_failed");
+        Reasons(staleNode).ShouldContain("stale");
+        (await RestoreVersionCountAsync(world, "feature_node", child)).ShouldBe(2);
+
+        var orphanNode = await SendAsync(world, world.Restore(world.Node(child)), ifMatch: "\"2\"");
+        orphanNode.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        orphanNode.ErrorCode.ShouldBe("authoring_parent_invalid");
+        Reasons(orphanNode).ShouldContain("parent_deleted");
+
+        // Route 11: the same pair one rank down. Items hang under a category (13.1.1 AC1).
+        var branch = await CreateNodeAsync(world, parent: feature, kind: "category", title: "Chargebacks");
+        var item = await CreateItemAsync(world, branch, "Refund is visible");
+        (await DeleteAsync(world, world.Item(item), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+        (await DeleteAsync(world, world.Node(branch), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+
+        var staleItem = await SendAsync(world, world.Restore(world.Item(item)), ifMatch: "\"1\"");
+        staleItem.Status.ShouldBe(HttpStatusCode.PreconditionFailed);
+        staleItem.ErrorCode.ShouldBe("precondition_failed");
+        (await RestoreVersionCountAsync(world, "checklist_item", item)).ShouldBe(2);
+
+        var orphanItem = await SendAsync(world, world.Restore(world.Item(item)), ifMatch: "\"2\"");
+        orphanItem.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        Reasons(orphanItem).ShouldContain("parent_deleted");
+
+        // Route 18: and once more for a case under a deleted item.
+        var holder = await CreateNodeAsync(world, parent: feature, kind: "category", title: "Refunds");
+        var liveItem = await CreateItemAsync(world, holder, "Chargeback is filed");
+        var manualCase = await CreateCaseAsync(world, liveItem, "File the chargeback");
+        (await DeleteAsync(world, world.Case(manualCase), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+        (await DeleteAsync(world, world.Item(liveItem), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+
+        var staleCase = await SendAsync(world, world.Restore(world.Case(manualCase)), ifMatch: "\"1\"");
+        staleCase.Status.ShouldBe(HttpStatusCode.PreconditionFailed);
+        staleCase.ErrorCode.ShouldBe("precondition_failed");
+        (await RestoreVersionCountAsync(world, "manual_test_case", manualCase)).ShouldBe(2);
+
+        var orphanCase = await SendAsync(world, world.Restore(world.Case(manualCase)), ifMatch: "\"2\"");
+        orphanCase.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        Reasons(orphanCase).ShouldContain("parent_deleted");
+    }
+
+    /// <summary>
+    /// AC19/AC8 on the two child routes, and route 24 on a live entity (review F6): a live item or case restored with a
+    /// stale tag is <c>412</c>, with its current tag it is the <c>409 invalid_transition</c> of "not soft-deleted", and
+    /// route 24 — which carries no tag and names the state instead — re-appends a live entity as a fresh version rather
+    /// than refusing it. Every refusal writes nothing.
+    /// </summary>
+    [Fact]
+    public async Task Restore_ItemAndCase_StaleAndLive()
+    {
+        await using var world = await StartRestoreAsync();
+
+        var module = await CreateNodeAsync(world, parent: null, kind: "module", title: "Checkout");
+        var feature = await CreateNodeAsync(world, parent: module, kind: "feature", title: "Payment");
+        var category = await CreateNodeAsync(world, parent: feature, kind: "category", title: "Cards");
+
+        // A live item at version 2: the create is version 1, the edit the tag the caller can be stale against.
+        var item = await CreateItemAsync(world, category, "Pay online");
+        var edited = await world.Client.SendAsync(
+            HttpMethod.Patch, world.Item(item), world.As, new { title = "Pay online (card)" }, NewKey(), "\"1\"");
+        edited.Status.ShouldBe(HttpStatusCode.OK, edited.ErrorMessage);
+
+        var staleItem = await SendAsync(world, world.Restore(world.Item(item)), ifMatch: "\"1\"");
+        staleItem.Status.ShouldBe(HttpStatusCode.PreconditionFailed);
+        staleItem.ErrorCode.ShouldBe("precondition_failed");
+        Reasons(staleItem).ShouldContain("stale");
+
+        var liveItem = await SendAsync(world, world.Restore(world.Item(item)), ifMatch: "\"2\"");
+        liveItem.Status.ShouldBe(HttpStatusCode.Conflict, "a live entity is the 409 of AC8, not a silent second restore");
+        liveItem.ErrorCode.ShouldBe("invalid_transition");
+        (await RestoreVersionCountAsync(world, "checklist_item", item)).ShouldBe(2, "neither refusal appended a version");
+
+        // Route 24 takes no tag: naming a version of a live entity re-applies it as one more version.
+        var reapplied = await SendAsync(world, world.VersionRestore(await VersionIdAsync(world, item, versionNo: 1)), ifMatch: null);
+        reapplied.Status.ShouldBe(HttpStatusCode.OK, reapplied.ErrorMessage);
+        reapplied.Body.GetProperty("version").GetInt32().ShouldBe(3);
+        (await _fixture.ScalarAsync<string>(
+            world.Database, $"select title from public.checklist_item where id = '{item:D}'"))
+            .ShouldBe("Pay online", "the named version's snapshot is what the route re-applies");
+
+        // A live case answers the same pair on route 18.
+        var caseItem = await CreateItemAsync(world, category, "Card is charged");
+        var manualCase = await CreateCaseAsync(world, caseItem, "Charge the card");
+        var caseEdited = await world.Client.SendAsync(
+            HttpMethod.Patch, world.Case(manualCase), world.As, new { title = "Charge the card once" }, NewKey(), "\"1\"");
+        caseEdited.Status.ShouldBe(HttpStatusCode.OK, caseEdited.ErrorMessage);
+
+        var staleCase = await SendAsync(world, world.Restore(world.Case(manualCase)), ifMatch: "\"1\"");
+        staleCase.Status.ShouldBe(HttpStatusCode.PreconditionFailed);
+        staleCase.ErrorCode.ShouldBe("precondition_failed");
+
+        var liveCase = await SendAsync(world, world.Restore(world.Case(manualCase)), ifMatch: "\"2\"");
+        liveCase.Status.ShouldBe(HttpStatusCode.Conflict);
+        liveCase.ErrorCode.ShouldBe("invalid_transition");
+        (await RestoreVersionCountAsync(world, "manual_test_case", manualCase)).ShouldBe(2);
+    }
+
+    /// <summary>
+    /// AC2's cap on the restore path (review F3): a restore re-appends its row as a live member, so it grows its target
+    /// group exactly like a create or a move-into-group does. A restore into a group of 999 live siblings lands — that is
+    /// the 1 000 the reorder accepts — and the next one, routes 6 and 24 alike, answers <c>422 request_invalid</c> with
+    /// <c>details[].path = /parent_id</c> and <c>details[].reason = children_limit_exceeded</c> and writes nothing: the
+    /// tombstone, its position and its history stay as the delete left them.
+    /// </summary>
+    [Fact]
+    public async Task Restore_NodeGroupFull_422()
+    {
+        await using var world = await StartRestoreAsync();
+
+        var module = await CreateNodeAsync(world, parent: null, kind: "module", title: "Checkout");
+
+        // Both tombstones are made before the group fills: once it is at the cap a create into it is refused too.
+        var first = await CreateNodeAsync(world, parent: module, kind: "feature", title: "Payment");
+        var second = await CreateNodeAsync(world, parent: module, kind: "feature", title: "Refunds");
+        (await DeleteAsync(world, world.Node(first), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+        (await DeleteAsync(world, world.Node(second), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
+        var secondVersion = await VersionIdAsync(world, second, versionNo: 1);
+
+        // 999 live siblings in one statement — the group a reorder can still take (ReorderNodesCommandValidator.
+        // MaxOrderedIds), seeded the way the create-side cap test seeds it.
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+             insert into public.feature_node (id, org_id, project_id, parent_id, kind, title, position)
+             select cast(md5('s80-restore-cap-' || g) as uuid),
+                    '{world.Org:D}',
+                    '{world.Project:D}',
+                    '{module:D}',
+                    'feature',
+                    'Seeded ' || g,
+                    g - 1
+               from generate_series(1, 999) as g
+             """);
+
+        // The restore of `first` re-appends it: its old position 0 is taken, so it lands at the group's max + 1.
+        var filled = await SendAsync(world, world.Restore(world.Node(first)), ifMatch: "\"2\"");
+        filled.Status.ShouldBe(HttpStatusCode.OK, filled.ErrorMessage);
+        filled.Body.GetProperty("version").GetInt32().ShouldBe(3);
+        (await EntityStateAsync(world, "feature_node", first)).ShouldBe("true|999|3", "the old position was taken, so max + 1");
+        (await LiveChildrenAsync(world, module)).ShouldBe(1000);
+
+        // The group is at the cap now: the second restore is one live member too many.
+        var refused = await SendAsync(world, world.Restore(world.Node(second)), ifMatch: "\"2\"");
+        refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        refused.ErrorCode.ShouldBe("request_invalid");
+        Paths(refused).ShouldContain("/parent_id");
+        Reasons(refused).ShouldContain("children_limit_exceeded");
+
+        // Route 24 re-applies the same snapshot and meets the same cap.
+        var refusedVersion = await SendAsync(world, world.VersionRestore(secondVersion), ifMatch: null);
+        refusedVersion.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        refusedVersion.ErrorCode.ShouldBe("request_invalid");
+        Paths(refusedVersion).ShouldContain("/parent_id");
+        Reasons(refusedVersion).ShouldContain("children_limit_exceeded");
+
+        // Nothing written by either refusal: the tombstone keeps its position and its delete version, its history stays
+        // two rows long, and the group is still the 1 000 live members the restore of `first` produced.
+        (await EntityStateAsync(world, "feature_node", second)).ShouldBe("false|1|2");
+        (await RestoreVersionCountAsync(world, "feature_node", second)).ShouldBe(2);
+        (await LiveChildrenAsync(world, module)).ShouldBe(1000);
+    }
+
+    /// <summary>
+    /// AC8 against a retired parent (review F8): route 24 re-applies a version of a live case whose checklist item is
+    /// <c>retired</c>, so the case parent guard answers <c>409 invalid_transition</c> — "restore the item first" — and
+    /// nothing is written: the case stays live at its own version and its history keeps its one row.
+    /// </summary>
+    [Fact]
+    public async Task Restore_Version_RetiredItemParent_409()
+    {
+        await using var world = await StartRestoreAsync();
+
+        var module = await CreateNodeAsync(world, parent: null, kind: "module", title: "Checkout");
+        var feature = await CreateNodeAsync(world, parent: module, kind: "feature", title: "Payment");
+        var category = await CreateNodeAsync(world, parent: feature, kind: "category", title: "Cards");
+        var item = await CreateItemAsync(world, category, "Pay by card");
+        var manualCase = await CreateCaseAsync(world, item, "Card is charged");
+        var caseVersion = await VersionIdAsync(world, manualCase, versionNo: 1);
+
+        // §6/AC20: active -> retired, with the reason the transition requires.
+        var retired = await world.Client.SendAsync(
+            HttpMethod.Patch, world.Item(item), world.As, new { state = "retired", reason = "obsolete" }, NewKey(), "\"1\"");
+        retired.Status.ShouldBe(HttpStatusCode.OK, retired.ErrorMessage);
+
+        var refused = await SendAsync(world, world.VersionRestore(caseVersion), ifMatch: null);
+        refused.Status.ShouldBe(HttpStatusCode.Conflict, "a retired item takes no new content, a re-applied version included");
+        refused.ErrorCode.ShouldBe("invalid_transition");
+
+        // The wording proves it is the case parent guard that answered (13.1.1 §6: a retired item takes no new content),
+        // not the 409 of an entity that is simply not soft-deleted.
+        refused.ErrorMessage.ShouldNotBeNull().ShouldContain("a retired checklist item takes no new content");
+
+        // Nothing written: the case is still live at version 1 with its single create row, and the item is still retired.
+        (await EntityStateAsync(world, "manual_test_case", manualCase)).ShouldBe("true|1");
+        (await RestoreVersionCountAsync(world, "manual_test_case", manualCase)).ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(
+            world.Database, $"select state from public.checklist_item where id = '{item:D}'"))
+            .ShouldBe("retired");
     }
 
     // ------------------------------------------------------------------ helpers
@@ -542,6 +813,17 @@ public sealed partial class AuthoringVersionTests
         await _fixture.ScalarAsync<int>(
             world.Database,
             $"select count(*)::integer from public.authoring_version where entity_kind = '{kind}' and entity_id = '{entityId:D}'");
+
+    /// <summary>The number of live children of one node: AC2's sibling group, read where the tree stores it.</summary>
+    private async Task<int> LiveChildrenAsync(RestoreWorld world, Guid parent) =>
+        await _fixture.ScalarAsync<int>(
+            world.Database,
+            $"""
+             select count(*)::integer
+               from public.feature_node
+              where org_id = '{world.Org:D}' and project_id = '{world.Project:D}'
+                and parent_id = '{parent:D}' and deleted_at is null
+             """);
 
     /// <summary>The newest version row of an entity as <c>change_kind|version_no</c>.</summary>
     private async Task<string> LastVersionAsync(RestoreWorld world, Guid entityId) =>

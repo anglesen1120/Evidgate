@@ -348,9 +348,10 @@ public sealed class AuthoringTimelineTests
         (await Expect("entity_kind=feature_node", featureIds)).Count.ShouldBe(10);
         (await Expect("entity_kind=checklist_item", [idOf(item)])).Count.ShouldBe(1);
         (await Expect("entity_kind=manual_test_case", [idOf(caseEntity)])).Count.ShouldBe(1);
-        (await Expect($"entity_id={feature:D}", featureIds)).Count.ShouldBe(10);
 
-        // The two halves of the entity filter are ANDed: a kind that does not match the id answers nothing.
+        // The two halves of the entity filter are ANDed and the route serves only the pair (`entity_id` alone is the
+        // 422 of CursorAndLimit_Refusals): a kind that does not match the id answers nothing, the matching pair answers
+        // the entity's history.
         (await Expect($"entity_kind=feature_node&entity_id={item:D}", [])).ShouldBeEmpty();
         (await Expect($"entity_kind=feature_node&entity_id={feature:D}", featureIds)).Count.ShouldBe(10);
 
@@ -436,6 +437,9 @@ public sealed class AuthoringTimelineTests
             ("entity_kind=bogus", "/entity_kind", "value_invalid"),
             ("source=bogus", "/source", "value_invalid"),
             ("entity_id=nope", "/entity_id", "value_invalid"),
+            // The pair is the only entity filter the route serves: an id without its kind cannot use the entity key
+            // index (`org_id, project_id, entity_kind, entity_id, version_no`), so it is refused instead of scanning.
+            ($"entity_id={Guid.CreateVersion7():D}", "/entity_kind", "required_with_entity_id"),
             ("actor=nope", "/actor", "value_invalid"),
             ("from=nope", "/from", "value_invalid"),
             ("to=2026-10-01", "/to", "value_invalid"),
@@ -461,6 +465,75 @@ public sealed class AuthoringTimelineTests
         (await VersionsAsync(world, "limit=200")).Status.ShouldBe(HttpStatusCode.OK);
         (await VersionsAsync(world, "from=2026-10-01T10:00:00Z&to=2026-10-01T10:00:00Z")).Status.ShouldBe(HttpStatusCode.OK);
         (await VersionsAsync(world, "entity_kind=")).Status.ShouldBe(HttpStatusCode.OK, "an empty filter is an absent filter");
+        (await VersionsAsync(world, "entity_kind=feature_node")).Status.ShouldBe(
+            HttpStatusCode.OK,
+            "the kind alone is a served filter");
+        (await VersionsAsync(world, $"entity_kind=feature_node&entity_id={Guid.CreateVersion7():D}")).Status.ShouldBe(
+            HttpStatusCode.OK,
+            "the pair is served even when no row matches the id");
+        (await VersionsAsync(world, "entity_kind=&entity_id=")).Status.ShouldBe(
+            HttpStatusCode.OK,
+            "two empty values are two absent filters, so no kind is required");
+    }
+
+    /// <summary>
+    /// AC9's <c>from</c>/<c>to</c> are instants, not local times: a <c>+07:00</c> or <c>-05:30</c> bound names the same
+    /// window as the <c>Z</c> spelling. The bound reaches the statement as <c>timestamptz</c>, which stores no zone, and
+    /// Npgsql refuses to bind a <see cref="DateTimeOffset"/> with a non-zero offset to that type — so without
+    /// normalisation the same window answers 500 instead of the same page.
+    /// </summary>
+    [Fact]
+    public async Task FromTo_NonUtcOffsets_AreTheSameWindow()
+    {
+        await using var world = await StartAsync();
+
+        var entity = Guid.CreateVersion7();
+        var atTen = new DateTimeOffset(2026, 10, 1, 10, 0, 0, TimeSpan.Zero);
+        var halfAfter = atTen.AddTicks(5_000_000);
+        var atOneSecond = atTen.AddSeconds(1);
+
+        var rows = new[]
+        {
+            new Seed(Guid.CreateVersion7(), world.Project, entity, "feature_node", 1, Guid.CreateVersion7(),
+                "create", "manual", null, atTen),
+            new Seed(Guid.CreateVersion7(), world.Project, entity, "feature_node", 2, Guid.CreateVersion7(),
+                "update", "manual", null, halfAfter),
+            new Seed(Guid.CreateVersion7(), world.Project, entity, "feature_node", 3, Guid.CreateVersion7(),
+                "update", "manual", null, atOneSecond),
+        };
+
+        await SeedAsync(world, rows);
+
+        // The window is [10:00:00Z, 10:00:01Z): the two rows below the exclusive bound, newest first.
+        var expected = new[] { rows[1].Id, rows[0].Id };
+
+        // The `+` of a positive offset is percent-encoded (`%2B`), because a raw `+` in a query string is a space; the
+        // `-05:30` spelling needs no encoding. Both directions are covered as a client library would send them.
+        var windows = new[]
+        {
+            "from=2026-10-01T10:00:00Z&to=2026-10-01T10:00:01Z",
+            "from=2026-10-01T17:00:00%2B07:00&to=2026-10-01T17:00:01%2B07:00",
+            "from=2026-10-01T04:30:00-05:30&to=2026-10-01T04:30:01-05:30",
+        };
+
+        foreach (var window in windows)
+        {
+            var answer = await VersionsAsync(world, window);
+
+            answer.Status.ShouldBe(HttpStatusCode.OK, $"{window}: {answer.Body}");
+            Ids(answer).ShouldBe(expected, window);
+        }
+
+        // The bound is the instant, not its spelling: 17:00:00+07:00 is the row at 10:00:00Z, which `to` excludes.
+        var exclusive = await VersionsAsync(world, "from=2026-10-01T10:00:00Z&to=2026-10-01T17:00:00%2B07:00");
+
+        exclusive.Status.ShouldBe(HttpStatusCode.OK, exclusive.ErrorMessage);
+        Ids(exclusive).ShouldBeEmpty("to is exclusive whichever offset spells it");
+
+        var late = await VersionsAsync(world, "from=2026-10-01T17:00:01%2B07:00");
+
+        late.Status.ShouldBe(HttpStatusCode.OK, late.ErrorMessage);
+        Ids(late).ShouldBe([rows[2].Id], "a +07:00 lower bound is the 10:00:01Z instant");
     }
 
     [Fact]

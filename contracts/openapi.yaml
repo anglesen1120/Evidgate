@@ -4551,9 +4551,13 @@ paths:
         (compared under the row lock, so two concurrent restores answer one 200 and one 412). A
         node that is not soft-deleted is 409 `invalid_transition`, an unknown, another tenant's
         or another project's node 404 `not_found`; a parent that is still soft-deleted is 422
-        `authoring_parent_invalid` with `details[].reason = parent_deleted`. Missing
-        `Idempotency-Key` is 400 `request_invalid`, and a replay answers the stored 200 with no
-        second version or audit row (AC18). A lock timeout is 503 `unavailable` with
+        `authoring_parent_invalid` with `details[].reason = parent_deleted`. A restore that would
+        bring its sibling group past the 1000 live nodes a create and a move-in already refuse is
+        422 `request_invalid` with `details[].path = /parent_id` and
+        `details[].reason = children_limit_exceeded` — the row keeps its tombstone and the caller
+        frees a slot first, so a group a reorder can still renumber never grows out of reach.
+        Missing `Idempotency-Key` is 400 `request_invalid`, and a replay answers the stored 200
+        with no second version or audit row (AC18). A lock timeout is 503 `unavailable` with
         `Retry-After`.
       x-permission: authoring:write
       x-version: v1
@@ -5271,9 +5275,10 @@ paths:
         A case that is not soft-deleted is 409 `invalid_transition`; an unknown, another
         tenant's or another project's case 404 `not_found`; a parent checklist item that is
         still soft-deleted is 422 `authoring_parent_invalid` with `details[].reason =
-        parent_deleted`. Missing `Idempotency-Key` is 400 `request_invalid`, and a replay
-        answers the stored 200 with no second version or audit row (AC18). A lock timeout is 503
-        `unavailable` with `Retry-After`.
+        parent_deleted`, and one that is `retired` is 409 `invalid_transition` instead — a retired
+        item takes no new content, so it has to be restored first. Missing `Idempotency-Key` is 400
+        `request_invalid`, and a replay answers the stored 200 with no second version or audit row
+        (AC18). A lock timeout is 503 `unavailable` with `Retry-After`.
       x-permission: authoring:write
       x-version: v1
       parameters:
@@ -5321,9 +5326,14 @@ paths:
         (`feature_node`, `checklist_item`, `manual_test_case`), by the exact `entity_id`, by
         `source` (`manual`, `ai`, `import`), by `actor` (the authoring membership that wrote the
         change) and by the half-open window `from` (inclusive) .. `to` (exclusive), both RFC 3339
-        instants with an explicit offset. `from` later than `to` is 422 `request_invalid` with
+        instants with an explicit offset, whose UTC offset is normalised (the stored instants are
+        UTC). `from` later than `to` is 422 `request_invalid` with
         `details[].path = /from` and `reason = invalid_range`; an unknown enum value is 422 with
-        `details[].path = /entity_kind` or `/source` and `reason = value_invalid`; a `limit`
+        `details[].path = /entity_kind` or `/source` and `reason = value_invalid`; `entity_id`
+        without `entity_kind` is 422 with `details[].path = /entity_kind` and `reason =
+        required_with_entity_id`, because the entity key index starts
+        `(org_id, project_id, entity_kind, entity_id, version_no)` and a lone id could only scan the project's whole
+        timeline (`entity_kind` alone stays valid); a `limit`
         outside 1..200, a malformed uuid in `entity_id`/`actor` or a cursor this endpoint did not
         issue is 422 with `details[].path` naming the parameter. The page is a keyset seek on the
         `(created_at, id)` pair of the last row, so `next_cursor` never skips or repeats a row.
@@ -5424,11 +5434,16 @@ paths:
         project, so another project's version, another tenant's version and a random id are one
         404 `not_found` (AC10), and a version whose entity row is gone is that same 404. A parent
         that is still soft-deleted is 422 `authoring_parent_invalid` with `details[].reason =
-        `parent_deleted`, which is the only conflict this route answers — it never answers 409. No
-        `If-Match` is bound, so no stale-tag `412` can arise: the `412` entry belongs to the
-        restore family's shared status set (AC19 is routes 6, 11 and 18) and this route never
-        answers it. Missing `Idempotency-Key` is 400 `request_invalid`, and a replay answers the stored
-        200 with no second version or audit row (AC18). A lock timeout is 503 `unavailable` with
+        `parent_deleted`. A snapshot that names a parent checklist item which is `retired` is 409
+        `invalid_transition` and writes nothing: a retired item takes no new content, so it has to
+        be restored first (the same parent guard the case-create route applies). A snapshot of a
+        feature node that would bring its sibling group past 1000 live nodes is 422
+        `request_invalid` with `details[].path = /parent_id` and
+        `details[].reason = children_limit_exceeded`, exactly as route 6 and the create refuse it,
+        and nothing is written. No `If-Match` is bound, so no stale-tag `412` can arise: AC19 is
+        routes 6, 11 and 18, this route declares no `If-Match` and never answers `412`. Missing
+        `Idempotency-Key` is 400 `request_invalid`, and a replay answers the stored 200 with no
+        second version or audit row (AC18). A lock timeout is 503 `unavailable` with
         `Retry-After`.
       x-permission: authoring:write
       x-version: v1
@@ -5455,8 +5470,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '412':
-          $ref: '#/components/responses/PreconditionFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -6001,7 +6016,9 @@ components:
       description: >-
         Which entity the versions describe (13.1.1 §5 route 22): `feature_node`,
         `checklist_item` or `manual_test_case`. Any other value is 422 `request_invalid` with
-        `details[].path = /entity_kind` and `reason = value_invalid`.
+        `details[].path = /entity_kind` and `reason = value_invalid`. Required whenever
+        `entity_id` is sent: the entity key index starts `(org_id, project_id, entity_kind, entity_id, version_no)`,
+        so an id on its own is 422 (see `entity_id`). `entity_kind` alone is valid.
       schema:
         type: string
         enum: [feature_node, checklist_item, manual_test_case]
@@ -6011,7 +6028,9 @@ components:
       required: false
       description: >-
         The entity's id (13.1.1 §5 route 22); combined with `entity_kind` it is one entity's
-        history. A malformed uuid is 422 `request_invalid` with `details[].path = /entity_id`.
+        history. Sending it without `entity_kind` is 422 `request_invalid` with
+        `details[].path = /entity_kind` and `reason = required_with_entity_id`. A malformed uuid
+        is 422 `request_invalid` with `details[].path = /entity_id`.
       schema:
         type: string
         format: uuid
@@ -6042,7 +6061,8 @@ components:
       required: false
       description: >-
         Inclusive lower bound of the window (13.1.1 §5 route 22): an RFC 3339 instant with an
-        explicit offset (`Z` or `±hh:mm`). A bare date, a local time without an offset or
+        explicit offset (`Z` or `±hh:mm`), normalised to UTC before it is bound (the stored
+        instants are UTC). A bare date, a local time without an offset or
         `from` later than `to` is 422 `request_invalid` — `details[].path = /from` with
         `reason = value_invalid` or `invalid_range`.
       schema:
@@ -6055,7 +6075,8 @@ components:
       required: false
       description: >-
         Exclusive upper bound of the window (13.1.1 §5 route 22), the same RFC 3339 rule as
-        `from`; a malformed value is 422 `request_invalid` with `details[].path = /to`.
+        `from` and normalised to UTC the same way; a malformed value is 422 `request_invalid`
+        with `details[].path = /to`.
       schema:
         type: string
         format: date-time

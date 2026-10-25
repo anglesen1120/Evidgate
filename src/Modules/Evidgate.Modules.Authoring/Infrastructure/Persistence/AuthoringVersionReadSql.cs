@@ -64,10 +64,13 @@ internal static class AuthoringVersionReadSql
 
     /// <summary>
     /// The timeline shape of AC9: no <c>entity_kind</c> filter, so the <c>(created_at desc, id desc)</c> order is served
-    /// by <c>authoring_version_timeline_idx</c> and every filter is residual. The range bounds are
-    /// <c>coalesce(@from_at, '-infinity')</c>/<c>coalesce(@to_at, 'infinity')</c> on purpose: an <c>is null or</c> form
-    /// would drop the range out of the index condition, while an absent bound as infinity keeps <c>created_at</c>
-    /// searchable. <c>@entity_kind</c> is bound but always null here, so all three statements take one parameter set.
+    /// by <c>authoring_version_timeline_idx</c> and every filter is residual. <c>@entity_kind</c> is bound but always null
+    /// here, so all three statements take one parameter set. There is no <c>@entity_id</c> predicate: the handler refuses
+    /// <c>entity_id</c> without <c>entity_kind</c>, so no request can reach this shape with an entity id (<see
+    /// cref="EntityPage"/> serves the pair) and the statement carries no unreachable entity-id branch. The range bounds
+    /// are <c>coalesce(@from_at, '-infinity')</c>/<c>coalesce(@to_at, 'infinity')</c> on purpose: an <c>is null or</c>
+    /// form would drop the range out of the index condition, while an absent bound as infinity keeps <c>created_at</c>
+    /// searchable.
     /// </summary>
     internal const string TimelinePage = $"""
         select {Columns}
@@ -76,7 +79,6 @@ internal static class AuthoringVersionReadSql
            and v.project_id = @project_id
            and (v.created_at, v.id) < (@cursor_created_at::timestamptz, @cursor_id::uuid)
            and (@entity_kind::text is null or v.entity_kind = @entity_kind)
-           and (@entity_id::uuid is null or v.entity_id = @entity_id)
            and (@source::text is null or v.source = @source)
            and (@actor::uuid is null or v.author_membership_id = @actor)
            and v.created_at >= coalesce(@from_at::timestamptz, '-infinity'::timestamptz)
@@ -89,8 +91,9 @@ internal static class AuthoringVersionReadSql
     /// <summary>
     /// The per-entity-kind shape: <c>entity_kind</c> is an index condition on
     /// <c>authoring_version_entity_key</c> (<c>org_id, project_id, entity_kind, entity_id, version_no</c>) instead of a
-    /// filter. <c>@entity_id</c> is bound but always null here (the handler picks
-    /// <see cref="EntityPage"/> once it is present), so the parameter set stays shared.
+    /// filter. <c>@entity_id</c> is bound but always null here — the handler refuses the id without a kind and picks
+    /// <see cref="EntityPage"/> once the pair is present — so the parameter set stays shared, exactly as it does for
+    /// <c>@entity_kind</c> in <see cref="TimelinePage"/>.
     /// </summary>
     internal const string EntityKindPage = $"""
         select {Columns}
