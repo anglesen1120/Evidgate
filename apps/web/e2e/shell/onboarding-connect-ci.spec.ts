@@ -399,7 +399,7 @@ test.describe('a refused create shows the server error verbatim (§8, 00 §9.2)'
     // (`error-mapper.ts` reads `body.request_id`), so the same id would come back from a repeated
     // submission: "no automatic retry" therefore rests on the remount and reload assertions below,
     // never on this value.
-    await expect(error.locator('.error-pattern__request-id')).toContainText(
+    await expect(error.locator('[data-testid="error-request-id"]')).toContainText(
       '018f0000-0000-7000-8000-0000000000e4',
     );
     await expectNoReveal(page);

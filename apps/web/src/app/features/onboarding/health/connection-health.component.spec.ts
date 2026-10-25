@@ -2,6 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
 
+import { deriveConnectionHealth } from './connection-health';
 import { ConnectionHealthComponent } from './connection-health.component';
 
 const BINDING: CiBindingView = {
@@ -33,6 +34,19 @@ const TOKEN: IngestTokenView = {
 describe('ConnectionHealthComponent', () => {
   let fixture: ComponentFixture<ConnectionHealthComponent>;
   let root: HTMLElement;
+  let metadata: Omit<Parameters<typeof deriveConnectionHealth>[0], 'now'>;
+
+  function setMetadata<K extends keyof typeof metadata>(
+    name: K,
+    value: (typeof metadata)[K],
+  ): void {
+    metadata = { ...metadata, [name]: value };
+    fixture.componentRef.setInput(
+      'health',
+      deriveConnectionHealth({ ...metadata, now: new Date('2026-10-25T12:00:00Z') }),
+    );
+    if (name !== 'bindings') fixture.componentRef.setInput(name, value);
+  }
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -40,14 +54,14 @@ describe('ConnectionHealthComponent', () => {
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
     fixture = TestBed.createComponent(ConnectionHealthComponent);
-    fixture.componentRef.setInput('bindings', []);
-    fixture.componentRef.setInput('tokens', []);
+    metadata = { bindings: [], tokens: [], bindingsTruncated: false, tokensTruncated: false };
+    setMetadata('tokens', []);
     root = fixture.nativeElement as HTMLElement;
     await fixture.whenStable();
   });
 
   it('renders a healthy state with the shared pill, repository and usable explanation', async () => {
-    fixture.componentRef.setInput('bindings', [BINDING]);
+    setMetadata('bindings', [BINDING]);
     await fixture.whenStable();
     expect(root.getAttribute('data-testid')).toBe('connection-health');
     expect(root.getAttribute('data-health-state')).toBe('healthy');
@@ -60,7 +74,7 @@ describe('ConnectionHealthComponent', () => {
   });
 
   it('renders an unhealthy state and a reason when all credentials are unusable', async () => {
-    fixture.componentRef.setInput('tokens', [{ ...TOKEN, status: 'revoked' }]);
+    setMetadata('tokens', [{ ...TOKEN, status: 'revoked' }]);
     await fixture.whenStable();
     expect(root.getAttribute('data-health-state')).toBe('unhealthy');
     expect(root.querySelector('header app-status-pill')?.textContent).toContain('Unhealthy');
@@ -80,7 +94,7 @@ describe('ConnectionHealthComponent', () => {
   });
 
   it('says not recorded without claiming no ingest occurred, including OIDC-only projects', async () => {
-    fixture.componentRef.setInput('bindings', [BINDING]);
+    setMetadata('bindings', [BINDING]);
     await fixture.whenStable();
     expect(root.querySelector('[data-testid="connection-health-last-use"]')?.textContent).toContain(
       'Not recorded',
@@ -91,10 +105,10 @@ describe('ConnectionHealthComponent', () => {
     expect(root.textContent).not.toMatch(/nothing was ingested|no successful ingest/i);
   });
 
-  it.each(['bindingsTruncated', 'tokensTruncated'])(
+  it.each(['bindingsTruncated', 'tokensTruncated'] as const)(
     'shows the truncation caveat for %s and unknown health when nothing usable is shown',
     async (flag) => {
-      fixture.componentRef.setInput(flag, true);
+      setMetadata(flag, true);
       await fixture.whenStable();
       expect(root.getAttribute('data-health-state')).toBe('unknown');
       expect(root.textContent).toContain('Only part of the credential list is shown.');
@@ -104,25 +118,23 @@ describe('ConnectionHealthComponent', () => {
   );
 
   it('keeps healthy precedence with truncated lists and qualifies the last-use lower bound', async () => {
-    fixture.componentRef.setInput('tokens', [
-      { ...TOKEN, last_used_at: '2026-10-25T13:30:00+02:00' },
-    ]);
-    fixture.componentRef.setInput('tokensTruncated', true);
+    setMetadata('tokens', [{ ...TOKEN, last_used_at: '2026-10-25T13:30:00+02:00' }]);
+    setMetadata('tokensTruncated', true);
     await fixture.whenStable();
     expect(root.getAttribute('data-health-state')).toBe('healthy');
     expect(root.textContent).toContain('may be older than the newest use');
     expect(root.querySelector('[data-testid="connection-health-last-use"] time')?.textContent).toBe(
       '2026-10-25 11:30:00',
     );
-    fixture.componentRef.setInput('tokensTruncated', false);
-    fixture.componentRef.setInput('bindingsTruncated', true);
+    setMetadata('tokensTruncated', false);
+    setMetadata('bindingsTruncated', true);
     await fixture.whenStable();
     expect(root.textContent).not.toContain('may be older than the newest use');
     expect(root.textContent).toContain('Only part of the credential list is shown.');
   });
 
   it('renders pending bindings as awaiting verification rather than healthy', async () => {
-    fixture.componentRef.setInput('bindings', [{ ...BINDING, status: 'pending_verification' }]);
+    setMetadata('bindings', [{ ...BINDING, status: 'pending_verification' }]);
     await fixture.whenStable();
     expect(root.getAttribute('data-health-state')).toBe('pending');
     expect(root.textContent).toContain('Pending verification');
@@ -132,7 +144,7 @@ describe('ConnectionHealthComponent', () => {
   });
 
   it('shows expiry and rotation-overlap times in UTC with an explicit usability explanation', async () => {
-    fixture.componentRef.setInput('tokens', [
+    setMetadata('tokens', [
       { ...TOKEN, expires_at: '2020-01-01T02:00:00+02:00' },
       {
         ...TOKEN,
@@ -152,14 +164,25 @@ describe('ConnectionHealthComponent', () => {
     expect(rows[1]?.querySelector('time')?.textContent).toBe('2099-01-01 00:00:00');
   });
 
+  it('renders the supplied health snapshot without deriving a different wall-clock state', async () => {
+    setMetadata('tokens', [{ ...TOKEN, expires_at: '2020-01-01T00:00:00Z' }]);
+    fixture.componentRef.setInput(
+      'health',
+      deriveConnectionHealth({ ...metadata, now: new Date('2019-01-01T00:00:00Z') }),
+    );
+    await fixture.whenStable();
+    expect(root.getAttribute('data-health-state')).toBe('healthy');
+    expect(root.textContent).toContain('Usable.');
+  });
+
   it('renders server labels as text and never renders secret-shaped payload fields', async () => {
     const secret = `egt_${'z'.repeat(48)}`;
     const challenge = 'private-binding-challenge';
     const jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiJwcml2YXRlIn0', 'signature'].join('.');
-    fixture.componentRef.setInput('tokens', [
-      { ...TOKEN, name: '<img src=x onerror=alert(1)>', secret, jwt },
-    ]);
-    fixture.componentRef.setInput('bindings', [{ ...BINDING, binding_challenge: challenge }]);
+    const tokenWithExtraFields = { ...TOKEN, name: '<img src=x onerror=alert(1)>', secret, jwt };
+    const bindingWithExtraFields = { ...BINDING, binding_challenge: challenge };
+    setMetadata('tokens', [tokenWithExtraFields]);
+    setMetadata('bindings', [bindingWithExtraFields]);
     await fixture.whenStable();
     expect(root.textContent).toContain('<img src=x onerror=alert(1)> (public-prefix)');
     expect(root.querySelector('img, script')).toBeNull();

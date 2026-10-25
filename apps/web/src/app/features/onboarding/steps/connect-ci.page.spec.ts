@@ -698,6 +698,118 @@ describe('ConnectCiPage', () => {
     expect(rotateIngestToken).not.toHaveBeenCalled();
   });
 
+  it('prefers an active usable token over an earlier rotating token, then falls back to rotating', async () => {
+    const rotating: IngestTokenView = {
+      ...TOKEN,
+      id: 'rotating-token',
+      name: 'Previous uploader',
+      prefix: 'previous-prefix',
+      status: 'rotated',
+      expires_at: null,
+      overlap_ends_at: '2099-01-01T00:00:00Z',
+    };
+    tokens.set([rotating, { ...TOKEN, expires_at: null }]);
+    await fixture.whenStable();
+    const snippet = root.querySelector('[data-testid="cli-quickstart-snippet"]')!;
+    expect(snippet.textContent).toContain(TOKEN.name);
+    expect(snippet.textContent).not.toContain(rotating.name);
+    tokens.set([rotating, { ...TOKEN, status: 'revoked' }]);
+    await fixture.whenStable();
+    expect(snippet.textContent).toContain(rotating.name);
+    expect(snippet.textContent).not.toContain(TOKEN.name);
+  });
+
+  it.each(['active', 'rotated'] as const)(
+    'updates health and quickstart when the %s token boundary passes without a list change',
+    async (status) => {
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+      vi.setSystemTime(new Date('2026-10-25T12:00:00Z'));
+      try {
+        const boundary = '2026-10-25T12:00:01Z';
+        const listed: readonly IngestTokenView[] = [
+          {
+            ...TOKEN,
+            status,
+            expires_at: status === 'active' ? boundary : null,
+            overlap_ends_at: status === 'rotated' ? boundary : null,
+          },
+        ];
+        tokens.set(listed);
+        fixture.detectChanges();
+        const panel = root.querySelector('[data-testid="connection-health"]')!;
+        const snippet = root.querySelector('[data-testid="cli-quickstart-snippet"]')!;
+        expect(panel.getAttribute('data-health-state')).toBe('healthy');
+        expect(snippet.textContent).toContain(TOKEN.name);
+        await vi.advanceTimersByTimeAsync(999);
+        fixture.detectChanges();
+        expect(panel.getAttribute('data-health-state')).toBe('healthy');
+        await vi.advanceTimersByTimeAsync(1);
+        fixture.detectChanges();
+        expect(panel.getAttribute('data-health-state')).toBe('unhealthy');
+        expect(snippet.textContent).toContain('Create an ingest token first');
+        expect(tokens()).toBe(listed);
+        expect(canGoNext()).toBe(true);
+        expect(refresh).not.toHaveBeenCalled();
+      } finally {
+        fixture.destroy();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('clears its scheduled credential-boundary timer on destroy', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    vi.setSystemTime(new Date('2026-10-25T12:00:00Z'));
+    const schedule = vi.spyOn(globalThis, 'setTimeout');
+    const clear = vi.spyOn(globalThis, 'clearTimeout');
+    try {
+      tokens.set([{ ...TOKEN, expires_at: '2026-10-25T12:00:01Z' }]);
+      fixture.detectChanges();
+      const index = schedule.mock.calls.findIndex((call) => call[1] === 1000);
+      expect(index).toBeGreaterThanOrEqual(0);
+      const timer = schedule.mock.results[index]?.value as unknown;
+      expect(timer).toBeDefined();
+      clear.mockClear();
+      fixture.destroy();
+      expect(clear).toHaveBeenCalledWith(timer);
+    } finally {
+      fixture.destroy();
+      schedule.mockRestore();
+      clear.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-arms for changed token metadata and caps long timeout delays', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    vi.setSystemTime(new Date('2026-10-25T12:00:00Z'));
+    const schedule = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      tokens.set([{ ...TOKEN, expires_at: '2026-10-25T12:00:01Z' }]);
+      fixture.detectChanges();
+      expect(schedule).toHaveBeenCalledWith(expect.any(Function), 1000);
+      tokens.set([{ ...TOKEN, expires_at: '2099-01-01T00:00:00Z' }]);
+      fixture.detectChanges();
+      expect(schedule).toHaveBeenCalledWith(expect.any(Function), 2 ** 31 - 1);
+      await vi.advanceTimersByTimeAsync(1000);
+      fixture.detectChanges();
+      expect(
+        root.querySelector('[data-testid="connection-health"]')?.getAttribute('data-health-state'),
+      ).toBe('healthy');
+      tokens.set([{ ...TOKEN, expires_at: '2026-10-25T12:00:02Z' }]);
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(1000);
+      fixture.detectChanges();
+      expect(
+        root.querySelector('[data-testid="connection-health"]')?.getAttribute('data-health-state'),
+      ).toBe('unhealthy');
+    } finally {
+      fixture.destroy();
+      schedule.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('references an OIDC binding by repository name when no token is usable', async () => {
     bindings.set([BINDING]);
     await fixture.whenStable();

@@ -104,6 +104,15 @@ describe('CliQuickstartComponent', () => {
     expect(text).not.toContain('EVIDGATE_INGEST_TOKEN=');
   });
 
+  it('keeps the project-slug placeholder when projectRef is null but token metadata exists', () => {
+    fixture.componentRef.setInput('projectRef', null);
+    fixture.detectChanges();
+    expect(snippet().textContent).toContain("export EVIDGATE_PROJECT='<project-slug>'");
+    expect(snippet().textContent).toContain(token.name);
+    expect(snippet().textContent).toContain(token.prefix);
+    expect(snippet().textContent).not.toContain("export EVIDGATE_PROJECT='widgets'");
+  });
+
   it('renders the OIDC path when the token is null and references the challenge only by variable name', () => {
     fixture.componentRef.setInput('token', null);
     fixture.detectChanges();

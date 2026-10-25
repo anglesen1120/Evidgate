@@ -6,11 +6,10 @@ import {
   StatusPillComponent,
   type StatusTone,
 } from '../../../shared/ui/chips/status-pill.component';
-import {
-  deriveConnectionHealth,
-  type ConnectionHealth,
-  type ConnectionHealthState,
-  type CredentialHealth,
+import type {
+  ConnectionHealth,
+  ConnectionHealthState,
+  CredentialHealth,
 } from './connection-health';
 
 @Component({
@@ -82,21 +81,11 @@ import {
   `,
 })
 export class ConnectionHealthComponent {
-  readonly bindings = input.required<readonly CiBindingView[]>();
+  readonly health = input.required<ConnectionHealth>();
   readonly tokens = input.required<readonly IngestTokenView[]>();
   readonly bindingsTruncated = input(false);
   readonly tokensTruncated = input(false);
 
-  // The snapshot is refreshed when metadata inputs change; no polling or extra HTTP request.
-  protected readonly health = computed(() =>
-    deriveConnectionHealth({
-      bindings: this.bindings(),
-      tokens: this.tokens(),
-      bindingsTruncated: this.bindingsTruncated(),
-      tokensTruncated: this.tokensTruncated(),
-      now: new Date(),
-    }),
-  );
   protected readonly rows = computed(() => {
     const tokens = new Map(this.tokens().map((token) => [token.id, token]));
     return this.health().credentials.map((credential) => {

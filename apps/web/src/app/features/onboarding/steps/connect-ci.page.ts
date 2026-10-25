@@ -39,6 +39,9 @@ const MAX_REF_ENTRIES = 32;
 /** The ingest-token name limit in Unicode code points (contract `name` `maxLength: 128`). */
 const MAX_TOKEN_NAME_LENGTH = 128;
 
+/** Browsers clamp larger timeout delays; re-arm long-lived credentials after each capped wait. */
+const MAX_HEALTH_TIMEOUT_MS = 2 ** 31 - 1;
+
 @Component({
   selector: 'app-onboarding-connect-ci',
   imports: [
@@ -64,6 +67,8 @@ export class ConnectCiPage {
   private readonly session = inject(SessionStore);
   private readonly destroyRef = inject(DestroyRef);
   private scopeVersion = 0;
+  private readonly healthNow = signal(new Date());
+  private healthBoundaryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly bindingHeading = viewChild<ElementRef<HTMLHeadingElement>>('bindingHeading');
   private readonly tokenHeading = viewChild<ElementRef<HTMLHeadingElement>>('tokenHeading');
   protected readonly busy = signal(false);
@@ -168,21 +173,26 @@ export class ConnectCiPage {
       tokens: this.store.tokens(),
       bindingsTruncated: this.store.bindingsTruncated(),
       tokensTruncated: this.store.tokensTruncated(),
-      now: new Date(),
+      now: this.healthNow(),
     }),
   );
   /**
-   * The credential the CLI quickstart names, as metadata only: the first token the health
-   * derivation counts as usable, reduced to its name and prefix. `null` keeps the snippet's
+   * The credential the CLI quickstart names, as metadata only: prefer an active usable token,
+   * then a rotating token still inside its overlap. `null` keeps the snippet's
    * "create a token first" branch. The one-time secret is never reachable from here.
    */
   protected readonly quickstartToken = computed<{ name: string; prefix: string } | null>(() => {
-    const usable = new Set(
-      this.health()
-        .credentials.filter((credential) => credential.kind === 'token' && credential.usable)
-        .map((credential) => credential.id),
-    );
-    const token = this.store.tokens().find((candidate) => usable.has(candidate.id));
+    const credentials = this.health().credentials;
+    const preferred =
+      credentials.find(
+        (credential) => credential.kind === 'token' && credential.detail === 'active',
+      ) ??
+      credentials.find(
+        (credential) => credential.kind === 'token' && credential.detail === 'rotating',
+      );
+    const token = preferred
+      ? this.store.tokens().find((candidate) => candidate.id === preferred.id)
+      : undefined;
     return token ? { name: token.name, prefix: token.prefix } : null;
   });
   /** The repository the snippet references: the first active binding, else the first one. */
@@ -204,6 +214,43 @@ export class ConnectCiPage {
       this.failure.set(null);
       this.overlapEndsAt.set(null);
     });
+    effect((onCleanup) => {
+      this.scheduleHealthBoundary(this.store.tokens());
+      onCleanup(() => this.clearHealthBoundaryTimer());
+    });
+    this.destroyRef.onDestroy(() => this.clearHealthBoundaryTimer());
+  }
+
+  private clearHealthBoundaryTimer(): void {
+    if (this.healthBoundaryTimer !== undefined) {
+      clearTimeout(this.healthBoundaryTimer);
+      this.healthBoundaryTimer = undefined;
+    }
+  }
+
+  private scheduleHealthBoundary(tokens: readonly IngestTokenView[]): void {
+    this.clearHealthBoundaryTimer();
+    const now = Date.now();
+    this.healthNow.set(new Date(now));
+    let nextBoundary = Infinity;
+    for (const token of tokens) {
+      const boundary =
+        token.status === 'active'
+          ? token.expires_at
+          : token.status === 'rotated'
+            ? token.overlap_ends_at
+            : null;
+      if (boundary != null) {
+        const timestamp = Date.parse(boundary);
+        if (timestamp > now && timestamp < nextBoundary) nextBoundary = timestamp;
+      }
+    }
+    if (Number.isFinite(nextBoundary)) {
+      this.healthBoundaryTimer = setTimeout(
+        () => this.scheduleHealthBoundary(tokens),
+        Math.min(nextBoundary - now, MAX_HEALTH_TIMEOUT_MS),
+      );
+    }
   }
 
   protected dismissReveal(): void {
