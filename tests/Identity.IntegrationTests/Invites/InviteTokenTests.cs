@@ -355,6 +355,7 @@ public sealed class InviteTokenTests : CatalogueTestBase
 }
 
 /// <summary>Boot validation of the invite options: a pepper must be base64 of at least 32 bytes.</summary>
+[Trait("Category", "Docker")]
 public sealed class InviteOptionsValidatorTests
 {
     private static readonly InviteOptionsValidator Validator = new();
