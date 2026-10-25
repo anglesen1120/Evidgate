@@ -2446,6 +2446,9 @@
       <trans-unit id="settings.policy.invalid-json" datatype="html"><source>Enter a valid JSON object.</source><target>Nhập một đối tượng JSON hợp lệ.</target></trans-unit>
       <trans-unit id="settings.policy.too-large" datatype="html"><source>The policy body exceeds the 65536-byte limit.</source><target>Nội dung chính sách vượt quá giới hạn 65536 byte.</target></trans-unit>
       <trans-unit id="settings.policy.cancel" datatype="html"><source>Cancel</source><target>Hủy</target></trans-unit>
+      <trans-unit id="settings.policy.conflict-not-set" datatype="html"><source>(not set)</source><target>(chưa đặt)</target></trans-unit>
+      <trans-unit id="settings.policy.load-failed" datatype="html"><source>The policy revisions could not be loaded.</source><target>Không tải được các phiên bản chính sách.</target></trans-unit>
+      <trans-unit id="settings.policy.load-retry" datatype="html"><source>Retry</source><target>Thử lại</target></trans-unit>
     </body>
   </file>
 </xliff>

@@ -22,7 +22,17 @@ import {
   type ConflictField,
 } from '../../../shared/ui/conflict/conflict-details';
 import { wrapDialogFocus } from '../members/dialog-focus-wrap';
+import { diffPolicyBodies } from './policy-diff';
+import { POLICY_BODY_MAX_BYTES, policyBodyBytes } from './policy-body-size';
 import { PolicyStore } from './policy.store';
+
+/**
+ * The most field rows the shared conflict dialog is handed. A policy body may differ in thousands
+ * of pointers and the dialog renders every row it is given; past this cap the comparison is the
+ * start of the change, not an inventory (the revision list is one click away), and the shared
+ * dialog has no footer slot for an "N more" row, so the list is simply cut here.
+ */
+const MAX_CONFLICT_FIELDS = 100;
 
 @Component({
   selector: 'app-policy-publish-dialog',
@@ -61,7 +71,7 @@ import { PolicyStore } from './policy.store';
             localError() ? 'policy-body-size policy-local-error' : 'policy-body-size'
           "
         ></textarea>
-        <p id="policy-body-size">{{ copy.bytes }}: {{ bytes() }} / 65536</p>
+        <p id="policy-body-size">{{ copy.bytes }}: {{ bytes() ?? '—' }} / {{ maxBytes }}</p>
         <p role="status">
           @if (loading()) {
             {{ copy.loading }}
@@ -134,7 +144,12 @@ export class PublishDialogComponent {
   protected readonly busy = computed(
     () => this.loading() || this.submitting() || this.store.publishing(),
   );
-  protected readonly bytes = computed(() => new TextEncoder().encode(this.text()).byteLength);
+  protected readonly maxBytes = POLICY_BODY_MAX_BYTES;
+  /**
+   * The bytes the request would carry: the COMPACT body (`JSON.stringify(JSON.parse(text))`), not
+   * the pretty-printed text, or `null` while the text is not JSON at all.
+   */
+  protected readonly bytes = computed(() => policyBodyBytes(this.text()));
   protected readonly localError = signal<string | null>(null);
   protected readonly serverError = signal<ApiError | null>(null);
   protected readonly seedFailed = signal(false);
@@ -160,6 +175,7 @@ export class PublishDialogComponent {
     tooLarge: $localize`:@@settings.policy.too-large:The policy body exceeds the 65536-byte limit.`,
     cancel: $localize`:@@settings.policy.cancel:Cancel`,
     publish: $localize`:@@settings.policy.publish-title:Publish revision`,
+    notSet: $localize`:@@settings.policy.conflict-not-set:(not set)`,
   };
   constructor() {
     effect(() => {
@@ -213,6 +229,8 @@ export class PublishDialogComponent {
     if (!(event.target instanceof HTMLTextAreaElement)) return;
     this.text.set(event.target.value);
     this.localError.set(null);
+    // The 422 describes the body that was sent; the first keystroke makes it a stale claim.
+    this.serverError.set(null);
   }
   protected requestClose(): void {
     if (!this.submitting() && !this.store.publishing()) this.close();
@@ -229,13 +247,17 @@ export class PublishDialogComponent {
       return;
     this.localError.set(null);
     this.serverError.set(null);
-    if (this.bytes() > 65536) {
+    // The cap is on the WIRE body: `policyBodyBytes` measures the compact document the request
+    // carries, so a pretty-printed but small body is never refused (review F1/G5).
+    const bytes = policyBodyBytes(this.text());
+    if (bytes !== null && bytes > POLICY_BODY_MAX_BYTES) {
       this.localError.set(this.copy.tooLarge);
       this.focusTextarea();
       return;
     }
+    let parsed: unknown;
     try {
-      const parsed: unknown = JSON.parse(this.text());
+      parsed = JSON.parse(this.text());
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
         throw new Error('invalid_json');
     } catch {
@@ -263,21 +285,9 @@ export class PublishDialogComponent {
         case 'refused':
           this.serverError.set(result.error);
           break;
-        case 'conflict': {
-          const conflict = conflictFromError(
-            result.error,
-            { body: this.text() },
-            { body: this.copy.body },
-          );
-          this.conflictFields.set(conflict.fields);
-          this.currentRevision.set(result.currentRevisionId);
-          this.reloadState.set('idle');
-          this.reloadError.set(null);
-          this.opened.set(false);
-          this.dialog().nativeElement.close();
-          this.conflictOpen.set(true);
+        case 'conflict':
+          await this.presentConflict(result.error, result.currentRevisionId, parsed);
           break;
-        }
         case 'busy':
           break;
       }
@@ -287,6 +297,59 @@ export class PublishDialogComponent {
         if (this.opened()) this.focusTextarea();
       }
     }
+  }
+
+  /**
+   * Hands the shared conflict dialog a comparison the user can act on (AC4: "conflict dialog with
+   * a revision diff").
+   *
+   * The `412` envelope carries metadata, never the current body, so `conflictFromError` alone can
+   * only show `server: null` ("Server value unavailable"). With the head revision id the envelope
+   * named, the current body is read once through the store's bounded body cache and the two bodies
+   * are compared field by field: `before` is the server's value, `after` the draft's. A read that
+   * fails, and a comparison with no rows at all, fall back to the envelope's own fields — the
+   * dialog stays usable and Reload stays the only way forward. Nothing is ever resubmitted here.
+   */
+  private async presentConflict(
+    error: ApiError,
+    currentRevisionId: string | null,
+    attempted: unknown,
+  ): Promise<void> {
+    const generation = this.generation;
+    let fields: readonly ConflictField[] | null = null;
+    if (currentRevisionId !== null) {
+      try {
+        const head = await this.store.loadBody(currentRevisionId);
+        if (generation !== this.generation) return;
+        const differences = diffPolicyBodies(head.body, attempted).rows;
+        if (differences.length > 0) {
+          // `id` must be unique: a primitive-set comparison reports every added or removed element
+          // at the ARRAY's own pointer, so several rows can share one path. The shared dialog
+          // tracks fields by `id` and rejects duplicated keys, so the index disambiguates while
+          // the label stays the JSON pointer the user can find in the body.
+          fields = differences.slice(0, MAX_CONFLICT_FIELDS).map((row, index) => ({
+            id: `${index}:${row.path}`,
+            label: row.path,
+            local: row.after ?? this.copy.notSet,
+            server: row.before ?? this.copy.notSet,
+          }));
+        }
+      } catch {
+        // A refused read is not a failed publish: the shared dialog still opens, with the
+        // envelope's own (uncompared) fields and a working Reload.
+        if (generation !== this.generation) return;
+        fields = null;
+      }
+    }
+    this.conflictFields.set(
+      fields ?? conflictFromError(error, { body: this.text() }, { body: this.copy.body }).fields,
+    );
+    this.currentRevision.set(currentRevisionId);
+    this.reloadState.set('idle');
+    this.reloadError.set(null);
+    this.opened.set(false);
+    this.dialog().nativeElement.close();
+    this.conflictOpen.set(true);
   }
   protected keepEditing(): void {
     // A dismissed reload must not later close an editor the user has returned to.

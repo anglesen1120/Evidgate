@@ -23,15 +23,17 @@
 // The in-process backend answers ONE document per operation, never by path parameter, so both diff
 // bodies are the same document in real Chromium: the diff panel's no-differences state is what a
 // browser can assert, and the added/removed/changed rows are
-// `revision-diff.component.spec.ts`'s subject. No source-text assertion, no mock UI.
+// `revision-diff.component.spec.ts`'s subject. The conflict dialog is the one place a browser CAN
+// show differing bodies, because the draft is edited before the attempt: the head read is answered
+// by the corpus document and every differing pointer in the 412 dialog carries that document's own
+// value on the server side. No source-text assertion, no mock UI.
 //
-// [KNOWN DEFECT, reported with the run that wrote this file] `revision-diff.component.ts` binds
-// `[value]` on both diff `<select>`s before the `@for` options exist, so the two pickers display
-// their "choose a revision" placeholder while the component compares head against previous (the
-// observed `<select>` value is `""`, `selectedIndex` on the placeholder). This suite therefore
-// asserts the OPTIONS each picker offers — the real contract — and not its displayed value, so the
-// defect cannot hide behind a green assertion here; the comparison itself is asserted through
-// `[data-policy-diff]`. When the binding is fixed, add the two `toHaveValue(<id>)` assertions.
+// The diff pickers carry their selection through each option's own `selected` state
+// (`revision-diff.component.ts`: the select exists, with only its placeholder, before the revisions
+// arrive, so a value written then would be discarded). Both displayed values are therefore real:
+// the head is the target and the newest revision below it is the base, and the case that owns the
+// default corpus asserts both through `toHaveValue`; the comparison itself is asserted through
+// `[data-policy-diff]`.
 //
 // Frozen-grant and refusal corpora are separate documents selected per operation through
 // `?fixture.variant.<operationId>=<variant>`; no case infers a state by clicking twice. Every
@@ -81,6 +83,29 @@ const CONFLICT = 'app-conflict-dialog dialog';
 const HEAD_ID = head.body.id;
 const HEAD_NO = String(head.body.revision_no);
 const SEED = JSON.stringify(head.body.body, null, 2);
+
+/**
+ * A draft that differs from the head document in exactly two pointers: `flaky_budget` (changed)
+ * and `late_window_minutes` (removed). The 412 envelope carries metadata, never a body, so the
+ * conflict dialog can only fill its server column by reading the head that envelope named — these
+ * two rows are the browser's proof that the head body was read and compared.
+ */
+const CONFLICT_DRAFT = ((): string => {
+  const body: Record<string, unknown> = { ...head.body.body };
+  body['flaky_budget'] = 9;
+  delete body['late_window_minutes'];
+  return JSON.stringify(body, null, 2);
+})();
+
+/** The revision the diff panel's base picker defaults to: the newest one below the head. */
+const PREVIOUS_ID = ((): string => {
+  const previous = revisions.body.items
+    .filter((item) => item.revision_no < Number(HEAD_NO))
+    .sort((left, right) => left.revision_no - right.revision_no)
+    .at(-1);
+  if (previous === undefined) throw new Error('the list corpus has no revision before the head');
+  return previous.id;
+})();
 
 /** The revision another writer published while this session held `…a003`, per the 412 corpus. */
 const CURRENT_HEAD = ((): string => {
@@ -149,10 +174,8 @@ async function ready(page: Page, rowCount: number): Promise<void> {
   await expect(page.locator(HEAD_ROW)).toHaveCount(1);
   await expect(page.locator(DIFF)).toBeVisible();
   // The pickers are built from the served rows: one placeholder plus one option per revision.
-  // Their DOM *value* is deliberately not asserted here — this file's report records the T4
-  // defect that the `[value]` binding lands before the `@for` options exist, so both pickers
-  // display the placeholder even though a comparison is running (`revision-diff.component.ts`
-  // `#policy-diff-base`/`#policy-diff-target`); the option VALUES below are the real contract.
+  // Which option is selected depends on the corpus this case served, so the exact displayed values
+  // are asserted by the case that owns the default corpus; here the offered OPTIONS are the claim.
   await expect(page.locator('#policy-diff-base option')).toHaveCount(rowCount + 1);
   await expect(page.locator('#policy-diff-target option')).toHaveCount(rowCount + 1);
   await expect(page.locator(DIFF)).not.toHaveAttribute('aria-busy', 'true');
@@ -208,6 +231,11 @@ for (const locale of LOCALES) {
     await expect(page.locator(MODE)).toHaveText(/\S/);
     await expect(page.locator('#policy-diff-base')).toBeEnabled();
     await expect(page.locator('#policy-diff-target')).toBeEnabled();
+    // The panel compares the head against the newest revision below it, and each picker SHOWS
+    // that selection: the selected option's own state, not a value written before the options
+    // existed, so this is the real displayed value.
+    await expect(page.locator('#policy-diff-base')).toHaveValue(PREVIOUS_ID);
+    await expect(page.locator('#policy-diff-target')).toHaveValue(HEAD_ID);
     // Both pickers offer exactly the served revisions, by id, in the served order.
     for (const [index, revision] of revisions.body.items.entries()) {
       await expect(page.locator('#policy-diff-base option').nth(index + 1)).toHaveAttribute(
@@ -247,10 +275,14 @@ for (const locale of LOCALES) {
   });
 
   // AC1/P1: the publish control is derived from `policy:write` and absent — not disabled — without
-  // it, while the read side of the tab keeps working.
+  // it, while the read side of the tab keeps working. The DIALOG is part of that control: AC1 is
+  // about the DOM, so its dialog, textarea and submit button must not be rendered either.
   test(`read-only grant offers no publish control (${locale})`, async ({ page }) => {
     await visit(page, locale, [POLICY_READONLY]);
     await expect(page.locator(OPEN_PUBLISH)).toHaveCount(0);
+    await expect(page.locator(DIALOG)).toHaveCount(0);
+    await expect(page.locator(BODY)).toHaveCount(0);
+    await expect(page.locator(SUBMIT)).toHaveCount(0);
     await expect(page.locator(`${PAGE} .narrow-notice`)).toHaveCount(0);
     await expect(page.locator(ROWS)).toHaveCount(revisions.body.items.length);
     await expect(page.locator(MODE)).toBeVisible();
@@ -300,9 +332,10 @@ for (const locale of LOCALES) {
     await expect(page.locator(appendedRow)).toHaveCount(0);
   });
 
-  // AC4: a 412 opens the shared conflict dialog with the head the server named, offers the reload
-  // explicitly, and never resubmits on its own.
-  test(`publish 412: conflict dialog, explicit reload, no retry (${locale})`, async ({ page }) => {
+  // AC4: a 412 opens the shared conflict dialog with the head the server named AND the head
+  // document's own values for every differing pointer, offers the reload explicitly, and never
+  // resubmits on its own.
+  test(`publish 412: conflict diff, explicit reload, no retry (${locale})`, async ({ page }) => {
     await visit(
       page,
       locale,
@@ -316,8 +349,12 @@ for (const locale of LOCALES) {
     await expect(headRow).toHaveCount(1);
     await expect(headRow).toHaveAttribute('data-revision-no', CURRENT_HEAD_NO);
     const dialog = await openPublish(page);
+    await expect(dialog.locator(BODY)).toHaveValue(SEED);
+    // The draft is edited so the two bodies differ. The 412 envelope has no body, so a filled
+    // server column can only come from a completed read of the head revision it named.
+    await dialog.locator(BODY).fill(CONFLICT_DRAFT);
     const draft = await dialog.locator(BODY).inputValue();
-    expect(draft).toBe(SEED);
+    expect(draft).toBe(CONFLICT_DRAFT);
     await dialog.locator(SUBMIT).click();
     const conflict = page.locator(CONFLICT);
     await expect(conflict).toHaveCount(1);
@@ -325,6 +362,17 @@ for (const locale of LOCALES) {
     // The current revision is the server's `details[]` value, verbatim; nothing else is inferred.
     await expect(conflict.locator('.revision code')).toHaveText(CURRENT_HEAD);
     await expect(conflict.locator('.revision code')).not.toHaveText(HEAD_ID);
+    // One changed and one removed pointer, each with the SERVER's value on the right.
+    await expect(conflict.locator('.field')).toHaveCount(2);
+    const changed = conflict.locator('.field', { hasText: '/flaky_budget' });
+    await expect(changed.locator('.server-value')).toContainText(
+      String(head.body.body.flaky_budget),
+    );
+    await expect(changed.locator('.local-value')).toContainText('9');
+    const removed = conflict.locator('.field', { hasText: '/late_window_minutes' });
+    await expect(removed.locator('.server-value')).toContainText(
+      String(head.body.body.late_window_minutes),
+    );
     await expect(page.locator(SERVER_ERROR)).toHaveCount(0);
     await expect(page.locator(PUBLISHED)).toHaveCount(0);
     await expect(dialog).not.toBeVisible();

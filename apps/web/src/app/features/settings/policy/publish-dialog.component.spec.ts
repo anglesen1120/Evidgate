@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { PolicyRevisionDto } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
@@ -167,18 +167,16 @@ describe('PublishDialogComponent', () => {
     });
     const { fixture, root, submit, dialog } = await render();
     submit.click();
-    await fixture.whenStable();
-    const shared = root.querySelector<HTMLDialogElement>('app-conflict-dialog dialog');
-    expect(shared?.open).toBe(true);
-    expect(shared?.textContent).toContain('current-head');
+    const shared = await waitForConflict(fixture, root);
+    expect(shared.textContent).toContain('current-head');
     expect(dialog.open).toBe(false);
-    const reload = shared?.querySelector<HTMLButtonElement>('button.reload');
+    const reload = shared.querySelector<HTMLButtonElement>('button.reload');
     expect(reload).not.toBeNull();
     reload?.click();
     await fixture.whenStable();
     expect(store.reload).toHaveBeenCalledTimes(1);
     expect(store.publish).toHaveBeenCalledTimes(1);
-    expect(shared?.open).toBe(false);
+    expect(shared.open).toBe(false);
   });
   it('Keep editing returns to the same textarea draft without any reload or publish', async () => {
     store.publish.mockResolvedValue({
@@ -189,8 +187,8 @@ describe('PublishDialogComponent', () => {
     const { fixture, root, textarea, submit, dialog } = await render();
     edit(textarea, '{"flaky_budget":9}');
     submit.click();
-    await fixture.whenStable();
-    root.querySelector<HTMLButtonElement>('app-conflict-dialog footer button')?.click();
+    const shared = await waitForConflict(fixture, root);
+    shared.querySelector<HTMLButtonElement>('footer button:not(.reload)')?.click();
     await fixture.whenStable();
     expect(dialog.open).toBe(true);
     expect(textarea.value).toBe('{"flaky_budget":9}');
@@ -211,10 +209,10 @@ describe('PublishDialogComponent', () => {
     });
     const { fixture, root, submit } = await render();
     submit.click();
+    const shared = await waitForConflict(fixture, root);
+    shared.querySelector<HTMLButtonElement>('button.reload')?.click();
     await fixture.whenStable();
-    root.querySelector<HTMLButtonElement>('app-conflict-dialog button.reload')?.click();
-    await fixture.whenStable();
-    expect(root.querySelector<HTMLDialogElement>('app-conflict-dialog dialog')?.open).toBe(true);
+    expect(shared.open).toBe(true);
     expect(root.querySelector('app-conflict-dialog')?.textContent).toContain(refused.message);
     expect(store.publish).toHaveBeenCalledTimes(1);
   });
@@ -276,10 +274,10 @@ describe('PublishDialogComponent', () => {
     });
     const { fixture, root, textarea, submit, dialog } = await render();
     submit.click();
-    await fixture.whenStable();
-    root.querySelector<HTMLButtonElement>('app-conflict-dialog button.reload')?.click();
+    const shared = await waitForConflict(fixture, root);
+    shared.querySelector<HTMLButtonElement>('button.reload')?.click();
     fixture.detectChanges();
-    root.querySelector<HTMLButtonElement>('app-conflict-dialog footer button')?.click();
+    shared.querySelector<HTMLButtonElement>('footer button:not(.reload)')?.click();
     await fixture.whenStable();
     edit(textarea, '{"flaky_budget":3}');
     resolve?.();
@@ -335,5 +333,168 @@ describe('PublishDialogComponent', () => {
     const { dialog } = await render();
     expect(store.loadBody).not.toHaveBeenCalled();
     expect(dialog.open).toBe(false);
+  });
+  /** The 412 path reads the head body before it opens the dialog: wait for that second settle. */
+  async function waitForConflict(
+    fixture: ComponentFixture<unknown>,
+    root: HTMLElement,
+  ): Promise<HTMLDialogElement> {
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelector<HTMLDialogElement>('app-conflict-dialog dialog')?.open).toBe(true);
+    });
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLDialogElement>('app-conflict-dialog dialog');
+    if (dialog === null) throw new Error('the conflict dialog did not open');
+    return dialog;
+  }
+  it('shows the head body as server values for added, removed and changed rows', async () => {
+    const headBody: PolicyRevisionDto = {
+      ...revision,
+      id: 'current-head',
+      body: { flaky_budget: 2, collection_timeout_minutes: 30 },
+    };
+    store.loadBody.mockResolvedValueOnce(revision).mockResolvedValueOnce(headBody);
+    store.publish.mockResolvedValue({
+      kind: 'conflict',
+      error: conflict,
+      currentRevisionId: 'current-head',
+    });
+    const { fixture, root, textarea, submit } = await render();
+    edit(textarea, JSON.stringify({ flaky_budget: 1, late_window_minutes: 15 }, null, 2));
+    submit.click();
+    const shared = await waitForConflict(fixture, root);
+    // The envelope carries no body, so the head the 412 named is read once and compared.
+    expect(store.loadBody).toHaveBeenLastCalledWith('current-head');
+    const fields = [...shared.querySelectorAll('.field')];
+    expect(fields).toHaveLength(3);
+    const field = (path: string): Element => {
+      const found = fields.find((item) => item.querySelector('h3')?.textContent?.includes(path));
+      if (found === undefined) throw new Error(`no conflict field for ${path}`);
+      return found;
+    };
+    // changed: the draft's value on the left, the server's on the right.
+    expect(field('/flaky_budget').querySelector('.local-value')?.textContent).toContain('1');
+    expect(field('/flaky_budget').querySelector('.server-value')?.textContent).toContain('2');
+    // added: nothing on the server, the draft's value on the left.
+    expect(field('/late_window_minutes').querySelector('.server-value')?.textContent).toMatch(/\S/);
+    expect(field('/late_window_minutes').querySelector('.local-value')?.textContent).toContain(
+      '15',
+    );
+    // removed: the server's value on the right, nothing in the draft.
+    expect(
+      field('/collection_timeout_minutes').querySelector('.server-value')?.textContent,
+    ).toContain('30');
+    expect(field('/collection_timeout_minutes').querySelector('.local-value')?.textContent).toMatch(
+      /\S/,
+    );
+  });
+  it('falls back to the envelope fields when the head body cannot be loaded', async () => {
+    store.loadBody
+      .mockResolvedValueOnce(revision)
+      .mockRejectedValueOnce(new Error('head read refused'));
+    store.publish.mockResolvedValue({
+      kind: 'conflict',
+      error: conflict,
+      currentRevisionId: 'current-head',
+    });
+    const { fixture, root, submit } = await render();
+    submit.click();
+    const shared = await waitForConflict(fixture, root);
+    expect(store.loadBody).toHaveBeenLastCalledWith('current-head');
+    // The draft is the only field the envelope can describe; its server side stays uncompared.
+    const fields = [...shared.querySelectorAll('.field')];
+    expect(fields).toHaveLength(1);
+    expect(fields[0]?.querySelector('.local-value')?.textContent).toMatch(/\S/);
+    expect(fields[0]?.querySelector('.server-value')?.textContent).toMatch(/\S/);
+    // Still usable: Reload acts, and nothing is resubmitted on its own.
+    shared.querySelector<HTMLButtonElement>('button.reload')?.click();
+    await fixture.whenStable();
+    expect(store.reload).toHaveBeenCalledTimes(1);
+    expect(store.publish).toHaveBeenCalledTimes(1);
+  });
+  it('caps the conflict comparison at a hundred field rows', async () => {
+    const wideBody = Object.fromEntries(
+      Array.from({ length: 150 }, (_unused, index) => [`field_${index}`, index]),
+    ) as PolicyRevisionDto['body'];
+    store.loadBody
+      .mockResolvedValueOnce(revision)
+      .mockResolvedValueOnce({ ...revision, id: 'current-head', body: wideBody });
+    store.publish.mockResolvedValue({
+      kind: 'conflict',
+      error: conflict,
+      currentRevisionId: 'current-head',
+    });
+    const { fixture, root, textarea, submit } = await render();
+    edit(textarea, '{}');
+    submit.click();
+    const shared = await waitForConflict(fixture, root);
+    // 150 pointers differ; the shared dialog is handed the first hundred and no "N more" row.
+    expect([...shared.querySelectorAll('.field')]).toHaveLength(100);
+  });
+  it('renders every row of an array change even when the rows share one pointer', async () => {
+    store.loadBody.mockResolvedValueOnce(revision).mockResolvedValueOnce({
+      ...revision,
+      id: 'current-head',
+      body: { required_suites: ['checkout', 'search', 'storefront-catalog'] },
+    });
+    store.publish.mockResolvedValue({
+      kind: 'conflict',
+      error: conflict,
+      currentRevisionId: 'current-head',
+    });
+    const { fixture, root, textarea, submit } = await render();
+    // A primitive-set comparison reports one row per removed element at the ARRAY's pointer, so
+    // these two rows share `/required_suites`: the shared dialog tracks by `id` and must not see
+    // duplicated keys.
+    edit(textarea, JSON.stringify({ required_suites: ['checkout'] }));
+    submit.click();
+    const shared = await waitForConflict(fixture, root);
+    const fields = [...shared.querySelectorAll('.field')];
+    expect(fields).toHaveLength(2);
+    for (const field of fields) {
+      expect(field.querySelector('h3')?.textContent).toContain('/required_suites');
+    }
+  });
+  it('falls back to the envelope fields when the head body has no differing field', async () => {
+    store.loadBody
+      .mockResolvedValueOnce(revision)
+      .mockResolvedValueOnce({ ...revision, id: 'current-head' });
+    store.publish.mockResolvedValue({
+      kind: 'conflict',
+      error: conflict,
+      currentRevisionId: 'current-head',
+    });
+    const { fixture, root, submit } = await render();
+    submit.click();
+    const shared = await waitForConflict(fixture, root);
+    // Zero diff rows cannot fill a field list: the envelope's single draft field stands in.
+    expect([...shared.querySelectorAll('.field')]).toHaveLength(1);
+    expect(store.publish).toHaveBeenCalledTimes(1);
+  });
+  it('clears a stale server refusal as soon as the draft is edited', async () => {
+    store.publish.mockResolvedValue({ kind: 'refused', error: refused });
+    const { fixture, root, textarea, submit } = await render();
+    submit.click();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-policy-error]')?.textContent).toContain(refused.message);
+    edit(textarea, '{"flaky_budget":7}');
+    await fixture.whenStable();
+    expect(root.querySelector('[data-policy-error]')).toBeNull();
+  });
+  it('measures the compact body, so pretty-printing cannot push it over the cap', async () => {
+    const { fixture, root, textarea, submit } = await render();
+    // The seed is pretty-printed: the hint reports the compact body, not the editor's text.
+    expect(new TextEncoder().encode(textarea.value).byteLength).toBeGreaterThan(18);
+    expect(root.querySelector('#policy-body-size')?.textContent).toContain('18 / 65536');
+    const text = JSON.stringify({ x: 'a'.repeat(65528) }, null, 2);
+    expect(new TextEncoder().encode(text).byteLength).toBeGreaterThan(65536);
+    edit(textarea, text);
+    fixture.detectChanges();
+    expect(root.querySelector('#policy-body-size')?.textContent).toContain('65536 / 65536');
+    submit.click();
+    await fixture.whenStable();
+    expect(store.publish).toHaveBeenCalledExactlyOnceWith(text);
+    expect(root.querySelector('[data-policy-publish-local-error]')).toBeNull();
   });
 });

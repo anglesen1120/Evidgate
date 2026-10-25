@@ -2463,6 +2463,9 @@
       <trans-unit id="settings.policy.invalid-json" datatype="html"><source>Enter a valid JSON object.</source></trans-unit>
       <trans-unit id="settings.policy.too-large" datatype="html"><source>The policy body exceeds the 65536-byte limit.</source></trans-unit>
       <trans-unit id="settings.policy.cancel" datatype="html"><source>Cancel</source></trans-unit>
+      <trans-unit id="settings.policy.conflict-not-set" datatype="html"><source>(not set)</source></trans-unit>
+      <trans-unit id="settings.policy.load-failed" datatype="html"><source>The policy revisions could not be loaded.</source></trans-unit>
+      <trans-unit id="settings.policy.load-retry" datatype="html"><source>Retry</source></trans-unit>
     </body>
   </file>
 </xliff>

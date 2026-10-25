@@ -11,11 +11,19 @@
 // - the head is the list answer's `ETag` (never an optimistic value), and it is what a publish
 //   quotes in `If-Match`;
 // - the list follows `next_cursor` one page per call and refuses a cursor it already followed;
-// - a publication's local refusals (over the cap, not a JSON object) send nothing at all, a `412`
-//   answers `conflict` with the head the server named and is never retried, and every other refusal
-//   — `422` included — is handed back verbatim;
+// - a publication's local refusals (no `policy:write`, not a JSON object, a COMPACT body over
+//   65 536 bytes — never the pretty-printed text) send nothing at all, a `412` answers `conflict`
+//   with the head the server named and is never retried, and every other refusal — `422` included —
+//   is handed back verbatim;
 // - the caller gets the stored revision before the list is re-read, and `activeRevision` moves only
-//   when a list answer says which row is `active`;
+//   when a list answer says which row is `active`; a refresh that fails keeps the rows and surfaces
+//   its own `ApiError` through the page's alert, and a `loadMore` that succeeds clears what an
+//   earlier one left there;
+// - `csrf_failed` is an error with the server's copy, never "there is nothing here" — only the two
+//   existence-hiding refusals become `not_found`;
+// - concurrent `loadBody` calls for one revision share one read, and a read that settles after a
+//   reset answers its caller without filling a cache that belongs to a view that is gone;
+// - `reload` retries the open that failed before the list, from the id that open was asked for;
 // - the mode chip renders exactly `policy_activation.mode`: the four mappings are proved here
 //   through `applyActivation`, and nothing is derived from a revision's `state`.
 
@@ -205,6 +213,15 @@ class FakePolicyDataService {
     pending.resolve(stored);
   }
 
+  /** Settles a deferred revision read with whatever the server (or the adapter) threw. */
+  failGet(index: number, error: unknown): void {
+    const pending = this.pendingGets[index];
+    if (pending === undefined) {
+      throw new Error(`the fake holds no pending revision read ${index}`);
+    }
+    pending.reject(error);
+  }
+
   /** Answers the n-th deferred list read the way the server would. */
   settleList(index: number, served: PolicyRevisionPage): void {
     const pending = this.pendingLists[index];
@@ -233,12 +250,21 @@ class FakePolicyDataService {
   }
 }
 
-/** The store's only session dependency here: which projects the caller is in. */
+/**
+ * The store's session dependencies here: which projects the caller is in, and the permission codes
+ * it holds. `policy:read` is what the tab itself needs; `policy:write` is what a publish needs, and it
+ * is present by default so a case about publishing does not have to say so.
+ */
 class FakeSessionStore {
   rows: readonly { readonly id: string }[] = [{ id: PROJECT_ID }];
+  codes: ReadonlySet<string> = new Set(['policy:read', 'policy:write']);
 
   projects(): readonly { readonly id: string }[] {
     return this.rows;
+  }
+
+  has(code: string): boolean {
+    return this.codes.has(code);
   }
 }
 
@@ -315,7 +341,6 @@ describe('PolicyStore (09.7.1-T4)', () => {
     it.each<{ status: number; kind: ApiErrorKind }>([
       { status: 404, kind: 'not_found' },
       { status: 403, kind: 'forbidden' },
-      { status: 403, kind: 'csrf_failed' },
     ])('renders a $status $kind refusal as not_found', async ({ status, kind }) => {
       data.getFailure = typedFailure(
         {
@@ -334,6 +359,30 @@ describe('PolicyStore (09.7.1-T4)', () => {
 
       expect(store.phase()).toBe('not_found');
       expect(store.loadError()).toBeNull();
+      expect(data.listCalls).toEqual([]);
+    });
+
+    it('renders a refused antiforgery token as error, not as a missing revision', async () => {
+      // `csrf_failed` says nothing about whether the revision exists (F2): hiding it behind
+      // `not_found` would tell the user "there is nothing here" about a fault a reload can fix.
+      data.getFailure = typedFailure(
+        {
+          error: {
+            code: 'csrf_failed',
+            message: 'The antiforgery token was refused.',
+            request_id: '018f0000-0000-7000-8000-0000000000e9',
+            retryable: true,
+          },
+        },
+        'csrf_failed',
+        403,
+      );
+
+      await store.open(ANCHOR_ID);
+
+      expect(store.phase()).toBe('error');
+      expect(store.loadError()?.code).toBe('csrf_failed');
+      expect(store.loadError()?.message).toBe('The antiforgery token was refused.');
       expect(data.listCalls).toEqual([]);
     });
 
@@ -473,6 +522,36 @@ describe('PolicyStore (09.7.1-T4)', () => {
       expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
       expect(store.loadError()?.code).toBe('validation_failed');
     });
+
+    it('clears the alert a refused page raised once a later page arrives', async () => {
+      // F7: the alert belongs to the read that failed, not to the tab.
+      data.pages = [
+        page([summary(ANCHOR_ID, 1, 'active')], '1', HEAD_ID),
+        page([summary(SECOND_ID, 2, 'draft')], null, HEAD_ID),
+      ];
+      await store.open(ANCHOR_ID);
+      data.listFailure = typedFailure(
+        {
+          error: {
+            code: 'unavailable',
+            message: 'The policy store is busy.',
+            request_id: '018f0000-0000-7000-8000-0000000000eb',
+            retryable: true,
+          },
+        },
+        'unavailable',
+        503,
+      );
+      await store.loadMore();
+      expect(store.loadError()?.code).toBe('unavailable');
+
+      data.listFailure = null;
+      await store.loadMore();
+
+      expect(store.loadError()).toBeNull();
+      expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID, SECOND_ID]);
+      expect(store.phase()).toBe('ready');
+    });
   });
 
   describe('reload', () => {
@@ -515,6 +594,61 @@ describe('PolicyStore (09.7.1-T4)', () => {
       await store.reload();
 
       expect(store.phase()).toBe('idle');
+      expect(data.listCalls).toEqual([]);
+    });
+
+    it('retries the open that failed before it ever reached the list', async () => {
+      // F6: a 503 on the revision read leaves no anchor, and without one this reload used to do
+      // nothing — the page's own retry would have spun on an error it could not leave.
+      data.getFailure = typedFailure(
+        {
+          error: {
+            code: 'unavailable',
+            message: 'The policy store is busy.',
+            request_id: '018f0000-0000-7000-8000-0000000000ec',
+            retryable: true,
+          },
+        },
+        'unavailable',
+        503,
+      );
+      await store.open(ANCHOR_ID);
+
+      expect(store.phase()).toBe('error');
+      expect(data.listCalls).toEqual([]);
+
+      data.getFailure = null;
+      await store.reload();
+
+      expect(store.phase()).toBe('ready');
+      expect(data.getCalls).toEqual([ANCHOR_ID, ANCHOR_ID]);
+      expect(data.listCalls).toEqual([{ revisionId: ANCHOR_ID, cursor: undefined }]);
+      expect(store.projectId()).toBe(PROJECT_ID);
+      expect(store.headRevisionId()).toBe(HEAD_ID);
+    });
+
+    it('forgets the retry id once the view is reset', async () => {
+      data.getFailure = typedFailure(
+        {
+          error: {
+            code: 'unavailable',
+            message: 'The policy store is busy.',
+            request_id: '018f0000-0000-7000-8000-0000000000ed',
+            retryable: true,
+          },
+        },
+        'unavailable',
+        503,
+      );
+      await store.open(ANCHOR_ID);
+      store.reset();
+
+      data.getFailure = null;
+      await store.reload();
+
+      // Nothing is open and nothing was asked for any more: a reload after a reset is still a no-op.
+      expect(store.phase()).toBe('idle');
+      expect(data.getCalls).toEqual([ANCHOR_ID]);
       expect(data.listCalls).toEqual([]);
     });
   });
@@ -564,6 +698,69 @@ describe('PolicyStore (09.7.1-T4)', () => {
       await expect(store.loadBody(ANCHOR_ID)).rejects.toMatchObject({
         error: { kind: 'not_found' },
       });
+    });
+
+    it('shares one read between concurrent calls for the same revision', async () => {
+      // The diff and the publish dialog ask in the same tick (F3); one immutable revision is one GET.
+      data.getManual = true;
+
+      const diff = store.loadBody(ANCHOR_ID);
+      const dialog = store.loadBody(ANCHOR_ID);
+      expect(data.getCalls).toEqual([ANCHOR_ID]);
+
+      const stored = revision(ANCHOR_ID, PROJECT_ID, 2, 'active');
+      data.settleGet(0, stored);
+
+      await expect(diff).resolves.toBe(stored);
+      await expect(dialog).resolves.toBe(stored);
+      expect(data.getCalls).toEqual([ANCHOR_ID]);
+      // The shared answer is the cached one, so a later call costs no request either.
+      await expect(store.loadBody(ANCHOR_ID)).resolves.toBe(stored);
+      expect(data.getCalls).toEqual([ANCHOR_ID]);
+    });
+
+    it('lets a later call start a new read after the shared one was refused', async () => {
+      data.getManual = true;
+      const first = store.loadBody(ANCHOR_ID);
+      const joined = store.loadBody(ANCHOR_ID);
+
+      const refusal = typedFailure(
+        {
+          error: {
+            code: 'unavailable',
+            message: 'The policy store is busy.',
+            request_id: '018f0000-0000-7000-8000-0000000000ee',
+            retryable: true,
+          },
+        },
+        'unavailable',
+        503,
+      );
+      data.failGet(0, refusal);
+
+      await expect(first).rejects.toBe(refusal);
+      await expect(joined).rejects.toBe(refusal);
+      // The in-flight entry is gone, so a retry is a real retry rather than the same rejection.
+      data.getManual = false;
+      const retried = await store.loadBody(ANCHOR_ID);
+      expect(retried.id).toBe(ANCHOR_ID);
+      expect(data.getCalls).toEqual([ANCHOR_ID, ANCHOR_ID]);
+    });
+
+    it('answers its caller but caches nothing when a reset lands mid-read', async () => {
+      const stored = revision(ANCHOR_ID, PROJECT_ID, 2, 'active');
+      data.revisions.set(ANCHOR_ID, stored);
+      data.getManual = true;
+      const reading = store.loadBody(ANCHOR_ID);
+      store.reset();
+
+      data.settleGet(0, stored);
+
+      await expect(reading).resolves.toBe(stored);
+      // The body belonged to a view that is gone, so the cache stays empty and the next call reads.
+      data.getManual = false;
+      await expect(store.loadBody(ANCHOR_ID)).resolves.toBe(stored);
+      expect(data.getCalls).toEqual([ANCHOR_ID, ANCHOR_ID]);
     });
   });
 
@@ -644,7 +841,7 @@ describe('PolicyStore (09.7.1-T4)', () => {
       expect(result.kind).toBe('unchanged');
     });
 
-    it('sends a body of exactly 65 536 bytes and refuses 65 537 without a request', async () => {
+    it('sends a compact body of exactly 65 536 bytes and refuses 65 537 without a request', async () => {
       const atCap = await store.publish(bodyOfSize(65_536));
 
       expect(atCap.kind).toBe('created');
@@ -653,6 +850,59 @@ describe('PolicyStore (09.7.1-T4)', () => {
       const overCap = await store.publish(bodyOfSize(65_537));
 
       expect(overCap).toEqual({ kind: 'too_large', bytes: 65_537 });
+      expect(data.publishCalls).toHaveLength(1);
+    });
+
+    it('measures the compact body, so a pretty-printed one under the cap is still sent', async () => {
+      // The editor seeds itself with the two-space indented document (F1), and indentation is a large
+      // part of that text: `critical_cases` with 16 000 members is 64 020 bytes compact and more than
+      // twice the cap once every member sits on its own indented line.
+      const compact = `{"critical_cases":[${new Array<string>(16_000).fill('"a"').join(',')}]}`;
+      const pretty = JSON.stringify(JSON.parse(compact), null, 2);
+      expect(new TextEncoder().encode(compact).byteLength).toBe(64_020);
+      expect(new TextEncoder().encode(pretty).byteLength).toBeGreaterThan(2 * 65_536);
+
+      const result = await store.publish(pretty);
+
+      expect(result.kind).toBe('created');
+      // What travels is the parsed object, so the bytes on the wire are the compact ones.
+      expect(data.publishCalls[0]?.body).toEqual(JSON.parse(compact));
+      expect(data.publishCalls).toHaveLength(1);
+    });
+
+    it('refuses a pretty-printed body whose compact form is over the cap, quoting that size', async () => {
+      const compact = `{"critical_cases":[${new Array<string>(16_400).fill('"a"').join(',')}]}`;
+      const compactBytes = new TextEncoder().encode(compact).byteLength;
+      expect(compactBytes).toBe(65_620);
+
+      const result = await store.publish(JSON.stringify(JSON.parse(compact), null, 2));
+
+      // The refusal reports the size the cap is about — the wire body, not the text on screen.
+      expect(result).toEqual({ kind: 'too_large', bytes: compactBytes });
+      expect(data.publishCalls).toEqual([]);
+    });
+
+    it('counts a multi-byte character as every byte it occupies', async () => {
+      // `{"note":"` is nine bytes and `"}` is two, and "ế" is three UTF-8 bytes: 21 842 of them are
+      // 65 526 bytes, so the compact body is 65 537 bytes while the TEXT is only 21 853 characters
+      // long. A character-counted cap would let this through — the cap is declared in bytes, so it is
+      // measured in bytes.
+      const overCap = `{"note":"${'ế'.repeat(21_842)}"}`;
+      expect(overCap.length).toBe(21_853);
+      expect(new TextEncoder().encode(overCap).byteLength).toBe(65_537);
+
+      const refused = await store.publish(overCap);
+
+      expect(refused).toEqual({ kind: 'too_large', bytes: 65_537 });
+      expect(data.publishCalls).toEqual([]);
+
+      // Two ASCII characters instead of the last three-byte one is exactly 65 536 bytes: accepted.
+      const atCap = `{"note":"${'ế'.repeat(21_841)}xx"}`;
+      expect(new TextEncoder().encode(atCap).byteLength).toBe(65_536);
+
+      const sent = await store.publish(atCap);
+
+      expect(sent.kind).toBe('created');
       expect(data.publishCalls).toHaveLength(1);
     });
 
@@ -836,6 +1086,76 @@ describe('PolicyStore (09.7.1-T4)', () => {
       expect(store.phase()).toBe('ready');
       expect(store.loadError()).toBeNull();
       expect(store.headRevisionId()).toBe(HEAD_ID);
+    });
+
+    it('surfaces a refused refresh through the alert without losing the ready list', async () => {
+      // F4: the head the screen shows is now stale, so the refusal is not nobody's — but the stored
+      // revision and every row stay, because they are still true.
+      data.listManual = true;
+      const result = await store.publish(bodyOfSize(64));
+      data.failList(
+        0,
+        typedFailure(
+          {
+            error: {
+              code: 'unavailable',
+              message: 'The policy store is busy.',
+              request_id: '018f0000-0000-7000-8000-0000000000ea',
+              retryable: true,
+            },
+          },
+          'unavailable',
+          503,
+        ),
+      );
+      await flushMicrotasks();
+
+      expect(result.kind).toBe('created');
+      expect(store.loadError()?.code).toBe('unavailable');
+      expect(store.phase()).toBe('ready');
+      expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
+      expect(store.headRevisionId()).toBe(HEAD_ID);
+
+      // The next read that succeeds clears it, so the alert does not outlive the failure.
+      data.listManual = false;
+      data.pages = [page([summary(SECOND_ID, 3, 'active')], null, SECOND_ID)];
+      await store.reload();
+
+      expect(store.loadError()).toBeNull();
+      expect(store.headRevisionId()).toBe(SECOND_ID);
+    });
+
+    it('refuses without sending when this session does not hold policy:write', async () => {
+      // F5: the control is absent from the DOM without the code, so this is the rule repeated where
+      // the request is built — nothing is sent, and no request is made to learn what is known.
+      session.codes = new Set(['policy:read']);
+
+      const result = await store.publish(bodyOfSize(64));
+
+      expect(result.kind).toBe('refused');
+      if (result.kind === 'refused') {
+        expect(result.error.code).toBe('policy_write_forbidden');
+        expect(result.error).toEqual(
+          expect.objectContaining({ kind: 'forbidden', status: 0, retryable: false }),
+        );
+      }
+      expect(data.publishCalls).toEqual([]);
+      expect(store.publishing()).toBe(false);
+    });
+
+    it('answers busy before it looks at the permission, so one press is one outcome', async () => {
+      data.publishManual = true;
+      const first = store.publish(bodyOfSize(64));
+
+      session.codes = new Set(['policy:read']);
+      const second = await store.publish(bodyOfSize(64));
+
+      expect(second).toEqual({ kind: 'busy' });
+      data.settlePublish(0, {
+        revision: revision(SECOND_ID, PROJECT_ID, 3, 'draft'),
+        created: true,
+      });
+      await expect(first).resolves.toMatchObject({ kind: 'created' });
     });
 
     it('refuses without sending when no revision is open', async () => {

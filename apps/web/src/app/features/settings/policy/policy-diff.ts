@@ -24,8 +24,10 @@
 //    subscript access and are NEVER assigned onto an object, so a hostile body cannot pollute a
 //    prototype through the diff.
 //  * Bounded: recursion stops at 32 container levels (a deeper pair is compared by deep equality
-//    and reported as one row), at 2000 rows (`truncated: true`) and at 200 rendered characters
-//    per value. The work is linear in the size of the two bodies — no repeated scan, no sort of
+//    and reported as one row), at 2000 rows and at 200 rendered characters per value. `truncated`
+//    is set by the row the cap REFUSES — the 2001st difference, which also ends the walk — so 2000
+//    differences followed by nothing but equal keys/elements are a COMPLETE answer, not a cut one.
+//    The work is linear in the size of the two bodies — no repeated scan, no sort of
 //    the array elements, no recursion beyond the cap — so the 64 KiB transport cap
 //    (`x-max-bytes`) is not a performance question.
 
@@ -66,7 +68,11 @@ const UNRENDERABLE = '[unrenderable]';
 /** A JSON object: never `null`, never an array (`JSON.parse` output is the only real input). */
 type JsonObject = Record<string, unknown>;
 
-/** The rows collected so far plus the flag the cap sets. */
+/**
+ * The rows collected so far. `truncated` is both the answer and the stop flag: only the row the
+ * cap REFUSES (the 2001st difference) sets it, so it stays `false` when a walk ends having
+ * collected exactly {@link MAX_DIFF_ROWS} rows — nothing was dropped in that case.
+ */
 interface DiffSink {
   readonly rows: PolicyDiffRow[];
   truncated: boolean;
@@ -176,17 +182,10 @@ function deepEqual(before: unknown, after: unknown): boolean {
   return true;
 }
 
-/** True once the row budget is spent; from then on every walker stops and `truncated` is set. */
-function isFull(sink: DiffSink): boolean {
-  if (sink.rows.length < MAX_DIFF_ROWS) {
-    return false;
-  }
-  sink.truncated = true;
-  return true;
-}
-
+/** Append one row; the row that does not fit (the 2001st difference) sets `truncated` instead. */
 function pushRow(sink: DiffSink, row: PolicyDiffRow): void {
-  if (isFull(sink)) {
+  if (sink.rows.length >= MAX_DIFF_ROWS) {
+    sink.truncated = true;
     return;
   }
   sink.rows.push(row);
@@ -223,7 +222,7 @@ function diffPrimitiveSets(
   const reported = new Set<string>();
 
   for (const element of before) {
-    if (isFull(sink)) {
+    if (sink.truncated) {
       return;
     }
     const key = serialise(element);
@@ -234,7 +233,7 @@ function diffPrimitiveSets(
     pushRow(sink, { path, kind: 'removed', before: render(element), after: null });
   }
   for (const element of after) {
-    if (isFull(sink)) {
+    if (sink.truncated) {
       return;
     }
     const key = serialise(element);
@@ -256,7 +255,7 @@ function diffArraysByIndex(
 ): void {
   const length = Math.max(before.length, after.length);
   for (let index = 0; index < length; index += 1) {
-    if (isFull(sink)) {
+    if (sink.truncated) {
       return;
     }
     const itemPath = `${path}/${index}`;
@@ -301,7 +300,7 @@ function diffObjects(
   const sorted = [...keys].sort(compareKeys);
 
   for (const key of sorted) {
-    if (isFull(sink)) {
+    if (sink.truncated) {
       return;
     }
     // RFC 6901: escape `~` first, then `/` (`a~/b` is `a~0~1b` in a pointer segment).
@@ -328,7 +327,7 @@ function diffObjects(
  * `changed` row at that container's pointer.
  */
 function walk(before: unknown, after: unknown, path: string, depth: number, sink: DiffSink): void {
-  if (isFull(sink)) {
+  if (sink.truncated) {
     return;
   }
   if (isArrayValue(before) && isArrayValue(after)) {

@@ -4,10 +4,11 @@
 // Every case here is a rule the revision-diff component (and the 412 conflict dialog built on it)
 // depends on, pinned as a boundary rather than a happy path: set semantics for the `uniqueItems`
 // lists, index semantics for arrays that carry objects, RFC 6901 escaping, a hostile `__proto__`
-// key, the row/depth/value caps, and the cost of the 64 KiB transport cap. Two rules matter most
-// because they are invisible until they are wrong: one insertion into a 1000-case list is ONE row
-// (not 1000 shifted indices), and reordering a list is not a difference at all (the server
-// canonicalises the body with RFC 8785, where list order is not part of the content).
+// key, the row/depth/value caps (the row cap flags only a row it actually REFUSED, so 2000
+// differences and no more is a complete answer), and the cost of the 64 KiB transport cap. Two
+// rules matter most because they are invisible until they are wrong: one insertion into a
+// 1000-case list is ONE row (not 1000 shifted indices), and reordering a list is not a difference
+// at all (the server canonicalises the body with RFC 8785, where list order is not content).
 
 import {
   MAX_DIFF_DEPTH,
@@ -295,9 +296,9 @@ describe('diffPolicyBodies (09.7.1-T4.2, S83 P2)', () => {
     expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
   });
 
-  it('caps the rows at 2000 and flags the cut', () => {
+  it('flags the cut at the 2001st difference only', () => {
     const after: Record<string, unknown> = {};
-    for (let index = 0; index < MAX_DIFF_ROWS + 100; index += 1) {
+    for (let index = 0; index < MAX_DIFF_ROWS + 1; index += 1) {
       after[`k${String(index).padStart(5, '0')}`] = index;
     }
 
@@ -319,6 +320,52 @@ describe('diffPolicyBodies (09.7.1-T4.2, S83 P2)', () => {
 
     expect(diff.rows).toHaveLength(MAX_DIFF_ROWS);
     expect(diff.truncated).toBe(false);
+  });
+
+  it('does not flag the cap when 2000 differences are followed by an equal key', () => {
+    // `shared` sorts after every `k…` key, so the walk reaches it with the row budget already
+    // spent: nothing is dropped there, and reaching the cap is not the same as cutting a row.
+    const before: Record<string, unknown> = { shared: 'same' };
+    const after: Record<string, unknown> = { shared: 'same' };
+    for (let index = 0; index < MAX_DIFF_ROWS; index += 1) {
+      const key = `k${String(index).padStart(5, '0')}`;
+      before[key] = index;
+      after[key] = index + 1;
+    }
+
+    const diff = diffPolicyBodies(deepFreeze(before), deepFreeze(after));
+
+    expect(diff.rows).toHaveLength(MAX_DIFF_ROWS);
+    expect(diff.truncated).toBe(false);
+    expect(diff.rows[0]?.kind).toBe('changed');
+    expect(diff.rows[diff.rows.length - 1]?.path).toBe('/k01999');
+
+    // An equal key between differences is not a stop either: the 2001st difference still cuts.
+    const withTrailingDifference = diffPolicyBodies(
+      deepFreeze({ ...before, head: 1 }),
+      deepFreeze({ ...after, head: 1, tail: 1 }),
+    );
+    expect(withTrailingDifference.rows).toHaveLength(MAX_DIFF_ROWS);
+    expect(withTrailingDifference.truncated).toBe(true);
+  });
+
+  it('caps a set difference only when an element is actually dropped', () => {
+    const kept = 'case-kept';
+    const removed = caseIds(MAX_DIFF_ROWS);
+
+    // 2000 removals and then an element both sides hold: complete, so nothing is flagged.
+    const atCap = diffPolicyBodies(deepFreeze([...removed, kept]), deepFreeze([kept]));
+    expect(atCap.rows).toHaveLength(MAX_DIFF_ROWS);
+    expect(atCap.truncated).toBe(false);
+    expect(atCap.rows.every((row) => row.path === '' && row.kind === 'removed')).toBe(true);
+
+    // The 2001st removal has no room, so that one is refused and the answer says it was cut.
+    const overCap = diffPolicyBodies(
+      deepFreeze([...removed, 'case-extra', kept]),
+      deepFreeze([kept]),
+    );
+    expect(overCap.rows).toHaveLength(MAX_DIFF_ROWS);
+    expect(overCap.truncated).toBe(true);
   });
 
   it('diffs a body pair at the 64 KiB transport cap inside the time budget', () => {

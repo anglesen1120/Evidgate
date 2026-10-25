@@ -111,6 +111,13 @@ describe('PolicyPage', () => {
     canWrite.set(false);
     const { root } = await render();
     expect(root.querySelector('[data-policy-publish-open]')).toBeNull();
+    // AC1 is about the DOM, not about a disabled control: the dialog, its textarea and its submit
+    // button are not rendered at all, so no grant-less session can reach them by any means.
+    expect(root.querySelector('[data-policy-publish-dialog]')).toBeNull();
+    expect(root.querySelector('#policy-publish-body')).toBeNull();
+    expect(root.querySelector('[data-policy-publish-submit]')).toBeNull();
+    expect(root.querySelector('app-policy-publish-dialog')).toBeNull();
+    expect(store.loadBody).not.toHaveBeenCalled();
   });
   it('forwards initial revision query parameter to the store validator', async () => {
     route.snapshot.queryParamMap = convertToParamMap({ revision: revision.id });
@@ -137,6 +144,41 @@ describe('PolicyPage', () => {
     await fixture.whenStable();
     expect(store.open).toHaveBeenCalledExactlyOnceWith('not-a-uuid');
     expect(route.snapshot.queryParamMap.has('body')).toBe(false);
+  });
+  it('renders a generic error with a retry when the failure carries no typed error', async () => {
+    store.phase.set('error');
+    store.revisions.set([]);
+    const { fixture, root } = await render();
+    const alert = root.querySelector('[data-policy-error-generic]');
+    expect(alert?.getAttribute('role')).toBe('alert');
+    expect(alert?.textContent).toMatch(/\S/);
+    const retry = alert?.querySelector<HTMLButtonElement>('[data-policy-retry]');
+    expect(retry).not.toBeNull();
+    expect(retry?.textContent).toMatch(/\S/);
+    retry?.click();
+    await fixture.whenStable();
+    expect(store.reload).toHaveBeenCalledTimes(1);
+  });
+  it('keeps the server error verbatim instead of the generic message when typed', async () => {
+    const error: ApiError = {
+      kind: 'validation',
+      status: 422,
+      code: 'policy_revision_refused',
+      message: 'Server message verbatim.',
+      details: [{ path: '/flaky_budget', reason: 'Out of range.' }],
+      requestId: null,
+      retryable: false,
+      retryAfterSeconds: null,
+    };
+    store.phase.set('error');
+    store.revisions.set([]);
+    store.loadError.set(error);
+    const { root } = await render();
+    expect(root.querySelector('[data-policy-error-generic]')).toBeNull();
+    const alert = root.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(error.code);
+    expect(alert?.textContent).toContain(error.message);
+    expect(alert?.textContent).toContain('/flaky_budget');
   });
   it.each(['created', 'unchanged'] as const)(
     'announces the revision number after %s and closes the dialog',

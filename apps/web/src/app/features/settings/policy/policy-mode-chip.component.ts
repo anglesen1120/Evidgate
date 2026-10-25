@@ -11,7 +11,7 @@ import { policyModeView } from './policy-mode';
       data-policy-mode
       [class.mode-gating]="view().kind === 'gating'"
       [class.mode-advisory]="view().kind === 'advisory'"
-      [attr.data-mode]="mode() ?? 'unavailable'"
+      [attr.data-mode]="view().kind === 'unavailable' ? 'unavailable' : mode()"
     >
       @switch (view().kind) {
         @case ('gating') {

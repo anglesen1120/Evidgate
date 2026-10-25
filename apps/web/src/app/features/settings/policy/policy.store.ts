@@ -23,10 +23,13 @@
 //    answer's `ETag` (unquoted) — the value a publish quotes in `If-Match` — and `activeRevision()`
 //    is the listed row whose `state` is `active`. Neither is ever set optimistically: a publish
 //    changes them only once a list answer says so.
-// 5. Publication checks before it sends (S83 P4). A non-object body and a body over 65 536 UTF-8
-//    bytes are refused locally with no request; the server's closed schema is the authority on
-//    everything else, so a `422` is surfaced VERBATIM. The textarea's text is a parameter, never
-//    state: no signal, field, URL or log line of this store holds a policy body
+// 5. Publication checks before it sends (S83 P4). The store refuses locally, with no request, a
+//    caller without `policy:write` (the control is absent from the DOM, so this is defence in
+//    depth), a body that is not a JSON object, and a body over 65 536 UTF-8 bytes — measured on the
+//    COMPACT wire body, never on the pretty-printed text, so indentation cannot cost the user a
+//    revision the server would have accepted (`policy-body-size.ts`); the server's closed schema is
+//    the authority on everything else, so a `422` is surfaced VERBATIM. The textarea's text is a
+//    parameter, never state: no signal, field, URL or log line of this store holds a policy body
 //    (`no-secret-field-in-store` scans store fields for exactly this class of mistake).
 // 6. A `412` is the end of an attempt. The caller gets `conflict` with the current head the server
 //    named, and nothing is retried or resubmitted — the deliberate reload is the user's.
@@ -47,6 +50,7 @@ import { PolicyDataService, type PolicyRevisionPage } from '../../../core/data/p
 import { isApiRequestError, type ApiError, type ApiErrorKind } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { conflictFromError } from '../../../shared/ui/conflict/conflict-details';
+import { POLICY_BODY_MAX_BYTES, policyBodyBytes } from './policy-body-size';
 
 /** The tab's read state: `idle` before a revision is opened, `not_found` for every refusal. */
 export type PolicyPhase = 'idle' | 'loading' | 'ready' | 'error' | 'not_found';
@@ -74,13 +78,6 @@ export type PublishResult =
 const NO_REVISIONS: readonly PolicyRevisionSummaryDto[] = [];
 
 /**
- * The body cap of `policy-revision.v1` (contracts/schemas, AC4): 65 536 UTF-8 bytes are accepted,
- * one more byte is refused before any request. The server enforces the same number, so this is a
- * courtesy that saves a round trip, not a second source of truth.
- */
-const POLICY_BODY_LIMIT_BYTES = 65_536;
-
-/**
  * How many revision bodies the diff and the publish seed may hold at once. The oldest read is
  * dropped, because a body is only needed while it is on screen and a project's history is unbounded.
  */
@@ -95,11 +92,16 @@ const REVISION_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 
 /**
  * The refusals that are indistinguishable from "there is no such revision": a `404` (00 §9.2 also
- * answers it for another tenant's or another project's id), a `403` for a reason other than the
- * antiforgery token, and `403 csrf_failed`. All three become the same `not_found` phase, so the tab
- * cannot tell an id it may not see from an id that does not exist.
+ * answers it for another tenant's or another project's id) and a `403` for a reason other than the
+ * antiforgery token. Both become the same `not_found` phase, so the tab cannot tell an id it may not
+ * see from an id that does not exist.
+ *
+ * `csrf_failed` is deliberately NOT one of them (review finding F2): it says nothing about whether
+ * the revision exists — it says the antiforgery token was refused — so folding it into `not_found`
+ * would hide a fault the user can act on (reload and retry) behind "there is nothing here". It is
+ * `error` with the server's own `ApiError`, like every other refusal that is not about existence.
  */
-const REFUSAL_KINDS: readonly ApiErrorKind[] = ['not_found', 'forbidden', 'csrf_failed'];
+const REFUSAL_KINDS: readonly ApiErrorKind[] = ['not_found', 'forbidden'];
 
 /** No fields to compare in a policy conflict: the dialog learns the head, not a field snapshot. */
 const NO_CONFLICT_FIELDS: Readonly<Record<string, string>> = {};
@@ -132,6 +134,24 @@ const NO_SCOPE_FAILURE: ApiError = {
   status: 0,
   code: 'policy_scope_unavailable',
   message: 'No policy revision is open, so nothing was sent.',
+  requestId: null,
+  retryable: false,
+  details: [],
+  retryAfterSeconds: null,
+};
+
+/**
+ * The typed failure a publish reports when this session does not hold `policy:write` (review finding
+ * F5). The publish control is absent from the DOM without the code (S83 P1), so the page cannot
+ * reach this; it is defence in depth, the same way a route repeats an authorization rule its UI
+ * already hides. Nothing is sent, and the server's own refusal is never pre-empted — the request
+ * that could have been legitimate is simply not made.
+ */
+const NO_WRITE_FAILURE: ApiError = {
+  kind: 'forbidden',
+  status: 0,
+  code: 'policy_write_forbidden',
+  message: 'This session may not publish policy revisions, so nothing was sent.',
   requestId: null,
   retryable: false,
   details: [],
@@ -193,6 +213,14 @@ export class PolicyStore {
    * appends a NEW id) never invalidates it.
    */
   private anchorRevisionId: string | null = null;
+  /**
+   * The last revision id this store was ASKED to open, shape-checked, kept even when that open
+   * failed before it could read the list (review finding F6). It is what {@link reload} retries from
+   * when there is no anchor yet — a `503` on the revision read leaves nothing to re-read the list
+   * through, and a reload that silently did nothing would strand the page's own retry. `null` until
+   * an id is opened, so a reload before any open stays the no-op it was.
+   */
+  private lastRequestedRevisionId: string | null = null;
   /** The cursors this store already asked for, so a repeated one is an error, not a loop. */
   private readonly followedCursors = new Set<string>();
   /** Pages read for the current anchor, the first page included; bounded by the page cap. */
@@ -204,6 +232,14 @@ export class PolicyStore {
    * first key. A body is immutable once stored, so a cached one is never stale.
    */
   private readonly bodyCache = new Map<string, PolicyRevisionDto>();
+  /**
+   * The body reads still in flight, keyed by revision id (review finding F3). The diff and the publish
+   * dialog can ask for the same revision in the same tick — the dialog seeds itself from the row the
+   * diff is already measuring — and a second `GET` for an immutable revision would be pure waste. A
+   * later caller joins the read already out instead of starting one of its own; the entry is dropped
+   * the moment that read settles, so a failure is retried on the next call rather than replayed.
+   */
+  private readonly bodyReads = new Map<string, Promise<PolicyRevisionDto>>();
 
   /** The project's revisions, ascending as served, as many cursor pages as were followed. */
   readonly revisions = this.revisionsSignal.asReadonly();
@@ -253,6 +289,8 @@ export class PolicyStore {
       return;
     }
 
+    // The reload retries from here when this open never reached the list (F6).
+    this.lastRequestedRevisionId = id;
     const generation = ++this.generation;
     this.clearState();
     this.phaseSignal.set('loading');
@@ -328,16 +366,26 @@ export class PolicyStore {
     // Every page of one list names the same head; taking it from the newest answer keeps the
     // `If-Match` source honest if a publish committed elsewhere in between.
     this.headRevisionIdSignal.set(page.headRevisionId);
+    // A page that arrived IS the answer the earlier failure withheld (F7): the alert a refused page
+    // raised must not outlive the read that succeeded.
+    this.loadErrorSignal.set(null);
   }
 
   /**
-   * Re-reads the list from its first page at the current anchor — the explicit reload a `412`
-   * conflict dialog offers, and the page's own retry. It settles `error`/`not_found` on a refusal
-   * (so the dialog's reload path sees the failure) and never rejects.
+   * Re-reads the list from its first page — the explicit reload a `412` conflict dialog offers, and
+   * the page's own retry. It settles `error`/`not_found` on a refusal (so the dialog's reload path
+   * sees the failure) and never rejects.
+   *
+   * With no anchor there is no list to re-read: the open that was meant to set one failed before the
+   * list (a `503` on the revision read, say), so this retries that open from the id it was asked for
+   * (F6). A store that was never opened has nothing to retry and stays the no-op it was.
    */
   async reload(): Promise<void> {
     const anchor = this.anchorRevisionId;
     if (anchor === null) {
+      if (this.lastRequestedRevisionId !== null) {
+        await this.open(this.lastRequestedRevisionId);
+      }
       return;
     }
     const generation = ++this.generation;
@@ -348,6 +396,12 @@ export class PolicyStore {
    * One revision with its body, cached for the diff and the publish seed: at most
    * {@link MAX_CACHED_BODIES} bodies, the oldest dropped. A cached body is returned without a
    * request (a stored revision is immutable) and re-inserted so it counts as the newest.
+   *
+   * Concurrent calls for the same id share ONE read ({@link bodyReads}): the dialog and the diff
+   * often ask in the same tick, and the second request would only repeat the first. A read that
+   * settles after a {@link reset} or after the page moved to another revision still answers its own
+   * caller — it was asked for exactly that revision — but its body is NOT cached: the cache belongs
+   * to the view that is gone.
    *
    * REJECTS with the server's `ApiRequestError` when the read is refused: both callers (the diff
    * and the publish dialog) have a failure state of their own, and swallowing the refusal here
@@ -360,27 +414,40 @@ export class PolicyStore {
       this.bodyCache.set(revisionId, cached);
       return cached;
     }
-    const revision = await this.data.getRevision(revisionId);
-    this.bodyCache.delete(revision.id);
-    this.bodyCache.set(revision.id, revision);
-    while (this.bodyCache.size > MAX_CACHED_BODIES) {
-      const oldest = this.bodyCache.keys().next();
-      if (oldest.done === true) {
-        break;
-      }
-      this.bodyCache.delete(oldest.value);
+    const shared = this.bodyReads.get(revisionId);
+    if (shared !== undefined) {
+      return shared;
     }
-    return revision;
+    const generation = this.generation;
+    const read = this.data.getRevision(revisionId).then((revision) => {
+      if (generation === this.generation) {
+        this.cacheBody(revision);
+      }
+      return revision;
+    });
+    this.bodyReads.set(revisionId, read);
+    try {
+      return await read;
+    } finally {
+      // Only this read's own entry: a later call may already have started the next one.
+      if (this.bodyReads.get(revisionId) === read) {
+        this.bodyReads.delete(revisionId);
+      }
+    }
   }
 
   /**
    * Publishes the textarea's text (`POST /v1/projects/{p}/policies`, AC1/AC4/AC5).
    *
-   * The local checks run before the request: more than 65 536 UTF-8 bytes is `too_large` (with the
-   * size, so the page can say how far over it is), and text that is not a JSON object is
-   * `invalid_json`. Neither sends anything. A second call while one is in flight is `busy` — the
-   * route is not replayable in the way the reveal routes are, and one click must not append two
-   * revisions.
+   * The local checks run before the request, in this order: a caller without `policy:write` is
+   * `refused` with this store's own `policy_write_forbidden` (F5 — the control is absent from the DOM
+   * already, so this repeat of the rule costs nothing and sends nothing); text that is not a JSON
+   * object is `invalid_json`; and a WIRE body over 65 536 UTF-8 bytes is `too_large`, carrying that
+   * size so the page can say how far over it is. The size is the compact body's, never the
+   * pretty-printed text's (F1): indentation is what the editor shows, and refusing a body the server
+   * accepts would be a bug of this tab's own making. None of the three sends anything. A second call
+   * while one is in flight is `busy` — the route is not replayable in the way the reveal routes are,
+   * and one click must not append two revisions.
    *
    * `If-Match` is {@link headRevisionId}: the head the LAST list answer named. A `412` answers
    * `conflict` with the head the server named and is NEVER retried — the caller opens the shared
@@ -398,20 +465,28 @@ export class PolicyStore {
     if (this.publishingSignal()) {
       return { kind: 'busy' };
     }
+    if (!this.session.has('policy:write')) {
+      return { kind: 'refused', error: NO_WRITE_FAILURE };
+    }
     const projectId = this.projectIdSignal();
     if (projectId === null) {
       return { kind: 'refused', error: NO_SCOPE_FAILURE };
     }
 
-    // The cap is declared in UTF-8 bytes, so it is measured in them: a multi-byte character counts
-    // as the bytes it occupies, not as one character.
-    const bytes = new TextEncoder().encode(bodyText).byteLength;
-    if (bytes > POLICY_BODY_LIMIT_BYTES) {
-      return { kind: 'too_large', bytes };
-    }
     const body = parsePolicyObject(bodyText);
     if (body === null) {
       return { kind: 'invalid_json' };
+    }
+    // What the request would carry: the compact document, not the indented text on screen (F1). The
+    // cap is declared in UTF-8 bytes, so a multi-byte character counts as every byte it occupies.
+    const bytes = policyBodyBytes(bodyText);
+    if (bytes === null) {
+      // Unreachable: the same text parsed as a JSON object a line above. Answering the refusal that
+      // sent nothing keeps the promise honest even if it ever were reached.
+      return { kind: 'invalid_json' };
+    }
+    if (bytes > POLICY_BODY_MAX_BYTES) {
+      return { kind: 'too_large', bytes };
     }
 
     // The head is read BEFORE the request: the `If-Match` this attempt quotes is the one the user
@@ -456,6 +531,11 @@ export class PolicyStore {
     this.generation += 1;
     this.clearState();
     this.bodyCache.clear();
+    // The in-flight reads are abandoned with the view: a later call starts its own, which caches for
+    // the view that exists (the abandoned one only answers the caller that asked before the reset).
+    this.bodyReads.clear();
+    // Nothing is open any more, so a reload has nothing to retry (F6).
+    this.lastRequestedRevisionId = null;
     this.phaseSignal.set('idle');
   }
 
@@ -475,10 +555,15 @@ export class PolicyStore {
       return;
     }
     if (!read.ok) {
-      // A background refresh is not the caller's failure and has nothing to say: the revision the
-      // server just stored stays on screen, and the next explicit read tells the rest.
+      // A background refresh is not the caller's failure, and it must not cost the revision the
+      // server just stored: the phase and the rows stay exactly as they are. But its refusal is not
+      // nobody's either (F4) — the screen still shows a head that is no longer true, so the server's
+      // own error is surfaced through the page's alert, without touching `phase` or the rows. The
+      // next read that succeeds clears it.
       if (foreground) {
         this.settleFailure(read.error);
+      } else if (isApiRequestError(read.error)) {
+        this.loadErrorSignal.set(read.error.error);
       }
       return;
     }
@@ -493,6 +578,19 @@ export class PolicyStore {
     this.headRevisionIdSignal.set(page.headRevisionId);
     this.loadErrorSignal.set(null);
     this.phaseSignal.set('ready');
+  }
+
+  /** Stores one read body as the newest, dropping the oldest read past {@link MAX_CACHED_BODIES}. */
+  private cacheBody(revision: PolicyRevisionDto): void {
+    this.bodyCache.delete(revision.id);
+    this.bodyCache.set(revision.id, revision);
+    while (this.bodyCache.size > MAX_CACHED_BODIES) {
+      const oldest = this.bodyCache.keys().next();
+      if (oldest.done === true) {
+        break;
+      }
+      this.bodyCache.delete(oldest.value);
+    }
   }
 
   /**

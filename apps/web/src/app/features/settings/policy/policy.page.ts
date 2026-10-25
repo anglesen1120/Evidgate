@@ -57,6 +57,8 @@ export class PolicyPage {
     idle: $localize`:@@settings.policy.no-selection:No revision selected. Enter a revision ID to inspect its policy.`,
     notFound: $localize`:@@settings.policy.not-found:Revision not found.`,
     loading: $localize`:@@settings.policy.loading:Loading revisions…`,
+    loadFailed: $localize`:@@settings.policy.load-failed:The policy revisions could not be loaded.`,
+    loadRetry: $localize`:@@settings.policy.load-retry:Retry`,
     reload: $localize`:@@settings.policy.reload:Reload revisions`,
     created: $localize`:@@settings.policy.published-new:New revision published.`,
     unchanged: $localize`:@@settings.policy.published-unchanged:Policy unchanged. Existing revision returned.`,

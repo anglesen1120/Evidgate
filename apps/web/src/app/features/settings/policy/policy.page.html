@@ -80,6 +80,19 @@
     {{ copy.reload }}
   </button>
 }
+@if (store.phase() === 'error' && store.loadError() === null) {
+  <div class="failure" role="alert" data-policy-error-generic>
+    <p>{{ copy.loadFailed }}</p>
+    <button
+      type="button"
+      data-policy-retry
+      [disabled]="store.publishing() || store.phase() === 'loading'"
+      (click)="reload()"
+    >
+      {{ copy.loadRetry }}
+    </button>
+  </div>
+}
 @if (store.phase() === 'ready' || store.revisions().length > 0) {
   <app-policy-revision-list
     [rows]="store.revisions()"
@@ -90,4 +103,6 @@
   />
   <app-revision-diff (targetChanged)="targetId.set($event)" />
 }
-<app-policy-publish-dialog (completed)="onPublished($event)" (reloaded)="focusHeading()" />
+@if (canWrite()) {
+  <app-policy-publish-dialog (completed)="onPublished($event)" (reloaded)="focusHeading()" />
+}
