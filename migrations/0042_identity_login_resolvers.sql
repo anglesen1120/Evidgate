@@ -135,12 +135,10 @@ begin
     if found then
       v_user_id := p_user_id;
     else
-      -- Lost the race: the user row this call created has no identity and never will, so it must not
-      -- survive — an orphan account would hold an email a later explicit merge could not account for.
+      -- Lost the race: the user this call created has no identity and must not survive as an orphan.
       delete from public."user" u
        where u.id = p_user_id
          and not exists (select 1 from public.user_identity ui where ui.user_id = p_user_id);
-
       v_user_id := (select ui.user_id
                       from public.user_identity ui
                      where ui.provider = p_provider
