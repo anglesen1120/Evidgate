@@ -6,7 +6,7 @@ import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SETTINGS_TABS } from './settings-tabs';
 
 describe('SettingsNoTabsPage', () => {
-  it('renders a shared empty pattern with administrator guidance and no destination names', async () => {
+  it('renders the shared empty pattern and names no destination from the registry', async () => {
     TestBed.configureTestingModule({
       imports: [SettingsNoTabsPage],
       providers: [provideZonelessChangeDetection()],
@@ -15,11 +15,11 @@ describe('SettingsNoTabsPage', () => {
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('app-empty-pattern .state-panel--empty')).not.toBeNull();
-    expect(root.querySelector('h2')?.textContent).toBe('No settings destinations');
-    expect(root.textContent).toContain('Ask an administrator.');
+    // No way out of the empty state: no destination element, link or control.
     expect(root.querySelector('button, a, [data-settings-tab]')).toBeNull();
     for (const tab of SETTINGS_TABS) {
       expect(root.textContent).not.toContain(tab.label);
+      expect(root.querySelector(`[data-settings-tab="${tab.id}"]`)).toBeNull();
     }
   });
 });

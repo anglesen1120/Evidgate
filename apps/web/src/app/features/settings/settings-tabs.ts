@@ -37,8 +37,6 @@ export interface SettingsTab {
   readonly permission: string;
   /** CR-D-2 phase in which the tab ships; a later phase than the build's makes it absent. */
   readonly phase: ProductPhase;
-  /** Whether the tab's data hangs off `/projects/{p}` (`project`) or `/orgs/{o}` (`org`). */
-  readonly scope: 'org' | 'project';
   /** Localised label (`@@settings.tab.<id>`). */
   readonly label: string;
 }
@@ -54,7 +52,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'members',
     permission: 'membership:read',
     phase: 'G1',
-    scope: 'org',
     label: $localize`:@@settings.tab.members:Members`,
   },
   {
@@ -62,7 +59,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'secrets',
     permission: 'ingest_token:read',
     phase: 'G2',
-    scope: 'project',
     label: $localize`:@@settings.tab.secrets:Secrets`,
   },
   {
@@ -70,7 +66,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'policy',
     permission: 'policy:read',
     phase: 'G4',
-    scope: 'project',
     label: $localize`:@@settings.tab.policy:Policy`,
   },
   {
@@ -78,7 +73,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'quota-retention',
     permission: 'project:read',
     phase: 'G1',
-    scope: 'project',
     label: $localize`:@@settings.tab.quota-retention:Quota & retention`,
   },
   {
@@ -86,7 +80,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'audit',
     permission: 'audit:read',
     phase: 'G1',
-    scope: 'org',
     label: $localize`:@@settings.tab.audit:Audit`,
   },
   {
@@ -94,7 +87,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'security-events',
     permission: 'security_event:read',
     phase: 'G2',
-    scope: 'org',
     label: $localize`:@@settings.tab.security-events:Security events`,
   },
   {
@@ -102,7 +94,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'integrations',
     permission: 'webhook:read',
     phase: 'G4',
-    scope: 'project',
     label: $localize`:@@settings.tab.integrations:Integrations`,
   },
   {
@@ -110,7 +101,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'agents',
     permission: 'agent_pool:read',
     phase: 'G4',
-    scope: 'org',
     label: $localize`:@@settings.tab.agents:Agents`,
   },
 ];

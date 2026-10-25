@@ -12,6 +12,9 @@ import { SETTINGS_TABS } from './settings-tabs';
 const permissions = signal<ReadonlySet<string>>(new Set());
 const currentOrg = signal<{ name: string } | null>({ name: 'Example organization' });
 
+/** Segments whose child route refuses to match, so the router aborts that navigation. */
+const refusedSegments = new Set<string>();
+
 function tabIds(root: HTMLElement): (string | null)[] {
   return Array.from(root.querySelectorAll('[data-settings-tab]'), (link) =>
     link.getAttribute('data-settings-tab'),
@@ -28,6 +31,7 @@ describe('SettingsShellPage', () => {
   beforeEach(() => {
     permissions.set(new Set());
     currentOrg.set({ name: 'Example organization' });
+    refusedSegments.clear();
     TestBed.configureTestingModule({
       imports: [SettingsShellPage],
       providers: [
@@ -40,6 +44,7 @@ describe('SettingsShellPage', () => {
               path: tab.segment,
               component: SettingsTabPlaceholderPage,
               data: { settingsTabId: tab.id },
+              canMatch: [() => !refusedSegments.has(tab.segment)],
             })),
           },
         ]),
@@ -136,6 +141,44 @@ describe('SettingsShellPage', () => {
     await harness.fixture.whenStable();
     expect(TestBed.inject(Router).url).toBe('/settings/members');
     await harness.navigateByUrl('/settings/audit');
+    expect(select.value).toBe('audit');
+  });
+
+  it('keeps the mobile select on the router segment when the navigation is refused', async () => {
+    permissions.set(new Set(['membership:read', 'audit:read']));
+    refusedSegments.add('audit');
+    const harness = await RouterTestingHarness.create('/settings/members');
+    const root = harness.routeNativeElement!;
+    const select = root.querySelector('select')!;
+    expect(select.value).toBe('members');
+
+    // The router refuses this pick and the URL never moves, so the control may not keep showing it.
+    select.value = 'audit';
+    select.dispatchEvent(new Event('change'));
+    // An errored navigation renders nothing and registers no pending task: wait for the control.
+    await vi.waitFor(() => expect(select.value).toBe('members'));
+
+    expect(TestBed.inject(Router).url).toBe('/settings/members');
+    expect(select.selectedOptions[0]?.getAttribute('value')).toBe('members');
+  });
+
+  it('keeps the mobile select on the URL segment when the pick stopped being a destination', async () => {
+    permissions.set(new Set(['membership:read', 'audit:read']));
+    const harness = await RouterTestingHarness.create('/settings/audit');
+    const root = harness.routeNativeElement!;
+    const select = root.querySelector('select')!;
+    expect(select.value).toBe('audit');
+
+    // Revoked without change detection, so `members` is still an `<option>` while `tabs()` no
+    // longer offers it: a pick can arrive for a destination that stopped existing a moment ago.
+    permissions.set(new Set(['audit:read']));
+    select.value = 'members';
+    select.dispatchEvent(new Event('change'));
+
+    // Refused before any navigation starts, so the control returns to the URL in the same turn.
+    expect(TestBed.inject(Router).url).toBe('/settings/audit');
+    expect(select.value).toBe('audit');
+    await harness.fixture.whenStable();
     expect(select.value).toBe('audit');
   });
 });

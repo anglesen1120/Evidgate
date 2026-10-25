@@ -42,9 +42,18 @@ export class SettingsShellPage {
     { initialValue: this.route.firstChild?.snapshot?.url[0]?.path ?? '' },
   );
 
-  protected selectDestination(segment: string): void {
+  protected selectDestination(select: HTMLSelectElement): void {
+    const segment = select.value;
     // Only values from the same permission-filtered list may initiate navigation.
-    if (!this.tabs().some((tab) => tab.segment === segment)) return;
-    void this.router.navigate([segment], { relativeTo: this.route });
+    if (!this.tabs().some((tab) => tab.segment === segment)) {
+      select.value = this.activeSegment();
+      return;
+    }
+    // The router can refuse or abort the navigation while the browser has already moved the native
+    // select to the pick: once it settles, the control shows the segment the router really serves.
+    const resync = (): void => {
+      select.value = this.activeSegment();
+    };
+    void this.router.navigate([segment], { relativeTo: this.route }).then(resync, resync);
   }
 }

@@ -16,18 +16,15 @@
         <label for="settings-destination" i18n="@@settings.choose"
           >Choose a settings destination</label
         >
-        <select
-          #destination
-          id="settings-destination"
-          [value]="activeSegment()"
-          (change)="selectDestination(destination.value)"
-        >
+        <select #destination id="settings-destination" (change)="selectDestination(destination)">
           @if (!activeSegment()) {
             <option value="" disabled i18n="@@settings.choose">
               Choose a settings destination
             </option>
           }
           @for (tab of tabs(); track tab.id) {
+            <!-- `[selected]` is the one source of the select's value: it survives options being
+                 created or replaced, which a `[value]` binding on the select does not. -->
             <option [value]="tab.segment" [selected]="activeSegment() === tab.segment">
               {{ tab.label }}
             </option>

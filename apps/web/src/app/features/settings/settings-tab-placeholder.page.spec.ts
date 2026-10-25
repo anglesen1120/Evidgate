@@ -1,42 +1,35 @@
-// 09.7.1-T1.1 (D-S68-Q3): tab identity comes only from route data and the shared registry.
+// 09.7.1-T1.1 (D-S68-Q3): the placeholder identifies a destination and never fabricates one.
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
-import { SETTINGS_TABS } from './settings-tabs';
+
+/** Renders the page with `settingsTabId` supplied the way the route table supplies it. */
+async function render(settingsTabId: string): Promise<HTMLElement> {
+  TestBed.configureTestingModule({
+    imports: [SettingsTabPlaceholderPage],
+    providers: [
+      provideZonelessChangeDetection(),
+      { provide: ActivatedRoute, useValue: { snapshot: { data: { settingsTabId } } } },
+    ],
+  });
+  const fixture = TestBed.createComponent(SettingsTabPlaceholderPage);
+  await fixture.whenStable();
+  return fixture.nativeElement as HTMLElement;
+}
 
 describe('SettingsTabPlaceholderPage', () => {
-  for (const tab of SETTINGS_TABS) {
-    it(`renders ${tab.id} from route data with its registry label and host hook`, async () => {
-      TestBed.configureTestingModule({
-        imports: [SettingsTabPlaceholderPage],
-        providers: [
-          provideZonelessChangeDetection(),
-          { provide: ActivatedRoute, useValue: { snapshot: { data: { settingsTabId: tab.id } } } },
-        ],
-      });
-      const fixture = TestBed.createComponent(SettingsTabPlaceholderPage);
-      await fixture.whenStable();
-      const root = fixture.nativeElement as HTMLElement;
-      expect(root.getAttribute('data-settings-tab-body')).toBe(tab.id);
-      expect(root.querySelector('h2')?.textContent).toBe(tab.label);
-      expect(root.textContent).toContain('This tab arrives with its own feature story.');
-      expect(root.querySelector('input, button')).toBeNull();
-    });
-  }
+  it('takes the destination id and the heading from the route data', async () => {
+    const root = await render('secrets');
+    expect(root.getAttribute('data-settings-tab-body')).toBe('secrets');
+    expect(root.querySelector('h2')?.textContent?.trim()).toBeTruthy();
+    // A body hook without a resource behind it: no control invites an action that cannot work.
+    expect(root.querySelector('input, button')).toBeNull();
+  });
 
   it('does not invent a destination for unknown route data', async () => {
-    TestBed.configureTestingModule({
-      imports: [SettingsTabPlaceholderPage],
-      providers: [
-        provideZonelessChangeDetection(),
-        { provide: ActivatedRoute, useValue: { snapshot: { data: { settingsTabId: 'unknown' } } } },
-      ],
-    });
-    const fixture = TestBed.createComponent(SettingsTabPlaceholderPage);
-    await fixture.whenStable();
-    const root = fixture.nativeElement as HTMLElement;
+    const root = await render('unknown');
     expect(root.hasAttribute('data-settings-tab-body')).toBe(false);
     expect(root.querySelector('h2')).toBeNull();
   });

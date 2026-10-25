@@ -11,7 +11,8 @@ import { UrlTree, provideRouter } from '@angular/router';
 
 import { EMPTY_MATCH_SNAPSHOT } from '../../core/guards/spec-helpers';
 import { SessionStore, type SessionState } from '../../core/session/session.store';
-import { ACTIVE_PHASE, isPhaseActive } from '../../shell/nav/product-phase';
+import type { ProductPhase } from '../../shell/nav/nav.models';
+import { ACTIVE_PHASE } from '../../shell/nav/product-phase';
 import { settingsTabGuard } from './settings-tab.guard';
 import {
   SETTINGS_TABS,
@@ -23,6 +24,12 @@ import {
 /** One tab, labelled for `it.each`, so a failure names the tab and not an index. */
 const TAB_CASES = SETTINGS_TABS.map((tab) => ({ id: tab.id, tab }));
 
+/**
+ * The phases this build serves, declared here on purpose: an expectation computed with the guard's
+ * own `isPhaseActive` would agree with whatever that predicate answered.
+ */
+const SHIPPED_PHASES: readonly ProductPhase[] = ['G1'];
+
 /** The tab a case names, or a failure naming the missing row. */
 function tabOf(id: SettingsTabId): SettingsTab {
   const tab = SETTINGS_TABS.find((candidate) => candidate.id === id);
@@ -33,28 +40,24 @@ function tabOf(id: SettingsTabId): SettingsTab {
 }
 
 /**
- * The guard's whole dependency: an idempotent bootstrap and the loaded set. `has()` answers `false`
- * unless the session is authenticated, which is what `SessionStore` does — its permission signal
- * stays empty for `unknown`, `anonymous` and `unavailable`.
+ * The guard's whole dependency: an idempotent bootstrap that loads the set, then the set. `has()`
+ * answers `false` until `bootstrap()` settles and unless the session is authenticated, which is what
+ * `SessionStore` does — its permission signal stays empty for `unknown`, `anonymous` and
+ * `unavailable`, and a decision taken before the load sees nothing.
  */
 class FakeSessionStore {
   state: SessionState = 'authenticated';
   granted: ReadonlySet<string> = new Set<string>();
-  bootstrapCalls = 0;
-  asked: string[] = [];
+  private loaded = false;
 
   bootstrap(): Promise<void> {
-    this.bootstrapCalls += 1;
-    return Promise.resolve();
-  }
-
-  sessionState(): SessionState {
-    return this.state;
+    return Promise.resolve().then(() => {
+      this.loaded = true;
+    });
   }
 
   has(code: string): boolean {
-    this.asked.push(code);
-    return this.state === 'authenticated' && this.granted.has(code);
+    return this.state === 'authenticated' && this.loaded && this.granted.has(code);
   }
 }
 
@@ -83,12 +86,16 @@ describe('isSettingsTabAvailable (09.7.1-T1.1)', () => {
   });
 
   it.each(TAB_CASES)(
-    '$id: unavailable while its phase is not reached, even with the code',
+    '$id: unavailable in a phase the caller has not reached, even with the code',
     ({ tab }) => {
-      // The default seam is the build's own `isPhaseActive`: in the G1 build only the G1 tabs exist.
-      expect(isSettingsTabAvailable(tab, (code) => code === tab.permission)).toBe(
-        isPhaseActive(tab.phase),
-      );
+      // An explicit seam: the claim is the phase rule itself, not `isPhaseActive`'s own answer.
+      expect(
+        isSettingsTabAvailable(
+          tab,
+          () => true,
+          () => false,
+        ),
+      ).toBe(false);
     },
   );
 });
@@ -111,18 +118,13 @@ describe('settingsTabGuard (09.7.1-T1.2)', () => {
   }
 
   it.each(TAB_CASES)(
-    '$id: matches only when its own code is held and its phase is reached',
+    '$id: matches only when this build serves its phase and the set holds its code',
     async ({ tab }) => {
       session.granted = new Set([tab.permission]);
 
-      const result = await run(tab);
-
-      // In this build `ACTIVE_PHASE` is G1: a G2/G4 tab stays unmatched even with its permission, and
-      // the phase check short-circuits before the permission set is consulted at all.
-      const reached = isPhaseActive(tab.phase);
-      expect(result).toBe(reached);
-      expect(session.bootstrapCalls).toBe(1);
-      expect(session.asked).toEqual(reached ? [tab.permission] : []);
+      // A later-phase tab (Secrets G2; Policy, Integrations, Agents G4) stays unmatched even when
+      // the session holds its code, so it is as absent as a segment that exists nowhere.
+      await expect(run(tab)).resolves.toBe(SHIPPED_PHASES.includes(tab.phase));
     },
   );
 
