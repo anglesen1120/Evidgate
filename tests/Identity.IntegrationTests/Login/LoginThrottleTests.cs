@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shouldly;
@@ -186,6 +187,91 @@ public sealed class LoginThrottleTests
         response.Headers.RetryAfter.ShouldNotBeNull();
         (await LoginTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.Unavailable);
         LoginTestHost.StateCookies(response).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_One_Unit_Budget_Never_Refuses_The_First_Callback()
+    {
+        using var configured = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = HostWithBudget(configured, burst: 1);
+        using var client = host.CreateClient(
+            new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+
+        using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
+        start.StatusCode.ShouldBe(HttpStatusCode.Found);
+        var pair = LoginTestHost.StateCookieValue(start)
+            ?? throw new InvalidOperationException("the start response set no pending-login cookie");
+        var cookieValue = pair[(LoginStateCookie.Name.Length + 1)..];
+        var state = StateOf(start);
+
+        // The callback's second unit is best-effort: a legal ExchangeBurstLimit of 1 must still let the
+        // first login through to the provider, not answer every callback with 429.
+        using var first = await LoginTestHost.SendAsync(
+            client,
+            LoginTestHost.CallbackRequest("fake", cookieValue, state));
+
+        first.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await LoginTestHost.ErrorCodeAsync(first)).ShouldBe(ApiErrorCode.TokenInvalid);
+
+        // The first unit of the next callback is what decides: the window holds one, so this one is refused.
+        using var second = await LoginTestHost.SendAsync(
+            client,
+            LoginTestHost.CallbackRequest("fake", cookieValue, state));
+
+        second.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        (await LoginTestHost.ErrorCodeAsync(second)).ShouldBe(ApiErrorCode.RateLimited);
+        second.Headers.RetryAfter.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task A_Refused_Callback_Still_Deletes_The_Cookie_And_Sets_No_Store()
+    {
+        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var client = host.CreateLoginClient();
+        var callbackBudget = Burst(host) / 2;
+
+        for (var attempt = 1; attempt <= callbackBudget; attempt++)
+        {
+            using var allowed = await LoginTestHost.SendAsync(
+                client,
+                LoginTestHost.CallbackRequest("fake", cookieValue: null, state: "state-1"));
+
+            allowed.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        }
+
+        using var refused = await LoginTestHost.SendAsync(
+            client,
+            LoginTestHost.CallbackRequest("fake", cookieValue: null, state: "state-1"));
+
+        // The throttle answers after the deletion, so "the cookie is deleted on every outcome" holds for
+        // the 429 too, and the refusal is never cacheable.
+        refused.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        LoginTestHost.StateCookieDeletion(refused).ShouldNotBeNull();
+        refused.Headers.CacheControl.ShouldNotBeNull();
+        refused.Headers.CacheControl!.NoStore.ShouldBeTrue();
+    }
+
+    /// <summary>The same login host with a different CI exchange budget bound at boot.</summary>
+    private static WebApplicationFactory<Program> HostWithBudget(WebApplicationFactory<Program> host, int burst) =>
+        host.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
+            configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["EVIDGATE:Ci:ExchangeBurstLimit"] = burst.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            })));
+
+    /// <summary>The <c>state</c> the start redirect carries (base64url, so it needs no decoding).</summary>
+    private static string StateOf(HttpResponseMessage start)
+    {
+        var location = start.Headers.Location
+            ?? throw new InvalidOperationException("the start response carried no Location header");
+
+        return location.Query
+            .TrimStart('?')
+            .Split('&')
+            .Select(pair => pair.Split('=', 2))
+            .Where(pair => pair.Length == 2 && pair[0] == "state")
+            .Select(pair => pair[1])
+            .First();
     }
 
     /// <summary>The request header the address-setting filter reads the client address from.</summary>

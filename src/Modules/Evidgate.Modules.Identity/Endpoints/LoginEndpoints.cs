@@ -340,21 +340,17 @@ public static class LoginEndpoints
     }
 
     /// <summary>
-    /// Spends <paramref name="cost"/> units of the client's window in the CI exchange limiter and returns
-    /// the 00 §9.2 429 <c>rate_limited</c> failure (with <c>Retry-After</c> set on the response) when the
-    /// budget is gone, or null to continue. Same envelope and same <see cref="Error"/> shape as
-    /// <c>CiTokenEndpoints.Throttle</c>; the extra units of a route that must be stricter are spent from the
-    /// same window, so the limiter needs no second budget.
+    /// Spends up to <paramref name="cost"/> units of the client's window in the CI exchange limiter and
+    /// returns the 00 §9.2 429 <c>rate_limited</c> failure (with <c>Retry-After</c> set on the response) when
+    /// the budget is gone, or null to continue. Same envelope and same <see cref="Error"/> shape as
+    /// <c>CiTokenEndpoints.Throttle</c>. Only the first unit decides: the extra units of a route that must be
+    /// stricter are spent from the same window when they are available and never refuse by themselves, so a
+    /// legal <c>ExchangeBurstLimit</c> of 1 (or an odd one) cannot make the route unusable.
     /// </summary>
     private static Error? Throttle(HttpContext context, ExchangeRateLimiter limiter, string key, int cost)
     {
-        for (var unit = 0; unit < cost; unit++)
+        if (!limiter.TryAcquire(key, out var retryAfter))
         {
-            if (limiter.TryAcquire(key, out var retryAfter))
-            {
-                continue;
-            }
-
             context.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
 
             return new Error(
@@ -362,6 +358,11 @@ public static class LoginEndpoints
                 "too many sign-in attempts; retry later",
                 StatusCodes.Status429TooManyRequests,
                 Retryable: true);
+        }
+
+        for (var unit = 1; unit < cost; unit++)
+        {
+            _ = limiter.TryAcquire(key, out _);
         }
 
         return null;
