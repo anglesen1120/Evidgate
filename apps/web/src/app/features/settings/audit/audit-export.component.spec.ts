@@ -124,7 +124,7 @@ describe('AuditExportComponent (AC7)', () => {
     expect(
       data.list.mock.calls.every(([org, query]) => org === 'org1' && query.limit === 200),
     ).toBe(true);
-    expect(root.querySelector('[data-audit-export-capped]')?.textContent).toBe(
+    expect(root.querySelector('[data-audit-export-capped]')?.textContent?.trim()).toBe(
       'First 10,000 rows exported — narrow the filter for a complete export.',
     );
     expect(root.querySelector('[data-audit-export-capped]')?.getAttribute('role')).toBe('status');
@@ -158,7 +158,7 @@ describe('AuditExportComponent (AC7)', () => {
     });
     // A unit test runs the source locale, so the surrounding copy is English; only the number
     // follows the injected locale.
-    expect(root.querySelector('[data-audit-export-capped]')?.textContent).toBe(
+    expect(root.querySelector('[data-audit-export-capped]')?.textContent?.trim()).toBe(
       'First 10.000 rows exported — narrow the filter for a complete export.',
     );
     expect(click).toHaveBeenCalledTimes(1);
@@ -180,7 +180,7 @@ describe('AuditExportComponent (AC7)', () => {
       rows: AUDIT_EXPORT_MAX_PAGES,
       capped: true,
     });
-    expect(root.querySelector('[data-audit-export-capped]')?.textContent).toBe(
+    expect(root.querySelector('[data-audit-export-capped]')?.textContent?.trim()).toBe(
       `First ${AUDIT_EXPORT_MAX_PAGES} rows exported — narrow the filter for a complete export.`,
     );
     // A bounded export still hands the rows it did collect to the browser.
