@@ -1,0 +1,139 @@
+<header class="page-header">
+  <div>
+    <h2 #heading tabindex="-1">{{ copy.title }}</h2>
+    <p>{{ copy.description }}</p>
+  </div>
+  @if (session.currentOrg(); as org) {
+    <app-audit-export [orgId]="org.id" />
+  }
+</header>
+<form class="filters" (ngSubmit)="apply()" aria-labelledby="audit-filters-title">
+  <h3 id="audit-filters-title">{{ copy.filters }}</h3>
+  <div class="filter-grid">
+    <label for="audit-actor"
+      >{{ copy.actorType }}
+      <select id="audit-actor" name="actorType" [(ngModel)]="draft.actorType">
+        <option value="">{{ copy.anyActor }}</option>
+        <option value="user">{{ copy.user }}</option>
+        <option value="ci_producer">{{ copy.ciProducer }}</option>
+        <option value="agent">{{ copy.agent }}</option>
+        <option value="platform_operator">{{ copy.operator }}</option>
+        <option value="system">{{ copy.system }}</option>
+      </select>
+    </label>
+    <label for="audit-action"
+      >{{ copy.action
+      }}<input id="audit-action" name="action" maxlength="128" [(ngModel)]="draft.action"
+    /></label>
+    <label for="audit-object"
+      >{{ copy.objectType
+      }}<input id="audit-object" name="objectType" maxlength="64" [(ngModel)]="draft.objectType"
+    /></label>
+    <label for="audit-from"
+      >{{ copy.from
+      }}<input
+        id="audit-from"
+        name="from"
+        type="datetime-local"
+        step="1"
+        [(ngModel)]="draft.from"
+        [attr.aria-invalid]="invalidRange()"
+        [attr.aria-describedby]="
+          invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
+        "
+    /></label>
+    <label for="audit-to"
+      >{{ copy.to
+      }}<input
+        id="audit-to"
+        name="to"
+        type="datetime-local"
+        step="1"
+        [(ngModel)]="draft.to"
+        [attr.aria-invalid]="invalidRange()"
+        [attr.aria-describedby]="
+          invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
+        "
+    /></label>
+  </div>
+  <p id="audit-date-hint">{{ copy.dateHint }}</p>
+  @if (invalidRange()) {
+    <p class="validation" id="audit-range-error" role="alert">{{ copy.rangeError }}</p>
+  }
+  <div class="filter-actions">
+    <button type="submit" data-audit-apply>{{ copy.apply }}</button
+    ><button type="button" data-audit-clear (click)="clear()">{{ copy.clear }}</button>
+  </div>
+</form>
+@if (status() === 'error') {
+  @if (store.loadError(); as failure) {
+    @if (
+      failure.kind === 'rate_limited' ||
+      failure.kind === 'forbidden' ||
+      failure.kind === 'not_found' ||
+      (failure.kind === 'unavailable' && failure.retryAfterSeconds !== null)
+    ) {
+      <div class="banner failure" role="alert">
+        <p>{{ failure.message }}</p>
+        <code>{{ failure.code }}</code>
+      </div>
+    }
+  }
+}
+<app-request-state
+  [status]="status()"
+  [error]="store.loadError()"
+  [empty]="store.rows().length === 0"
+  [emptyTitle]="filtered() ? copy.noMatchTitle : copy.emptyTitle"
+  [emptyDescription]="filtered() ? copy.noMatchDescription : copy.emptyDescription"
+  [emptyActionLabel]="filtered() ? copy.clear : undefined"
+  (emptyAction)="clear()"
+  [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
+  (retry)="reload()"
+>
+  <section class="audit-content" [attr.aria-busy]="store.paging()">
+    <app-audit-table [rows]="visibleRows()" />
+    @if (pagingAlert(); as failure) {
+      <div class="banner failure" role="alert" data-audit-paging-error>
+        <p>{{ failure.message }}</p>
+        @if (failure.code) {
+          <code>{{ failure.code }}</code>
+        }
+        <button type="button" [disabled]="store.paging()" (click)="loadMore()">
+          {{ copy.retry }}
+        </button>
+      </div>
+    }
+    <p role="status" [attr.aria-live]="'polite'">
+      @if (store.paging()) {
+        {{ copy.loadingMore }}
+      }
+    </p>
+    @if (store.browseCapped()) {
+      <p role="status" data-audit-browse-capped>{{ browseCappedText(store.rows().length) }}</p>
+    }
+    <nav class="pagination" [attr.aria-label]="copy.pagination">
+      <button
+        type="button"
+        data-audit-previous
+        [disabled]="offset() === 0 || store.paging()"
+        (click)="previous()"
+      >
+        {{ copy.previous }}
+      </button>
+      <button
+        type="button"
+        data-audit-next
+        [disabled]="!nextWindow() || store.paging()"
+        (click)="next()"
+      >
+        {{ copy.next }}
+      </button>
+      @if (store.hasMore()) {
+        <button type="button" data-audit-load-more [disabled]="store.paging()" (click)="loadMore()">
+          {{ copy.loadMore }}
+        </button>
+      }
+    </nav>
+  </section>
+</app-request-state>

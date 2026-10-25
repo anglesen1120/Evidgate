@@ -19,6 +19,9 @@
 
 import ciBindingCreate from '../../../../../../fixtures/web-api/ci-binding-create/input.json';
 import ciBindingCreateConflict from '../../../../../../fixtures/web-api/ci-binding-create-conflict/input.json';
+import auditList from '../../../../../../fixtures/web-api/audit-list/input.json';
+import auditListEmpty from '../../../../../../fixtures/web-api/audit-list-empty/input.json';
+import auditListSupport from '../../../../../../fixtures/web-api/audit-list-support/input.json';
 import ciBindingsList from '../../../../../../fixtures/web-api/ci-bindings-list/input.json';
 import ciBindingsListOnboardingConnected from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-connected/input.json';
 import ciBindingsListOnboardingProject from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-project/input.json';
@@ -238,6 +241,24 @@ export interface FixtureDocument {
  * empty health panel — a wrong step is exactly what 00 §9.2 forbids. Their `X-Request-Id` values
  * (`…f1`–`…f4`) are distinct from the older onboarding rows so a page that echoes one can only echo
  * the answer it actually received.
+ *
+ * 09.7.1-T6 adds the Audit tab's page. `audit-list` is the `listAudit` page the tab opens with:
+ * six `AuditEntryDto` rows newest first on one hash chain (`seq` 1041–1046, each row's
+ * `prev_hash` the older row's `entry_hash`), a mix of `user`, `ci_producer` and `system` actors,
+ * one row carrying `metadata`, one with a null `object_id` (the system prune) and
+ * `next_cursor: null`, so the tab renders a complete page without a follow-up read. No row there
+ * is a support-access row — that is the state in which the plain rows must not grow a chip.
+ * `audit-list-support` (`?fixture.variant.listAudit=support`) is that same page with two `user`
+ * rows on top that carry `metadata.support_grant_id`: the marker alone is what flags a
+ * support-access row, so AC8's flagged-versus-plain rendering has both cases in one page. No
+ * document here names the wire enum's `platform_operator` actor, although the contract has it and
+ * a row so flagged would be a support-access row too: the corpus-wide value scan of
+ * `scripts/check-no-fixture-code.mjs` reads every string of 12+ characters outside its protocol
+ * slots as fixture data, and that actor name is already a production literal
+ * (`features/settings/audit/support-access.ts`), so a row carrying it fails the production build
+ * for a word that is not data. That half of the flag rule is pinned by the `AuditStore` and
+ * `AuditTableComponent` specs instead. `audit-list-empty`
+ * (`?fixture.variant.listAudit=empty`) is the empty page the shared empty pattern answers.
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
@@ -245,6 +266,9 @@ export const FIXTURE_CATALOG: readonly {
 }[] = [
   { name: 'ci-binding-create', document: ciBindingCreate },
   { name: 'ci-binding-create-conflict', document: ciBindingCreateConflict },
+  { name: 'audit-list', document: auditList },
+  { name: 'audit-list-empty', document: auditListEmpty },
+  { name: 'audit-list-support', document: auditListSupport },
   { name: 'ci-bindings-list', document: ciBindingsList },
   { name: 'ci-bindings-list-onboarding-connected', document: ciBindingsListOnboardingConnected },
   { name: 'ci-bindings-list-onboarding-project', document: ciBindingsListOnboardingProject },

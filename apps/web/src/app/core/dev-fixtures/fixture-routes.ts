@@ -57,6 +57,7 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'listMemberships', method: 'GET', path: '/orgs/{o}/memberships' },
   { operationId: 'createMembership', method: 'POST', path: '/orgs/{o}/memberships' },
   { operationId: 'removeMember', method: 'DELETE', path: '/orgs/{o}/memberships/{m}' },
+  { operationId: 'listAudit', method: 'GET', path: '/orgs/{o}/audit' },
   { operationId: 'listRuns', method: 'GET', path: '/projects/{p}/runs' },
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
