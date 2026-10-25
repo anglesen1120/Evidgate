@@ -44,11 +44,11 @@ export class OnboardingShellComponent {
   protected orgId = '';
   private projectId: string | null = null;
   /**
-   * The last `focusToken` this instance has honoured. It starts at the store's initial value, so
-   * the first ready render of a page load moves no focus; a create that bumped the token before
-   * this instance existed still moves it once (S71 F2). An activation that reads instead of
-   * taking the create marker adopts the store's current token as its baseline, because that
-   * token belongs to a step moved in an earlier visit (S71 N1).
+   * The last `focusToken` this instance has honoured. Which baseline it starts from depends on
+   * the branch the first route answer takes: an activation that takes the create marker keeps the
+   * store's initial `0`, so the token the create bumped before this instance existed still lands
+   * (S71 F2); an activation that reads adopts `store.focusToken()` instead, because that token
+   * belongs to a step moved in an earlier visit and must not move focus again (S71 N1).
    */
   private focusedToken = 0;
 

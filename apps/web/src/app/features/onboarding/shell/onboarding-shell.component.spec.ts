@@ -239,12 +239,16 @@ describe('OnboardingShellComponent', () => {
     await setup({
       created: () => ({ orgId: 'org-1', projectId: 'project-1' }),
       projectId: 'project-1',
+      // The create bumped the token before this activation existed. Taking the marker must NOT
+      // adopt it as the baseline, or the step the create opened would never receive focus.
+      focusToken: 1,
     });
     // The create's own `projectCreated` load published this scope; the URL change it caused
     // re-activates the shell, which must render that state instead of issuing the fan-out again.
     expect(store.consumeCreated).toHaveBeenCalledWith('org-1', 'project-1');
     expect(store.load).not.toHaveBeenCalled();
     expect(root.querySelector('[data-testid="onboarding-stepper"]')).not.toBeNull();
+    expect(document.activeElement?.id).toBe('onboarding-step-title');
 
     childParams.next(convertToParamMap({ projectId: 'project-2' }));
     await fixture.whenStable();
