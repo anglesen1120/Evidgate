@@ -1,0 +1,268 @@
+import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
+import type { CreateProjectRequest, ProjectDto } from '@evidgate/sdk';
+
+import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
+import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
+import type { Intent } from '../../../core/http/intent';
+import { SessionStore } from '../../../core/session/session.store';
+import { OnboardingStore } from '../onboarding.store';
+import { CreateProjectPage } from './create-project.page';
+
+const PROJECT: ProjectDto = {
+  id: 'project-1',
+  org_id: 'org-1',
+  name: 'Storefront web',
+  slug: 'storefront-web',
+  status: 'active',
+  default_environment_id: null,
+  created_at: '2026-10-25T00:00:00Z',
+  updated_at: '2026-10-25T00:00:00Z',
+  version: 1,
+  retention_days: null,
+  monthly_run_quota: 5000,
+  case_prefix: 'STOR',
+};
+
+function failure(overrides: Partial<ApiError> = {}): ApiRequestError {
+  return new ApiRequestError({
+    kind: 'network',
+    status: 0,
+    code: 'network_error',
+    message: 'Connection interrupted.',
+    requestId: null,
+    retryable: true,
+    details: [],
+    retryAfterSeconds: null,
+    ...overrides,
+  });
+}
+
+describe('CreateProjectPage', () => {
+  let fixture: ComponentFixture<CreateProjectPage>;
+  let root: HTMLElement;
+  const permitted = signal(true);
+  const createProject = vi.fn<
+    (org: string, body: CreateProjectRequest, intent: Intent) => Promise<ProjectDto>
+  >(() => Promise.resolve(PROJECT));
+  const projectCreated = vi.fn<(project: ProjectDto) => Promise<void>>(() => Promise.resolve());
+  const navigate = vi.fn<(commands: unknown[]) => Promise<boolean>>(() => Promise.resolve(true));
+
+  beforeEach(async () => {
+    permitted.set(true);
+    createProject.mockReset().mockResolvedValue(PROJECT);
+    projectCreated.mockReset().mockResolvedValue(undefined);
+    navigate.mockReset().mockResolvedValue(true);
+    await TestBed.configureTestingModule({
+      imports: [CreateProjectPage],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: OnboardingDataService, useValue: { createProject } },
+        { provide: OnboardingStore, useValue: { projectCreated } },
+        { provide: SessionStore, useValue: { has: () => permitted() } },
+        { provide: Router, useValue: { url: '/orgs/org-1/onboarding', navigate } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(CreateProjectPage);
+    fixture.componentRef.setInput('orgId', 'org-1');
+    root = fixture.nativeElement as HTMLElement;
+    await fixture.whenStable();
+  });
+
+  async function fill(name = 'Storefront web', slug = 'storefront-web'): Promise<void> {
+    for (const [selector, value] of [
+      ['[name="name"]', name],
+      ['[name="slug"]', slug],
+    ]) {
+      const input = root.querySelector<HTMLInputElement>(selector!)!;
+      input.value = value!;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await fixture.whenStable();
+  }
+
+  async function submit(): Promise<void> {
+    root
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+  }
+
+  function submitButton(): HTMLButtonElement {
+    return root.querySelector<HTMLButtonElement>('[data-testid="onboarding-project-submit"]')!;
+  }
+
+  it('submits once, adopts the SDK project, then navigates to its resumable URL', async () => {
+    await fill();
+    await submit();
+    expect(createProject).toHaveBeenCalledTimes(1);
+    expect(createProject).toHaveBeenCalledWith(
+      'org-1',
+      { name: 'Storefront web', slug: 'storefront-web' },
+      expect.objectContaining({ idempotencyKey: expect.any(String) as string }),
+    );
+    expect(projectCreated).toHaveBeenCalledWith(PROJECT);
+    expect(navigate).toHaveBeenCalledWith(['/orgs', 'org-1', 'onboarding', PROJECT.id]);
+    expect(projectCreated.mock.invocationCallOrder[0]).toBeLessThan(
+      navigate.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('reuses the same Idempotency intent and body on explicit retry after a failure', async () => {
+    createProject.mockRejectedValueOnce(failure());
+    await fill();
+    await submit();
+    expect(root.textContent).toContain('Connection interrupted.');
+    const retry = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    expect(retry.disabled).toBe(false);
+    retry.click();
+    await fixture.whenStable();
+    expect(createProject).toHaveBeenCalledTimes(2);
+    expect(createProject.mock.calls[1]?.[2]).toBe(createProject.mock.calls[0]?.[2]);
+    expect(createProject.mock.calls[1]?.[1]).toBe(createProject.mock.calls[0]?.[1]);
+    expect(projectCreated).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['', '   '])('blocks an empty or whitespace-only name (%j)', async (name) => {
+    await fill(name);
+    await submit();
+    expect(createProject).not.toHaveBeenCalled();
+    expect(root.querySelector('#onboarding-project-name-error')?.textContent).toContain(
+      'Enter a project name.',
+    );
+    expect(root.querySelector('[name="name"]')?.getAttribute('aria-invalid')).toBe('true');
+    const input = root.querySelector<HTMLInputElement>('[name="name"]')!;
+    expect(input.required).toBe(true);
+    expect(root.querySelector<HTMLFormElement>('form')?.noValidate).toBe(false);
+  });
+
+  it('blocks an empty required slug and associates both fields with their labels', async () => {
+    await fill('Storefront web', '');
+    await submit();
+    expect(createProject).not.toHaveBeenCalled();
+    expect(root.querySelector('#onboarding-project-slug-error')?.textContent).toContain(
+      'Enter a project slug.',
+    );
+    for (const name of ['name', 'slug']) {
+      const input = root.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
+      expect(root.querySelector(`label[for="${input.id}"]`)).not.toBeNull();
+    }
+  });
+
+  it('prevents a second request and disables the form while the first is pending', async () => {
+    // `Promise.withResolvers` is ES2024 and the project compiles against ES2022.
+    let resolvePending: (project: ProjectDto) => void = () => undefined;
+    const pending = new Promise<ProjectDto>((resolve) => {
+      resolvePending = resolve;
+    });
+    createProject.mockImplementationOnce(() => pending);
+    await fill();
+    await submit();
+    expect(submitButton().disabled).toBe(true);
+    expect(root.querySelector<HTMLInputElement>('[name="name"]')?.disabled).toBe(true);
+    await submit();
+    expect(createProject).toHaveBeenCalledTimes(1);
+    resolvePending(PROJECT);
+    await fixture.whenStable();
+  });
+
+  it('retains visible disabled mutation controls when permission is missing', async () => {
+    permitted.set(false);
+    await fixture.whenStable();
+    expect(submitButton().disabled).toBe(true);
+    expect(root.querySelector<HTMLInputElement>('[name="name"]')?.disabled).toBe(true);
+    expect(root.textContent).toContain('Ask your organisation owner');
+    await submit();
+    expect(createProject).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['conflict', 409],
+    ['validation', 422],
+  ] as const)(
+    'shows the %s server message and details verbatim without automatic retry',
+    async (kind, status) => {
+      createProject.mockRejectedValueOnce(
+        failure({
+          kind,
+          status,
+          retryable: false,
+          message: 'The server refused this exact project name.',
+          details: [{ path: 'name', reason: 'Already reserved by another operation.' }],
+        }),
+      );
+      await fill();
+      await submit();
+      expect(root.querySelector('app-error-pattern')).not.toBeNull();
+      expect(root.textContent).toContain('The server refused this exact project name.');
+      expect(root.textContent).toContain('Already reserved by another operation.');
+      expect(createProject).toHaveBeenCalledTimes(1);
+      expect(projectCreated).not.toHaveBeenCalled();
+    },
+  );
+
+  it('renders 429 through the shared Retry-After pattern and refuses early retry', async () => {
+    createProject.mockRejectedValueOnce(
+      failure({
+        kind: 'rate_limited',
+        status: 429,
+        message: 'Slow down this project creation.',
+        retryAfterSeconds: 999,
+      }),
+    );
+    await fill();
+    await submit();
+    expect(root.querySelector('app-retry-after')).not.toBeNull();
+    expect(root.textContent).toContain('Slow down this project creation.');
+    const retry = root.querySelector<HTMLButtonElement>('app-retry-after button')!;
+    expect(retry.disabled).toBe(true);
+    expect(submitButton().disabled).toBe(true);
+    retry.click();
+    await fixture.whenStable();
+    expect(createProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('mints a different intent only after the user changes the failed payload', async () => {
+    createProject.mockRejectedValueOnce(failure());
+    await fill();
+    await submit();
+    await fill('Different project', 'different-project');
+    await submit();
+    expect(createProject).toHaveBeenCalledTimes(2);
+    expect(createProject.mock.calls[1]?.[2].idempotencyKey).not.toBe(
+      createProject.mock.calls[0]?.[2].idempotencyKey,
+    );
+    expect(createProject.mock.calls[1]?.[1]).toEqual({
+      name: 'Different project',
+      slug: 'different-project',
+    });
+  });
+
+  it('keeps the intent when the user edits the draft and reverts to the submitted body', async () => {
+    // An ambiguous network failure: the request may have reached the server, so resubmitting the
+    // identical body must replay the same Idempotency-Key instead of risking a second project.
+    createProject.mockRejectedValueOnce(failure());
+    await fill();
+    await submit();
+    await fill('Different project', 'different-project');
+    await fill();
+    await submit();
+    expect(createProject).toHaveBeenCalledTimes(2);
+    expect(createProject.mock.calls[1]?.[2]).toBe(createProject.mock.calls[0]?.[2]);
+    expect(createProject.mock.calls[1]?.[1]).toEqual({
+      name: 'Storefront web',
+      slug: 'storefront-web',
+    });
+  });
+
+  it('renders forbidden through T8 while leaving the create action visible and disabled', async () => {
+    createProject.mockRejectedValueOnce(
+      failure({ kind: 'forbidden', status: 403, retryable: false }),
+    );
+    await fill();
+    await submit();
+    expect(root.querySelector('app-forbidden-pattern')).not.toBeNull();
+    expect(submitButton().disabled).toBe(true);
+  });
+});

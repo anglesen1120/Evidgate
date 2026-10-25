@@ -1558,6 +1558,114 @@
           <context context-type="linenumber">58</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="onboarding.shell.title" datatype="html">
+        <source>Set up your project</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.description" datatype="html">
+        <source>Resume from server-confirmed resources. Viewing a step does not change your progress.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.progress" datatype="html">
+        <source>Setup progress</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.complete" datatype="html">
+        <source>Complete</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.incomplete" datatype="html">
+        <source>Not complete</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.back" datatype="html">
+        <source>Back</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.next" datatype="html">
+        <source>Next</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.retry" datatype="html">
+        <source>Retry loading setup</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.next-disabled" datatype="html">
+        <source>Complete this step before continuing.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.final-step" datatype="html">
+        <source>There is no next setup step.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.project-created" datatype="html">
+        <source>Project created</source>
+      </trans-unit>
+      <trans-unit id="onboarding.step.project" datatype="html">
+        <source>Create project</source>
+      </trans-unit>
+      <trans-unit id="onboarding.step.ci" datatype="html">
+        <source>Connect CI</source>
+      </trans-unit>
+      <trans-unit id="onboarding.step.sample" datatype="html">
+        <source>Sample run</source>
+      </trans-unit>
+      <trans-unit id="onboarding.step.compare" datatype="html">
+        <source>Compare reports</source>
+      </trans-unit>
+      <trans-unit id="onboarding.step.enable" datatype="html">
+        <source>Enable collection</source>
+      </trans-unit>
+      <trans-unit id="onboarding.pending.title" datatype="html">
+        <source>This step is not available yet</source>
+      </trans-unit>
+      <trans-unit id="onboarding.pending.description" datatype="html">
+        <source>Your setup progress is read from the server. Viewing a step does not complete it.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.title" datatype="html">
+        <source>Created resources</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.project" datatype="html">
+        <source>Project</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.identifier" datatype="html">
+        <source>Project ID</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.empty" datatype="html">
+        <source>Nothing produced yet for this step.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-1" datatype="html">
+        <source>The created project will appear here.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-2" datatype="html">
+        <source>Connection resources will appear here.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-3" datatype="html">
+        <source>Sample-run evidence will appear here.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-4" datatype="html">
+        <source>Comparison resources will appear here.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-5" datatype="html">
+        <source>Activation resources will appear here. Collection is not enabled by viewing this step.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.name" datatype="html">
+        <source>Project name</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.name-hint" datatype="html">
+        <source>Choose a name your team will recognise.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.name-required" datatype="html">
+        <source>Enter a project name.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.slug" datatype="html">
+        <source>Project slug</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.slug-hint" datatype="html">
+        <source>Use a short URL name, for example my-project.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.slug-required" datatype="html">
+        <source>Enter a project slug.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.permission" datatype="html">
+        <source>Ask your organisation owner for permission to create projects.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.submit" datatype="html">
+        <source>Create project</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.submitting" datatype="html">
+        <source>Creating project…</source>
+      </trans-unit>
     </body>
   </file>
 </xliff>

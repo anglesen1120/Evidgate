@@ -1,0 +1,26 @@
+{
+  "operation_id": "getRun",
+  "variant": "onboarding-run-complete",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d0"
+  },
+  "latency_ms": 0,
+  "body": {
+    "run_id": "018f0000-0000-7000-8000-000000000021",
+    "state": "complete",
+    "current_evidence_revision_id": null,
+    "version": 4,
+    "purpose": "regular",
+    "ref": {
+      "kind": "branch",
+      "name": "main",
+      "pr_number": null,
+      "head_sha": "018f000000000000000000000000000000000001",
+      "base_sha": null,
+      "trigger_event": "push",
+      "is_fork": false
+    },
+    "unverified_ref": false
+  }
+}

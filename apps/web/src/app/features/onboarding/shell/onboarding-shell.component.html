@@ -1,0 +1,104 @@
+<section class="wizard" data-testid="onboarding-shell" aria-labelledby="onboarding-title">
+  <header class="wizard__header">
+    <h1 id="onboarding-title">{{ title }}</h1>
+    <p>{{ description }}</p>
+  </header>
+
+  @switch (store.status()) {
+    @case ('loading') {
+      <app-loading-pattern />
+    }
+    @case ('error') {
+      @switch (store.failure()) {
+        @case ('forbidden') {
+          <app-forbidden-pattern />
+        }
+        @case ('not-found') {
+          <app-not-found-pattern />
+        }
+        @default {
+          <app-error-pattern />
+          <button class="state-panel__action" type="button" (click)="reload()">
+            {{ retryLabel }}
+          </button>
+        }
+      }
+    }
+    @case ('ready') {
+      <section class="wizard__progress" aria-labelledby="onboarding-progress-title">
+        <h2 id="onboarding-progress-title">{{ progressLabel }}</h2>
+        <ol class="stepper" data-testid="onboarding-stepper">
+          @for (step of steps; track step.number) {
+            <li
+              [attr.data-testid]="'onboarding-step-' + step.number"
+              [attr.data-done]="store.done()[step.number]"
+              [attr.aria-current]="store.viewStep() === step.number ? 'step' : null"
+            >
+              <button
+                type="button"
+                class="stepper__button"
+                [disabled]="!canSelect(step.number)"
+                (click)="store.selectStep(step.number)"
+              >
+                <span class="stepper__number" aria-hidden="true">{{ step.number }}</span>
+                <span class="stepper__copy">
+                  <span class="stepper__label">{{ step.label }}</span>
+                  <span class="stepper__status">
+                    {{ store.done()[step.number] ? completedLabel : incompleteLabel }}
+                  </span>
+                </span>
+              </button>
+            </li>
+          }
+        </ol>
+      </section>
+
+      <div class="wizard__layout">
+        <section class="wizard__content" aria-labelledby="onboarding-step-title">
+          <h2 #stepHeading id="onboarding-step-title" tabindex="-1">
+            {{ steps[store.viewStep() - 1]?.label }}
+          </h2>
+          @if (store.viewStep() === 1) {
+            @if (store.project(); as project) {
+              <p class="wizard__project-created">{{ projectCreatedLabel }}</p>
+              <p class="wizard__project-name">{{ project.name }}</p>
+            } @else {
+              <app-onboarding-create-project [orgId]="orgId" />
+            }
+          } @else {
+            <app-onboarding-step-pending />
+          }
+          <footer class="wizard__footer">
+            @if (!store.canGoNext()) {
+              <p id="onboarding-next-reason" class="wizard__reason">
+                {{ store.viewStep() === 5 ? finalReason : gatedReason }}
+              </p>
+            }
+            <div class="wizard__actions">
+              <button
+                type="button"
+                class="state-panel__action"
+                data-testid="onboarding-back"
+                [disabled]="!store.canGoBack()"
+                (click)="store.back()"
+              >
+                {{ backLabel }}
+              </button>
+              <button
+                type="button"
+                class="state-panel__action"
+                data-testid="onboarding-next"
+                [disabled]="!store.canGoNext()"
+                [attr.aria-describedby]="!store.canGoNext() ? 'onboarding-next-reason' : null"
+                (click)="store.next()"
+              >
+                {{ nextLabel }}
+              </button>
+            </div>
+          </footer>
+        </section>
+        <app-onboarding-evidence-panel [step]="store.viewStep()" [project]="store.project()" />
+      </div>
+    }
+  }
+</section>
