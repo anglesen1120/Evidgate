@@ -12,6 +12,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
@@ -32,6 +33,13 @@ import { AuditStore, EMPTY_AUDIT_FILTERS, type AuditFilters } from './audit.stor
 export class AuditPage {
   protected readonly store = inject(AuditStore);
   protected readonly session = inject(SessionStore);
+  /**
+   * The `audit` sidebar entry mounts this page directly under the app shell, so the page owns the
+   * one `h1`; as a Settings tab the shell's `h1` ("Settings") is the page heading and this is an
+   * `h2`. The route says which (`audit.routes.ts`), never the page guessing from its position.
+   */
+  protected readonly ownsPageHeading =
+    inject(ActivatedRoute).snapshot.data['pageHeadingLevel'] === 1;
   protected draft: AuditFilters = { ...EMPTY_AUDIT_FILTERS };
   protected readonly invalidRange = signal(false);
   protected readonly offset = signal(0);

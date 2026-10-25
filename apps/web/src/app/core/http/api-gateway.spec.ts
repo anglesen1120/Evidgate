@@ -11,6 +11,10 @@
 // - an `AbortError` is re-thrown unchanged, even when the result also carries a response
 //   (the abort arrived while the SDK was reading the body — nothing there is a success);
 // - a refusal status is never a success value.
+//
+// 09.7.1-T4 adds the second entry point: `callWithResponse` resolves the body WITH the status and
+// the response headers (the policy list's `ETag`, a publish's `201`), and rejects with exactly what
+// `call` rejects with — `call` is that method minus the response.
 
 import { TestBed } from '@angular/core/testing';
 import type { Client, ErrorEnvelope } from '@evidgate/sdk';
@@ -323,6 +327,70 @@ describe('ApiGateway classification (09.1.1-T8)', () => {
 
       expect(value).toBe('ok');
       expect(isApiRequestError(value)).toBe(false);
+    });
+  });
+
+  // 09.7.1-T4: the policy list's `ETag` is the head revision a later publish quotes in `If-Match`,
+  // and a publish's `201`/`200` is "appended" versus "already stored" — neither is in the body, so
+  // `callWithResponse` hands back the response itself. Everything it rejects with is exactly what
+  // `call` rejects with, because `call` is this method minus the response.
+  describe('callWithResponse', () => {
+    it('resolves the body with the status and the response headers', async () => {
+      const head = '018f0000-0000-7000-8000-0000000000b2';
+      const result = await gateway.callWithResponse<SdkResult>(() =>
+        Promise.resolve({
+          data: { items: [], next_cursor: null },
+          response: new Response('{"items":[],"next_cursor":null}', {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', ETag: `"${head}"` },
+          }),
+        }),
+      );
+
+      expect(result.data).toEqual({ items: [], next_cursor: null });
+      expect(result.status).toBe(200);
+      expect(result.headers.get('ETag')).toBe(`"${head}"`);
+    });
+
+    it('keeps a 201 distinguishable from a 200', async () => {
+      const created = await gateway.callWithResponse<SdkResult>(() =>
+        Promise.resolve({
+          data: { id: 'r-1' },
+          response: new Response('{"id":"r-1"}', {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        }),
+      );
+
+      expect(created.status).toBe(201);
+    });
+
+    it('rejects a refusal with the same typed failure call throws', async () => {
+      const rejection = await captureRejection(
+        gateway.callWithResponse<SdkResult>(() =>
+          Promise.resolve({
+            response: envelopeResponse(412, PRECONDITION),
+            error: PRECONDITION,
+          }),
+        ),
+      );
+
+      if (!isApiRequestError(rejection)) {
+        throw rejection;
+      }
+      expect(rejection.error.kind).toBe('precondition_failed');
+      expect(rejection.error.status).toBe(412);
+      expect(rejection.error.details).toHaveLength(1);
+    });
+
+    it('rethrows a cancellation unchanged, exactly as call does', async () => {
+      const abort = new DOMException('The request was aborted.', 'AbortError');
+      const rejection = await captureRejection(
+        gateway.callWithResponse<SdkResult>(() => Promise.resolve({ error: abort })),
+      );
+
+      expect(rejection).toBe(abort);
     });
   });
 });

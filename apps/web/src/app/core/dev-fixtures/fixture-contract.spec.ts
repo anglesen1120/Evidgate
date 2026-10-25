@@ -34,18 +34,29 @@
 // rotation columns. The reminder window is measured against the fixed date the corpus's literal
 // timestamps were authored around, so the pin describes the corpus instead of the calendar.
 //
-// The last three tests are the negative controls of test 3 and of the header check above: they
-// take the `runs-list` page, break it the way a contract change would (a removed `required` run
-// member, a non-uuid uuid) and answer a header the contract does not declare, each of which must
-// be reported. Without them "every fixture validates" could pass while the check validated
-// nothing — AC10's done-when is precisely "fails on a fixture with a removed required field".
+// The four closing tests are negative controls of test 3, of the header check above and of the
+// external-reference inlining below: they take the `runs-list` page, break it the way a contract
+// change would (a removed `required` run member, a non-uuid uuid), answer a header the contract does
+// not declare and mistype a member only a standalone `contracts/schemas/` document declares, each of
+// which must be reported. Without them "every fixture validates" could pass while the check
+// validated nothing — AC10's done-when is precisely "fails on a fixture with a removed required
+// field".
 //
-// Read-only and offline: the contract and the corpus are read from the repository with
-// `node:fs`, exactly like `../http/contract-smoke.spec.ts`. No `fetch`, no `HttpClient`, no
-// network — the validator is the `packages/cli` one, never the app's HTTP stack.
+// 09.7.1-T4: a response schema may be a standalone document under `contracts/schemas/` —
+// `PolicyRevisionDto.body` is `./schemas/policy-revision.v1.json`. `createOpenApiResponseValidator`
+// resolves local `#/components/...` references only, so such a response was reported as
+// `schema_unavailable` and every policy revision page went unchecked. The parsed contract handed to
+// the validator is therefore the document with those external references inlined from the
+// repository (`inlineExternalSchemaRefs`): the same schema, compiled instead of skipped. Nothing is
+// loosened — a reference that cannot be inlined faithfully stays in place and still reports
+// `schema_unavailable`, and the last negative control proves an inlined body is enforced.
+//
+// Read-only and offline: the contract, `contracts/schemas` and the corpus are read from the
+// repository with `node:fs`, exactly like `../http/contract-smoke.spec.ts`. No `fetch`, no
+// `HttpClient`, no network — the validator is the `packages/cli` one, never the app's HTTP stack.
 
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 
 import { createOpenApiResponseValidator, type ContractValidationError } from '@evidgate/cli';
 import { loadAllFixtures, type Fixture } from '@evidgate/test-fixtures';
@@ -67,6 +78,15 @@ const NOT_A_UUID = 'not-a-uuid';
 
 /** A header name no response of `contracts/openapi.yaml` declares, used by the third one. */
 const UNDECLARED_HEADER = 'X-Fixture-Undeclared';
+
+/** 09.7.1-T4: the policy revision document whose standalone body schema the last control breaks. */
+const POLICY_REVISION_DOCUMENT_FIXTURE = 'policy-revision-head';
+
+/** A member only `contracts/schemas/policy-revision.v1.json` declares, typed `integer`. */
+const POLICY_BODY_TYPED_MEMBER = 'flaky_budget';
+
+/** A value that schema's `integer` type refuses. */
+const NOT_A_NUMBER = 'not-a-number';
 
 /**
  * 09.2.1-T2: the two body members a step-2 response can carry a one-time secret in —
@@ -178,8 +198,20 @@ const REPOSITORY_ROOT = findRepositoryRoot();
 const CONTRACT_PATH = join(REPOSITORY_ROOT, 'contracts', 'openapi.yaml');
 const WEB_API_FIXTURES = join(REPOSITORY_ROOT, 'fixtures', WEB_API_DOMAIN);
 
-/** The parsed contract; the validator resolves its own local `#/components/...` refs. */
-const CONTRACT_DOCUMENT: unknown = parseYaml(readFileSync(CONTRACT_PATH, 'utf8'));
+/** The `contracts/` tree external `$ref`s are resolved inside; anything outside it is refused. */
+const CONTRACTS_DIRECTORY = join(REPOSITORY_ROOT, 'contracts');
+
+/** How many external files one reference chain may cross before it counts as a cycle. */
+const MAX_EXTERNAL_SCHEMA_HOPS = 8;
+
+/**
+ * The parsed contract with its external schema references inlined; the validator resolves its own
+ * local `#/components/...` refs. See `inlineExternalSchemaRefs` for why the inlining happens here
+ * and for the references it deliberately leaves alone.
+ */
+const CONTRACT_DOCUMENT: unknown = inlineExternalSchemaRefs(
+  parseYaml(readFileSync(CONTRACT_PATH, 'utf8')),
+);
 const VALIDATOR = createOpenApiResponseValidator(CONTRACT_DOCUMENT);
 
 /**
@@ -198,6 +230,121 @@ const FIXTURE_ROUTE_ROWS: readonly FixtureRouteShape[] = FIXTURE_ROUTES;
 /** The one shape guard this spec needs for two documents it does not own. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * 09.7.1-T4: the contract with every external schema reference inlined, so the validator compiles
+ * the schemas it declares instead of reporting `schema_unavailable` for them.
+ *
+ * `createOpenApiResponseValidator` re-addresses local `#/components/schemas/<name>` references into
+ * one Ajv document and reads nothing else — its own documentation says an external
+ * `./schemas/*.json` reference "is reported as a row, never thrown". `PolicyRevisionDto.body` is
+ * exactly such a reference, so every policy revision response was unchecked. Inlining keeps the
+ * check honest: the document handed to the validator carries the schema the contract actually
+ * names, read from this repository.
+ *
+ * A reference is left in place — and therefore still reported as `schema_unavailable`, never as
+ * valid — when this spec cannot inline it faithfully:
+ * - the file does not exist, or resolves outside `contracts/`;
+ * - the reference chain revisits a file (a cycle);
+ * - the inlined document makes a root-relative `#/...` reference, which would resolve against
+ *   `contracts/openapi.yaml` instead of the file it was written for.
+ *
+ * `$id` and `$schema` are dropped from an inlined document: a nested `$id` re-bases the references
+ * inside the subtree it is spliced into, and `$schema` is only meaningful at a schema resource root.
+ */
+function inlineExternalSchemaRefs(node: unknown, inlined: readonly string[] = []): unknown {
+  if (Array.isArray(node)) {
+    return (node as readonly unknown[]).map((entry) => inlineExternalSchemaRefs(entry, inlined));
+  }
+  if (!isRecord(node)) {
+    return node;
+  }
+
+  const reference = node['$ref'];
+  if (typeof reference === 'string' && !reference.startsWith('#')) {
+    const target = readExternalSchema(reference, inlined);
+    if (target !== undefined) {
+      const siblings = Object.entries(node).filter(([key]) => key !== '$ref');
+      if (siblings.length === 0) {
+        return target;
+      }
+      // 2020-12 lets `$ref` carry siblings and applies both, so they stay side by side.
+      const rest: Record<string, unknown> = {};
+      for (const [key, value] of siblings) {
+        rest[key] = inlineExternalSchemaRefs(value, inlined);
+      }
+      return { allOf: [target, rest] };
+    }
+  }
+
+  const copy: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    copy[key] = key === '$ref' ? value : inlineExternalSchemaRefs(value, inlined);
+  }
+  return copy;
+}
+
+/**
+ * One external reference (`'./schemas/policy-revision.v1.json'`, optionally with a
+ * `'#/$defs/<name>'` tail) as an inlined schema node, or undefined when it cannot be inlined.
+ */
+function readExternalSchema(reference: string, inlined: readonly string[]): unknown {
+  const hash = reference.indexOf('#');
+  const file = hash < 0 ? reference : reference.slice(0, hash);
+  const pointer = hash < 0 ? '' : reference.slice(hash);
+  const path = resolve(dirname(CONTRACT_PATH), file);
+
+  if (!path.startsWith(`${CONTRACTS_DIRECTORY}${sep}`) || !existsSync(path)) {
+    return undefined;
+  }
+  if (inlined.includes(path) || inlined.length >= MAX_EXTERNAL_SCHEMA_HOPS) {
+    return undefined;
+  }
+
+  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  const target = resolveContractPointerIn(parsed, pointer);
+  if (target === undefined || hasRootRelativeRef(target)) {
+    return undefined;
+  }
+
+  const withoutIdentity: unknown = isRecord(target)
+    ? Object.fromEntries(
+        Object.entries(target).filter(([key]) => key !== '$id' && key !== '$schema'),
+      )
+    : target;
+  return inlineExternalSchemaRefs(withoutIdentity, [...inlined, path]);
+}
+
+/** Resolve one `#/json/pointer` (or a bare `#`) inside a standalone schema document. */
+function resolveContractPointerIn(document: unknown, pointer: string): unknown {
+  if (!pointer.startsWith('#/')) {
+    return document;
+  }
+
+  let current: unknown = document;
+  for (const raw of pointer.slice(2).split('/')) {
+    if (!isRecord(current)) {
+      return undefined;
+    }
+    current = current[raw.replace(/~1/g, '/').replace(/~0/g, '~')];
+  }
+  return current;
+}
+
+/** Whether a schema node (at any depth) makes a `#/...` reference the contract document owns. */
+function hasRootRelativeRef(node: unknown): boolean {
+  if (Array.isArray(node)) {
+    return node.some((entry) => hasRootRelativeRef(entry));
+  }
+  if (!isRecord(node)) {
+    return false;
+  }
+  const reference = node['$ref'];
+  if (typeof reference === 'string' && reference.startsWith('#')) {
+    return true;
+  }
+  return Object.entries(node).some(([key, value]) => key !== '$ref' && hasRootRelativeRef(value));
 }
 
 /**
@@ -1091,5 +1238,50 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       undeclared,
       `a runs-list fixture answering '${UNDECLARED_HEADER}' still passed the header check — it cannot catch a fixture that answers a header contracts/openapi.yaml does not declare`,
     ).toEqual([UNDECLARED_HEADER]);
+  });
+
+  // 09.7.1-T4: the control of the external-reference inlining. `PolicyRevisionDto.body` is the
+  // standalone `contracts/schemas/policy-revision.v1.json`, and the validator reports
+  // `schema_unavailable` for a response whose schema it cannot resolve — an unchecked policy page
+  // behind a green suite. This breaks a member only that document declares and requires the row.
+  it('enforces the standalone policy body schema contracts/openapi.yaml references', () => {
+    const document = corpusDocument(POLICY_REVISION_DOCUMENT_FIXTURE);
+    const baseline = VALIDATOR.validateResponse(
+      document.operation_id,
+      document.status,
+      document.body,
+    );
+    expect(
+      baseline.errors,
+      `the unmutated policy revision document must validate before it is broken: ${describeErrors(baseline.errors)}`,
+    ).toEqual([]);
+
+    const revisionBody = isRecord(document.body) ? document.body['body'] : undefined;
+    expect(
+      isRecord(revisionBody),
+      'the policy revision document carries no object `body`, so the control below mutates nothing',
+    ).toBe(true);
+
+    const mutated = {
+      ...(document.body as Record<string, unknown>),
+      // `flaky_budget` is declared by contracts/schemas/policy-revision.v1.json alone, so a body
+      // the validator accepted with it mistyped had its `body` schema skipped, not checked.
+      body: {
+        ...(revisionBody as Record<string, unknown>),
+        [POLICY_BODY_TYPED_MEMBER]: NOT_A_NUMBER,
+      },
+    };
+
+    const result = VALIDATOR.validateResponse(document.operation_id, document.status, mutated);
+    expect(
+      result.errors.length,
+      `a policy revision whose \`body.${POLICY_BODY_TYPED_MEMBER}\` is '${NOT_A_NUMBER}' still validated — the contract's standalone policy body schema is not enforced`,
+    ).toBeGreaterThan(0);
+    expect(
+      result.errors.some(
+        (error) => error.path.includes(POLICY_BODY_TYPED_MEMBER) || error.reason === 'type',
+      ),
+      `the contract check reported ${describeErrors(result.errors)}, none of which names the mistyped '${POLICY_BODY_TYPED_MEMBER}'`,
+    ).toBe(true);
   });
 });

@@ -1,6 +1,10 @@
 <header class="page-header">
   <div>
-    <h2 #heading tabindex="-1">{{ copy.title }}</h2>
+    @if (ownsPageHeading) {
+      <h1 #heading tabindex="-1">{{ copy.title }}</h1>
+    } @else {
+      <h2 #heading tabindex="-1">{{ copy.title }}</h2>
+    }
     <p>{{ copy.description }}</p>
   </div>
   @if (session.currentOrg(); as org) {

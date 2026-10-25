@@ -1,0 +1,44 @@
+{
+  "operation_id": "getPolicyRevision",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000f9",
+    "ETag": "\"018f0000-0000-7000-8000-00000000a003\""
+  },
+  "latency_ms": 0,
+  "body": {
+    "id": "018f0000-0000-7000-8000-00000000a003",
+    "project_id": "018f0000-0000-7000-8000-000000000011",
+    "revision_no": 3,
+    "hash": "sha256:d05c091a94bfe1c59087f5a38ef026b200d2edcbee0fab69a8d080fb461e377e",
+    "state": "active",
+    "body": {
+      "required_suites": ["checkout", "search", "storefront-catalog"],
+      "required_cases": [
+        "checkout/pay/card",
+        "checkout/pay/wallet",
+        "search/query/basic",
+        "storefront/catalog/price"
+      ],
+      "critical_cases": [
+        "018f0000-0000-7000-8000-00000000b001",
+        "018f0000-0000-7000-8000-00000000b002",
+        "018f0000-0000-7000-8000-00000000b003"
+      ],
+      "allowed_skips": ["search/query/typo-tolerance"],
+      "flaky_budget": 3,
+      "required_artifacts": ["junit", "trace", "video"],
+      "collection_timeout_minutes": 60,
+      "late_window_minutes": 30,
+      "quarantine_ids": ["018f0000-0000-7000-8000-00000000c0a1"],
+      "gating_refs": {
+        "default_branch": true,
+        "release_branch_glob": "release/*"
+      }
+    },
+    "created_by": "018f0000-0000-7000-8000-0000000000e1",
+    "created_at": "2026-10-08T06:45:00Z",
+    "version": 2
+  }
+}

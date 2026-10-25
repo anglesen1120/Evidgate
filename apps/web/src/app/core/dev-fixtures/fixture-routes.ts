@@ -46,6 +46,20 @@
 // a literal of each template, so neither row matches the other's path.
 //
 // Dev-only, like the rest of `core/dev-fixtures`: see the module comment of `fixture-toggles.ts`.
+//
+// 09.7.1-T4 routes the Settings > Policy tab's three calls, all of them response-corpus rows: the
+// append (`POST …/projects/{p}/policies`), the one-revision read (`GET /policies/{id}`) and the
+// revision list (`GET /policies/{id}/revisions`). The two `/policies` templates have three and
+// four segments, so neither matches the other, and neither can collide with the project-scoped
+// rows (`…/policies` is the append's literal last segment). The `{id}` of both reads is matched
+// against the template only, never against the document that answers — so `getPolicyRevision`
+// answers the revision its variant describes whatever id a request names, and the head, the two
+// retired revisions and the published one are four variants a review selects
+// (`?fixture.variant.getPolicyRevision=previous`, `=first`, `=created`). The corpus pages carry
+// the `ETag` the contract declares (the head revision id, quoted, exactly as
+// `PolicyEndpoints.cs` sets it), so the tab's `If-Match` source comes from a real header; the
+// append answers the `201` with the same header on the revision it created, and the `200`
+// (identical body already stored) with the head's.
 
 import { API_BASE_PATH } from '../http/api-origin';
 
@@ -102,6 +116,9 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'listRuns', method: 'GET', path: '/projects/{p}/runs' },
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
+  { operationId: 'createPolicyRevision', method: 'POST', path: '/projects/{p}/policies' },
+  { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}' },
+  { operationId: 'listPolicyRevisions', method: 'GET', path: '/policies/{id}/revisions' },
 ];
 
 const API_PREFIX = `${API_BASE_PATH}/`;
