@@ -16,23 +16,34 @@
 //     `private_key`/`privateKey`, `apiKey`, `accessToken`, `refreshToken`, `bearerToken`,
 //     `clientSecret` (matched on the joined words, so either spelling and any case matches);
 //   - a bare secret word followed by one VALUE word: `value`, `text`, `plain`, `plaintext`,
-//     `raw`, `string` — `tokenValue`, `secret_text`, `passwordRaw`.
+//     `raw`, `string`, `key` — `tokenValue`, `secret_text`, `passwordRaw`, `secretKey`;
+//   - a bare secret word in the TRAILING position of a compound name — `ingestToken`,
+//     `apiToken`, `webhookSecret`, `rawToken`, `plainSecret`. Only a presence word in front of it
+//     makes the name metadata: `hasToken`, `hasSecret`, `isToken` report whether a value exists,
+//     they do not hold it.
 //
 // Everything else is metadata and stays legal: `tokenPrefix`, `token_prefix`, `last4`,
-// `rotationState`, `secretRef`, `secret_reference`, `secretName`, `ingestTokens`, `tokenCount`,
-// `hasSecret`, `tokenExpiresAt`, `lastRotatedAt`, `ciBindings`. The rule is deliberately narrow:
-// a plural (`tokens`), a secret word with a non-value suffix (`passwordHash`) or a secret word in
-// a non-leading position (`hasSecret`) is not reported, because a lint rule that cries wolf is
-// switched off.
+// `rotationState`, `secretRef`, `secret_reference`, `secretName`, `tokenName`, `ingestTokens`,
+// `tokenCount`, `expiresAt`, `tokenExpiresAt`, `lastRotatedAt`, `ciBindings`. The rule is
+// deliberately narrow: a plural (`tokens`) and a secret word with a metadata suffix — `Prefix`,
+// `Suffix`, `Ref`, `Reference`, `Name`, `Count`, `At`, `Hash`, `State`, `Id`, `Kind`, `Label` —
+// (`passwordHash`, `tokenCount`, `tokenExpiresAt`) are not reported, because a lint rule that
+// cries wolf is switched off. Every match is a set lookup over the split words or a single-pass
+// regex, so no quantifier in this rule can backtrack over the same text twice (ReDoS).
 //
 // Reported positions, once per occurrence:
-//   1. an object-literal key anywhere inside the arguments of a `withState(...)`,
-//      `patchState(...)` or `signalStore(...)` call — the state literal of a SignalStore;
+//   1. an object-literal key of the state literal handed to a `withState(...)`,
+//      `patchState(...)` or `signalState(...)` call, nested objects included — the state of a
+//      SignalStore. A `signalStore(...)` argument is not walked on its own: its state is the
+//      literal of the `withState(...)` calls inside it, each visited once. Nothing inside a
+//      function body is state: `withMethods({ save() { post('/x', { token }) } })` sends a
+//      payload, it does not store the value;
 //   2. a property signature of an `interface`/`type` whose declaration name matches
 //      `/(State|Store)$/` (`interface SecretsState { password: string }`), and a member of the
 //      type-argument literal of `withState<{ ... }>(...)`;
-//   3. a class field, accessor field or getter of a class whose name matches `/Store$/`
-//      (`readonly token = signal('')`, `get signingSecret()`);
+//   3. a class field, private field, accessor field, getter or constructor parameter property of
+//      a class whose name matches `/Store$/` (`readonly token = signal('')`, `#token = signal('')`,
+//      `constructor(private token: string)`, `get signingSecret()`);
 //   4. an inline `template:` string of a component: a member read whose property is
 //      secret-shaped — `{{ store.token() }}`, `{{ row.secret }}`, `[value]="x.signing_secret"`,
 //      `store.plaintext` — reported once per template property.
@@ -55,8 +66,14 @@
 // `apps/web/src/app` marker (mirroring `no-bypass-security-trust.cjs`):
 //   - a `*.spec.ts` file, which has to spell the forbidden name to assert its absence;
 //   - the one-time reveal component: a directory named exactly `reveal` at any depth below
-//     `apps/web/src/app`, or a file whose basename contains `reveal` — that component is the
-//     single reviewed place allowed to hold a secret value in memory (09.2.1-T2).
+//     `apps/web/src/app`, or a file whose basename carries `reveal` as a whole word between the
+//     separators Angular file names use (`reveal-dialog.ts`, `signing-secret-reveal.component.ts`,
+//     `reveal.ts`) — that component is the single reviewed place allowed to hold a secret value
+//     in memory (09.2.1-T2). The word boundary is what keeps a mere substring from switching the
+//     rule off: `revealed.ts`, `unrevealed.ts` and `secrets-revealed-store.ts` are reported like
+//     any other file. The anchor is the whole exemption, deliberately: the directory form already
+//     exempts every file inside `reveal/`, so adding a store-file exception to the basename form
+//     alone would be a rule the path already contradicts.
 //
 // Registered by apps/web/lint/boundaries.cjs for the Settings feature only, and self-contained
 // enough that a bare `Linter` handed the rule directly gets the same answer.
@@ -68,8 +85,13 @@ const APP_ROOT_SEGMENTS = ['apps', 'web', 'src', 'app'];
 /** The one reviewed component family allowed to hold a secret value, as a directory segment. */
 const ALLOWED_REVEAL_DIRECTORY = 'reveal';
 
-/** ... or as part of the file's own name (`signing-secret-reveal.component.ts`). */
-const ALLOWED_REVEAL_FILE = /reveal/i;
+/**
+ * ... or as a whole word of the file's own name (`signing-secret-reveal.component.ts`,
+ * `reveal-dialog.ts`, `reveal.ts`). The word must sit between the start/end of the basename and
+ * one of the separators Angular file names use, so a mere substring (`revealed.ts`,
+ * `unrevealed.ts`, `secrets-revealed-store.ts`) does not switch the rule off.
+ */
+const ALLOWED_REVEAL_FILE = /(?:^|[-.])reveal(?:[-.]|$)/;
 
 /** A spec has to spell the forbidden name to assert its absence. */
 const SPEC_FILE = /\.spec\.ts$/;
@@ -97,8 +119,18 @@ const COMPOUND_SECRET_NAMES = new Set([
   'clientsecret',
 ]);
 
-/** The words that turn a bare secret word into the value itself: `tokenValue`, `secret_text`. */
-const VALUE_WORDS = new Set(['value', 'text', 'plain', 'plaintext', 'raw', 'string']);
+/**
+ * The words that turn a bare secret word into the value itself: `tokenValue`, `secret_text`,
+ * `secretKey`.
+ */
+const VALUE_WORDS = new Set(['value', 'text', 'plain', 'plaintext', 'raw', 'string', 'key']);
+
+/**
+ * The words that, in front of a secret word, describe whether the value exists rather than hold
+ * it: `hasToken`, `hasSecret`, `isToken`. A name is metadata when the only secret word it carries
+ * is a trailing one with one of these in front of it.
+ */
+const PRESENCE_WORDS = new Set(['has', 'is', 'no', 'any', 'requires', 'allowed', 'supported']);
 
 /** A state declaration: the interface/type alias that describes a store's state. */
 const STATE_DECLARATION = /(State|Store)$/;
@@ -106,8 +138,14 @@ const STATE_DECLARATION = /(State|Store)$/;
 /** A SignalStore class: its fields are the state a template can read. */
 const STORE_CLASS = /Store$/;
 
-/** The calls whose argument is a state literal. */
-const STATE_CALLS = new Set(['withState', 'patchState', 'signalStore']);
+/**
+ * The calls whose own argument is a state literal (`STATE_LITERAL_CALLS`): their literal is the
+ * one walked. `STATE_CALLS` adds `signalStore`, whose state is the literal of the `withState(...)`
+ * calls inside it — the walk stops at every call in that set, so a nested state call is reported
+ * by its own visit exactly once.
+ */
+const STATE_LITERAL_CALLS = new Set(['withState', 'patchState', 'signalState']);
+const STATE_CALLS = new Set([...STATE_LITERAL_CALLS, 'signalStore']);
 
 /** The class member kinds that declare a field a template can read. */
 const FIELD_KINDS = new Set([
@@ -118,11 +156,17 @@ const FIELD_KINDS = new Set([
 
 /**
  * A member read inside an inline Angular template: the property name after a `.`, which is what
- * `{{ store.token() }}`, `{{ row.secret }}` and `[value]="x.signing_secret"` all have. A bare
- * `{{ token }}` read of a component field, and any word in the surrounding copy, has no dot and
- * is therefore not matched — that is what keeps a sentence mentioning a token legal.
+ * `{{ store.token() }}`, `{{ store?.token }}`, `{{ row.secret }}`, `a.b.token` and
+ * `[value]="x.signing_secret"` all have. The dot only counts when it is glued to the member in
+ * front of it (an identifier character, or the `)`/`]` that closes a call or an index — with the
+ * `?` of an optional chain allowed in between) and to the property name behind it, so the full
+ * stop of a sentence is not a member read: `Rotate the key. Token is shown once.`, `Copy it now.
+ * Secret values are hidden.` and `e.g. token` stay legal. A bare `{{ token }}` read of a component
+ * field has no dot either and is not matched — the class-field position above is what catches it,
+ * and only in a `/Store$/` class. The lookbehind keeps the preceding character out of the match,
+ * so `a.b.token` reports `b` and then still reports `token`.
  */
-const TEMPLATE_MEMBER_READ = /\.\s*([A-Za-z_$][\w$]*)/g;
+const TEMPLATE_MEMBER_READ = /(?<=[\w$]|\)|\])\??\.([A-Za-z_$][\w$]*)/g;
 
 /** The name split into lower-cased words on camelCase, snake_case and kebab-case boundaries. */
 function nameWords(name) {
@@ -144,7 +188,17 @@ function isSecretShaped(name) {
   if (BARE_SECRET_WORDS.has(joined) || COMPOUND_SECRET_NAMES.has(joined)) {
     return true;
   }
-  return BARE_SECRET_WORDS.has(words[0]) && words.length > 1 && VALUE_WORDS.has(words[1]);
+  if (BARE_SECRET_WORDS.has(words[0]) && words.length > 1 && VALUE_WORDS.has(words[1])) {
+    return true;
+  }
+  // A trailing secret word names the value (`ingestToken`, `webhookSecret`) unless the word in
+  // front of it reports whether the value exists (`hasToken`). A metadata suffix (`tokenCount`,
+  // `tokenExpiresAt`) never reaches this branch: it is not a secret word.
+  if (words.length > 1) {
+    const last = words.length - 1;
+    return BARE_SECRET_WORDS.has(words[last]) && !PRESENCE_WORDS.has(words[last - 1]);
+  }
+  return false;
 }
 
 /**
@@ -187,8 +241,9 @@ function lastApplicationRoot(segments) {
  * the segments BELOW the last `apps/web/src/app` marker, and only as whole segments, so a
  * checkout whose own parent directory is named `reveal`, a `..` that leaves the directory or a
  * look-alike (`not-reveal/`) cannot switch the rule off. A path outside `apps/web/src/app/`
- * never gets the directory exemption; the `*.spec.ts` and `*reveal*` file-name exemptions are
- * basename checks and hold anywhere.
+ * never gets the directory exemption; the `*.spec.ts` and `reveal`-word file-name exemptions are
+ * basename checks and hold anywhere — the word form is anchored, so `secrets-revealed-store.ts`
+ * and `unrevealed.ts` are reported, while `signing-secret-reveal.component.ts` is exempt.
  */
 function isExempt(filename) {
   const segments = pathSegments(filename);
@@ -218,7 +273,10 @@ function constantString(node) {
   return null;
 }
 
-/** The property name a key node declares, or null for a computed or private key. */
+/**
+ * The property name a key node declares, or null for a computed key with no constant name. A
+ * private class field (`#token`) declares its name too: it is still a field the store holds.
+ */
 function keyName(node) {
   const key = node.key;
   if (!key) {
@@ -227,7 +285,7 @@ function keyName(node) {
   if (node.computed) {
     return key.type === 'Literal' && typeof key.value === 'string' ? key.value : null;
   }
-  if (key.type === 'Identifier') {
+  if (key.type === 'Identifier' || key.type === 'PrivateIdentifier') {
     return key.name;
   }
   if (key.type === 'Literal' && typeof key.value === 'string') {
@@ -256,17 +314,29 @@ function calleeName(node) {
     : null;
 }
 
+/** The nodes that hold runtime code, not state: nothing inside them is a store key. */
+const CLOSURE_TYPES = new Set([
+  'FunctionExpression',
+  'ArrowFunctionExpression',
+  'FunctionDeclaration',
+  'ClassExpression',
+  'ClassDeclaration',
+]);
+
 /**
- * Every object literal inside `node`, at any depth. `parent` is skipped so the walk cannot follow
- * the tree back up; `loc`/`range`/`tokens`/`comments` carry no AST node worth visiting.
+ * The object literals a state literal is made of: the literal itself and the nested objects that
+ * are part of it, in source order. The walk stops at a function body — an HTTP payload inside a
+ * `withMethods` closure (`post('/x', { token })`) is sent, not stored — and at a nested state call,
+ * whose own visit reports its literal once. `parent` is skipped so the walk cannot follow the tree
+ * back up; `loc`/`range`/`tokens`/`comments` carry no AST node worth visiting.
  */
-function objectLiteralsIn(node, found) {
+function stateLiteralsIn(node, found) {
   if (node === null || typeof node !== 'object') {
     return found;
   }
   if (Array.isArray(node)) {
     for (const item of node) {
-      objectLiteralsIn(item, found);
+      stateLiteralsIn(item, found);
     }
     return found;
   }
@@ -276,13 +346,37 @@ function objectLiteralsIn(node, found) {
   if (node.type === 'ObjectExpression') {
     found.push(node);
   }
+  if (CLOSURE_TYPES.has(node.type)) {
+    return found;
+  }
+  if (node.type === 'CallExpression' && STATE_CALLS.has(calleeName(node) ?? '')) {
+    return found;
+  }
   for (const [key, value] of Object.entries(node)) {
     if (key === 'parent' || key === 'loc' || key === 'range' || key === 'tokens') {
       continue;
     }
-    objectLiteralsIn(value, found);
+    stateLiteralsIn(value, found);
   }
   return found;
+}
+
+/**
+ * The identifier a constructor parameter property declares, or null: `constructor(private token:
+ * string)` is a field of the instance exactly like a declared one.
+ */
+function parameterPropertyName(parameter) {
+  if (parameter.type !== 'TSParameterProperty') {
+    return null;
+  }
+  const target = parameter.parameter;
+  if (target.type === 'Identifier') {
+    return target;
+  }
+  if (target.type === 'AssignmentPattern' && target.left.type === 'Identifier') {
+    return target.left;
+  }
+  return null;
 }
 
 /** The type-argument literal of `withState<{ ... }>(...)`, or null. */
@@ -314,8 +408,8 @@ module.exports = {
       return {};
     }
 
-    // One occurrence, one message: a state literal inside `signalStore(withState({...}))` is
-    // reached from both calls, and a member is reached from its class and from its own key.
+    // One occurrence, one message: whichever position reaches a key node first, the same node is
+    // never reported twice.
     const reported = new WeakSet();
 
     const reportField = (keyNode, name) => {
@@ -359,9 +453,14 @@ module.exports = {
         if (name === null) {
           return;
         }
-        if (STATE_CALLS.has(name)) {
+        // Only the literal handed to a state call is state: a `signalStore(...)` argument is a
+        // feature list whose `withState(...)` members are visited on their own.
+        if (STATE_LITERAL_CALLS.has(name)) {
           for (const argument of node.arguments) {
-            for (const literal of objectLiteralsIn(argument, [])) {
+            if (argument.type !== 'ObjectExpression') {
+              continue;
+            }
+            for (const literal of stateLiteralsIn(argument, [])) {
               reportObjectLiteral(literal);
             }
           }
@@ -392,6 +491,17 @@ module.exports = {
         }
         for (const member of node.body.body) {
           const isGetter = member.type === 'MethodDefinition' && member.kind === 'get';
+          if (member.type === 'MethodDefinition' && member.kind === 'constructor') {
+            // `constructor(private token: string)` declares a field the store holds, exactly like
+            // a property definition; only a parameter property counts, a plain parameter does not.
+            for (const parameter of member.value.params) {
+              const identifier = parameterPropertyName(parameter);
+              if (identifier !== null) {
+                reportField(identifier, identifier.name);
+              }
+            }
+            continue;
+          }
           if (!isGetter && !FIELD_KINDS.has(member.type)) {
             continue;
           }

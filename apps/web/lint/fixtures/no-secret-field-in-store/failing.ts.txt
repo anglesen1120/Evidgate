@@ -1,6 +1,8 @@
-// 09.7.1-T1 fixture (plan 09.7.1 §8 S3, T1.1, AC3): one finding per position group
-// `evidgate/no-secret-field-in-store` reports — a state interface, a withState state literal and
-// a `/Store$/` class field — in a file the Settings block covers.
+// 09.7.1-T1 fixture (plan 09.7.1 §8 S3, T1.1, AC3): one finding per reported position — a state
+// interface member, a withState state literal key, and the three class-position fields
+// `evidgate/no-secret-field-in-store` reports (`token`, a private `#signingSecret`, and a
+// `private readonly password` constructor parameter property) — in a file the Settings block
+// covers.
 //
 // It is a `.ts.txt` file on purpose: eslint.config.js's `apps/web/**/*.ts` block types every
 // `.ts` under apps/web against apps/web/tsconfig.json, which includes only `src/**/*.ts`, so a
@@ -20,4 +22,9 @@ export const SecretsStore = signalStore(withState({ secret: '' }));
 
 export class RotatingStore extends SecretsStore {
   readonly token = signal('');
+  #signingSecret = signal('');
+
+  constructor(private readonly password: string) {
+    super();
+  }
 }
