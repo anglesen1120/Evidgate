@@ -45,6 +45,15 @@
         "tenant_assignable": true
       },
       {
+        "code": "membership:write",
+        "resource": "membership",
+        "action": "write",
+        "description": "Invite, change the roles of or remove a member; the last-admin guard rejects removing the last tenant_admin (02.1.2).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
         "code": "organization:read",
         "resource": "organization",
         "action": "read",

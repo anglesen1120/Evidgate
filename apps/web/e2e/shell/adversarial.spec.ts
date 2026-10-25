@@ -110,7 +110,13 @@ interface Outcome {
 }
 
 async function outcome(page: Page): Promise<Outcome> {
-  const heading = (await page.locator('#main-content h1').innerText()).trim();
+  // A page owns its heading (the overview page renders its own `h1` too), but a tab body under the
+  // Settings shell is a section, so its heading is an `h2` below the shell's `h1`. The same members
+  // page mounts both ways (09.7.1-T2: the `members` sidebar entry and the Settings tab), so the
+  // heading is whichever of the two the page rendered, in DOM order.
+  const shellHeading = page.locator('#main-content h1');
+  const bodyHeading = page.locator('app-members-page h2');
+  const heading = (await shellHeading.or(bodyHeading).first().innerText()).trim();
   return {
     pathname: new URL(page.url()).pathname,
     search: new URL(page.url()).search,
@@ -143,7 +149,7 @@ test.describe('AC4 — every guarded G1 route against both corpus grant sets', (
           );
           expect(rendered.forbidden, `${entry.segment} rendered 403`).toBe(0);
           expect(rendered.notFound, `${entry.segment} rendered 404`).toBe(0);
-          expect(rendered.heading.length, `${entry.segment} has no h1`).toBeGreaterThan(0);
+          expect(rendered.heading.length, `${entry.segment} has no heading`).toBeGreaterThan(0);
         } else {
           // Refused: the 403 pattern, at /forbidden, with the attempt not echoed.
           expect(

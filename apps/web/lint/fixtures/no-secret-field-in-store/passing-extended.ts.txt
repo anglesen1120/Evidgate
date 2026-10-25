@@ -1,0 +1,59 @@
+// 09.7.1-T2 fixture (plan 09.7.1 §8 S3, T2 and the T2 Notes): the names the extended rule must
+// still leave alone — the neutral words that merely CONTAIN a secret word, the pagination cursor
+// fields, the metadata names, a presence word in front of a secret word, and the factory shapes
+// that hand over no state. The rule reports nothing in this file.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { signal } from '@angular/core';
+
+// Word-boundary splitting: `tokenizer`, `secretary` and `passwordless` are one word each, so they
+// are not the bare secret word. `passwordLess` splits to `password` + `less`, and `less` is not a
+// word that turns a secret word into a value: both describe an authentication mode, not a value.
+// A neutral word in front of a secret word does not make it secret either.
+export interface NeutralState {
+  tokenizer: string;
+  secretary: string;
+  passwordless: boolean;
+  passwordLess: boolean;
+  hasTokenValue: boolean;
+  cursor: string | null;
+  page: number;
+  tokenName: string;
+  tokenCount: number;
+  secretRef: string;
+  secretName: string;
+  passwordHash: string;
+  rotationState: string;
+  last4: string;
+  hasToken: boolean;
+  ingestTokens: string[];
+  expiresAt: string;
+}
+
+// A factory over metadata only, and an updater that returns the state it was given. The snake_case
+// metadata and pagination keys live in an object literal on purpose: the wire-DTO rule inspects
+// declarations only, and `next_cursor` is the page cursor this list follows.
+export const NeutralStore = signalStore(
+  withState(() => ({ token_prefix: '', next_cursor: null as string | null, cursor: null })),
+  withMethods(() => ({
+    page(): void {
+      patchState(this, (state) => state);
+    },
+  })),
+);
+
+// The walk stops at a closure that is not the factory itself: the request body a method builds is
+// a payload, and the object a nested function returns is not the literal the factory returns.
+export const PayloadStore = signalStore(
+  withState(() => ({
+    tokenPrefix: '',
+    send(token: string): unknown {
+      return { token };
+    },
+    later: () => ({ secret: '' }),
+  })),
+);
+
+// A plain signal wrapper inside a factory is unwrapped only for the state call that hands it over;
+// here the literal holds metadata, so nothing is reported.
+export const WrappedNeutralStore = signalStore(withState(() => signal({ tokenPrefix: '' })));

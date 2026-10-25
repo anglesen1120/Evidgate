@@ -1,0 +1,62 @@
+<header class="page-header">
+  <div>
+    <h2 #heading tabindex="-1">{{ copy.title }}</h2>
+    <p>{{ copy.description }}</p>
+  </div>
+  @if (canWrite()) {
+    <button
+      class="primary mutation"
+      type="button"
+      data-members-invite-open
+      (click)="openInvite($event)"
+    >
+      {{ copy.invite }}
+    </button>
+  }
+</header>
+@if (canWrite()) {
+  <p class="narrow-notice">{{ copy.narrow }}</p>
+}
+<p role="status">
+  @if (saved()) {
+    {{ copy.saved }}
+  }
+</p>
+<app-request-state
+  [status]="status()"
+  [error]="store.loadError()"
+  [empty]="store.members().length === 0"
+  [emptyTitle]="copy.emptyTitle"
+  [emptyDescription]="copy.emptyDescription"
+  [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
+  (retry)="reload()"
+>
+  <section class="members-content" [attr.aria-busy]="paging()">
+    <app-member-list
+      [members]="visibleMembers()"
+      [canWrite]="canWrite()"
+      (remove)="openRemove($event)"
+    />
+    <app-role-matrix [matrix]="visibleMatrix()" />
+    @if (pagingAlert(); as failure) {
+      <div data-members-load-error role="alert">
+        <p>{{ failure.message }}</p>
+        @if (failure.code) {
+          <code>{{ failure.code }}</code>
+        }
+      </div>
+    }
+    <nav class="pagination" [attr.aria-label]="copy.directory">
+      <button type="button" [disabled]="offset() === 0 || paging()" (click)="previous()">
+        {{ copy.previous }}
+      </button>
+      <button type="button" [disabled]="!more() || paging()" (click)="next()">
+        {{ copy.next }}
+      </button>
+    </nav>
+  </section>
+</app-request-state>
+@if (canWrite()) {
+  <app-invite-dialog (completed)="completed()" />
+  <app-remove-dialog (completed)="completed(true)" />
+}

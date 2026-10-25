@@ -1,0 +1,42 @@
+// 09.7.1-T2 fixture (plan 09.7.1 §8 S3, T2 and the T2 Notes): the three false negatives the
+// 09.7.1-T1 delta review named, each now in a position `evidgate/no-secret-field-in-store`
+// reports — a state factory or updater argument, and a secret word in the middle of a name
+// followed by the word that makes it the value itself.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains: eslint.config.js types every `.ts`
+// under apps/web against apps/web/tsconfig.json, which includes only `src/**/*.ts`.
+//
+// No `@ngrx/signals` import for the reason failing.ts.txt gives: the callee name is what the
+// rule matches, and the workspace has no such dependency.
+import { signal } from '@angular/core';
+
+// A lazy state factory: the literal the arrow returns is the state.
+export const LazyStore = signalStore(withState(() => ({ token: '' })));
+
+// An updater, in both spellings: the second argument's returned literal is the state.
+export function patch(store: unknown): void {
+  patchState(store, () => ({ password: '' }));
+  patchState(store, (state) => ({ ...state, refreshToken: '' }));
+}
+
+// The state a factory wraps in a signal is state too.
+export const WrappedStore = signalStore(withState(() => signal({ signing_secret: '' })));
+
+// A block body: the literal a top-level `return` hands over is the state, wherever it is declared.
+export const BlockStore = signalStore(
+  withState(() => {
+    const base = { tokenPrefix: '' };
+    return { base, secretValue: '' };
+  }),
+);
+
+// A factory whose literal nests one more object: reported at both depths, once each.
+export const NestedFactoryStore = signalStore(withState(() => ({ meta: { plaintext: '' } })));
+
+// A secret word in the middle of a name, followed by a VALUE word: `raw` + `token` + `value`,
+// `signing` + `secret` + `text`, `password` + `raw` + `text`.
+export interface MiddleState {
+  rawTokenValue: string;
+  signingSecretText: string;
+  passwordRawText: string;
+}
