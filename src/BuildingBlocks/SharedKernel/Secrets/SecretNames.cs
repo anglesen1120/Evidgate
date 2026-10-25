@@ -37,6 +37,9 @@ public static class SecretNames
     /// <summary>Secret key of the object-storage identity (06.1.2-T1).</summary>
     public const string ObjectSecretKey = "EVIDGATE__OBJECT__SECRETKEY";
 
+    /// <summary>Client secret of the Google OIDC login client (02.3.1-T1.2); the client id is plain configuration.</summary>
+    public const string OidcGoogleClientSecret = "EVIDGATE__OIDC__GOOGLE__CLIENTSECRET";
+
     private static readonly string[] Names =
     [
         DatabaseConnectionString,
@@ -47,6 +50,7 @@ public static class SecretNames
         MigratorConnectionString,
         ObjectAccessKey,
         ObjectSecretKey,
+        OidcGoogleClientSecret,
     ];
 
     /// <summary>Every known secret name; a name outside this list is rejected by the provider.</summary>

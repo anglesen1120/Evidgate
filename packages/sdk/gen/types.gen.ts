@@ -1589,6 +1589,31 @@ export type BindingId = string;
 
 export type IngestTokenId = string;
 
+/**
+ * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` is registered by 02.3.1-T1.2; `github` is in the enum because the browser button of 09.1.1 can already name it, and answers 404 `not_found` until 02.3.1-T1.3 lands the provider.
+ */
+export type ProviderPath = 'google' | 'github';
+
+/**
+ * Post-login destination, allowlisted by `ReturnUrlPolicy` (02.3.1 §8): a same-origin path with exactly one leading `/`, no backslash or control character, at most 512 characters, re-checked through up to four percent-decoding passes. Any other value — `//host`, `/\host`, a scheme — is replaced by `/` and is not an error. The value travels only inside the protected pending-login cookie, never in a URL to the provider.
+ */
+export type LoginReturnUrl = string;
+
+/**
+ * Authorization code of the provider redirect. Required in practice: a missing, empty or longer than 2048-character value answers 401 `token_invalid`, the same typed refusal as a mismatch, so the route is no oracle for which check failed.
+ */
+export type OidcCode = string;
+
+/**
+ * The one-time `state` `start` generated and put in the pending-login cookie. Compared in constant time; a missing, mismatched or already consumed value answers 401 `token_invalid`.
+ */
+export type OidcState = string;
+
+/**
+ * The provider's own error code when it refused the request (`access_denied` and the like). Its presence alone answers 401 `token_invalid`, and its value is never echoed — it can carry the code or a description.
+ */
+export type OidcError = string;
+
 export type AuditExportFormat = 'jsonl' | 'csv';
 
 export type AuditActorType = 'user' | 'ci_producer' | 'agent' | 'platform_operator' | 'system';
@@ -1830,6 +1855,90 @@ export type ExchangeCiTokenResponses = {
 };
 
 export type ExchangeCiTokenResponse = ExchangeCiTokenResponses[keyof ExchangeCiTokenResponses];
+
+export type StartFederatedLoginData = {
+    body?: never;
+    path: {
+        /**
+         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` is registered by 02.3.1-T1.2; `github` is in the enum because the browser button of 09.1.1 can already name it, and answers 404 `not_found` until 02.3.1-T1.3 lands the provider.
+         */
+        provider: 'google' | 'github';
+    };
+    query?: {
+        /**
+         * Post-login destination, allowlisted by `ReturnUrlPolicy` (02.3.1 §8): a same-origin path with exactly one leading `/`, no backslash or control character, at most 512 characters, re-checked through up to four percent-decoding passes. Any other value — `//host`, `/\host`, a scheme — is replaced by `/` and is not an error. The value travels only inside the protected pending-login cookie, never in a URL to the provider.
+         */
+        returnUrl?: string;
+    };
+    url: '/auth/oidc/{provider}/start';
+};
+
+export type StartFederatedLoginErrors = {
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type StartFederatedLoginError = StartFederatedLoginErrors[keyof StartFederatedLoginErrors];
+
+export type CompleteFederatedLoginData = {
+    body?: never;
+    path: {
+        /**
+         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` is registered by 02.3.1-T1.2; `github` is in the enum because the browser button of 09.1.1 can already name it, and answers 404 `not_found` until 02.3.1-T1.3 lands the provider.
+         */
+        provider: 'google' | 'github';
+    };
+    query?: {
+        /**
+         * Authorization code of the provider redirect. Required in practice: a missing, empty or longer than 2048-character value answers 401 `token_invalid`, the same typed refusal as a mismatch, so the route is no oracle for which check failed.
+         */
+        code?: string;
+        /**
+         * The one-time `state` `start` generated and put in the pending-login cookie. Compared in constant time; a missing, mismatched or already consumed value answers 401 `token_invalid`.
+         */
+        state?: string;
+        /**
+         * The provider's own error code when it refused the request (`access_denied` and the like). Its presence alone answers 401 `token_invalid`, and its value is never echoed — it can carry the code or a description.
+         */
+        error?: string;
+    };
+    url: '/auth/oidc/{provider}/callback';
+};
+
+export type CompleteFederatedLoginErrors = {
+    /**
+     * 401 `token_invalid` — the federated login could not be verified (02.3.1 AC8): the pending-login cookie is missing, expired or tampered with, the `state` does not match or was already used, the callback named another provider, the provider reported an `error`, the `code` is missing or oversized, or the provider rejected the exchange. One code and one message for every one of those causes, and no provider text, code, token, subject or email in the body.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 501 `login_not_completed` — the provider verified the identity, but completing the login (the `user`/`user_identity` upsert, the `session` row and the `__Host-evidgate` session cookie) is 02.3.1-T1.4's task (02.3.1 §5). This build answers a typed failure rather than a silent success, so a caller can never mistake "verified" for "signed in"; the code leaves the API when 02.3.1-T1.4 replaces the `ILoginCompletion` seam.
+     */
+    501: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CompleteFederatedLoginError = CompleteFederatedLoginErrors[keyof CompleteFederatedLoginErrors];
 
 export type CreateManifestData = {
     body: ManifestV1;

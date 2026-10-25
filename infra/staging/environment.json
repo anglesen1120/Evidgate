@@ -19,6 +19,10 @@
       "origin": "default",
       "from": "not set: the option default Required applies; Disabled is only for hosts that boot without a database"
     },
+    "EVIDGATE__LOGIN__PUBLICBASEURL": {
+      "origin": "environment",
+      "from": "the staging origin a browser reaches, injected at deploy as a plain variable; the redirect URI registered at the provider is {origin}/v1/auth/oidc/{provider}/callback. Not required: until it is set, both login routes answer 503 unavailable + Retry-After and every other route serves (02.3.1-T1.1)"
+    },
     "EVIDGATE__OBJECT__ENDPOINT": {
       "origin": "default",
       "from": "not set: the S3-compatible endpoint is [OPEN] until O3 (10.8.1) picks the provider; an empty value selects the AWS regional endpoint of EVIDGATE__OBJECT__REGION"
@@ -46,6 +50,14 @@
     "EVIDGATE__OBJECT__SECRETKEY": {
       "origin": "secret-store",
       "from": "provider secret store (10.1.1-T3); staging's own object-storage identity, distinct from prod's (AC4)"
+    },
+    "EVIDGATE__OIDC__GOOGLE__CLIENTID": {
+      "origin": "environment",
+      "from": "the staging Google client id injected at deploy (02.3.1-T1.2); plain configuration, never a secret. Not required: without it, or without the client secret, the two Google routes answer 503 unavailable + Retry-After — no flag enables login"
+    },
+    "EVIDGATE__OIDC__GOOGLE__CLIENTSECRET": {
+      "origin": "secret-store",
+      "from": "provider secret store (10.1.1-T3), injected as an environment variable at deploy and resolved through ISecretProvider by GoogleLoginOptionsSecretPostConfigure (SecretNames.OidcGoogleClientSecret, 02.3.1-T1.2); staging's own Google client, never prod's. Not required: until both halves are present the Google routes answer 503"
     },
     "EVIDGATE__TASKS__BACKOFFBASESECONDS": {
       "origin": "default",
