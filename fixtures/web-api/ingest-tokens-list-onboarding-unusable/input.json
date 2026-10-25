@@ -1,0 +1,40 @@
+{
+  "operation_id": "listIngestTokens",
+  "variant": "onboarding-unusable",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000f2"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-00000000003d",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "name": "Old CI",
+        "prefix": "egt_fixture",
+        "status": "revoked",
+        "scopes": ["event:write"],
+        "expires_at": null,
+        "overlap_ends_at": null,
+        "last_used_at": null,
+        "rotated_to_id": null,
+        "created_at": "2026-09-14T06:05:00Z"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-00000000003e",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "name": "Trial CI",
+        "prefix": "egt_fixture",
+        "status": "expired",
+        "scopes": ["event:write"],
+        "expires_at": "2026-10-01T00:00:00Z",
+        "overlap_ends_at": null,
+        "last_used_at": null,
+        "rotated_to_id": null,
+        "created_at": "2026-09-01T06:05:00Z"
+      }
+    ],
+    "next_cursor": null
+  }
+}

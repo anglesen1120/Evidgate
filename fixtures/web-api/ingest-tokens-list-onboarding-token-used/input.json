@@ -1,0 +1,27 @@
+{
+  "operation_id": "listIngestTokens",
+  "variant": "onboarding-token-used",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000f1"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-00000000003c",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "name": "Release CI",
+        "prefix": "egt_fixture",
+        "status": "active",
+        "scopes": ["event:write", "run:create"],
+        "expires_at": null,
+        "overlap_ends_at": null,
+        "last_used_at": "2026-10-24T09:12:34Z",
+        "rotated_to_id": null,
+        "created_at": "2026-10-20T06:05:00Z"
+      }
+    ],
+    "next_cursor": null
+  }
+}

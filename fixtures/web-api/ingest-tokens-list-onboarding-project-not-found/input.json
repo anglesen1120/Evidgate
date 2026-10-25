@@ -1,0 +1,18 @@
+{
+  "operation_id": "listIngestTokens",
+  "variant": "onboarding-project-not-found",
+  "status": 404,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000f4"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "not_found",
+      "message": "the requested resource does not exist",
+      "request_id": "018f0000-0000-7000-8000-0000000000f4",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

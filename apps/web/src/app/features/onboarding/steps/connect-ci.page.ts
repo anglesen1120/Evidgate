@@ -23,7 +23,24 @@ import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.compon
 import { ConnectStepRevealComponent } from '../../../shared/ui/reveal/connect-step-reveal.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { ErrorPatternComponent } from '../../../shared/ui/states';
+import { CONNECT_LIST_LIMIT } from '../data/onboarding-progress.service';
+import { CliQuickstartComponent } from '../health/cli-quickstart.component';
+import { ConnectionHealthComponent } from '../health/connection-health.component';
+import { deriveConnectionHealth, type ConnectionHealth } from '../health/connection-health';
 import { OnboardingStore } from '../onboarding.store';
+
+/**
+ * The create-binding form's two list fields, named once so the validators, the error copy and
+ * the boundary tests read the same number. They mirror the contract (`allowed_ref_patterns` and
+ * `allowed_workflow_refs` carry `maxItems: 32`).
+ */
+const MAX_REF_ENTRIES = 32;
+
+/** The ingest-token name limit in Unicode code points (contract `name` `maxLength: 128`). */
+const MAX_TOKEN_NAME_LENGTH = 128;
+
+/** Browsers clamp larger timeout delays; re-arm long-lived credentials after each capped wait. */
+const MAX_HEALTH_TIMEOUT_MS = 2 ** 31 - 1;
 
 @Component({
   selector: 'app-onboarding-connect-ci',
@@ -32,6 +49,8 @@ import { OnboardingStore } from '../onboarding.store';
     FormsModule,
     StatusPillComponent,
     ConnectStepRevealComponent,
+    ConnectionHealthComponent,
+    CliQuickstartComponent,
     ErrorPatternComponent,
   ],
   providers: [RevealSlot],
@@ -48,6 +67,8 @@ export class ConnectCiPage {
   private readonly session = inject(SessionStore);
   private readonly destroyRef = inject(DestroyRef);
   private scopeVersion = 0;
+  private readonly healthNow = signal(new Date());
+  private healthBoundaryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly bindingHeading = viewChild<ElementRef<HTMLHeadingElement>>('bindingHeading');
   private readonly tokenHeading = viewChild<ElementRef<HTMLHeadingElement>>('tokenHeading');
   protected readonly busy = signal(false);
@@ -85,7 +106,7 @@ export class ConnectCiPage {
   protected readonly workflowsInvalid = computed(() => !this.validLines(this.workflows()));
   protected readonly tokenNameInvalid = computed(() => {
     const length = [...this.tokenName().trim()].length;
-    return length < 1 || length > 128;
+    return length < 1 || length > MAX_TOKEN_NAME_LENGTH;
   });
 
   protected readonly intro = $localize`:@@onboarding.connect.intro:Choose one connection method. Next becomes available only after the server confirms a binding or token.`;
@@ -97,17 +118,17 @@ export class ConnectCiPage {
   protected readonly repoNameLabel = $localize`:@@onboarding.connect.repo-name:Repository (owner/repo)`;
   protected readonly repoNameError = $localize`:@@onboarding.connect.repo-name-error:Enter the repository as owner/repo.`;
   protected readonly refsLabel = $localize`:@@onboarding.connect.refs:Allowed Git ref patterns`;
-  protected readonly refsHint = $localize`:@@onboarding.connect.refs-hint:One per line, for example refs/heads/your-branch. Enter 1–32 patterns.`;
-  protected readonly refsError = $localize`:@@onboarding.connect.refs-error:Enter between 1 and 32 non-empty ref patterns.`;
+  protected readonly refsHint = $localize`:@@onboarding.connect.refs-hint:One per line, for example refs/heads/your-branch. Enter 1–${MAX_REF_ENTRIES}:MAX_REF_ENTRIES: patterns.`;
+  protected readonly refsError = $localize`:@@onboarding.connect.refs-error:Enter between 1 and ${MAX_REF_ENTRIES}:MAX_REF_ENTRIES: non-empty ref patterns.`;
   protected readonly workflowsLabel = $localize`:@@onboarding.connect.workflows:Allowed workflow refs`;
-  protected readonly workflowsHint = $localize`:@@onboarding.connect.workflows-hint:One per line, for example owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Enter 1–32 refs.`;
-  protected readonly workflowsError = $localize`:@@onboarding.connect.workflows-error:Enter between 1 and 32 non-empty workflow refs.`;
+  protected readonly workflowsHint = $localize`:@@onboarding.connect.workflows-hint:One per line, for example owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Enter 1–${MAX_REF_ENTRIES}:MAX_REF_ENTRIES: refs.`;
+  protected readonly workflowsError = $localize`:@@onboarding.connect.workflows-error:Enter between 1 and ${MAX_REF_ENTRIES}:MAX_REF_ENTRIES: non-empty workflow refs.`;
   protected readonly bindingSubmit = $localize`:@@onboarding.connect.binding-submit:Create CI binding`;
   protected readonly bindingPermission = $localize`:@@onboarding.connect.binding-permission:Ask your organisation owner for permission to create CI bindings.`;
   protected readonly tokenTitle = $localize`:@@onboarding.connect.token-title:Ingest token`;
   protected readonly tokenHint = $localize`:@@onboarding.connect.token-hint:Use an ingest token when OIDC is not available. Save the one-time value in your CI secret manager, never in source control.`;
   protected readonly tokenNameLabel = $localize`:@@onboarding.connect.token-name:Token name`;
-  protected readonly tokenNameError = $localize`:@@onboarding.connect.token-name-error:Enter a token name between 1 and 128 characters.`;
+  protected readonly tokenNameError = $localize`:@@onboarding.connect.token-name-error:Enter a token name between 1 and ${MAX_TOKEN_NAME_LENGTH}:MAX_TOKEN_NAME_LENGTH: characters.`;
   protected readonly tokenSubmit = $localize`:@@onboarding.connect.token-submit:Create ingest token`;
   protected readonly tokenPermission = $localize`:@@onboarding.connect.token-permission:Ask your organisation owner for permission to create or rotate ingest tokens.`;
   protected readonly busyLabel = $localize`:@@onboarding.connect.busy:Saving connection…`;
@@ -140,7 +161,48 @@ export class ConnectCiPage {
   protected readonly revokedLabel = $localize`:@@onboarding.connect.revoked:Revoked`;
   protected readonly uncertainLabel = $localize`:@@onboarding.connect.response-uncertain:It may have been saved. Reload the connection data before trying again.`;
   protected readonly revealShownLabel = $localize`:@@onboarding.connect.reveal-shown:A one-time value is shown. Save it before leaving this step.`;
-  protected readonly truncatedLabel = $localize`:@@onboarding.connect.list-truncated:Showing the first 10; more exist, so a newer entry may not appear here.`;
+  protected readonly truncatedLabel = $localize`:@@onboarding.connect.list-truncated:Showing the first ${CONNECT_LIST_LIMIT}:CONNECT_LIST_LIMIT: entries; more exist, so a newer entry may not appear here.`;
+
+  /**
+   * Connection health of the credentials step 2 already lists: derived from the store's two
+   * lists, never fetched, so the panel describes only what the server answered.
+   */
+  protected readonly health = computed<ConnectionHealth>(() =>
+    deriveConnectionHealth({
+      bindings: this.store.bindings(),
+      tokens: this.store.tokens(),
+      bindingsTruncated: this.store.bindingsTruncated(),
+      tokensTruncated: this.store.tokensTruncated(),
+      now: this.healthNow(),
+    }),
+  );
+  /**
+   * The credential the CLI quickstart names, as metadata only: prefer an active usable token,
+   * then a rotating token still inside its overlap. `null` keeps the snippet's
+   * "create a token first" branch. The one-time secret is never reachable from here.
+   */
+  protected readonly quickstartToken = computed<{ name: string; prefix: string } | null>(() => {
+    const credentials = this.health().credentials;
+    const preferred =
+      credentials.find(
+        (credential) => credential.kind === 'token' && credential.detail === 'active',
+      ) ??
+      credentials.find(
+        (credential) => credential.kind === 'token' && credential.detail === 'rotating',
+      );
+    const token = preferred
+      ? this.store.tokens().find((candidate) => candidate.id === preferred.id)
+      : undefined;
+    return token ? { name: token.name, prefix: token.prefix } : null;
+  });
+  /** The repository the snippet references: the first active binding, else the first one. */
+  protected readonly quickstartBinding = computed<{ repository_full_name: string } | null>(() => {
+    const bindings = this.store.bindings();
+    const binding = bindings.find((candidate) => candidate.status === 'active') ?? bindings[0];
+    return binding ? { repository_full_name: binding.repository_full_name } : null;
+  });
+  /** The project slug the loaded progress carries; the snippet keeps its placeholder without it. */
+  protected readonly quickstartProjectRef = computed(() => this.store.project()?.slug ?? null);
 
   constructor() {
     effect(() => {
@@ -152,6 +214,43 @@ export class ConnectCiPage {
       this.failure.set(null);
       this.overlapEndsAt.set(null);
     });
+    effect((onCleanup) => {
+      this.scheduleHealthBoundary(this.store.tokens());
+      onCleanup(() => this.clearHealthBoundaryTimer());
+    });
+    this.destroyRef.onDestroy(() => this.clearHealthBoundaryTimer());
+  }
+
+  private clearHealthBoundaryTimer(): void {
+    if (this.healthBoundaryTimer !== undefined) {
+      clearTimeout(this.healthBoundaryTimer);
+      this.healthBoundaryTimer = undefined;
+    }
+  }
+
+  private scheduleHealthBoundary(tokens: readonly IngestTokenView[]): void {
+    this.clearHealthBoundaryTimer();
+    const now = Date.now();
+    this.healthNow.set(new Date(now));
+    let nextBoundary = Infinity;
+    for (const token of tokens) {
+      const boundary =
+        token.status === 'active'
+          ? token.expires_at
+          : token.status === 'rotated'
+            ? token.overlap_ends_at
+            : null;
+      if (boundary != null) {
+        const timestamp = Date.parse(boundary);
+        if (timestamp > now && timestamp < nextBoundary) nextBoundary = timestamp;
+      }
+    }
+    if (Number.isFinite(nextBoundary)) {
+      this.healthBoundaryTimer = setTimeout(
+        () => this.scheduleHealthBoundary(tokens),
+        Math.min(nextBoundary - now, MAX_HEALTH_TIMEOUT_MS),
+      );
+    }
   }
 
   protected dismissReveal(): void {
@@ -161,6 +260,11 @@ export class ConnectCiPage {
         : this.tokenHeading();
     this.slot.clear();
     heading?.nativeElement.focus();
+  }
+
+  /** The accessible name of one row's Rotate button: the visible label repeats per row. */
+  protected rotateNamed(name: string): string {
+    return $localize`:@@onboarding.connect.rotate-named:Rotate token ${name}:TOKEN_NAME:`;
   }
 
   protected statusText(status: CiBindingView['status'] | IngestTokenView['status']): string {
@@ -189,7 +293,7 @@ export class ConnectCiPage {
 
   private validLines(value: string): boolean {
     const count = this.lines(value).length;
-    return count >= 1 && count <= 32;
+    return count >= 1 && count <= MAX_REF_ENTRIES;
   }
 
   protected async createBinding(): Promise<void> {

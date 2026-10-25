@@ -11,10 +11,30 @@ import type { ApiError } from '../../../core/http/api-error';
     <section class="state-panel state-panel--error">
       @for (failure of failures(); track failure) {
         <div role="alert" aria-atomic="true">
-          <h2 class="state-panel__title">{{ heading() }}</h2>
+          @switch (headingLevel()) {
+            @case (3) {
+              <h3 class="state-panel__title">{{ heading() }}</h3>
+            }
+            @case (4) {
+              <h4 class="state-panel__title">{{ heading() }}</h4>
+            }
+            @default {
+              <h2 class="state-panel__title">{{ heading() }}</h2>
+            }
+          }
         </div>
       } @empty {
-        <h2 class="state-panel__title">{{ heading() }}</h2>
+        @switch (headingLevel()) {
+          @case (3) {
+            <h3 class="state-panel__title">{{ heading() }}</h3>
+          }
+          @case (4) {
+            <h4 class="state-panel__title">{{ heading() }}</h4>
+          }
+          @default {
+            <h2 class="state-panel__title">{{ heading() }}</h2>
+          }
+        }
       }
       @if (error(); as failure) {
         <p class="state-panel__description">{{ failure.message }}</p>
@@ -24,6 +44,7 @@ import type { ApiError } from '../../../core/http/api-error';
         @if (failure.requestId; as requestId) {
           <p
             class="state-panel__metadata error-pattern__request-id"
+            data-testid="error-request-id"
             i18n="@@shared.states.error.request-id"
           >
             Request ID: {{ requestId }}
@@ -47,6 +68,11 @@ import type { ApiError } from '../../../core/http/api-error';
 export class ErrorPatternComponent {
   readonly error = input<ApiError | null>(null);
   readonly retryDisabled = input(false);
+  /**
+   * Document heading level for the state title, so a panel embedded inside a page
+   * section keeps a valid outline. Defaults to 2, the standalone render.
+   */
+  readonly headingLevel = input<2 | 3 | 4>(2);
   readonly retry = output<void>();
 
   // Key only the announcement to the immutable typed error, not retry state or change detection.

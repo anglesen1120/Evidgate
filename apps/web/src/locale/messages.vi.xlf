@@ -1933,24 +1933,24 @@
         <target>Mẫu tham chiếu Git được phép</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.refs-hint" datatype="html">
-        <source>One per line, for example refs/heads/your-branch. Enter 1–32 patterns.</source>
-        <target>Mỗi dòng một mẫu, ví dụ refs/heads/your-branch. Nhập từ 1 đến 32 mẫu.</target>
+        <source>One per line, for example refs/heads/your-branch. Enter 1–<x id="MAX_REF_ENTRIES" equiv-text="${MAX_REF_ENTRIES}"/> patterns.</source>
+        <target>Mỗi dòng một mẫu, ví dụ refs/heads/your-branch. Nhập từ 1 đến <x id="MAX_REF_ENTRIES"/> mẫu.</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.refs-error" datatype="html">
-        <source>Enter between 1 and 32 non-empty ref patterns.</source>
-        <target>Nhập từ 1 đến 32 mẫu tham chiếu không rỗng.</target>
+        <source>Enter between 1 and <x id="MAX_REF_ENTRIES" equiv-text="${MAX_REF_ENTRIES}"/> non-empty ref patterns.</source>
+        <target>Nhập từ 1 đến <x id="MAX_REF_ENTRIES"/> mẫu tham chiếu không rỗng.</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.workflows" datatype="html">
         <source>Allowed workflow refs</source>
         <target>Tham chiếu quy trình CI được phép</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.workflows-hint" datatype="html">
-        <source>One per line, for example owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Enter 1–32 refs.</source>
-        <target>Mỗi dòng một tham chiếu, ví dụ owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Nhập từ 1 đến 32 tham chiếu.</target>
+        <source>One per line, for example owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Enter 1–<x id="MAX_REF_ENTRIES" equiv-text="${MAX_REF_ENTRIES}"/> refs.</source>
+        <target>Mỗi dòng một tham chiếu, ví dụ owner/repo/.github/workflows/ci.yml@refs/heads/your-branch. Nhập từ 1 đến <x id="MAX_REF_ENTRIES"/> tham chiếu.</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.workflows-error" datatype="html">
-        <source>Enter between 1 and 32 non-empty workflow refs.</source>
-        <target>Nhập từ 1 đến 32 tham chiếu quy trình CI không rỗng.</target>
+        <source>Enter between 1 and <x id="MAX_REF_ENTRIES" equiv-text="${MAX_REF_ENTRIES}"/> non-empty workflow refs.</source>
+        <target>Nhập từ 1 đến <x id="MAX_REF_ENTRIES"/> tham chiếu quy trình CI không rỗng.</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.binding-submit" datatype="html">
         <source>Create CI binding</source>
@@ -1973,8 +1973,8 @@
         <target>Tên mã</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-name-error" datatype="html">
-        <source>Enter a token name between 1 and 128 characters.</source>
-        <target>Nhập tên mã dài từ 1 đến 128 ký tự.</target>
+        <source>Enter a token name between 1 and <x id="MAX_TOKEN_NAME_LENGTH" equiv-text="${MAX_TOKEN_NAME_LENGTH}"/> characters.</source>
+        <target>Nhập tên mã dài từ 1 đến <x id="MAX_TOKEN_NAME_LENGTH"/> ký tự.</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-submit" datatype="html">
         <source>Create ingest token</source>
@@ -2105,8 +2105,184 @@
         <target>Đang hiển thị giá trị một lần. Hãy lưu giá trị này trước khi rời khỏi bước này.</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.list-truncated" datatype="html">
-        <source>Showing the first 10; more exist, so a newer entry may not appear here.</source>
-        <target>Đang hiển thị 10 mục đầu tiên; vẫn còn mục khác nên mục mới hơn có thể không xuất hiện ở đây.</target>
+        <source>Showing the first <x id="CONNECT_LIST_LIMIT" equiv-text="${CONNECT_LIST_LIMIT}"/> entries; more exist, so a newer entry may not appear here.</source>
+        <target>Đang hiển thị <x id="CONNECT_LIST_LIMIT"/> mục đầu tiên; vẫn còn mục khác nên mục mới hơn có thể không xuất hiện ở đây.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.rotate-named" datatype="html">
+        <source>Rotate token <x id="TOKEN_NAME" equiv-text="${name}"/></source>
+        <target>Thay mã <x id="TOKEN_NAME"/></target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.title" datatype="html">
+        <source>Connection health</source>
+        <target>Tình trạng kết nối</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.expires" datatype="html">
+        <source>Expires (UTC):</source>
+        <target>Hết hạn (UTC):</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.overlap" datatype="html">
+        <source>Rotation overlap ends (UTC):</source>
+        <target>Kết thúc giai đoạn chồng lấn luân chuyển (UTC):</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.last-use" datatype="html">
+        <source>Last successful token use (UTC)</source>
+        <target>Lần dùng mã thành công gần nhất (UTC)</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.not-recorded" datatype="html">
+        <source>Not recorded</source>
+        <target>Chưa ghi nhận</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.last-use-hint" datatype="html">
+        <source>Token use is not a project-wide ingest timestamp. OIDC-only activity is not shown, and token-use timestamps are updated at most once every 60 seconds.</source>
+        <target>Việc dùng mã không phải là mốc thời gian nạp dữ liệu của toàn dự án. Hoạt động chỉ qua OIDC không được hiển thị, và mốc thời gian dùng mã được cập nhật tối đa 60 giây một lần.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.lower-bound" datatype="html">
+        <source>The token list is incomplete. The latest token use shown may be older than the newest use; an unlisted token may have been used more recently.</source>
+        <target>Danh sách mã chưa đầy đủ. Lần dùng mã gần nhất được hiển thị có thể cũ hơn lần dùng mới nhất; một mã không có trong danh sách có thể đã được dùng gần đây hơn.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.truncated" datatype="html">
+        <source>Only part of the credential list is shown. Health reflects the listed credentials; an unlisted credential may still be usable.</source>
+        <target>Chỉ hiển thị một phần danh sách thông tin xác thực. Tình trạng phản ánh các thông tin xác thực được liệt kê; một thông tin xác thực không có trong danh sách vẫn có thể dùng được.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.state-healthy" datatype="html">
+        <source>Healthy</source>
+        <target>Tốt</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.state-pending" datatype="html">
+        <source>Pending</source>
+        <target>Đang chờ</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.state-unhealthy" datatype="html">
+        <source>Unhealthy</source>
+        <target>Không tốt</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.state-unknown" datatype="html">
+        <source>Unknown</source>
+        <target>Không xác định</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-usable" datatype="html">
+        <source>At least one listed credential is usable. This does not confirm a successful ingest.</source>
+        <target>Có ít nhất một thông tin xác thực trong danh sách là dùng được. Điều này không xác nhận một lần nạp dữ liệu thành công.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-rotating" datatype="html">
+        <source>Only tokens in their rotation overlap are usable. Update CI to use the replacement before the overlap ends.</source>
+        <target>Chỉ các mã đang trong giai đoạn chồng lấn luân chuyển là dùng được. Hãy cập nhật CI sang mã thay thế trước khi giai đoạn này kết thúc.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-pending" datatype="html">
+        <source>No listed credential is usable yet. Run the first CI exchange to verify the pending binding.</source>
+        <target>Chưa có thông tin xác thực nào trong danh sách là dùng được. Hãy chạy lần trao đổi CI đầu tiên để xác minh liên kết đang chờ.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-truncated" datatype="html">
+        <source>No usable credential is shown, but the list is incomplete. Connection health cannot be determined from this list.</source>
+        <target>Không có thông tin xác thực dùng được nào được hiển thị, nhưng danh sách chưa đầy đủ. Không thể xác định tình trạng kết nối từ danh sách này.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-unusable" datatype="html">
+        <source>None of the listed credentials is usable. Create an ingest token or enable a CI binding.</source>
+        <target>Không thông tin xác thực nào trong danh sách là dùng được. Hãy tạo mã nạp dữ liệu hoặc bật một liên kết CI.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.reason-empty" datatype="html">
+        <source>No connection credentials are recorded. Create a CI binding or an ingest token.</source>
+        <target>Chưa ghi nhận thông tin xác thực kết nối nào. Hãy tạo một liên kết CI hoặc một mã nạp dữ liệu.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-active" datatype="html">
+        <source>Active</source>
+        <target>Đang hoạt động</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-pending" datatype="html">
+        <source>Pending verification</source>
+        <target>Chờ xác minh</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-disabled" datatype="html">
+        <source>Disabled</source>
+        <target>Đã vô hiệu hóa</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-rotated" datatype="html">
+        <source>Rotated</source>
+        <target>Đã thay mã</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-expired" datatype="html">
+        <source>Expired</source>
+        <target>Đã hết hạn</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.status-revoked" datatype="html">
+        <source>Revoked</source>
+        <target>Đã thu hồi</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-active" datatype="html">
+        <source>Usable.</source>
+        <target>Dùng được.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-rotating" datatype="html">
+        <source>Usable during the rotation overlap. Switch CI to the replacement token before it ends.</source>
+        <target>Dùng được trong giai đoạn chồng lấn luân chuyển. Hãy chuyển CI sang mã thay thế trước khi giai đoạn này kết thúc.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-pending" datatype="html">
+        <source>Not usable until the first CI exchange verifies this binding.</source>
+        <target>Chưa dùng được cho đến khi lần trao đổi CI đầu tiên xác minh liên kết này.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-expired" datatype="html">
+        <source>Not usable: the token has expired.</source>
+        <target>Không dùng được: mã đã hết hạn.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-revoked" datatype="html">
+        <source>Not usable: the token has been revoked.</source>
+        <target>Không dùng được: mã đã bị thu hồi.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-disabled" datatype="html">
+        <source>Not usable: the binding is disabled.</source>
+        <target>Không dùng được: liên kết đã bị vô hiệu hóa.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.health.detail-rotated-ended" datatype="html">
+        <source>Not usable: the rotation overlap has ended. Use the replacement token.</source>
+        <target>Không dùng được: giai đoạn chồng lấn luân chuyển đã kết thúc. Hãy dùng mã thay thế.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.variables" datatype="html">
+        <source>Set EVIDGATE_API_URL and EVIDGATE_PROJECT as non-secret CI variables.</source>
+        <target>Đặt EVIDGATE_API_URL và EVIDGATE_PROJECT làm biến CI không chứa bí mật.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.token-reference" datatype="html">
+        <source>Ingest token: <x id="TOKEN_NAME" equiv-text="${name}"/> (prefix: <x id="TOKEN_PREFIX" equiv-text="${prefix}"/>).</source>
+        <target>Mã nạp dữ liệu: <x id="TOKEN_NAME"/> (tiền tố: <x id="TOKEN_PREFIX"/>).</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.token-injection" datatype="html">
+        <source>Inject EVIDGATE_INGEST_TOKEN from your CI masked secret store. Never paste its value here.</source>
+        <target>Chèn EVIDGATE_INGEST_TOKEN từ kho bí mật đã che của CI. Không bao giờ dán giá trị của nó vào đây.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.binding-reference" datatype="html">
+        <source>GitHub OIDC repository: <x id="REPOSITORY" equiv-text="${repository}"/>.</source>
+        <target>Kho GitHub OIDC: <x id="REPOSITORY"/>.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.binding-variable" datatype="html">
+        <source>Pass the EVIDGATE_BINDING_CHALLENGE repository variable by name; keep its value out of this file.</source>
+        <target>Truyền biến kho EVIDGATE_BINDING_CHALLENGE theo tên; giữ giá trị của biến này ngoài tệp.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.oidc-permission" datatype="html">
+        <source>Grant id-token: write in the CI job so the CLI can request GitHub OIDC credentials.</source>
+        <target>Cấp quyền id-token: write trong job CI để CLI có thể yêu cầu thông tin xác thực GitHub OIDC.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.create-token" datatype="html">
+        <source>Create an ingest token first, then inject EVIDGATE_INGEST_TOKEN from your CI masked secret store.</source>
+        <target>Hãy tạo mã nạp dữ liệu trước, rồi chèn EVIDGATE_INGEST_TOKEN từ kho bí mật đã che của CI.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.title" datatype="html">
+        <source>CLI quickstart</source>
+        <target>Bắt đầu nhanh với CLI</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.hint" datatype="html">
+        <source>Replace the API URL placeholder with your API root, without /v1. Run these commands with your CI variables and credentials injected. This snippet contains metadata only, not credentials.</source>
+        <target>Thay chỗ giữ chỗ của URL API bằng gốc API của bạn, không kèm /v1. Chạy các lệnh này với biến CI và thông tin xác thực đã được chèn. Đoạn lệnh này chỉ chứa thông tin mô tả, không chứa thông tin xác thực.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.copy" datatype="html">
+        <source>Copy CLI quickstart commands</source>
+        <target>Sao chép các lệnh bắt đầu nhanh CLI</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.copied" datatype="html">
+        <source>CLI quickstart commands copied.</source>
+        <target>Đã sao chép các lệnh bắt đầu nhanh CLI.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.quickstart.copy-failed" datatype="html">
+        <source>Copy was unavailable. Select the commands above and copy them manually.</source>
+        <target>Không thể sao chép. Hãy chọn các lệnh ở trên và sao chép thủ công.</target>
       </trans-unit>
       <trans-unit id="settings.audit.caption" datatype="html"><source>Audit activity</source><target>Hoạt động kiểm toán</target></trans-unit>
       <trans-unit id="settings.audit.time" datatype="html"><source>Time (UTC)</source><target>Thời gian (UTC)</target></trans-unit>
