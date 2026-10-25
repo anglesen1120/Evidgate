@@ -281,11 +281,26 @@ export class CreateProjectPage {
     await this.store.projectCreated(project);
     // projectCreated reloads the shell (and can unmount this form). Still update the URL,
     // unless the user navigated elsewhere while that read was in flight.
-    if (this.router.url === originUrl) {
-      await this.router.navigate(['/orgs', orgId, 'onboarding', project.id]);
-    } else {
-      // Navigation elsewhere must not leave a create-only skip marker for a later visit (N2).
+    //
+    // The marker `projectCreated` armed is only good for the activation this URL change causes.
+    // When no such activation is coming — the user already left, the router declined, or the
+    // navigation rejected — it must not be left behind for a later visit (N2/F10), which would
+    // render a derivation nobody read for it.
+    const activated =
+      this.router.url === originUrl && (await this.navigateToProject(orgId, project.id));
+    if (!activated) {
       this.store.clearCreated();
+    }
+  }
+
+  /** Navigates to the created project's resumable URL; false when the router did not activate it. */
+  private async navigateToProject(orgId: string, projectId: string): Promise<boolean> {
+    try {
+      return await this.router.navigate(['/orgs', orgId, 'onboarding', projectId]);
+    } catch {
+      // A rejected navigation (a guard threw, a redirect the router refused) activated nothing,
+      // so it counts as "did not happen" rather than escaping as an unhandled rejection.
+      return false;
     }
   }
 }

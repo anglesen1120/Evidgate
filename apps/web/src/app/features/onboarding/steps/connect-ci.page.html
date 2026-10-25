@@ -1,5 +1,10 @@
 <section class="connect" data-testid="connect-ci-page" [attr.aria-busy]="busy()">
   <p>{{ intro }}</p>
+  <p data-testid="connect-reveal-status" role="status" [attr.aria-live]="'polite'">
+    @if (slot.current()) {
+      {{ revealShownLabel }}
+    }
+  </p>
   @if (slot.current(); as entry) {
     <div data-testid="connect-reveal">
       <app-connect-step-reveal
@@ -9,7 +14,7 @@
         [copyLabel]="copyLabel"
         [copiedLabel]="copiedLabel"
         [dismissLabel]="dismissLabel"
-        (dismissed)="slot.clear()"
+        (dismissed)="dismissReveal()"
       />
     </div>
   }
@@ -19,14 +24,16 @@
       <time [attr.datetime]="overlap">{{ overlap | date: 'medium' : '+0000' }}</time>
     </p>
   }
-  @if (failure(); as error) {
-    <section data-testid="connect-ci-error" role="alert">
-      <app-request-state [status]="'error'" [error]="error" [retryEligible]="false" />
-      <p class="validation">{{ error.message }}</p>
+  @if (displayFailure(); as error) {
+    <section data-testid="connect-ci-error">
+      <app-error-pattern [error]="error" />
       @for (detail of error.details; track $index) {
         <p class="validation">{{ detail.path }} {{ detail.reason }}</p>
       }
     </section>
+    @if (responseUncertain()) {
+      <p class="notice" data-testid="connect-ci-response-uncertain">{{ uncertainLabel }}</p>
+    }
   }
   @if (store.refreshFailure()) {
     <section class="notice" data-testid="connect-ci-refresh-failed" role="status">
@@ -48,7 +55,7 @@
   </p>
   <div class="panels">
     <section class="panel" data-testid="connect-oidc-panel" aria-labelledby="connect-oidc-heading">
-      <h3 id="connect-oidc-heading">{{ oidcTitle }}</h3>
+      <h3 #bindingHeading id="connect-oidc-heading" tabindex="-1">{{ oidcTitle }}</h3>
       <p>{{ oidcHint }}</p>
       <p>{{ workflowHint }}</p>
       <form (ngSubmit)="createBinding()">
@@ -173,13 +180,16 @@
           <li>{{ emptyBindings }}</li>
         }
       </ul>
+      @if (store.bindingsTruncated()) {
+        <p class="notice" data-testid="connect-bindings-truncated">{{ truncatedLabel }}</p>
+      }
     </section>
     <section
       class="panel"
       data-testid="connect-token-panel"
       aria-labelledby="connect-token-heading"
     >
-      <h3 id="connect-token-heading">{{ tokenTitle }}</h3>
+      <h3 #tokenHeading id="connect-token-heading" tabindex="-1">{{ tokenTitle }}</h3>
       <p>{{ tokenHint }}</p>
       <form (ngSubmit)="createToken()">
         <div class="field">
@@ -190,7 +200,6 @@
             name="tokenName"
             type="text"
             autocomplete="off"
-            [maxLength]="128"
             [(ngModel)]="tokenName"
             [disabled]="busy() || !tokenPermitted()"
             [attr.aria-invalid]="tokenSubmitted() && tokenNameInvalid() ? 'true' : null"
@@ -219,7 +228,7 @@
       <ul class="metadata">
         @for (token of store.tokens(); track token.id) {
           <li data-testid="connect-token-row" [attr.data-status]="token.status">
-            <strong>{{ token.name }}</strong>
+            <strong [id]="'connect-token-name-' + token.id">{{ token.name }}</strong>
             <app-status-pill
               [tone]="'neutral'"
               [dimension]="statusLabel"
@@ -263,7 +272,11 @@
                 type="button"
                 data-testid="connect-token-rotate"
                 [disabled]="busy() || !tokenPermitted()"
-                [attr.aria-describedby]="!tokenPermitted() ? 'connect-token-permission' : null"
+                [attr.aria-describedby]="
+                  'connect-token-name-' +
+                  token.id +
+                  (!tokenPermitted() ? ' connect-token-permission' : '')
+                "
                 (click)="rotate(token)"
               >
                 {{ rotateLabel }}
@@ -274,6 +287,9 @@
           <li>{{ emptyTokens }}</li>
         }
       </ul>
+      @if (store.tokensTruncated()) {
+        <p class="notice" data-testid="connect-tokens-truncated">{{ truncatedLabel }}</p>
+      }
     </section>
   </div>
 </section>

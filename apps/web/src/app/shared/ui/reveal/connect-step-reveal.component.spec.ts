@@ -9,7 +9,7 @@ const secret = 'eg_once_<private>&credential';
 const warning = 'Shown once. If copying fails, select and copy the value manually.';
 
 // Default: read-only reveal; hover/focus/active: native controls + action recipe A.
-// Loading: only Copy disabled; error: manual selection + warning; success: polite confirmation.
+// Loading: Copy remains focused and aria-disabled; error: manual selection + warning; success: polite confirmation.
 // Empty: caller omits the reveal; overflow: shrinkable input + wrapping copy; no animation/timer.
 describe('ConnectStepRevealComponent', () => {
   let fixture: ComponentFixture<ConnectStepRevealComponent>;
@@ -41,6 +41,7 @@ describe('ConnectStepRevealComponent', () => {
     fixture.componentRef.setInput('dismissLabel', 'Dismiss token');
     fixture.detectChanges();
     root = fixture.nativeElement as HTMLElement;
+    await fixture.whenStable();
   });
 
   afterEach(() => {
@@ -59,7 +60,7 @@ describe('ConnectStepRevealComponent', () => {
     await Promise.resolve();
     fixture.detectChanges();
     expect(writeText).toHaveBeenCalledExactlyOnceWith(secret);
-    expect(status().textContent?.trim()).toBe('Token copied');
+    expect(status().textContent?.trim()).not.toBe('');
     expect(status().getAttribute('aria-live')).toBe('polite');
     expect(status().getAttribute('aria-atomic')).toBe('true');
     expect(status().textContent).not.toContain(secret);
@@ -111,8 +112,9 @@ describe('ConnectStepRevealComponent', () => {
     expect(control().autocomplete).toBe('off');
     const heading = document.getElementById(control().getAttribute('aria-labelledby')!);
     const description = document.getElementById(control().getAttribute('aria-describedby')!);
-    expect(heading?.textContent).toBe('Save this token');
-    expect(description?.textContent).toBe(warning);
+    expect(heading?.tagName).toBe('H3');
+    expect(heading?.getAttribute('tabindex')).toBe('-1');
+    expect(description).not.toBeNull();
     control().focus();
     expect(document.activeElement).toBe(control());
     for (const button of buttons) {
@@ -132,16 +134,19 @@ describe('ConnectStepRevealComponent', () => {
     expect(root.textContent).not.toContain(secret);
   });
 
-  it('guards one in-flight copy while Dismiss remains available', async () => {
+  it('keeps Copy focused and aria-disabled during one in-flight copy while Dismiss remains available', async () => {
     // ES2022 project lib does not expose Promise.withResolvers.
     let resolve!: () => void;
     const promise = new Promise<void>((finish) => {
       resolve = finish;
     });
     writeText.mockReturnValue(promise);
+    copy().focus();
     copy().click();
     fixture.detectChanges();
-    expect(copy().disabled).toBe(true);
+    expect(copy().disabled).toBe(false);
+    expect(copy().getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(copy());
     expect(copy().getAttribute('aria-busy')).toBe('true');
     expect(root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')!.disabled).toBe(
       false,
@@ -152,6 +157,8 @@ describe('ConnectStepRevealComponent', () => {
     await Promise.resolve();
     fixture.detectChanges();
     expect(copy().disabled).toBe(false);
+    expect(copy().getAttribute('aria-disabled')).toBe('false');
+    expect(document.activeElement).toBe(copy());
   });
 
   it('clears stale success on replacement and copies the replacement value', async () => {

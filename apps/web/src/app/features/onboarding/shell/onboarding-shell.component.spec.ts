@@ -334,6 +334,8 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
     sampleRun: null,
     bindings: [],
     tokens: [],
+    bindingsTruncated: false,
+    tokensTruncated: false,
     currentStep: 1,
   };
   const CREATED: OnboardingProgress = {

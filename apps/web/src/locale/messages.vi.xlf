@@ -2058,6 +2058,18 @@
         <source>Revoked</source>
         <target>Đã thu hồi</target>
       </trans-unit>
+      <trans-unit id="onboarding.connect.response-uncertain" datatype="html">
+        <source>It may have been saved. Reload the connection data before trying again.</source>
+        <target>Kết nối có thể đã được lưu. Hãy tải lại dữ liệu kết nối trước khi thử lại.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.reveal-shown" datatype="html">
+        <source>A one-time value is shown. Save it before leaving this step.</source>
+        <target>Đang hiển thị giá trị một lần. Hãy lưu giá trị này trước khi rời khỏi bước này.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.list-truncated" datatype="html">
+        <source>Showing the first 10; more exist, so a newer entry may not appear here.</source>
+        <target>Đang hiển thị 10 mục đầu tiên; vẫn còn mục khác nên mục mới hơn có thể không xuất hiện ở đây.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

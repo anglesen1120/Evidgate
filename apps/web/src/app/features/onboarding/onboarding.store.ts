@@ -30,8 +30,13 @@
 //    `status: 'loading'`, never changes `viewStep` or `focusToken`, and on failure keeps the
 //    derivation it had while publishing `refreshFailure`. That is what step 2 needs after a
 //    create: the page stays mounted — with the one-time secret it is revealing — while `done[2]`
-//    flips and `canGoNext` enables Next (AC2). It shares `load`'s sequence guard, so a newer
-//    load or refresh wins and a superseded answer is dropped.
+//    flips and `canGoNext` enables Next (AC2). It owns its sequence, separate from `load`'s
+//    (F4): a refresh never supersedes a load, so a refresh asked for while the resume is still in
+//    flight cannot leave the store loading forever; a refresh drops its own answer when a newer
+//    refresh started, or when a newer load did (that read describes a page nobody is on any
+//    more). And a step move — `selectStep`, `next`, `back` — clears `refreshFailure`: the notice
+//    belongs to the step the refresh failed on, so a step 2 that is re-entered after a failure
+//    must not show a banner for it.
 
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
@@ -115,6 +120,12 @@ export const OnboardingStore = signalStore(
      */
     bindings: computed<readonly CiBindingView[]>(() => progress()?.bindings ?? NO_BINDINGS),
     tokens: computed<readonly IngestTokenView[]>(() => progress()?.tokens ?? NO_TOKENS),
+    /**
+     * Whether step 2's list is the whole list or the first page of a longer one. False before a
+     * derivation answers: no rows have been read, so nothing is being left out either.
+     */
+    bindingsTruncated: computed<boolean>(() => progress()?.bindingsTruncated ?? false),
+    tokensTruncated: computed<boolean>(() => progress()?.tokensTruncated ?? false),
     /** True when the viewed step's done-condition holds and there is a step after it. */
     canGoNext: computed<boolean>(() => {
       const step = viewStep();
@@ -127,10 +138,18 @@ export const OnboardingStore = signalStore(
     const session = inject(SessionStore);
     /**
      * The sequence number of the newest `load`, per store instance (this store is a route-level
-     * singleton, so two activations can overlap across a route change). An answer whose sequence
-     * is no longer the newest is dropped.
+     * singleton, so two activations can overlap across a route change). A load's answer — success
+     * or failure — is dropped when a newer load started meanwhile.
      */
     let newestLoad = 0;
+    /**
+     * The sequence number of the newest `refresh`, deliberately separate from `newestLoad` (F4).
+     * Sharing one counter made a refresh that started during an in-flight load supersede that
+     * load: the load dropped its answer, nothing else published, and the store stayed `loading`
+     * for the rest of the activation. A refresh is an in-place re-derivation of a page that is
+     * already on screen, so it never outranks the resume that decides what is on screen.
+     */
+    let newestRefresh = 0;
     /**
      * The scope a create just published, for the one activation its URL change causes. It is not
      * state: nothing renders it, and it must never outlive the next `load` (S71 N1).
@@ -174,26 +193,37 @@ export const OnboardingStore = signalStore(
       if (step === store.viewStep()) {
         return;
       }
-      patchState(store, { viewStep: step, focusToken: store.focusToken() + 1 });
+      // A move dismisses a refresh notice: it reports a read that failed for the step that was on
+      // screen, and a step re-entered later must not open with a banner for that earlier read.
+      patchState(store, {
+        viewStep: step,
+        focusToken: store.focusToken() + 1,
+        refreshFailure: null,
+      });
     }
 
     /**
-     * Re-derives the position without disturbing the view (header, 6). It shares `newestLoad`, so
-     * a newer `load` or `refresh` supersedes this answer; a superseded one publishes nothing.
+     * Re-derives the position without disturbing the view (header, 6). Its answer is dropped when
+     * a newer refresh started, or when a load started after it did: this is a re-derivation of the
+     * page on screen, so a resume that began later describes a page nobody is on any more.
      */
     async function refresh(orgId: string, projectId: string): Promise<void> {
-      newestLoad += 1;
-      const refreshSequence = newestLoad;
+      newestRefresh += 1;
+      const refreshSequence = newestRefresh;
+      // The load counter this refresh found. A load that starts afterwards bumps it, which is
+      // what makes this answer stale — and the reverse is not true: this refresh leaves `newestLoad`
+      // alone, so the in-flight load it overlaps still publishes (F4).
+      const loadAtStart = newestLoad;
       try {
         const progress = await progressService.load(orgId, projectId);
-        if (refreshSequence !== newestLoad) {
+        if (refreshSequence !== newestRefresh || loadAtStart !== newestLoad) {
           return;
         }
         // Only the derivation and its own failure marker: `status`, `viewStep`, `focusToken` and
         // the create marker belong to the activation on screen, which a refresh does not change.
         patchState(store, { progress, refreshFailure: null });
       } catch (error) {
-        if (refreshSequence !== newestLoad) {
+        if (refreshSequence !== newestRefresh || loadAtStart !== newestLoad) {
           return;
         }
         // The page keeps what it renders — including the one-time secret it is revealing — and

@@ -171,10 +171,12 @@ export interface FixtureDocument {
  *
  * One shape note for future rows: `allowed_workflow_refs` holds `job_workflow_ref` values,
  * `owner/repo/.github/workflows/<file>@refs/heads/main` — what the contract describes
- * (contracts/openapi.yaml:6654) and what the server's pattern accepts (`Ci/RefGlob.cs:74-78`).
+ * (contracts/openapi.yaml:6654) and what the server's pattern accepts (`Ci/RefGlob.cs:69,77`; a
+ * create with the other spelling is a 422 through `CiBindingCommands.cs:45`).
  * `ci-binding-create` uses that form; the T1 rows `ci-bindings-list-onboarding-connected` and
- * `ci-bindings-list-onboarding-run` still spell it `refs/heads/main:<path>`, which the server would
- * refuse, so they are an open corpus item rather than an established convention.
+ * `ci-bindings-list-onboarding-run` still spell it `refs/heads/main:<path>` (line 18 of each), which
+ * the server would refuse, so they are an open corpus item handed to 09.2.1-T7.1 rather than an
+ * established convention.
  *
  * 09.7.1-T1 added three rows for the Settings tab strip: `permissions-list-settings-admin`
  * (`?fixture.variant.listPermissions=settings-admin`: the grant set that reaches every tab code of

@@ -18,7 +18,10 @@
 //   - `refresh` re-derives in place (AC2): the page — and the one-time secret it reveals — stays
 //     mounted, so `status`, `viewStep` and `focusToken` never change, `done[2]` flips only when the
 //     server says so, and a failure lands in `refreshFailure` without throwing or dropping the
-//     derivation the page is rendering;
+//     derivation the page is rendering; it owns its sequence, so it never supersedes the resume it
+//     overlaps, and a step move clears its notice (F4);
+//   - each step 2 list reports whether the server held more rows than the page it answered, and
+//     nothing is reported truncated before a derivation exists;
 //   - `projectCreated` adopts the project into the session cache and resumes on step 2, and never
 //     throws when the follow-up read fails — the create already succeeded;
 //   - AC7: resuming a project that already has an ingest token reaches step 3 without issuing
@@ -114,12 +117,18 @@ function projectPage(items: readonly ProjectDto[]): ProjectListResponse {
   return { items: [...items], next_cursor: null };
 }
 
-function bindingPage(items: readonly CiBindingView[]): CiBindingListResponse {
-  return { items: [...items], next_cursor: null };
+function bindingPage(
+  items: readonly CiBindingView[],
+  nextCursor: string | null = null,
+): CiBindingListResponse {
+  return { items: [...items], next_cursor: nextCursor };
 }
 
-function tokenPage(items: readonly IngestTokenView[]): IngestTokenListResponse {
-  return { items: [...items], next_cursor: null };
+function tokenPage(
+  items: readonly IngestTokenView[],
+  nextCursor: string | null = null,
+): IngestTokenListResponse {
+  return { items: [...items], next_cursor: nextCursor };
 }
 
 function runSummary(runId: string, state: RunSummary['state']): RunSummary {
@@ -533,6 +542,24 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
     expect(store.bindings()).toEqual([]);
     expect(store.tokens()).toEqual([]);
     expect(store.refreshFailure()).toBeNull();
+    // Nothing was read, so nothing is being left out either.
+    expect(store.bindingsTruncated()).toBe(false);
+    expect(store.tokensTruncated()).toBe(false);
+  });
+
+  it('reports a step 2 list as truncated only when the server answered a next cursor', async () => {
+    data.projects = [PROJECT];
+    // The bindings page is full and carries a cursor: the panel renders these rows, but they are
+    // not the project's whole inventory, and it says so instead of implying they are.
+    data.bindings = bindingPage([BINDING], 'cursor-b');
+    data.tokens = tokenPage([TOKEN]);
+
+    await store.load('o-1', 'p-1');
+
+    expect(store.bindingsTruncated()).toBe(true);
+    expect(store.tokensTruncated()).toBe(false);
+    // Truncation is a rendering hint, not a done-condition: step 2 still completes on presence.
+    expect(store.done()[2]).toBe(true);
   });
 
   it('refresh publishes the new derivation without moving the page (AC2)', async () => {
@@ -635,6 +662,97 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
     expect(store.refreshFailure()).toBeNull();
   });
 
+  it('publishes the load a refresh overlaps, so the store cannot stay loading (F4)', async () => {
+    data.projects = [PROJECT];
+    data.deferProjectReads = true;
+
+    // Step 2 asks for a refresh while the resume is still in flight: the store is `loading`.
+    const loading = store.load('o-1', 'p-1');
+    const refreshing = store.refresh('o-1', 'p-1');
+    expect(data.pendingProjects.length).toBe(2);
+    expect(store.status()).toBe('loading');
+
+    // The load answers: it is the read that decides what is on screen, and the overlapped refresh
+    // must not take that answer away from it — the bug was the store staying `loading` forever.
+    data.bindings = bindingPage([BINDING]);
+    data.settleProject(0, PROJECT);
+    await loading;
+
+    expect(store.status()).toBe('ready');
+    expect(store.failure()).toBeNull();
+    expect(store.currentStep()).toBe(3);
+    expect(store.viewStep()).toBe(3);
+
+    // The refresh then answers with the newer state; it patches the derivation only.
+    data.bindings = bindingPage([BINDING, { ...BINDING, id: 'b-2' }]);
+    data.settleProject(1, PROJECT);
+    await refreshing;
+
+    expect(store.status()).toBe('ready');
+    expect(store.viewStep()).toBe(3);
+    expect(store.bindings()).toHaveLength(2);
+  });
+
+  it('drops a refresh that a newer refresh superseded', async () => {
+    data.projects = [PROJECT];
+    data.bindings = bindingPage([BINDING]);
+    await store.load('o-1', 'p-1');
+    expect(store.bindings()).toEqual([BINDING]);
+
+    // Two refreshes overlap; the newer one is the answer the page must end up showing.
+    const second: CiBindingView = { ...BINDING, id: 'b-2', repository_full_name: 'acme/web' };
+    data.deferProjectReads = true;
+    const older = store.refresh('o-1', 'p-1');
+    const newer = store.refresh('o-1', 'p-1');
+    expect(data.pendingProjects.length).toBe(2);
+
+    // The older refresh answers first with an empty list: dropped, because the newer one started
+    // after it and that is the read whose answer describes the project now.
+    data.bindings = bindingPage([]);
+    data.settleProject(0, PROJECT);
+    await older;
+    expect(store.bindings()).toEqual([BINDING]);
+
+    data.bindings = bindingPage([BINDING, second]);
+    data.settleProject(1, PROJECT);
+    await newer;
+
+    expect(store.bindings()).toEqual([BINDING, second]);
+    expect(store.status()).toBe('ready');
+  });
+
+  it('clears the refresh notice on every user step move (F4)', async () => {
+    // Steps 1–2 are done and step 3 is the first open one, so all three moves are allowed.
+    data.projects = [PROJECT];
+    data.bindings = bindingPage([BINDING]);
+    await store.load('o-1', 'p-1');
+    expect(store.viewStep()).toBe(3);
+
+    const failedRefresh = async (): Promise<void> => {
+      data.bindingFailure = apiError('unavailable', 503);
+      await store.refresh('o-1', 'p-1');
+      data.bindingFailure = null;
+      expect(store.refreshFailure()).toBe('unavailable');
+    };
+
+    // selectStep: the notice belongs to the step that was on screen, so a step re-entered later
+    // opens without it — the remounted step 2 must not show an earlier failure's banner.
+    await failedRefresh();
+    store.selectStep(2);
+    expect(store.viewStep()).toBe(2);
+    expect(store.refreshFailure()).toBeNull();
+
+    await failedRefresh();
+    store.next();
+    expect(store.viewStep()).toBe(3);
+    expect(store.refreshFailure()).toBeNull();
+
+    await failedRefresh();
+    store.back();
+    expect(store.viewStep()).toBe(2);
+    expect(store.refreshFailure()).toBeNull();
+  });
+
   it('load clears a refresh failure it supersedes', async () => {
     data.projects = [PROJECT];
     await store.load('o-1', 'p-1');
@@ -670,6 +788,8 @@ describe('OnboardingStore on the terminal screen (09.2.1-T1.1)', () => {
     sampleRun: null,
     bindings: [BINDING],
     tokens: [],
+    bindingsTruncated: false,
+    tokensTruncated: false,
     currentStep: 'enabled',
   };
 

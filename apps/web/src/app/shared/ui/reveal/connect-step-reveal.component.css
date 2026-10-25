@@ -53,6 +53,7 @@ input {
   line-height: var(--eg-leading-sm);
 }
 
+h3:focus,
 input:focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);
   outline-offset: var(--eg-focus-offset);
@@ -62,6 +63,16 @@ input:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: var(--eg-space-3);
+}
+
+.state-panel__action[aria-disabled='true'],
+.state-panel__action[aria-disabled='true']:hover,
+.state-panel__action[aria-disabled='true']:active {
+  border-color: var(--eg-border);
+  background: var(--eg-neutral-bg);
+  color: var(--eg-text-muted);
+  box-shadow: none;
+  cursor: default;
 }
 
 [role='status'] {

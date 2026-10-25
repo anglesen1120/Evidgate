@@ -95,6 +95,16 @@ describe('CreateProjectPage', () => {
     return root.querySelector<HTMLButtonElement>('[data-testid="onboarding-project-submit"]')!;
   }
 
+  /**
+   * The submit chain keeps going after the form event — create, adopt, navigate, marker — so a
+   * stable fixture is not proof it finished. One macrotask runs every microtask it queued.
+   */
+  async function settle(): Promise<void> {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
   it('submits once, adopts the SDK project, then navigates to its resumable URL', async () => {
     await fill();
     await submit();
@@ -109,6 +119,8 @@ describe('CreateProjectPage', () => {
     expect(projectCreated.mock.invocationCallOrder[0]).toBeLessThan(
       navigate.mock.invocationCallOrder[0]!,
     );
+    // The navigation did happen, so the marker stays armed for the activation it causes (F10).
+    expect(clearCreated).not.toHaveBeenCalled();
   });
 
   it('clears the create marker when the user navigated elsewhere before the read completed (N2)', async () => {
@@ -121,6 +133,26 @@ describe('CreateProjectPage', () => {
     await submit();
     expect(projectCreated).toHaveBeenCalledWith(PROJECT);
     expect(navigate).not.toHaveBeenCalled();
+    expect(clearCreated).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the create marker when the router declines the navigation (N2/F10)', async () => {
+    // A guard that answers `false` activated nothing: no activation is coming for the marker.
+    navigate.mockResolvedValueOnce(false);
+    await fill();
+    await submit();
+    await settle();
+    expect(projectCreated).toHaveBeenCalledWith(PROJECT);
+    expect(navigate).toHaveBeenCalledWith(['/orgs', 'org-1', 'onboarding', PROJECT.id]);
+    expect(clearCreated).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the create marker when the navigation rejects, and swallows the rejection (N2/F10)', async () => {
+    navigate.mockRejectedValueOnce(new Error('the guard threw'));
+    await fill();
+    await submit();
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(['/orgs', 'org-1', 'onboarding', PROJECT.id]);
     expect(clearCreated).toHaveBeenCalledTimes(1);
   });
 

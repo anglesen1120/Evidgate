@@ -118,6 +118,11 @@ test.describe('the token path reveals its secret exactly once (AC2, §8)', () =>
     await expect(revealSlot(page)).toBeVisible();
     const value = revealValue(page);
     await expect(value).toHaveValue(FIXTURE_TOKEN_SECRET);
+    await expect(revealSlot(page).getByRole('heading')).toBeFocused();
+    const shownStatus = page.getByTestId('connect-reveal-status');
+    await expect(shownStatus).toHaveAttribute('aria-live', 'polite');
+    await expect(shownStatus).not.toHaveText(/^\s*$/);
+    await expect(shownStatus).not.toContainText(FIXTURE_TOKEN_SECRET);
     // AC2's second clause, before anything is dismissed: the value lives in the slot, in exactly
     // one element, and nowhere else — not in a hidden field, a log buffer, a store, the URL or a
     // history entry.
@@ -146,6 +151,7 @@ test.describe('the token path reveals its secret exactly once (AC2, §8)', () =>
     await page.locator('[data-testid="reveal-dismiss"]').click();
     await expectNoReveal(page);
     await expectSecretAbsent(page, FIXTURE_TOKEN_SECRET, 'after Dismiss');
+    await expect(page.locator('#connect-token-heading')).toBeFocused();
 
     // The corpus is static: the list read after a create answers the seed's empty page, so the page
     // must not invent a row from the answer it just revealed.
@@ -190,6 +196,7 @@ test.describe('the OIDC path reveals the challenge once (AC2, §8)', () => {
     await createBinding(page);
 
     await expect(revealValue(page)).toHaveValue(FIXTURE_BINDING_CHALLENGE);
+    await expect(revealSlot(page).getByRole('heading')).toBeFocused();
     await expectSecretOnlyInReveal(page, FIXTURE_BINDING_CHALLENGE, 'the open challenge');
     await expectNoStepInStorage(page, 'after the binding create');
     // The reveal holds the response body's own `binding_challenge`, so the create did reach the
@@ -215,6 +222,7 @@ test.describe('the OIDC path reveals the challenge once (AC2, §8)', () => {
     await page.locator('[data-testid="reveal-dismiss"]').click();
     await expectNoReveal(page);
     await expectSecretAbsent(page, FIXTURE_BINDING_CHALLENGE, 'after Dismiss');
+    await expect(page.locator('#connect-oidc-heading')).toBeFocused();
     // Same static-corpus caveat as the token path: no row may be fabricated from the create.
     await expect(page.locator('[data-testid="connect-binding-row"]')).toHaveCount(0);
   });
@@ -383,7 +391,8 @@ test.describe('a refused create shows the server error verbatim (§8, 00 §9.2)'
     const error = ciError(page);
     await expect(error).toBeVisible();
     // Verbatim: the page echoes the envelope's `message` and the pattern shows its `code`.
-    await expect(error.locator('.validation').first()).toHaveText(REFUSAL_MESSAGE);
+    await expect(error.getByRole('alert')).toHaveCount(1);
+    await expect(error.getByText(REFUSAL_MESSAGE, { exact: true })).toBeVisible();
     await expect(error.locator('code')).toHaveText('binding_exists');
     // …and the envelope's `request_id` reaches the reader, which is the support path 00 §9.2 asks
     // for. It is the document's own value, not the per-call `X-Request-Id` header

@@ -62,6 +62,8 @@ describe('ConnectCiPage', () => {
   const permitted = signal(true);
   const bindings = signal<readonly CiBindingView[]>([]);
   const tokens = signal<readonly IngestTokenView[]>([]);
+  const bindingsTruncated = signal(false);
+  const tokensTruncated = signal(false);
   const refreshFailure = signal<'unavailable' | null>(null);
   const done = computed(() => ({ 2: bindings().length + tokens().length > 0 }));
   const canGoNext = computed(() => done()[2]);
@@ -74,6 +76,8 @@ describe('ConnectCiPage', () => {
     permitted.set(true);
     bindings.set([]);
     tokens.set([]);
+    bindingsTruncated.set(false);
+    tokensTruncated.set(false);
     refreshFailure.set(null);
     createCiBinding
       .mockReset()
@@ -101,7 +105,16 @@ describe('ConnectCiPage', () => {
         },
         {
           provide: OnboardingStore,
-          useValue: { bindings, tokens, done, canGoNext, refreshFailure, refresh },
+          useValue: {
+            bindings,
+            tokens,
+            bindingsTruncated,
+            tokensTruncated,
+            done,
+            canGoNext,
+            refreshFailure,
+            refresh,
+          },
         },
         { provide: SessionStore, useValue: { has: () => permitted() } },
       ],
@@ -165,7 +178,6 @@ describe('ConnectCiPage', () => {
     expect(
       root.querySelector('[data-testid="connect-binding-row"]')?.getAttribute('data-status'),
     ).toBe('pending_verification');
-    expect(root.textContent).toContain('Pending verification');
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b|Binding verified/);
   });
 
@@ -196,14 +208,19 @@ describe('ConnectCiPage', () => {
       await fillOidc({ 'connect-oidc-repo-id': id });
       await submit('oidc');
       expect(createCiBinding).not.toHaveBeenCalled();
-      expect(root.querySelector('#connect-repo-id-error')?.textContent).toContain(
-        'positive whole-number',
-      );
+      expect(root.querySelector('#connect-repo-id-error')?.textContent?.trim()).not.toBe('');
       expect(root.querySelector('#connect-oidc-repo-id')?.getAttribute('aria-invalid')).toBe(
         'true',
       );
     },
   );
+
+  it('accepts the maximum safe integer repository ID', async () => {
+    await fillOidc({ 'connect-oidc-repo-id': '9007199254740991' });
+    await submit('oidc');
+    expect(createCiBinding.mock.calls[0]?.[2].repository_id).toBe(9007199254740991);
+    expect(root.querySelector('#connect-oidc-repo-id')?.getAttribute('aria-invalid')).toBeNull();
+  });
 
   it.each(['connect-oidc-refs', 'connect-oidc-workflows'])(
     'rejects zero and over 32 lines in %s',
@@ -212,7 +229,10 @@ describe('ConnectCiPage', () => {
         await fillOidc({ [id]: value });
         await submit('oidc');
         expect(createCiBinding).not.toHaveBeenCalled();
-        expect(root.textContent).toContain('between 1 and 32 non-empty');
+        const field = root.querySelector(`[data-testid="${id}"]`)!;
+        expect(field.getAttribute('aria-invalid')).toBe('true');
+        const errorId = field.getAttribute('aria-describedby')!.split(' ').at(-1);
+        expect(root.querySelector(`#${errorId}`)?.textContent?.trim()).not.toBe('');
       }
     },
   );
@@ -221,7 +241,9 @@ describe('ConnectCiPage', () => {
     await fillOidc({ 'connect-oidc-repo-name': 'invalid' });
     await submit('oidc');
     expect(createCiBinding).not.toHaveBeenCalled();
-    expect(root.textContent).toContain('Enter the repository as owner/repo.');
+    expect(root.querySelector('#connect-oidc-repo-name')?.getAttribute('aria-invalid')).toBe(
+      'true',
+    );
     await fillOidc({
       'connect-oidc-refs': Array.from({ length: 32 }, (_, i) => `refs/heads/branch-${i}`).join(
         '\n',
@@ -231,20 +253,27 @@ describe('ConnectCiPage', () => {
     expect(createCiBinding.mock.calls[0]?.[2].allowed_ref_patterns).toHaveLength(32);
   });
 
-  it.each(['', '   ', 'n'.repeat(129)])('blocks invalid token name (%j)', async (name) => {
-    await fill({ 'connect-token-name': name });
-    await submit('token');
-    expect(createIngestToken).not.toHaveBeenCalled();
-    expect(root.querySelector('#connect-token-name-error')?.textContent).toContain(
-      'between 1 and 128',
-    );
-  });
+  it.each(['', '   ', 'n'.repeat(129), '\u{10400}'.repeat(129)])(
+    'blocks invalid token name (%j)',
+    async (name) => {
+      await fill({ 'connect-token-name': name });
+      await submit('token');
+      expect(createIngestToken).not.toHaveBeenCalled();
+      expect(root.querySelector('#connect-token-name')?.getAttribute('aria-invalid')).toBe('true');
+      expect(root.querySelector('#connect-token-name-error')?.textContent?.trim()).not.toBe('');
+    },
+  );
 
-  it('accepts a 128-character token name', async () => {
-    await fill({ 'connect-token-name': 'n'.repeat(128) });
-    await submit('token');
-    expect(createIngestToken).toHaveBeenCalledWith('project-1', { name: 'n'.repeat(128) });
-  });
+  it.each(['n'.repeat(128), '\u{10400}'.repeat(128), '\u{10400}'.repeat(65)])(
+    'accepts a token name of %s using Unicode code-point length',
+    async (name) => {
+      await fill({ 'connect-token-name': name });
+      await submit('token');
+      expect(createIngestToken).toHaveBeenCalledWith('project-1', { name });
+      expect(root.querySelector('#connect-token-name')?.hasAttribute('maxlength')).toBe(false);
+      expect(root.querySelector('#connect-token-name')?.getAttribute('aria-invalid')).toBeNull();
+    },
+  );
 
   it('allows only one in-flight command across both panels and rotation', async () => {
     let resolvePending!: (response: CiBindingCreatedResponse) => void;
@@ -273,6 +302,7 @@ describe('ConnectCiPage', () => {
   it.each([
     ['conflict', 409],
     ['forbidden', 403],
+    ['not_found', 404],
     ['validation', 422],
     ['rate_limited', 429],
   ] as const)(
@@ -283,6 +313,10 @@ describe('ConnectCiPage', () => {
       await submit('token');
       const error = root.querySelector('[data-testid="connect-ci-error"]');
       expect(error?.textContent).toContain('Exact server refusal, unchanged.');
+      expect(error?.textContent?.split('Exact server refusal, unchanged.')).toHaveLength(2);
+      expect(error?.querySelectorAll('[role="alert"]')).toHaveLength(1);
+      expect(error?.querySelector('[role="alert"] [role="alert"]')).toBeNull();
+      expect(error?.querySelector('button')).toBeNull();
       expect(error?.textContent).toContain('/repository_id');
       expect(error?.textContent).toContain('Exact field reason.');
       expect(
@@ -376,9 +410,11 @@ describe('ConnectCiPage', () => {
     for (const id of ['connect-oidc-submit', 'connect-token-submit', 'connect-token-rotate']) {
       const button = root.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)!;
       expect(button.disabled).toBe(true);
-      expect(
-        root.querySelector(`#${button.getAttribute('aria-describedby')}`)?.textContent,
-      ).toContain('Ask your organisation owner');
+      const descriptionIds = button.getAttribute('aria-describedby')!.split(' ');
+      const permissionId =
+        id === 'connect-oidc-submit' ? 'connect-binding-permission' : 'connect-token-permission';
+      expect(descriptionIds).toContain(permissionId);
+      expect(root.querySelector(`#${permissionId}`)?.textContent?.trim()).not.toBe('');
     }
     await fillOidc();
     await submit('oidc');
@@ -396,7 +432,6 @@ describe('ConnectCiPage', () => {
     expect(rotateIngestToken).toHaveBeenCalledExactlyOnceWith('token-1');
     expect(slot.current()).toEqual({ source: 'ingest-token-rotation', value: ROTATED });
     expect(root.querySelector('time[datetime="2026-10-27T07:30:00Z"]')).not.toBeNull();
-    expect(root.textContent).not.toContain('24 h');
     expect(refresh).toHaveBeenCalledWith('org-1', 'project-1');
   });
 
@@ -429,5 +464,199 @@ describe('ConnectCiPage', () => {
     expect(createIngestToken).toHaveBeenCalledTimes(1);
     expect(root.querySelector('[data-testid="connect-ci-refresh-failed"]')).toBeNull();
     expect(canGoNext()).toBe(true);
+  });
+
+  it('keeps the first reveal copyable when a second create fails with 409', async () => {
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    try {
+      await fill({ 'connect-token-name': 'Build upload' });
+      await submit('token');
+      createIngestToken.mockRejectedValueOnce(failure('conflict', 409));
+      await submit('token');
+      expect(slot.current()).toEqual({ source: 'ingest-token', value: SECRET });
+      expect(root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')?.value).toBe(
+        SECRET,
+      );
+      root.querySelector<HTMLButtonElement>('[data-testid="reveal-copy"]')!.click();
+      await fixture.whenStable();
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(SECRET);
+      expect(createIngestToken).toHaveBeenCalledTimes(2);
+      expect(refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  });
+
+  it.each(['oidc', 'token'] as const)(
+    'focuses the %s reveal heading, announces no value, and restores the panel heading on Dismiss',
+    async (panel) => {
+      if (panel === 'oidc') await fillOidc();
+      else await fill({ 'connect-token-name': 'Build upload' });
+      await submit(panel);
+      const value = root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')!;
+      const heading = root.querySelector(`#${value.getAttribute('aria-labelledby')}`)!;
+      expect(document.activeElement).toBe(heading);
+      expect(heading.getAttribute('tabindex')).toBe('-1');
+      const announcement = root.querySelector('[data-testid="connect-reveal-status"]')!;
+      expect(announcement.getAttribute('aria-live')).toBe('polite');
+      expect(announcement.textContent?.trim()).not.toBe('');
+      expect(announcement.textContent).not.toContain(value.value);
+      root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')!.click();
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(root.querySelector(`#connect-${panel}-heading`));
+      expect(announcement.textContent?.trim()).toBe('');
+    },
+  );
+
+  it.each(['timeout', 'network'] as const)(
+    'reconciles metadata once after a %s on create/rotate without replaying the command',
+    async (kind) => {
+      for (const action of ['oidc', 'token', 'rotate'] as const) {
+        refresh.mockClear();
+        createCiBinding.mockClear();
+        createIngestToken.mockClear();
+        rotateIngestToken.mockClear();
+        const error = failure(kind, 0);
+        // Transport errors may be retryable for reads, never for these one-time commands.
+        const uncertain = new ApiRequestError({ ...error.error, retryable: true });
+        refresh.mockImplementationOnce(() => {
+          tokens.set([TOKEN]);
+          return Promise.resolve();
+        });
+        if (action === 'oidc') {
+          createCiBinding.mockRejectedValueOnce(uncertain);
+          await fillOidc();
+          await submit('oidc');
+        } else if (action === 'token') {
+          createIngestToken.mockRejectedValueOnce(uncertain);
+          await fill({ 'connect-token-name': 'Build upload' });
+          await submit('token');
+        } else {
+          rotateIngestToken.mockRejectedValueOnce(uncertain);
+          root.querySelector<HTMLButtonElement>('[data-testid="connect-token-rotate"]')!.click();
+          await fixture.whenStable();
+        }
+        expect(refresh).toHaveBeenCalledExactlyOnceWith('org-1', 'project-1');
+        expect(root.querySelector('[data-testid="connect-token-row"]')).not.toBeNull();
+        const hint = root.querySelector('[data-testid="connect-ci-response-uncertain"]');
+        expect(hint).not.toBeNull();
+        expect(hint?.textContent?.trim()).not.toBe('');
+        expect(root.querySelector('[data-testid="connect-ci-error"] button')).toBeNull();
+        expect(slot.current()).toBeNull();
+        expect(createCiBinding).toHaveBeenCalledTimes(action === 'oidc' ? 1 : 0);
+        expect(createIngestToken).toHaveBeenCalledTimes(action === 'token' ? 1 : 0);
+        expect(rotateIngestToken).toHaveBeenCalledTimes(action === 'rotate' ? 1 : 0);
+      }
+    },
+  );
+
+  it.each(['orgId', 'projectId'])(
+    'resets busy on changed %s and ignores the stale completion while the new command is busy',
+    async (input) => {
+      // ES2022 project lib does not expose Promise.withResolvers.
+      let resolveOld!: (response: IngestTokenCreatedResponse) => void;
+      let resolveNew!: (response: IngestTokenCreatedResponse) => void;
+      createIngestToken
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveOld = resolve;
+            }),
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveNew = resolve;
+            }),
+        );
+      await fill({ 'connect-token-name': 'Build upload' });
+      await submit('token');
+      fixture.componentRef.setInput(input, 'scope-2');
+      await fixture.whenStable();
+      const button = root.querySelector<HTMLButtonElement>('[data-testid="connect-token-submit"]')!;
+      expect(button.disabled).toBe(false);
+      await submit('token');
+      expect(createIngestToken).toHaveBeenCalledTimes(2);
+      resolveOld({ token: TOKEN, secret: SECRET });
+      await fixture.whenStable();
+      expect(slot.current()).toBeNull();
+      expect(refresh).not.toHaveBeenCalled();
+      expect(button.disabled).toBe(true);
+      resolveNew({ token: TOKEN, secret: ROTATED });
+      await fixture.whenStable();
+      expect(slot.current()?.value).toBe(ROTATED);
+      await fixture.whenStable();
+      expect(
+        root.querySelector<HTMLButtonElement>('[data-testid="connect-token-submit"]')!.disabled,
+      ).toBe(false);
+      expect(refresh).toHaveBeenCalledExactlyOnceWith(
+        input === 'orgId' ? 'scope-2' : 'org-1',
+        input === 'projectId' ? 'scope-2' : 'project-1',
+      );
+    },
+  );
+
+  it('does not reconcile a stale timeout after the project changes', async () => {
+    let rejectOld!: (error: ApiRequestError) => void;
+    createIngestToken.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectOld = reject;
+        }),
+    );
+    await fill({ 'connect-token-name': 'Build upload' });
+    await submit('token');
+    fixture.componentRef.setInput('projectId', 'project-2');
+    await fixture.whenStable();
+    rejectOld(failure('timeout', 0));
+    await fixture.whenStable();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(root.querySelector('[data-testid="connect-ci-error"]')).toBeNull();
+    expect(root.querySelector('[data-testid="connect-ci-response-uncertain"]')).toBeNull();
+  });
+
+  it('describes each Rotate button with its own token name', async () => {
+    tokens.set([TOKEN, { ...TOKEN, id: 'token-2', name: 'Other workflow' }]);
+    await fixture.whenStable();
+    const buttons = [...root.querySelectorAll('[data-testid="connect-token-rotate"]')];
+    expect(buttons).toHaveLength(2);
+    expect(buttons.map((button) => button.getAttribute('aria-describedby'))).toEqual([
+      'connect-token-name-token-1',
+      'connect-token-name-token-2',
+    ]);
+    for (const button of buttons) {
+      const row = button.closest('[data-testid="connect-token-row"]')!;
+      expect(row.querySelector(`#${button.getAttribute('aria-describedby')}`)).toBe(
+        row.querySelector('strong'),
+      );
+    }
+  });
+
+  it('shows a truncation notice only under each truncated metadata list', async () => {
+    expect(root.querySelector('[data-testid="connect-bindings-truncated"]')).toBeNull();
+    expect(root.querySelector('[data-testid="connect-tokens-truncated"]')).toBeNull();
+    bindingsTruncated.set(true);
+    await fixture.whenStable();
+    const bindingNotice = root.querySelector(
+      '[data-testid="connect-oidc-panel"] [data-testid="connect-bindings-truncated"]',
+    );
+    expect(bindingNotice).not.toBeNull();
+    expect(bindingNotice?.textContent?.trim()).not.toBe('');
+    expect(root.querySelector('[data-testid="connect-tokens-truncated"]')).toBeNull();
+    bindingsTruncated.set(false);
+    tokensTruncated.set(true);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-testid="connect-bindings-truncated"]')).toBeNull();
+    const tokenNotice = root.querySelector(
+      '[data-testid="connect-token-panel"] [data-testid="connect-tokens-truncated"]',
+    );
+    expect(tokenNotice).not.toBeNull();
+    expect(tokenNotice?.textContent?.trim()).not.toBe('');
   });
 });

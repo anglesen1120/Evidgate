@@ -16,7 +16,10 @@
 // Step 2's two lists are read with `limit: 10`: step 2's panel shows the rows it created or
 // resumed with (T2.2: metadata only — neither list carries a secret), while the done-condition
 // stays presence — `done[2]` is "either list is not empty", exactly as T1 shipped it — so a token
-// without a binding (or a binding without a token) completes step 2 either way (AC2).
+// without a binding (or a binding without a token) completes step 2 either way (AC2). Because the
+// panel renders one page, each list also reports whether the server held more rows than that page
+// (`bindingsTruncated` / `tokensTruncated`: the response carried a `next_cursor`), so the panel can
+// say the rows shown are not all of them instead of implying the project has exactly these.
 //
 // Scope: every SDK call is made with the id the route supplied (`orgId`, `projectId`), and the
 // project row the server answered with must carry that same `org_id`. A row of another org — a
@@ -74,6 +77,14 @@ export interface OnboardingProgress {
    */
   readonly bindings: readonly CiBindingView[];
   readonly tokens: readonly IngestTokenView[];
+  /**
+   * Whether the server held more rows than the page each list carries (`next_cursor` was not
+   * `null`). Step 2's panel shows one page of rows, so it renders a notice when either list is
+   * truncated rather than presenting that page as the project's whole inventory. Presence, not
+   * truncation, is what completes step 2: `done[2]` stays "either list is not empty".
+   */
+  readonly bindingsTruncated: boolean;
+  readonly tokensTruncated: boolean;
   readonly currentStep: WizardStep;
 }
 
@@ -103,6 +114,9 @@ export class OnboardingProgressService {
         sampleRun: null,
         bindings: [],
         tokens: [],
+        // No project means neither list was read, so neither is truncated.
+        bindingsTruncated: false,
+        tokensTruncated: false,
         currentStep: 1,
       };
     }
@@ -133,6 +147,9 @@ export class OnboardingProgressService {
       sampleRun,
       bindings: bindings.items,
       tokens: tokens.items,
+      // A non-null cursor is the server saying this page is not the whole list.
+      bindingsTruncated: bindings.next_cursor !== null,
+      tokensTruncated: tokens.next_cursor !== null,
       currentStep: deriveCurrentStep(done),
     };
   }

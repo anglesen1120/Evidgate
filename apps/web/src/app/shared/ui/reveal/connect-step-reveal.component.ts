@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  afterRenderEffect,
   effect,
   inject,
   input,
@@ -21,7 +22,7 @@ let nextRevealId = 0;
   styleUrls: ['../states/state-panel.css', './connect-step-reveal.component.css'],
   template: `
     <section class="reveal" [attr.aria-labelledby]="headingId">
-      <h3 [id]="headingId">{{ heading() }}</h3>
+      <h3 #headingControl [id]="headingId" tabindex="-1">{{ heading() }}</h3>
       <p class="reveal__warning" [id]="warningId">{{ warning() }}</p>
       <input
         #control
@@ -39,7 +40,7 @@ let nextRevealId = 0;
           class="state-panel__action"
           data-testid="reveal-copy"
           type="button"
-          [disabled]="copying()"
+          [attr.aria-disabled]="copying()"
           [attr.aria-busy]="copying()"
           (click)="copy()"
         >
@@ -58,7 +59,7 @@ let nextRevealId = 0;
         data-testid="reveal-copy-status"
         role="status"
         [attr.aria-live]="'polite'"
-        aria-atomic="true"
+        [attr.aria-atomic]="'true'"
       >
         {{ copyStatus() }}
       </p>
@@ -80,6 +81,7 @@ export class ConnectStepRevealComponent {
   protected readonly copying = signal(false);
   protected readonly copyStatus = signal('');
   private readonly control = viewChild<ElementRef<HTMLInputElement>>('control');
+  private readonly headingControl = viewChild<ElementRef<HTMLHeadingElement>>('headingControl');
   private readonly destroyRef = inject(DestroyRef);
   private attempt = 0;
 
@@ -89,6 +91,10 @@ export class ConnectStepRevealComponent {
       this.attempt++;
       this.copying.set(false);
       this.copyStatus.set('');
+    });
+    afterRenderEffect(() => {
+      this.value();
+      this.headingControl()?.nativeElement.focus();
     });
     this.destroyRef.onDestroy(() => {
       this.attempt++;

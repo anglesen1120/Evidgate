@@ -1816,6 +1816,15 @@
       <trans-unit id="onboarding.connect.revoked" datatype="html">
         <source>Revoked</source>
       </trans-unit>
+      <trans-unit id="onboarding.connect.response-uncertain" datatype="html">
+        <source>It may have been saved. Reload the connection data before trying again.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.reveal-shown" datatype="html">
+        <source>A one-time value is shown. Save it before leaving this step.</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.list-truncated" datatype="html">
+        <source>Showing the first 10; more exist, so a newer entry may not appear here.</source>
+      </trans-unit>
     </body>
   </file>
 </xliff>

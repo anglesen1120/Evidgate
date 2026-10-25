@@ -71,6 +71,7 @@ textarea {
 textarea {
   resize: vertical;
 }
+h3:focus,
 input:focus-visible,
 textarea:focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);

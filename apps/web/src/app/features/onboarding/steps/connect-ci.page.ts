@@ -10,6 +10,8 @@ import {
   inject,
   input,
   signal,
+  viewChild,
+  type ElementRef,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
@@ -20,7 +22,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { ConnectStepRevealComponent } from '../../../shared/ui/reveal/connect-step-reveal.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
-import { RequestStateComponent } from '../../../shared/ui/states';
+import { ErrorPatternComponent } from '../../../shared/ui/states';
 import { OnboardingStore } from '../onboarding.store';
 
 @Component({
@@ -30,7 +32,7 @@ import { OnboardingStore } from '../onboarding.store';
     FormsModule,
     StatusPillComponent,
     ConnectStepRevealComponent,
-    RequestStateComponent,
+    ErrorPatternComponent,
   ],
   providers: [RevealSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -46,9 +48,19 @@ export class ConnectCiPage {
   private readonly session = inject(SessionStore);
   private readonly destroyRef = inject(DestroyRef);
   private scopeVersion = 0;
+  private readonly bindingHeading = viewChild<ElementRef<HTMLHeadingElement>>('bindingHeading');
+  private readonly tokenHeading = viewChild<ElementRef<HTMLHeadingElement>>('tokenHeading');
   protected readonly busy = signal(false);
   protected readonly refreshing = signal(false);
   protected readonly failure = signal<ApiError | null>(null);
+  // These one-time commands are never safe to replay, even if the transport error is retryable.
+  protected readonly displayFailure = computed(() => {
+    const failure = this.failure();
+    return failure ? { ...failure, retryable: false } : null;
+  });
+  protected readonly responseUncertain = computed(
+    () => this.failure()?.kind === 'timeout' || this.failure()?.kind === 'network',
+  );
   protected readonly oidcSubmitted = signal(false);
   protected readonly tokenSubmitted = signal(false);
   protected readonly repositoryId = signal('');
@@ -71,9 +83,10 @@ export class ConnectCiPage {
   );
   protected readonly refsInvalid = computed(() => !this.validLines(this.refs()));
   protected readonly workflowsInvalid = computed(() => !this.validLines(this.workflows()));
-  protected readonly tokenNameInvalid = computed(
-    () => this.tokenName().trim().length < 1 || this.tokenName().trim().length > 128,
-  );
+  protected readonly tokenNameInvalid = computed(() => {
+    const length = [...this.tokenName().trim()].length;
+    return length < 1 || length > 128;
+  });
 
   protected readonly intro = $localize`:@@onboarding.connect.intro:Choose one connection method. Next becomes available only after the server confirms a binding or token.`;
   protected readonly oidcTitle = $localize`:@@onboarding.connect.oidc-title:GitHub Actions (OIDC)`;
@@ -125,16 +138,29 @@ export class ConnectCiPage {
   protected readonly rotatedLabel = $localize`:@@onboarding.connect.rotated:Rotated`;
   protected readonly expiredLabel = $localize`:@@onboarding.connect.expired:Expired`;
   protected readonly revokedLabel = $localize`:@@onboarding.connect.revoked:Revoked`;
+  protected readonly uncertainLabel = $localize`:@@onboarding.connect.response-uncertain:It may have been saved. Reload the connection data before trying again.`;
+  protected readonly revealShownLabel = $localize`:@@onboarding.connect.reveal-shown:A one-time value is shown. Save it before leaving this step.`;
+  protected readonly truncatedLabel = $localize`:@@onboarding.connect.list-truncated:Showing the first 10; more exist, so a newer entry may not appear here.`;
 
   constructor() {
     effect(() => {
       this.orgId();
       this.projectId();
       this.scopeVersion += 1;
+      this.busy.set(false);
       this.slot.clear();
       this.failure.set(null);
       this.overlapEndsAt.set(null);
     });
+  }
+
+  protected dismissReveal(): void {
+    const heading =
+      this.slot.current()?.source === 'binding-challenge'
+        ? this.bindingHeading()
+        : this.tokenHeading();
+    this.slot.clear();
+    heading?.nativeElement.focus();
   }
 
   protected statusText(status: CiBindingView['status'] | IngestTokenView['status']): string {
@@ -190,6 +216,7 @@ export class ConnectCiPage {
           allowed_workflow_refs: this.lines(this.workflows()),
         });
         if (!this.isCurrent(version, orgId, projectId)) return;
+        this.overlapEndsAt.set(null);
         this.slot.show({ source: 'binding-challenge', value: response.binding_challenge });
         await this.store.refresh(orgId, projectId);
       },
@@ -211,6 +238,7 @@ export class ConnectCiPage {
           name: this.tokenName().trim(),
         });
         if (!this.isCurrent(version, orgId, projectId)) return;
+        this.overlapEndsAt.set(null);
         this.slot.show({ source: 'ingest-token', value: response.secret });
         await this.store.refresh(orgId, projectId);
       },
@@ -266,15 +294,19 @@ export class ConnectCiPage {
   ): Promise<void> {
     this.busy.set(true);
     this.failure.set(null);
-    this.slot.clear();
-    this.overlapEndsAt.set(null);
     try {
       await action();
     } catch (error: unknown) {
       if (!isApiRequestError(error)) throw error;
-      if (this.isCurrent(version, orgId, projectId)) this.failure.set(error.error);
+      if (this.isCurrent(version, orgId, projectId)) {
+        this.failure.set(error.error);
+        if (error.error.kind === 'timeout' || error.error.kind === 'network') {
+          // Reconcile metadata only: the failed response may hide a committed write.
+          await this.store.refresh(orgId, projectId);
+        }
+      }
     } finally {
-      this.busy.set(false);
+      if (this.isCurrent(version, orgId, projectId)) this.busy.set(false);
     }
   }
 }
