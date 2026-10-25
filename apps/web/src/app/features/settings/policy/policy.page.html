@@ -1,0 +1,93 @@
+<header class="page-header">
+  <h2 #heading id="heading" tabindex="-1">{{ copy.title }}</h2>
+  <p>{{ copy.description }}</p>
+</header>
+<form class="revision-entry" (submit)="openRevision($event)">
+  <div class="field">
+    <label for="policy-revision-id">{{ copy.revisionId }}</label>
+    <input
+      id="policy-revision-id"
+      type="text"
+      autocomplete="off"
+      spellcheck="false"
+      [value]="revisionId()"
+      (input)="editRevision($event)"
+      [disabled]="store.publishing() || store.phase() === 'loading'"
+    />
+  </div>
+  <button
+    type="submit"
+    data-policy-open
+    [disabled]="store.publishing() || store.phase() === 'loading'"
+  >
+    {{ copy.open }}
+  </button>
+</form>
+<div class="page-actions">
+  <app-policy-mode-chip [mode]="store.mode()" />
+  @if (canWrite()) {
+    <button
+      type="button"
+      class="primary mutation"
+      data-policy-publish-open
+      [disabled]="
+        store.phase() !== 'ready' || store.publishing() || !(targetId() || store.headRevisionId())
+      "
+      (click)="openPublish($event)"
+    >
+      {{ copy.publish }}
+    </button>
+  }
+</div>
+@if (canWrite()) {
+  <p class="narrow-notice">{{ copy.narrow }}</p>
+}
+<div role="status">
+  @if (published(); as result) {
+    <p class="success" data-policy-published>
+      {{ result.created ? copy.created : copy.unchanged }} {{ copy.revision }}
+      {{ result.revision.revision_no }}
+    </p>
+  }
+</div>
+@if (store.phase() === 'idle') {
+  <p class="state">{{ copy.idle }}</p>
+}
+@if (store.phase() === 'loading') {
+  <p class="state" role="status">{{ copy.loading }}</p>
+}
+@if (store.phase() === 'not_found') {
+  <p class="state">{{ copy.notFound }}</p>
+}
+@if (store.loadError(); as error) {
+  <div class="failure" role="alert">
+    <code>{{ error.code }}</code>
+    <p>{{ error.message }}</p>
+    <ul>
+      @for (detail of error.details; track $index) {
+        <li>
+          <code>{{ detail.path }}</code>
+          <p>{{ detail.reason }}</p>
+        </li>
+      }
+    </ul>
+  </div>
+  <button
+    type="button"
+    [disabled]="store.publishing() || store.phase() === 'loading'"
+    (click)="reload()"
+  >
+    {{ copy.reload }}
+  </button>
+}
+@if (store.phase() === 'ready' || store.revisions().length > 0) {
+  <app-policy-revision-list
+    [rows]="store.revisions()"
+    [headId]="store.headRevisionId()"
+    [hasMore]="store.hasMore()"
+    [busy]="paging() || store.phase() === 'loading' || store.publishing()"
+    (loadMore)="loadMore()"
+  />
+  <app-revision-diff (targetChanged)="targetId.set($event)" />
+}
+<app-policy-publish-dialog (completed)="onPublished($event)" (reloaded)="focusHeading()" />

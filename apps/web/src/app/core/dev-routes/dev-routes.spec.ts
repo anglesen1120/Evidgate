@@ -11,6 +11,8 @@ import { describe, expect, it } from 'vitest';
 
 import { UiGalleryComponent } from '../../shared/ui/gallery';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
+import { PolicyPage } from '../../features/settings/policy/policy.page';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
 import { SecretsPage } from '../../features/settings/secrets/secrets.page';
 import { ShellComponent } from '../../shell/layout/shell.component';
 import { authGuard, orgScopeGuard } from '../guards';
@@ -20,7 +22,7 @@ describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(2);
+    expect(table).toHaveLength(3);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();
@@ -48,5 +50,19 @@ describe('dev routes (review only)', () => {
     const loadComponent = orgRoute?.loadComponent;
     if (loadComponent === undefined) throw new Error('no lazy Secrets review route');
     expect(await loadComponent()).toBe(SecretsPage);
+  });
+
+  it('mounts the real Policy page under the normal authenticated org shell, review-only', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/settings-policy');
+    expect(route?.component).toBe(ShellComponent);
+    const orgRoute = route?.children?.[0];
+    expect(orgRoute?.path).toBe('orgs/:orgId');
+    expect(orgRoute?.canMatch?.slice(0, 2)).toEqual([authGuard, orgScopeGuard]);
+    // The remaining gates are the org entry and the Policy tab read grants; phase is deliberately
+    // not overridden globally. The browser suite also proves both refusal paths.
+    expect(orgRoute?.canMatch).toHaveLength(4);
+    const loadComponent = orgRoute?.loadComponent;
+    if (loadComponent === undefined) throw new Error('no lazy Policy review route');
+    expect(await loadComponent()).toBe(PolicyPage);
   });
 });

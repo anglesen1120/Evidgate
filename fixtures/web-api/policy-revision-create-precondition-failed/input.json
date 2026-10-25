@@ -1,0 +1,27 @@
+{
+  "operation_id": "createPolicyRevision",
+  "variant": "precondition_failed",
+  "status": 412,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000105"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "precondition_failed",
+      "message": "the project's policy head changed since it was read",
+      "request_id": "018f0000-0000-7000-8000-000000000105",
+      "retryable": false,
+      "details": [
+        {
+          "path": "If-Match",
+          "reason": "stale"
+        },
+        {
+          "path": "revision_id",
+          "reason": "018f0000-0000-7000-8000-00000000a005"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,483 @@
+// 09.7.1-T4 — plan 09.7.1 §2 AC1/AC3/AC4/AC5, §5, §8 S3 and §10 T4; real Chromium against the
+// FIXTURES build of `apps/web`.
+//
+// The Policy tab is a phase-G4 product tab, so it is absent from this G1 build: only the
+// dev-routes file-replacement seam mounts the real page, at
+// `/dev/settings-policy/orgs/:orgId`, under the normal shell, auth and org-scope gates plus the
+// `organization:read` + `policy:read` pair the product tab is gated on. Nothing else is relaxed:
+// the page-local PolicyStore and the publish control's `policy:write` derivation are the real ones.
+//
+// Fixtures replace Angular's `HttpBackend` IN PROCESS (`core/dev-fixtures/fixture-backend.ts`), so
+// Playwright never sees a `/v1/policies` request and cannot count or inspect one — the same limit
+// the Secrets suite records. Every "nothing was sent" claim below is therefore made through an
+// observable the app owns, and one of them is deliberately impossible to miss: the variant selected
+// for `createPolicyRevision` is one NO corpus document answers (`variant=absent`), so the dev
+// backend answers any such POST with 501 `fixture_not_found` and the dialog's server-refusal region
+// `[data-policy-error]` appears. A local refusal that keeps that region absent therefore proves the
+// request never left the app. The same device covers the read side (`getPolicyRevision=absent`):
+// a fired read settles `data-policy-phase` to `error`, so an `idle` tab is the proof nothing was
+// requested for a revision id that is not UUID-shaped. "One POST, never retried" is observed as one
+// conflict dialog, no `[data-policy-published]`, and no second dialog after the user returns to the
+// draft; the store's own spec (`policy.store.spec.ts`) pins the call count itself.
+//
+// The in-process backend answers ONE document per operation, never by path parameter, so both diff
+// bodies are the same document in real Chromium: the diff panel's no-differences state is what a
+// browser can assert, and the added/removed/changed rows are
+// `revision-diff.component.spec.ts`'s subject. No source-text assertion, no mock UI.
+//
+// [KNOWN DEFECT, reported with the run that wrote this file] `revision-diff.component.ts` binds
+// `[value]` on both diff `<select>`s before the `@for` options exist, so the two pickers display
+// their "choose a revision" placeholder while the component compares head against previous (the
+// observed `<select>` value is `""`, `selectedIndex` on the placeholder). This suite therefore
+// asserts the OPTIONS each picker offers — the real contract — and not its displayed value, so the
+// defect cannot hide behind a green assertion here; the comparison itself is asserted through
+// `[data-policy-diff]`. When the binding is fixed, add the two `toHaveValue(<id>)` assertions.
+//
+// Frozen-grant and refusal corpora are separate documents selected per operation through
+// `?fixture.variant.<operationId>=<variant>`; no case infers a state by clicking twice. Every
+// selector is a component/data hook, an id or a role, so the suite passes on both locale bundles;
+// the only verbatim text asserted is the SERVER's own 412/422 envelope, which AC4/AC5 require.
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+import created from '../../../../fixtures/web-api/policy-revision-create/input.json';
+import critical from '../../../../fixtures/web-api/policy-revision-create-critical-case-quarantined/input.json';
+import preconditionFailed from '../../../../fixtures/web-api/policy-revision-create-precondition-failed/input.json';
+import unchanged from '../../../../fixtures/web-api/policy-revision-create-unchanged/input.json';
+import unknownField from '../../../../fixtures/web-api/policy-revision-create-unknown-field/input.json';
+import head from '../../../../fixtures/web-api/policy-revision-head/input.json';
+import afterPublish from '../../../../fixtures/web-api/policy-revisions-list-after-publish/input.json';
+import conflictHead from '../../../../fixtures/web-api/policy-revisions-list-conflict-head/input.json';
+import revisions from '../../../../fixtures/web-api/policy-revisions-list/input.json';
+import {
+  expectNoA11yViolations,
+  LOCALES,
+  localePath,
+  ORG_ACME,
+  seedStoredTheme,
+  SETTINGS_NO_TAB_GRANTS,
+  THEMES,
+  UNKNOWN_ORG,
+  withVariants,
+  type ShellLocale,
+} from './support';
+
+const PAGE = 'app-policy-page';
+const PHASE = `${PAGE}[data-policy-phase]`;
+const ROWS = `${PAGE} [data-policy-revision]`;
+const HEAD_ROW = `${ROWS}[data-policy-head]`;
+const MODE = `${PAGE} [data-policy-mode]`;
+const DIFF = `${PAGE} [data-policy-diff]`;
+const DIFF_ROWS = `${DIFF} [data-diff-row]`;
+const OPEN_PUBLISH = `${PAGE} [data-policy-publish-open]`;
+const DIALOG = '[data-policy-publish-dialog]';
+const BODY = '#policy-publish-body';
+const SUBMIT = '[data-policy-publish-submit]';
+const LOCAL_ERROR = '[data-policy-publish-local-error]';
+const SERVER_ERROR = '[data-policy-error]';
+const PUBLISHED = '[data-policy-published]';
+const CONFLICT = 'app-conflict-dialog dialog';
+
+/** The head revision the corpus opens by default (`?revision=…`), and the body it seeds. */
+const HEAD_ID = head.body.id;
+const HEAD_NO = String(head.body.revision_no);
+const SEED = JSON.stringify(head.body.body, null, 2);
+
+/** The revision another writer published while this session held `…a003`, per the 412 corpus. */
+const CURRENT_HEAD = ((): string => {
+  const detail = preconditionFailed.body.error.details.find((row) => row.path === 'revision_id');
+  if (detail === undefined) throw new Error('the 412 document names no current revision');
+  return detail.reason;
+})();
+
+/** The revision number that head carries in the list the same review selects (`=conflict-head`). */
+const CURRENT_HEAD_NO = ((): string => {
+  const row = conflictHead.body.items.find((item) => item.id === CURRENT_HEAD);
+  if (row === undefined) throw new Error('the conflict-head list does not carry that head');
+  return String(row.revision_no);
+})();
+
+/** The one `details[]` row a refusal document carries (its JSON pointer and reason, verbatim). */
+function firstDetail(document: {
+  readonly body: {
+    readonly error: {
+      readonly details: readonly { readonly path: string; readonly reason: string }[];
+    };
+  };
+}): { path: string; reason: string } {
+  const [detail] = document.body.error.details;
+  if (detail === undefined) throw new Error('the refusal document carries no detail row');
+  return detail;
+}
+
+const POLICY_WRITE = '?fixture.variant.listPermissions=settings-policy-write';
+const POLICY_READONLY = '?fixture.variant.listPermissions=settings-policy-readonly';
+const CREATE_412 = '?fixture.variant.createPolicyRevision=precondition_failed';
+const CREATE_UNCHANGED = '?fixture.variant.createPolicyRevision=unchanged';
+const CREATE_UNKNOWN_FIELD = '?fixture.variant.createPolicyRevision=unknown-field';
+const CREATE_CRITICAL = '?fixture.variant.createPolicyRevision=critical-case-quarantined';
+const LIST_CONFLICT_HEAD = '?fixture.variant.listPolicyRevisions=conflict-head';
+const LIST_AFTER_PUBLISH = '?fixture.variant.listPolicyRevisions=after-publish';
+/**
+ * A `createPolicyRevision` variant no corpus document answers, so any POST that does leave the app
+ * is answered 501 `fixture_not_found` and shows `[data-policy-error]`: the negative control that
+ * makes a local refusal's "nothing was sent" observable in the browser.
+ */
+const UNANSWERED_CREATE = '?fixture.variant.createPolicyRevision=absent';
+/** The same negative control for the revision read `open()` performs first. */
+const UNANSWERED_GET = '?fixture.variant.getPolicyRevision=absent';
+
+/** A body one byte over the contract's 65 536-byte cap: refused locally, never sent. */
+const OVERSIZED_BODY = `{"a":"${'x'.repeat(65_536)}"}`;
+
+/**
+ * `/dev/settings-policy/orgs/:orgId` — the review-only address of the real Policy page, with the
+ * revision the query parameter opens. `revisionId: null` leaves the parameter off entirely.
+ */
+function policyReviewPath(
+  locale: ShellLocale,
+  orgId: string = ORG_ACME,
+  revisionId: string | null = HEAD_ID,
+): string {
+  const path = localePath(locale, `/dev/settings-policy/orgs/${orgId}`);
+  return revisionId === null ? path : `${path}?revision=${revisionId}`;
+}
+
+/** What the page's own ready contract looks like: rows served, head marked, diff settled. */
+async function ready(page: Page, rowCount: number): Promise<void> {
+  await expect(page.locator(PHASE)).toHaveAttribute('data-policy-phase', 'ready');
+  await expect(page.locator(ROWS)).toHaveCount(rowCount);
+  await expect(page.locator(HEAD_ROW)).toHaveCount(1);
+  await expect(page.locator(DIFF)).toBeVisible();
+  // The pickers are built from the served rows: one placeholder plus one option per revision.
+  // Their DOM *value* is deliberately not asserted here — this file's report records the T4
+  // defect that the `[value]` binding lands before the `@for` options exist, so both pickers
+  // display the placeholder even though a comparison is running (`revision-diff.component.ts`
+  // `#policy-diff-base`/`#policy-diff-target`); the option VALUES below are the real contract.
+  await expect(page.locator('#policy-diff-base option')).toHaveCount(rowCount + 1);
+  await expect(page.locator('#policy-diff-target option')).toHaveCount(rowCount + 1);
+  await expect(page.locator(DIFF)).not.toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator(DIFF_ROWS)).toHaveCount(0);
+  await expect(page.locator(`${DIFF} p`).first()).toHaveText(/\S/);
+}
+
+async function visit(
+  page: Page,
+  locale: ShellLocale,
+  variants: readonly string[] = [POLICY_WRITE],
+  revisionId: string | null = HEAD_ID,
+  rowCount: number = revisions.body.items.length,
+): Promise<void> {
+  await page.goto(withVariants(policyReviewPath(locale, ORG_ACME, revisionId), variants));
+  await expect(page.locator(PAGE)).toBeVisible();
+  await ready(page, rowCount);
+}
+
+/** Opens the real publish dialog and waits for its seeded body (the revision it will quote). */
+async function openPublish(page: Page): Promise<Locator> {
+  await page.locator(OPEN_PUBLISH).click();
+  const dialog = page.locator(DIALOG);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(BODY)).toHaveValue(SEED);
+  return dialog;
+}
+
+/** True while the browser's focused element is inside the selector the case is about. */
+async function focusInside(page: Page, selector: string): Promise<boolean> {
+  return page.evaluate((target) => {
+    const element = document.querySelector(target);
+    return element instanceof HTMLElement && element.contains(document.activeElement);
+  }, selector);
+}
+
+for (const locale of LOCALES) {
+  // AC3: the served list, its head marking, the mode chip and the diff panel's own state.
+  test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) => {
+    await visit(page, locale);
+    for (const [index, revision] of revisions.body.items.entries()) {
+      const row = page.locator(ROWS).nth(index);
+      await expect(row).toHaveAttribute('data-revision-no', String(revision.revision_no));
+      await expect(row).toHaveAttribute('data-revision-state', revision.state);
+      await expect(row.locator('code')).toHaveText(revision.hash.slice(0, 12));
+    }
+    // Exactly one row is the head the list's ETag named, and it is the newest one.
+    const headRow = page.locator(HEAD_ROW);
+    await expect(headRow).toHaveCount(1);
+    await expect(headRow).toHaveAttribute('data-revision-no', HEAD_NO);
+    // No route reads `policy_activation` today (S83 P2): the chip says "unavailable", never a guess.
+    await expect(page.locator(MODE)).toHaveAttribute('data-mode', 'unavailable');
+    await expect(page.locator(MODE)).toHaveText(/\S/);
+    await expect(page.locator('#policy-diff-base')).toBeEnabled();
+    await expect(page.locator('#policy-diff-target')).toBeEnabled();
+    // Both pickers offer exactly the served revisions, by id, in the served order.
+    for (const [index, revision] of revisions.body.items.entries()) {
+      await expect(page.locator('#policy-diff-base option').nth(index + 1)).toHaveAttribute(
+        'value',
+        revision.id,
+      );
+      await expect(page.locator('#policy-diff-target option').nth(index + 1)).toHaveAttribute(
+        'value',
+        revision.id,
+      );
+    }
+    // Both bodies are the same document in this backend, so the panel settles on "no differences".
+    await expect(page.locator(DIFF)).toHaveCount(1);
+    await expect(page.locator(`${DIFF} p`).first()).toHaveText(/\S/);
+  });
+
+  // AC3 (S83 P2): a revision id that is not UUID-shaped is the "no revision selected" state, and
+  // the shape check runs BEFORE any read. `getPolicyRevision=absent` would answer 501 for a fired
+  // read, which settles the page to `error` — so an idle page is the browser-visible proof.
+  test(`a revision id that is not a UUID requests nothing (${locale})`, async ({ page }) => {
+    await page.goto(
+      withVariants(policyReviewPath(locale, ORG_ACME, 'not-a-uuid'), [
+        POLICY_WRITE,
+        UNANSWERED_GET,
+      ]),
+    );
+    await expect(page.locator(PAGE)).toBeVisible();
+    await expect(page.locator(PHASE)).toHaveAttribute('data-policy-phase', 'idle');
+    await expect(page.locator('#policy-revision-id')).toHaveValue('not-a-uuid');
+    await expect(page.locator(ROWS)).toHaveCount(0);
+    await expect(page.locator(DIFF)).toHaveCount(0);
+    await expect(page.locator(PUBLISHED)).toHaveCount(0);
+    // A read that did leave the app settles `error` (501) or `not_found`; the tab stays untouched.
+    await page.waitForTimeout(600);
+    await expect(page.locator(PHASE)).toHaveAttribute('data-policy-phase', 'idle');
+    await expect(page.locator(ROWS)).toHaveCount(0);
+  });
+
+  // AC1/P1: the publish control is derived from `policy:write` and absent — not disabled — without
+  // it, while the read side of the tab keeps working.
+  test(`read-only grant offers no publish control (${locale})`, async ({ page }) => {
+    await visit(page, locale, [POLICY_READONLY]);
+    await expect(page.locator(OPEN_PUBLISH)).toHaveCount(0);
+    await expect(page.locator(`${PAGE} .narrow-notice`)).toHaveCount(0);
+    await expect(page.locator(ROWS)).toHaveCount(revisions.body.items.length);
+    await expect(page.locator(MODE)).toBeVisible();
+  });
+
+  // AC4/T4.3: the seeded body, the 201 confirmation and the reloaded head from the server's list.
+  test(`publish 201: seeded body, confirmation and the reloaded head (${locale})`, async ({
+    page,
+  }) => {
+    await visit(
+      page,
+      locale,
+      [POLICY_WRITE, LIST_AFTER_PUBLISH],
+      HEAD_ID,
+      afterPublish.body.items.length,
+    );
+    const dialog = await openPublish(page);
+    await expect(dialog.locator(BODY)).toHaveValue(SEED);
+    await dialog.locator(SUBMIT).click();
+    const published = page.locator(PUBLISHED);
+    await expect(published).toBeVisible();
+    await expect(published).toHaveText(/\S/);
+    await expect(dialog).not.toBeVisible();
+    await expect(dialog.locator(SERVER_ERROR)).toHaveCount(0);
+    // The head is the server's: only the post-publish list answer moves it to the new revision.
+    await expect(page.locator(ROWS)).toHaveCount(afterPublish.body.items.length);
+    const headRow = page.locator(HEAD_ROW);
+    await expect(headRow).toHaveCount(1);
+    await expect(headRow).toHaveAttribute('data-revision-no', String(created.body.revision_no));
+    await expect(page.locator(PHASE)).toHaveAttribute('data-policy-phase', 'ready');
+  });
+
+  // AC4: a `200` means the body was already stored — the confirmation must not claim a new row.
+  test(`publish 200 unchanged: confirmation without a new revision (${locale})`, async ({
+    page,
+  }) => {
+    await visit(page, locale, [POLICY_WRITE, CREATE_UNCHANGED]);
+    const dialog = await openPublish(page);
+    await dialog.locator(SUBMIT).click();
+    await expect(page.locator(PUBLISHED)).toBeVisible();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.locator(ROWS)).toHaveCount(revisions.body.items.length);
+    const headRow = page.locator(HEAD_ROW);
+    await expect(headRow).toHaveCount(1);
+    await expect(headRow).toHaveAttribute('data-revision-no', String(unchanged.body.revision_no));
+    const appendedRow = `${ROWS}[data-revision-no="${created.body.revision_no}"]`;
+    await expect(page.locator(appendedRow)).toHaveCount(0);
+  });
+
+  // AC4: a 412 opens the shared conflict dialog with the head the server named, offers the reload
+  // explicitly, and never resubmits on its own.
+  test(`publish 412: conflict dialog, explicit reload, no retry (${locale})`, async ({ page }) => {
+    await visit(
+      page,
+      locale,
+      [POLICY_WRITE, CREATE_412, LIST_CONFLICT_HEAD],
+      HEAD_ID,
+      conflictHead.body.items.length,
+    );
+    // The session's list already shows the revision another writer published, and the head the
+    // ETag named moved with it — the state a stale attempt must not be silently resubmitted against.
+    const headRow = page.locator(HEAD_ROW);
+    await expect(headRow).toHaveCount(1);
+    await expect(headRow).toHaveAttribute('data-revision-no', CURRENT_HEAD_NO);
+    const dialog = await openPublish(page);
+    const draft = await dialog.locator(BODY).inputValue();
+    expect(draft).toBe(SEED);
+    await dialog.locator(SUBMIT).click();
+    const conflict = page.locator(CONFLICT);
+    await expect(conflict).toHaveCount(1);
+    await expect(conflict).toBeVisible();
+    // The current revision is the server's `details[]` value, verbatim; nothing else is inferred.
+    await expect(conflict.locator('.revision code')).toHaveText(CURRENT_HEAD);
+    await expect(conflict.locator('.revision code')).not.toHaveText(HEAD_ID);
+    await expect(page.locator(SERVER_ERROR)).toHaveCount(0);
+    await expect(page.locator(PUBLISHED)).toHaveCount(0);
+    await expect(dialog).not.toBeVisible();
+    // Reload is a named control the user must press; it is never automatic.
+    const reload = conflict.locator('button.reload');
+    await expect(reload).toBeEnabled();
+    await expect(reload).toHaveText(/\S/);
+    // Returning to the draft keeps the text and appends no second attempt.
+    await conflict.locator('footer button:not(.reload)').click();
+    await expect(conflict).not.toBeVisible();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(BODY)).toHaveValue(draft);
+    await page.waitForTimeout(750);
+    await expect(conflict).not.toBeVisible();
+    await expect(page.locator(PUBLISHED)).toHaveCount(0);
+    await expect(page.locator(SERVER_ERROR)).toHaveCount(0);
+  });
+
+  // AC5: the closed schema's 422 is rendered VERBATIM (code, message, pointer and reason).
+  test(`publish 422 unknown field is verbatim (${locale})`, async ({ page }) => {
+    await visit(page, locale, [POLICY_WRITE, CREATE_UNKNOWN_FIELD]);
+    const dialog = await openPublish(page);
+    await dialog.locator(SUBMIT).click();
+    const alert = dialog.locator(SERVER_ERROR);
+    await expect(alert).toBeVisible();
+    await expect(alert).toHaveAttribute('data-error-code', unknownField.body.error.code);
+    await expect(alert.locator('code').first()).toHaveText(unknownField.body.error.code);
+    await expect(alert.locator('p').first()).toHaveText(unknownField.body.error.message);
+    const detail = firstDetail(unknownField);
+    await expect(alert.locator('li code')).toHaveText(detail.path);
+    await expect(alert.locator('li p')).toHaveText(detail.reason);
+    await expect(dialog).toBeVisible();
+    await expect(page.locator(PUBLISHED)).toHaveCount(0);
+    await expect(dialog.locator(LOCAL_ERROR)).toHaveCount(0);
+  });
+
+  // AC5: `critical_case_quarantined` is a server refusal, never a local guess or a swallow.
+  test(`publish 422 critical case is verbatim (${locale})`, async ({ page }) => {
+    await visit(page, locale, [POLICY_WRITE, CREATE_CRITICAL]);
+    const dialog = await openPublish(page);
+    await dialog.locator(SUBMIT).click();
+    const alert = dialog.locator(SERVER_ERROR);
+    await expect(alert).toBeVisible();
+    await expect(alert).toHaveAttribute('data-error-code', critical.body.error.code);
+    await expect(alert.locator('code').first()).toHaveText(critical.body.error.code);
+    await expect(alert.locator('p').first()).toHaveText(critical.body.error.message);
+    const detail = firstDetail(critical);
+    await expect(alert.locator('li code')).toHaveText(detail.path);
+    await expect(alert.locator('li p')).toHaveText(detail.reason);
+    await expect(dialog).toBeVisible();
+    await expect(page.locator(PUBLISHED)).toHaveCount(0);
+  });
+
+  // AC4/P4: the two local refusals happen BEFORE any request; `createPolicyRevision=absent` would
+  // answer 501 and show the server-refusal region, so its absence is the browser's proof.
+  test(`local refusals send nothing and keep the editor open (${locale})`, async ({ page }) => {
+    await visit(page, locale, [POLICY_WRITE, UNANSWERED_CREATE]);
+    const dialog = await openPublish(page);
+    const body = dialog.locator(BODY);
+    const local = dialog.locator(LOCAL_ERROR);
+    await body.fill('{');
+    await dialog.locator(SUBMIT).click();
+    await expect(local).toBeVisible();
+    await expect(local).toHaveText(/\S/);
+    await expect(body).toHaveAttribute('aria-invalid', 'true');
+    await expect(dialog.locator(SERVER_ERROR)).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    // 65 536 bytes are the cap: one byte more is refused with nothing sent.
+    await body.fill(OVERSIZED_BODY);
+    await expect(body).not.toHaveAttribute('aria-invalid', 'true');
+    await dialog.locator(SUBMIT).click();
+    await expect(local).toBeVisible();
+    await expect(local).toHaveText(/\S/);
+    await expect(dialog.locator(SERVER_ERROR)).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(page.locator(PUBLISHED)).toHaveCount(0);
+  });
+
+  // AC3/P6: below 768px Settings is inspection-only, never a squeezed mutation surface.
+  test(`360px is inspection-only (${locale})`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await visit(page, locale);
+    const notice = page.locator(`${PAGE} .narrow-notice`);
+    await expect(notice).toBeVisible();
+    await expect(notice).toHaveText(/\S/);
+    // CSS-hidden, and therefore not a keyboard stop either.
+    await expect(page.locator(OPEN_PUBLISH)).toBeHidden();
+    await expect(page.locator(`${ROWS}:visible`)).toHaveCount(revisions.body.items.length);
+    await expect(page.locator(DIFF)).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await expectNoA11yViolations(page, `Policy inspection-only ${locale} 360px`);
+  });
+
+  // AC3 + native dialog semantics: Enter opens, the trap holds, Escape closes to the opener.
+  test(`keyboard publish: Enter opens, trap holds, Escape restores focus (${locale})`, async ({
+    page,
+  }) => {
+    await visit(page, locale);
+    const opener = page.locator(OPEN_PUBLISH);
+    const dialog = page.locator(DIALOG);
+    await opener.focus();
+    await expect(opener).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(BODY)).toHaveValue(SEED);
+    await expect.poll(() => focusInside(page, DIALOG)).toBe(true);
+    // Two full cycles over the dialog's three stops (body, Cancel, Publish) prove the wrapping edge.
+    for (let stop = 0; stop < 6; stop++) {
+      await page.keyboard.press('Tab');
+      await expect.poll(() => focusInside(page, DIALOG)).toBe(true);
+    }
+    await page.keyboard.press('Shift+Tab');
+    await expect.poll(() => focusInside(page, DIALOG)).toBe(true);
+    await page.keyboard.press('Shift+Tab');
+    await expect.poll(() => focusInside(page, DIALOG)).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(opener).toBeFocused();
+    await expect(page.locator(PUBLISHED)).toHaveCount(0);
+  });
+
+  // AC1: the review address omits only the phase gate — never authentication, org scope or a read
+  // grant. A missing `policy:read` lands on the 403 pattern; a foreign org is the same 404 any
+  // address that never existed answers, so the review address cannot confirm it exists.
+  test(`review route refuses missing read grant and foreign org (${locale})`, async ({ page }) => {
+    await page.goto(withVariants(policyReviewPath(locale), [SETTINGS_NO_TAB_GRANTS]));
+    await expect(page.locator('app-forbidden-pattern')).toBeVisible();
+    await expect(page.locator(PAGE)).toHaveCount(0);
+    await page.goto(withVariants(policyReviewPath(locale, UNKNOWN_ORG), [POLICY_WRITE]));
+    await expect(page.locator('app-not-found-pattern')).toBeVisible();
+    await expect(page.locator(PAGE)).toHaveCount(0);
+  });
+
+  for (const theme of THEMES) {
+    // AC3/T4: real-browser WCAG 2.2 AA — contrast included — on the list/diff state, the open
+    // publish dialog and the conflict dialog it opens, in every locale and theme.
+    test(`axe has no violations on list/diff, publish and conflict (${locale}, ${theme})`, async ({
+      page,
+    }) => {
+      await seedStoredTheme(page, theme);
+      await visit(page, locale, [POLICY_WRITE, CREATE_412]);
+      await expect(page.locator('html')).toHaveAttribute('lang', locale);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expectNoA11yViolations(page, `Policy list/diff ${locale} ${theme}`);
+      const dialog = await openPublish(page);
+      await expectNoA11yViolations(page, `Policy publish dialog ${locale} ${theme}`);
+      await dialog.locator(SUBMIT).click();
+      const conflict = page.locator(CONFLICT);
+      await expect(conflict).toBeVisible();
+      await expectNoA11yViolations(page, `Policy conflict dialog ${locale} ${theme}`);
+      await expect(page.locator(SERVER_ERROR)).toHaveCount(0);
+    });
+  }
+}
