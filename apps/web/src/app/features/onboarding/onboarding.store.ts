@@ -2,7 +2,7 @@
 // SignalStore. It holds no progress of its own — `OnboardingProgressService` derives that from the
 // server on every `load` (T63) — and it holds no secret.
 //
-// Three behaviours the shell depends on:
+// Five behaviours the shell depends on:
 //
 // 1. `load` never throws. Every failure becomes `status: 'error'` plus one of the fixed
 //    `failure` values the shell renders as the T8 patterns (forbidden / not-found / error), so a
@@ -13,6 +13,13 @@
 // 3. The viewed step is gated by the derived one: `selectStep` cannot open a step the server has
 //    not reached, and `next` cannot pass a step whose done-condition is unmet (T1.3's disabled
 //    `onboarding-next`). Nothing here advances the wizard: only a new `load` moves it.
+// 4. A published derivation is tagged with the route scope it was read for, so `holds` can answer
+//    "is this already the state of the page the user is on?". The shell consults it before
+//    re-reading: the create's own `projectCreated` load is the single read after a creation
+//    (S71 F1), while a fresh page load finds an empty store and always loads.
+// 5. `focusToken` counts the step moves the *user* caused (`next`, `back`, `selectStep`, and the
+//    step a create opens). The shell moves focus to the step heading on a new token only, so the
+//    first ready render of a page load and a Retry leave focus alone (S71 F2).
 
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
@@ -43,6 +50,12 @@ export type OnboardingStatus = 'loading' | 'ready' | 'error';
  */
 export type OnboardingFailure = 'forbidden' | 'not-found' | 'unavailable' | null;
 
+/** The route scope a derivation is read for: the org, and the project address if the URL had one. */
+export interface OnboardingScope {
+  readonly orgId: string;
+  readonly projectId: string | null;
+}
+
 /** The store's state. Mutable by design: `patchState` replaces members, never mutates them. */
 export interface OnboardingViewState {
   status: OnboardingStatus;
@@ -51,10 +64,21 @@ export interface OnboardingViewState {
   progress: OnboardingProgress | null;
   /** The step whose panel is rendered; gated by `currentStep()`. */
   viewStep: StepNumber;
+  /** The route scope `progress` was read for; `null` until a load publishes one. */
+  scope: OnboardingScope | null;
+  /** Counts the step moves a user caused; the shell's cue to move focus (see the header). */
+  focusToken: number;
 }
 
 function initialState(): OnboardingViewState {
-  return { status: 'loading', failure: null, progress: null, viewStep: 1 };
+  return {
+    status: 'loading',
+    failure: null,
+    progress: null,
+    viewStep: 1,
+    scope: null,
+    focusToken: 0,
+  };
 }
 
 export const OnboardingStore = signalStore(
@@ -95,6 +119,7 @@ export const OnboardingStore = signalStore(
           failure: null,
           progress,
           viewStep: viewStepFor(progress.currentStep),
+          scope: { orgId, projectId },
         });
       } catch (error) {
         if (loadSequence !== newestLoad) {
@@ -106,8 +131,17 @@ export const OnboardingStore = signalStore(
           status: 'error',
           failure: failureFor(error),
           progress: null,
+          scope: null,
         });
       }
+    }
+
+    /** Publish a step the user moved, with the focus cue the shell reads (see the header, 5). */
+    function showStep(step: StepNumber): void {
+      if (step === store.viewStep()) {
+        return;
+      }
+      patchState(store, { viewStep: step, focusToken: store.focusToken() + 1 });
     }
 
     return {
@@ -117,13 +151,30 @@ export const OnboardingStore = signalStore(
        */
       load,
 
+      /**
+       * True when the published derivation already describes exactly this route scope. The shell
+       * asks before re-reading, so the load a create already ran is not issued a second time when
+       * the URL it caused re-enters the shell (S71 F1). Only a `ready` store holds anything: an
+       * error holds no derivation, and a load in flight has not published this scope yet.
+       */
+      holds(orgId: string, projectId: string | null): boolean {
+        const scope = store.scope();
+        return (
+          store.status() === 'ready' &&
+          store.progress() !== null &&
+          scope !== null &&
+          scope.orgId === orgId &&
+          scope.projectId === projectId
+        );
+      },
+
       /** Opens a step the server has already reached; a not-yet-reached step is ignored. */
       selectStep(step: StepNumber): void {
         const current = store.currentStep();
         if (current !== 'enabled' && step > current) {
           return;
         }
-        patchState(store, { viewStep: step });
+        showStep(step);
       },
 
       /** Moves to the next step when the viewed one is done; a no-op otherwise. */
@@ -133,7 +184,7 @@ export const OnboardingStore = signalStore(
         }
         const following = STEP_NUMBERS[STEP_NUMBERS.indexOf(store.viewStep()) + 1];
         if (following !== undefined) {
-          patchState(store, { viewStep: following });
+          showStep(following);
         }
       },
 
@@ -144,7 +195,7 @@ export const OnboardingStore = signalStore(
         }
         const previous = STEP_NUMBERS[STEP_NUMBERS.indexOf(store.viewStep()) - 1];
         if (previous !== undefined) {
-          patchState(store, { viewStep: previous });
+          showStep(previous);
         }
       },
 
@@ -157,6 +208,11 @@ export const OnboardingStore = signalStore(
       async projectCreated(project: ProjectDto): Promise<void> {
         session.adoptCreatedProject(project);
         await load(project.org_id, project.id);
+        if (store.status() === 'ready') {
+          // The create opened a step on the user's behalf, so the shell moves focus there even
+          // though the component the URL change activates is constructed after this patch.
+          patchState(store, { focusToken: store.focusToken() + 1 });
+        }
       },
     };
   }),

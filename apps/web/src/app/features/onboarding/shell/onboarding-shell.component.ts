@@ -43,6 +43,12 @@ export class OnboardingShellComponent {
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
   protected orgId = '';
   private projectId: string | null = null;
+  /**
+   * The last `focusToken` this instance has honoured. It starts at the store's initial value, so
+   * the first ready render of a page load moves no focus; a create that bumped the token before
+   * this instance existed still moves it once (S71 F2).
+   */
+  private focusedToken = 0;
 
   protected readonly title = $localize`:@@onboarding.shell.title:Set up your project`;
   protected readonly description = $localize`:@@onboarding.shell.description:Resume from server-confirmed resources. Viewing a step does not change your progress.`;
@@ -82,14 +88,25 @@ export class OnboardingShellComponent {
       .subscribe(({ orgId, projectId }) => {
         this.orgId = orgId;
         this.projectId = projectId;
+        // The create's own load already published exactly this scope, and the URL change it
+        // caused re-activates this component: reading it again would issue the same fan-out
+        // twice and flash the loading pattern (S71 F1). A fresh page load finds an empty store,
+        // and Retry (`reload`) still loads unconditionally.
+        if (this.store.holds(orgId, projectId)) {
+          return;
+        }
         void this.store.load(orgId, projectId);
       });
 
     afterRenderEffect(() => {
-      this.store.viewStep();
-      if (this.store.status() === 'ready') {
-        this.heading()?.nativeElement.focus();
+      // Focus follows a step the user moved — next, back, a step click, or the step a create
+      // opened — and never the first ready render of a page load or a Retry (S71 F2).
+      const token = this.store.focusToken();
+      if (this.store.status() !== 'ready' || token <= this.focusedToken) {
+        return;
       }
+      this.focusedToken = token;
+      this.heading()?.nativeElement.focus();
     });
   }
 

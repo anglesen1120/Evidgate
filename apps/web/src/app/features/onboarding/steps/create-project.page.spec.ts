@@ -239,6 +239,23 @@ describe('CreateProjectPage', () => {
     });
   });
 
+  it('keeps the intent when the user edits the draft and reverts to the submitted body', async () => {
+    // An ambiguous network failure: the request may have reached the server, so resubmitting the
+    // identical body must replay the same Idempotency-Key instead of risking a second project.
+    createProject.mockRejectedValueOnce(failure());
+    await fill();
+    await submit();
+    await fill('Different project', 'different-project');
+    await fill();
+    await submit();
+    expect(createProject).toHaveBeenCalledTimes(2);
+    expect(createProject.mock.calls[1]?.[2]).toBe(createProject.mock.calls[0]?.[2]);
+    expect(createProject.mock.calls[1]?.[1]).toEqual({
+      name: 'Storefront web',
+      slug: 'storefront-web',
+    });
+  });
+
   it('renders forbidden through T8 while leaving the create action visible and disabled', async () => {
     createProject.mockRejectedValueOnce(
       failure({ kind: 'forbidden', status: 403, retryable: false }),

@@ -118,7 +118,7 @@ export interface FixtureDocument {
  *                                 not readable yet, so the wizard reports it as not done).
  *
  * `onboarding-forbidden` (403) and `onboarding-project-not-found` (404) answer both project reads,
- * failing progress read renders the T8 pattern instead of a wrong step whether the wizard was
+ * so a failing progress read renders the T8 pattern instead of a wrong step whether the wizard was
  * opened at the org's root or at a project address.
  * Every wizard URL also carries `permissions-list-onboarding`: the catalogue's own rows for the
  * seven codes the wizard gates on, because the default page holds no `project:*` code and the

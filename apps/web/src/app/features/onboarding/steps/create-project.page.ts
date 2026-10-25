@@ -107,7 +107,6 @@ import { OnboardingStore } from '../onboarding.store';
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="name"
           #nameField="ngModel"
-          (ngModelChange)="draftChanged()"
           (invalid)="submitted.set(true)"
           [disabled]="busy() || !permitted()"
           [attr.aria-invalid]="(nameField.touched || submitted()) && !name().trim() ? 'true' : null"
@@ -133,7 +132,6 @@ import { OnboardingStore } from '../onboarding.store';
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="slug"
           #slugField="ngModel"
-          (ngModelChange)="draftChanged()"
           (invalid)="submitted.set(true)"
           [disabled]="busy() || !permitted()"
           [attr.aria-invalid]="(slugField.touched || submitted()) && !slug().trim() ? 'true' : null"
@@ -165,7 +163,7 @@ import { OnboardingStore } from '../onboarding.store';
       <app-request-state
         [status]="'error'"
         [error]="failure"
-        [retryEligible]="permitted() && creation.retryEligible()"
+        [retryEligible]="permitted() && creation.retryEligible() && !draftChanged()"
         [retryBusy]="busy()"
         (retry)="retry()"
       />
@@ -193,13 +191,19 @@ export class CreateProjectPage {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
-  private request: CreateProjectRequest | null = null;
+  /**
+   * The body the current Idempotency intent was submitted with; `null` before the first submit.
+   * The operation always sends this — not the live draft — so a retry replays the payload the key
+   * belongs to, and the payload is what decides whether a key may be reused (see `submit`).
+   */
+  private readonly submittedBody = signal<CreateProjectRequest | null>(null);
 
   // The shared runner mints createIntent() once per submit, reuses it on explicit retries,
   // honours Retry-After and never retries automatically. Keep the submitted body immutable.
   protected readonly creation = createIntentRunner((intent) => {
-    if (this.request === null) throw new Error('A project intent requires a submitted form.');
-    return this.data.createProject(this.orgId(), this.request, intent);
+    const body = this.submittedBody();
+    if (body === null) throw new Error('A project intent requires a submitted form.');
+    return this.data.createProject(this.orgId(), body, intent);
   });
   protected readonly permitted = computed(
     () => this.session.has('project:create') && this.creation.error()?.kind !== 'forbidden',
@@ -207,11 +211,27 @@ export class CreateProjectPage {
   protected readonly busy = computed(
     () => this.creation.status() === 'running' || this.creation.status() === 'succeeded',
   );
+  /**
+   * True when the draft no longer carries the body the current intent was submitted with, and
+   * true before the first submit. Every field of `CreateProjectRequest` must be compared here: a
+   * field this misses would reuse the previous key for a different payload (S71 QA-F1).
+   */
+  protected readonly draftChanged = computed(() => {
+    const submitted = this.submittedBody();
+    return (
+      submitted === null ||
+      submitted.name !== this.name().trim() ||
+      submitted.slug !== this.slug().trim()
+    );
+  });
   protected readonly submitDisabled = computed(
     () =>
       this.busy() ||
       !this.permitted() ||
-      (this.creation.error()?.retryable === true && !this.creation.retryEligible()),
+      // A corrected payload is a new action, so a wait on the previous one no longer blocks it.
+      (this.creation.error()?.retryable === true &&
+        !this.creation.retryEligible() &&
+        !this.draftChanged()),
   );
 
   protected readonly nameLabel = $localize`:@@onboarding.create.name:Project name`;
@@ -231,16 +251,18 @@ export class CreateProjectPage {
     this.destroyRef.onDestroy(() => this.creation.reset());
   }
 
-  protected draftChanged(): void {
-    if (this.busy()) return;
-    this.creation.reset();
-    this.request = null;
-  }
-
   protected async submit(form: NgForm): Promise<void> {
     this.submitted.set(true);
     if (this.submitDisabled() || form.invalid || !this.name().trim() || !this.slug().trim()) return;
-    this.request ??= { name: this.name().trim(), slug: this.slug().trim() };
+    const body: CreateProjectRequest = { name: this.name().trim(), slug: this.slug().trim() };
+    // An unchanged body keeps the intent and its key: after an ambiguous network failure the
+    // resource may already exist, and a fresh key would let the server create it twice. Only a
+    // corrected payload abandons the key (S71 QA-F1), which is why the decision lives here and
+    // not in a per-keystroke handler.
+    if (this.draftChanged()) {
+      this.creation.reset();
+    }
+    this.submittedBody.set(body);
     await this.creation.run();
     await this.finishCreation();
   }
