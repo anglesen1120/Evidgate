@@ -21,16 +21,19 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// <para>
 /// Both are PRE-TENANT (00 §5.4.8, the same shape as <c>CiTokenEndpoints</c>): the browser has no session
 /// yet, so neither route takes a tenant, a principal, a permission or the tenant-resolution filter — only
-/// the 00 §9.2 envelope filter. Neither touches the database: the callback makes its provider calls before
-/// anything could open a transaction (P5) and hands the verified identity to
-/// <see cref="ILoginCompletion"/>, which owns the writes (02.3.1-T1.4).
+/// the 00 §9.2 envelope filter. Neither route runs inside a tenant scope or a transaction of its own: the
+/// callback makes its provider calls before anything touches the database (P5) and hands the verified identity to
+/// <see cref="ILoginCompletion"/>, which owns the writes — the user/identity upsert, the active-membership
+/// check, the <c>session</c> row and the <c>__Host-evidgate_session</c> cookie (02.3.1-T1.4).
 /// </para>
 /// <para>
 /// <c>start</c> writes the pending-login cookie (<see cref="LoginStateCookie"/>) and redirects to the
 /// provider with <c>state</c>, a nonce and the PKCE S256 challenge; <c>callback</c> always deletes that
 /// cookie, verifies the one-time <c>state</c> against it in constant time, refuses a replay, and maps the
 /// provider's typed outcome to 401 <c>token_invalid</c> or 503 <c>unavailable</c> + <c>Retry-After</c>
-/// (AC8). No provider text, code, token, nonce, verifier, email or subject is ever logged or echoed.
+/// (AC8). A verified identity then ends in a 302 — the allowlisted <c>returnUrl</c> — or in the completion's
+/// own refusal (403 <c>no_membership</c>, 403 <c>account_disabled</c>, 503 <c>unavailable</c> + <c>Retry-After</c>).
+/// No provider text, code, token, nonce, verifier, email or subject is ever logged or echoed.
 /// </para>
 /// <para>
 /// Both routes are throttled per client address before any other work, with the limiter
@@ -333,7 +336,9 @@ public static class LoginEndpoints
 
         // The seam promises an app path, and the browser is sent here right after a successful sign-in:
         // this is the sink where a completion bug (a computed target, a provider value) would become an
-        // open redirect, so the allowlist is applied once more to what actually leaves the server.
+        // open redirect, so the allowlist is applied once more to what actually leaves the server. The value
+        // is already percent-encoded by the completion (ReturnUrlEncoder), so a non-ASCII path is a valid
+        // ASCII Location and this check sees the bytes Kestrel writes.
         var target = ReturnUrlPolicy.IsAppPath(completed.Value) ? completed.Value : ReturnUrlPolicy.Root;
 
         return Result.Success<IResult>(Results.Redirect(target), StatusCodes.Status302Found);

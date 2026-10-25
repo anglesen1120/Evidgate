@@ -58,7 +58,12 @@ The playbook for changing a table without breaking the running version is
   built-in role grants, no DDL (the file header records why), `0041` is 02.3.1-T1's `user`,
   `user_identity` and `session` (platform scope, D12: FORCE ROW LEVEL SECURITY with an owner-only
   policy and no privilege for the app role; access is through `SECURITY DEFINER` `evidgate_resolve`
-  functions added by 02.3.1-T1.4 and 02.3.2); the next free number is `0042`;
+  functions added by 02.3.1-T1.4 and 02.3.2), and `0042` is 02.3.1-T1.4's login resolvers — the
+  `session.cookie_hmac`/`session.pepper_version` credential columns with their unique lookup index and
+  `evidgate_resolve.login_upsert_identity`/`session_create`, the two `SECURITY DEFINER` writers of the
+  platform identity tables (a cookie is stored only as an HMAC, the login upsert is race-safe on
+  `(provider, subject)`, and a disabled account is a returned status rather than an exception); the next
+  free number is `0043`;
   a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL

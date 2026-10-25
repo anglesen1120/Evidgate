@@ -40,6 +40,12 @@ public static class SecretNames
     /// <summary>Client secret of the Google OIDC login client (02.3.1-T1.2); the client id is plain configuration.</summary>
     public const string OidcGoogleClientSecret = "EVIDGATE__OIDC__GOOGLE__CLIENTSECRET";
 
+    /// <summary>Client secret of the GitHub OAuth login client (02.3.1-T1.3); the client id is plain configuration.</summary>
+    public const string OauthGithubClientSecret = "EVIDGATE__OAUTH__GITHUB__CLIENTSECRET";
+
+    /// <summary>Base64 current pepper behind the HMAC of the session cookie value (02.3.1-T1.3/T1.4).</summary>
+    public const string SessionPepper = "EVIDGATE__SESSION__PEPPER";
+
     private static readonly string[] Names =
     [
         DatabaseConnectionString,
@@ -51,6 +57,8 @@ public static class SecretNames
         ObjectAccessKey,
         ObjectSecretKey,
         OidcGoogleClientSecret,
+        OauthGithubClientSecret,
+        SessionPepper,
     ];
 
     /// <summary>Every known secret name; a name outside this list is rejected by the provider.</summary>

@@ -69,6 +69,14 @@
       "origin": "default",
       "from": "not set: the dev stack completes no federated login, so the secret is never materialised here; staging and prod resolve it through ISecretProvider from the provider secret store (10.1.1-T3)"
     },
+    "EVIDGATE__OAUTH__GITHUB__CLIENTID": {
+      "origin": "default",
+      "from": "not set: no GitHub OAuth app is registered for a local https origin, so the GitHub provider stays unconfigured and both login routes answer 503 for it (02.3.1-T1.3)"
+    },
+    "EVIDGATE__OAUTH__GITHUB__CLIENTSECRET": {
+      "origin": "default",
+      "from": "not set: the dev stack completes no federated login, so the secret is never materialised here; staging and prod resolve it through ISecretProvider from the provider secret store (10.1.1-T3)"
+    },
     "EVIDGATE__TASKS__BACKOFFBASESECONDS": {
       "origin": "default",
       "from": "option default 5"

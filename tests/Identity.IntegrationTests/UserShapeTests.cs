@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Evidgate.Testing;
 using Npgsql;
 using Shouldly;
@@ -48,16 +49,21 @@ public sealed class UserShapeTests : CatalogueTestBase
 
     /// <summary>
     /// The exact column list of <c>session</c>. It ships here so login can insert
-    /// (02.3.1 §3); <c>cookie_hmac</c>/<c>pepper_version</c> are 02.3.2-T1's
-    /// columns and must not appear before that task adds them.
+    /// (02.3.1 §3); <c>cookie_hmac</c>/<c>pepper_version</c> are 02.3.1-T1.4's
+    /// credential columns (migration 0042) and 02.3.2-T1 adds only its expiry/index
+    /// work on top.
     /// </summary>
     private static readonly string[] SessionColumns =
     [
         "id", "user_id", "created_at", "last_seen_at", "expires_at", "absolute_expires_at",
-        "ip", "user_agent", "revoked_at", "rotated_from",
+        "ip", "user_agent", "revoked_at", "rotated_from", "cookie_hmac", "pepper_version",
     ];
 
-    /// <summary>AC7: no column of an identity table may be a credential of any kind.</summary>
+    /// <summary>
+    /// AC7: no identity table may store a password, secret or reusable token. <c>session.cookie_hmac</c> is the
+    /// one deliberate exception and is not one of these: it holds HMAC-SHA256 of a value the browser keeps, so
+    /// the row verifies a cookie without being usable as one (0042).
+    /// </summary>
     private static readonly string[] CredentialNameFragments =
         ["password", "passwd", "secret", "hash", "token"];
 
@@ -245,11 +251,12 @@ public sealed class UserShapeTests : CatalogueTestBase
                     "user" => "insert into public.\"user\" (id, email) values (@id, 'sneaky@example.com')",
                     "user_identity" => "insert into public.user_identity (id, user_id, provider, subject) "
                         + "values (@id, @user_id, 'github', '9')",
-                    _ => "insert into public.session (id, user_id, expires_at, absolute_expires_at) "
-                        + "values (@id, @user_id, now(), now())",
+                    _ => "insert into public.session (id, user_id, expires_at, absolute_expires_at, cookie_hmac, pepper_version) "
+                        + "values (@id, @user_id, now(), now(), @cookie_hmac, 1)",
                 },
                 ("id", Guid.CreateVersion7()),
-                ("user_id", userId));
+                ("user_id", userId),
+                ("cookie_hmac", NewCookieHmac()));
             write.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, $"{table}: evidgate_app must hold no write");
         }
     }
@@ -342,13 +349,14 @@ public sealed class UserShapeTests : CatalogueTestBase
         await SeedRotatedSessionAsync(userId, predecessor);
 
         var orphan = await RefusalAsync(
-            "insert into public.session (id, user_id, expires_at, absolute_expires_at, rotated_from) "
-            + "values (@id, @user_id, @expires_at, @absolute_expires_at, @rotated_from)",
+            "insert into public.session (id, user_id, expires_at, absolute_expires_at, rotated_from, cookie_hmac, pepper_version) "
+            + "values (@id, @user_id, @expires_at, @absolute_expires_at, @rotated_from, @cookie_hmac, 1)",
             ("id", Guid.CreateVersion7()),
             ("user_id", userId),
             ("expires_at", AbsoluteExpiry.AddHours(-1)),
             ("absolute_expires_at", AbsoluteExpiry),
-            ("rotated_from", Guid.CreateVersion7()));
+            ("rotated_from", Guid.CreateVersion7()),
+            ("cookie_hmac", NewCookieHmac()));
 
         orphan.SqlState.ShouldBe(PostgresErrorCodes.ForeignKeyViolation);
         orphan.ConstraintName.ShouldBe("session_rotated_from_fk");
@@ -387,13 +395,14 @@ public sealed class UserShapeTests : CatalogueTestBase
     {
         var id = Guid.CreateVersion7();
         await Fixture.SeedAsync(
-            "insert into public.session (id, user_id, expires_at, absolute_expires_at, ip, user_agent) "
-            + "values (@id, @user_id, @expires_at, @absolute_expires_at, '203.0.113.7', 'xunit')",
+            "insert into public.session (id, user_id, expires_at, absolute_expires_at, ip, user_agent, cookie_hmac, pepper_version) "
+            + "values (@id, @user_id, @expires_at, @absolute_expires_at, '203.0.113.7', 'xunit', @cookie_hmac, 1)",
             [
                 ("id", id),
                 ("user_id", userId),
                 ("expires_at", AbsoluteExpiry.AddHours(-1)),
                 ("absolute_expires_at", AbsoluteExpiry),
+                ("cookie_hmac", NewCookieHmac()),
             ],
             Token);
         return id;
@@ -405,16 +414,23 @@ public sealed class UserShapeTests : CatalogueTestBase
     /// </summary>
     private async Task SeedRotatedSessionAsync(Guid userId, Guid predecessor) =>
         await Fixture.SeedAsync(
-            "insert into public.session (id, user_id, expires_at, absolute_expires_at, ip, user_agent, rotated_from) "
-            + "values (@id, @user_id, @expires_at, @absolute_expires_at, '203.0.113.7', 'xunit', @rotated_from)",
+            "insert into public.session (id, user_id, expires_at, absolute_expires_at, ip, user_agent, rotated_from, cookie_hmac, pepper_version) "
+            + "values (@id, @user_id, @expires_at, @absolute_expires_at, '203.0.113.7', 'xunit', @rotated_from, @cookie_hmac, 1)",
             [
                 ("id", Guid.CreateVersion7()),
                 ("user_id", userId),
                 ("expires_at", AbsoluteExpiry.AddHours(-1)),
                 ("absolute_expires_at", AbsoluteExpiry),
                 ("rotated_from", predecessor),
+                ("cookie_hmac", NewCookieHmac()),
             ],
             Token);
+
+    /// <summary>
+    /// A fresh 32-byte cookie hash for a seeded session: <c>session_cookie_hmac_length_check</c> fixes the
+    /// length and <c>session_cookie_hmac_key</c> is unique, so a fixed literal would collide at the second row.
+    /// </summary>
+    private static byte[] NewCookieHmac() => SHA256.HashData(Guid.CreateVersion7().ToByteArray());
 
     /// <summary>The table's columns in ordinal order, as <c>information_schema</c> reports them.</summary>
     private async Task<string[]> ColumnsAsync(string table) =>
