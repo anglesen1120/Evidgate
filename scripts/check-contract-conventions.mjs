@@ -142,6 +142,14 @@ const EXPECTED = [
   ['/projects/{p}/authoring/manual-cases/{m}', 'delete', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/manual-cases/{m}/state', 'post', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/manual-cases/{m}/item', 'post', 'authoring:write', 'v1'],
+  // 13.1.1-T3 (S80): the version timeline (routes 22, 23) and the four restore routes (6, 11, 18, 24).
+  // 00 §9.3's authoring row carries them; the two reads are `authoring:read`, the four restores `authoring:write`.
+  ['/projects/{p}/authoring/versions', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/versions/{v}', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/nodes/{n}/restore', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/checklist-items/{i}/restore', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/manual-cases/{m}/restore', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/versions/{v}/restore', 'post', 'authoring:write', 'v1'],
 ];
 
 const byKey = new Map(ops.map((o) => [`${o.method} ${o.path}`, o]));

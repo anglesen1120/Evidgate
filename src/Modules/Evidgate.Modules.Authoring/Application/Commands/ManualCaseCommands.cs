@@ -245,7 +245,7 @@ internal sealed class UpdateManualCaseCommandHandler(
 
         if (row.Version != command.ExpectedVersion)
         {
-            return Result.Failure<AuthoringChangeResponse>(ManualCaseCommands.Stale(row.Version));
+            return Result.Failure<AuthoringChangeResponse>(AuthoringRequestScope.Stale("manual test case", row.Version));
         }
 
         if (ManualCaseBody.OptionalTitle(command.Body, out var title, out var titleSet) is { } titleError)
@@ -382,7 +382,7 @@ internal sealed class DeleteManualCaseCommandHandler(
 
         if (row.Version != command.ExpectedVersion)
         {
-            return Result.Failure(ManualCaseCommands.Stale(row.Version));
+            return Result.Failure(AuthoringRequestScope.Stale("manual test case", row.Version));
         }
 
         var actor = await ManualCaseActor.MembershipIdAsync(db, principals, orgId, cancellationToken).ConfigureAwait(false);
@@ -477,7 +477,7 @@ internal sealed class SetManualCaseStateCommandHandler(
 
         if (row.Version != command.ExpectedVersion)
         {
-            return Result.Failure<SetManualCaseStateResponse>(ManualCaseCommands.Stale(row.Version));
+            return Result.Failure<SetManualCaseStateResponse>(AuthoringRequestScope.Stale("manual test case", row.Version));
         }
 
         var content = JsonSerializer.SerializeToElement(AuthoringContent.ManualTestCase(
@@ -616,7 +616,7 @@ internal sealed class MoveManualTestCaseCommandHandler(
 
         if (row.Version != command.ExpectedVersion)
         {
-            return Result.Failure<MoveManualCaseResponse>(ManualCaseCommands.Stale(row.Version));
+            return Result.Failure<MoveManualCaseResponse>(AuthoringRequestScope.Stale("manual test case", row.Version));
         }
 
         var actor = await ManualCaseActor.MembershipIdAsync(db, principals, orgId, cancellationToken).ConfigureAwait(false);
@@ -740,22 +740,6 @@ internal static class ManualCaseCommands
             ? (null, Error.NotFound("no manual test case with that id is visible to this tenant"))
             : (rows[0], null);
     }
-
-    /// <summary>
-    /// 412 <c>precondition_failed</c> for a stale <c>If-Match</c> (AC19): nothing has been written at this point and the
-    /// current version travels in <c>details</c>, so a client can retry against it without a second read.
-    /// </summary>
-    /// <param name="currentVersion">The version the row holds now.</param>
-    internal static Error Stale(int currentVersion) => new(
-        ApiErrorCode.PreconditionFailed,
-        "the manual test case changed since you read it; re-read it and retry",
-        StatusCodes.Status412PreconditionFailed,
-        Retryable: false,
-        Details:
-        [
-            new ErrorDetail("/If-Match", "stale"),
-            new ErrorDetail("/version", currentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-        ]);
 }
 
 /// <summary>The body readers of the case routes: one precise 422 per member instead of a single opaque refusal.</summary>

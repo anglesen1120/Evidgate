@@ -889,9 +889,10 @@ public sealed partial class AuthoringVersionTests
             null,
             kind,
             entityId,
-            "restore",
-            null,
-            null,
+            expectedVersion: null,
+            reason: "restore",
+            fromVersionId: null,
+            context: null,
             TestContext.Current.CancellationToken);
 
         if (result.IsSuccess)

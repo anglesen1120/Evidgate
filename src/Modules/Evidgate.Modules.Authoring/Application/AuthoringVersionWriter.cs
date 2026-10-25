@@ -38,13 +38,16 @@ namespace Evidgate.Modules.Authoring.Application;
 /// <b>Lock order, one total order for every path:</b> <c>feature_node</c> → <c>checklist_item</c> →
 /// <c>manual_test_case</c>, and within a rank by id. A batch takes <em>every</em> lock it can need — the rows it mutates
 /// <c>for update</c> and the parents its content names <c>for share</c> — in that one sorted phase before its first
-/// change; a move locks the target item before the case; a restore peeks its parent without a lock, takes the parent's
-/// share lock, then locks the entity, and answers <c>503</c> if the row moved to another parent in between rather than
-/// taking a parent lock after the child. A parent probe is always a share lock — it exists to block a concurrent soft
-/// delete of the parent, never to serialise siblings. Siblings are serialised instead by one transaction-scoped advisory
-/// lock per group (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>, the pattern <c>CaseIdentityService</c> uses for
+/// change; a move locks the target item before the case; a restore takes the sibling group's advisory lock, then peeks
+/// its parent without a lock, takes the parent's share lock, then locks the entity, and answers <c>503</c> if the row
+/// moved to another parent in between rather than taking a parent lock after the child. A parent probe is always a
+/// share lock — it exists to block a concurrent soft delete of the parent, never to serialise siblings. Siblings are
+/// serialised instead by one transaction-scoped advisory lock per group
+/// (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>, the pattern <c>CaseIdentityService</c> uses for
 /// a project's sync), because a <c>for update</c> lock of the parent row would join this order and could form a cycle with
-/// a batch that locks a child before its parent. Every lock of a call is bounded by one 5 s <c>lock_timeout</c>,
+/// a batch that locks a child before its parent. Every path that takes that lock takes it <em>before</em> its first row
+/// lock (create and move-into-group in their handler, the reorder and the restore in their core), so it is always the
+/// outermost lock of the call. Every lock of a call is bounded by one 5 s <c>lock_timeout</c>,
 /// and a lock timeout (55P03) or a deadlock (40P01) answers the retryable <c>503 unavailable</c> of §5 rather than a
 /// 500, so even an order this comment missed degrades to a retry.
 /// </para>
@@ -422,12 +425,27 @@ internal sealed class AuthoringVersionWriter(
     /// position clash at <c>max + 1</c>, refuses a parent that is still soft-deleted and sets a restored item to
     /// <c>active</c> and a restored case to <c>draft</c> (§6).
     /// </summary>
+    /// <remarks>
+    /// <b>Serialisation (hand-over (a), OI-13-128).</b> The restore takes the sibling group's transaction-scoped advisory
+    /// lock (<see cref="AuthoringLockGuard.LockSiblingGroupAsync"/>) <em>before</em> it resolves <c>max + 1</c>, and it is
+    /// the first lock of the call — create, move-into-group and the reorder take that same lock before any row lock, so
+    /// the advisory lock is the outermost of every path and cannot sit in a cycle with them. Before this, a restore
+    /// resolved its position unlocked and survived a lost race only through the <c>23505</c> → <c>503</c> mapping
+    /// below, which stays as the defence in depth for a writer that does not take the group lock (13.1.2's batch path,
+    /// OI-13-129).
+    /// </remarks>
     /// <param name="orgId">The tenant; must equal the open scope's organization.</param>
     /// <param name="projectId">The project.</param>
     /// <param name="batchId">The batch of the calling command.</param>
     /// <param name="actorMembershipId">The authoring member, or null.</param>
     /// <param name="entityKind">Which entity to restore.</param>
     /// <param name="entityId">The entity.</param>
+    /// <param name="expectedVersion">
+    /// The <c>version</c> the caller last read (the route's <c>If-Match</c>, AC19), or null when the route carries no
+    /// precondition (route 24). It is compared with the <b>locked</b> row's <c>version</c> before anything is written, so
+    /// a restore that lost the race to another writer answers the <c>412 precondition_failed</c> of
+    /// <see cref="AuthoringRequestScope.Stale"/> with the current version in its details, and nothing else happens.
+    /// </param>
     /// <param name="reason">An optional 1..500 character reason.</param>
     /// <param name="fromVersionId">A version of the entity whose snapshot is re-applied, or null for its own last state.</param>
     /// <param name="context">Source, reason and AI run of the call.</param>
@@ -439,6 +457,7 @@ internal sealed class AuthoringVersionWriter(
         Guid? actorMembershipId,
         AuthoringEntityKind entityKind,
         Guid entityId,
+        int? expectedVersion = null,
         string? reason = null,
         Guid? fromVersionId = null,
         AuthoringAppendContext? context = null,
@@ -446,7 +465,7 @@ internal sealed class AuthoringVersionWriter(
     {
         try
         {
-            return await RestoreCoreAsync(orgId, projectId, batchId, actorMembershipId, entityKind, entityId, reason, fromVersionId, context, cancellationToken).ConfigureAwait(false);
+            return await RestoreCoreAsync(orgId, projectId, batchId, actorMembershipId, entityKind, entityId, expectedVersion, reason, fromVersionId, context, cancellationToken).ConfigureAwait(false);
         }
         catch (PostgresException exception) when (IsContention(exception))
         {
@@ -461,6 +480,7 @@ internal sealed class AuthoringVersionWriter(
         Guid? actorMembershipId,
         AuthoringEntityKind entityKind,
         Guid entityId,
+        int? expectedVersion = null,
         string? reason = null,
         Guid? fromVersionId = null,
         AuthoringAppendContext? context = null,
@@ -550,18 +570,52 @@ internal sealed class AuthoringVersionWriter(
         }
         else if (!IsDeleted(peeked))
         {
+            // AC19 answers before AC8's "not soft-deleted" refusal: a second restore that presents the tag the first one
+            // already consumed is a stale precondition (412), not a 409. The authoritative comparison runs again under
+            // the entity lock below; this one only picks the right refusal for a row that is already live.
+            if (expectedVersion is { } presented && VersionOf(peeked) != presented)
+            {
+                return AuthoringErrors.Fail<AuthoringVersionRef>(StaleRestore(entityKind, VersionOf(peeked)));
+            }
+
             return AuthoringErrors.Fail<AuthoringVersionRef>(AuthoringErrors.InvalidTransition(
                 "the entity is not soft-deleted; restore names the version it re-applies"));
         }
 
         // The parent to lock comes from the row (or from the named version) as peeked; the entity lock follows it.
         var peekedSnapshot = fromVersion ?? SnapshotOf(peeked);
+
+        // Hand-over (a) / OI-13-128: the sibling group's advisory lock, and it is the FIRST lock of this call.
+        // Why here: create and move-into-group (NodeCommands) and the reorder (ReorderNodesCoreAsync) all take this lock
+        // before their first row lock, so taking it before the parent's share lock and before the entity's own lock keeps
+        // the advisory lock the outermost of every path and no cycle can include it. Taking it later — after the entity
+        // lock, next to the max + 1 read it protects — would put it behind a row lock a create or a reorder already
+        // holds, which is the one inversion this order forbids.
+        // Which group: the parent the restored snapshot lands in — a node's parent_id (null = root), an item's
+        // feature_node_id, a case's checklist_item_id. The group of the peeked parent is taken even when the lock below
+        // finds that the row moved in between: that case answers the retryable 503 (see below) and the retry re-peeks,
+        // so locking a group the write does not use can only cost a wait, never a wrong append.
+        // A manual case has no position of its own (route 12 orders by (code, id) and the code is immutable), so its
+        // group lock is the create/merge side of 13.1.2 that can bring a case into the same item, not a position guard.
+        await AuthoringLockGuard
+            .LockSiblingGroupAsync(db, projectId, ParentOf(peekedSnapshot), SiblingGroupOf(entityKind), cancellationToken)
+            .ConfigureAwait(false);
+
         await LockRestoreParentAsync(orgId, projectId, peekedSnapshot, cancellationToken).ConfigureAwait(false);
 
         var stored = await LockAsync(orgId, projectId, entityId, entityKind, cancellationToken).ConfigureAwait(false);
         if (stored is null)
         {
             return AuthoringErrors.Fail<AuthoringVersionRef>(AuthoringErrors.EntityNotFound(entityKind));
+        }
+
+        // AC19, atomically with the write: the tag the caller presented is compared with the version of the row this
+        // transaction now holds for update, before a single column is written. A second restore that presents the tag the
+        // first one consumed therefore answers 412 with the current version in details — never a second restore and never
+        // a 409 — and a refusal here leaves the transaction untouched (no entity write, no version row, no audit row).
+        if (expectedVersion is { } ifMatch && VersionOf(stored) != ifMatch)
+        {
+            return AuthoringErrors.Fail<AuthoringVersionRef>(StaleRestore(entityKind, VersionOf(stored)));
         }
 
         AuthoringSnapshot snapshot;
@@ -1412,7 +1466,7 @@ internal sealed class AuthoringVersionWriter(
         Details:
         [
             new ErrorDetail("/If-Match", "stale"),
-            new ErrorDetail("order", currentOrderHash),
+            new ErrorDetail("/order", currentOrderHash),
         ]);
 
     // ------------------------------------------------------------------ shared pieces
@@ -1850,6 +1904,38 @@ internal sealed class AuthoringVersionWriter(
         ChecklistItemSnapshot item => item with { State = ChecklistItemStateMachine.RestoreState },
         ManualTestCaseSnapshot manualCase => manualCase with { State = ManualTestCaseStateMachine.RestoreState },
         _ => snapshot,
+    };
+
+    /// <summary>
+    /// The AC19 refusal of a restore whose <c>If-Match</c> no longer describes the locked row: the shared
+    /// <see cref="AuthoringRequestScope.Stale"/> answer, so every authoring 412 has one shape (hand-over (c), the
+    /// <c>/version</c> pointer, belongs to <see cref="AuthoringRequestScope"/>). The writer returns the finished refusal
+    /// instead of a code the handler re-maps, so a route and a writer-level test assert the same bytes.
+    /// </summary>
+    /// <param name="kind">Which entity the caller addressed.</param>
+    /// <param name="currentVersion">The version of the locked row.</param>
+    private static Error StaleRestore(AuthoringEntityKind kind, int currentVersion) =>
+        AuthoringRequestScope.Stale(
+            kind switch
+            {
+                AuthoringEntityKind.FeatureNode => "feature node",
+                AuthoringEntityKind.ChecklistItem => "checklist item",
+                AuthoringEntityKind.ManualTestCase => "manual test case",
+                _ => "entity",
+            },
+            currentVersion);
+
+    /// <summary>
+    /// The sibling group a restore of <paramref name="kind"/> serialises on (hand-over (a)): a node's parent group, an
+    /// item's group under its node, a case's group under its item — the same key its create and reorder take.
+    /// </summary>
+    /// <param name="kind">The entity kind.</param>
+    private static AuthoringLockGuard.SiblingGroup SiblingGroupOf(AuthoringEntityKind kind) => kind switch
+    {
+        AuthoringEntityKind.FeatureNode => AuthoringLockGuard.SiblingGroup.FeatureNode,
+        AuthoringEntityKind.ChecklistItem => AuthoringLockGuard.SiblingGroup.ChecklistItem,
+        AuthoringEntityKind.ManualTestCase => AuthoringLockGuard.SiblingGroup.ManualTestCase,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown authoring entity kind"),
     };
 
     /// <summary>

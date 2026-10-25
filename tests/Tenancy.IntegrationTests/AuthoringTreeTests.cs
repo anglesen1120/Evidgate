@@ -168,6 +168,51 @@ public sealed class AuthoringTreeTests
         negative.Paths().ShouldContain("/position");
     }
 
+    /// <summary>
+    /// AC8 with a refilled slot: a tombstone keeps its sibling position, so the freed number can be taken by another
+    /// create while it is gone; the restore then re-appends at the group's <c>max + 1</c> instead of colliding, and the
+    /// appended version records the new position (hand-over (a), OI-13-128).
+    /// </summary>
+    [Fact]
+    public async Task Restore_TakenPosition_Reappends()
+    {
+        await using var world = await StartAsync();
+
+        var first = CreatedId(await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, null, "module", "A"));
+        var second = CreatedId(await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, null, "module", "B"));
+
+        var deleted = await AuthoringCalls.SendAsync(
+            world.Client, world.As, HttpMethod.Delete, world.NodeUrl(first), json: null, ifMatch: "\"1\"");
+        deleted.Status.ShouldBe(HttpStatusCode.NoContent);
+
+        // The tombstone's position 0 is free again (the unique index covers live rows), so a create can take it.
+        var refill = CreatedId(await AuthoringCalls.CreateNodeAsync(world.Client, world.As, world.Project, null, "module", "C", position: 0));
+
+        var restored = await AuthoringCalls.SendAsync(
+            world.Client, world.As, HttpMethod.Post, world.NodeUrl(first) + "/restore", json: null, ifMatch: "\"2\"");
+
+        restored.Status.ShouldBe(HttpStatusCode.OK);
+        restored.Member("version").GetInt32().ShouldBe(3);
+
+        // 0 and 1 are taken by live rows, so A comes back last: the group keeps one live row per position (AC2).
+        var roots = await AuthoringCalls.TreeAsync(world.Client, world.As, world.Project);
+        roots.Status.ShouldBe(HttpStatusCode.OK);
+
+        var items = roots.Member("items").EnumerateArray().ToList();
+        items.Select(item => item.GetProperty("node_id").GetGuid()).ShouldBe([refill, second, first]);
+        items.Select(item => item.GetProperty("position").GetInt32()).ShouldBe([0, 1, 2]);
+
+        // The appended row is the restore of AC8, and its snapshot carries the re-appended position, not the stale 0.
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select change_kind from public.authoring_version where entity_id = '{first:D}' and version_no = 3"))
+            .ShouldBe("restore");
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select content->>'position' from public.authoring_version where entity_id = '{first:D}' and version_no = 3"))
+            .ShouldBe("2");
+    }
+
     [Fact]
     public async Task ReorderNodes_TwoStatements()
     {
