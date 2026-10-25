@@ -41,13 +41,17 @@ describe('AuditTableComponent (AC8)', () => {
     ['platform_operator', 'Platform staff'],
     ['system', 'System'],
   ])('renders the localized actor label for %s', async (actorType, label) => {
-    const { root } = await render([row('actor', { actor_type: actorType })]);
+    const { root } = await render([
+      row('actor', { actor_type: actorType as AuditEntryDto['actor_type'] }),
+    ]);
     expect(root.querySelector('tbody td app-status-pill')?.textContent?.trim()).toBe(label);
   });
   it.each(['future_actor', 'constructor', '__proto__'])(
     'keeps an unknown actor type verbatim: %s',
     async (actorType) => {
-      const { root } = await render([row('unknown', { actor_type: actorType })]);
+      const { root } = await render([
+        row('unknown', { actor_type: actorType as AuditEntryDto['actor_type'] }),
+      ]);
       expect(root.querySelector('tbody td app-status-pill')?.textContent?.trim()).toBe(actorType);
       expect(root.querySelector('[data-audit-support="true"]')).toBeNull();
     },
