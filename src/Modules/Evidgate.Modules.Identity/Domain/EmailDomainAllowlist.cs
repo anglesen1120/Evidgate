@@ -57,7 +57,7 @@ internal static class EmailDomainAllowlist
         // F2: the fully qualified form (`example.com.`) is the same domain as `example.com`, so one
         // trailing root dot is dropped here too — otherwise a provider that reports the dotted form,
         // or an admin who typed it into the allowlist, locks the org out with an exact-entry typo.
-        var domain = normalisedEmail[(at + 1)..].TrimEnd('.');
+        var domain = DropRootDot(normalisedEmail[(at + 1)..]);
         var restricted = false;
 
         foreach (var entry in allowed)
@@ -70,13 +70,13 @@ internal static class EmailDomainAllowlist
                 continue;
             }
 
-            // A present entry restricts from here on, even one a TrimEnd('.') empties (`.` alone):
+            // A present entry restricts from here on, even one that DropRootDot empties (`.` alone):
             // it is admin-written data, so it must never turn a restriction into "no restriction" —
             // it just matches no address.
             restricted = true;
 
             if (domain.Length > 0
-                && string.Equals(candidate.TrimEnd('.'), domain, StringComparison.OrdinalIgnoreCase))
+                && string.Equals(DropRootDot(candidate), domain, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -87,4 +87,8 @@ internal static class EmailDomainAllowlist
         // org out instead of narrowing it.
         return !restricted;
     }
+
+    /// <summary>Drops exactly one trailing DNS root dot; <c>example.com..</c> is not a domain and stays distinct.</summary>
+    private static string DropRootDot(string domain) =>
+        domain.EndsWith('.') ? domain[..^1] : domain;
 }

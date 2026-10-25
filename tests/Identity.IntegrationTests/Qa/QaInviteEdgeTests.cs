@@ -145,13 +145,11 @@ public sealed class QaInviteEdgeTests : BindTestBase
     }
 
     /// <summary>
-    /// An allowlist entry written with a trailing DNS dot does not admit the plain domain, so the org's
-    /// invites stay <c>pending</c> and the login is refused. This is the end-to-end shape of the
-    /// admin-form artefact <c>EmailDomainAllowlist</c> compares exactly; the entry is a real domain in
-    /// DNS, so the refusal is surprising rather than intended.
+    /// An allowlist entry written with a trailing DNS dot is the same domain as the plain one, so the
+    /// bind goes through (a form artefact must not lock the org out of its own invites).
     /// </summary>
     [Fact]
-    public async Task AllowlistEntryWithATrailingDot_LocksTheOrgOutOfTheBind()
+    public async Task AllowlistEntryWithATrailingDot_StillAdmitsThePlainDomain()
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: false);
         await SetAllowedDomainsAsync(org, ["example.test."]);
@@ -166,9 +164,9 @@ public sealed class QaInviteEdgeTests : BindTestBase
 
         using var callback = await host.SignInWithInviteAsync(client, invite.Token);
 
-        callback.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        callback.StatusCode.ShouldBe(HttpStatusCode.Found);
         (await LoginCompletionTestHost.MembershipStatusAsync(Fixture, invite.MembershipId))
-            .ShouldBe(MembershipStatus.Pending, "the dotted entry admits no address at all");
+            .ShouldBe(MembershipStatus.Active);
     }
 
     /// <summary>

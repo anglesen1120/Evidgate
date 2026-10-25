@@ -108,6 +108,10 @@ public sealed class QaAliasAndAllowlistEdgeTests
         EmailDomainAllowlist.Admits(TrailingDotEntry, "invitee@example.com.").ShouldBeTrue();
         EmailDomainAllowlist.Admits(TrailingDotEntry, "invitee@sub.example.com").ShouldBeFalse(
             "the trailing dot changes nothing about exactness");
+        EmailDomainAllowlist.Admits(TrailingDotEntry, "invitee@example.com..").ShouldBeFalse(
+            "only one root dot is dropped; two dots are not a domain");
+        EmailDomainAllowlist.Admits(["example.com.."], "invitee@example.com").ShouldBeFalse(
+            "the same holds for an entry");
     }
 
     /// <summary>
