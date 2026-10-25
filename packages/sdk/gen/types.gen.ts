@@ -1590,7 +1590,7 @@ export type BindingId = string;
 export type IngestTokenId = string;
 
 /**
- * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers; a deployment that registers neither — no client credential configured — answers 404 `not_found` for both.
+ * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers. A route value no provider is registered under answers 404 `not_found`; a registered provider without a client credential answers 503 `unavailable`, never 404.
  */
 export type ProviderPath = 'google' | 'github';
 
@@ -1860,7 +1860,7 @@ export type StartFederatedLoginData = {
     body?: never;
     path: {
         /**
-         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers; a deployment that registers neither — no client credential configured — answers 404 `not_found` for both.
+         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers. A route value no provider is registered under answers 404 `not_found`; a registered provider without a client credential answers 503 `unavailable`, never 404.
          */
         provider: 'google' | 'github';
     };
@@ -1894,7 +1894,7 @@ export type CompleteFederatedLoginData = {
     body?: never;
     path: {
         /**
-         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers; a deployment that registers neither — no client credential configured — answers 404 `not_found` for both.
+         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers. A route value no provider is registered under answers 404 `not_found`; a registered provider without a client credential answers 503 `unavailable`, never 404.
          */
         provider: 'google' | 'github';
     };
