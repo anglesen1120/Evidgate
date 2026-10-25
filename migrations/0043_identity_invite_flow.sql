@@ -7,10 +7,10 @@
 -- the invite path calls before any tenant exists. What it adds and why:
 --
 --   * `membership.invite_pepper_version` — T5 keeps an invite secret only as
---     HMAC-SHA256(pepper_vN, secret). Without the version a pepper rotation would
---     invalidate every live invite, so the version travels with the hash exactly as
---     `session.pepper_version` does (0042:6-13). No default: a minted token always
---     names its pepper, and a row without a token has no version.
+--     HMAC-SHA256(pepper_vN, secret), and the column records which pepper made the hash:
+--     one pepper is configured and `InviteSecrets.Verify` accepts that version only, so a
+--     bump fails every pending invite closed and an admin resend re-mints them. No
+--     default: a minted token always names its pepper; a row without a token has none.
 --   * `membership_invite_token_all_or_none` — a half-minted invite is not a state any
 --     reader handles: `invite_by_secret` would return a row whose hash can never
 --     verify. The constraint makes the three columns move together, requires the
@@ -59,10 +59,10 @@
 -- 0011 leads with `org_id`, so it cannot serve a lookup by address alone).
 --
 -- The org's status is deliberately not part of `invite_by_secret`'s predicate: the
--- resolver answers "which membership owns this prefix", one row, and a suspended or
--- deleted org is a tenant-path decision taken after the scope opens (§8, W4's bind
--- re-reads the row under RLS). `invite_autobind_candidates` does filter the org,
--- because AC8's opt-in is only meaningful for an org that is still `active`.
+-- resolver answers "which membership owns this prefix", one row. A suspended or deleted
+-- org is a tenant-path decision: after the scope opens, the bind re-reads the membership
+-- under RLS and reads the org's status under the same lock, refusing a non-active one.
+-- `invite_autobind_candidates` filters the org instead (AC8's opt-in needs `active`).
 --
 -- Deliberately absent, each owned by another task:
 --
@@ -147,7 +147,7 @@ $$;
 -- provider-verified email, in orgs that opted into email-only auto-bind and are still
 -- active. `p_email` must already be normalised by the caller (lower/trim, 02.1.2 §5);
 -- this function compares exactly, so an unnormalised argument matches nothing instead
--- of half-matching. Ordered by org so a caller's result is deterministic.
+-- of half-matching. Ordered by org, capped at 50 rows: deterministic and bounded.
 create or replace function evidgate_resolve.invite_autobind_candidates(p_email text)
 returns table (org_id uuid, membership_id uuid)
 language sql
@@ -164,6 +164,7 @@ as $$
      and o.invite_autobind_verified_domain
      and o.status = 'active'
    order by m.org_id
+   limit 50
 $$;
 
 -- The `invite-expiry` sweep of 02.1.2 §7: bounded batches of past-due pending invites

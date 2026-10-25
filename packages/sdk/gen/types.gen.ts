@@ -3919,7 +3919,7 @@ export type CreateMembershipError = CreateMembershipErrors[keyof CreateMembershi
 
 export type CreateMembershipResponses = {
     /**
-     * Membership created (`pending`) with its one-time invite token
+     * Membership created (`pending`) with its one-time invite token. The response carries `Cache-Control: no-store`: its body holds a plaintext secret that must not reach a cache.
      */
     201: InviteIssuedView;
 };
@@ -4136,14 +4136,6 @@ export type ResendMembershipInviteErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
-     */
-    422: ErrorEnvelope;
-    /**
-     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
-     */
-    429: ErrorEnvelope;
-    /**
      * 503 unavailable — always `Retry-After` (00 §9.2)
      */
     503: ErrorEnvelope;
@@ -4153,7 +4145,7 @@ export type ResendMembershipInviteError = ResendMembershipInviteErrors[keyof Res
 
 export type ResendMembershipInviteResponses = {
     /**
-     * Invite token rotated; the new token is in the body
+     * Invite token rotated; the new token is in the body. The response carries `Cache-Control: no-store`: its body holds a plaintext secret that must not reach a cache.
      */
     202: InviteIssuedView;
 };
@@ -4197,10 +4189,6 @@ export type CancelMembershipInviteErrors = {
      * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
      */
     409: ErrorEnvelope;
-    /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
-     */
-    422: ErrorEnvelope;
     /**
      * 503 unavailable — always `Retry-After` (00 §9.2)
      */

@@ -67,7 +67,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate.audit_org_ids"] = "0015_identity_audit_log.sql:132",
         ["evidgate.purge_expired_ci_token_issue"] =
             "0017_identity_ci_token_issue.sql:67 (redefined 0019_identity_ci_review_fixes.sql:8)",
-        ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:176",
+        ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:177",
     };
 
     /// <summary>

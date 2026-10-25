@@ -13,10 +13,11 @@ namespace Identity.IntegrationTests.Invites;
 
 /// <summary>
 /// The invite token itself (02.1.2-T2 §5, T75): its shape and entropy, the HMAC store/verify pair
-/// and the two carriers around it — the notification payload (ids only) and the secret carrier the
-/// routes answer from. The unit cases need neither database nor host: they are the seam's own
-/// contract. The two persistence cases at the end drive the real route over the harness's migrated
-/// database and scan what the mint actually left behind (00 §5.7 S3).
+/// and the secret carrier the routes answer from. The unit cases need neither database nor host:
+/// they are the seam's own contract. The two persistence cases at the end drive the real route over
+/// the harness's migrated database and scan what the mint actually left behind (00 §5.7 S3);
+/// the ids-only payload of the notification is pinned by
+/// <c>InviteLifecycleTests.Outbox_OneNotifyRowPerMintWithIdsOnly</c> instead.
 /// </summary>
 [Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
@@ -113,31 +114,6 @@ public sealed class InviteTokenTests : CatalogueTestBase
         Assert.False(unconfigured.Verify(version, hash, token.Secret));
         Assert.Throws<InvalidOperationException>(
             () => unconfigured.HashCurrent(Encoding.UTF8.GetBytes(token.Secret)));
-    }
-
-    [Fact]
-    public void NotificationPayload_CarriesNoSecretNoPrefixAndNoAddress()
-    {
-        var membershipId = Guid.CreateVersion7();
-        var orgId = Guid.CreateVersion7();
-        var token = InviteTokenFormat.Generate();
-
-        var payload = InviteNotifications.Payload(membershipId, orgId, InviteNotifications.InviteKind);
-
-        using var document = JsonDocument.Parse(payload);
-        var properties = document.RootElement.EnumerateObject().Select(property => property.Name).ToArray();
-
-        // Exactly the three documented members (PDPL: the sender looks the rest up itself).
-        Assert.Equal(["membership_id", "org_id", "kind"], properties);
-        Assert.False(payload.Contains(token.Full, StringComparison.Ordinal));
-        Assert.False(payload.Contains(token.Secret, StringComparison.Ordinal));
-        Assert.False(payload.Contains(token.Prefix, StringComparison.Ordinal));
-        Assert.False(payload.Contains('@', StringComparison.Ordinal));
-
-        // One row per mint: the key carries the row version, so a resend cannot reuse the create's.
-        Assert.NotEqual(
-            InviteNotifications.IdempotencyKey(membershipId, 1),
-            InviteNotifications.IdempotencyKey(membershipId, 2));
     }
 
     [Fact]

@@ -953,7 +953,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "`EVIDGATE:INVITE:PepperVersion` (02.1.2-T2 invite group): version stored beside every invite HMAC (`membership.invite_pepper_version`, migration 0043 rejects 0); bump it when the pepper rotates so an invite minted under the previous pepper keeps verifying until the rotation window closes. Default 1."
+      "note": "`EVIDGATE:INVITE:PepperVersion` (02.1.2-T2 invite group): version stored beside every invite HMAC (`membership.invite_pepper_version`, migration 0043 rejects 0). Exactly one pepper is configured, so this names that pepper's version: bumping it makes every pending invite fail closed (`InviteSecrets.Verify` returns false for any other version) and an admin must resend them — a resend re-mints under the current pepper. Default 1."
     },
     {
       "key": "EVIDGATE__ISOLATION__SELFCHECK",

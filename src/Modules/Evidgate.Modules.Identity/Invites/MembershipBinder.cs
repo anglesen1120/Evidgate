@@ -27,6 +27,9 @@ namespace Evidgate.Modules.Identity.Invites;
 /// opened here — the binder runs at login, before any tenant exists — and committed before
 /// the next row is touched. The seat check takes the org's row lock first, so concurrent
 /// binds of one org serialise on <c>max_seats</c> and can never overfill it.
+/// <b>Only an active org binds.</b> That same statement reads the org's status, so a
+/// <c>suspended</c> or <c>deleted</c> org answers like every other refusal: an empty result,
+/// the row still <c>pending</c>, nothing written.
 /// </para>
 /// <para>
 /// <b>No oracle, no secret.</b> Every refusal — unknown prefix, wrong secret, another address,
@@ -270,10 +273,19 @@ internal sealed class MembershipBinder : IMembershipBinder
         }
 
         // The org row lock taken here is what serialises concurrent binds of one org; a full
-        // org fails the whole call, with this org's transaction rolled back uncommitted.
+        // org fails the whole call, with this org's transaction rolled back uncommitted. F4: the
+        // same statement reads the org's status, and a `suspended` or `deleted` org binds nothing —
+        // the same rule as the auto-bind resolver's `o.status = 'active'` (0043) — answered like
+        // every other refusal (empty result, no oracle, row untouched, no seat consumed), and
+        // before the seat answer so a suspended org never learns its limit.
         var seats = await SeatQuota
             .CheckAsync(_db, candidate.OrgId, SeatCountMode.Bind, cancellationToken)
             .ConfigureAwait(false);
+
+        if (!seats.IsOrgActive)
+        {
+            return BindAttempt.NotBound;
+        }
 
         if (!seats.HasRoom)
         {

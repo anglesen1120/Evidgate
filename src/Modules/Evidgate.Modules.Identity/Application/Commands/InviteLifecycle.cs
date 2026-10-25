@@ -105,6 +105,12 @@ internal sealed class ResendInviteCommandHandler(
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A concurrent cancel or bind got in first: the row is no longer pending, which is the
+            // 409 the serial path answers (the same race CancelInviteCommandHandler closes).
+            return Result.Failure<InviteIssuedView>(InviteErrors.NotPending);
+        }
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {

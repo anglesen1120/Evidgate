@@ -47,9 +47,10 @@ internal sealed class Membership
 
     /// <summary>
     /// The pepper version the <see cref="InviteTokenHash"/> was computed under (T5, migration
-    /// 0043's <c>membership_invite_token_all_or_none</c>): a rotation keeps the old pepper
-    /// alive while its invites drain, exactly as <c>session.pepper_version</c> does (0042).
-    /// Null when no token was minted.
+    /// 0043's <c>membership_invite_token_all_or_none</c>). Exactly one pepper is configured and
+    /// <c>InviteSecrets.Verify</c> accepts that version only, so a bump does not keep older
+    /// invites verifiable: every pending invite fails closed and an admin resend re-mints it
+    /// under the current pepper. Null when no token was minted.
     /// </summary>
     public int? InvitePepperVersion { get; set; }
 

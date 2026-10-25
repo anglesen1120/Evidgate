@@ -161,7 +161,9 @@ internal static class IdentityModule
         services.AddTaskHandler<InviteExpiryPayload, InviteExpiryTaskHandler>();
         services.AddTaskSchedule(InviteExpirySweeps.Expire);
 
-        // 02.3.1-T2 calls the binder inside its login transaction; nothing in this PR calls it.
+        // 02.3.1-T2 calls the binder. It opens and commits its own per-org tenant transactions,
+        // so it must be called outside any open tenant scope (BeginAsync throws inside one;
+        // 02.3.1-T2 hand-over); nothing in this PR calls it.
         services.TryAddSingleton<MembershipBinder>();
         services.TryAddSingleton<IMembershipBinder>(
             provider => provider.GetRequiredService<MembershipBinder>());

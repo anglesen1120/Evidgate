@@ -28,9 +28,10 @@ internal static class InviteExpirySweeps
     public const int BatchSize = 10_000;
 
     /// <summary>
-    /// Batches one fire may drain before it stops and logs the remainder; the next
-    /// fire continues. Bounded so a backlog never holds one long lock, and a fire
-    /// never outlives the lease it holds.
+    /// Batches one fire may drain before it stops; whatever is left waits for the next
+    /// hourly fire, and the log line counts only what this fire expired (nothing marks
+    /// the cap as hit). Bounded so a backlog never holds one long lock, and a fire never
+    /// outlives the lease it holds.
     /// </summary>
     public const int MaxBatchesPerFire = 50;
 

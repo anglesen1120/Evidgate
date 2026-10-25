@@ -207,11 +207,6 @@ public sealed class InviteExpiryTaskTests
             owner,
             "select task_type from public.task where schedule_name = @n",
             ("n", InviteExpirySweeps.TaskType))).ShouldBe(InviteExpirySweeps.TaskType);
-
-        InviteExpirySweeps.TaskType.ShouldBe("invite-expiry");
-        InviteExpirySweeps.Cron.ShouldBe("5 * * * *");
-        InviteExpirySweeps.BatchSize.ShouldBe(10_000);
-        InviteExpirySweeps.MaxBatchesPerFire.ShouldBe(50);
     }
 
     /// <summary>

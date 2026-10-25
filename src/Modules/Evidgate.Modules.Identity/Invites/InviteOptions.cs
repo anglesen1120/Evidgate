@@ -15,9 +15,11 @@ namespace Evidgate.Modules.Identity.Invites;
 /// </para>
 /// <para>
 /// The pepper never leaves the process: only <c>HMAC-SHA256(pepper_vN, secret)</c> reaches the
-/// database, beside <c>membership.invite_pepper_version</c>, so a rotation keeps the old key
-/// usable while invites minted under it are still pending. Validation names the key only, never a
-/// value.
+/// database, beside <c>membership.invite_pepper_version</c>. Exactly one pepper is configured, so
+/// bumping <see cref="PepperVersion"/> invalidates every pending invite —
+/// <see cref="InviteSecrets.Verify"/> accepts that stored version only and fails closed — and an
+/// admin must resend them; a resend re-mints under the current pepper. Validation names the key
+/// only, never a value.
 /// </para>
 /// </remarks>
 internal sealed class InviteOptions

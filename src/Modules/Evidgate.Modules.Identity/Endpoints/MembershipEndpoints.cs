@@ -31,6 +31,13 @@ namespace Evidgate.Modules.Identity.Endpoints;
 public static class MembershipEndpoints
 {
     /// <summary>
+    /// The invite responses' cache policy (00 §9.1): a 201/202 whose body carries the one-time
+    /// <c>invite_token</c> is never reusable, so no cache may keep it — the same header the login
+    /// routes set.
+    /// </summary>
+    private const string NoStore = "no-store";
+
+    /// <summary>
     /// Maps the membership routes and returns the <c>/v1</c> group so the host can
     /// apply its <c>ResultEndpointFilter</c> (00 §5.5 C8).
     /// </summary>
@@ -143,7 +150,9 @@ public static class MembershipEndpoints
     /// <summary>
     /// Attaches the minted token to the body of the answer that produced it, and publishes the row's
     /// version as <c>ETag</c> (00 §9.1). An <c>Idempotency-Key</c> replay finds no token in the slot
-    /// — the stored response was written without one — so it answers the stored body unchanged.
+    /// — the stored response was written without one — so it answers the stored body unchanged. Every
+    /// success of the two routes is <c>Cache-Control: no-store</c>, token or replay, because an invite
+    /// answer is never reusable.
     /// </summary>
     private static Result<InviteIssuedView> WithInviteToken(
         HttpContext context,
@@ -159,6 +168,7 @@ public static class MembershipEndpoints
 
         var view = result.Value;
 
+        context.Response.Headers.CacheControl = NoStore;
         context.Response.Headers.ETag = string.Create(CultureInfo.InvariantCulture, $"\"{view.Version}\"");
 
         return token is null

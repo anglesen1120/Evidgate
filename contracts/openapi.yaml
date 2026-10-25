@@ -1963,12 +1963,16 @@ paths:
               $ref: '#/components/schemas/InviteMemberRequest'
       responses:
         '201':
-          description: Membership created (`pending`) with its one-time invite token
+          description: >-
+            Membership created (`pending`) with its one-time invite token. The response carries
+            `Cache-Control: no-store`: its body holds a plaintext secret that must not reach a cache.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
             ETag:
               $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
           content:
             application/json:
               schema:
@@ -2126,12 +2130,16 @@ paths:
         - $ref: '#/components/parameters/XsrfToken'
       responses:
         '202':
-          description: Invite token rotated; the new token is in the body
+          description: >-
+            Invite token rotated; the new token is in the body. The response carries
+            `Cache-Control: no-store`: its body holds a plaintext secret that must not reach a cache.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
             ETag:
               $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
           content:
             application/json:
               schema:
@@ -2144,10 +2152,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-        '429':
-          $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
   /orgs/{o}/memberships/{m}/cancel-invite:
@@ -2181,8 +2185,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
         '503':
           $ref: '#/components/responses/Unavailable'
   /orgs/{o}/memberships/{m}/roles:
@@ -5693,8 +5695,9 @@ components:
         type: string
     NoStore:
       description: >-
-        `Cache-Control: no-store` — a browser-flow answer is never reusable (02.3.1 §5: the pending-login
-        and session cookies of both login routes).
+        `Cache-Control: no-store` — an answer that sets a cookie or carries a secret is never reusable
+        (02.3.1 §5: the pending-login and session cookies of both login routes; the invite responses
+        whose body carries `invite_token`).
       schema:
         type: string
         enum: [no-store]
