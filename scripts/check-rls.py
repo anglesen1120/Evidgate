@@ -120,7 +120,7 @@ def statements(sql: str) -> list[tuple[str, str]]:
 
 
 def qualified(name: str) -> str:
-    name = name.strip().strip('"').lower()
+    name = name.replace('"', "").strip().lower()
     return name if "." in name else f"public.{name}"
 
 

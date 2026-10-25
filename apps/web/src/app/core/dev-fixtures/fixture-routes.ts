@@ -39,11 +39,16 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'listPermissions', method: 'GET', path: '/permissions' },
   { operationId: 'listRoles', method: 'GET', path: '/roles' },
   { operationId: 'listMyOrganizations', method: 'GET', path: '/orgs' },
+  { operationId: 'createProject', method: 'POST', path: '/orgs/{o}/projects' },
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
+  { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
+  { operationId: 'listCiBindings', method: 'GET', path: '/projects/{p}/ci-bindings' },
+  { operationId: 'listIngestTokens', method: 'GET', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'listMemberships', method: 'GET', path: '/orgs/{o}/memberships' },
   { operationId: 'createMembership', method: 'POST', path: '/orgs/{o}/memberships' },
   { operationId: 'removeMember', method: 'DELETE', path: '/orgs/{o}/memberships/{m}' },
   { operationId: 'listRuns', method: 'GET', path: '/projects/{p}/runs' },
+  { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
 ];
 

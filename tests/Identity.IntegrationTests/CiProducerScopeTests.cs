@@ -61,6 +61,10 @@ public sealed class CiProducerScopeTests(DatabaseFixture fixture) : CatalogueTes
         {
             [("POST", "/v1/ci/token")] =
                 "x-permission is 'none' (the pre-tenant credential exchange itself, 02.4.1)",
+            [("GET", "/v1/auth/oidc/{provider}/start")] =
+                "x-permission is 'none' (pre-tenant login start, 02.3.1-T1.1: no tenant, no principal, no session yet)",
+            [("GET", "/v1/auth/oidc/{provider}/callback")] =
+                "x-permission is 'none' (pre-tenant login callback, 02.3.1-T1.1: the browser holds only the pending-login cookie)",
             [("POST", "/v1/slice/run")] =
                 "01.1.2 run-only slice dev surface, absent from the spec (ServedRouteTable.ServedNotInSpec)",
         };

@@ -1752,6 +1752,150 @@
           <context context-type="linenumber">58</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="onboarding.shell.title" datatype="html">
+        <source>Set up your project</source>
+        <target>Thiết lập dự án của bạn</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.description" datatype="html">
+        <source>Resume from server-confirmed resources. Viewing a step does not change your progress.</source>
+        <target>Tiếp tục từ các tài nguyên đã được máy chủ xác nhận. Xem một bước không làm thay đổi tiến độ của bạn.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.progress" datatype="html">
+        <source>Setup progress</source>
+        <target>Tiến độ thiết lập</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.complete" datatype="html">
+        <source>Complete</source>
+        <target>Đã hoàn thành</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.incomplete" datatype="html">
+        <source>Not complete</source>
+        <target>Chưa hoàn thành</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.back" datatype="html">
+        <source>Back</source>
+        <target>Quay lại</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.next" datatype="html">
+        <source>Next</source>
+        <target>Tiếp theo</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.retry" datatype="html">
+        <source>Retry loading setup</source>
+        <target>Thử tải lại thiết lập</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.next-disabled" datatype="html">
+        <source>Complete this step before continuing.</source>
+        <target>Hoàn thành bước này trước khi tiếp tục.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.final-step" datatype="html">
+        <source>There is no next setup step.</source>
+        <target>Không còn bước thiết lập tiếp theo.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.project-created" datatype="html">
+        <source>Project created</source>
+        <target>Đã tạo dự án</target>
+      </trans-unit>
+      <trans-unit id="onboarding.step.project" datatype="html">
+        <source>Create project</source>
+        <target>Tạo dự án</target>
+      </trans-unit>
+      <trans-unit id="onboarding.step.ci" datatype="html">
+        <source>Connect CI</source>
+        <target>Kết nối CI</target>
+      </trans-unit>
+      <trans-unit id="onboarding.step.sample" datatype="html">
+        <source>Sample run</source>
+        <target>Lượt chạy mẫu</target>
+      </trans-unit>
+      <trans-unit id="onboarding.step.compare" datatype="html">
+        <source>Compare reports</source>
+        <target>So sánh báo cáo</target>
+      </trans-unit>
+      <trans-unit id="onboarding.step.enable" datatype="html">
+        <source>Enable collection</source>
+        <target>Bật thu thập dữ liệu</target>
+      </trans-unit>
+      <trans-unit id="onboarding.pending.title" datatype="html">
+        <source>This step is not available yet</source>
+        <target>Bước này hiện chưa khả dụng</target>
+      </trans-unit>
+      <trans-unit id="onboarding.pending.description" datatype="html">
+        <source>Your setup progress is read from the server. Viewing a step does not complete it.</source>
+        <target>Tiến độ thiết lập được đọc từ máy chủ. Xem một bước không có nghĩa là hoàn thành bước đó.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.title" datatype="html">
+        <source>Created resources</source>
+        <target>Tài nguyên đã tạo</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.project" datatype="html">
+        <source>Project</source>
+        <target>Dự án</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.identifier" datatype="html">
+        <source>Project ID</source>
+        <target>Mã dự án</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.empty" datatype="html">
+        <source>Nothing produced yet for this step.</source>
+        <target>Bước này chưa tạo ra tài nguyên nào.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-1" datatype="html">
+        <source>The created project will appear here.</source>
+        <target>Dự án được tạo sẽ xuất hiện tại đây.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-2" datatype="html">
+        <source>Connection resources will appear here.</source>
+        <target>Tài nguyên kết nối sẽ xuất hiện tại đây.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-3" datatype="html">
+        <source>Sample-run evidence will appear here.</source>
+        <target>Bằng chứng của lượt chạy mẫu sẽ xuất hiện tại đây.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-4" datatype="html">
+        <source>Comparison resources will appear here.</source>
+        <target>Tài nguyên so sánh sẽ xuất hiện tại đây.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.step-5" datatype="html">
+        <source>Activation resources will appear here. Collection is not enabled by viewing this step.</source>
+        <target>Tài nguyên kích hoạt sẽ xuất hiện tại đây. Việc xem bước này không bật thu thập dữ liệu.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.name" datatype="html">
+        <source>Project name</source>
+        <target>Tên dự án</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.name-hint" datatype="html">
+        <source>Choose a name your team will recognise.</source>
+        <target>Chọn tên dễ nhận biết đối với nhóm của bạn.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.name-required" datatype="html">
+        <source>Enter a project name.</source>
+        <target>Nhập tên dự án.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.slug" datatype="html">
+        <source>Project slug</source>
+        <target>Tên dự án trong đường dẫn</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.slug-hint" datatype="html">
+        <source>Use a short URL name, for example my-project.</source>
+        <target>Dùng tên ngắn trong đường dẫn, ví dụ my-project.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.slug-required" datatype="html">
+        <source>Enter a project slug.</source>
+        <target>Nhập tên dự án dùng trong đường dẫn.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.permission" datatype="html">
+        <source>Ask your organisation owner for permission to create projects.</source>
+        <target>Liên hệ chủ sở hữu tổ chức để được cấp quyền tạo dự án.</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.submit" datatype="html">
+        <source>Create project</source>
+        <target>Tạo dự án</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.submitting" datatype="html">
+        <source>Creating project…</source>
+        <target>Đang tạo dự án…</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

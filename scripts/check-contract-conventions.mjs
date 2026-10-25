@@ -30,6 +30,11 @@ for (const [p, item] of Object.entries(spec.paths ?? {})) {
 // the /v1 server). Update only via a contract change to 00.
 const EXPECTED = [
   ['/ci/token', 'post', 'none', 'v1'],
+  // The federated-login browser routes are documented by 02 §4.2 and 00 §5.4.8 rather than by
+  // the 00 §9.3 core table; they are listed here so the "no undocumented operation" rule below
+  // keeps holding, and they are pre-tenant with no permission (02.3.1-T1.1).
+  ['/auth/oidc/{provider}/start', 'get', 'none', 'v1'],
+  ['/auth/oidc/{provider}/callback', 'get', 'none', 'v1'],
   ['/projects/{p}/manifests', 'post', 'run:create', 'v1'],
   ['/projects/{p}/runs', 'post', 'run:create', 'v1'],
   ['/runs/{r}', 'get', 'run:read', 'v1'],

@@ -25,6 +25,10 @@
       "origin": "default",
       "from": "not set: the option default Required applies (the self-check runs against the dev database)"
     },
+    "EVIDGATE__LOGIN__PUBLICBASEURL": {
+      "origin": "default",
+      "from": "not set: the dev stack has no https origin to register as a provider redirect URI, so both login routes answer 503 unavailable + Retry-After and everything else serves (02.3.1-T1.1); a developer who tunnels an https origin exports it in his own shell"
+    },
     "EVIDGATE__OBJECT__ENDPOINT": {
       "origin": "env-file",
       "value": "http://127.0.0.1:8333",
@@ -56,6 +60,14 @@
     "EVIDGATE__OBJECT__SECRETKEY": {
       "origin": "env-file",
       "from": ".env.dev literal, the same local-only SeaweedFS identity as the EVIDGATE_S3_SECRET_KEY dev-stack row (asserted equal to infra/seaweedfs/s3-config.json by scripts/dev/up.sh)"
+    },
+    "EVIDGATE__OIDC__GOOGLE__CLIENTID": {
+      "origin": "default",
+      "from": "not set: no Google client is registered for a local https origin, so the Google provider stays unconfigured and its two routes answer 503 (02.3.1-T1.2)"
+    },
+    "EVIDGATE__OIDC__GOOGLE__CLIENTSECRET": {
+      "origin": "default",
+      "from": "not set: the dev stack completes no federated login, so the secret is never materialised here; staging and prod resolve it through ISecretProvider from the provider secret store (10.1.1-T3)"
     },
     "EVIDGATE__TASKS__BACKOFFBASESECONDS": {
       "origin": "default",

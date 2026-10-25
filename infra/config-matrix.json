@@ -383,6 +383,307 @@
       "note": "length of the exchange rate-limit window in seconds (02.4.1 AC8); default 60."
     },
     {
+      "key": "EVIDGATE__LOGIN__PUBLICBASEURL",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:Login` (02.3.1-T1.1): absolute https base URL of the platform as a browser reaches it; the redirect URI registered at every provider is `{PublicBaseUrl}/v1/auth/oidc/{provider}/callback`, built from its origin, so a present value must be https with no path, query or fragment and `LoginOptionsValidator` fails the boot naming the key only (never the value). Absent is valid and starts no login: `GET /v1/auth/oidc/{provider}/start` and `/callback` answer 503 `unavailable` with `Retry-After` while every other route serves — no flag enables the routes. dev does not set it (the dev stack has no https origin); staging and prod inject their own origin as a plain variable at deploy."
+    },
+    {
+      "key": "EVIDGATE__LOGIN__STATELIFETIMESECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 60,
+        "max": 900
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Login:StateLifetimeSeconds` (02.3.1-T1.1): lifetime in seconds of the pending-login cookie `__Host-evidgate_login` and of the one-time `state` it carries (02.3.1 §8: short-lived and one-time); default 600, accepted 60..900. No environment provides it."
+    },
+    {
+      "key": "EVIDGATE__LOGIN__RETRYAFTERSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 300
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Login:RetryAfterSeconds` (02.3.1-T1.1): value of the `Retry-After` header on the 503 `unavailable` a login route answers when its provider cannot be used (02.3.1 AC8), in seconds; default 30."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__CLIENTID",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:ClientId` (02.3.1-T1.2): OAuth client id of the platform's own Google client; plain configuration, safe to log by name only and never a secret. Absent — or present without the client secret — leaves the provider unconfigured (`GoogleLoginProvider.IsConfigured`) and both Google routes answer 503 `unavailable` + `Retry-After`; there is no flag that enables login. dev sets neither credential (no https origin to complete a login on); staging and prod inject their own client id as a plain variable at deploy."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__CLIENTSECRET",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:ClientSecret` (02.3.1-T1.2): OAuth client secret of the Google login client, declared once in `SecretNames` (`OidcGoogleClientSecret`), resolved through `ISecretProvider` by `GoogleLoginOptionsSecretPostConfigure` — the property has an internal setter, so the binder never reads it from configuration — and never logged or put in an exception message. Absent with the client id, both Google routes answer 503 `unavailable` + `Retry-After` (no flag); staging and prod hold it in the provider secret store (10.1.1-T3), dev does not set it because the dev stack has no https origin to complete a login on."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__ISSUER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:Issuer` (02.3.1-T1.2): expected `iss` of the Google ID token. The default `https://accounts.google.com` satisfies `[Required]`, so the key is not boot-required, and `GoogleLoginOptionsValidator` refuses any value other than it or its bare `accounts.google.com` alias — the issuer is not a per-environment preference, so no environment provides it."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__AUTHORIZATIONENDPOINT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:AuthorizationEndpoint` (02.3.1-T1.2): browser-facing authorization endpoint, the target of the `start` redirect and never called by the server; default `https://accounts.google.com/o/oauth2/v2/auth`. The validator refuses at boot a value that is not https on `accounts.google.com` with no userinfo and the default port (S4), so no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__TOKENENDPOINT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:TokenEndpoint` (02.3.1-T1.2): token endpoint of the authorization-code exchange; default `https://oauth2.googleapis.com/token`. It must stay an https allowlisted Google host (`GoogleEndpoints.OutboundHosts`), checked at boot by the validator and again before every send by `GoogleOutboundAllowlistHandler` (S4), so no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__JWKSURI",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:JwksUri` (02.3.1-T1.2): document publishing the ID-token signing keys; default `https://www.googleapis.com/oauth2/v3/certs`. Same S4 allowlist and the same boot-time and per-send refusal as the token endpoint; no environment provides it."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__CLOCKSKEWSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 0,
+        "max": 300
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:ClockSkewSeconds` (02.3.1-T1.2): tolerance applied to `exp` and `nbf` of the ID token, in seconds; 02.3.1 AC2 fixes 60 and the option accepts 0..300, so the default is the policy and no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__JWKSTTLSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 30,
+        "max": 86400
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:JwksTtlSeconds` (02.3.1-T1.2): how long a fetched JWKS document is trusted without a refresh attempt, in seconds; default 3600. No environment provides it."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__JWKSMINREFRESHSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3600
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:JwksMinRefreshSeconds` (02.3.1-T1.2): the soonest an unknown `kid` in a presented ID token may force another JWKS fetch, in seconds; default 30, so a token stream naming random key ids cannot become one outbound call per request. No environment provides it."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__HTTPTIMEOUTSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 30
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:HttpTimeoutSeconds` (02.3.1-T1.2): hard timeout of one outbound provider call, in seconds (P6); default 5. A call that times out is an outage, so the callback answers 503 rather than 401 (02.3.1 AC8). No environment provides it."
+    },
+    {
+      "key": "EVIDGATE__OIDC__GOOGLE__MAXRESPONSEBYTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1024,
+        "max": 1048576
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OIDC:GOOGLE:MaxResponseBytes` (02.3.1-T1.2): largest provider response body the server reads, in bytes; default 65536, and a longer body is refused unread rather than buffered. No environment provides it."
+    },
+    {
       "key": "EVIDGATE__ISOLATION__SELFCHECK",
       "scope": "runtime",
       "consumers": ["api", "worker"],

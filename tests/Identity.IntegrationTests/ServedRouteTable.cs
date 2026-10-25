@@ -639,6 +639,14 @@ internal static class RouteRequests
         Add("POST", "/v1/ci/token", _ => new(HttpMethod.Post, "/v1/ci/token",
             new JsonObject { ["ingest_token"] = "egt_probe" }));
 
+        // ---- Federated login (LoginEndpoints.cs, 02.3.1-T1.1: pre-tenant, x-permission 'none') ---------------
+        // This host configures no provider credential and no public base URL, so both routes answer the typed
+        // 503 `unavailable`; the builders only have to be shape-valid: `google` is a registered route value and
+        // the code/state pair is what a refused callback carries (the pending-login cookie is absent here).
+        Add("GET", "/v1/auth/oidc/{provider}/start", _ => new(HttpMethod.Get, "/v1/auth/oidc/google/start"));
+        Add("GET", "/v1/auth/oidc/{provider}/callback", _ =>
+            new(HttpMethod.Get, "/v1/auth/oidc/google/callback?code=probe&state=probe"));
+
         // ---- Catalog -----------------------------------------------------------------------------------------
         Add("GET", "/v1/projects/{p}/cases", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/cases"));
         Add("GET", "/v1/cases/{c}", ctx => new(HttpMethod.Get, $"/v1/cases/{ctx.CaseId}"));

@@ -72,9 +72,13 @@ resolution are off), and two files that would share a key fail the load.
 Every operation declares:
 
 - `x-permission` — its 00 §9.3 permission (T51). The literal `none` is
-  reserved for the two non-permission routes, `POST /v1/ci/token` and
-  `POST /v1/webhooks/github`; those must set `x-auth` naming the credential
-  (`github_oidc_jwt_or_ingest_token`, `github_webhook_signature`). The literal
+  reserved for the routes that reach no tenant permission at all:
+  `POST /v1/ci/token` and `POST /v1/webhooks/github`, which must set `x-auth`
+  naming the credential (`github_oidc_jwt_or_ingest_token`,
+  `github_webhook_signature`), and the pre-tenant browser routes
+  `GET /v1/auth/oidc/{provider}/start` and `/callback` (00 §5.4.8, 02 §4.2),
+  which take no credential at all and set `x-auth: anonymous` with
+  `security: []`. The literal
   `authenticated` is reserved for `POST /v1/orgs` (02.1.1 §5): any signed-in
   user may create an org, because no tenant permission can exist before the
   tenant does; it sets `x-auth: user_session`. The server side is the

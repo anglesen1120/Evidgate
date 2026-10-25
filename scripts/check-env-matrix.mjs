@@ -8,7 +8,10 @@
 //
 // Consumption is discovered from:
 //   src/**/*.cs           options classes bound to an `EVIDGATE:<Section>`
-//                         section (with one level of `List<T>` element keys),
+//                         section (with one level of `List<T>` element keys; a
+//                         section name may be multi-segment, so
+//                         `EVIDGATE:OIDC:GOOGLE` yields
+//                         `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.2),
 //                         `const string` key constants (MigratorOptions,
 //                         WorkerSchedDataSource), and every `EVIDGATE_…` literal
 //                         left in non-comment code — an undeclared literal is an
@@ -252,9 +255,33 @@ function projectOf(root, file) {
 // discovery: options classes, key constants and undeclared literals
 // --------------------------------------------------------------------------
 
-/** True when the declaration's default initializer already satisfies [Required]. */
-function defaultSatisfiesRequired(tail) {
-  return /=*\s*(?:"[^"]+"|'[^']+'|true|false|[\d_]+)\b/.test(tail) || /=\s*new\s/.test(tail);
+/**
+ * True when the declaration's default initializer already satisfies [Required].
+ * A literal default is read directly; a reference to a same-file `const string`
+ * (`= GoogleEndpoints.Issuer`, the fixed Google issuer of 02.3.1-T1.2) is
+ * resolved through `constStrings`, because its non-empty value satisfies the
+ * attribute just as a literal would and the environment need not supply it.
+ */
+function defaultSatisfiesRequired(tail, constStrings) {
+  const initializer = tail.replace(/^\s*=/, '').trim();
+  if (initializer === '') return false;
+  if (/^new\s/.test(initializer)) return true;
+  if (/^"(?:[^"\\]|\\.)+"/.test(initializer)) return true;
+  if (/^'(?:[^'\\]|\\.)+'/.test(initializer)) return true;
+  if (/^(?:true|false)\b/.test(initializer)) return true;
+  if (/^[\d_]+\b/.test(initializer)) return true;
+  const reference = initializer.match(/^(?:\w+\.)?(\w+)\s*;/);
+  const value = reference ? constStrings?.get(reference[1]) : undefined;
+  return typeof value === 'string' && value.length > 0;
+}
+
+/** Every `const string NAME = "literal";` of one file: name -> value. */
+function collectConstStrings(text) {
+  const values = new Map();
+  for (const match of text.matchAll(/const\s+string\s+(\w+)\s*=\s*"([^"]*)"/g)) {
+    values.set(match[1], match[2]);
+  }
+  return values;
 }
 
 function csType(type) {
@@ -345,6 +372,7 @@ function discoverFromSource(root, graph) {
 
   for (const file of sourceFiles) {
     const text = texts.get(file);
+    const constStrings = collectConstStrings(text);
     const consumers = consumersOf(graph, projectOf(root, file));
     let current = null;
     let attributes = [];
@@ -372,9 +400,10 @@ function discoverFromSource(root, graph) {
       if (current === null) continue;
       const info = classes.get(current);
 
-      const section = line.match(/SectionName\s*=\s*"EVIDGATE:(\w+)"/);
+      const section = line.match(/SectionName\s*=\s*"EVIDGATE:([\w:]+)"/);
       if (section) {
-        info.section = section[1].toUpperCase();
+        // A multi-segment section (EVIDGATE:OIDC:GOOGLE) is the nested key prefix.
+        info.section = section[1].replace(/:/g, '__').toUpperCase();
         continue;
       }
 
@@ -423,7 +452,10 @@ function discoverFromSource(root, graph) {
           // empty string or an empty collection does not.
           required:
             attributes.some((a) => a.includes('Required(')) &&
-            !defaultSatisfiesRequired(line.slice(property.index + property[0].length)),
+            !defaultSatisfiesRequired(
+              line.slice(property.index + property[0].length),
+              constStrings,
+            ),
           constraints: constraintsFrom(attributes, enums),
         });
         attributes = [];
@@ -1137,6 +1169,12 @@ function fixture(root) {
       `}\n` +
       `public sealed class RowOptions\n{\n` +
       `    public string Name { get; init; } = string.Empty;\n` +
+      `}\n` +
+      `public sealed class DemoNestedOptions\n{\n` +
+      `    public const string SectionName = "EVIDGATE:Demo:Nested";\n` +
+      `    [Required(ErrorMessage = "EVIDGATE__DEMO__NESTED__LABEL is required")]\n` +
+      `    public string Label { get; init; } = "fixture";\n` +
+      `    public string Name { get; init; } = string.Empty;\n` +
       `}\n`,
   );
   write(
@@ -1204,6 +1242,11 @@ function fixture(root) {
             source: { dev: 'environment', staging: 'environment', prod: 'environment' },
           }),
           row({ key: 'EVIDGATE__DEMO__ROWS__<n>__NAME' }),
+          // A multi-segment section (EVIDGATE:Demo:Nested): its keys are the nested prefix, and LABEL is
+          // [Required] with a literal default, so the row must be requiredAtBoot false — a regression in
+          // either derivation fails the `clean` case.
+          row({ key: 'EVIDGATE__DEMO__NESTED__LABEL' }),
+          row({ key: 'EVIDGATE__DEMO__NESTED__NAME' }),
           row({
             key: 'EVIDGATE_DEMO_PORT',
             scope: 'dev-stack',
@@ -1383,6 +1426,17 @@ function selfTest() {
     },
     1,
     'E discovery: EVIDGATE__DEMO__NEWKNOB is consumed by the code but missing',
+  );
+  expect(
+    'nested-section-key-missing-from-matrix',
+    (root) => {
+      const path = join(root, 'infra/config-matrix.json');
+      const matrix = readJson(path);
+      matrix.keys = matrix.keys.filter((row) => row.key !== 'EVIDGATE__DEMO__NESTED__NAME');
+      writeFileSync(path, JSON.stringify(matrix, null, 2));
+    },
+    1,
+    'E discovery: EVIDGATE__DEMO__NESTED__NAME is consumed by the code but missing',
   );
   expect(
     'boot-requirement-unproven',
