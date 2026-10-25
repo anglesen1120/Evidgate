@@ -51,15 +51,23 @@
 // append (`POST …/projects/{p}/policies`), the one-revision read (`GET /policies/{id}`) and the
 // revision list (`GET /policies/{id}/revisions`). The two `/policies` templates have three and
 // four segments, so neither matches the other, and neither can collide with the project-scoped
-// rows (`…/policies` is the append's literal last segment). The `{id}` of both reads is matched
-// against the template only, never against the document that answers — so `getPolicyRevision`
-// answers the revision its variant describes whatever id a request names, and the head, the two
-// retired revisions and the published one are four variants a review selects
-// (`?fixture.variant.getPolicyRevision=previous`, `=first`, `=created`). The corpus pages carry
-// the `ETag` the contract declares (the head revision id, quoted, exactly as
-// `PolicyEndpoints.cs` sets it), so the tab's `If-Match` source comes from a real header; the
-// append answers the `201` with the same header on the revision it created, and the `200`
-// (identical body already stored) with the head's.
+// rows (`…/policies` is the append's literal last segment). The corpus pages carry the `ETag` the
+// contract declares (the head revision id, quoted, exactly as `PolicyEndpoints.cs` sets it), so
+// the tab's `If-Match` source comes from a real header; the append answers the `201` with the
+// same header on the revision it created, and the `200` (identical body already stored) with the
+// head's.
+//
+// 09.7.1-F15 note (3) makes `getPolicyRevision` the one ID-KEYED row (`idKeyParameter: 'id'`): the
+// corpus holds one document per revision, each carrying its own `body.id`, so a read for a
+// revision the corpus has answers THAT document and the browser's revision-vs-revision diff (and
+// the 412 dialog's server column) can hold two different bodies. The variant selection stays as
+// it was and is the FALLBACK for an id no document carries — a revision another writer published
+// (`…a005`), say — so `?fixture.variant.getPolicyRevision=previous`/`=first`/`=created` still
+// opens the retired, the first and the published revision on their own. The order is: matching
+// `body.id` first, then the variant, never the other way round, because the variant is a review's
+// explicit selection of a document while the path id is what the app asked for; an id no
+// document holds changes nothing. Every other row stays id-agnostic: `{p}`, `{m}`, `{r}` and `{t}`
+// are matched against the template only.
 
 import { API_BASE_PATH } from '../http/api-origin';
 
@@ -72,6 +80,12 @@ export interface FixtureRoute {
   readonly method: FixtureHttpMethod;
   /** Path template relative to the API base path, `{name}` marking a path parameter. */
   readonly path: string;
+  /**
+   * The `{name}` path parameter whose request value selects the answer among this operation's
+   * catalog documents by their own `body.id`, BEFORE the variant is consulted (09.7.1-F15 note
+   * 3). Absent on every id-agnostic row, where the variant alone selects the document.
+   */
+  readonly idKeyParameter?: string;
 }
 
 /**
@@ -117,7 +131,7 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
   { operationId: 'createPolicyRevision', method: 'POST', path: '/projects/{p}/policies' },
-  { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}' },
+  { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}', idKeyParameter: 'id' },
   { operationId: 'listPolicyRevisions', method: 'GET', path: '/policies/{id}/revisions' },
 ];
 
@@ -171,6 +185,27 @@ function pathMatches(template: string, requestSegments: readonly string[]): bool
     const isParameter = segment.startsWith('{') && segment.endsWith('}');
     return isParameter ? requestSegment.length > 0 : segment === requestSegment;
   });
+}
+
+/**
+ * The request value of path parameter `name` — the decoded segment at the index `{name}` holds in
+ * `template` — or `undefined` when the template has no such parameter or the path does not match
+ * the template's segment count. Used only for a route that declares an `idKeyParameter`
+ * (09.7.1-F15 note 3), which selects the answer by the document's own `body.id`.
+ */
+export function pathParameter(
+  template: string,
+  relativePath: string,
+  name: string,
+): string | undefined {
+  const templateSegments = template.split('/').filter((segment) => segment.length > 0);
+  const requestSegments = relativePath.split('/').filter((segment) => segment.length > 0);
+  if (templateSegments.length !== requestSegments.length) {
+    return undefined;
+  }
+  const index = templateSegments.indexOf(`{${name}}`);
+  const segment = index === -1 ? undefined : requestSegments[index];
+  return segment === undefined ? undefined : decodeSegment(segment);
 }
 
 /**

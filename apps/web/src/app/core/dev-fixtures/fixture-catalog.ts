@@ -26,6 +26,9 @@ import ciBindingsList from '../../../../../../fixtures/web-api/ci-bindings-list/
 import ciBindingsListOnboardingConnected from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-connected/input.json';
 import ciBindingsListOnboardingProject from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-project/input.json';
 import ciBindingsListOnboardingRun from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-run/input.json';
+import ciBindingsListSettings from '../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
+import ciBindingsListSettingsEmpty from '../../../../../../fixtures/web-api/ci-bindings-list-settings-empty/input.json';
+import ciBindingsListSettingsForbidden from '../../../../../../fixtures/web-api/ci-bindings-list-settings-forbidden/input.json';
 import ingestTokenCreate from '../../../../../../fixtures/web-api/ingest-token-create/input.json';
 import ingestTokenRotate from '../../../../../../fixtures/web-api/ingest-token-rotate/input.json';
 import ingestTokenRotateConflict from '../../../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
@@ -363,16 +366,18 @@ export interface FixtureDocument {
  * and changed rows (`flaky_budget`, `collection_timeout_minutes`, and a nested change inside
  * `gating_refs`), and a diff of 3 against 4 adds `checkout/pay/apple-pay`. Every `hash` is the
  * `sha256:` digest of the RFC 8785 canonical body — this corpus has no body whose hash a reader
- * cannot recompute — and every body is far below the 64 KiB transport cap. A body is reachable from
- * a browser page load only through a variant, never by asking for another revision id, so the
- * revision-vs-revision diff is a `revision-diff.component.spec.ts` state (its store double answers
- * two different bodies) rather than a fixtures-build one: `getPolicyRevision` answers whatever its
- * selected variant holds for every id.
+ * cannot recompute — and every body is far below the 64 KiB transport cap. The FOUR bodies carry
+ * four distinct `id`s (their own revision ids), so `getPolicyRevision` is the one ID-KEYED route
+ * (09.7.1-F15 note 3, `FIXTURE_ROUTES`): a read for `…a002` answers the revision-2 document and a
+ * read for `…a003` the head, which is what lets the browser's revision-vs-revision diff and the
+ * 412 dialog's server column hold two different bodies. The four variants remain for a review
+ * that wants one document without naming an id in the path.
  *
- * Because the fixture backend answers one variant per operation (a path parameter never selects a
- * document), the four bodies are four variants of `getPolicyRevision`: `ok` is the head, and
+ * Because the fixture backend still selects by variant for every id-agnostic route, the same four
+ * bodies are also four variants of `getPolicyRevision`: `ok` is the head, and
  * `?fixture.variant.getPolicyRevision=previous` (revision 2), `=first` (revision 1) and `=created`
- * (revision 4) are the other three, so a review opens any single revision it needs. The list pages
+ * (revision 4) are the other three, so a review opens any single revision it needs, and they are
+ * the answer for an id no document holds (`…a005`, the head another writer published). The list pages
  * are `policy-revisions-list` (`ok`, revisions 1..3, `ETag` the head `…a003`),
  * `policy-revisions-list-after-publish` (`?fixture.variant.listPolicyRevisions=after-publish`, the
  * same page with revision 4 on it and the head moved to `…a004`: the head is the highest
@@ -404,6 +409,29 @@ export interface FixtureDocument {
  * `contracts/permissions.json`, rows copied verbatim and ordered by `code`, so the pair differs in
  * `policy:write` — the one code that decides whether `[data-policy-publish-open]` exists at all —
  * and both hold `policy:read`, which is what keeps the tab itself reachable.
+ *
+ * 09.7.1-F15 adds the Secrets tab's CI-binding section: `listCiBindings` is list-only and read-only
+ * (the contract declares no `GET /ci-bindings/{b}`, and the only writes are `PATCH`/`DELETE`), so
+ * the three documents below are the three states that section renders.
+ * `ci-bindings-list-settings` (`?fixture.variant.listCiBindings=settings`) is that page: five
+ * `CiBindingView` rows on the `Storefront web` project (`…0011`, as `ingest-tokens-list-settings`),
+ * covering the three verification states — three `active` bindings (one with three ref patterns and
+ * two workflow refs, one with a single pattern, so the multi-line and single-line layouts both have
+ * a row, and one that is the overflow case), a `pending_verification` binding with
+ * `activated_at: null` (the OIDC handshake has not finished yet) and a `disabled` one. The overflow
+ * row carries a 57-character repository full name and allowlists of eight ref patterns and four
+ * workflow refs, so a cell that does not wrap has something to truncate. Every
+ * `allowed_workflow_refs` entry uses the form the server accepts —
+ * `owner/repo/.github/workflows/<file>@refs/…`, `Ci/RefGlob.cs:77` — not the
+ * `refs/heads/main:<path>` spelling the 09.2.1-T1 rows above still carry. No document here has a
+ * `binding_challenge` member: the challenge exists only in `ci-binding-create`'s answer, and the
+ * corpus-wide one-time-secret pin in `fixture-contract.spec.ts` holds that for every list read.
+ * `ci-bindings-list-settings-empty` (`=settings-empty`) is the unbound project's page (`items: []`,
+ * `next_cursor: null`), the state the section's empty pattern answers, and
+ * `ci-bindings-list-settings-forbidden` (`=settings-forbidden`) is the 403 of that same read, which
+ * the store renders as its own `forbidden` phase. The three `X-Request-Id` values (`…c5`–`…c7`) are
+ * distinct from the older `ci-bindings-list*` rows, so a page that echoes one can only echo the
+ * answer it actually received. `ci-bindings-list` and every `onboarding-*` row stay byte-identical.
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
@@ -418,6 +446,9 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'ci-bindings-list-onboarding-connected', document: ciBindingsListOnboardingConnected },
   { name: 'ci-bindings-list-onboarding-project', document: ciBindingsListOnboardingProject },
   { name: 'ci-bindings-list-onboarding-run', document: ciBindingsListOnboardingRun },
+  { name: 'ci-bindings-list-settings', document: ciBindingsListSettings },
+  { name: 'ci-bindings-list-settings-empty', document: ciBindingsListSettingsEmpty },
+  { name: 'ci-bindings-list-settings-forbidden', document: ciBindingsListSettingsForbidden },
   { name: 'ingest-token-create', document: ingestTokenCreate },
   { name: 'ingest-token-rotate', document: ingestTokenRotate },
   { name: 'ingest-token-rotate-conflict', document: ingestTokenRotateConflict },
@@ -561,5 +592,31 @@ export type FixtureEntry = (typeof FIXTURE_CATALOG)[number];
 export function findFixtureEntry(operationId: string, variant: string): FixtureEntry | undefined {
   return FIXTURE_CATALOG.find(
     (entry) => entry.document.operation_id === operationId && entry.document.variant === variant,
+  );
+}
+
+/**
+ * The `id` a document answers for: its own `body.id`, or `undefined` when the body is absent or
+ * carries no string `id`. Nothing is inferred — an operation whose body names its resource another
+ * way simply never matches by id, and its route must not declare an `idKeyParameter`.
+ */
+function documentId(document: FixtureDocument): string | undefined {
+  const body = document.body;
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return undefined;
+  }
+  const id = (body as Record<string, unknown>)['id'];
+  return typeof id === 'string' ? id : undefined;
+}
+
+/**
+ * The entry of `operationId` whose own `body.id` equals `id` — the id-keyed selection
+ * `fixture-backend.ts` makes for a route that declares an `idKeyParameter`, ahead of the variant
+ * (09.7.1-F15 note 3). `undefined` means no document of that operation answers this id, and the
+ * caller then falls back to the variant it would have used anyway.
+ */
+export function findFixtureEntryById(operationId: string, id: string): FixtureEntry | undefined {
+  return FIXTURE_CATALOG.find(
+    (entry) => entry.document.operation_id === operationId && documentId(entry.document) === id,
   );
 }

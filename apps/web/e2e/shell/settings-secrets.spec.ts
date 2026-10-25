@@ -18,6 +18,7 @@ import rotation from '../../../../fixtures/web-api/ingest-token-rotate/input.jso
 import conflict from '../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
 import rateLimited from '../../../../fixtures/web-api/ingest-token-rotate-rate-limited/input.json';
 import references from '../../../../fixtures/web-api/ingest-tokens-list-settings/input.json';
+import ciBindings from '../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
 import {
   expectNoA11yViolations,
   LOCALES,
@@ -305,4 +306,106 @@ for (const locale of LOCALES) {
       await expectNoPlaintext(page);
     });
   }
+}
+
+// 09.7.1-F15: the independent CI-binding track is list-only and metadata-only.
+const CI_SECTION = `${PAGE} app-ci-binding-list`;
+const CI_ROWS = `${CI_SECTION} [data-ci-binding]`;
+const CI_STATUS = {
+  en: { active: 'Active', pending_verification: 'Pending verification', disabled: 'Disabled' },
+  vi: {
+    active: 'Đang hoạt động',
+    pending_verification: 'Chờ xác minh',
+    disabled: 'Đã vô hiệu hóa',
+  },
+} as const;
+
+async function expectNoBindingChallenge(page: Page): Promise<void> {
+  await expectNoPlaintext(page);
+  const sinks = await page.evaluate(() => [
+    document.documentElement.innerHTML,
+    ...Array.from(document.querySelectorAll('input, textarea')).map(
+      (element) => (element as HTMLInputElement | HTMLTextAreaElement).value,
+    ),
+    location.href,
+    JSON.stringify(Object.entries(localStorage)),
+    JSON.stringify(Object.entries(sessionStorage)),
+  ]);
+  for (const sink of sinks) {
+    expect(sink).not.toContain('binding_challenge');
+    expect(sink).not.toContain('DO_NOT_RENDER_BINDING_CHALLENGE_DECOY');
+  }
+}
+
+for (const locale of LOCALES) {
+  for (const theme of THEMES) {
+    for (const variant of ['settings', 'settings-empty', 'settings-forbidden'] as const) {
+      test(`CI bindings ${variant} axe (${locale}, ${theme})`, async ({ page }) => {
+        await seedStoredTheme(page, theme);
+        await visit(page, locale, SETTINGS_ADMIN_GRANTS, [
+          `?fixture.variant.listCiBindings=${variant}`,
+        ]);
+        const section = page.locator(CI_SECTION);
+        await expect(section).toBeVisible();
+        await expect(section.locator('section')).toHaveAttribute('aria-busy', 'false');
+        await expect(page.locator('html')).toHaveAttribute('lang', locale);
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        if (variant === 'settings') {
+          await expect(page.locator(CI_ROWS)).toHaveCount(ciBindings.body.items.length);
+          for (const [index, binding] of ciBindings.body.items.entries()) {
+            const row = page.locator(CI_ROWS).nth(index);
+            await expect(row.getByRole('heading')).toHaveText(binding.repository_full_name);
+            await expect(row.getByRole('heading')).toHaveAttribute(
+              'title',
+              binding.repository_full_name,
+            );
+            await expect(row.locator('.status-pill__label')).toHaveText(
+              CI_STATUS[locale][binding.status as keyof (typeof CI_STATUS)['en']],
+            );
+          }
+        } else {
+          await expect(
+            section.locator(
+              variant === 'settings-empty' ? '[data-ci-empty]' : '[data-ci-forbidden]',
+            ),
+          ).toBeVisible();
+          await expect(page.locator(CI_ROWS)).toHaveCount(0);
+          await expect(section.locator('button')).toHaveCount(0);
+        }
+        // Current fixture's next_cursor:null is terminal; no fabricated cursor/button.
+        await expect(section.locator('[data-ci-load-more]')).toHaveCount(0);
+        await expectNoBindingChallenge(page);
+        await expectNoA11yViolations(page, `CI bindings ${variant} ${locale} ${theme}`);
+      });
+    }
+  }
+
+  test(`CI bindings 360px keyboard allowlists and no horizontal overflow (${locale})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await visit(page, locale, SETTINGS_ADMIN_GRANTS, ['?fixture.variant.listCiBindings=settings']);
+    const section = page.locator(CI_SECTION);
+    const toggles = section.locator('[data-ci-show-all]');
+    await expect(toggles).toHaveCount(2);
+    // Traverse actual Tab stops from the project picker to both overflow controls.
+    await page.locator('#secrets-project').focus();
+    await page.keyboard.press('Tab');
+    await expect(toggles.nth(0)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'true');
+    const refsId = await toggles.nth(0).getAttribute('aria-controls');
+    await expect(section.locator(`[id=\"${refsId}\"] > li`)).toHaveCount(8);
+    await page.keyboard.press('Space');
+    await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('Tab');
+    await expect(toggles.nth(1)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'true');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await expectNoBindingChallenge(page);
+    await expectNoA11yViolations(page, `CI bindings expanded ${locale} 360px`);
+  });
 }

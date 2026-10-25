@@ -1,0 +1,5 @@
+<!-- A planted violation: the component field that holds the value is read directly. The sentence
+     above the binding mentions the word and is not a read. -->
+<p>Token is shown once.</p>
+<p>{{ token }}</p>
+<input [value]="signingSecret" />

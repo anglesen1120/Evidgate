@@ -1,0 +1,60 @@
+// 09.7.1-T3 fixture (queue F16, plan 09.7.1 §8 S3, AC3): the positions a one-time result type is
+// ALLOWED in. It is a return value, so a method whose return type carries it is the sanctioned
+// shape — `secrets.store.ts`'s `rotate()` and `members.store.ts`'s `invite()`/`resend()` are the
+// real ones — and a method parameter, a local variable and the declaration of the type itself are
+// not state either. A component class is not a store, so its own field annotation is out of this
+// rule's scope (apps/web/README.md lists that boundary). The rule reports nothing in this file.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { computed, signal } from '@angular/core';
+
+// The declarations themselves: a result type is the shape a route ANSWERS with.
+export interface IssuedInvite {
+  readonly membershipId: string;
+  readonly inviteValue: string;
+}
+
+export interface RotationResult {
+  readonly successorId: string;
+  readonly overlapEndsAt: string | null;
+  readonly value: string;
+}
+
+// A state declaration of metadata only, signal generics of the same.
+export interface SecretsResultState {
+  readonly tokenPrefix: string;
+  readonly rotationState: string;
+  readonly lastRotatedAt: string | null;
+  readonly lastIssuedInviteId: string | null;
+}
+
+export class SecretsStore {
+  readonly phase = signal<SecretsResultState | null>(null);
+  readonly hasToken = computed<boolean>(() => false);
+  readonly rotationState = signal<string>('idle');
+
+  // The one-time value is handed to the CALLER: a return type, a parameter, a local.
+  async rotate(tokenId: string): Promise<RotationResult | null> {
+    const created: RotationResult = {
+      successorId: tokenId,
+      overlapEndsAt: null,
+      value: '',
+    };
+    return created;
+  }
+
+  async invite(intent: IssuedInvite): Promise<IssuedInvite | null> {
+    const issued: IssuedInvite = { membershipId: intent.membershipId, inviteValue: '' };
+    return issued;
+  }
+
+  // A getter's declared type is a method return type as well.
+  get lastRotation(): RotationResult | null {
+    return null;
+  }
+}
+
+// A component is not a `/Store$/` class: its own field annotation is not store state.
+export class SecretsResultPanel {
+  readonly lastRotation: RotationResult | null = null;
+}

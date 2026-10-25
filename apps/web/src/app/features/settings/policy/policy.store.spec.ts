@@ -762,6 +762,44 @@ describe('PolicyStore (09.7.1-T4)', () => {
       await expect(store.loadBody(ANCHOR_ID)).resolves.toBe(stored);
       expect(data.getCalls).toEqual([ANCHOR_ID, ANCHOR_ID]);
     });
+
+    it.each([
+      ['a bare word', 'current-head'],
+      ['a UUID one digit short', '018f0000-0000-7000-8000-00000000000'],
+      ['a UUID with a stray character', '018f0000-0000-7000-8000-0000000000zz'],
+    ])('requests nothing for %s as the id of a body read', async (_label, id) => {
+      // D1: the `412` envelope's head id is server text and reaches this read without passing
+      // `open`, so the same shape check applies here — no request, and the state both callers
+      // already render for "no such revision".
+      await expect(store.loadBody(id)).rejects.toMatchObject({ error: { kind: 'not_found' } });
+
+      expect(data.getCalls).toEqual([]);
+      expect(data.pendingGets).toEqual([]);
+    });
+
+    it('reads a body of the project on screen', async () => {
+      await store.open(ANCHOR_ID);
+      const stored = revision(HEAD_ID, PROJECT_ID, 3, 'draft');
+      data.revisions.set(HEAD_ID, stored);
+
+      await expect(store.loadBody(HEAD_ID)).resolves.toBe(stored);
+      expect(data.getCalls).toEqual([ANCHOR_ID, HEAD_ID]);
+    });
+
+    it('refuses another project’s body as not_found and caches nothing', async () => {
+      await store.open(ANCHOR_ID);
+      // A hostile or buggy `412` may name a head of another project; the body of that revision must
+      // never reach the diff or the editor, and the tab must not become a probe for it (D1).
+      data.revisions.set(HEAD_ID, revision(HEAD_ID, OTHER_PROJECT_ID, 3, 'draft'));
+
+      await expect(store.loadBody(HEAD_ID)).rejects.toMatchObject({
+        error: { kind: 'not_found', code: 'policy_revision_not_found' },
+      });
+
+      // Nothing was cached: the next call is a real read again, not the refused answer.
+      await expect(store.loadBody(HEAD_ID)).rejects.toMatchObject({ error: { kind: 'not_found' } });
+      expect(data.getCalls).toEqual([ANCHOR_ID, HEAD_ID, HEAD_ID]);
+    });
   });
 
   describe('applyActivation', () => {
@@ -868,6 +906,29 @@ describe('PolicyStore (09.7.1-T4)', () => {
       // What travels is the parsed object, so the bytes on the wire are the compact ones.
       expect(data.publishCalls[0]?.body).toEqual(JSON.parse(compact));
       expect(data.publishCalls).toHaveLength(1);
+    });
+
+    it('refuses without sending when the compact body cannot be written', async () => {
+      // D2: `JSON.stringify` can throw (`RangeError`) on a pathological body, so the measurement
+      // lives inside the guarded path and answers "no wire body". The publish then refuses with the
+      // answer it already has for unparsable text — and nothing is sent. The body is deeply nested
+      // as such a paste is (8 000 levels, well under the 64 KiB cap) and the throw is forced,
+      // because the depth at which an engine gives up is not portable across browsers.
+      let deep: unknown = 'leaf';
+      for (let level = 0; level < 8_000; level += 1) deep = { a: deep };
+      const text = JSON.stringify(deep);
+      expect(new TextEncoder().encode(text).byteLength).toBeLessThan(65_536);
+
+      const stringify = vi.spyOn(JSON, 'stringify').mockImplementationOnce(() => {
+        throw new RangeError('Maximum call stack size exceeded');
+      });
+      try {
+        await expect(store.publish(text)).resolves.toEqual({ kind: 'invalid_json' });
+      } finally {
+        stringify.mockRestore();
+      }
+
+      expect(data.publishCalls).toEqual([]);
     });
 
     it('refuses a pretty-printed body whose compact form is over the cap, quoting that size', async () => {

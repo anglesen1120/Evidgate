@@ -37,6 +37,10 @@
 //    returned as soon as the server confirmed it; re-reading the list is a background read it
 //    neither awaits nor can fail, because a slow or refused list must never cost the user the
 //    revision the server has already stored.
+// 8. Every body read passes the two checks rule 1 states (D1 delta finding). The `412` envelope's
+//    head id is server text and reaches a read without going through `open`, so `loadBody` applies
+//    the same UUID shape check (no request at all when it fails) and refuses a body whose
+//    `project_id` is not the project on screen, as `not_found` and without caching it.
 
 import { computed, inject, Injectable, signal } from '@angular/core';
 import type {
@@ -47,7 +51,12 @@ import type {
 
 import { MAX_CURSOR_PAGES } from '../../../core/data/identity-data.service';
 import { PolicyDataService, type PolicyRevisionPage } from '../../../core/data/policy-data.service';
-import { isApiRequestError, type ApiError, type ApiErrorKind } from '../../../core/http/api-error';
+import {
+  ApiRequestError,
+  isApiRequestError,
+  type ApiError,
+  type ApiErrorKind,
+} from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { conflictFromError } from '../../../shared/ui/conflict/conflict-details';
 import { POLICY_BODY_MAX_BYTES, policyBodyBytes } from './policy-body-size';
@@ -152,6 +161,43 @@ const NO_WRITE_FAILURE: ApiError = {
   status: 0,
   code: 'policy_write_forbidden',
   message: 'This session may not publish policy revisions, so nothing was sent.',
+  requestId: null,
+  retryable: false,
+  details: [],
+  retryAfterSeconds: null,
+};
+
+/**
+ * The typed refusal a body read answers with NO request at all (delta finding D1): the id is not
+ * revision-shaped, so there is nothing to ask the server about. The `412` envelope's head id is
+ * server text, and it is the one id in this tab that reaches a read without having passed the
+ * UUID check {@link PolicyStore.open} applies to the page's own key; refusing it here keeps that
+ * one entry point to the same rule. `not_found` is the kind because that is the state both callers
+ * already render for "there is no such revision", so a hostile answer cannot open a state the tab
+ * has no copy for.
+ */
+const MALFORMED_REVISION_FAILURE: ApiError = {
+  kind: 'not_found',
+  status: 0,
+  code: 'policy_revision_id_invalid',
+  message: 'That is not a policy revision id, so no revision was read.',
+  requestId: null,
+  retryable: false,
+  details: [],
+  retryAfterSeconds: null,
+};
+
+/**
+ * The typed refusal a body read answers with when the revision it DID read belongs to another
+ * project than the one on screen (delta finding D1). Exactly the same state a `404` renders
+ * ({@link REFUSAL_KINDS}), so a body cannot be used to learn that an id of another project exists,
+ * and the answer is never cached: it belongs to a view this store does not own.
+ */
+const FOREIGN_REVISION_FAILURE: ApiError = {
+  kind: 'not_found',
+  status: 0,
+  code: 'policy_revision_not_found',
+  message: 'The policy revision was not found in this project.',
   requestId: null,
   retryable: false,
   details: [],
@@ -397,41 +443,60 @@ export class PolicyStore {
    * {@link MAX_CACHED_BODIES} bodies, the oldest dropped. A cached body is returned without a
    * request (a stored revision is immutable) and re-inserted so it counts as the newest.
    *
+   * Two checks run BEFORE a body is handed to a caller (delta finding D1). The id must be
+   * revision-shaped ({@link REVISION_ID_SHAPE}), exactly as {@link open} requires of the page's own
+   * key: a body read is the one path a `412` envelope's head id reaches, so a malformed answer is
+   * refused with no request at all. And a body the server answers for a revision of ANOTHER project
+   * than the one on screen is refused like a missing one and never cached — the same existence
+   * promise {@link open} keeps, and the check applies only when a project is open (nothing is on
+   * screen to compare against before that).
+   *
    * Concurrent calls for the same id share ONE read ({@link bodyReads}): the dialog and the diff
    * often ask in the same tick, and the second request would only repeat the first. A read that
    * settles after a {@link reset} or after the page moved to another revision still answers its own
    * caller — it was asked for exactly that revision — but its body is NOT cached: the cache belongs
    * to the view that is gone.
    *
-   * REJECTS with the server's `ApiRequestError` when the read is refused: both callers (the diff
-   * and the publish dialog) have a failure state of their own, and swallowing the refusal here
-   * would leave them seeding an editor with nothing.
+   * REJECTS with the server's `ApiRequestError` when the read is refused, and with this store's own
+   * typed refusals for the two cases above: both callers (the diff and the publish dialog) have a
+   * failure state of their own, and swallowing the refusal here would leave them seeding an editor
+   * with nothing.
    */
   async loadBody(revisionId: string): Promise<PolicyRevisionDto> {
-    const cached = this.bodyCache.get(revisionId);
+    const id = revisionId.trim();
+    if (!REVISION_ID_SHAPE.test(id)) {
+      // No request: the id is the server's own text in the `412` case, and it is not a revision id.
+      throw new ApiRequestError(MALFORMED_REVISION_FAILURE);
+    }
+    const cached = this.bodyCache.get(id);
     if (cached !== undefined) {
-      this.bodyCache.delete(revisionId);
-      this.bodyCache.set(revisionId, cached);
+      this.bodyCache.delete(id);
+      this.bodyCache.set(id, cached);
       return cached;
     }
-    const shared = this.bodyReads.get(revisionId);
+    const shared = this.bodyReads.get(id);
     if (shared !== undefined) {
       return shared;
     }
     const generation = this.generation;
-    const read = this.data.getRevision(revisionId).then((revision) => {
+    const read = this.data.getRevision(id).then((revision) => {
+      const projectId = this.projectIdSignal();
+      if (projectId !== null && revision.project_id !== projectId) {
+        // Another project's revision: the same state as a missing one, and nothing is cached.
+        throw new ApiRequestError(FOREIGN_REVISION_FAILURE);
+      }
       if (generation === this.generation) {
         this.cacheBody(revision);
       }
       return revision;
     });
-    this.bodyReads.set(revisionId, read);
+    this.bodyReads.set(id, read);
     try {
       return await read;
     } finally {
       // Only this read's own entry: a later call may already have started the next one.
-      if (this.bodyReads.get(revisionId) === read) {
-        this.bodyReads.delete(revisionId);
+      if (this.bodyReads.get(id) === read) {
+        this.bodyReads.delete(id);
       }
     }
   }
@@ -479,10 +544,11 @@ export class PolicyStore {
     }
     // What the request would carry: the compact document, not the indented text on screen (F1). The
     // cap is declared in UTF-8 bytes, so a multi-byte character counts as every byte it occupies.
+    // `null` is "no measurable wire body": the text is not JSON, or it is JSON the engine refuses to
+    // write compactly (a pathological body, D2). Either way nothing is sent — refusing with the
+    // no-body answer is the honest one, because a size invented for an unmeasurable body would be.
     const bytes = policyBodyBytes(bodyText);
     if (bytes === null) {
-      // Unreachable: the same text parsed as a JSON object a line above. Answering the refusal that
-      // sent nothing keeps the promise honest even if it ever were reached.
       return { kind: 'invalid_json' };
     }
     if (bytes > POLICY_BODY_MAX_BYTES) {

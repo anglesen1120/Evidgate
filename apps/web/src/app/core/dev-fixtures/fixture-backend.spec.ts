@@ -25,6 +25,7 @@ import { TestBed } from '@angular/core/testing';
 import {
   createCiBinding,
   createIngestToken,
+  getPolicyRevision,
   getRunDecision,
   isErrorEnvelope,
   listPermissions,
@@ -100,6 +101,21 @@ async function rejectionOf<T>(promise: Promise<T>): Promise<unknown> {
   throw new Error('expected the call to reject');
 }
 
+/**
+ * The revision id a `getPolicyRevision` document answers for: its own `body.id`, the member the
+ * id-keyed selection of 09.7.1-F15 note 3 compares against the request's `{id}` path segment.
+ */
+function revisionIdOf(document: FixtureDocument): string {
+  const body = document.body as { id?: unknown } | undefined;
+  if (typeof body?.id !== 'string') {
+    throw new Error('the document carries no revision `body.id`, so it cannot be read by id');
+  }
+  return body.id;
+}
+
+/** An id no corpus document of `getPolicyRevision` carries: the fallback case's subject. */
+const UNKNOWN_REVISION_ID = '018f0000-0000-7000-8000-00000000a0ff';
+
 describe('fixture backend (09.1.1-T12.1)', () => {
   let gateway: ApiGateway;
   let toggles: FixtureToggles;
@@ -151,6 +167,86 @@ describe('fixture backend (09.1.1-T12.1)', () => {
     if (response instanceof HttpResponse) {
       expect(response.headers.get(FIXTURE_RESPONSE_HEADER)).toBe('runs-list');
     }
+  });
+
+  // 09.7.1-F15 note (3): `getPolicyRevision` is the one ID-KEYED route. Each corpus revision
+  // document carries its own `body.id`, so two different revision ids must answer two different
+  // documents — the property the browser's revision diff and the 412 dialog's server column need.
+  it('answers the revision the path id names, with two ids giving two bodies (09.7.1-F15)', async () => {
+    const previous = documentOf('policy-revision-previous');
+    const head = documentOf('policy-revision-head');
+    const previousId = revisionIdOf(previous);
+    const headId = revisionIdOf(head);
+    expect(previousId).not.toBe(headId);
+
+    const before = await gateway.call((client) =>
+      getPolicyRevision({ client, path: { id: previousId } }),
+    );
+    const after = await gateway.call((client) =>
+      getPolicyRevision({ client, path: { id: headId } }),
+    );
+
+    expect(before).toEqual(previous.body);
+    expect(after).toEqual(head.body);
+    expect(before).not.toEqual(after);
+    expect(handled.map((request) => `${request.method} ${request.url}`)).toEqual([
+      `GET ${API_BASE_URL}/policies/${previousId}`,
+      `GET ${API_BASE_URL}/policies/${headId}`,
+    ]);
+    const answered = events.filter((event) => event instanceof HttpResponse);
+    expect(answered.map((event) => event.headers.get(FIXTURE_RESPONSE_HEADER))).toEqual([
+      'policy-revision-previous',
+      'policy-revision-head',
+    ]);
+  });
+
+  // The order, in one case: a matching id wins over a variant that selects another document, and
+  // that same variant still answers when no document carries the id.
+  it('lets a matching id win over the variant and falls back to it otherwise (09.7.1-F15)', async () => {
+    toggles.setVariant('getPolicyRevision', 'first');
+    const head = documentOf('policy-revision-head');
+    const first = documentOf('policy-revision-first');
+    expect(revisionIdOf(head)).not.toBe(revisionIdOf(first));
+
+    const byId = await gateway.call((client) =>
+      getPolicyRevision({ client, path: { id: revisionIdOf(head) } }),
+    );
+    const fallback = await gateway.call((client) =>
+      getPolicyRevision({ client, path: { id: UNKNOWN_REVISION_ID } }),
+    );
+
+    // The id won: the variant still names the FIRST revision, and the answer is still the head.
+    expect(byId).toEqual(head.body);
+    // No document holds the unknown id, so the selected variant answers, exactly as before.
+    expect(fallback).toEqual(first.body);
+    const answered = events.filter((event) => event instanceof HttpResponse);
+    expect(answered.map((event) => event.headers.get(FIXTURE_RESPONSE_HEADER))).toEqual([
+      'policy-revision-head',
+      'policy-revision-first',
+    ]);
+  });
+
+  // A variant still opens its own document for an id no revision carries: the review switch is
+  // unchanged for every id the corpus does not know, including the default `ok`.
+  it('keeps the variant selection for an id no document carries (09.7.1-F15)', async () => {
+    const head = documentOf('policy-revision-head');
+    const previous = documentOf('policy-revision-previous');
+
+    const defaulted = await gateway.call((client) =>
+      getPolicyRevision({ client, path: { id: UNKNOWN_REVISION_ID } }),
+    );
+    toggles.setVariant('getPolicyRevision', 'previous');
+    const selected = await gateway.call((client) =>
+      getPolicyRevision({ client, path: { id: UNKNOWN_REVISION_ID } }),
+    );
+
+    expect(defaulted).toEqual(head.body);
+    expect(selected).toEqual(previous.body);
+    const answered = events.filter((event) => event instanceof HttpResponse);
+    expect(answered.map((event) => event.headers.get(FIXTURE_RESPONSE_HEADER))).toEqual([
+      'policy-revision-head',
+      'policy-revision-previous',
+    ]);
   });
 
   it('answers the step-2 writes: create binding, create token, rotate token (09.2.1-T2)', async () => {

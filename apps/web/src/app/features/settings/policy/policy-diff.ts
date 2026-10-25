@@ -104,8 +104,14 @@ function isPrimitiveArray(value: readonly unknown[]): boolean {
   return true;
 }
 
-/** Cut rendered text to the value budget without ever leaving half a surrogate pair behind. */
-function clip(text: string): string {
+/**
+ * Cut rendered text to {@link MAX_DIFF_VALUE_CHARS} without ever leaving half a surrogate pair
+ * behind. Exported because a diff ROW's LABEL (its JSON pointer) is unbounded in exactly the same
+ * way a value is — a body may carry a 40 KiB key — and every renderer of this tab's rows clips it
+ * with this one budget (delta finding D3: the `412` conflict field label was rendered whole while
+ * its two values were clipped).
+ */
+export function clipDiffText(text: string): string {
   if (text.length <= MAX_DIFF_VALUE_CHARS) {
     return text;
   }
@@ -133,7 +139,7 @@ function serialise(value: unknown): string {
  * component may interpolate it as text).
  */
 function render(value: unknown): string {
-  return clip(serialise(value));
+  return clipDiffText(serialise(value));
 }
 
 function primitiveEquals(before: unknown, after: unknown): boolean {

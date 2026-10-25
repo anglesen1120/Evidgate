@@ -119,6 +119,12 @@ const SECRET_MINTING_OPERATIONS: readonly string[] = [
 const ONBOARDING_TOKEN_FIXTURE = 'ingest-tokens-list-onboarding-token';
 
 /**
+ * 09.7.1-F15: the `Storefront web` project the Settings area's pages are authored on — the first
+ * row of `projects-list`, `PROJECT_STOREFRONT` in `apps/web/e2e/shell/support.ts`.
+ */
+const STOREFRONT_PROJECT_ID = '018f0000-0000-7000-8000-000000000011';
+
+/**
  * How many `$ref` hops a response or header object may take before the check calls it
  * unresolved — the same bound `packages/cli`'s response validator uses.
  */
@@ -171,6 +177,8 @@ interface FixtureRouteShape {
   readonly operationId: string;
   readonly method: string;
   readonly path: string;
+  /** 09.7.1-F15 note 3: the `{name}` parameter the answer is keyed by, where a route declares one. */
+  readonly idKeyParameter?: string;
 }
 
 /**
@@ -836,6 +844,63 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     }
   });
 
+  it('pins the id-keyed revision read to distinct corpus ids (09.7.1-F15)', () => {
+    // 09.7.1-F15 note (3): `getPolicyRevision` answers the document whose own `body.id` equals the
+    // request's `{id}`. That is only sound when (a) the row names a parameter its template actually
+    // carries, (b) every 2xx document of the operation carries a string `id`, (c) no two documents
+    // share one, so the selection is unambiguous, and (d) the revision ids a corpus page offers are
+    // exactly the documents a read can address — otherwise a page load would ask for an id no
+    // document answers and silently get the variant.
+    const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.idKeyParameter !== undefined);
+    expect(
+      keyed.map((route) => route.operationId),
+      'only getPolicyRevision is id-keyed; a second id-keyed row needs its own pin here',
+    ).toEqual(['getPolicyRevision']);
+
+    const page = corpusDocument('policy-revisions-list-after-publish');
+    const pageItems = (page.body as { items?: readonly { id?: unknown }[] } | undefined)?.items;
+    if (pageItems === undefined) {
+      throw new Error('the post-publish revision page carries no items array');
+    }
+    const pageIds = pageItems.map((item) => item.id);
+
+    for (const route of keyed) {
+      const parameter = route.idKeyParameter;
+      if (parameter === undefined) {
+        throw new Error(`'${route.operationId}' holds an empty idKeyParameter`);
+      }
+      expect(
+        route.path,
+        `'${route.operationId}' declares idKeyParameter '${parameter}' but its template carries no {${parameter}}`,
+      ).toContain(`{${parameter}}`);
+
+      const ids = CORPUS.map(readDocument)
+        .filter((document) => document.operation_id === route.operationId && document.status < 400)
+        .map((document) => {
+          const body = document.body;
+          const id = isRecord(body) ? body['id'] : undefined;
+          expect(
+            typeof id,
+            `a '${route.operationId}' 2xx document carries no string body.id, so a request for its id cannot find it`,
+          ).toBe('string');
+          return id as string;
+        });
+
+      expect(
+        ids.length,
+        `'${route.operationId}' has ${ids.length} addressable document(s); two are needed for a revision comparison`,
+      ).toBeGreaterThan(1);
+      expect(
+        new Set(ids).size,
+        `'${route.operationId}' answers ${ids.length} documents with only ${new Set(ids).size} distinct body.id values: the id-keyed read would be ambiguous`,
+      ).toBe(ids.length);
+      expect(
+        [...ids].sort(),
+        `the ids '${route.operationId}' can answer differ from the revision ids the corpus page offers, so a page load would fall back to the variant`,
+      ).toEqual(pageIds.map(String).sort());
+    }
+  });
+
   it('pins at most one ok variant per operation and the 403 and 412 error fixtures (AC10)', () => {
     const documents = CORPUS.map((fixture) => ({
       name: fixture.name,
@@ -1141,6 +1206,133 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       expect(item.prefix.startsWith('egt_')).toBe(true);
       expect(item.prefix.split('.')).toHaveLength(1);
     }
+  });
+
+  it('pins the Secrets tab’s CI-binding section states (09.7.1-F15)', () => {
+    // 1. The page the section opens with: five bindings on the `Storefront web` project, one per
+    //    state the section renders — the three `status` values plus the layout extremes (a single
+    //    ref pattern, and a repository whose name and allowlists overflow a cell).
+    const page = corpusDocument('ci-bindings-list-settings');
+    expect([page.operation_id, page.variant, page.status]).toEqual([
+      'listCiBindings',
+      'settings',
+      200,
+    ]);
+    const body = page.body as {
+      items: {
+        id: string;
+        project_id: string;
+        provider: string;
+        repository_id: number;
+        repository_full_name: string;
+        allowed_ref_patterns: string[];
+        allowed_workflow_refs: string[];
+        status: string;
+        activated_at?: string | null;
+        created_at: string;
+        version: number;
+      }[];
+      next_cursor: string | null;
+    };
+    expect(body.next_cursor).toBeNull();
+    expect(
+      body.items.length,
+      'the section must show every verification state in one read',
+    ).toBeGreaterThanOrEqual(5);
+
+    const projectIds = new Set(body.items.map((item) => item.project_id));
+    expect([...projectIds], 'every row belongs to the Storefront web project').toEqual([
+      STOREFRONT_PROJECT_ID,
+    ]);
+    expect(new Set(body.items.map((item) => item.status))).toEqual(
+      new Set(['active', 'pending_verification', 'disabled']),
+    );
+
+    // A pending binding is exactly one the OIDC handshake has not finished: it has no activation
+    // time. An activated one always has it, so the two are never the same row.
+    for (const item of body.items) {
+      if (item.status === 'pending_verification') {
+        expect(
+          item.activated_at,
+          `${item.id} is pending yet carries an activation time`,
+        ).toBeNull();
+      }
+    }
+    expect(
+      body.items.some((item) => item.status !== 'pending_verification' && item.activated_at),
+      'no activated binding carries its activation time',
+    ).toBe(true);
+
+    // Layout extremes: one binding allows a single ref and workflow, one overflows.
+    expect(
+      body.items.some(
+        (item) => item.allowed_ref_patterns.length === 1 && item.allowed_workflow_refs.length === 1,
+      ),
+      'no binding has the single-pattern shape the compact row renders',
+    ).toBe(true);
+    expect(
+      body.items.some(
+        (item) =>
+          item.repository_full_name.length > 40 &&
+          item.allowed_ref_patterns.length >= 6 &&
+          item.allowed_workflow_refs.length >= 3,
+      ),
+      'no binding has a long repository name with long allowlists, so the overflow cell has nothing to truncate',
+    ).toBe(true);
+
+    // 2. Every allowlist entry is in the form the server accepts — not merely a string the
+    //    contract's patternless `array of string` lets through (`Ci/RefGlob.cs:69,79`): a ref
+    //    pattern is `refs/heads/…` or `refs/tags/…`, and a workflow ref is
+    //    `owner/repo/.github/workflows/<file>@refs/…` for THAT row's repository.
+    for (const item of body.items) {
+      expect(item.provider).toBe('github_actions');
+      expect(Number.isInteger(item.repository_id) && item.repository_id > 0).toBe(true);
+      expect(item.version).toBeGreaterThan(0);
+      for (const pattern of item.allowed_ref_patterns) {
+        expect(pattern, `${item.id} allows a ref pattern the server refuses`).toMatch(
+          /^refs\/(heads|tags)\/[A-Za-z0-9._/*+@-]{1,200}$/,
+        );
+      }
+      for (const workflowRef of item.allowed_workflow_refs) {
+        expect(workflowRef, `${item.id} allows a workflow ref the server refuses`).toMatch(
+          /^[A-Za-z0-9._*-]{1,100}\/[A-Za-z0-9._*-]{1,100}\/\.github\/workflows\/[A-Za-z0-9._*-]{1,100}@refs\/(heads|tags)\/[A-Za-z0-9._/*+@-]{1,200}$/,
+        );
+        expect(
+          workflowRef.startsWith(`${item.repository_full_name}/.github/workflows/`),
+          `${item.id} allows a workflow of a repository it is not bound to`,
+        ).toBe(true);
+      }
+    }
+
+    // 3. Metadata only: a listed binding never carries the challenge or its hash — the same pin the
+    //    corpus-wide one-time-secret test applies, restated on the page the section renders.
+    expect(oneTimeSecretMembers(page.body)).toEqual([]);
+    for (const item of body.items) {
+      expect(Object.keys(item), `${item.id} carries a challenge member`).not.toContain(
+        'binding_challenge',
+      );
+    }
+
+    // 4. The two other states: the unbound project's empty page, and the 403 the section renders
+    //    as its own `forbidden` phase instead of an error message.
+    const empty = corpusDocument('ci-bindings-list-settings-empty');
+    expect([empty.operation_id, empty.variant, empty.status]).toEqual([
+      'listCiBindings',
+      'settings-empty',
+      200,
+    ]);
+    expect(empty.body).toEqual({ items: [], next_cursor: null });
+
+    const forbidden = corpusDocument('ci-bindings-list-settings-forbidden');
+    expect([forbidden.operation_id, forbidden.variant, forbidden.status]).toEqual([
+      'listCiBindings',
+      'settings-forbidden',
+      403,
+    ]);
+    const envelope = forbidden.body as { error: { code: string; retryable: boolean } };
+    expect(envelope.error.code).toBe('forbidden');
+    expect(envelope.error.retryable).toBe(false);
+    expect(oneTimeSecretMembers(forbidden.body)).toEqual([]);
   });
 
   it('fails on the runs-list page when a required run member is removed (AC10)', () => {

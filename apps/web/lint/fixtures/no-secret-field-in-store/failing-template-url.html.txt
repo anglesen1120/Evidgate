@@ -1,0 +1,4 @@
+<!-- A planted violation: the member read of the store's secret value. The prose above it is
+     HTML text, which the rule never scans. -->
+<p>Token is shown once after a rotation.</p>
+<button type="button" (click)="rotate()">{{ store.token() }}</button>

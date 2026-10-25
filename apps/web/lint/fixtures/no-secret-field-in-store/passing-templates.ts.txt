@@ -1,0 +1,58 @@
+// 09.7.1-T3 fixture (queue F16, plan 09.7.1 §8 S3, AC3): the template shapes the bare-read check
+// must still leave alone — a member read of a metadata name, an `@for` alias whose members are
+// bound, a template-reference declaration, a quoted string, an object key, the `@let` declaration
+// variable, a presence name, HTML text outside any binding and the metadata-only bindings the
+// Settings screens actually write. The rule reports nothing in this file.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { Component } from '@angular/core';
+
+// A member read of a metadata property: only the property name after the dot is checked, and the
+// root of the access is an object read, not a bare read of a value.
+@Component({
+  selector: 'app-secret-references',
+  template: `<p>Token is shown once.</p>
+    <p>{{ token.prefix }} — {{ row.token_prefix }} — {{ store?.tokenPrefix }}</p>`,
+})
+export class SecretReferencesPanel {}
+
+// The declaration variable of an `@for` is not a read: only the iterated expression and the reads
+// inside the body are scanned, and `token.name` names its own member.
+@Component({
+  selector: 'app-secret-rows',
+  template: '@for (token of tokens; track token.name) { <p>{{ token.name }}</p> }',
+})
+export class SecretRowsPanel {}
+
+// A template-reference declaration, a quoted string and an object key all name nothing a template
+// reads.
+@Component({
+  selector: 'app-secret-references-bindings',
+  template: `<input #token />
+    <button type="button" [attr.aria-label]="'signingSecret'" [routerLinkActiveOptions]="{ token: true }">
+      Copy it now. Secret values are hidden.
+    </button>`,
+})
+export class SecretReferencesBindingsPanel {}
+
+// The `@let` declaration variable is not a read, the presence name reports whether a value exists
+// and the metadata names describe one.
+@Component({
+  selector: 'app-secret-metadata',
+  template: `@let label = tokens();
+    <p>{{ label }} {{ tokenCount }} {{ rotationState }} {{ $index }}</p>
+    <p *ngFor="let row of rows; index as i">{{ i }} {{ 'token' }}</p>
+    @if (hasToken) { <p>{{ copy.title }}</p> }
+    @for (entry of rows; track entry.id) { <p>{{ entry.last4 }}</p> }
+    @switch (phase()) { @case ('ready') { <p>{{ lastRotatedAt }}</p> } }
+    <input [value]="secretRef" />`,
+})
+export class SecretMetadataPanel {}
+
+// A component field named like the value is out of this rule's scope for a template read: the
+// binding names a metadata property, and the field itself is not store state.
+@Component({
+  selector: 'app-secret-last-four',
+  templateUrl: './passing-template-url.html.txt',
+})
+export class SecretLastFourPanel {}
