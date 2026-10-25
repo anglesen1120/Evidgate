@@ -9,8 +9,9 @@
 //     the server has not reached (T1.3's disabled `onboarding-next`);
 //   - a failed resume is a `failure`, never a step: no case may publish progress from a refusal;
 //   - a superseded load never publishes, whichever load answers first;
-//   - a published derivation is tagged with its route scope, so `holds` answers "already this
-//     page?" and nothing else — the shell skips the second read after a create (S71 F1);
+//   - the store is a route-level singleton, so a `ready` state may belong to an earlier visit:
+//     the only thing reusable across activations is the one-shot create marker `consumeCreated`
+//     takes, which spares the activation a create causes a second read and nothing else (F1/N1);
 //   - `focusToken` counts only the step moves a user caused, so a load or a Retry never moves
 //     focus (S71 F2);
 //   - `projectCreated` adopts the project into the session cache and resumes on step 2, and never
@@ -334,40 +335,53 @@ describe('OnboardingStore (09.2.1-T1.1)', () => {
     expect(store.viewStep()).toBe(1);
   });
 
-  it('holds the published scope, and only that scope (S71 F1)', async () => {
-    expect(store.holds('o-1', 'p-1')).toBe(false);
+  it('consumes the create marker once, and only for the scope the create published (S71 F1/N1)', async () => {
     data.projects = [PROJECT];
+    await store.projectCreated(PROJECT);
+    expect(store.status()).toBe('ready');
 
-    await store.load('o-1', 'p-1');
-
-    expect(store.holds('o-1', 'p-1')).toBe(true);
-    // The same org read at its root is a different scope, and so is another org's project.
-    expect(store.holds('o-1', null)).toBe(false);
-    expect(store.holds('o-2', 'p-1')).toBe(false);
+    // Another org's root, and this org's own root, are not the scope the create published.
+    expect(store.consumeCreated('o-2', null)).toBe(false);
+    expect(store.consumeCreated(PROJECT.org_id, null)).toBe(false);
+    // The exact scope is consumed once…
+    expect(store.consumeCreated(PROJECT.org_id, PROJECT.id)).toBe(true);
+    // …and the next activation of the same URL reads the server again.
+    expect(store.consumeCreated(PROJECT.org_id, PROJECT.id)).toBe(false);
   });
 
-  it('separates two orgs that both have no project (S71 F1)', async () => {
-    // `progress.project` is null for both, so the scope cannot be read off the derivation: the
-    // second org must still be read instead of inheriting the first org's step 1.
+  it('consumes nothing after a plain load, whatever the store still holds (S71 N1)', async () => {
+    // The store is a route-level singleton: after an earlier activation it is `ready`, but that
+    // is no licence to skip a read. Two orgs with no project in particular must not share a skip,
+    // because `progress.project` is null for both and cannot identify the scope.
+    data.projects = [PROJECT];
     await store.load('o-1', null);
-    expect(store.holds('o-1', null)).toBe(true);
+    expect(store.status()).toBe('ready');
+    expect(store.consumeCreated('o-1', null)).toBe(false);
+    expect(store.consumeCreated('o-2', null)).toBe(false);
 
-    expect(store.holds('o-2', null)).toBe(false);
-    await store.load('o-2', null);
-    expect(store.holds('o-2', null)).toBe(true);
-    expect(store.holds('o-1', null)).toBe(false);
+    await store.load('o-1', 'p-1');
+    expect(store.consumeCreated('o-1', 'p-1')).toBe(false);
   });
 
-  it('holds nothing once a load fails, so the shell reads again', async () => {
+  it('invalidates the create marker as soon as any load runs (S71 N1)', async () => {
     data.projects = [PROJECT];
-    await store.load('o-1', 'p-1');
-    expect(store.holds('o-1', 'p-1')).toBe(true);
+    await store.projectCreated(PROJECT);
+
+    // A revisit (or a Retry, or a route change) reads first and only then publishes.
+    await store.load(PROJECT.org_id, PROJECT.id);
+
+    expect(store.consumeCreated(PROJECT.org_id, PROJECT.id)).toBe(false);
+  });
+
+  it('leaves no marker after a failed load (S71 N1)', async () => {
+    data.projects = [PROJECT];
+    await store.projectCreated(PROJECT);
 
     data.projectFailure = apiError('unavailable', 503);
-    await store.load('o-1', 'p-1');
+    await store.load(PROJECT.org_id, PROJECT.id);
 
     expect(store.status()).toBe('error');
-    expect(store.holds('o-1', 'p-1')).toBe(false);
+    expect(store.consumeCreated(PROJECT.org_id, PROJECT.id)).toBe(false);
   });
 
   it('bumps the focus token only when a user move changes the viewed step (S71 F2)', async () => {
@@ -475,9 +489,9 @@ describe('OnboardingStore (09.2.1-T1.1)', () => {
     expect(store.currentStep()).toBe(2);
     expect(store.viewStep()).toBe(2);
     expect(store.project()).toEqual(PROJECT);
-    // The create's load is the one read after a creation: the scope it published is the scope
-    // the URL change will activate, so that activation re-reads nothing (S71 F1).
-    expect(store.holds(PROJECT.org_id, PROJECT.id)).toBe(true);
+    // The create's load is the one read after a creation: the activation its URL change causes
+    // may take that result instead of reading again — once (S71 F1/N1).
+    expect(store.consumeCreated(PROJECT.org_id, PROJECT.id)).toBe(true);
     // The create opened step 2 on the user's behalf, so it cues the shell's focus move; the
     // shell that the URL change activates is built after this, hence the token (S71 F2).
     expect(store.focusToken()).toBe(1);

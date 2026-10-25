@@ -3,9 +3,10 @@ import type { Routes } from '@angular/router';
 import { OnboardingStore } from './onboarding.store';
 
 // Entry permissions and org scope are enforced by the registry-generated parent route.
-// The store is provided here, on the parent, so both children share one instance: the URL change
-// a create causes re-activates the shell on `:projectId`, and the scope `projectCreated` published
-// is still there, so that second activation renders it instead of reading it again (S71 F1).
+// `providers` here make the store a route-level singleton: one instance for the app's lifetime,
+// NOT one per activation. So its `ready` state can belong to an earlier visit, and nothing in it
+// may be reused across activations except the one-shot create marker `consumeCreated` takes —
+// that is what spares the activation a create's URL change causes a second read (S71 F1/N1).
 export const routes: Routes = [
   {
     path: '',

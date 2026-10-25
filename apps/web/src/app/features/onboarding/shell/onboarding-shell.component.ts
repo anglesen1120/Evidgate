@@ -46,7 +46,9 @@ export class OnboardingShellComponent {
   /**
    * The last `focusToken` this instance has honoured. It starts at the store's initial value, so
    * the first ready render of a page load moves no focus; a create that bumped the token before
-   * this instance existed still moves it once (S71 F2).
+   * this instance existed still moves it once (S71 F2). An activation that reads instead of
+   * taking the create marker adopts the store's current token as its baseline, because that
+   * token belongs to a step moved in an earlier visit (S71 N1).
    */
   private focusedToken = 0;
 
@@ -88,13 +90,16 @@ export class OnboardingShellComponent {
       .subscribe(({ orgId, projectId }) => {
         this.orgId = orgId;
         this.projectId = projectId;
-        // The create's own load already published exactly this scope, and the URL change it
-        // caused re-activates this component: reading it again would issue the same fan-out
-        // twice and flash the loading pattern (S71 F1). A fresh page load finds an empty store,
-        // and Retry (`reload`) still loads unconditionally.
-        if (this.store.holds(orgId, projectId)) {
+        // The one activation the create's own load published may render it instead of reading it
+        // again — that is the single fan-out after a creation (S71 F1). Every other activation
+        // reads: this store is a route-level singleton, so its ready state can be a derivation of
+        // an earlier visit (S71 N1). Retry (`reload`) loads unconditionally too.
+        if (this.store.consumeCreated(orgId, projectId)) {
           return;
         }
+        // A revisit inherits the token of a step moved in an earlier activation; adopting it as
+        // the baseline keeps the first ready render of that revisit from stealing focus (N1).
+        this.focusedToken = this.store.focusToken();
         void this.store.load(orgId, projectId);
       });
 

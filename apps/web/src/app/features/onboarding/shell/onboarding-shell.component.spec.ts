@@ -19,13 +19,13 @@ class CreateProjectStub {
   readonly orgId = input.required<string>();
 }
 
-/** The route scope a stub store reports as already published (S71 F1). */
+/** The scope a stub store reports as the one-shot create marker (S71 F1/N1). */
 interface StubScope {
   orgId: string;
   projectId: string | null;
 }
 
-function shellStore(heldScope: () => StubScope | null = () => null) {
+function shellStore(createdScope: () => StubScope | null = () => null) {
   const viewStep = signal<StepNumber>(1);
   const currentStep = signal<StepNumber | 'enabled'>(2);
   const focusToken = signal(0);
@@ -55,9 +55,9 @@ function shellStore(heldScope: () => StubScope | null = () => null) {
     load: vi.fn<(orgId: string, projectId: string | null) => Promise<void>>(() =>
       Promise.resolve(),
     ),
-    holds: vi.fn((orgId: string, projectId: string | null) => {
-      const scope = heldScope();
-      return scope !== null && scope.orgId === orgId && scope.projectId === projectId;
+    consumeCreated: vi.fn((orgId: string, projectId: string | null) => {
+      const created = createdScope();
+      return created !== null && created.orgId === orgId && created.projectId === projectId;
     }),
     selectStep: vi.fn((step: StepNumber) => {
       const current = currentStep();
@@ -80,20 +80,26 @@ describe('OnboardingShellComponent', () => {
   let childParams: BehaviorSubject<ParamMap>;
 
   interface SetupOptions {
-    /** The scope the store reports as already published; nothing is held by default. */
-    held?: () => StubScope | null;
+    /** The scope the stub store reports as the one-shot create marker; nothing by default. */
+    created?: () => StubScope | null;
     /** The project address the route carries; the org root by default. */
     projectId?: string;
+    /**
+     * The focus token the store already carries when the shell is built — a revisit inheriting a
+     * step moved in an earlier activation.
+     */
+    focusToken?: number;
   }
 
   /**
    * Build the shell over a fresh store. A case that changes what the store holds or what the
-   * route carries must go through here: the shell consults `holds` once, when its route
+   * route carries must go through here: the shell consults the create marker once, when its route
    * subscription first answers, so the state has to be in place before the component exists.
    */
   async function setup(options: SetupOptions = {}): Promise<void> {
     TestBed.resetTestingModule();
-    store = shellStore(options.held);
+    store = shellStore(options.created);
+    store.focusToken.set(options.focusToken ?? 0);
     orgParams = new BehaviorSubject(convertToParamMap({ orgId: 'org-1' }));
     childParams = new BehaviorSubject(
       convertToParamMap(options.projectId === undefined ? {} : { projectId: options.projectId }),
@@ -229,14 +235,14 @@ describe('OnboardingShellComponent', () => {
     expect(store.load).toHaveBeenCalledTimes(count);
   });
 
-  it('does not re-read the scope a create already published, and reads a different one (S71 F1)', async () => {
+  it('renders the scope a create just published, and reads any other (S71 F1)', async () => {
     await setup({
-      held: () => ({ orgId: 'org-1', projectId: 'project-1' }),
+      created: () => ({ orgId: 'org-1', projectId: 'project-1' }),
       projectId: 'project-1',
     });
     // The create's own `projectCreated` load published this scope; the URL change it caused
     // re-activates the shell, which must render that state instead of issuing the fan-out again.
-    expect(store.holds).toHaveBeenCalledWith('org-1', 'project-1');
+    expect(store.consumeCreated).toHaveBeenCalledWith('org-1', 'project-1');
     expect(store.load).not.toHaveBeenCalled();
     expect(root.querySelector('[data-testid="onboarding-stepper"]')).not.toBeNull();
 
@@ -244,6 +250,17 @@ describe('OnboardingShellComponent', () => {
     await fixture.whenStable();
     expect(store.load).toHaveBeenCalledWith('org-1', 'project-2');
     expect(store.load).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads again on a revisit that inherits a used focus token, and moves no focus (S71 N1)', async () => {
+    // A store left ready by an earlier activation carries the token of a step moved back then.
+    await setup({ focusToken: 2 });
+
+    expect(store.consumeCreated).toHaveBeenCalledWith('org-1', null);
+    expect(store.load).toHaveBeenCalledWith('org-1', null);
+    expect(root.querySelector('#onboarding-step-title')).not.toBeNull();
+    // The first ready render of the revisit must not steal focus to the step heading.
+    expect(document.activeElement?.id).not.toBe('onboarding-step-title');
   });
 
   it('keeps Next disabled on the final step even when all resources are done', async () => {
@@ -256,7 +273,7 @@ describe('OnboardingShellComponent', () => {
   });
 });
 
-describe('OnboardingShellComponent over the real store (S71 F1)', () => {
+describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
   const PROJECT: ProjectDto = {
     id: 'project-1',
     org_id: 'org-1',
@@ -287,12 +304,8 @@ describe('OnboardingShellComponent over the real store (S71 F1)', () => {
     currentStep: 2,
   };
 
-  /**
-   * The acceptance shape of F1 with the real store: the create's own load plus the activation the
-   * URL change causes must stay one fan-out, so the progress read runs twice in total — once for
-   * the org root, once for the create — and never a third time for the `:projectId` URL.
-   */
-  it('reads the wizard once for the page and once for the create, never again for the URL', async () => {
+  /** A shell over the real store, with the progress read spied and the route params driven here. */
+  async function setupRealShell() {
     const progressLoad = vi.fn((_orgId: string, projectId: string | null) =>
       Promise.resolve(projectId === null ? NO_PROJECT : CREATED),
     );
@@ -317,22 +330,50 @@ describe('OnboardingShellComponent over the real store (S71 F1)', () => {
         add: { imports: [CreateProjectStub] },
       })
       .compileComponents();
-    const fixture = TestBed.createComponent(OnboardingShellComponent);
-    await fixture.whenStable();
+    const activate = async (): Promise<ComponentFixture<OnboardingShellComponent>> => {
+      const fixture = TestBed.createComponent(OnboardingShellComponent);
+      await fixture.whenStable();
+      return fixture;
+    };
+    return { progressLoad, childParams, activate, store: TestBed.inject(OnboardingStore) };
+  }
+
+  it('reads once for the page and once for the create, and reads again on the next visit (S71 F1/N1)', async () => {
+    const { progressLoad, childParams, activate, store } = await setupRealShell();
+    const fixture = await activate();
     expect(progressLoad).toHaveBeenCalledTimes(1);
     expect(progressLoad).toHaveBeenLastCalledWith('org-1', null);
 
-    // Step 1 creates the project; the store adopts it and publishes that scope.
-    const realStore = TestBed.inject(OnboardingStore);
-    await realStore.projectCreated(PROJECT);
+    // Step 1 creates the project; the store adopts it and loads the derivation for it.
+    await store.projectCreated(PROJECT);
     expect(progressLoad).toHaveBeenCalledTimes(2);
 
     // The create navigates to `/orgs/org-1/onboarding/project-1`, which activates the shell on
-    // the `:projectId` route: it renders the published scope instead of reading it again.
+    // the `:projectId` route: it takes the marker and renders that scope, no third read.
     childParams.next(convertToParamMap({ projectId: PROJECT.id }));
     await fixture.whenStable();
     expect(progressLoad).toHaveBeenCalledTimes(2);
     const rendered = fixture.nativeElement as HTMLElement;
     expect(rendered.querySelector('[data-testid="onboarding-step-2"]')).not.toBeNull();
+    // The create's step change still moves focus on the activation it caused (S71 F2).
+    expect(document.activeElement?.id).toBe('onboarding-step-title');
+
+    // The marker was consumed by that activation, so a later visit to the same URL re-derives.
+    fixture.destroy();
+    await activate();
+    expect(progressLoad).toHaveBeenCalledTimes(3);
+  });
+
+  it('reads again when the shell is re-created over a ready scope with no create in between (S71 N1)', async () => {
+    const { progressLoad, activate } = await setupRealShell();
+    const first = await activate();
+    expect(progressLoad).toHaveBeenCalledTimes(1);
+
+    // Leaving onboarding and coming back: the route-level store is still ready for the very same
+    // scope, but no create published a marker, so the new activation must re-derive rather than
+    // render a derivation nobody refreshed.
+    first.destroy();
+    await activate();
+    expect(progressLoad).toHaveBeenCalledTimes(2);
   });
 });

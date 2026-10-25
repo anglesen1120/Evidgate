@@ -13,10 +13,13 @@
 // 3. The viewed step is gated by the derived one: `selectStep` cannot open a step the server has
 //    not reached, and `next` cannot pass a step whose done-condition is unmet (T1.3's disabled
 //    `onboarding-next`). Nothing here advances the wizard: only a new `load` moves it.
-// 4. A published derivation is tagged with the route scope it was read for, so `holds` can answer
-//    "is this already the state of the page the user is on?". The shell consults it before
-//    re-reading: the create's own `projectCreated` load is the single read after a creation
-//    (S71 F1), while a fresh page load finds an empty store and always loads.
+// 4. This store is a route-level singleton, not a per-activation one: the route's `providers`
+//    keep one instance for the app's lifetime, so a state that is still `ready` says nothing
+//    about the activation on screen. The only thing reusable across activations is the one-shot
+//    create marker: `projectCreated` sets it after its own successful load, and `consumeCreated`
+//    takes it exactly once, for exactly that scope. That spares the activation the create's URL
+//    change causes a second fan-out (S71 F1), while every other activation — a revisit, a
+//    different org or project, a Retry — loads and re-derives from the server (S71 N1).
 // 5. `focusToken` counts the step moves the *user* caused (`next`, `back`, `selectStep`, and the
 //    step a create opens). The shell moves focus to the step heading on a new token only, so the
 //    first ready render of a page load and a Retry leave focus alone (S71 F2).
@@ -50,7 +53,7 @@ export type OnboardingStatus = 'loading' | 'ready' | 'error';
  */
 export type OnboardingFailure = 'forbidden' | 'not-found' | 'unavailable' | null;
 
-/** The route scope a derivation is read for: the org, and the project address if the URL had one. */
+/** The route scope a create published: the one-shot marker `consumeCreated` takes. */
 export interface OnboardingScope {
   readonly orgId: string;
   readonly projectId: string | null;
@@ -64,21 +67,12 @@ export interface OnboardingViewState {
   progress: OnboardingProgress | null;
   /** The step whose panel is rendered; gated by `currentStep()`. */
   viewStep: StepNumber;
-  /** The route scope `progress` was read for; `null` until a load publishes one. */
-  scope: OnboardingScope | null;
   /** Counts the step moves a user caused; the shell's cue to move focus (see the header). */
   focusToken: number;
 }
 
 function initialState(): OnboardingViewState {
-  return {
-    status: 'loading',
-    failure: null,
-    progress: null,
-    viewStep: 1,
-    scope: null,
-    focusToken: 0,
-  };
+  return { status: 'loading', failure: null, progress: null, viewStep: 1, focusToken: 0 };
 }
 
 export const OnboardingStore = signalStore(
@@ -100,14 +94,23 @@ export const OnboardingStore = signalStore(
     const progressService = inject(OnboardingProgressService);
     const session = inject(SessionStore);
     /**
-     * The sequence number of the newest `load`, per store instance (the route provides one store
-     * per activation). An answer whose sequence is no longer the newest is dropped.
+     * The sequence number of the newest `load`, per store instance (this store is a route-level
+     * singleton, so two activations can overlap across a route change). An answer whose sequence
+     * is no longer the newest is dropped.
      */
     let newestLoad = 0;
+    /**
+     * The scope a create just published, for the one activation its URL change causes. It is not
+     * state: nothing renders it, and it must never outlive the next `load` (S71 N1).
+     */
+    let createdScope: OnboardingScope | null = null;
 
     async function load(orgId: string, projectId: string | null): Promise<void> {
       newestLoad += 1;
       const loadSequence = newestLoad;
+      // Any load invalidates the create marker: a revisit, a route change or a Retry is a fresh
+      // read, and the activation after it must not inherit a skip meant for another one.
+      createdScope = null;
       patchState(store, { status: 'loading', failure: null });
       try {
         const progress = await progressService.load(orgId, projectId);
@@ -119,7 +122,6 @@ export const OnboardingStore = signalStore(
           failure: null,
           progress,
           viewStep: viewStepFor(progress.currentStep),
-          scope: { orgId, projectId },
         });
       } catch (error) {
         if (loadSequence !== newestLoad) {
@@ -131,7 +133,6 @@ export const OnboardingStore = signalStore(
           status: 'error',
           failure: failureFor(error),
           progress: null,
-          scope: null,
         });
       }
     }
@@ -152,20 +153,18 @@ export const OnboardingStore = signalStore(
       load,
 
       /**
-       * True when the published derivation already describes exactly this route scope. The shell
-       * asks before re-reading, so the load a create already ran is not issued a second time when
-       * the URL it caused re-enters the shell (S71 F1). Only a `ready` store holds anything: an
-       * error holds no derivation, and a load in flight has not published this scope yet.
+       * Take the one-shot create marker, if this is the activation the create caused. True only
+       * for the exact `(orgId, projectId)` `projectCreated` published, with that derivation still
+       * ready, and only once: the marker is cleared here, so the next activation of the same URL
+       * reads the server again instead of rendering a derivation nobody refreshed (S71 N1).
        */
-      holds(orgId: string, projectId: string | null): boolean {
-        const scope = store.scope();
-        return (
-          store.status() === 'ready' &&
-          store.progress() !== null &&
-          scope !== null &&
-          scope.orgId === orgId &&
-          scope.projectId === projectId
-        );
+      consumeCreated(orgId: string, projectId: string | null): boolean {
+        const created = createdScope;
+        if (created === null || created.orgId !== orgId || created.projectId !== projectId) {
+          return false;
+        }
+        createdScope = null;
+        return store.status() === 'ready' && store.progress() !== null;
       },
 
       /** Opens a step the server has already reached; a not-yet-reached step is ignored. */
@@ -209,8 +208,11 @@ export const OnboardingStore = signalStore(
         session.adoptCreatedProject(project);
         await load(project.org_id, project.id);
         if (store.status() === 'ready') {
-          // The create opened a step on the user's behalf, so the shell moves focus there even
-          // though the component the URL change activates is constructed after this patch.
+          // This one read is the create's, so the activation the URL change causes may take it
+          // instead of reading again — once (S71 F1). The create also opened a step on the user's
+          // behalf, so it cues a focus move even though the component that URL change activates
+          // is constructed after this patch (S71 F2).
+          createdScope = { orgId: project.org_id, projectId: project.id };
           patchState(store, { focusToken: store.focusToken() + 1 });
         }
       },
