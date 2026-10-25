@@ -12,11 +12,21 @@ import {
 import type { StepNumber } from '../data/step-derivation';
 import { OnboardingStore } from '../onboarding.store';
 import { CreateProjectPage } from '../steps/create-project.page';
+import { ConnectCiPage } from '../steps/connect-ci.page';
 import { OnboardingShellComponent } from './onboarding-shell.component';
 
 @Component({ selector: 'app-onboarding-create-project', template: '' })
 class CreateProjectStub {
   readonly orgId = input.required<string>();
+}
+
+@Component({
+  selector: 'app-onboarding-connect-ci',
+  template: '<div data-testid="connect-ci-page">{{ orgId() }} {{ projectId() }}</div>',
+})
+class ConnectCiStub {
+  readonly orgId = input.required<string>();
+  readonly projectId = input.required<string>();
 }
 
 /** The scope a stub store reports as the one-shot create marker (S71 F1/N1). */
@@ -48,7 +58,10 @@ function shellStore(createdScope: () => StubScope | null = () => null) {
     viewStep,
     currentStep,
     done,
-    project: signal(null),
+    project: signal<{ id: string; name: string } | null>({
+      id: 'project-1',
+      name: 'Storefront web',
+    }),
     focusToken,
     canGoNext: computed(() => done()[viewStep()] && viewStep() < 5),
     canGoBack: computed(() => viewStep() > 1),
@@ -116,8 +129,8 @@ describe('OnboardingShellComponent', () => {
       ],
     })
       .overrideComponent(OnboardingShellComponent, {
-        remove: { imports: [CreateProjectPage] },
-        add: { imports: [CreateProjectStub] },
+        remove: { imports: [CreateProjectPage, ConnectCiPage] },
+        add: { imports: [CreateProjectStub, ConnectCiStub] },
       })
       .compileComponents();
     fixture = TestBed.createComponent(OnboardingShellComponent);
@@ -146,7 +159,8 @@ describe('OnboardingShellComponent', () => {
     button('next').click();
     await fixture.whenStable();
     expect(store.viewStep()).toBe(2);
-    expect(root.querySelector('[data-testid="onboarding-step-pending"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="connect-ci-page"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="onboarding-step-pending"]')).toBeNull();
   });
 
   it('leaves focus alone on the first ready render of a page load', () => {
@@ -235,6 +249,27 @@ describe('OnboardingShellComponent', () => {
     expect(store.load).toHaveBeenCalledTimes(count);
   });
 
+  it('updates the connect child inputs coherently when the route scope changes', async () => {
+    store.viewStep.set(2);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-testid="connect-ci-page"]')?.textContent).toContain(
+      'org-1 project-1',
+    );
+    orgParams.next(convertToParamMap({ orgId: 'org-2' }));
+    store.project.set({ id: 'project-2', name: 'Other project' });
+    await fixture.whenStable();
+    expect(root.querySelector('[data-testid="connect-ci-page"]')?.textContent).toContain(
+      'org-2 project-2',
+    );
+  });
+
+  it.each([3, 4, 5] as const)('keeps step %s as the placeholder', async (step) => {
+    store.viewStep.set(step);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-testid="onboarding-step-pending"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="connect-ci-page"]')).toBeNull();
+  });
+
   it('renders the scope a create just published, and reads any other (S71 F1)', async () => {
     await setup({
       created: () => ({ orgId: 'org-1', projectId: 'project-1' }),
@@ -297,8 +332,10 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
     done: { 1: false, 2: false, 3: false, 4: false, 5: false },
     activationReadable: false,
     sampleRun: null,
-    bindingCount: 0,
-    tokenCount: 0,
+    bindings: [],
+    tokens: [],
+    bindingsTruncated: false,
+    tokensTruncated: false,
     currentStep: 1,
   };
   const CREATED: OnboardingProgress = {
@@ -330,8 +367,8 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
       ],
     })
       .overrideComponent(OnboardingShellComponent, {
-        remove: { imports: [CreateProjectPage] },
-        add: { imports: [CreateProjectStub] },
+        remove: { imports: [CreateProjectPage, ConnectCiPage] },
+        add: { imports: [CreateProjectStub, ConnectCiStub] },
       })
       .compileComponents();
     const activate = async (): Promise<ComponentFixture<OnboardingShellComponent>> => {

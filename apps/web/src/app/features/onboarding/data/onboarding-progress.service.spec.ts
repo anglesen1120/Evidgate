@@ -1,11 +1,17 @@
-// 09.2.1-T1.2 (plan 09.2.1 §9 "unit test: five independent seed combinations each resolve the
-// documented step", §10 T1.2; decisions (b) and (d); AC1, AC7): the derivation that turns server
-// resources into the wizard's position, with the data service stubbed so each seed is a single
-// fact to read.
+// 09.2.1-T1.2/T2 (plan 09.2.1 §9 "unit test: five independent seed combinations each resolve the
+// documented step", §10 T1.2/T2; decisions (b) and (d); AC1, AC2, AC7): the derivation that turns
+// server resources into the wizard's position, with the data service stubbed so each seed is a
+// single fact to read.
 //
 // What is pinned here:
 //   - the three project reads are issued together, not one after another (a resume is one round
-//     trip after the project, not three);
+//     trip after the project, not three), each with the page size the panel needs (`limit: 10` for
+//     step 2's two lists, `limit: 1` for the oldest run);
+//   - step 2 completes on *presence* — a binding with no token, a token with no binding — and the
+//     progress carries the rows themselves, in server order, so step 2's panel can render metadata
+//     for a project it resumed on (AC2, AC7: a resume re-issues nothing); each list also reports
+//     whether the server held more rows than the page it answered (`next_cursor`), so the panel
+//     never presents one page as the project's whole inventory;
 //   - step 3 completes only on a *terminal collection* state — `incomplete` counts, `canceled`
 //     does not (plan §6: "canceled in the wizard shows a retry control, never treated as complete");
 //   - step 4 reads the evidence revision of the oldest run, never the newest one;
@@ -112,12 +118,18 @@ function projectPage(items: readonly ProjectDto[]): ProjectListResponse {
   return { items: [...items], next_cursor: null };
 }
 
-function bindingPage(items: readonly CiBindingView[]): CiBindingListResponse {
-  return { items: [...items], next_cursor: null };
+function bindingPage(
+  items: readonly CiBindingView[],
+  nextCursor: string | null = null,
+): CiBindingListResponse {
+  return { items: [...items], next_cursor: nextCursor };
 }
 
-function tokenPage(items: readonly IngestTokenView[]): IngestTokenListResponse {
-  return { items: [...items], next_cursor: null };
+function tokenPage(
+  items: readonly IngestTokenView[],
+  nextCursor: string | null = null,
+): IngestTokenListResponse {
+  return { items: [...items], next_cursor: nextCursor };
 }
 
 function runPage(items: readonly RunSummary[]): RunPage {
@@ -287,26 +299,88 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     expect(progress.done).toEqual({ 1: true, 2: true, 3: false, 4: false, 5: false });
     expect(progress.currentStep).toBe(3);
     expect(progress.sampleRun).toBeNull();
-    expect(progress.bindingCount).toBe(1);
-    expect(progress.tokenCount).toBe(0);
-    // The explicit project is one `getProject` call, not a walk of the org's project list, and
-    // each project-scoped read asks for one row: presence is all the derivation needs.
+    // A binding with no token completes step 2, and the progress carries the row itself: step 2's
+    // panel renders metadata for what the project already has (AC2), never a secret again (AC7).
+    expect(progress.bindings).toEqual([BINDING]);
+    expect(progress.tokens).toEqual([]);
+    // The explicit project is one `getProject` call, not a walk of the org's project list. Step 2's
+    // two lists are read with the page size the panel shows; the run read still asks for one row.
     expect(data.projectReadIds).toEqual(['p-1']);
     expect(data.projectCalls).toEqual([]);
-    expect(data.bindingQueries).toEqual([{ limit: 1 }]);
-    expect(data.tokenQueries).toEqual([{ limit: 1 }]);
+    expect(data.bindingQueries).toEqual([{ limit: 10 }]);
+    expect(data.tokenQueries).toEqual([{ limit: 10 }]);
     expect(data.runQueries).toEqual([{ limit: 1 }]);
   });
 
-  it('resumes on step 3 for a project with an ingest token and no run', async () => {
+  it('resumes on step 3 for a project with an ingest token and no run (AC2)', async () => {
     data.projectsById.set('p-1', PROJECT);
     data.tokens = tokenPage([TOKEN]);
 
     const progress = await service.load('o-1', 'p-1');
 
     expect(progress.done[2]).toBe(true);
-    expect(progress.tokenCount).toBe(1);
+    expect(progress.tokens).toEqual([TOKEN]);
+    expect(progress.bindings).toEqual([]);
     expect(progress.currentStep).toBe(3);
+  });
+
+  it('carries the returned bindings and tokens in the order the server answered them', async () => {
+    data.projectsById.set('p-1', PROJECT);
+    // Server order is `(created_at, id)` ascending; the derivation must not sort, filter or
+    // deduplicate: the panel renders what the server listed, and a re-order would make the rows
+    // disagree with a later page of the same list.
+    const secondBinding: CiBindingView = {
+      ...BINDING,
+      id: 'b-2',
+      repository_full_name: 'acme/web',
+    };
+    const secondToken: IngestTokenView = { ...TOKEN, id: 't-2', prefix: 'egt_cd34' };
+    data.bindings = bindingPage([BINDING, secondBinding]);
+    data.tokens = tokenPage([TOKEN, secondToken]);
+
+    const progress = await service.load('o-1', 'p-1');
+
+    expect(progress.bindings.map((row) => row.id)).toEqual(['b-1', 'b-2']);
+    expect(progress.tokens.map((row) => row.id)).toEqual(['t-1', 't-2']);
+    // A second row changes nothing: `done[2]` is presence, and a binding's `status` is metadata
+    // the wizard renders as the server reported it — it never re-derives it.
+    expect(progress.done[2]).toBe(true);
+  });
+
+  it('leaves step 2 open for a project with neither a binding nor a token', async () => {
+    data.projectsById.set('p-1', PROJECT);
+
+    const progress = await service.load('o-1', 'p-1');
+
+    expect(progress.done[2]).toBe(false);
+    expect(progress.currentStep).toBe(2);
+    expect(progress.bindings).toEqual([]);
+    expect(progress.tokens).toEqual([]);
+  });
+
+  it('reports each list as truncated only when its answer carried a next cursor', async () => {
+    data.projectsById.set('p-1', PROJECT);
+    // The server answered one full page and a cursor: the rows are real, but they are not all of
+    // them, which is what the panel's notice says.
+    data.bindings = bindingPage([BINDING], 'cursor-b');
+    data.tokens = tokenPage([TOKEN], 'cursor-t');
+
+    const truncated = await service.load('o-1', 'p-1');
+
+    expect(truncated.bindingsTruncated).toBe(true);
+    expect(truncated.tokensTruncated).toBe(true);
+    // Presence, not truncation, is the done-condition: the derivation itself is unchanged.
+    expect(truncated.done[2]).toBe(true);
+    expect(truncated.currentStep).toBe(3);
+
+    // A list that ended on this page (`next_cursor: null`) is not truncated.
+    data.bindings = bindingPage([BINDING]);
+    data.tokens = tokenPage([TOKEN]);
+
+    const whole = await service.load('o-1', 'p-1');
+
+    expect(whole.bindingsTruncated).toBe(false);
+    expect(whole.tokensTruncated).toBe(false);
   });
 
   it('reads the bindings, tokens and runs together, before any of them answers', async () => {
@@ -332,8 +406,8 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     data.settleBindings(bindingPage([]));
     const progress = await loading;
 
-    expect(progress.bindingCount).toBe(0);
-    expect(progress.tokenCount).toBe(1);
+    expect(progress.bindings).toEqual([]);
+    expect(progress.tokens).toEqual([TOKEN]);
     expect(progress.currentStep).toBe(3);
   });
 
@@ -412,6 +486,12 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     expect(progress.project).toBeNull();
     expect(progress.currentStep).toBe(1);
     expect(progress.done).toEqual({ 1: false, 2: false, 3: false, 4: false, 5: false });
+    // No project means neither step 2 list, and no request that would need one.
+    expect(progress.bindings).toEqual([]);
+    expect(progress.tokens).toEqual([]);
+    // Neither list was read, so neither is reported as truncated.
+    expect(progress.bindingsTruncated).toBe(false);
+    expect(progress.tokensTruncated).toBe(false);
     // The oldest project is the only read: no project means no project-scoped request.
     expect(data.projectCalls).toEqual([{ orgId: 'o-1', query: { limit: 1 } }]);
     expect(data.bindingCalls).toBe(0);

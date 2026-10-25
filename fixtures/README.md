@@ -63,7 +63,7 @@ Fixture review checklist (per 00 §5.7 S3): synthetic ids/emails only; provenanc
 
 - `operation_id` — an `operationId` of `contracts/openapi.yaml`. The directory name, not the operation, is the fixture's identity: a second response of the same operation is a second directory.
 - `variant` — which response of that operation it is. `ok` is the answer the backend serves when no toggle is set, pinned at most once per operation; every other name is reached only through `FixtureToggles`. An operation may pin error states alone (`updateProject` has only its 412), in which case the un-pinned request answers 501 `fixture_not_found` rather than a fabricated success body.
-- `status` — the status the backend answers (200, 403, 412 here), the body of every non-2xx row being the 00 §9.2 envelope.
+- `status` — the status the backend answers (200, 201, 403, 412 here), the body of every non-2xx row being the 00 §9.2 envelope.
 - `headers` — the headers the backend sets before its own `Content-Type: application/json`; `X-Request-Id` only, and the error bodies echo that value as `error.request_id`.
 - `latency_ms` — the delay before the answer, so loading states are reachable with no proxy and no throttle.
 - `body` — the response body, and the part `apps/web/src/app/core/dev-fixtures/fixture-contract.spec.ts` validates against the response schema that `contracts/openapi.yaml` declares for (`operation_id`, `status`), so a fixture that drifts from the contract fails `npm run test -w apps/web`.
