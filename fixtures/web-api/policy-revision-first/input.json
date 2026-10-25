@@ -1,0 +1,38 @@
+{
+  "operation_id": "getPolicyRevision",
+  "variant": "first",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000f7",
+    "ETag": "\"018f0000-0000-7000-8000-00000000a001\""
+  },
+  "latency_ms": 0,
+  "body": {
+    "id": "018f0000-0000-7000-8000-00000000a001",
+    "project_id": "018f0000-0000-7000-8000-000000000011",
+    "revision_no": 1,
+    "hash": "sha256:92e22b8e57755e168c3fa4671c32f7eb0b399937720ecdf0d48d7e2212dd5815",
+    "state": "retired",
+    "body": {
+      "required_suites": ["checkout", "search"],
+      "required_cases": ["checkout/pay/card", "search/query/basic"],
+      "critical_cases": [
+        "018f0000-0000-7000-8000-00000000b001",
+        "018f0000-0000-7000-8000-00000000b002",
+        "018f0000-0000-7000-8000-00000000b003"
+      ],
+      "allowed_skips": ["search/query/typo-tolerance"],
+      "flaky_budget": 1,
+      "required_artifacts": ["junit", "trace"],
+      "collection_timeout_minutes": 30,
+      "late_window_minutes": 0,
+      "freshness_minutes": 2880,
+      "gating_refs": {
+        "default_branch": true
+      }
+    },
+    "created_by": "018f0000-0000-7000-8000-0000000000e1",
+    "created_at": "2026-08-12T07:30:00Z",
+    "version": 3
+  }
+}

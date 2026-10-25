@@ -123,7 +123,10 @@ test.describe('the tab strip names only tabs the caller may open (AC1)', () => {
 
     await expect.poll(() => settingsTabIds(page)).toEqual(['audit']);
     await expect.poll(() => activeSettingsTabId(page)).toBe('audit');
-    await expect.poll(() => settingsTabBodyId(page)).toBe('audit');
+    // 09.7.1-T6 shipped the audit tab body: the host is the real page, not the placeholder, so
+    // `settingsTabBodyId` (placeholder bodies only) answers null, as it does for members.
+    await expect(page.locator('app-audit-page')).toHaveCount(1);
+    expect(await settingsTabBodyId(page)).toBeNull();
   });
 
   test('a session with no reachable tab gets the empty state, not a refusal and not a redirect', async ({

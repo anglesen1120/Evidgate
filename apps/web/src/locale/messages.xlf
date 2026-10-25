@@ -2415,6 +2415,57 @@
       <trans-unit id="settings.secrets.pages-label" datatype="html"><source>Secret references pages</source></trans-unit>
       <trans-unit id="settings.secrets.rotate-unavailable-hint" datatype="html"><source>The rotation may have been applied. Reload the list and check the status before rotating again.</source></trans-unit>
       <trans-unit id="settings.secrets.reload" datatype="html"><source>Reload</source></trans-unit>
+      <trans-unit id="settings.policy.title" datatype="html"><source>Policy</source></trans-unit>
+      <trans-unit id="settings.policy.description" datatype="html"><source>Inspect policy revisions and compare their fields. Open a revision using its identifier.</source></trans-unit>
+      <trans-unit id="settings.policy.revision-id" datatype="html"><source>Revision ID</source></trans-unit>
+      <trans-unit id="settings.policy.open" datatype="html"><source>Open revision</source></trans-unit>
+      <trans-unit id="settings.policy.narrow" datatype="html"><source>Inspection only on narrow screens. Use a wider screen to publish a revision.</source></trans-unit>
+      <trans-unit id="settings.policy.no-selection" datatype="html"><source>No revision selected. Enter a revision ID to inspect its policy.</source></trans-unit>
+      <trans-unit id="settings.policy.not-found" datatype="html"><source>Revision not found.</source></trans-unit>
+      <trans-unit id="settings.policy.loading" datatype="html"><source>Loading revisions…</source></trans-unit>
+      <trans-unit id="settings.policy.reload" datatype="html"><source>Reload revisions</source></trans-unit>
+      <trans-unit id="settings.policy.published-new" datatype="html"><source>New revision published.</source></trans-unit>
+      <trans-unit id="settings.policy.published-unchanged" datatype="html"><source>Policy unchanged. Existing revision returned.</source></trans-unit>
+      <trans-unit id="settings.policy.revisions" datatype="html"><source>Revisions</source></trans-unit>
+      <trans-unit id="settings.policy.revisions-empty" datatype="html"><source>No revisions available.</source></trans-unit>
+      <trans-unit id="settings.policy.revision" datatype="html"><source>Revision</source></trans-unit>
+      <trans-unit id="settings.policy.head" datatype="html"><source>Head</source></trans-unit>
+      <trans-unit id="settings.policy.hash" datatype="html"><source>Hash</source></trans-unit>
+      <trans-unit id="settings.policy.created" datatype="html"><source>Created</source></trans-unit>
+      <trans-unit id="settings.policy.more" datatype="html"><source>Load more</source></trans-unit>
+      <trans-unit id="settings.policy.gating" datatype="html"><source>Gating</source></trans-unit>
+      <trans-unit id="settings.policy.advisory" datatype="html"><source>Advisory</source></trans-unit>
+      <trans-unit id="settings.policy.mode" datatype="html"><source>Mode</source></trans-unit>
+      <trans-unit id="settings.policy.mode-unavailable" datatype="html"><source>Mode unavailable</source></trans-unit>
+      <trans-unit id="settings.policy.diff-title" datatype="html"><source>Compare revisions</source></trans-unit>
+      <trans-unit id="settings.policy.diff-base" datatype="html"><source>Base revision</source></trans-unit>
+      <trans-unit id="settings.policy.diff-target" datatype="html"><source>Target revision</source></trans-unit>
+      <trans-unit id="settings.policy.diff-choose" datatype="html"><source>Choose a revision</source></trans-unit>
+      <trans-unit id="settings.policy.diff-loading" datatype="html"><source>Loading revision bodies…</source></trans-unit>
+      <trans-unit id="settings.policy.diff-error" datatype="html"><source>Revision bodies could not be loaded.</source></trans-unit>
+      <trans-unit id="settings.policy.diff-retry" datatype="html"><source>Reload comparison</source></trans-unit>
+      <trans-unit id="settings.policy.diff-empty" datatype="html"><source>Select two revisions to compare their fields.</source></trans-unit>
+      <trans-unit id="settings.policy.diff-same" datatype="html"><source>No field differences.</source></trans-unit>
+      <trans-unit id="settings.policy.diff-before" datatype="html"><source>Before</source></trans-unit>
+      <trans-unit id="settings.policy.diff-after" datatype="html"><source>After</source></trans-unit>
+      <trans-unit id="settings.policy.diff-absent" datatype="html"><source>Not present</source></trans-unit>
+      <trans-unit id="settings.policy.diff-added" datatype="html"><source>Added</source></trans-unit>
+      <trans-unit id="settings.policy.diff-removed" datatype="html"><source>Removed</source></trans-unit>
+      <trans-unit id="settings.policy.diff-changed" datatype="html"><source>Changed</source></trans-unit>
+      <trans-unit id="settings.policy.diff-truncated" datatype="html"><source>This comparison is truncated. Not all field differences are shown.</source></trans-unit>
+      <trans-unit id="settings.policy.publish-title" datatype="html"><source>Publish revision</source></trans-unit>
+      <trans-unit id="settings.policy.publish-description" datatype="html"><source>Review the JSON policy body before publishing. Publishing does not change the activation mode.</source></trans-unit>
+      <trans-unit id="settings.policy.body" datatype="html"><source>Policy body (JSON object)</source></trans-unit>
+      <trans-unit id="settings.policy.bytes" datatype="html"><source>UTF-8 bytes</source></trans-unit>
+      <trans-unit id="settings.policy.seed-loading" datatype="html"><source>Loading policy body…</source></trans-unit>
+      <trans-unit id="settings.policy.publishing" datatype="html"><source>Publishing revision…</source></trans-unit>
+      <trans-unit id="settings.policy.seed-error" datatype="html"><source>The policy body could not be loaded. Close and reopen to try again.</source></trans-unit>
+      <trans-unit id="settings.policy.invalid-json" datatype="html"><source>Enter a valid JSON object.</source></trans-unit>
+      <trans-unit id="settings.policy.too-large" datatype="html"><source>The policy body exceeds the 65536-byte limit.</source></trans-unit>
+      <trans-unit id="settings.policy.cancel" datatype="html"><source>Cancel</source></trans-unit>
+      <trans-unit id="settings.policy.conflict-not-set" datatype="html"><source>(not set)</source></trans-unit>
+      <trans-unit id="settings.policy.load-failed" datatype="html"><source>The policy revisions could not be loaded.</source></trans-unit>
+      <trans-unit id="settings.policy.load-retry" datatype="html"><source>Retry</source></trans-unit>
     </body>
   </file>
 </xliff>

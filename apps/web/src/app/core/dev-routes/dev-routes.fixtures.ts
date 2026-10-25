@@ -15,6 +15,16 @@
 // gates. Only the phase gate is omitted on this review address; no product route or tab changes.
 // Page-local SecretsStore/RevealSlot providers are the real ones. This file-replacement seam is
 // absent from production, so the review address can never expose a phase-later product route there.
+//
+// 09.7.1-T4 / AC1-AC5 browser review: Policy is the same shape. It is a phase-G4 product tab in the
+// G1 build, so `/dev/settings-policy/orgs/:orgId` mounts its real page inside the normal app shell,
+// under the same authenticated org/project session and the organization/read + policy/read
+// permission gates (the exact pair the product tab is gated on: `settings-tabs.ts` is unchanged).
+// Only the phase gate is omitted on this review address; no product route or tab changes. The
+// page-local PolicyStore provider is the real one, and the publish control stays grant-derived —
+// `session.has('policy:write')`, absent from the DOM without it. The same seam rule applies: this
+// file is replaced in the `development`/`fixtures` configurations only, so the review address can
+// never expose a phase-later product route in production.
 
 import type { Routes } from '@angular/router';
 
@@ -43,6 +53,24 @@ export function devRoutes(): Routes {
           loadComponent: () =>
             // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph; mounts the real G2 page without changing its product phase.
             import('../../features/settings/secrets/secrets.page').then((m) => m.SecretsPage),
+        },
+      ],
+    },
+    {
+      path: 'dev/settings-policy',
+      component: ShellComponent,
+      children: [
+        {
+          path: 'orgs/:orgId',
+          canMatch: [
+            authGuard,
+            orgScopeGuard,
+            permissionGuard('organization:read'),
+            permissionGuard('policy:read'),
+          ],
+          loadComponent: () =>
+            // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph; mounts the real G4 page without changing its product phase.
+            import('../../features/settings/policy/policy.page').then((m) => m.PolicyPage),
         },
       ],
     },
