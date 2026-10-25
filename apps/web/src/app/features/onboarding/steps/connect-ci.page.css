@@ -97,6 +97,13 @@ textarea:disabled {
 .busy-status {
   min-block-size: var(--eg-leading-sm);
 }
+/* 09.2.1-T7: the derived health panel and the CLI quickstart sit between the intro region and
+   the two create panels. They take the page grid's gap and must shrink with the column. */
+app-connection-health,
+app-cli-quickstart {
+  display: block;
+  min-inline-size: var(--eg-space-0);
+}
 .metadata {
   display: grid;
   gap: var(--eg-space-4);

@@ -5,8 +5,8 @@
 //
 // What is pinned here:
 //   - the three project reads are issued together, not one after another (a resume is one round
-//     trip after the project, not three), each with the page size the panel needs (`limit: 10` for
-//     step 2's two lists, `limit: 1` for the oldest run);
+//     trip after the project, not three), each with the page size the panel needs
+//     (`CONNECT_LIST_LIMIT` rows for step 2's two lists, `limit: 1` for the oldest run);
 //   - step 2 completes on *presence* — a binding with no token, a token with no binding — and the
 //     progress carries the rows themselves, in server order, so step 2's panel can render metadata
 //     for a project it resumed on (AC2, AC7: a resume re-issues nothing); each list also reports
@@ -41,7 +41,11 @@ import {
   isApiRequestError,
   type ApiErrorKind,
 } from '../../../core/http/api-error';
-import { OnboardingProgressService, type OnboardingProgress } from './onboarding-progress.service';
+import {
+  CONNECT_LIST_LIMIT,
+  OnboardingProgressService,
+  type OnboardingProgress,
+} from './onboarding-progress.service';
 
 type ProjectListQuery = NonNullable<ListProjectsData['query']>;
 
@@ -171,6 +175,7 @@ class FakeOnboardingDataService {
   projectFailure: Error | null = null;
   projectReadFailure: Error | null = null;
   bindingFailure: Error | null = null;
+  tokenFailure: Error | null = null;
   runStateFailure: Error | null = null;
 
   readonly projectCalls: Array<{ orgId: string; query: ProjectListQuery }> = [];
@@ -235,6 +240,9 @@ class FakeOnboardingDataService {
   listIngestTokens(_projectId: string, query: unknown = {}): Promise<IngestTokenListResponse> {
     this.tokenCalls += 1;
     this.tokenQueries.push(query);
+    if (this.tokenFailure !== null) {
+      return Promise.reject(this.tokenFailure);
+    }
     if (this.deferProjectReads) {
       return new Promise<IngestTokenListResponse>((resolve) => this.pendingTokens.push(resolve));
     }
@@ -307,8 +315,8 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     // two lists are read with the page size the panel shows; the run read still asks for one row.
     expect(data.projectReadIds).toEqual(['p-1']);
     expect(data.projectCalls).toEqual([]);
-    expect(data.bindingQueries).toEqual([{ limit: 10 }]);
-    expect(data.tokenQueries).toEqual([{ limit: 10 }]);
+    expect(data.bindingQueries).toEqual([{ limit: CONNECT_LIST_LIMIT }]);
+    expect(data.tokenQueries).toEqual([{ limit: CONNECT_LIST_LIMIT }]);
     expect(data.runQueries).toEqual([{ limit: 1 }]);
   });
 
@@ -530,6 +538,36 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     const cause = await rejectionOf(service.load('o-1', 'p-1'));
 
     expect(cause).toBe(failure);
+  });
+
+  it('propagates a 403 or 404 from either step-2 list unchanged', async () => {
+    data.projectsById.set('p-1', PROJECT);
+    // Both lists are read on every resume, so each of the four refusals has to reach the caller as
+    // the gateway's own `ApiRequestError`, by identity: a `not_found` from a list must never be
+    // read as the not-found *project* pattern (the service builds its own error for that, with
+    // different text), and a rejected load publishes no step and no partial progress — no
+    // `OnboardingProgress` exists to carry a guessed one.
+    for (const kind of ['forbidden', 'not_found'] as const) {
+      const status = kind === 'forbidden' ? 403 : 404;
+      for (const list of ['bindings', 'tokens'] as const) {
+        const failure = apiError(kind, status);
+        data.bindingFailure = list === 'bindings' ? failure : null;
+        data.tokenFailure = list === 'tokens' ? failure : null;
+
+        const cause = await rejectionOf(service.load('o-1', 'p-1'));
+
+        expect(cause).toBe(failure);
+        expect(isApiRequestError(cause)).toBe(true);
+        if (isApiRequestError(cause)) {
+          expect(cause.error.kind).toBe(kind);
+          expect(cause.error.status).toBe(status);
+          // The service's own not-found refusal reads differently: this is the list's answer.
+          expect(cause.error.message).toBe(`${kind} (test)`);
+        }
+      }
+    }
+    data.bindingFailure = null;
+    data.tokenFailure = null;
   });
 
   it('propagates a run refusal unchanged', async () => {
