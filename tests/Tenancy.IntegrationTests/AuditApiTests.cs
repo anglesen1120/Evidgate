@@ -91,7 +91,10 @@ public sealed class AuditApiTests
         var bare = Guid.CreateVersion7();
         await _fixture.ExecuteAsync(
             database,
-            $"insert into public.membership (id, org_id, user_id, invited_email, status) values (gen_random_uuid(), '{org}', '{bare}', 'bare@example.test', 'active')");
+            $"""
+            insert into public."user" (id, email) values ('{bare}', 'bare@example.test');
+            insert into public.membership (id, org_id, user_id, invited_email, status) values (gen_random_uuid(), '{org}', '{bare}', 'bare@example.test', 'active')
+            """);
 
         var denied = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}/audit", TenancyApiFactory.Resolved(user: bare));
         denied.Status.ShouldBe(HttpStatusCode.Forbidden);

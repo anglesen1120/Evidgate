@@ -87,6 +87,7 @@ public sealed class WaiverQaTests
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
+            insert into public."user" (id, email) values ('{userId}', 'member-{userId:N}@example.test');
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values ('{membershipId}', '{world.Org}', '{userId}', 'member-{userId:N}@example.test', 'active')
             """);

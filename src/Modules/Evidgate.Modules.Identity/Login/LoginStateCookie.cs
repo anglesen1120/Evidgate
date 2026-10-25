@@ -10,7 +10,8 @@ namespace Evidgate.Modules.Identity.Login;
 /// <summary>
 /// The pending login a browser carries between <c>start</c> and <c>callback</c> (02.3.1 §5): which
 /// provider the attempt belongs to, its one-time <c>state</c>, the nonce the ID token must echo, the PKCE
-/// verifier, the allowlisted <c>returnUrl</c> and when the attempt began.
+/// verifier, the allowlisted <c>returnUrl</c>, when the attempt began, and whether the attempt is a sign-in
+/// or an explicit second-provider link (02.3.1-T2, Q4).
 /// </summary>
 /// <param name="Version">Payload schema version; a value the code does not know is refused.</param>
 /// <param name="Provider">Route value of the provider that issued the attempt.</param>
@@ -19,6 +20,10 @@ namespace Evidgate.Modules.Identity.Login;
 /// <param name="Verifier">PKCE verifier (RFC 7636); only its S256 challenge left the server.</param>
 /// <param name="ReturnUrl">Already allowlisted app path (<see cref="ReturnUrlPolicy"/>).</param>
 /// <param name="IssuedAt">When the attempt began, for the lifetime check.</param>
+/// <param name="Purpose"><see cref="PurposeLogin"/> for a sign-in, <see cref="PurposeLink"/> for an explicit
+/// link; any other value is refused with the rest of an unknown payload.</param>
+/// <param name="LinkUserId">The account a link was started for; set exactly when <paramref name="Purpose"/> is
+/// <see cref="PurposeLink"/>.</param>
 internal sealed record LoginStatePayload(
     int Version,
     string Provider,
@@ -26,7 +31,16 @@ internal sealed record LoginStatePayload(
     string Nonce,
     string Verifier,
     string ReturnUrl,
-    DateTimeOffset IssuedAt);
+    DateTimeOffset IssuedAt,
+    string Purpose,
+    Guid? LinkUserId)
+{
+    /// <summary>Purpose of a state cookie <c>start</c> wrote: the browser is signing in.</summary>
+    public const string PurposeLogin = "login";
+
+    /// <summary>Purpose of a state cookie a link start wrote: the browser is adding a provider to an account.</summary>
+    public const string PurposeLink = "link";
+}
 
 /// <summary>The source-generated JSON of <see cref="LoginStatePayload"/> (never on the wire; inside the protected cookie only).</summary>
 [JsonSerializable(typeof(LoginStatePayload))]
@@ -82,8 +96,13 @@ internal sealed class LoginStateCookie(
     /// </summary>
     internal const string ApplicationName = "Evidgate";
 
-    /// <summary>Payload schema version this build writes and reads.</summary>
-    internal const int PayloadVersion = 1;
+    /// <summary>
+    /// Payload schema version this build writes and reads. Version 2 added <see cref="LoginStatePayload.Purpose"/>
+    /// and <see cref="LoginStatePayload.LinkUserId"/>: a version-1 cookie written by an earlier build is refused
+    /// (the browser starts the login again), never upgraded, because a payload of unknown shape must not be
+    /// interpreted as a sign-in.
+    /// </summary>
+    internal const int PayloadVersion = 2;
 
     /// <summary>Tolerated clock difference for a payload stamped in the future.</summary>
     private static readonly TimeSpan FutureSkew = TimeSpan.FromSeconds(60);
@@ -127,7 +146,8 @@ internal sealed class LoginStateCookie(
 
     /// <summary>
     /// Reads a cookie value: null when it is absent, unprotected by another key or purpose, unparsable,
-    /// unknown in version, or outside its lifetime. Never throws for a client-supplied value.
+    /// unknown in version or in purpose, inconsistent with its own purpose, or outside its lifetime. Never
+    /// throws for a client-supplied value.
     /// </summary>
     /// <param name="value">The raw <c>__Host-evidgate_login</c> value, or null.</param>
     public LoginStatePayload? Unprotect(string? value)
@@ -156,7 +176,7 @@ internal sealed class LoginStateCookie(
             return null;
         }
 
-        if (payload is null || payload.Version != PayloadVersion)
+        if (payload is null || payload.Version != PayloadVersion || !ShapeIsKnown(payload))
         {
             return null;
         }
@@ -165,6 +185,19 @@ internal sealed class LoginStateCookie(
 
         return age <= Lifetime && age >= -FutureSkew ? payload : null;
     }
+
+    /// <summary>
+    /// Whether the payload's own fields agree with each other: exactly the two purposes this build knows, and
+    /// a <see cref="LoginStatePayload.LinkUserId"/> set exactly on the link one. A payload that disagrees is
+    /// refused whole, so no route can read a link as a sign-in (or the reverse) from a half-valid cookie.
+    /// </summary>
+    /// <param name="payload">The unprotected payload.</param>
+    private static bool ShapeIsKnown(LoginStatePayload payload) => payload.Purpose switch
+    {
+        LoginStatePayload.PurposeLogin => payload.LinkUserId is null,
+        LoginStatePayload.PurposeLink => payload.LinkUserId is not null,
+        _ => false,
+    };
 
     /// <summary>The one set of attributes both the write and the deletion use, so a browser replaces the cookie.</summary>
     private static CookieOptions Attributes(TimeSpan? maxAge) => new()

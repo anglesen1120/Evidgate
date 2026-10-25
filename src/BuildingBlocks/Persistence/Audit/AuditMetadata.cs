@@ -33,6 +33,9 @@ public static partial class AuditMetadata
         // 07.1.1-T4.1: the activation records which revision it moved the pointer from and the mode it stored.
         "previous_id",
         "mode",
+        // 02.3.1-T2: login/link/bind rows record which provider authenticated the identity and how an invite bound (names, never an address or subject).
+        "provider",
+        "via",
     };
 
     /// <summary>Throws if <paramref name="metadata"/> breaks the allowlist; returns it otherwise.</summary>

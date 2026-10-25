@@ -134,8 +134,10 @@ internal static class SelfEscalation
     /// the address of the caller's own membership (a pending row addressed to the caller
     /// binds to them later). The one definition GrantRole and InviteMember share, so the
     /// two routes cannot disagree on what "self" means. <c>invited_email</c> is stored
-    /// normalised (InviteEmail.Normalize and 0011's check), so an ordinal comparison
-    /// settles the address arm.
+    /// normalised (InviteEmail.Normalize and 0011's check), and both sides are compared in
+    /// their <see cref="EmailAlias.Canonical"/> form (D-S81-Q2): a <c>+tag</c> suffix or a
+    /// Gmail dot/`googlemail.com` spelling of the caller's own mailbox is the caller, so an
+    /// invite sent to that form is the same self-grant as one sent to the plain address.
     /// </summary>
     internal static async Task<bool> IsSelfTargetAsync(
         IdentityDbContext context,
@@ -159,6 +161,9 @@ internal static class SelfEscalation
             .ConfigureAwait(false);
 
         return ownMembership is not null
-            && string.Equals(ownMembership.InvitedEmail, targetEmail, StringComparison.Ordinal);
+            && string.Equals(
+                EmailAlias.Canonical(ownMembership.InvitedEmail),
+                EmailAlias.Canonical(targetEmail),
+                StringComparison.Ordinal);
     }
 }

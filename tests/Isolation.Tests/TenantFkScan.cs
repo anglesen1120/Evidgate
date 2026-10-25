@@ -97,7 +97,15 @@ internal sealed record TenantFkScanResult(
 /// <c>organization.id</c> is globally unique). Every other reference to a table
 /// without <c>org_id</c> is a finding, because such a parent can still be
 /// org-scoped — the <c>organization</c> root is — so a column other than
-/// <c>org_id</c> could name another org's row.
+/// <c>org_id</c> could name another org's row. The one exception is a
+/// <c>platform</c> table of <c>contracts/rls-exceptions.txt</c> other than the root
+/// (02 D12): a row of <c>public."user"</c>, <c>public.user_identity</c>,
+/// <c>public.session</c> or <c>public.permission</c> carries no org at all, so no
+/// column of a tenant table can name another org's row through it —
+/// <c>membership.user_id → public."user"</c> (0044) is the reference this rule must
+/// let through while the root stays under it. <c>catalogue</c> and
+/// <c>mechanism</c> tables keep the rule, because both kinds do carry
+/// <c>org_id</c>.
 /// </description></item>
 /// </list>
 /// <para>
@@ -117,6 +125,9 @@ internal static class TenantFkScan
 
     /// <summary>The composite tenant key, sorted ordinal — <c>"id"</c> sorts before <c>"org_id"</c>.</summary>
     private static readonly string[] TenantKeyColumns = [TenantKeyColumn, TenantColumn];
+
+    /// <summary>The tenant root of 00 §5.4.1: the one <c>platform</c> table rule 3 still applies to.</summary>
+    private const string TenantRoot = "public.organization";
 
     /// <summary>An out-of-set reference on the tenant column itself (rule 3).</summary>
     private static readonly string[] TenantColumnOnly = [TenantColumn];
@@ -144,7 +155,7 @@ internal static class TenantFkScan
         foreach (var table in tenantTables)
         {
             CheckTenantKey(schema, table, findings);
-            CheckForeignKeys(schema, table, findings);
+            CheckForeignKeys(schema, table, exceptions, findings);
         }
 
         return new TenantFkScanResult(schema, exceptions, excluded, tenantTables, findings);
@@ -167,10 +178,11 @@ internal static class TenantFkScan
         }
     }
 
-    /// <summary>00 §5.4.1/§5.4.6: a parent with <c>org_id</c> takes the composite key (rule 2); one without takes the org column (rule 3).</summary>
+    /// <summary>00 §5.4.1/§5.4.6: a parent with <c>org_id</c> takes the composite key (rule 2); one without takes the org column (rule 3), unless it is a platform table.</summary>
     private static void CheckForeignKeys(
         TenantSchema schema,
         string table,
+        IReadOnlyList<RlsException> exceptions,
         List<TenantFkFinding> findings)
     {
         foreach (var foreignKey in schema.ForeignKeysOf(table))
@@ -180,6 +192,11 @@ internal static class TenantFkScan
 
             if (!schema.HasOrgId(foreignKey.PrincipalTable))
             {
+                if (IsPlatformPrincipal(exceptions, foreignKey.PrincipalTable))
+                {
+                    continue;
+                }
+
                 if (!foreignKey.Columns.AsSpan().SequenceEqual(TenantColumnOnly))
                 {
                     findings.Add(new TenantFkFinding(
@@ -218,6 +235,17 @@ internal static class TenantFkScan
             }
         }
     }
+
+    /// <summary>
+    /// True when <paramref name="principal"/> is a <c>platform</c> table of the exception list other than
+    /// the tenant root: such a row carries no <c>org_id</c>, so a tenant table may reference it through any
+    /// column (<c>membership.user_id → public."user"</c>, 0044) without being able to name another org's row.
+    /// </summary>
+    private static bool IsPlatformPrincipal(IReadOnlyList<RlsException> exceptions, string principal) =>
+        !string.Equals(principal, TenantRoot, StringComparison.Ordinal)
+        && exceptions.Any(exception =>
+            string.Equals(exception.Table, principal, StringComparison.Ordinal)
+            && string.Equals(exception.Kind, "platform", StringComparison.Ordinal));
 
     /// <summary>
     /// <c>org_id</c> pairs with <c>org_id</c> and the referenced <c>id</c> pairs

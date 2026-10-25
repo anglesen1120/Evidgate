@@ -29,6 +29,13 @@ internal static class IdentityTestData
         var userId = Guid.CreateVersion7();
         var membershipId = Guid.CreateVersion7();
 
+        // 0044's `membership_user_fk` (membership.user_id -> public."user") makes a bound
+        // membership name a real account, so the account is seeded before the membership.
+        await fixture.SeedAsync(
+            """insert into public."user" (id, email) values (@id, @email)""",
+            [("id", userId), ("email", $"member-{userId:N}@example.test")],
+            cancellationToken).ConfigureAwait(false);
+
         await fixture.SeedAsync(
             """
             insert into public.membership

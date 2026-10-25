@@ -224,6 +224,10 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
+            // First, so the caller's `user` row exists before anything the route writes can reference it
+            // (0044's membership_user_fk names it on POST /v1/orgs — see SessionUserSeed).
+            services.AddSingleton<IStartupFilter>(new SessionUserStartupFilter(_connectionString));
+
             if (_realResolver)
             {
                 // In CI mode only the production ci_producer authenticator identifies service callers;
@@ -259,6 +263,35 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
                 services.AddSingleton<IPermissionEvaluator>(new GrantAllEvaluator());
             }
         });
+    }
+
+    /// <summary>
+    /// Seeds the <c>public."user"</c> row a signed-in caller implies for the id the <c>X-Test-User</c> header
+    /// names (0044's <c>membership_user_fk</c>; see <see cref="SessionUserSeed"/>). The stand-in authenticator
+    /// takes the caller's place, so it also takes the place of the login upsert that writes this row.
+    /// </summary>
+    private sealed class SessionUserStartupFilter(string appConnectionString) : IStartupFilter
+    {
+        /// <inheritdoc />
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use(async (context, nextMiddleware) =>
+            {
+                if (Guid.TryParse(context.Request.Headers[UserHeader], out var user))
+                {
+                    await SessionUserSeed.EnsureAsync(
+                            appConnectionString,
+                            user,
+                            context.Request.Headers[EmailHeader].ToString(),
+                            context.RequestAborted)
+                        .ConfigureAwait(false);
+                }
+
+                await nextMiddleware().ConfigureAwait(false);
+            });
+
+            next(app);
+        };
     }
 
     /// <summary>Publishes the tenant and the caller the <c>X-Test-*</c> headers name.</summary>

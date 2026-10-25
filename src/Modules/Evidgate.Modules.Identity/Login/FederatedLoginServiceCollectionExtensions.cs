@@ -1,4 +1,6 @@
+using Evidgate.Modules.Identity.Login.Audit;
 using Evidgate.Modules.Identity.Login.Completion;
+using Evidgate.Modules.Identity.Login.Linking;
 using Evidgate.Modules.Identity.Sessions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
@@ -58,6 +60,10 @@ internal static class FederatedLoginServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<LoginStateCookie>();
+
+        // 02.3.1-T2 (Q1): the staged-invite cookie of POST /v1/auth/invite-token. Same Data Protection ring and
+        // a purpose of its own, so a login cookie can never be read as an invite one (or the reverse).
+        services.TryAddSingleton<InviteTokenCookie>();
         services.TryAddSingleton<LoginReplayCache>();
 
         // 02.3.1-T1.4: the real completion — the user/identity upsert, the active-membership check, the
@@ -66,6 +72,15 @@ internal static class FederatedLoginServiceCollectionExtensions
         services.AddSessions(configuration);
         services.TryAddSingleton<CompleteLoginCommandHandler>();
         services.TryAddSingleton<ILoginCompletion, LoginCommandCompletion>();
+
+        // 02.3.1-T2.2 (Q5): the identity audit writer. Both the login completion and the linking confirm
+        // record through it, and it is a singleton for the same reason they are: it opens one tenant scope
+        // and one transaction per org itself (the caller is pre-tenant) and holds nothing per request.
+        services.TryAddSingleton<IIdentityAuditWriter, IdentityAuditWriter>();
+
+        // 02.3.1-T2.2 (Q4): the explicit second-provider link — the pre-tenant session lookup the linking
+        // routes authenticate with, the staged-link cookie, the identity writer and the callback's link seam.
+        services.AddIdentityLinking();
 
         return services;
     }

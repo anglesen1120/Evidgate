@@ -40,6 +40,8 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate_resolve.session_create"] = ["session_id", "expires_at", "status"],
         ["evidgate_resolve.invite_by_secret"] = ["org_id", "membership_id"],
         ["evidgate_resolve.invite_autobind_candidates"] = ["org_id", "membership_id"],
+        ["evidgate_resolve.session_user"] = ["user_id"],
+        ["evidgate_resolve.login_link_identity"] = ["outcome", "moved_from_user_id"],
     };
 
     /// <summary>
@@ -52,6 +54,8 @@ public sealed class ResolverTests : HarnessTest
     {
         "evidgate_resolve.login_upsert_identity",
         "evidgate_resolve.session_create",
+        "evidgate_resolve.session_user",
+        "evidgate_resolve.login_link_identity",
     };
 
     /// <summary>

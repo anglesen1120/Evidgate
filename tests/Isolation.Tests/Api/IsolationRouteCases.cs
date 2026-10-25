@@ -176,6 +176,13 @@ public static class IsolationRouteCases
     /// </summary>
     private const string TokenInvalidCode = "token_invalid";
 
+    /// <summary>
+    /// A token with the contract's shape (<c>evgi_&lt;12-char prefix&gt;_&lt;43-char secret&gt;</c>,
+    /// <c>InviteTokenFormat</c>) and no matching row: the invite staging route of 02.3.1-T2 validates the shape
+    /// only — whether the token exists is decided by the binder at login — so this is the body it accepts.
+    /// </summary>
+    private static readonly string InviteTokenProbe = "evgi_" + "probe1234567" + "_" + new string('A', 43);
+
     /// <summary>Every case, one per served route.</summary>
     public static IReadOnlyList<RouteCase> All { get; } = Build();
 
@@ -530,6 +537,66 @@ public static class IsolationRouteCases
                 "/v1/auth/oidc/google/callback?code=probe&state=probe",
                 StatusCodes.Status401Unauthorized,
                 TokenInvalidCode)),
+        ]),
+
+        // ---- Invite staging + explicit linking (InviteTokenEndpoints.cs, LinkEndpoints.cs; 02.3.1-T2) ------------
+        // Pre-tenant like the login routes: none of them resolves a tenant, so org B's member headers can change
+        // nothing. The invite route accepts a body with the token's SHAPE and answers 204 plus the
+        // `__Host-evidgate_invite` cookie (nothing is looked up: whether the token exists is the binder's business
+        // at login); the four link routes answer the typed 503 `unavailable` in this host, which provisions no
+        // session pepper, so the session lookup refuses before any tenant read.
+        Case("POST", "/v1/auth/invite-token", (route, w) =>
+        [
+            new(route, "invite staging stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "invite staging stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Post, "/v1/auth/invite-token", new JsonObject
+                {
+                    ["invite_token"] = InviteTokenProbe,
+                }),
+                StatusCodes.Status204NoContent,
+                expectedCode: null)),
+        ]),
+        Case("POST", "/v1/auth/link/{provider}", (route, w) =>
+        [
+            new(route, "link start stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "link start stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Post, "/v1/auth/link/google"),
+                StatusCodes.Status503ServiceUnavailable,
+                UnavailableCode)),
+        ]),
+        Case("GET", "/v1/auth/link/pending", (route, w) =>
+        [
+            new(route, "staged link read stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "staged link read stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Get, "/v1/auth/link/pending"),
+                StatusCodes.Status503ServiceUnavailable,
+                UnavailableCode)),
+        ]),
+        Case("DELETE", "/v1/auth/link/pending", (route, w) =>
+        [
+            new(route, "staged link discard stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "staged link discard stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Delete, "/v1/auth/link/pending"),
+                StatusCodes.Status503ServiceUnavailable,
+                UnavailableCode)),
+        ]),
+        Case("POST", "/v1/auth/link/confirm", (route, w) =>
+        [
+            new(route, "link confirm stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "link confirm stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Post, "/v1/auth/link/confirm"),
+                StatusCodes.Status503ServiceUnavailable,
+                UnavailableCode)),
         ]),
 
         // ---- Catalog (CatalogEndpoints.cs:39-83) ---------------------------------------------------------------
@@ -1844,6 +1911,7 @@ public sealed class RouteProbeRunner
         ArgumentNullException.ThrowIfNull(orgA);
         const string name = "creates only the caller's own org, never attaches to org A";
         var founder = new IsolationUser("fresh", Guid.CreateVersion7(), "fresh@example.test", Guid.Empty, []);
+        await SeedUserRowAsync(founder.UserId, founder.Email).ConfigureAwait(false);
         var caller = ProbeCaller.Member("fresh user (X-Evidgate-Org: A)", founder, orgA.Id);
         var violations = new List<string>();
 
@@ -1956,35 +2024,63 @@ public sealed class RouteProbeRunner
     /// <param name="url">The request URL (a registered provider route value, with the query a refused callback carries).</param>
     /// <param name="expectedStatus">The exact status both callers must receive in this host.</param>
     /// <param name="expectedCode">The exact 00 §9.2 <c>error.code</c> both callers must receive.</param>
-    public async Task<IReadOnlyList<string>> PreTenantLoginAsync(
+    public Task<IReadOnlyList<string>> PreTenantLoginAsync(
         ApiRoute route,
         string name,
         IsolationWorld world,
         string url,
         int expectedStatus,
-        string expectedCode)
+        string expectedCode) =>
+        PreTenantAnswerAsync(route, name, world, new ProbeRequest(HttpMethod.Get, url), expectedStatus, expectedCode);
+
+    /// <summary>
+    /// A pre-tenant route of 02.3.1-T2 (<c>POST /v1/auth/invite-token</c> and the four
+    /// <c>/v1/auth/link</c> routes): one exact answer for an anonymous caller and for org B's member headers, the
+    /// same body shape, and no org-A id — the headers cannot select a tenant on a route that resolves none.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="expectedCode"/> is null for the bodiless 204 of the invite staging route: there is no
+    /// envelope to compare, so the exact status plus the identical shape carry the case. The link routes answer
+    /// the typed 503 <c>unavailable</c> in this host: it provisions no session pepper
+    /// (<c>EVIDGATE__SESSION__PEPPER</c>), so <c>ISessionUserReader</c> refuses before any tenant read — an
+    /// answer of the route, not a fault, which is why the case asserts it exactly and must be revisited if this
+    /// host ever mints sessions.
+    /// </remarks>
+    /// <param name="route">The served route.</param>
+    /// <param name="name">What the probe proves.</param>
+    /// <param name="world">The isolation world (org B's <c>tenant_admin</c> supplies the member headers).</param>
+    /// <param name="request">The request both callers send.</param>
+    /// <param name="expectedStatus">The exact status both callers must receive in this host.</param>
+    /// <param name="expectedCode">The exact 00 §9.2 <c>error.code</c> both callers must receive, or null for a bodiless answer.</param>
+    public async Task<IReadOnlyList<string>> PreTenantAnswerAsync(
+        ApiRoute route,
+        string name,
+        IsolationWorld world,
+        ProbeRequest request,
+        int expectedStatus,
+        string? expectedCode)
     {
         ArgumentNullException.ThrowIfNull(world);
-        ArgumentException.ThrowIfNullOrWhiteSpace(expectedCode);
+        ArgumentNullException.ThrowIfNull(request);
 
-        var request = new ProbeRequest(HttpMethod.Get, url);
         var caller = IsolationRouteCases.OrgBAdmin(world);
         var anonymous = await SendAsync(ProbeCaller.Anonymous, request).ConfigureAwait(false);
         var named = await SendAsync(caller, request).ConfigureAwait(false);
         var violations = new List<string>();
+        var expected = expectedCode is null ? expectedStatus.ToString(CultureInfo.InvariantCulture) : $"{expectedStatus} {expectedCode}";
 
         if (anonymous.Status != expectedStatus || !string.Equals(anonymous.Code, expectedCode, StringComparison.Ordinal))
         {
             violations.Add(Describe(
                 route, name, ProbeCaller.Anonymous,
-                $"{request} answered {anonymous} anonymously, expected {expectedStatus} {expectedCode}: {Brief(anonymous)}"));
+                $"{request} answered {anonymous} anonymously, expected {expected}: {Brief(anonymous)}"));
         }
 
         if (named.Status != expectedStatus || !string.Equals(named.Code, expectedCode, StringComparison.Ordinal))
         {
             violations.Add(Describe(
                 route, name, caller,
-                $"{request} answered {named} naming org B, expected {expectedStatus} {expectedCode}: {Brief(named)}"));
+                $"{request} answered {named} naming org B, expected {expected}: {Brief(named)}"));
         }
 
         // Even with both statuses right, the body must be the same answer: a member
@@ -2081,6 +2177,23 @@ public sealed class RouteProbeRunner
     /// <summary>The first page's <c>next_cursor</c> of <paramref name="url"/> as <paramref name="caller"/>, or null.</summary>
     public async Task<string?> FirstCursorAsync(ProbeCaller caller, string url) =>
         NextCursor(await SendAsync(caller, new(HttpMethod.Get, url)).ConfigureAwait(false));
+
+    /// <summary>
+    /// Seeds the <c>public."user"</c> row a session implies (02.3.1-T2 / 0044's <c>membership_user_fk</c>):
+    /// <c>POST /v1/orgs</c> founds the caller's membership, and that membership names the caller.
+    /// </summary>
+    private async Task SeedUserRowAsync(Guid user, string email)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var connection = new NpgsqlConnection(_fixture.OwnerConnectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new NpgsqlCommand(
+            """insert into public."user" (id, email) values (@id, @email) on conflict (id) do nothing""",
+            connection);
+        command.Parameters.AddWithValue("id", user);
+        command.Parameters.AddWithValue("email", email);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>The <c>id::text</c> values an owner-connection query returns for <paramref name="org"/> (<c>@org</c>).</summary>
     public async Task<IReadOnlyCollection<string>> OwnerIdsAsync(string sql, Guid org)

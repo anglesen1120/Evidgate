@@ -70,6 +70,11 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
         await using var connection = await OpenSuperuserAsync("postgres").ConfigureAwait(false);
         await ExecuteAsync(connection, $"create database \"{database}\" owner {DatabaseOwnerRole}").ConfigureAwait(false);
 
+        // The host's stand-in session seeds the `user` row a signed-in caller implies (0044's
+        // membership_user_fk); it can only do that through this owner seam, so the connection is
+        // registered as the database is minted.
+        SessionUserSeed.Register(database, OwnerConnectionString(database));
+
         return database;
     }
 

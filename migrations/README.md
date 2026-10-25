@@ -66,8 +66,13 @@ The playbook for changing a table without breaking the running version is
   is 02.1.2-T2's invite flow — `membership.invite_pepper_version` with the `membership_invite_token_all_or_none`
   CHECK (the three token columns plus the expiry move together), `organization.invite_autobind_verified_domain`,
   the `evidgate_resolve.invite_by_secret`/`invite_autobind_candidates` lookups of T75 and the
-  `evidgate.expire_pending_invites` sweep (T80: `evidgate_worker_sched` only); the next
-  free number is `0044`;
+  `evidgate.expire_pending_invites` sweep (T80: `evidgate_worker_sched` only), and `0044` is
+  02.3.1-T2's login binding and linking schema — the deferred `membership_user_fk`
+  (`membership.user_id → public."user"`, added `not valid`, orphan-checked, then validated, with the
+  `membership_user_idx` parent-side index), the read-only `evidgate_resolve.session_user` session
+  lookup and the `evidgate_resolve.login_link_identity` writer that inserts, re-confirms or moves one
+  `(provider, subject)` identity and answers `conflict` rather than merging accounts; the next
+  free number is `0045`;
   a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL

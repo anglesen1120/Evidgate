@@ -55,6 +55,14 @@ public sealed class ViewerDenyMatrixTests(DatabaseFixture fixture) : CatalogueTe
                 "x-permission is 'authenticated' (the org creator is any authenticated caller, 02.1.1 §5)",
             [("POST", "/v1/ci/token")] =
                 "x-permission is 'none' (pre-tenant credential exchange, 02.4.1)",
+            [("POST", "/v1/auth/invite-token")] =
+                "x-permission is 'none' (pre-tenant invite staging, 02.3.1-T2: the browser holds no session yet)",
+            [("POST", "/v1/auth/link/{provider}")] =
+                "x-permission is 'none' (the link start acts only on the caller's own session cookie, 02.3.1-T2)",
+            [("DELETE", "/v1/auth/link/pending")] =
+                "x-permission is 'none' (discarding the caller's own staged link, 02.3.1-T2)",
+            [("POST", "/v1/auth/link/confirm")] =
+                "x-permission is 'none' (confirming the caller's own staged link, 02.3.1-T2)",
             [("POST", "/v1/slice/run")] =
                 "01.1.2 run-only slice dev surface, absent from the spec (ServedRouteTable.ServedNotInSpec)",
         };
