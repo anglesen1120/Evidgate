@@ -45,6 +45,15 @@ public sealed class BindOnLoginTests : BindTestBase
     /// <summary>The org of the seat-limit cases whose one seat is taken (the auto-bind runs in id order).</summary>
     private static readonly Guid FullOrgId = Guid.Parse("0190f000-0000-7000-8000-000000000002");
 
+    /// <summary>
+    /// The full org of the F1 cases, whose id sorts BEFORE <see cref="OpenHigherOrgId"/>: the candidates are
+    /// ordered by <c>org_id</c>, so this is what makes the 429 the first answer of the bind.
+    /// </summary>
+    private static readonly Guid FullLowerOrgId = Guid.Parse("0190f000-0000-7000-8000-000000000011");
+
+    /// <summary>The open org of the F1 cases, visited after <see cref="FullLowerOrgId"/> and still bound.</summary>
+    private static readonly Guid OpenHigherOrgId = Guid.Parse("0190f000-0000-7000-8000-000000000012");
+
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
     /// <param name="fixture">The shared container, migrated database and reset seam.</param>
     public BindOnLoginTests(DatabaseFixture fixture)
@@ -381,6 +390,75 @@ public sealed class BindOnLoginTests : BindTestBase
     }
 
     /// <summary>
+    /// F1, the auto-bind path: a full org refuses only its own seat. The full org sorts BEFORE the open one (the
+    /// candidates are ordered by org id, which the seeding picks), so a binder that stopped at the first 429
+    /// would leave this login with no membership at all — 403 <c>no_membership</c> after the staged invite has
+    /// already been spent. The open org must still bind, and the login must complete.
+    /// </summary>
+    [Fact]
+    public async Task FullOrgSortingFirstOfTheAutoBind_StillBindsTheOpenOrgBehindIt()
+    {
+        var full = await SeedLoginOrgAsync(FullLowerOrgId, autobind: true, maxSeats: 1);
+        var open = await SeedLoginOrgAsync(OpenHigherOrgId, autobind: true);
+        var fullInvite = await SeedInviteAsync(full, "member@example.com");
+        var openInvite = await SeedInviteAsync(open, "member@example.com");
+        await SeedActiveMemberAsync(full, "already-seated@example.com");
+
+        using var host = StartHost(
+            LoginCompletionTestHost.IdentityProvider(
+                LoginCompletionTestHost.Google,
+                "google-subject-full-first",
+                "member@example.com",
+                hostedDomain: "example.com"));
+        using var client = host.CreateLoginClient();
+
+        using var callback = await host.SignInAsync(client);
+
+        callback.StatusCode.ShouldBe(
+            HttpStatusCode.Found,
+            "the full org's 429 must not end the auto-bind list the open org sits later in");
+        LoginCompletionTestHost.SessionCookieValue(callback).ShouldNotBeNull();
+        (await LoginCompletionTestHost.MembershipStatusAsync(Fixture, openInvite.MembershipId))
+            .ShouldBe(MembershipStatus.Active);
+        (await LoginCompletionTestHost.MembershipStatusAsync(Fixture, fullInvite.MembershipId))
+            .ShouldBe(MembershipStatus.Pending, "the full org still binds nothing of its own");
+    }
+
+    /// <summary>
+    /// F1, across the two paths: the presented invite's own org is full, so the secret path answers 429 — and the
+    /// auto-bind phase must still run, because that is where this identity's open invite lives. Stopping at the
+    /// secret path's refusal would answer 403 <c>no_membership</c> with the open seat unused.
+    /// </summary>
+    [Fact]
+    public async Task FullSecretPathOrg_StillLetsTheAutoBindPhaseBindTheOpenOrg()
+    {
+        var full = await SeedLoginOrgAsync(FullLowerOrgId, autobind: false, maxSeats: 1);
+        var open = await SeedLoginOrgAsync(OpenHigherOrgId, autobind: true);
+        var fullInvite = await SeedInviteAsync(full, "member@example.com");
+        var openInvite = await SeedInviteAsync(open, "member@example.com");
+        await SeedActiveMemberAsync(full, "already-seated@example.com");
+
+        using var host = StartHost(
+            LoginCompletionTestHost.IdentityProvider(
+                LoginCompletionTestHost.Google,
+                "google-subject-full-secret",
+                "member@example.com",
+                hostedDomain: "example.com"));
+        using var client = host.CreateLoginClient();
+
+        using var callback = await host.SignInWithInviteAsync(client, fullInvite.Token);
+
+        callback.StatusCode.ShouldBe(
+            HttpStatusCode.Found,
+            "the secret path's 429 must not skip the auto-bind phase");
+        LoginCompletionTestHost.SessionCookieValue(callback).ShouldNotBeNull();
+        (await LoginCompletionTestHost.MembershipStatusAsync(Fixture, openInvite.MembershipId))
+            .ShouldBe(MembershipStatus.Active);
+        (await LoginCompletionTestHost.MembershipStatusAsync(Fixture, fullInvite.MembershipId))
+            .ShouldBe(MembershipStatus.Pending, "the full org's own row stays pending");
+    }
+
+    /// <summary>
     /// The other half of the same rule: when the login's only org is full, the 429 leaves it with no
     /// membership at all — 403 <c>no_membership</c>, no session, and the invite still <c>pending</c>.
     /// </summary>
@@ -629,10 +707,16 @@ public sealed class BindOnLoginTests : BindTestBase
     /// <summary>
     /// The same public prefix with a freshly minted secret: a token that is well-formed and verifies nothing.
     /// </summary>
+    /// <remarks>
+    /// The separator is the SECOND underscore, not <c>LastIndexOf('_')</c>: the secret is base64url, whose
+    /// alphabet contains <c>_</c>, so the last underscore is inside the secret about half the time — and the
+    /// minted token then carried a secret that was not the contract's 43 characters, which the staging route
+    /// refuses with 422 before the binder is ever reached (a flake, not a behaviour of the bind).
+    /// </remarks>
     /// <param name="token">The minted token of a seeded invite.</param>
     private static string WithAnotherSecret(string token)
     {
-        var separator = token.LastIndexOf('_');
+        var separator = token.IndexOf('_', token.IndexOf('_') + 1);
         var secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=')
             .Replace('+', '-')

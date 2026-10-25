@@ -189,23 +189,43 @@ paths:
         (02.3.1)
       description: >-
         Pre-tenant browser route (00 §5.4.8, 02 §4.2), the second half of `start`: no session, no bearer
-        token, no tenant (`x-permission: none`, `x-auth: anonymous`). Deletes the `__Host-evidgate_login`
-        cookie on **every** outcome — including the 404 and 503 ones — then compares `state` with the one
-        the cookie carried in constant time, records it as consumed before calling the provider (so a
-        replay is refused even when the first attempt failed) and exchanges the code with the stored PKCE
-        verifier. A provider `error` value, a missing or oversized `code` (over 2048 characters), a state
-        mismatch and a provider rejection all answer the same 401 `token_invalid`; no provider text, code,
-        token, nonce, verifier, email or subject is echoed or logged. 404 `not_found` and 503 `unavailable`
-        with `Retry-After` mean what they mean on `start`, and a provider timeout, transport failure, 5xx,
-        429 or unusable JWKS is 503 rather than 401 (02.3.1 AC8). Every response carries
-        `Cache-Control: no-store`. Once the identity is verified the completion (02.3.1-T1.4) upserts the
-        `user`/`user_identity` on `(provider, subject)`, requires an active membership
-        (`evidgate_resolve.member_orgs`), inserts the platform-scoped `session` row, sets the
+        token, no tenant (`x-permission: none`, `x-auth: anonymous`). First, before any other work,
+        deletes **both** browser cookies on **every** outcome — the 404, 429 and 503 ones included: the
+        pending-login cookie `__Host-evidgate_login` and the staged-invite cookie
+        `__Host-evidgate_invite` that `POST /auth/invite-token` wrote, so one staging buys exactly one
+        callback whether that callback succeeds, is refused or never reads the token. It then compares
+        `state` with the one the cookie carried in constant time, records it as consumed before calling
+        the provider (so a replay is refused even when the first attempt failed) and exchanges the code
+        with the stored PKCE verifier. A provider `error` value, a missing or oversized `code` (over 2048
+        characters), a state mismatch, a pending cookie of another provider and a provider rejection all
+        answer the same 401 `token_invalid`; no provider text, code, token, nonce, verifier, email or
+        subject is echoed or logged. 404 `not_found` and 503 `unavailable` with `Retry-After` mean what
+        they mean on `start`, and a provider timeout, transport failure, 5xx, 429 or unusable JWKS is 503
+        rather than 401 (02.3.1 AC8). Every response carries `Cache-Control: no-store`.
+        <br><br>
+        The **purpose** inside the signed state cookie decides which completion — and only that one —
+        finishes the attempt (02.3.1-T2 Q4). A state of purpose `login`, the shape `start` writes: the
+        completion (02.3.1-T1.4) upserts the `user`/`user_identity` on `(provider, subject)`, refuses a
+        disabled account with 403 `account_disabled`, **binds the pending invite** the browser staged
+        before the round-trip (the token travels only inside that encrypted cookie and reaches the binder
+        through the request object — never a URL, a `Location`, a log line, a metric, an error body or the
+        `session` row; a staged token that does not parse, has expired, or names no pending membership
+        simply binds nothing and never blocks the login), requires an active membership
+        (`evidgate_resolve.member_orgs`), writes the `auth.login` audit row into the chain of **every**
+        active organization before any session exists — fail-closed: a login that cannot be audited issues
+        nothing and answers 503 `unavailable` — then inserts the platform-scoped `session` row, sets the
         `__Host-evidgate_session` cookie and answers the 302. A verified account that no active
         organization admits is 403 `no_membership` with no session and no cookie (AC3) — the rows the
-        upsert wrote stay, so a later invite binds to them — and a disabled account is 403
-        `account_disabled`. There is no 200 body at any point: the browser flow ends in a redirect, and a
-        verified-but-refused identity is never reported as signed in.
+        upsert wrote stay, so a later invite binds to them. A state of purpose `link`, the shape
+        `POST /auth/link/{provider}` writes: the verified identity is **not** signed in and no server-side
+        state is written — the callback only proves the browser still holds the session of the account the
+        link was started for, answering 401 `unauthenticated` when it does not (an absent, expired or
+        revoked session, or another account's), and 503 `unavailable` with `Retry-After` when the
+        deployment composes no link seam or the session lookup faults — and answers a **session-less 302**
+        whose `Set-Cookie` stages the identity in `__Host-evidgate_link` for `POST /auth/link/confirm` to
+        write. There is no 200 body at any point: the browser flow ends in a redirect, and a
+        verified-but-refused identity is never reported as signed in. No `Idempotency-Key` (see
+        `contracts/README.md`): the route is a `GET` whose one-time `state` makes a replay a 401.
       x-permission: none
       x-auth: anonymous
       x-version: v1
@@ -218,8 +238,13 @@ paths:
       responses:
         '302':
           description: >-
-            The login completed: the `session` row is written, the browser is sent to the allowlisted
-            `returnUrl` (or `/`) and the session cookie is set.
+            The attempt completed, in one of two shapes decided by the state cookie's purpose. Purpose
+            `login`: the `session` row is written, the browser is sent to the allowlisted `returnUrl` (or
+            `/`) and the `__Host-evidgate_session` cookie is set. Purpose `link`: nothing is signed in, no
+            `session` row exists and no session cookie is set — the browser is sent to the same allowlisted
+            target and the verified identity waits in the `__Host-evidgate_link` cookie for
+            `POST /auth/link/confirm`. Both shapes delete the `__Host-evidgate_login` and
+            `__Host-evidgate_invite` cookies on this response, as on every other.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -231,23 +256,46 @@ paths:
                 type: string
             Set-Cookie:
               description: >-
+                Purpose `login`:
                 `__Host-evidgate_session=<opaque value>; Path=/; Secure; HttpOnly; SameSite=Lax;
                 Expires=<the session's sliding deadline>` (00 §8.9; the value is stored server-side only
-                as an HMAC and never shown again). No `Domain` attribute, as the `__Host-` prefix demands.
-                The pending-login cookie of the `__Host-evidgate_login` name is deleted on this response
-                like on every other.
+                as an HMAC and never shown again). Purpose `link`:
+                `__Host-evidgate_link=<protected payload>; Path=/; Secure; HttpOnly; SameSite=Lax;
+                Max-Age=<the staged-link lifetime>`, the encrypted staging of the verified identity and the
+                account it is being added to, which one confirmation spends. No `Domain` attribute on
+                either, as the `__Host-` prefix demands.
               schema:
                 type: string
             Cache-Control:
               $ref: '#/components/headers/NoStore'
         '401':
-          $ref: '#/components/responses/TokenInvalid'
+          description: >-
+            401 `token_invalid` — the federated login could not be verified (02.3.1 AC8): the pending-login
+            cookie is missing, of another provider, expired or tampered with, the `state` does not match or
+            was already used, the provider reported an `error`, the `code` is missing or oversized, or the
+            provider rejected the exchange, or (purpose `link`) the verified identity cannot be stored
+            (subject over 255 or address over 320 characters). Or 401 `unauthenticated` — a state of purpose `link` whose
+            callback did not come from the session of the account the link was started for: no session
+            cookie, one for another account, or one that expired or was revoked during the provider
+            round-trip (02.3.1-T2 Q4); nothing is staged then, so the link has to be started again. Each
+            cause keeps its own code and no provider text, code, token, subject or email is in the body.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '403':
           description: >-
-            403 `no_membership` — the identity is verified but the account holds no membership in an
-            active organization, so no session row and no session cookie are created (02.3.1 AC3); or 403
-            `account_disabled` — the account's `user.status` is `disabled` (02.3.1 §6). Both are
-            `retryable: false`.
+            Purpose `login` only, both `retryable: false`, both without a `session` row or a session
+            cookie: 403 `no_membership` — the identity is verified but the account holds no membership in
+            an active organization (02.3.1 AC3); or 403 `account_disabled` — the account's `user.status`
+            is `disabled` (02.3.1 §6). A refusal from the invite bind, or from the audit write that must
+            precede the session, is not a 403: the bind's seat limit does not stop the login, and an audit
+            that cannot commit is 503 `unavailable`.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -262,7 +310,27 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          description: >-
+            503 `unavailable`, always with `Retry-After` — the same answer as on `start`
+            (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) for a provider that is configured at composition but has
+            no usable client credential or JWKS, for a deployment with no
+            `EVIDGATE__LOGIN__PUBLICBASEURL`, and for a provider timeout, transport failure or 5xx
+            (02.3.1 AC8); plus the completion's own infrastructure faults: a database outage, an audit chain
+            that could not be appended (fail-closed, 02.3.1-T2.2), and — on a state of purpose `link` — a
+            deployment that composes no link seam, a missing session pepper or a session lookup fault. The
+            callback it answers is already spent (both cookies deleted, `state` consumed), so the header
+            says when the browser may sign in or start the link again.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /auth/invite-token:
     post:
       operationId: stageInviteToken
@@ -284,12 +352,12 @@ paths:
         logged, counted, echoed, put in a `Location` or copied into a `returnUrl`, and the login
         callback deletes the cookie on every outcome, so one staging buys one login attempt. A
         malformed, absent or non-string `invite_token` is 422 `request_invalid` with
-        `details[].path` = `invite_token` (`body` for a body that is not JSON), and no cookie is
-        written. The body is bounded before it is parsed: a declared or streamed length over 4096
-        bytes is 413 `payload_too_large`, and an empty body or one whose media type is not
-        `application/json` is 422 `request_invalid` — the media type is a security boundary, because
-        a cross-site `enctype=text/plain` form post is the one encoding that can reach a response's
-        `Set-Cookie` without a CORS preflight and a browser cannot label a form post
+        `details[].path` = `invite_token` (`body` for a body that is not JSON, is not a JSON object, or is
+        not `application/json`), and no cookie is written. The body is bounded before it is parsed: a
+        declared or streamed length over 4096 bytes is 413 `payload_too_large`, and an empty body or one
+        whose media type is not `application/json` is 422 `request_invalid` — the media type is a security
+        boundary, because a cross-site `enctype=text/plain` form post is the one encoding that can reach a
+        response's `Set-Cookie` without a CORS preflight and a browser cannot label a form post
         `application/json`. Every response carries `Cache-Control: no-store`, and the route is
         throttled per client address from the CI exchange limiter's budget
         (`EVIDGATE__CI__EXCHANGEBURSTLIMIT`) under its own key prefix at one unit — the cost of a
@@ -580,7 +648,9 @@ paths:
         where the database reports the status itself, i.e. the account was disabled between the
         session check and this call; the session lookup cannot tell a disabled account from an absent
         session and answers 401 `unauthenticated` there. A 503 from the audit leaves the staging in
-        place, so the retry converges on `already_linked` and re-audits. Every response carries
+        place, so the retry converges on `already_linked` and writes the audit rows again (at least
+        once per organisation, `auth.link_move` included; a move re-issues `__Host-evidgate_link`
+        carrying the moved-from account with its original deadline). Every response carries
         `Cache-Control: no-store`, costs two units of the confirm key prefix in the CI exchange
         limiter (it writes a row and a chain), and refuses a foreign `Origin` with 403 `forbidden`.
       x-permission: none
@@ -6114,20 +6184,6 @@ components:
             $ref: '#/components/schemas/ErrorEnvelope'
     Unauthorized:
       description: 401 unauthenticated (00 §9.2)
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-    TokenInvalid:
-      description: >-
-        401 `token_invalid` — the federated login could not be verified (02.3.1 AC8): the pending-login
-        cookie is missing, expired or tampered with, the `state` does not match or was already used, the
-        callback named another provider, the provider reported an `error`, the `code` is missing or
-        oversized, or the provider rejected the exchange. One code and one message for every one of
-        those causes, and no provider text, code, token, subject or email in the body.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'

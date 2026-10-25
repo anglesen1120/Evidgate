@@ -63,17 +63,20 @@ internal interface ILinkIdentityStore
     /// <param name="provider">The provider's registered name.</param>
     /// <param name="subject">The provider's verified subject for this identity.</param>
     /// <param name="email">The verified address the provider reported (stored as <c>email_at_provider</c>).</param>
-    /// <param name="displayName">The provider's profile name; accepted for the contract and deliberately not written.</param>
     /// <param name="cancellationToken">Request abort.</param>
     /// <returns>
     /// Success with the <see cref="LinkOutcome"/> — the business answers, including the refusals — or a failure
     /// rendered as the 00 §9.2 body: 503 <c>unavailable</c> for a database fault or an unrecognised outcome.
     /// </returns>
+    /// <remarks>
+    /// There is no profile-name parameter: a second provider's display name must not rename an account whose name
+    /// the login upsert of 0042 owns, so <c>login_link_identity</c> has no argument for it and this seam does not
+    /// pretend to pass one.
+    /// </remarks>
     ValueTask<Result<LinkOutcome>> LinkAsync(
         Guid userId,
         string provider,
         string subject,
         string email,
-        string? displayName,
         CancellationToken cancellationToken);
 }

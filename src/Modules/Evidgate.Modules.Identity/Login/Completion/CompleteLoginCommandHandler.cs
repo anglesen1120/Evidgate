@@ -25,8 +25,9 @@ namespace Evidgate.Modules.Identity.Login.Completion;
 /// the upsert with the provider's own verdict on the address and the token the login staged. The binder opens
 /// and commits one tenant transaction per org itself, so this handler opens none: the login has no tenant at
 /// all (00 §5.4.8), and the membership question is the pre-tenant resolver, run after the bind so a bind of
-/// this very login already counts. A reached seat limit (429 <c>quota_exceeded</c>) is not fatal — the orgs
-/// that bound before it are committed — so the handler continues to the membership check; any other failure
+/// this very login already counts. A reached seat limit (429 <c>quota_exceeded</c>) is not fatal — the binder
+/// still attempts every other candidate org before it reports the refusal, so whatever bound is committed —
+/// so the handler continues to the membership check; any other failure
 /// value is returned unchanged and admits nobody. 02.3.1-T2 Q2/Q3 (the alias ceiling and the per-org Google
 /// domain allowlist) are the binder's own rules; this call site adds none.
 /// </para>
@@ -101,9 +102,9 @@ internal sealed class CompleteLoginCommandHandler(
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            // A full org (429 quota_exceeded) refuses only its own seat: the orgs that bound before it are
-            // already committed, so the login continues to the membership check instead of retrying. Any
-            // other failure admits nobody and is answered as the binder reported it.
+            // A full org (429 quota_exceeded) refuses only its own seat: the binder has already tried every
+            // other candidate org and committed what bound, so the login continues to the membership check
+            // instead of failing. Any other failure admits nobody and is answered as the binder reported it.
             if (!bound.IsSuccess
                 && !string.Equals(bound.Error!.Code, ApiErrorCode.QuotaExceeded, StringComparison.Ordinal))
             {

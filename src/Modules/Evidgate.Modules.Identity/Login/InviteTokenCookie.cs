@@ -46,8 +46,10 @@ internal sealed partial class InviteTokenJsonContext : JsonSerializerContext
 /// The value is encrypted and integrity-protected with ASP.NET Core Data Protection under
 /// <see cref="ProtectorPurpose"/> (the same key ring as the pending-login cookie and a different purpose), so a
 /// client can neither read the token nor alter the payload, and a tampered, foreign or expired value reads as
-/// "no staged invite" instead of failing the login. The callback deletes the cookie on every outcome, so one
-/// staging buys one login attempt.
+/// "no staged invite" instead of failing the login. The callback deletes the cookie on every outcome, so the
+/// browser carries a staged token into exactly one attempt; the server keeps no spent marker of its own, and a
+/// copy presented again inside the window is still held to the invite row's single-use update by the binder
+/// (see <see cref="Delete"/>).
 /// </para>
 /// </remarks>
 internal sealed class InviteTokenCookie(
@@ -97,8 +99,15 @@ internal sealed class InviteTokenCookie(
 
     /// <summary>
     /// Marks the cookie for deletion. The callback calls it on every outcome, including the ones that never
-    /// read it: a staged token is one use, and a client must not be able to replay a value the server saw.
+    /// read it, so the browser stops carrying the token as soon as it presents one.
     /// </summary>
+    /// <remarks>
+    /// This ends the BROWSER's staging, not a server-side one: no spent marker is kept, so a client that kept
+    /// its own copy could present the same cookie again inside the ten-minute window and <see cref="Read"/>
+    /// would accept the value. Single use is enforced where the token is actually spent — the binder verifies
+    /// it against the pending membership's stored hash and flips that row out of <c>pending</c> in the same
+    /// statement — so a second presentation binds nothing.
+    /// </remarks>
     /// <param name="context">The request the browser is answering.</param>
     public static void Delete(HttpContext context)
     {

@@ -202,6 +202,64 @@ public sealed class DomainAllowlistTests : BindTestBase
         (await MembershipStateAsync(org, invite.MembershipId)).Status.ShouldBe(MembershipStatus.Active);
     }
 
+    /// <summary>
+    /// F2: an entry written with the trailing DNS root dot (<c>example.com.</c>) is the same domain as the plain
+    /// one, so it admits the address instead of locking the org out of every Google bind over one admin typo.
+    /// </summary>
+    [Fact]
+    public async Task TrailingDotEntry_AdmitsTheSameDomainThroughTheAutoBind()
+    {
+        var org = await SeedOrgAsync(autobindVerifiedDomain: true);
+        await SetAllowedDomainsAsync(org, ["Example.com."]);
+        var invite = await SeedInviteAsync(org, "invitee@example.com");
+        var userId = await SeedUserAsync();
+
+        var result = await CreateBinder().BindAsync(
+            new BindPendingMembershipsRequest(
+                userId,
+                "google",
+                invite.Email,
+                EmailVerified: true,
+                InviteToken: null,
+                HostedDomain: "example.com"),
+            Token);
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Bound.Count.ShouldBe(1, "a fully qualified entry names the same domain");
+        result.Value.Bound[0].OrgId.ShouldBe(org);
+        var (status, boundUser) = await MembershipStateAsync(org, invite.MembershipId);
+        status.ShouldBe(MembershipStatus.Active);
+        boundUser.ShouldBe(userId);
+    }
+
+    /// <summary>
+    /// F2's other half: an entry that normalises to nothing (<c>.</c> alone) is still a restriction the admin
+    /// wrote. It admits no address — and it must never turn the list into "this org restricts nothing", which
+    /// would open the org to every domain instead of closing it.
+    /// </summary>
+    [Fact]
+    public async Task DotOnlyEntry_RestrictsWithoutAdmittingAnything()
+    {
+        var org = await SeedOrgAsync(autobindVerifiedDomain: true);
+        await SetAllowedDomainsAsync(org, ["."]);
+        var invite = await SeedInviteAsync(org, "invitee@example.com");
+
+        var result = await CreateBinder().BindAsync(
+            new BindPendingMembershipsRequest(
+                await SeedUserAsync(),
+                "google",
+                invite.Email,
+                EmailVerified: true,
+                InviteToken: null,
+                HostedDomain: "example.com"),
+            Token);
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Bound.ShouldBeEmpty("a dot-only entry matches no domain");
+        (await MembershipStateAsync(org, invite.MembershipId)).Status
+            .ShouldBe(MembershipStatus.Pending, "and it does not open the org either");
+    }
+
     /// <summary>Writes the org's allowlist as the owner: null clears the restriction (00 §5.5 C3).</summary>
     private Task<int> SetAllowedDomainsAsync(Guid orgId, string[]? domains) => Fixture.SeedAsync(
         "update public.organization set allowed_email_domains = @domains::text[] where id = @org_id",

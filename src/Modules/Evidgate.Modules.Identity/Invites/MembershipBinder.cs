@@ -129,6 +129,26 @@ internal sealed class MembershipBinder : IMembershipBinder
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// <para>
+    /// <b>A full org refuses only its own seat (F1).</b> A candidate whose org is at <c>max_seats</c>
+    /// answers 429 <c>quota_exceeded</c>, and that refusal is <i>not</i> the end of the call: every
+    /// remaining candidate — the rest of the auto-bind list, and the auto-bind phase after the
+    /// secret path — is still attempted inside its own transaction, in the resolver's order
+    /// (<c>org_id</c>). The reason is a login that holds opt-in invites in two orgs: the full one may
+    /// sort first, and stopping there would refuse the login over an org the identity can never join
+    /// while the other org's open seat stays unused (the handler sees 403 <c>no_membership</c> after
+    /// the invite cookie is already spent).
+    /// </para>
+    /// <para>
+    /// <b>What the call returns when an org binds and another is full.</b> The first refusal met is
+    /// remembered and the call still ends in that failure value (429 <c>quota_exceeded</c>, the
+    /// binder's only failing outcome), so the caller's contract is unchanged: the login treats that
+    /// code as non-fatal, and the orgs that bound are committed and visible to it through
+    /// <c>evidgate_resolve.member_orgs</c>, not through this result. A refusal is therefore never
+    /// swallowed silently — it just no longer truncates the call.
+    /// </para>
+    /// </remarks>
     public async ValueTask<Result<BindPendingMembershipsResult>> BindAsync(
         BindPendingMembershipsRequest request,
         CancellationToken cancellationToken)
@@ -153,6 +173,11 @@ internal sealed class MembershipBinder : IMembershipBinder
 
         var bound = new List<BoundMembership>(1);
         var attempted = new HashSet<Guid>();
+
+        // F1: the first full-org refusal is remembered, not returned, so a full org that sorts before
+        // an org this identity can join does not cost it the login. Only SeatQuota produces an Error
+        // here (429 quota_exceeded), and it is reported after every candidate has been attempted.
+        Error? refusal = null;
 
         // The domain allowlist restricts Google logins only (D-S81-Q3, AC5): a GitHub identity is
         // never gated, whatever its address. The flag is the provider the caller already told us.
@@ -180,10 +205,9 @@ internal sealed class MembershipBinder : IMembershipBinder
                     domainGated,
                     cancellationToken).ConfigureAwait(false);
 
-                if (attempt.Error is { } error)
-                {
-                    return Result.Failure<BindPendingMembershipsResult>(error);
-                }
+                // A full org refuses its own row only: the auto-bind phase below still runs, and its
+                // orgs may be the ones this identity can join (F1).
+                refusal ??= attempt.Error;
 
                 if (attempt.IsBound)
                 {
@@ -218,16 +242,24 @@ internal sealed class MembershipBinder : IMembershipBinder
                     domainGated,
                     cancellationToken).ConfigureAwait(false);
 
-                if (attempt.Error is { } error)
-                {
-                    return Result.Failure<BindPendingMembershipsResult>(error);
-                }
+                // The same rule inside the list: a full org does not end the loop, so a later org with
+                // an open seat still binds this login (F1).
+                refusal ??= attempt.Error;
 
                 if (attempt.IsBound)
                 {
                     bound.Add(new BoundMembership(candidate.OrgId, candidate.MembershipId, ViaVerifiedDomain));
                 }
             }
+        }
+
+        // F1: refuse only after every candidate has had its chance. The orgs that bound are committed
+        // and visible to the caller through evidgate_resolve.member_orgs (which is what the login
+        // reads), so reporting the 429 here keeps the caller's contract — it treats this code as
+        // non-fatal — without hiding that an org was full.
+        if (refusal is { } fullOrg)
+        {
+            return Result.Failure<BindPendingMembershipsResult>(fullOrg);
         }
 
         return Result.Success(new BindPendingMembershipsResult(bound));
@@ -354,7 +386,8 @@ internal sealed class MembershipBinder : IMembershipBinder
         }
 
         // The org row lock taken here is what serialises concurrent binds of one org; a full
-        // org fails the whole call, with this org's transaction rolled back uncommitted. F4: the
+        // org refuses its own row — this org's transaction rolls back uncommitted, and the call
+        // reports that refusal only after its other candidates have had their chance (F1). F4: the
         // same statement reads the org's status, and a `suspended` or `deleted` org binds nothing —
         // the same rule as the auto-bind resolver's `o.status = 'active'` (0043) — answered like
         // every other refusal (empty result, no oracle, row untouched, no seat consumed), and
@@ -479,9 +512,9 @@ internal sealed class MembershipBinder : IMembershipBinder
     /// <param name="AllowedEmailDomains">The org's allowlist, or null when it restricts nothing.</param>
     private sealed record OrganizationDomainRow(string[]? AllowedEmailDomains);
 
-    /// <summary>What one row's attempt produced: bound, not bound, or the refusal that ends the call.</summary>
+    /// <summary>What one row's attempt produced: bound, not bound, or the refusal the call reports.</summary>
     /// <param name="IsBound">True when the row became <c>active</c> and its org committed.</param>
-    /// <param name="Error">The refusal that ends the whole call, or null.</param>
+    /// <param name="Error">The org-is-full refusal, or null; the caller reports the first one it met.</param>
     private readonly record struct BindAttempt(bool IsBound, Error? Error)
     {
         /// <summary>The row stayed <c>pending</c> and the caller must not learn why.</summary>
@@ -490,7 +523,7 @@ internal sealed class MembershipBinder : IMembershipBinder
         /// <summary>The row became <c>active</c> and its org's transaction committed.</summary>
         internal static BindAttempt Bound => new(true, null);
 
-        /// <summary>The org is full: the whole call answers 429, nothing in this org is bound.</summary>
+        /// <summary>The org is full: nothing in this org is bound, and the call answers 429 once its other candidates ran (F1).</summary>
         internal static BindAttempt Refused(Error error) => new(false, error);
     }
 }

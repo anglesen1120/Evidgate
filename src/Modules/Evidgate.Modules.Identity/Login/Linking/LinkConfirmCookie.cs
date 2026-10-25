@@ -20,6 +20,12 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 /// <param name="DisplayName">The provider's profile name, or null.</param>
 /// <param name="IssuedAt">When the callback staged it, for the lifetime check and the <c>expires_at</c> of the pending answer.</param>
 /// <param name="LinkId">A random id for this staging, so two stagings are distinguishable without naming the subject.</param>
+/// <param name="MovedFromUserId">
+/// The account the identity was moved from, carried only by a staging that a failed audit re-issued: that first
+/// confirm committed the move (<c>moved</c>) and could not write its <c>auth.link_move</c> rows, and the retry
+/// answers <c>already_linked</c> — where the store no longer reports the move — so the fact has to travel with
+/// the staging or the retry could never audit it. Null on a staging the callback just wrote.
+/// </param>
 internal sealed record LinkConfirmPayload(
     int Version,
     Guid UserId,
@@ -28,7 +34,8 @@ internal sealed record LinkConfirmPayload(
     string Email,
     string? DisplayName,
     DateTimeOffset IssuedAt,
-    string LinkId);
+    string LinkId,
+    Guid? MovedFromUserId = null);
 
 /// <summary>The source-generated JSON of <see cref="LinkConfirmPayload"/> (never on the wire; inside the protected cookie only).</summary>
 [JsonSerializable(typeof(LinkConfirmPayload))]
@@ -85,13 +92,29 @@ internal sealed class LinkConfirmCookie(
     /// <summary>Lifetime of a staged link, in seconds (Q4: at most ten minutes).</summary>
     internal const int LifetimeSeconds = 600;
 
-    /// <summary>Bounds of the fields the provider fills, so a hostile provider cannot inflate the cookie.</summary>
+    /// <summary>The bounds of the fields the provider fills, so a hostile provider cannot inflate the cookie.</summary>
     internal const int MaxProviderLength = 64;
 
-    internal const int MaxSubjectLength = 512;
+    /// <summary>
+    /// <c>user_identity</c>'s own bound — <c>user_identity_subject_length_check</c>,
+    /// <c>char_length(subject) between 1 and 255</c> (0041) — not a bound of this cookie's own: a longer subject
+    /// could be staged, verified and then refused by the table for as long as the identity stood (23514 on the
+    /// insert, answered 503 and retried forever). Staging refuses it instead, before the cookie exists.
+    /// </summary>
+    internal const int MaxSubjectLength = 255;
 
-    internal const int MaxEmailLength = 512;
+    /// <summary>
+    /// <c>user_identity_email_at_provider_length_check</c>'s bound (0041: <c>&lt;= 320</c>), for the same reason
+    /// as <see cref="MaxSubjectLength"/>: a value the column refuses must never reach the staging.
+    /// </summary>
+    internal const int MaxEmailLength = 320;
 
+    /// <summary>
+    /// Largest profile name a staging carries. A provider may report more (Google's validator accepts up to 256,
+    /// 0041's <c>user.display_name</c> holds 1..200, 0042 truncates), so <see cref="Write"/> drops a longer name
+    /// instead of refusing the identity: the name is a display detail of the PENDING answer, and refusing to stage
+    /// a verified identity over it would lock a real person out of linking.
+    /// </summary>
     internal const int MaxDisplayNameLength = 200;
 
     /// <summary>Bounds of the staging id this class mints.</summary>
@@ -106,6 +129,34 @@ internal sealed class LinkConfirmCookie(
     public static TimeSpan Lifetime => TimeSpan.FromSeconds(LifetimeSeconds);
 
     /// <summary>
+    /// Whether the callback may stage <paramref name="identity"/>: every field the provider fills is present and
+    /// within the bound the column it will be written to enforces (0041's checks for <c>subject</c> and
+    /// <c>email_at_provider</c>, this cookie's own for <c>provider</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The callback asks this BEFORE <see cref="Write"/>, so a hostile or simply over-long provider value is a
+    /// 401 the caller can act on (start the link again) instead of an <see cref="ArgumentException"/> escaping
+    /// the request pipeline, and instead of a staging that would be refused by the database on every confirm.
+    /// </para>
+    /// <para>
+    /// The profile name is NOT part of this judgement: it is the only field no column of the write path owns, and
+    /// a provider that reports a longer one (Google's validator accepts up to 256, this cookie stages 200) must not
+    /// cost the person their link. <see cref="Write"/> drops it to null instead.
+    /// </para>
+    /// </remarks>
+    /// <param name="identity">The provider-verified identity a link callback received.</param>
+    /// <returns>True when the identity can be staged and later written.</returns>
+    internal static bool IsStageable(VerifiedIdentity identity)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+
+        return IsBounded(identity.Provider, MaxProviderLength)
+            && IsBounded(identity.Subject, MaxSubjectLength)
+            && IsBounded(identity.Email, MaxEmailLength);
+    }
+
+    /// <summary>
     /// Writes the protected payload as this response's staged-link cookie.
     /// </summary>
     /// <param name="context">The request the browser is answering.</param>
@@ -114,7 +165,7 @@ internal sealed class LinkConfirmCookie(
     /// <exception cref="ArgumentException">
     /// The account is the empty id, or a provider field is empty or longer than its bound: the callback
     /// verified this identity and a value that cannot be staged is a caller bug, refused before a cookie the
-    /// confirm route would have to guess about exists.
+    /// confirm route would have to guess about exists. <see cref="IsStageable"/> is the guard the callback uses.
     /// </exception>
     public void Write(HttpContext context, Guid userId, VerifiedIdentity identity)
     {
@@ -126,10 +177,7 @@ internal sealed class LinkConfirmCookie(
             throw new ArgumentException("a staged link names an account, never the empty id", nameof(userId));
         }
 
-        if (!IsBounded(identity.Provider, MaxProviderLength)
-            || !IsBounded(identity.Subject, MaxSubjectLength)
-            || !IsBounded(identity.Email, MaxEmailLength)
-            || (identity.DisplayName is { } name && name.Length > MaxDisplayNameLength))
+        if (!IsStageable(identity))
         {
             throw new ArgumentException("the verified identity carries a field this cookie cannot stage", nameof(identity));
         }
@@ -140,7 +188,7 @@ internal sealed class LinkConfirmCookie(
             identity.Provider,
             identity.Subject,
             identity.Email,
-            string.IsNullOrWhiteSpace(identity.DisplayName) ? null : identity.DisplayName,
+            StagedName(identity.DisplayName),
             clock.GetUtcNow(),
             NewLinkId());
 
@@ -148,6 +196,68 @@ internal sealed class LinkConfirmCookie(
             Name,
             _protector.Protect(JsonSerializer.Serialize(payload, LinkConfirmJsonContext.Default.LinkConfirmPayload)),
             Attributes(Lifetime));
+    }
+
+    /// <summary>
+    /// The profile name a staging carries: null when the provider gave none, or when the name is longer than
+    /// <see cref="MaxDisplayNameLength"/> — dropped rather than truncated into a different name, the convention
+    /// <c>GoogleIdTokenValidator</c> uses for the same field (and 0042's truncation for the <c>user</c> column).
+    /// </summary>
+    /// <param name="displayName">The provider's profile name, or null.</param>
+    private static string? StagedName(string? displayName) =>
+        string.IsNullOrWhiteSpace(displayName) || displayName.Length > MaxDisplayNameLength ? null : displayName;
+
+    /// <summary>
+    /// Re-issues an ALREADY READ payload as this response's staged-link cookie, keeping its
+    /// <see cref="LinkConfirmPayload.IssuedAt"/> and <see cref="LinkConfirmPayload.LinkId"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one caller is the confirm route's fail-closed audit path: the link committed, the audit rows did not,
+    /// so the staging has to survive the 503 — and when that link was a MOVE, it has to survive carrying the
+    /// account the identity came from, because the retry will answer <c>already_linked</c> and could not
+    /// otherwise write the <c>auth.link_move</c> row at all. Keeping <see cref="LinkConfirmPayload.IssuedAt"/>
+    /// keeps the original expiry: the re-issued cookie and the staging inside it still end ten minutes after the
+    /// callback verified the identity, however often a failing audit re-issues it.
+    /// </para>
+    /// <para>
+    /// A staging whose window closed while the failed attempt ran is NOT re-issued: it could not be confirmed
+    /// anyway, so there is nothing to carry, and the 503 of the attempt stands on its own.
+    /// </para>
+    /// </remarks>
+    /// <param name="context">The request the browser is answering.</param>
+    /// <param name="payload">The payload <see cref="Read"/> returned, with any field this route had to carry on.</param>
+    /// <exception cref="ArgumentException">
+    /// The payload is not one this build writes and reads (version, empty ids, a field out of its bound): a
+    /// value <see cref="Read"/> returned cannot fail this, so it is a caller bug.
+    /// </exception>
+    public void Restage(HttpContext context, LinkConfirmPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(payload);
+
+        var remaining = payload.IssuedAt + Lifetime - clock.GetUtcNow();
+        if (payload.Version != PayloadVersion
+            || payload.UserId == Guid.Empty
+            || payload.MovedFromUserId == Guid.Empty
+            || !IsBounded(payload.LinkId, 64)
+            || !IsBounded(payload.Provider, MaxProviderLength)
+            || !IsBounded(payload.Subject, MaxSubjectLength)
+            || !IsBounded(payload.Email, MaxEmailLength)
+            || payload.DisplayName?.Length > MaxDisplayNameLength)
+        {
+            throw new ArgumentException("the payload is not a staged link this build writes", nameof(payload));
+        }
+
+        if (remaining <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        context.Response.Cookies.Append(
+            Name,
+            _protector.Protect(JsonSerializer.Serialize(payload, LinkConfirmJsonContext.Default.LinkConfirmPayload)),
+            Attributes(remaining));
     }
 
     /// <summary>
@@ -185,6 +295,7 @@ internal sealed class LinkConfirmCookie(
         if (payload is null
             || payload.Version != PayloadVersion
             || payload.UserId == Guid.Empty
+            || payload.MovedFromUserId == Guid.Empty
             || !IsBounded(payload.LinkId, 64)
             || !IsBounded(payload.Provider, MaxProviderLength)
             || !IsBounded(payload.Subject, MaxSubjectLength)

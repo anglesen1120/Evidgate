@@ -285,15 +285,24 @@ internal static class LinkEndpoints
     /// account still in use, 403 <c>account_disabled</c>, or 503 when the audit chain could not be extended.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The order is the story's: the identity row first (<see cref="ILinkIdentityStore"/>, one call, the
     /// database's own decision), then the audit rows of every ACTIVE org of the confirming user. A 503 from the
-    /// audit leaves the staged link in place, so the retry converges on <c>already_linked</c> and re-audits; every
-    /// other outcome deletes the cookie.
+    /// audit leaves the staged link in place, so the retry converges on <c>already_linked</c> and writes the rows
+    /// again — including <c>auth.link_move</c> when the first attempt moved the identity, because that attempt
+    /// re-issues the staging carrying the account it came from; every other outcome deletes the cookie.
+    /// </para>
     /// <para>
-    /// What that deletion ends is the BROWSER's staging, not a server-side single use: the payload is a protected
+    /// A retry therefore audits AT LEAST once per org, not exactly once: an org whose row committed before
+    /// another org faulted keeps that row and gains a second one. <see cref="AuditAsync"/> records why that trade
+    /// is the one this route takes.
+    /// </para>
+    /// <para>
+    /// What the deletion ends is the BROWSER's staging, not a server-side single use: the payload is a protected
     /// cookie and Q4 ruled out a table for its ten minutes, so there is no spent marker to consult. A client that
     /// kept the deleted value can present it again; the database then answers <c>already_linked</c> (or completes
-    /// the same link once) and no second identity row is written.
+    /// the same link once), no second identity row is written, and the audit rows are appended again (the
+    /// at-least-once rule above).
     /// </para>
     /// </remarks>
     private static async Task<Result> ConfirmAsync(
@@ -348,7 +357,7 @@ internal static class LinkEndpoints
         }
 
         var linked = await identities
-            .LinkAsync(userId, pending.Provider, pending.Subject, pending.Email, pending.DisplayName, cancellationToken)
+            .LinkAsync(userId, pending.Provider, pending.Subject, pending.Email, cancellationToken)
             .ConfigureAwait(false);
 
         if (!linked.IsSuccess)
@@ -387,10 +396,32 @@ internal static class LinkEndpoints
                 return Result.Failure(LinkErrors.UnavailableWithRetryAfter(context, login));
         }
 
-        var audited = await AuditAsync(audit, memberOrgs, userId, pending, outcome, cancellationToken).ConfigureAwait(false);
+        // Which account the identity came FROM, when this confirm moved it. A first attempt reports that
+        // itself; a retry answers already_linked and reports nothing, so the fact comes from the staging the
+        // failed audit re-issued (F1, D-S81-Q5). Without it a move whose audit rows never committed would keep
+        // its `auth.link_move` row forever. No other outcome reads the carried fact: a carried move plus a
+        // `linked` answer is not the same link, and inventing a move row for it would be worse than the gap.
+        var movedFrom = outcome.Result switch
+        {
+            LinkResult.Moved => outcome.MovedFromUserId,
+            LinkResult.AlreadyLinked => pending.MovedFromUserId,
+            _ => null,
+        };
+
+        var audited = await AuditAsync(audit, memberOrgs, userId, pending.Provider, movedFrom, cancellationToken)
+            .ConfigureAwait(false);
+
         if (!audited)
         {
-            // The link is committed and the staging is kept: the retry answers already_linked and re-audits.
+            // The link is committed and the audit is not: fail closed (503) and KEEP the staging, so the retry
+            // converges on already_linked and writes the rows this attempt could not. A move needs one thing
+            // more than keeping it — the retry would no longer know the identity was moved — so the staging is
+            // re-issued carrying the account it came from, with its original expiry and binding.
+            if (movedFrom is { } previous)
+            {
+                cookie.Restage(context, pending with { MovedFromUserId = previous });
+            }
+
             return Result.Failure(LinkErrors.UnavailableWithRetryAfter(context, login));
         }
 
@@ -405,13 +436,31 @@ internal static class LinkEndpoints
     /// from. Both are written through <see cref="IIdentityAuditWriter"/>, which opens and commits one tenant
     /// transaction per org and propagates a fault (fail closed).
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A retry can repeat <c>auth.link</c>.</b> Each org commits its own transaction, so an audit that faulted
+    /// on the third of four orgs leaves the first two rows written; the retry that converges on
+    /// <c>already_linked</c> writes them again, and the chains of those orgs then hold the row twice. The
+    /// alternative would be to read each org's chain back before appending and to skip the orgs that already
+    /// hold this row — a per-org read plus a "was it this link or another one of the same provider" judgement on
+    /// a pre-tenant path, for an at-least-once audit that a hash chain is designed to tolerate (a duplicate row
+    /// is visible and verifiable; a missing one is not). Duplicates are therefore accepted, and only the
+    /// move — which the retry could not record at all without the staging carrying it — is carried forward.
+    /// </para>
+    /// <para>
+    /// <b>The move row is subject to the same rule.</b> It is a second write over the same org list, so a fault in
+    /// the middle of it leaves the earlier orgs' <c>auth.link_move</c> rows committed and the retry — which still
+    /// carries the account the identity came from — appends them again. Identical <c>previous_id</c>, identical
+    /// verifiability argument, same acceptance: the move is at least once per org, never exactly once.
+    /// </para>
+    /// </remarks>
     /// <returns>True when every row committed, false when one did not (the route answers 503).</returns>
     private static async Task<bool> AuditAsync(
         IIdentityAuditWriter audit,
         IMemberOrgResolver memberOrgs,
         Guid userId,
-        LinkConfirmPayload pending,
-        LinkOutcome outcome,
+        string provider,
+        Guid? movedFrom,
         CancellationToken cancellationToken)
     {
         try
@@ -422,20 +471,20 @@ internal static class LinkEndpoints
                 .ToArray();
 
             await audit
-                .WriteAsync(new IdentityAuditEvent(IdentityAuditActions.Link, userId, pending.Provider), orgIds, cancellationToken)
+                .WriteAsync(new IdentityAuditEvent(IdentityAuditActions.Link, userId, provider), orgIds, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (outcome is { Result: LinkResult.Moved, MovedFromUserId: { } movedFrom })
+            if (movedFrom is { } previous)
             {
                 await audit
                     .WriteAsync(
                         new IdentityAuditEvent(
                             IdentityAuditActions.LinkMove,
                             userId,
-                            pending.Provider,
+                            provider,
                             new Dictionary<string, string>(StringComparer.Ordinal)
                             {
-                                [PreviousIdMetadataKey] = movedFrom.ToString("D"),
+                                [PreviousIdMetadataKey] = previous.ToString("D"),
                             }),
                         orgIds,
                         cancellationToken)

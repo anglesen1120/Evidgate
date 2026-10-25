@@ -45,6 +45,12 @@ public sealed class IdentityLinkingTests : HarnessTest
     /// <summary>GitHub's numeric user id for the second provider.</summary>
     private const string GitHubSubject = "149272102";
 
+    /// <summary>
+    /// The address the second provider verifies for the MOVE cases: a different mailbox from <see cref="Email"/>,
+    /// so the source account is a distinct person-shaped account that holds nothing.
+    /// </summary>
+    private const string MovableEmail = "movable@example.test";
+
     public IdentityLinkingTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -337,6 +343,98 @@ public sealed class IdentityLinkingTests : HarnessTest
         (await host.UserIdAsync(LinkTestHost.GitHub, GitHubSubject)).ShouldBe(githubUser);
     }
 
+    /// <summary>
+    /// An identity the <c>user_identity</c> columns cannot store is refused AT STAGING: a subject over the 255
+    /// characters of <c>user_identity_subject_length_check</c> or an address over the 320 of
+    /// <c>user_identity_email_at_provider_length_check</c> (0041) answers 401 <c>token_invalid</c>, stages no
+    /// cookie and writes nothing — instead of staging an identity whose every confirm would be a 23514 answered
+    /// 503 and retried forever (F2).
+    /// </summary>
+    /// <param name="subjectLength">The subject length the fake provider reports.</param>
+    /// <param name="emailLength">The address length it reports.</param>
+    [Theory]
+    [InlineData(256, 24)]
+    [InlineData(15, 321)]
+    public async Task Callback_OfAnIdentityTheColumnsCannotStore_Answers401AndStagesNothing(
+        int subjectLength,
+        int emailLength)
+    {
+        var subject = new string('s', subjectLength);
+        var address = new string('a', emailLength) + "@example.test";
+
+        using var host = LinkTestHost.Start(
+            Fixture,
+            LinkTestHost.Provider(LinkTestHost.Google, GoogleSubject, Email),
+            LinkTestHost.Provider(LinkTestHost.GitHub, GitHubSubject, address));
+        using var client = host.CreateLinkClient();
+
+        var (userId, session, _) = await MemberAsync(host, client, LinkTestHost.Google, GoogleSubject);
+
+        host.Use(LinkTestHost.GitHub, LinkTestHost.Identity(LinkTestHost.GitHub, subject, address));
+
+        var start = await StartLinkAsync(host, client, LinkTestHost.GitHub, session);
+        using var startResponse = start.Response;
+
+        using var callback = await LinkTestHost.LinkCallbackAsync(
+            client,
+            LinkTestHost.GitHub,
+            start.StateCookie,
+            start.Payload.State,
+            session);
+
+        callback.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await LinkTestHost.ErrorCodeAsync(callback)).ShouldBe(ApiErrorCode.TokenInvalid);
+        LinkTestHost.CookieValue(callback, LinkConfirmCookie.Name).ShouldBeNull();
+
+        // Nothing was staged, so nothing can be confirmed: the account still holds its one identity.
+        (await host.CountAsync("select count(*) from public.user_identity where user_id = @id", ("id", userId))).ShouldBe(1L);
+        (await host.CountAsync(
+            "select count(*) from public.user_identity where provider = @provider",
+            ("provider", LinkTestHost.GitHub))).ShouldBe(0L);
+    }
+
+    /// <summary>
+    /// A provider profile name longer than the staging carries is DROPPED, never a refusal: the name is the one
+    /// field no column of the write path owns, and refusing the identity over it would lock a real person out of
+    /// linking (F2; Google's validator accepts names up to 256 characters, this cookie stages 200).
+    /// </summary>
+    [Fact]
+    public async Task Callback_OfAnOverLongProfileName_StagesTheIdentityWithoutTheName()
+    {
+        using var host = LinkTestHost.Start(
+            Fixture,
+            LinkTestHost.Provider(LinkTestHost.Google, GoogleSubject, Email),
+            LinkTestHost.Provider(LinkTestHost.GitHub, GitHubSubject, MovableEmail));
+        using var client = host.CreateLinkClient();
+
+        var (userId, session, _) = await MemberAsync(host, client, LinkTestHost.Google, GoogleSubject);
+
+        host.Use(
+            LinkTestHost.GitHub,
+            LinkTestHost.Identity(LinkTestHost.GitHub, GitHubSubject, MovableEmail)
+                with
+            { DisplayName = new string('n', 256) });
+
+        var staged = await StageAsync(host, client, LinkTestHost.GitHub, session);
+
+        var payload = host.ReadStagedLink(staged);
+        payload.DisplayName.ShouldBeNull("an over-long name is dropped, never truncated into a different name");
+        payload.Subject.ShouldBe(GitHubSubject, "the identity itself is staged");
+
+        using (var pending = await PendingAsync(client, session, staged))
+        {
+            pending.StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await LinkTestHost.MemberAsync(pending, "display_name")).ShouldBeNullOrEmpty();
+        }
+
+        using var confirm = await ConfirmAsync(client, session, staged);
+
+        confirm.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await LinkTestHost.MemberAsync(confirm, "outcome")).ShouldBe("linked");
+        (await host.UserIdAsync(LinkTestHost.GitHub, GitHubSubject)).ShouldBe(userId);
+        (await host.IdentityEmailAsync(LinkTestHost.GitHub, GitHubSubject)).ShouldBe(MovableEmail);
+    }
+
     // ------------------------------------------------------------------ pending / confirm guards
 
     /// <summary>Confirm without a staged cookie is the 401 <c>token_invalid</c>: the link has to start again.</summary>
@@ -573,7 +671,7 @@ public sealed class IdentityLinkingTests : HarnessTest
         using var host = LinkTestHost.Start(
             Fixture,
             LinkTestHost.Provider(LinkTestHost.Google, GoogleSubject, Email),
-            LinkTestHost.Provider(LinkTestHost.GitHub, GitHubSubject, "movable@example.test"));
+            LinkTestHost.Provider(LinkTestHost.GitHub, GitHubSubject, MovableEmail));
         using var client = host.CreateLinkClient();
 
         var (_, sessionA, orgA) = await MemberAsync(host, client, LinkTestHost.Google, GoogleSubject);
@@ -832,7 +930,8 @@ public sealed class IdentityLinkingTests : HarnessTest
 
     /// <summary>
     /// An audit chain that cannot commit fails the confirm closed (503 + <c>Retry-After</c>) while the identity
-    /// stays attached and the staging is kept; the retry converges on <c>already_linked</c> and writes the row.
+    /// stays attached and the staging is kept; the retry converges on <c>already_linked</c> and writes the row
+    /// in every active org. A plain link carries nothing extra, so the failed answer sets no new cookie value.
     /// </summary>
     [Fact]
     public async Task Confirm_AuditFault_Answers503KeepsTheLinkAndTheRetryConverges()
@@ -852,6 +951,10 @@ public sealed class IdentityLinkingTests : HarnessTest
         using var client = host.CreateLinkClient();
 
         var (userId, session, orgId) = await MemberAsync(host, client, LinkTestHost.Google, GoogleSubject);
+
+        var secondOrg = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        await host.SeedMembershipAsync(secondOrg, userId);
+
         var linkCookie = await StageAsync(host, client, LinkTestHost.GitHub, session);
 
         // Armed only now: the member's own sign-in wrote its auth.login row through this registration, and the fault
@@ -864,19 +967,129 @@ public sealed class IdentityLinkingTests : HarnessTest
             (await LinkTestHost.ErrorCodeAsync(failed)).ShouldBe(ApiErrorCode.Unavailable);
             failed.Headers.RetryAfter.ShouldNotBeNull();
 
-            // The link is committed, the staging is kept for the retry.
+            // The link is committed, the staging is kept for the retry — kept as it was: a plain link has no fact
+            // to carry forward, so the route re-issues nothing.
             LinkTestHost.CookieValue(failed, LinkConfirmCookie.Name).ShouldBeNull();
         }
 
         (await host.UserIdAsync(LinkTestHost.GitHub, GitHubSubject)).ShouldBe(userId);
-        (await host.AuditRowsAsync(orgId))
-            .ShouldNotContain(row => row.Action == IdentityAuditActions.Link);
+        foreach (var org in new[] { orgId, secondOrg })
+        {
+            (await host.AuditRowsAsync(org))
+                .ShouldNotContain(row => row.Action == IdentityAuditActions.Link);
+        }
 
         using var retry = await ConfirmAsync(client, session, linkCookie);
 
         retry.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await LinkTestHost.MemberAsync(retry, "outcome")).ShouldBe("already_linked");
-        (await host.AuditRowsAsync(orgId)).Count(row => row.Action == IdentityAuditActions.Link).ShouldBe(1);
+
+        foreach (var org in new[] { orgId, secondOrg })
+        {
+            (await host.AuditRowsAsync(org)).Count(row => row.Action == IdentityAuditActions.Link).ShouldBe(1);
+        }
+    }
+
+    /// <summary>
+    /// A confirm that MOVED the identity and then could not audit it answers 503 and re-issues the staging carrying
+    /// the account the identity came from; the retry answers <c>already_linked</c> — the store no longer reports the
+    /// move — and still writes exactly one <c>auth.link_move</c> in every active org (F1, D-S81-Q5).
+    /// </summary>
+    /// <remarks>
+    /// The fault is armed on the ACTION, so the interesting half is proven: <c>auth.link</c> committed in both orgs
+    /// and <c>auth.link_move</c> did not. The retry appends <c>auth.link</c> again (at-least-once, recorded in the
+    /// route's own remarks) and the move row exactly once, which is what the carry-forward exists for.
+    /// </remarks>
+    [Fact]
+    public async Task Confirm_AuditFaultAfterAMove_CarriesTheMoveToTheRetry()
+    {
+        FaultingAuditWriter? audit = null;
+
+        using var host = LinkTestHost.Start(
+            Fixture,
+            services =>
+            {
+                services.RemoveAll<IIdentityAuditWriter>();
+                services.AddSingleton<IIdentityAuditWriter>(provider =>
+                    audit = new FaultingAuditWriter(AuditWriterFactory.Create(provider), failingWrites: 0));
+            },
+            LinkTestHost.Provider(LinkTestHost.Google, GoogleSubject, Email),
+            LinkTestHost.Provider(LinkTestHost.GitHub, GitHubSubject, MovableEmail));
+        using var client = host.CreateLinkClient();
+
+        var (userId, session, orgId) = await MemberAsync(host, client, LinkTestHost.Google, GoogleSubject);
+
+        var secondOrg = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        await host.SeedMembershipAsync(secondOrg, userId);
+
+        // The source account: its first sign-in created the identity and was refused for want of a membership, so
+        // it holds no membership and no live session and the identity may be moved.
+        using (var source = await host.SignInAsync(client, LinkTestHost.GitHub))
+        {
+            source.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        }
+
+        var movedFrom = (await host.UserIdAsync(LinkTestHost.GitHub, GitHubSubject))
+            ?? throw new InvalidOperationException("the source sign-in created no identity");
+
+        var staged = await StageAsync(host, client, LinkTestHost.GitHub, session);
+        var original = host.ReadStagedLink(staged);
+
+        // The link row commits in both orgs and the MOVE row fails: the state the staging must carry forward.
+        audit.ShouldNotBeNull().Arm(IdentityAuditActions.LinkMove, 1);
+
+        string restaged;
+        using (var failed = await ConfirmAsync(client, session, staged))
+        {
+            failed.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+            failed.Headers.RetryAfter.ShouldNotBeNull();
+
+            restaged = LinkTestHost.CookieValue(failed, LinkConfirmCookie.Name)
+                ?? throw new InvalidOperationException("the failed audit did not re-issue the staging");
+
+            // The re-issued staging is the same staging: same account, same issuance (hence the SAME deadline, not
+            // a fresh ten minutes), plus the account it came from.
+            var payload = host.ReadStagedLink(restaged);
+            payload.UserId.ShouldBe(userId);
+            payload.IssuedAt.ShouldBe(original.IssuedAt, "a re-issued staging never extends the ten-minute window");
+            payload.LinkId.ShouldBe(original.LinkId);
+            payload.MovedFromUserId.ShouldBe(movedFrom);
+
+            var header = LinkTestHost.Cookies(failed, LinkConfirmCookie.Name).ShouldHaveSingleItem();
+            var maxAge = MaxAgeSeconds(header);
+            maxAge.ShouldBeGreaterThan(0);
+            maxAge.ShouldBeLessThan(
+                LinkConfirmCookie.LifetimeSeconds,
+                "the re-issued cookie carries the REST of the window, not a new one");
+        }
+
+        // The move committed and its link row was audited; the move row was not.
+        (await host.UserIdAsync(LinkTestHost.GitHub, GitHubSubject)).ShouldBe(userId);
+        foreach (var org in new[] { orgId, secondOrg })
+        {
+            var failedRows = await host.AuditRowsAsync(org);
+            failedRows.Count(row => row.Action == IdentityAuditActions.Link).ShouldBe(1);
+            failedRows.ShouldNotContain(row => row.Action == IdentityAuditActions.LinkMove);
+        }
+
+        using var retry = await ConfirmAsync(client, session, restaged);
+
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await LinkTestHost.MemberAsync(retry, "outcome")).ShouldBe("already_linked");
+        LinkTestHost.CookieValue(retry, LinkConfirmCookie.Name).ShouldBe(string.Empty);
+
+        foreach (var org in new[] { orgId, secondOrg })
+        {
+            var rows = await host.AuditRowsAsync(org);
+            var moves = rows.Where(row => row.Action == IdentityAuditActions.LinkMove).ToArray();
+
+            moves.Length.ShouldBe(1, "the retry writes the move row the failed attempt could not");
+            moves[0].MetadataJson.ShouldNotBeNull().ShouldContain(movedFrom.ToString("D"));
+            moves[0].ObjectId.ShouldBe(userId.ToString("D"));
+
+            // At-least-once, as the route's own remarks record: the org's auth.link row is appended again.
+            rows.Count(row => row.Action == IdentityAuditActions.Link).ShouldBe(2);
+        }
     }
 
     // ------------------------------------------------------------------ nothing sensitive on the wire
@@ -1092,6 +1305,24 @@ public sealed class IdentityLinkingTests : HarnessTest
     }
 
     /// <summary>
+    /// The <c>max-age</c> of one raw <c>Set-Cookie</c> header value, so a case can prove a cookie carries the REST of
+    /// a window instead of a fresh one.
+    /// </summary>
+    /// <param name="setCookie">One header value, e.g. <c>__Host-evidgate_link=…; max-age=599; path=/</c>.</param>
+    private static int MaxAgeSeconds(string setCookie)
+    {
+        ArgumentNullException.ThrowIfNull(setCookie);
+
+        const string Marker = "max-age=";
+        var start = setCookie.IndexOf(Marker, StringComparison.OrdinalIgnoreCase);
+        start.ShouldBeGreaterThanOrEqualTo(0, "the cookie carries a max-age");
+
+        return int.Parse(
+            setCookie[(start + Marker.Length)..].Split(';')[0],
+            System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
     /// A store that answers one outcome for any request, so the route's mapping of the outcomes the database
     /// would rarely produce is proven at its seam.
     /// </summary>
@@ -1103,7 +1334,6 @@ public sealed class IdentityLinkingTests : HarnessTest
             string provider,
             string subject,
             string email,
-            string? displayName,
             CancellationToken cancellationToken) =>
             ValueTask.FromResult(Result.Success(new LinkOutcome(result, null)));
     }

@@ -22,14 +22,16 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// group as <c>start</c>/<c>callback</c> so it carries the same single envelope filter.
 /// </para>
 /// <para>
-/// The token is a bearer secret. It arrives once, in a request BODY (never a URL, a query string or a
-/// <c>Location</c>), is validated with <see cref="InviteTokenFormat.TryParse"/>, and leaves the server only
+/// The token is a bearer secret. It arrives once, in a request BODY — <c>{"invite_token": "evgi_…"}</c>, the
+/// <c>InviteTokenRequest</c> of <c>contracts/openapi.yaml</c> — never a URL, a query string or a
+/// <c>Location</c>, is validated with <see cref="InviteTokenFormat.TryParse"/>, and leaves the server only
 /// inside the encrypted <see cref="InviteTokenCookie"/>: the answer is a bodiless 204 and the value is never
 /// logged, counted, echoed, stored on the session row or copied into a <c>returnUrl</c>. A malformed token is
-/// 422 <c>request_invalid</c> with no cookie written, so a client learns nothing about whether a
-/// well-formed token exists. The route is throttled per client address from the CI exchange limiter's budget
-/// under its own key prefix, aimed at the same cost as a <c>start</c>: one client cannot fill the cookie jar
-/// (or the staging path) for everyone else.
+/// 422 <c>request_invalid</c> with <c>details[].path</c> = <c>invite_token</c> and no cookie written, so a
+/// client learns nothing about whether a well-formed token exists; <c>path</c> is <c>body</c> only when the
+/// body itself is wrong (not JSON, not a JSON object, or not <c>application/json</c>). The route is throttled
+/// per client address from the CI exchange limiter's budget under its own key prefix, aimed at the same cost
+/// as a <c>start</c>: one client cannot fill the cookie jar (or the staging path) for everyone else.
 /// </para>
 /// <para>
 /// The body is bounded before it is parsed: a declared or streamed length over <see cref="MaxBodyBytes"/> is
@@ -55,8 +57,11 @@ internal static class InviteTokenEndpoints
     /// <summary>This route's answer is never cacheable: it sets a credential-bearing cookie.</summary>
     private const string NoStore = "no-store";
 
-    private static readonly JsonSerializerOptions BodyOptions =
-        new(JsonSerializerDefaults.Web) { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
+    /// <summary>
+    /// The wire member name of the token in the request body (<c>contracts/openapi.yaml</c>,
+    /// <c>InviteTokenRequest</c>). It is also the <c>details[].path</c> of every refusal that names the field.
+    /// </summary>
+    private const string TokenField = "invite_token";
 
     /// <summary>Maps the route onto the login group and returns it.</summary>
     /// <param name="group">The <c>/v1/auth</c> group <see cref="LoginEndpoints"/> built.</param>
@@ -145,12 +150,20 @@ internal static class InviteTokenEndpoints
     /// Reads the body under <see cref="MaxBodyBytes"/> and returns <c>invite_token</c>, or the error the route
     /// answers (413 or 422). Nothing read here is logged.
     /// </summary>
+    /// <remarks>
+    /// The body is parsed as a <see cref="JsonDocument"/> rather than deserialized into a record, because the
+    /// contract fixes WHICH field a refusal names: a non-string <c>invite_token</c> is
+    /// <c>details[].path = invite_token</c>, while a body that is not JSON, or not a JSON object, is the whole
+    /// body's fault and reports <c>body</c> (contracts/openapi.yaml, <c>POST /auth/invite-token</c>).
+    /// </remarks>
     /// <param name="context">The request.</param>
     /// <param name="cancellationToken">Request abort.</param>
     private static async Task<(string? Token, Error? Error)> ReadBodyAsync(
         HttpContext context,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         if (context.Request.ContentLength > MaxBodyBytes)
         {
             return (null, TooLarge());
@@ -183,17 +196,60 @@ internal static class InviteTokenEndpoints
             return (null, Invalid("the request body is required"));
         }
 
-        InviteTokenRequest? body;
+        JsonDocument document;
         try
         {
-            body = JsonSerializer.Deserialize<InviteTokenRequest>(limited.ToArray(), BodyOptions);
+            document = JsonDocument.Parse(limited.ToArray());
         }
         catch (JsonException)
         {
             return (null, Invalid("the request body is not valid JSON"));
         }
 
-        return (body?.InviteToken, null);
+        using (document)
+        {
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                ? ReadToken(document.RootElement)
+                : (null, Invalid("the request body must be a JSON object"));
+        }
+    }
+
+    /// <summary>
+    /// <c>invite_token</c> out of a JSON object body, or the refusal a value of the wrong type earns.
+    /// </summary>
+    /// <param name="body">The request body, already known to be a JSON object.</param>
+    /// <returns>
+    /// The token — null when the member is absent or explicitly <c>null</c>, which the caller's shape check
+    /// then refuses as a field error — or the 422 whose <c>details[].path</c> names <c>invite_token</c> when
+    /// the member carries anything but a string. Either verdict is about SHAPE only: nothing here can reveal
+    /// whether a token exists.
+    /// </returns>
+    private static (string? Token, Error? Error) ReadToken(JsonElement body)
+    {
+        string? token = null;
+
+        // The name is matched case-insensitively, as the serializer this replaced did, and the last
+        // occurrence of a repeated member wins, as it would there too.
+        foreach (var property in body.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, TokenField, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (property.Value.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+            {
+                // A number, a boolean, an object or an array is not a token: the contract names the field,
+                // so the client is told which member to fix and nothing about the token itself.
+                return (null, Error.Invalid(
+                    "the invite token must be a string",
+                    [new ErrorDetail(TokenField, "invalid")]));
+            }
+
+            token = property.Value.GetString();
+        }
+
+        return (token, null);
     }
 
     private static Error TooLarge() => new(
@@ -203,8 +259,3 @@ internal static class InviteTokenEndpoints
 
     private static Error Invalid(string message) => Error.Invalid(message, [new ErrorDetail("body", "invalid")]);
 }
-
-/// <summary>The wire body of <c>POST /v1/auth/invite-token</c>: <c>{"invite_token": "evgi_…"}</c>.</summary>
-/// <param name="InviteToken">The token the landing page received, exactly as minted; null when the body omitted
-/// it, which the route refuses like a malformed one.</param>
-internal sealed record InviteTokenRequest(string? InviteToken);

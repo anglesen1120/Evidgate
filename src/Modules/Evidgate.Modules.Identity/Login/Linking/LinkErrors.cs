@@ -21,8 +21,24 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 /// </para>
 /// <para>
 /// No outcome here is counted as a login attempt: the metric's vocabulary
-/// (<c>EvidgateTelemetry.RecordLoginAttempt</c>) is a provider sign-in, and a link that borrows it would
-/// inflate the sign-in success rate. The callback counts the attempt it completed, as it does for a sign-in.
+/// (<c>EvidgateTelemetry.RecordLoginAttempt</c>) is a provider sign-in and measures the sign-in success
+/// rate, and a link that borrowed it would inflate that rate. This slice adds no counter of its own, and the
+/// shared callback records nothing for the two things a link can decide: a link it completed and a link its
+/// seam refused (a 409 <c>binding_conflict</c>, a 401 <c>unauthenticated</c>) never reach the sign-in
+/// outcome, neither as <c>completed</c> nor as the refusal code.
+/// </para>
+/// <para>
+/// <b>Residual, by design of the shared route.</b> Refusals the callback raises itself — a state mismatch, a
+/// replayed or foreign state cookie, the provider's own <c>error</c>, a rejected exchange, a provider
+/// outage, and the 503 of an uncomposed link seam — are answered by the login errors of the shared route,
+/// which do count a <c>token_invalid</c>/<c>unavailable</c> outcome. A state cookie that cannot be
+/// unprotected has no purpose at all, so those refusals cannot be attributed to a sign-in or to a link in
+/// the first place; the metric therefore counts them as it always has, and only a completed link attempt is
+/// reliably absent from it.
+/// </para>
+/// <para>
+/// The 503 helper is <see cref="UnavailableWithRetryAfter(HttpContext, LoginOptions)"/>: a 503 always carries
+/// <c>Retry-After</c> (00 §9.2), and the value comes from <c>EVIDGATE__LOGIN__RETRYAFTERSECONDS</c>.
 /// </para>
 /// </remarks>
 internal static class LinkErrors

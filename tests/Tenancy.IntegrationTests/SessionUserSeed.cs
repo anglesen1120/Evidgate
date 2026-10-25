@@ -20,7 +20,10 @@ namespace Tenancy.IntegrationTests;
 /// The write runs on its own owner connection rather than the app role's data source: 0041 gives the
 /// runtime roles nothing at all on <c>user</c>, and a separate connection keeps the insert out of the
 /// statement log the P3 statement-budget test reads. Concurrent first requests of one caller share a
-/// single in-flight seed, so a racing request never runs before the row exists.
+/// single in-flight seed, so a racing request never runs before the row exists, and the completed seed
+/// stays in the dictionary for the life of the process: the row is written once per (database, caller),
+/// so no later request of that caller repeats the owner insert. Only a faulted seed is dropped, which
+/// lets the next request retry and report its own error.
 /// </para>
 /// </summary>
 internal static class SessionUserSeed
@@ -80,11 +83,13 @@ internal static class SessionUserSeed
             {
                 await seed.ConfigureAwait(false);
             }
-            finally
+            catch
             {
-                // Kept only while it runs: a failed seed must not look done, so the next request retries and
-                // reports its own error instead of a stale one.
+                // A faulted seed must not look done: the entry goes so the next request retries and reports
+                // its own error instead of this one. A completed seed stays, because the row it wrote is
+                // what every later request of the caller relies on.
                 Seeds.TryRemove(key, out _);
+                throw;
             }
 
             return;

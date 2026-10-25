@@ -21,13 +21,16 @@
 --          the table — so the step that can fail for data reasons is the explicit one
 --          below, and not an implicit scan inside the `add`. Honest caveat: the
 --          Migrator applies one file in ONE transaction (`WithTransactionPerScript`,
---          this README), so the ACCESS EXCLUSIVE lock the `add` takes is held until
---          the file commits and the scan runs under it either way. What the two-step
---          form buys here is the named failure (next point) and the shape an operator
---          needs when the same statements are applied to a large live table outside
---          the runner: add + commit (momentary lock), verify, then
---          `validate constraint` alone (SHARE UPDATE EXCLUSIVE, which blocks neither
---          reads nor writes).
+--          this README), so the lock the `add` takes is held until the file commits
+--          and the scan runs under it either way. That lock is SHARE ROW EXCLUSIVE on
+--          BOTH tables (the referencing `membership` and the referenced `user`), not
+--          ACCESS EXCLUSIVE: it blocks writes to either table from other sessions and
+--          still allows reads, which is what makes the momentary form below tolerable.
+--          What the two-step form buys here is the named failure (next point) and the
+--          shape an operator needs when the same statements are applied to a large
+--          live table outside the runner: add + commit (momentary SHARE ROW
+--          EXCLUSIVE), verify, then `validate constraint` alone (SHARE UPDATE
+--          EXCLUSIVE, which blocks neither reads nor writes).
 --       2. The `$orphans$` block counts rows whose `user_id` has no `user` row and
 --          raises 23503 with the count and this key's name, instead of letting the
 --          check fail with a bare `23503` and no instruction. It never deletes:
@@ -96,10 +99,10 @@
 --         a handler.
 --     It never rewrites `user.email`, never merges two users, and writes no other
 --     row: `user_identity.email_at_provider` travels with the moved row (it is the
---     address the provider reported when that identity was linked), and
---     `p_display_name` is accepted for the signature the linking handler builds from
---     the profile but deliberately not written — a second provider's profile name must
---     not rename the account, whose name is the login upsert's (0042).
+--     address the provider reported when that identity was linked). There is
+--     deliberately no profile-name argument at all: a second provider's display name
+--     must not rename the account, whose name is the login upsert's (0042), so the
+--     signature carries nothing it would not write.
 --
 -- Why both definers are safe (TL T80, identical hygiene to 0014/0016/0042/0043):
 -- owned by `evidgate_owner`, whose `*_owner_backfill` policies (0041:193-212,
@@ -133,7 +136,7 @@
 -- in place): the file is additive, so the contract step drops what it added —
 --   alter table public.membership drop constraint membership_user_fk;
 --   drop index if exists public.membership_user_idx;
---   drop function if exists evidgate_resolve.login_link_identity(uuid, text, text, text, text, uuid);
+--   drop function if exists evidgate_resolve.login_link_identity(uuid, text, text, text, uuid);
 --   drop function if exists evidgate_resolve.session_user(bytea, integer);
 -- Dropping the key needs no data change: a NULL `user_id` was always legal and a
 -- non-null one stays readable by value, exactly as 0011 left it.
@@ -183,7 +186,8 @@ end
 $orphans$;
 
 -- The scan itself takes SHARE UPDATE EXCLUSIVE, which blocks neither reads nor writes (the
--- add above already holds its ACCESS EXCLUSIVE until this file's transaction commits).
+-- add above already holds SHARE ROW EXCLUSIVE on both tables until this file's transaction
+-- commits).
 alter table public.membership validate constraint membership_user_fk;
 
 -- Which user a presented session cookie belongs to (02.3.1 §4, AC1/AC3). The lookup is the
@@ -220,7 +224,6 @@ create or replace function evidgate_resolve.login_link_identity(
   p_provider text,
   p_subject text,
   p_email text,
-  p_display_name text,
   p_identity_id uuid)
 returns table (outcome text, moved_from_user_id uuid)
 language plpgsql
@@ -332,6 +335,6 @@ end
 $$;
 
 revoke all on function evidgate_resolve.session_user(bytea, integer) from public;
-revoke all on function evidgate_resolve.login_link_identity(uuid, text, text, text, text, uuid) from public;
+revoke all on function evidgate_resolve.login_link_identity(uuid, text, text, text, uuid) from public;
 grant execute on function evidgate_resolve.session_user(bytea, integer) to evidgate_app;
-grant execute on function evidgate_resolve.login_link_identity(uuid, text, text, text, text, uuid) to evidgate_app;
+grant execute on function evidgate_resolve.login_link_identity(uuid, text, text, text, uuid) to evidgate_app;

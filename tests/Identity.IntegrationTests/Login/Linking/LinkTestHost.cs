@@ -642,14 +642,15 @@ internal sealed class LinkTestHost : WebApplicationFactory<Program>
 
 /// <summary>
 /// The production <see cref="IdentityAuditWriter"/> behind a fault switch (02.3.1-T2.2): the first
-/// <see cref="FailingWrites"/> calls raise a database exception and nothing else changes, so a case can prove
-/// the confirm route's fail-closed answer AND its convergence — the retry of the same staged link reaches the
-/// real writer and re-audits.
+/// <see cref="FailingWrites"/> matching calls raise a database exception and nothing else changes, so a case can
+/// prove the confirm route's fail-closed answer AND its convergence — the retry of the same staged link reaches
+/// the real writer and re-audits.
 /// </summary>
 internal sealed class FaultingAuditWriter : IIdentityAuditWriter
 {
     private readonly IIdentityAuditWriter _inner;
     private int _remaining;
+    private string? _action;
 
     /// <summary>Wraps <paramref name="inner"/>, failing its first <paramref name="failingWrites"/> calls.</summary>
     /// <param name="inner">The writer that answers once the fault budget is spent.</param>
@@ -669,10 +670,30 @@ internal sealed class FaultingAuditWriter : IIdentityAuditWriter
     /// registration — a host-armed fault would turn the member's sign-in into the 503 instead of the confirm.
     /// </summary>
     /// <param name="writes">How many calls raise from now on.</param>
-    internal void Arm(int writes)
+    internal void Arm(int writes) => ArmCore(action: null, writes);
+
+    /// <summary>
+    /// Arms the fault for the next <paramref name="writes"/> calls that carry <paramref name="action"/> only, so a
+    /// case can let one row of a confirm commit and fail the next: the confirm writes <c>auth.link</c> before
+    /// <c>auth.link_move</c>, and "the link is recorded, the move is not" is the state the staging has to carry.
+    /// </summary>
+    /// <param name="action">The action whose writes raise (<see cref="IdentityAuditActions"/>).</param>
+    /// <param name="writes">How many such calls raise from now on.</param>
+    internal void Arm(string action, int writes)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(action);
+
+        ArmCore(action, writes);
+    }
+
+    /// <summary>Arms the fault, optionally for one action only (<paramref name="action"/> null: every call).</summary>
+    /// <param name="action">The action whose writes raise, or null for any.</param>
+    /// <param name="writes">How many calls raise from now on.</param>
+    private void ArmCore(string? action, int writes)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(writes);
 
+        _action = action;
         Interlocked.Exchange(ref _remaining, writes);
     }
 
@@ -682,13 +703,14 @@ internal sealed class FaultingAuditWriter : IIdentityAuditWriter
         IReadOnlyCollection<Guid> orgIds,
         CancellationToken cancellationToken)
     {
-        if (_remaining > 0)
+        if (_remaining > 0
+            && (_action is null || string.Equals(_action, auditEvent.Action, StringComparison.Ordinal)))
         {
             _remaining--;
 
             // The type the route's fail-closed path catches: an audit chain that cannot commit looks exactly
             // like this to the caller.
-            throw new NpgsqlException("injected audit fault (02.3.1-T2.2 test)");
+            throw new NpgsqlException("injected audit fault (02.3.1-T2 test)");
         }
 
         return _inner.WriteAsync(auditEvent, orgIds, cancellationToken);

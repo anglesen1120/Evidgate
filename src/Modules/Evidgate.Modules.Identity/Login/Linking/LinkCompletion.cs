@@ -52,7 +52,7 @@ internal sealed class LinkCompletion(
         // composition bug rather than a client's request: fail closed the same way an absent seam does.
         if (request.LinkUserId is not { } linkUserId)
         {
-            return Fail(LinkErrors.UnavailableWithRetryAfter(request.HttpContext, options.Value));
+            return Result.Failure<string>(LinkErrors.UnavailableWithRetryAfter(request.HttpContext, options.Value));
         }
 
         var resolved = await sessions
@@ -61,7 +61,7 @@ internal sealed class LinkCompletion(
 
         if (!resolved.IsSuccess)
         {
-            return Fail(resolved.Error!.Status == StatusCodes.Status503ServiceUnavailable
+            return Result.Failure<string>(resolved.Error!.Status == StatusCodes.Status503ServiceUnavailable
                 ? LinkErrors.UnavailableWithRetryAfter(request.HttpContext, options.Value)
                 : resolved.Error!);
         }
@@ -73,22 +73,17 @@ internal sealed class LinkCompletion(
             return Result.Failure<string>(LinkErrors.Unauthenticated);
         }
 
+        // Refused BEFORE the cookie exists, not at the confirm: a subject longer than the column's 255 or an
+        // address longer than `user_identity`'s 320 would stage fine and then be refused by the table on every
+        // confirm (23514, answered 503 and retried forever). "Start the link again" is the honest answer, and
+        // nothing is left staged.
+        if (!LinkConfirmCookie.IsStageable(request.Identity))
+        {
+            return Result.Failure<string>(LinkErrors.LinkNotPending);
+        }
+
         cookie.Write(request.HttpContext, linkUserId, request.Identity);
 
         return Result.Success(ReturnUrlEncoder.ToLocation(request.ReturnUrl));
-    }
-
-    /// <summary>
-    /// <paramref name="error"/> as the seam's failure. The 503 already carries <c>Retry-After</c> (set by
-    /// <see cref="LinkErrors.UnavailableWithRetryAfter(Microsoft.AspNetCore.Http.HttpContext, LoginOptions)"/>), and it means
-    /// "start the link again": the callback has already deleted the pending-login cookie and spent its
-    /// one-time <c>state</c>, so replaying the same callback answers 401 <c>token_invalid</c>.
-    /// </summary>
-    /// <param name="error">The failure the callback renders.</param>
-    private static Result<string> Fail(Error error)
-    {
-        ArgumentNullException.ThrowIfNull(error);
-
-        return Result.Failure<string>(error);
     }
 }

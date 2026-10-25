@@ -1377,7 +1377,7 @@ export type MoveManualCaseResponse = {
 };
 
 /**
- * Body of `POST /v1/auth/invite-token` (02.3.1-T2 Q1): the token the invite link carried, presented once and staged in the `__Host-evidgate_invite` cookie. The member is treated as required — an absent or non-string value is 422 `request_invalid` with `details[].path` = `invite_token` — so a client always sends it.
+ * Body of `POST /v1/auth/invite-token` (02.3.1-T2 Q1): the token the invite link carried, presented once and staged in the `__Host-evidgate_invite` cookie. The member is treated as required — an absent or non-string value is 422 `request_invalid` with `details[].path` = `invite_token` — so a client always sends it. A member this schema does not declare is ignored, not refused: the route binds with a snake_case `JsonSerializerOptions` and no strict-member check, exactly like `CiTokenRequest`.
  */
 export type InviteTokenRequest = {
     /**
@@ -1387,7 +1387,7 @@ export type InviteTokenRequest = {
 };
 
 /**
- * Body of `POST /v1/auth/link/{provider}` (02.3.1-T2 Q4), optional: an empty or absent body lands on the app root after the link.
+ * Body of `POST /v1/auth/link/{provider}` (02.3.1-T2 Q4), optional: an empty or absent body lands on the app root after the link. A member this schema does not declare is ignored, not refused: the route binds with a snake_case `JsonSerializerOptions` and no strict-member check, exactly like `CiTokenRequest`.
  */
 export type LinkStartRequest = {
     /**
@@ -2008,11 +2008,11 @@ export type CompleteFederatedLoginData = {
 
 export type CompleteFederatedLoginErrors = {
     /**
-     * 401 `token_invalid` — the federated login could not be verified (02.3.1 AC8): the pending-login cookie is missing, expired or tampered with, the `state` does not match or was already used, the callback named another provider, the provider reported an `error`, the `code` is missing or oversized, or the provider rejected the exchange. One code and one message for every one of those causes, and no provider text, code, token, subject or email in the body.
+     * 401 `token_invalid` — the federated login could not be verified (02.3.1 AC8): the pending-login cookie is missing, of another provider, expired or tampered with, the `state` does not match or was already used, the provider reported an `error`, the `code` is missing or oversized, or the provider rejected the exchange. Or 401 `unauthenticated` — a state of purpose `link` whose callback did not come from the session of the account the link was started for: no session cookie, one for another account, or one that expired or was revoked during the provider round-trip (02.3.1-T2 Q4); nothing is staged then, so the link has to be started again. Each cause keeps its own code and no provider text, code, token, subject or email is in the body.
      */
     401: ErrorEnvelope;
     /**
-     * 403 `no_membership` — the identity is verified but the account holds no membership in an active organization, so no session row and no session cookie are created (02.3.1 AC3); or 403 `account_disabled` — the account's `user.status` is `disabled` (02.3.1 §6). Both are `retryable: false`.
+     * Purpose `login` only, both `retryable: false`, both without a `session` row or a session cookie: 403 `no_membership` — the identity is verified but the account holds no membership in an active organization (02.3.1 AC3); or 403 `account_disabled` — the account's `user.status` is `disabled` (02.3.1 §6). A refusal from the invite bind, or from the audit write that must precede the session, is not a 403: the bind's seat limit does not stop the login, and an audit that cannot commit is 503 `unavailable`.
      */
     403: ErrorEnvelope;
     /**
@@ -2024,7 +2024,7 @@ export type CompleteFederatedLoginErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 unavailable — always `Retry-After` (00 §9.2)
+     * 503 `unavailable`, always with `Retry-After` — the same answer as on `start` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) for a provider that is configured at composition but has no usable client credential or JWKS, for a deployment with no `EVIDGATE__LOGIN__PUBLICBASEURL`, and for a provider timeout, transport failure or 5xx (02.3.1 AC8); plus the completion's own infrastructure faults: a database outage, an audit chain that could not be appended (fail-closed, 02.3.1-T2.2), and — on a state of purpose `link` — a deployment that composes no link seam, a missing session pepper or a session lookup fault. The callback it answers is already spent (both cookies deleted, `state` consumed), so the header says when the browser may sign in or start the link again.
      */
     503: ErrorEnvelope;
 };
@@ -2108,7 +2108,7 @@ export type StartProviderLinkErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable` — the identity store or the session lookup is not usable: a registered provider whose client credential is missing, a deployment with no `EVIDGATE__LOGIN__PUBLICBASEURL` (one answer for both, so the route is no oracle for the deployment's configuration), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage. `Retry-After` is supplied through `EVIDGATE__LOGIN__RETRYAFTERSECONDS` when the route reports the outage itself; a refusal raised by the session lookup (the missing-pepper case) carries the code without the header.
+     * 503 `unavailable` — the identity store or the session lookup is not usable: a registered provider whose client credential is missing, a deployment with no `EVIDGATE__LOGIN__PUBLICBASEURL` (one answer for both, so the route is no oracle for the deployment's configuration), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage. The route sets `Retry-After` through `EVIDGATE__LOGIN__RETRYAFTERSECONDS` when it reports the outage itself; a refusal raised by the session lookup (the missing-pepper case) leaves the header to the envelope filter's default `60` (00 §9.2).
      */
     503: ErrorEnvelope;
 };
@@ -2151,7 +2151,7 @@ export type DiscardPendingProviderLinkErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup.
+     * 503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup; the route sets no `Retry-After`, so the envelope filter's default `60` applies (00 §9.2).
      */
     503: ErrorEnvelope;
 };
@@ -2192,7 +2192,7 @@ export type GetPendingProviderLinkErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup. The answer is the 00 §9.2 envelope and never a 200 with an empty body.
+     * 503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup. The answer is the 00 §9.2 envelope and never a 200 with an empty body; the route sets no `Retry-After`, so the envelope filter's default `60` applies.
      */
     503: ErrorEnvelope;
 };
@@ -2239,7 +2239,7 @@ export type ConfirmProviderLinkErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable`, retryable — a database fault, an audit chain that could not be extended (the staging is kept, so the retry converges), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a stored contract this build does not know. This route sets `Retry-After` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) on every one of those answers.
+     * 503 `unavailable`, retryable — a database fault, an audit chain that could not be extended (the staging is kept, so the retry converges), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a stored contract this build does not know. The route sets `Retry-After` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) on the answers it raises itself (the unknown stored contract, the audit failure); the session lookup and the store command leave the header to the envelope filter's default `60` (00 §9.2).
      */
     503: ErrorEnvelope;
 };

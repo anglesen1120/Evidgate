@@ -1,7 +1,10 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Net;
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Invites;
 using Evidgate.Modules.Identity.Login;
 using Microsoft.Extensions.Logging;
@@ -364,6 +367,118 @@ public sealed class CallbackPlumbingTests
         completion.Calls.ShouldBe(0);
     }
 
+    /// <summary>
+    /// The provider name of the metric case below: unique to it, because the meter and its counter are
+    /// process-wide and a parallel suite's sign-in measurements must never be mistaken for this case's.
+    /// </summary>
+    private const string MetricProvider = "metricprobe";
+
+    [Fact]
+    public async Task Only_A_Sign_In_Callback_Is_Counted_As_A_Login_Attempt()
+    {
+        var attempts = new ConcurrentQueue<(string? Provider, string? Outcome)>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, publisher) =>
+            {
+                if (instrument.Meter.Name == EvidgateTelemetry.MeterName
+                    && instrument.Name == EvidgateTelemetry.LoginAttemptMetricName)
+                {
+                    publisher.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+        {
+            if (instrument.Name != EvidgateTelemetry.LoginAttemptMetricName)
+            {
+                return;
+            }
+
+            var pairs = tags.ToArray();
+            attempts.Enqueue((
+                pairs.FirstOrDefault(pair => pair.Key == "provider").Value as string,
+                pairs.FirstOrDefault(pair => pair.Key == "outcome").Value as string));
+        });
+        listener.Start();
+
+        var clock = new MutableClock(Now);
+        var completion = new FakeLoginCompletion();
+        var link = new FakeLinkCompletion();
+        var provider = new FakeLoginProvider(MetricProvider)
+        {
+            Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity(MetricProvider)),
+        };
+        using var host = LoginTestHost.Start(clock, completion, link, provider);
+        using var client = host.CreateLoginClient();
+
+        // (1) Non-vacuity: a sign-in callback IS one counted login attempt — so "nothing was counted" in the
+        // link cases below cannot be an artefact of a listener that never fires.
+        var (payload, cookieValue) = await BeginAsync(host, client, MetricProvider);
+
+        using var signIn = await LoginTestHost.SendAsync(
+            client,
+            LoginTestHost.CallbackRequest(MetricProvider, cookieValue, payload.State));
+
+        signIn.StatusCode.ShouldBe(HttpStatusCode.Found);
+        completion.Calls.ShouldBe(1);
+        Outcomes(attempts, MetricProvider).ShouldContain(
+            "completed",
+            "a sign-in callback is one counted login attempt (02.3.1-T1.1)");
+
+        // (2) A link-purpose callback is a staging, not a sign-in, so it must not move the sign-in success
+        // rate (the rule LinkErrors states): after its own `start`, which IS counted, only that `started`
+        // measurement may exist — never `completed`.
+        attempts.Clear();
+        var (linkPayload, _) = await BeginAsync(host, client, MetricProvider);
+        var staged = linkPayload with { Purpose = LoginStatePayload.PurposeLink, LinkUserId = Guid.NewGuid() };
+
+        using var linkResponse = await LoginTestHost.SendAsync(
+            client,
+            LoginTestHost.CallbackRequest(MetricProvider, host.ProtectPending(staged), staged.State));
+
+        linkResponse.StatusCode.ShouldBe(HttpStatusCode.Found);
+        link.Calls.ShouldBe(1);
+        completion.Calls.ShouldBe(1, "a link attempt never reaches the sign-in completion");
+        Outcomes(attempts, MetricProvider).ShouldBe(
+            ["started"],
+            "the link's own start is counted; the link callback that completed it is not");
+
+        // (3) The same for the failure side: a link refused by its seam must not appear as a refused sign-in
+        // under its own error code.
+        attempts.Clear();
+        var (refusedPayload, _) = await BeginAsync(host, client, MetricProvider);
+        var refusedStaging = refusedPayload with
+        {
+            Purpose = LoginStatePayload.PurposeLink,
+            LinkUserId = Guid.NewGuid(),
+        };
+        link.Failure = new Error(ApiErrorCode.BindingConflict, "that identity belongs to another account", 409);
+
+        using var refused = await LoginTestHost.SendAsync(
+            client,
+            LoginTestHost.CallbackRequest(MetricProvider, host.ProtectPending(refusedStaging), refusedStaging.State));
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await LoginTestHost.ErrorCodeAsync(refused)).ShouldBe(ApiErrorCode.BindingConflict);
+        Outcomes(attempts, MetricProvider).ShouldBe(
+            ["started"],
+            "a refused link is not a refused sign-in attempt");
+    }
+
+    /// <summary>The outcomes the attempt counter recorded for one provider, in order.</summary>
+    /// <param name="attempts">What the case's listener captured.</param>
+    /// <param name="provider">The provider label to keep.</param>
+    private static List<string?> Outcomes(
+        ConcurrentQueue<(string? Provider, string? Outcome)> attempts,
+        string provider)
+    {
+        ArgumentNullException.ThrowIfNull(attempts);
+        ArgumentNullException.ThrowIfNull(provider);
+
+        return [.. attempts.Where(attempt => attempt.Provider == provider).Select(attempt => attempt.Outcome)];
+    }
+
     /// <summary>A provider that verifies every callback as this suite's sign-in identity.</summary>
     private static FakeLoginProvider SignedIn() =>
         new(Provider) { Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity(Provider)) };
@@ -371,11 +486,13 @@ public sealed class CallbackPlumbingTests
     /// <summary>Runs <c>start</c> and unprotects the pending-attempt cookie it wrote.</summary>
     /// <param name="host">The host under test.</param>
     /// <param name="client">The case's client.</param>
+    /// <param name="provider">The provider route value to start with.</param>
     private static async Task<(LoginStatePayload Payload, string CookieValue)> BeginAsync(
         LoginTestHost host,
-        HttpClient client)
+        HttpClient client,
+        string provider = Provider)
     {
-        using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest(Provider));
+        using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest(provider));
         start.StatusCode.ShouldBe(HttpStatusCode.Found);
 
         return host.PendingLogin(start);

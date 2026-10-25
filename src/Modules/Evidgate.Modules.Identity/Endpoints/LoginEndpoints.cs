@@ -420,18 +420,28 @@ public static class LoginEndpoints
         // that seam: a link is never completed by the login completion (it would bind a provider to an account
         // without the explicit confirm of AC6), and a sign-in is never completed by the link one. Unprotect
         // already refused every purpose but these two, so "not link" is "login" here.
-        var completed = string.Equals(pending.Purpose, LoginStatePayload.PurposeLink, StringComparison.Ordinal)
+        var isLink = string.Equals(pending.Purpose, LoginStatePayload.PurposeLink, StringComparison.Ordinal);
+        var completed = isLink
             ? await CompleteLinkAsync(context, request, selected.Name, login, cancellationToken).ConfigureAwait(false)
             : await completion.CompleteAsync(request, cancellationToken).ConfigureAwait(false);
 
-        if (!completed.IsSuccess)
+        // The attempt counter is the SIGN-IN success rate and nothing else (02.3.1-T1.1): a link stages an
+        // identity for the explicit confirm of AC6 and signs nobody in, so counting its outcome here — as
+        // `completed` or as its seam's refusal code — would inflate that rate. The linking slice counts no
+        // counter of its own (there is none in EvidgateTelemetry), so what a link decides is recorded
+        // nowhere, exactly as LinkErrors documents; a refusal this route raises itself (an unusable state
+        // cookie, a provider outage) has no known purpose and stays counted as before.
+        if (!isLink)
         {
-            EvidgateTelemetry.RecordLoginAttempt(selected.Name, completed.Error!.Code);
-
-            return completed;
+            EvidgateTelemetry.RecordLoginAttempt(
+                selected.Name,
+                completed.IsSuccess ? OutcomeCompleted : completed.Error!.Code);
         }
 
-        EvidgateTelemetry.RecordLoginAttempt(selected.Name, OutcomeCompleted);
+        if (!completed.IsSuccess)
+        {
+            return completed;
+        }
 
         // The seam promises an app path, and the browser is sent here right after a successful sign-in:
         // this is the sink where a completion bug (a computed target, a provider value) would become an

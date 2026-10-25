@@ -237,7 +237,7 @@ public sealed class LinkResolverTests : SessionTestBase
         [
             "select user_id from evidgate_resolve.session_user(@cookie_hmac, @pepper_version)",
             "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-            + "@user_id, @provider, @subject, @email, @display_name, @identity_id)",
+            + "@user_id, @provider, @subject, @email, @identity_id)",
         ];
 
         foreach (var sql in functionCalls)
@@ -250,7 +250,6 @@ public sealed class LinkResolverTests : SessionTestBase
             command.Parameters.AddWithValue("provider", Provider);
             command.Parameters.AddWithValue("subject", $"operator-{Guid.NewGuid():N}");
             command.Parameters.AddWithValue("email", "operator@example.test");
-            command.Parameters.AddWithValue("display_name", "Operator Probe");
             command.Parameters.AddWithValue("identity_id", Guid.CreateVersion7());
 
             var refused = await Should.ThrowAsync<PostgresException>(() => command.ExecuteNonQueryAsync(Token));
@@ -295,6 +294,37 @@ public sealed class LinkResolverTests : SessionTestBase
         // reported when the identity was linked, and the login upsert (0042) is the writer that refreshes
         // it on a real login.
         (await IdentityRowAsync(Provider, subject))[1].ShouldBe("first@example.test");
+    }
+
+    /// <summary>
+    /// A link never renames the account and has no argument to try with: <c>user.display_name</c> belongs to the
+    /// login upsert of 0042, and the function's signature carries no profile name (F3 of the 02.3.1-T2 review
+    /// removed the parameter that was accepted and never written).
+    /// </summary>
+    [Fact]
+    public async Task Link_NeitherRenamesTheAccountNorTakesAProfileName()
+    {
+        var userId = await SeedUserAsync("no-rename@example.com", displayName: "First Name");
+        var subject = $"rename-{Guid.NewGuid():N}";
+
+        (await LinkAsync(userId, Provider, subject, "no-rename@example.com")).Outcome.ShouldBe("linked");
+
+        (await OwnerScalarAsync<string>("select display_name from public.\"user\" where id = @id", ("id", userId)))
+            .ShouldBe("First Name");
+
+        // The removed shape is not a function at all: a caller that still passes a profile name gets 42883 rather
+        // than an argument that is silently ignored.
+        var refused = await AppRefusalAsync(
+            "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
+            + "@user_id, @provider, @subject, @email, @display_name, @identity_id)",
+            ("user_id", userId),
+            ("provider", Provider),
+            ("subject", $"{subject}-extra"),
+            ("email", "no-rename@example.com"),
+            ("display_name", "Second Name"),
+            ("identity_id", Guid.CreateVersion7()));
+
+        refused.SqlState.ShouldBe(PostgresErrorCodes.UndefinedFunction);
     }
 
     /// <summary>
@@ -536,7 +566,10 @@ public sealed class LinkResolverTests : SessionTestBase
         return value is null or DBNull ? null : (Guid)value;
     }
 
-    /// <summary><c>evidgate_resolve.login_link_identity(...)</c> as the app role, no tenant setting.</summary>
+    /// <summary>
+    /// <c>evidgate_resolve.login_link_identity(...)</c> as the app role, no tenant setting. There is no
+    /// profile-name argument: the function has none, so the signature this call builds is the whole contract.
+    /// </summary>
     private async Task<(string Outcome, Guid? MovedFrom)> LinkAsync(
         Guid userId,
         string provider,
@@ -545,12 +578,11 @@ public sealed class LinkResolverTests : SessionTestBase
     {
         await using var command = AppDataSource.CreateCommand(
             "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-            + "@user_id, @provider, @subject, @email, @display_name, @identity_id)");
+            + "@user_id, @provider, @subject, @email, @identity_id)");
         command.Parameters.AddWithValue("user_id", userId);
         command.Parameters.AddWithValue("provider", provider);
         command.Parameters.AddWithValue("subject", subject);
         command.Parameters.AddWithValue("email", email);
-        command.Parameters.AddWithValue("display_name", "Linked Profile");
         command.Parameters.AddWithValue("identity_id", Guid.CreateVersion7());
 
         await using var reader = await command.ExecuteReaderAsync(Token);

@@ -43,7 +43,6 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource) : ILi
         string provider,
         string subject,
         string email,
-        string? displayName,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(provider);
@@ -54,14 +53,14 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource) : ILi
         {
             await using var command = dataSource.CreateCommand(
                 "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-                + "@user_id, @provider, @subject, @email, @display_name, @identity_id)");
+                + "@user_id, @provider, @subject, @email, @identity_id)");
             command.Parameters.AddWithValue("user_id", userId);
             command.Parameters.AddWithValue("provider", provider);
             command.Parameters.AddWithValue("subject", subject);
             command.Parameters.AddWithValue("email", email);
-            // Accepted for the signature and never written by the function: a second provider's profile name
-            // must not rename an account whose name the login upsert (0042) owns.
-            command.Parameters.AddWithValue("display_name", (object?)displayName ?? DBNull.Value);
+
+            // No profile name: the function has no argument for one, because a second provider's display name must
+            // not rename an account whose name the login upsert (0042) owns.
             command.Parameters.AddWithValue("identity_id", Guid.CreateVersion7());
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);

@@ -82,18 +82,30 @@ public sealed class InviteTokenStagingTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await LoginTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.RequestInvalid);
+        (await ErrorPathsAsync(response)).ShouldBe(["invite_token"], "the contract names the field to fix");
         LoginTestHost.InviteCookies(response).ShouldBeEmpty("a refused token must leave no cookie behind");
         response.Headers.CacheControl!.NoStore.ShouldBeTrue();
         (await LoginTestHost.BodyAsync(response)).ShouldNotContain(token, Case.Sensitive);
     }
 
+    /// <summary>
+    /// The <c>details[].path</c> each refused body must name (contracts/openapi.yaml,
+    /// <c>POST /auth/invite-token</c>): the FIELD for a body whose <c>invite_token</c> is unusable, the BODY
+    /// itself when it is not JSON, not a JSON object, or not <c>application/json</c>.
+    /// </summary>
+    /// <param name="body">The raw request body.</param>
+    /// <param name="path">The <c>details[].path</c> the refusal must carry.</param>
     [Theory]
-    [InlineData("")]
-    [InlineData("{}")]
-    [InlineData("{\"invite_token\": null}")]
-    [InlineData("{\"invite_token\": 42}")]
-    [InlineData("this is not json")]
-    public async Task A_Body_Without_A_Usable_Token_Is_422_And_Stages_Nothing(string body)
+    [InlineData("{\"invite_token\": 42}", "invite_token")]
+    [InlineData("{\"invite_token\": true}", "invite_token")]
+    [InlineData("{\"invite_token\": {\"token\": \"evgi_ABCDEFGHIJKL_secret\"}}", "invite_token")]
+    [InlineData("{\"invite_token\": [\"evgi_ABCDEFGHIJKL_secret\"]}", "invite_token")]
+    [InlineData("{\"invite_token\": null}", "invite_token")]
+    [InlineData("{}", "invite_token")]
+    [InlineData("this is not json", "body")]
+    [InlineData("[]", "body")]
+    [InlineData("", "body")]
+    public async Task A_Body_Without_A_Usable_Token_Is_422_And_Names_The_Field_Or_The_Body(string body, string path)
     {
         using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
@@ -102,6 +114,7 @@ public sealed class InviteTokenStagingTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await LoginTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.RequestInvalid);
+        (await ErrorPathsAsync(response)).ShouldBe([path]);
         LoginTestHost.InviteCookies(response).ShouldBeEmpty();
     }
 
@@ -124,6 +137,7 @@ public sealed class InviteTokenStagingTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await LoginTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.RequestInvalid);
+        (await ErrorPathsAsync(response)).ShouldBe(["body"], "the media type is the body's own fault");
         LoginTestHost.InviteCookies(response).ShouldBeEmpty("a form post must never stage a token");
         response.Headers.CacheControl!.NoStore.ShouldBeTrue();
     }
@@ -204,4 +218,27 @@ public sealed class InviteTokenStagingTests
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
+
+    /// <summary>
+    /// The <c>error.details[].path</c> values of a response body, in order — what tells a client which member
+    /// of the request to fix (00 §9.2).
+    /// </summary>
+    /// <param name="response">The refused response.</param>
+    private static async Task<List<string?>> ErrorPathsAsync(HttpResponseMessage response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        var body = await LoginTestHost.BodyAsync(response);
+        using var document = JsonDocument.Parse(body);
+
+        return document.RootElement.ValueKind == JsonValueKind.Object
+            && document.RootElement.TryGetProperty("error", out var error)
+            && error.TryGetProperty("details", out var details)
+            && details.ValueKind == JsonValueKind.Array
+            ? [.. details.EnumerateArray().Select(detail =>
+                detail.ValueKind == JsonValueKind.Object && detail.TryGetProperty("path", out var path)
+                    ? path.GetString()
+                    : null)]
+            : [];
+    }
 }
