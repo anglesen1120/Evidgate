@@ -74,10 +74,11 @@ internal sealed class AuthoringVersionWriterContract(AuthoringVersionWriter writ
             actorMembershipId,
             entityKind,
             entityId,
-            reason,
-            fromVersionId,
-            context,
-            cancellationToken).ConfigureAwait(false));
+            expectedVersion: null,
+            reason: reason,
+            fromVersionId: fromVersionId,
+            context: context,
+            cancellationToken: cancellationToken).ConfigureAwait(false));
 
     private static AuthoringWriteResult<T> Translate<T>(Result<T> result) => result.IsSuccess
         ? AuthoringWriteResult<T>.Success(result.Value!)

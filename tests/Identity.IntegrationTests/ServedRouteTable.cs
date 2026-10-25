@@ -516,12 +516,14 @@ internal sealed record RouteRequestContext(
     Guid RunId,
     Guid NodeId,
     Guid ItemId,
-    Guid ManualCaseId)
+    Guid ManualCaseId,
+    Guid AuthoringVersionId)
 {
     /// <summary>The seeded tenant plus fresh ids for everything else.</summary>
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -748,7 +750,8 @@ internal static class RouteRequests
                 },
             }));
 
-        // ---- Authoring (13.1.1-T2: routes 1-5, 7-10, 12-17 and 19; the restore and link routes are T3/T4) ------
+        // ---- Authoring (13.1.1-T2 routes 1-5, 7-10, 12-17 and 19; 13.1.1-T3 routes 6, 11, 18, 22-24; the link
+        // routes 20, 21 and 25 are T4) -------------------------------------------------------------------------
         // The ids are fresh, so a granted call answers 404/412/422 rather than a body; the matrix only asserts the
         // authz outcome (403 for a denied route, never 403 for a granted one), and a denied call is refused by the
         // pipeline before the body is bound.
@@ -791,6 +794,25 @@ internal static class RouteRequests
             new JsonObject { ["state"] = "approved" }, IfMatch: "\"1\"", IdempotencyKey: Key()));
         Add("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/item", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}/item",
             new JsonObject { ["checklist_item_id"] = ctx.ItemId.ToString() }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        // 13.1.1-T3: the version timeline (routes 22, 23) and the four restore routes (6, 11, 18, 24). The version id is
+        // fresh, so a granted call answers 404 like the entity ids above; the restore routes carry If-Match exactly as
+        // the spec declares them — routes 6/11/18 a row tag, route 24 none.
+        Add("GET", "/v1/projects/{p}/authoring/versions", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/versions"));
+        Add("GET", "/v1/projects/{p}/authoring/versions/{v}", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/versions/{ctx.AuthoringVersionId}"));
+        Add("POST", "/v1/projects/{p}/authoring/nodes/{n}/restore", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/nodes/{ctx.NodeId}/restore",
+                IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("POST", "/v1/projects/{p}/authoring/checklist-items/{i}/restore", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/checklist-items/{ctx.ItemId}/restore",
+                IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/restore", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}/restore",
+                IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("POST", "/v1/projects/{p}/authoring/versions/{v}/restore", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/versions/{ctx.AuthoringVersionId}/restore",
+                IdempotencyKey: Key()));
 
         // ---- Dev surface (absent from the spec; allowlisted in ServedRouteTable) ------------------------------
         Add("POST", "/v1/slice/run", ctx => new(HttpMethod.Post, "/v1/slice/run",

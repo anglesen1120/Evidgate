@@ -4533,6 +4533,68 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/nodes/{n}/restore:
+    post:
+      operationId: restoreAuthoringNode
+      tags: [authoring]
+      summary: Restore a soft-deleted feature node under If-Match (13.1.1-T3)
+      description: >-
+        13.1.1 §5 route 6 (`authoring:write`). Clears the node's `deleted_at`, re-appends the last
+        live snapshot as one `restore` version (AC8) and answers the node's new `version`, which
+        is the tag the next write must present (AC19). A position a live sibling now holds is
+        resolved at `max + 1` of that sibling group; the sibling group's advisory lock is taken
+        before the parent and the node, so a restore racing a create or a reorder cannot invert
+        the lock order. `If-Match` is the soft-deleted row's `version` — a tombstone keeps its
+        version, so the caller names the tag it read: absent or malformed is 422
+        `request_invalid` with `details[].path = /If-Match`, a stale tag 412
+        `precondition_failed` with the current `version` in `error.details` and nothing written
+        (compared under the row lock, so two concurrent restores answer one 200 and one 412). A
+        node that is not soft-deleted is 409 `invalid_transition`, an unknown, another tenant's
+        or another project's node 404 `not_found`; a parent that is still soft-deleted is 422
+        `authoring_parent_invalid` with `details[].reason = parent_deleted`. A restore that would
+        bring its sibling group past the 1000 live nodes a create and a move-in already refuse is
+        422 `request_invalid` with `details[].path = /parent_id` and
+        `details[].reason = children_limit_exceeded` — the row keeps its tombstone and the caller
+        frees a slot first, so a group a reorder can still renumber never grows out of reach.
+        Missing `Idempotency-Key` is 400 `request_invalid`, and a replay answers the stored 200
+        with no second version or audit row (AC18). A lock timeout is 503 `unavailable` with
+        `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringNodeId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: The node's version after the restore
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringRestoreResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/authoring/checklist-items:
     get:
       operationId: listChecklistItems
@@ -4749,6 +4811,59 @@ paths:
           $ref: '#/components/responses/PreconditionFailed'
         '413':
           $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/checklist-items/{i}/restore:
+    post:
+      operationId: restoreChecklistItem
+      tags: [authoring]
+      summary: Restore a soft-deleted checklist item under If-Match (13.1.1-T3)
+      description: >-
+        13.1.1 §5 route 11 (`authoring:write`). Clears the item's `deleted_at`, re-appends the last
+        live snapshot as one `restore` version and sets the item back to `active` (13.1.1 §6,
+        AC8), answering the item's new `version` (AC19). `If-Match` is the soft-deleted row's
+        `version`: absent or malformed is 422 `request_invalid` with `details[].path =
+        /If-Match`, a stale tag 412 `precondition_failed` with the current `version` in
+        `error.details` and nothing written. An item that is not soft-deleted is 409
+        `invalid_transition`; an unknown, another tenant's or another project's item 404
+        `not_found`; a parent node that is still soft-deleted is 422 `authoring_parent_invalid`
+        with `details[].reason = parent_deleted`. Missing `Idempotency-Key` is 400
+        `request_invalid`, and a replay answers the stored 200 with no second version or audit
+        row (AC18). A lock timeout is 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringChecklistItemId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: The item's version after the restore
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringRestoreResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -5139,6 +5254,225 @@ paths:
           $ref: '#/components/responses/PreconditionFailed'
         '413':
           $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/manual-cases/{m}/restore:
+    post:
+      operationId: restoreManualCase
+      tags: [authoring]
+      summary: Restore a soft-deleted manual test case under If-Match (13.1.1-T3)
+      description: >-
+        13.1.1 §5 route 18 (`authoring:write`). Clears the case's `deleted_at`, re-appends the last
+        live snapshot — the same immutable `code` and links — as one `restore` version and sets
+        the case back to `draft` (13.1.1 §6, AC8), answering the case's new `version` (AC19).
+        `If-Match` is the soft-deleted row's `version`: absent or malformed is 422
+        `request_invalid` with `details[].path = /If-Match`, a stale tag 412
+        `precondition_failed` with the current `version` in `error.details` and nothing written.
+        A case that is not soft-deleted is 409 `invalid_transition`; an unknown, another
+        tenant's or another project's case 404 `not_found`; a parent checklist item that is
+        still soft-deleted is 422 `authoring_parent_invalid` with `details[].reason =
+        parent_deleted`, and one that is `retired` is 409 `invalid_transition` instead — the guard
+        the case create applies, with the message "a retired checklist item takes no new content;
+        restore it first". Missing `Idempotency-Key` is 400
+        `request_invalid`, and a replay answers the stored 200 with no second version or audit row
+        (AC18). A lock timeout is 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringManualCaseId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: The case's version after the restore
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringRestoreResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/versions:
+    get:
+      operationId: listAuthoringVersions
+      tags: [authoring]
+      summary: Keyset page of the project's authoring versions, newest first (13.1.1-T3)
+      description: >-
+        13.1.1 §5 route 22 (`authoring:read`). One page of `authoring_version` rows in the fixed
+        `(created_at desc, id desc)` order (AC9), optionally narrowed by `entity_kind`
+        (`feature_node`, `checklist_item`, `manual_test_case`), by the exact `entity_id`, by
+        `source` (`manual`, `ai`, `import`), by `actor` (the authoring membership that wrote the
+        change) and by the half-open window `from` (inclusive) .. `to` (exclusive), both RFC 3339
+        instants with an explicit offset, whose UTC offset is normalised (the stored instants are
+        UTC). `from` later than `to` is 422 `request_invalid` with
+        `details[].path = /from` and `reason = invalid_range`; an unknown enum value is 422 with
+        `details[].path = /entity_kind` or `/source` and `reason = value_invalid`; `entity_id`
+        without `entity_kind` is 422 with `details[].path = /entity_kind` and `reason =
+        required_with_entity_id`, because the entity key index starts
+        `(org_id, project_id, entity_kind, entity_id, version_no)` and a lone id could only scan the project's whole
+        timeline (`entity_kind` alone stays valid); a `limit`
+        outside 1..200, a malformed uuid in `entity_id`/`actor` or a cursor this endpoint did not
+        issue is 422 with `details[].path` naming the parameter. The page is a keyset seek on the
+        `(created_at, id)` pair of the last row, so `next_cursor` never skips or repeats a row.
+        Another tenant's project and a project this caller cannot see are the same 404
+        `not_found`; a credential scoped to a sibling project of the same org is 403
+        `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringVersionEntityKindFilter'
+        - $ref: '#/components/parameters/AuthoringVersionEntityIdFilter'
+        - $ref: '#/components/parameters/AuthoringVersionSourceFilter'
+        - $ref: '#/components/parameters/AuthoringVersionActorFilter'
+        - $ref: '#/components/parameters/AuthoringVersionFrom'
+        - $ref: '#/components/parameters/AuthoringVersionTo'
+        - $ref: '#/components/parameters/AuthoringVersionCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of authoring versions
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringVersionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/versions/{v}:
+    get:
+      operationId: getAuthoringVersion
+      tags: [authoring]
+      summary: One authoring version with its stored content; ETag is its content hash (13.1.1-T3)
+      description: >-
+        13.1.1 §5 route 23 (`authoring:read`). The twelve row members of route 22 plus `content`,
+        the stored document exactly as the writer hashed it — the content is never re-serialised
+        through a typed model, so whatever the version holds is what the caller reads. The
+        response's `ETag` is the row's `content_hash` in quotes (`"sha256:<hex>"`); a version is
+        immutable, so the tag never changes and a client compares it after a re-read. An unknown
+        version, another project's version of the same org, another tenant's version and a
+        version of a soft-deleted project are all the same 404 `not_found` (the statement carries
+        both the project and its liveness); a credential scoped to a sibling project is 403
+        `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringVersionId'
+      responses:
+        '200':
+          description: 'One authoring version with its content and `ETag: "<content_hash>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              description: >-
+                The stored `content_hash` in quotes (`"sha256:<hex>"`); a version is immutable, so the
+                tag never changes.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringVersionDetailDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/versions/{v}/restore:
+    post:
+      operationId: restoreAuthoringVersion
+      tags: [authoring]
+      summary: Re-apply one stored version of the entity it describes (13.1.1-T3)
+      description: >-
+        13.1.1 §5 route 24 (`authoring:write`). Re-applies the stored snapshot of version `{v}` to
+        the entity that version describes, as one new `restore` version, and answers the entity's
+        new `version` (AC8). The route declares no `If-Match`: the version id already names the
+        exact state to re-apply, so there is no tag to be stale against (AC19 applies to the
+        entity routes 6/11/18). The version is resolved inside the caller's org and the URL's
+        project, so another project's version, another tenant's version and a random id are one
+        404 `not_found` (AC10), and a version whose entity row is gone is that same 404. A parent
+        that is still soft-deleted is 422 `authoring_parent_invalid` with `details[].reason =
+        `parent_deleted`. A snapshot that names a parent checklist item which is `retired` is 409
+        `invalid_transition` and writes nothing, with the case-create guard's message "a retired
+        checklist item takes no new content; restore it first". A snapshot of a
+        feature node that would bring its sibling group past 1000 live nodes is 422
+        `request_invalid` with `details[].path = /parent_id` and
+        `details[].reason = children_limit_exceeded`, exactly as route 6 and the create refuse it,
+        and nothing is written. No `If-Match` is bound, so no stale-tag `412` can arise: AC19 is
+        routes 6, 11 and 18, this route declares no `If-Match` and never answers `412`. Missing
+        `Idempotency-Key` is 400 `request_invalid`, and a replay answers the stored 200 with no
+        second version or audit row (AC18). A lock timeout is 503 `unavailable` with
+        `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringVersionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: The entity's version after the restore
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringRestoreResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -5666,6 +6000,97 @@ components:
       description: >-
         Opaque cursor from `next_cursor`; the order is the one the route declares (`(position,
         id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+      schema:
+        type: string
+    AuthoringVersionId:
+      name: v
+      in: path
+      required: true
+      description: The `authoring_version` id (13.1.1 §5 routes 23 and 24).
+      schema:
+        type: string
+        format: uuid
+    AuthoringVersionEntityKindFilter:
+      name: entity_kind
+      in: query
+      required: false
+      description: >-
+        Which entity the versions describe (13.1.1 §5 route 22): `feature_node`,
+        `checklist_item` or `manual_test_case`. Any other value is 422 `request_invalid` with
+        `details[].path = /entity_kind` and `reason = value_invalid`. Required whenever
+        `entity_id` is sent: the entity key index starts `(org_id, project_id, entity_kind, entity_id, version_no)`,
+        so an id on its own is 422 (see `entity_id`). `entity_kind` alone is valid.
+      schema:
+        type: string
+        enum: [feature_node, checklist_item, manual_test_case]
+    AuthoringVersionEntityIdFilter:
+      name: entity_id
+      in: query
+      required: false
+      description: >-
+        The entity's id (13.1.1 §5 route 22); combined with `entity_kind` it is one entity's
+        history. Sending it without `entity_kind` is 422 `request_invalid` with
+        `details[].path = /entity_kind` and `reason = required_with_entity_id`. A malformed uuid
+        is 422 `request_invalid` with `details[].path = /entity_id`.
+      schema:
+        type: string
+        format: uuid
+    AuthoringVersionSourceFilter:
+      name: source
+      in: query
+      required: false
+      description: >-
+        Where the change came from (13.1.1 §5 route 22): `manual`, `ai` or `import`. Any other
+        value is 422 `request_invalid` with `details[].path = /source` and
+        `reason = value_invalid`.
+      schema:
+        type: string
+        enum: [manual, ai, import]
+    AuthoringVersionActorFilter:
+      name: actor
+      in: query
+      required: false
+      description: >-
+        The authoring membership that wrote the change (13.1.1 §5 route 22). A malformed uuid is
+        422 `request_invalid` with `details[].path = /actor`.
+      schema:
+        type: string
+        format: uuid
+    AuthoringVersionFrom:
+      name: from
+      in: query
+      required: false
+      description: >-
+        Inclusive lower bound of the window (13.1.1 §5 route 22): an RFC 3339 instant with an
+        explicit offset (`Z` or `±hh:mm`), normalised to UTC before it is bound (the stored
+        instants are UTC). A bare date, a local time without an offset or
+        `from` later than `to` is 422 `request_invalid` — `details[].path = /from` with
+        `reason = value_invalid` or `invalid_range`.
+      schema:
+        type: string
+        format: date-time
+        maxLength: 40
+    AuthoringVersionTo:
+      name: to
+      in: query
+      required: false
+      description: >-
+        Exclusive upper bound of the window (13.1.1 §5 route 22), the same RFC 3339 rule as
+        `from` and normalised to UTC the same way; a malformed value is 422 `request_invalid`
+        with `details[].path = /to`.
+      schema:
+        type: string
+        format: date-time
+        maxLength: 40
+    AuthoringVersionCursor:
+      name: cursor
+      in: query
+      required: false
+      description: >-
+        Opaque cursor from `next_cursor` of the version timeline (13.1.1 §5 route 22); the keyset
+        is the `(created_at, id)` pair of the page's last row, ordered
+        `(created_at desc, id desc)`. A value this endpoint did not issue is 422
+        `request_invalid` with `details[].path = /cursor` and `reason = malformed`.
       schema:
         type: string
     IfMatchOrder:
@@ -7826,6 +8251,124 @@ components:
       properties:
         version: { type: integer, minimum: 1 }
         checklist_item_id: { type: string, format: uuid }
+    AuthoringVersionListItemDto:
+      type: object
+      description: >-
+        One row of the version timeline (13.1.1 §5 route 22, AC9): the entity, the change kind, the
+        source, the content digest and who wrote it. The list projection carries no `content`.
+      required:
+        [
+          version_id,
+          entity_kind,
+          entity_id,
+          version_no,
+          batch_id,
+          change_kind,
+          source,
+          content_hash,
+          author,
+          reason,
+          ai_run_id,
+          created_at,
+        ]
+      properties:
+        version_id: { type: string, format: uuid }
+        entity_kind:
+          {
+            type: string,
+            enum: [feature_node, checklist_item, manual_test_case],
+            description: 'The entity the version describes (13.1.1 §4).',
+          }
+        entity_id: { type: string, format: uuid }
+        version_no:
+          {
+            type: integer,
+            minimum: 1,
+            description: "The entity's version number at the time of the change (AC5/AC8).",
+          }
+        batch_id:
+          {
+            type: string,
+            format: uuid,
+            description: 'The change this row belongs to; one batch is one version in the UI.',
+          }
+        change_kind: { type: string, enum: [create, update, delete, restore, import] }
+        source: { type: string, enum: [manual, ai, import] }
+        content_hash:
+          {
+            type: string,
+            pattern: '^sha256:[0-9a-f]{64}$',
+            description: 'The digest of the stored content, also the ETag of route 23.',
+          }
+        author:
+          {
+            type: [string, 'null'],
+            format: uuid,
+            description: 'The authoring membership that wrote the change, or null (an import or an AI run).',
+          }
+        reason: { type: [string, 'null'], maxLength: 500 }
+        ai_run_id: { type: [string, 'null'], format: uuid }
+        created_at: { type: string, format: date-time }
+    AuthoringVersionListResponse:
+      type: object
+      description: >-
+        00 §9.1 keyset page of `AuthoringVersionListItemDto`, ordered `(created_at desc, id desc)`
+        (13.1.1 §5 route 22).
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthoringVersionListItemDto'
+        next_cursor: { type: [string, 'null'] }
+    AuthoringVersionDetailDto:
+      type: object
+      description: >-
+        The 200 body of route 23 (13.1.1-T3): the twelve row members of route 22 plus `content`, the
+        stored document verbatim. The response's `ETag` is `content_hash` in quotes.
+      required:
+        [
+          version_id,
+          entity_kind,
+          entity_id,
+          version_no,
+          batch_id,
+          change_kind,
+          source,
+          content_hash,
+          author,
+          reason,
+          ai_run_id,
+          created_at,
+          content,
+        ]
+      properties:
+        version_id: { type: string, format: uuid }
+        entity_kind: { type: string, enum: [feature_node, checklist_item, manual_test_case] }
+        entity_id: { type: string, format: uuid }
+        version_no: { type: integer, minimum: 1 }
+        batch_id: { type: string, format: uuid }
+        change_kind: { type: string, enum: [create, update, delete, restore, import] }
+        source: { type: string, enum: [manual, ai, import] }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        author: { type: [string, 'null'], format: uuid }
+        reason: { type: [string, 'null'], maxLength: 500 }
+        ai_run_id: { type: [string, 'null'], format: uuid }
+        created_at: { type: string, format: date-time }
+        content:
+          type: object
+          additionalProperties: true
+          description: >-
+            The stored snapshot exactly as the writer hashed it — one of the three entity content
+            shapes of 13.1.1 §4 — never re-serialised through a typed model.
+    AuthoringRestoreResponse:
+      type: object
+      description: >-
+        The 200 body of the four restore routes (13.1.1 §5 routes 6, 11, 18 and 24): the entity's
+        `version` after the call, which is the tag the next write must present (AC8/AC19).
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1 }
 security:
   - sessionCookie: []
   - bearerToken: []

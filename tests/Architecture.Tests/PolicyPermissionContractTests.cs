@@ -25,8 +25,8 @@ public sealed class PolicyPermissionContractTests
         ("Policy", "removeQuarantineEntry", "RemoveQuarantineEntryCommandHandler", "quarantine:write"),
         ("Policy", "listQuarantineEntries", "ListQuarantineEntriesQueryHandler", "policy:read"),
 
-        // 13.1.1-T2.4: the sixteen authoring operations of 13.1.1 §5 — four reads on authoring:read, twelve writes
-        // on authoring:write (the split §5's permission column states).
+        // 13.1.1-T2.4: the sixteen authoring operations of 13.1.1-T2 (13.1.1 §5) — four reads on authoring:read,
+        // twelve writes on authoring:write (the split §5's permission column states).
         ("Authoring", "listAuthoringTree", "GetAuthoringTreeQueryHandler", "authoring:read"),
         ("Authoring", "createAuthoringNode", "CreateNodeCommandHandler", "authoring:write"),
         ("Authoring", "updateAuthoringNode", "UpdateNodeCommandHandler", "authoring:write"),
@@ -43,6 +43,15 @@ public sealed class PolicyPermissionContractTests
         ("Authoring", "deleteManualCase", "DeleteManualCaseCommandHandler", "authoring:write"),
         ("Authoring", "setManualCaseState", "SetManualCaseStateCommandHandler", "authoring:write"),
         ("Authoring", "moveManualCase", "MoveManualTestCaseCommandHandler", "authoring:write"),
+
+        // 13.1.1-T3: the version timeline (routes 22, 23) on authoring:read and the four restore routes
+        // (6, 11, 18, 24) on authoring:write — the split §5's permission column states.
+        ("Authoring", "listAuthoringVersions", "ListAuthoringVersionsQueryHandler", "authoring:read"),
+        ("Authoring", "getAuthoringVersion", "GetAuthoringVersionQueryHandler", "authoring:read"),
+        ("Authoring", "restoreAuthoringNode", "RestoreNodeCommandHandler", "authoring:write"),
+        ("Authoring", "restoreChecklistItem", "RestoreChecklistItemCommandHandler", "authoring:write"),
+        ("Authoring", "restoreManualCase", "RestoreManualCaseCommandHandler", "authoring:write"),
+        ("Authoring", "restoreAuthoringVersion", "RestoreVersionCommandHandler", "authoring:write"),
     ];
 
     [Fact]
