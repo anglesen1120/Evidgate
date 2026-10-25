@@ -43,6 +43,9 @@ public sealed class OrgProjectSchemaTests
             "version:integer:int4:NO:1",
             "max_projects:integer:int4:YES:-",
             "max_seats:integer:int4:YES:-",
+            // 0043 / 02.1.2-T2: AC8's per-org opt-in, appended by `alter table` so it sorts
+            // last (PG appends attnum). NOT NULL with a database default.
+            "invite_autobind_verified_domain:boolean:bool:NO:false",
         ]);
 
         var constraints = await _fixture.ConstraintsAsync(database, "organization");
@@ -217,6 +220,22 @@ public sealed class OrgProjectSchemaTests
     }
 
     /// <summary>
+    /// Columns that exist in the schema but deliberately have no wire field yet. The list is
+    /// explicit and single-column on purpose: every other column of every compared table stays
+    /// an exact match, so a new column still fails this test unless it is added here with its
+    /// owning task.
+    /// </summary>
+    private static readonly string[] SchemaOnlyColumns =
+    [
+        // 0043 / 02.1.2-T2 W1 adds the AC8 opt-in column as schema surface only: the feature
+        // plan records it as "02.1.2-T2.2's and 02.1.1's schema surface" (02.1.2 §4:70), and no
+        // route reads or writes an org's invite settings yet — the wire field (DTO,
+        // contracts/openapi.yaml and the generated SDK) belongs to the task that exposes that
+        // settings surface, not to this schema lane.
+        "invite_autobind_verified_domain",
+    ];
+
+    /// <summary>
     /// T1.3: the DTO field set is exactly the mapped column set — a column added
     /// by a later migration (or a field invented in the DTO) breaks this test
     /// instead of silently drifting (00 §5.4.5 typed columns, 00 §7 naming).
@@ -228,6 +247,7 @@ public sealed class OrgProjectSchemaTests
 
         (await _fixture.ColumnsAsync(database, "organization"))
             .Select(column => column.Split(':')[0])
+            .Except(SchemaOnlyColumns, StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ShouldBe(FieldNames<OrganizationDto>().Order(StringComparer.Ordinal));
 

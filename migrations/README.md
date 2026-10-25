@@ -62,8 +62,12 @@ The playbook for changing a table without breaking the running version is
   `session.cookie_hmac`/`session.pepper_version` credential columns with their unique lookup index and
   `evidgate_resolve.login_upsert_identity`/`session_create`, the two `SECURITY DEFINER` writers of the
   platform identity tables (a cookie is stored only as an HMAC, the login upsert is race-safe on
-  `(provider, subject)`, and a disabled account is a returned status rather than an exception); the next
-  free number is `0043`;
+  `(provider, subject)`, and a disabled account is a returned status rather than an exception), and `0043`
+  is 02.1.2-T2's invite flow — `membership.invite_pepper_version` with the `membership_invite_token_all_or_none`
+  CHECK (the three token columns plus the expiry move together), `organization.invite_autobind_verified_domain`,
+  the `evidgate_resolve.invite_by_secret`/`invite_autobind_candidates` lookups of T75 and the
+  `evidgate.expire_pending_invites` sweep (T80: `evidgate_worker_sched` only); the next
+  free number is `0044`;
   a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL

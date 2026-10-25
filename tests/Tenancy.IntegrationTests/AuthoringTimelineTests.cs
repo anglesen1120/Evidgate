@@ -415,12 +415,14 @@ public sealed class AuthoringTimelineTests
 
         var live = issued!;
 
-        // The live cursor, tampered in the two ways a client can: re-padded with the Base64 filler, and with the last
-        // character of its body swapped for another base64url digit (a value one character away from the issued text, so
-        // the codec's canonical re-encode is what refuses it). Both are base64url text that decodes to bytes, so both
-        // prove the route refuses a tampered cursor instead of reading a position out of it or treating it as absent.
+        // The live cursor, tampered in the two ways a client can: re-padded with the Base64 filler, and with the unused
+        // low bits of its last base64url digit set (the issued text has them zero, so the result decodes to the SAME bytes
+        // and only the codec's canonical re-encode refuses it). Both prove the route refuses a tampered cursor instead of
+        // reading a position out of it or treating it as absent. The 56-byte payload leaves two unused bits in the last
+        // digit, so `index | 1` is never the issued digit.
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
         var rePadded = live + "=";
-        var swapped = live[..^1] + (live[^1] == 'A' ? "B" : "A");
+        var swapped = live[..^1] + alphabet[alphabet.IndexOf(live[^1], StringComparison.Ordinal) | 1];
 
         var cases = new (string Query, string Path, string Reason)[]
         {

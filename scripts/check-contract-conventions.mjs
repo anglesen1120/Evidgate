@@ -74,6 +74,9 @@ const EXPECTED = [
   ['/orgs/{o}/memberships/{m}', 'delete', 'membership:write', 'v1'],
   ['/orgs/{o}/memberships/{m}/roles', 'post', 'membership:write', 'v1'],
   ['/orgs/{o}/memberships/{m}/roles/{r}', 'delete', 'membership:write', 'v1'],
+  // 02.1.2-T2's two invite-lifecycle routes; 00 §9.3 documents them in the membership row.
+  ['/orgs/{o}/memberships/{m}/resend', 'post', 'membership:write', 'v1'],
+  ['/orgs/{o}/memberships/{m}/cancel-invite', 'post', 'membership:write', 'v1'],
   ['/permissions', 'get', 'role:read', 'v1'],
   ['/roles', 'get', 'role:read', 'v1'],
   ['/roles', 'post', 'role:write', 'v1'],

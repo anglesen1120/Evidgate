@@ -67,6 +67,11 @@ internal sealed class MembershipConfiguration : IEntityTypeConfiguration<Members
         builder.Property(membership => membership.InviteTokenHash)
             .HasColumnName("invite_token_hash");
 
+        // Migration 0043: the pepper version travels with the hash (T5), and the
+        // all-or-none constraint makes it non-null exactly when a token is set.
+        builder.Property(membership => membership.InvitePepperVersion)
+            .HasColumnName("invite_pepper_version");
+
         builder.Property(membership => membership.InviteExpiresAt)
             .HasColumnName("invite_expires_at");
 
