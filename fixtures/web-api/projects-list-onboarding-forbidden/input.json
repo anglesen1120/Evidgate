@@ -1,0 +1,18 @@
+{
+  "operation_id": "listProjects",
+  "variant": "onboarding-forbidden",
+  "status": 403,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000cc"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "forbidden",
+      "message": "the principal is not allowed to perform this operation",
+      "request_id": "018f0000-0000-7000-8000-0000000000cc",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

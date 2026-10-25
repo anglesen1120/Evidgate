@@ -1,0 +1,27 @@
+{
+  "operation_id": "listCiBindings",
+  "variant": "onboarding-run",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000c4"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-000000000031",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "provider": "github_actions",
+        "repository_id": 5012345,
+        "repository_full_name": "acme/storefront-web",
+        "allowed_ref_patterns": ["refs/heads/main"],
+        "allowed_workflow_refs": ["refs/heads/main:.github/workflows/evidgate.yml"],
+        "status": "active",
+        "activated_at": "2026-10-20T07:40:00Z",
+        "created_at": "2026-10-20T07:30:00Z",
+        "version": 1
+      }
+    ],
+    "next_cursor": null
+  }
+}

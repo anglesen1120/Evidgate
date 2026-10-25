@@ -23,7 +23,7 @@ import { HttpClient, HttpResponse, type HttpEvent, type HttpRequest } from '@ang
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import {
-  getRun,
+  getRunDecision,
   isErrorEnvelope,
   listPermissions,
   listRoles,
@@ -181,11 +181,14 @@ describe('fixture backend (09.1.1-T12.1)', () => {
   });
 
   it('answers 501 fixture_not_found for an operation no fixture covers', async () => {
+    // 09.2.1-T1 routes `getRun` (the wizard reads it), so the required op for "uncovered" moved to
+    // its neighbour `GET /runs/{r}/decision`: one segment longer than the routed template, and
+    // deliberately unrouted — the corpus answers runs, not their decisions (09.2.1-T3 owns that).
     const cause = await rejectionOf(
-      gateway.call((client) => getRun({ client, path: { r: 'r-1' } })),
+      gateway.call((client) => getRunDecision({ client, path: { r: 'r-1' } })),
     );
 
-    expect(handled.at(0)?.url).toBe(`${API_BASE_URL}/runs/r-1`);
+    expect(handled.at(0)?.url).toBe(`${API_BASE_URL}/runs/r-1/decision`);
     expect(isApiRequestError(cause)).toBe(true);
     if (isApiRequestError(cause)) {
       expect(cause.error.kind).toBe('unexpected');

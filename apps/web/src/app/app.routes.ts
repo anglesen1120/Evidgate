@@ -76,6 +76,7 @@ const AREA_ROUTES: Readonly<Record<string, () => Promise<Routes>>> = {
   failures: () => import('./features/failures/failures.routes').then((m) => m.routes),
   knowledge: () => import('./features/knowledge/knowledge.routes').then((m) => m.routes),
   mapping: () => import('./features/mapping/mapping.routes').then((m) => m.routes),
+  onboarding: () => import('./features/onboarding/onboarding.routes').then((m) => m.routes),
   policies: () => import('./features/policies/policies.routes').then((m) => m.routes),
   project: () => import('./features/project/project.routes').then((m) => m.routes),
   quality: () => import('./features/quality/quality.routes').then((m) => m.routes),
