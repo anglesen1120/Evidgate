@@ -1,0 +1,18 @@
+{
+  "operation_id": "grantMembershipRole",
+  "variant": "forbidden",
+  "status": 403,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d7"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "forbidden",
+      "message": "the request would grant the caller a permission the caller does not hold (00 §2: a role never widens the caller's own access)",
+      "request_id": "018f0000-0000-7000-8000-0000000000d7",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

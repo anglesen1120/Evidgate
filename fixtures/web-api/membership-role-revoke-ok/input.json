@@ -1,0 +1,9 @@
+{
+  "operation_id": "revokeMembershipRole",
+  "variant": "ok",
+  "status": 204,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d9"
+  },
+  "latency_ms": 0
+}
