@@ -2407,6 +2407,14 @@
       <trans-unit id="settings.secrets.paging-failure" datatype="html"><source>The next page could not be loaded. References already shown are unchanged.</source></trans-unit>
       <trans-unit id="settings.secrets.saved" datatype="html"><source>Rotation recorded. Update your downstream CI with the new credential and verify it there.</source></trans-unit>
       <trans-unit id="settings.secrets.narrow" datatype="html"><source>Use a wider screen to rotate credentials.</source></trans-unit>
+      <trans-unit id="settings.secrets.status-active" datatype="html"><source>Active</source></trans-unit>
+      <trans-unit id="settings.secrets.status-rotated" datatype="html"><source>Rotated</source></trans-unit>
+      <trans-unit id="settings.secrets.status-revoked" datatype="html"><source>Revoked</source></trans-unit>
+      <trans-unit id="settings.secrets.status-expired" datatype="html"><source>Expired</source></trans-unit>
+      <trans-unit id="settings.secrets.rotate-named" datatype="html"><source>Rotate credential <x id="name" equiv-text="name"/></source></trans-unit>
+      <trans-unit id="settings.secrets.pages-label" datatype="html"><source>Secret references pages</source></trans-unit>
+      <trans-unit id="settings.secrets.rotate-unavailable-hint" datatype="html"><source>The rotation may have been applied. Reload the list and check the status before rotating again.</source></trans-unit>
+      <trans-unit id="settings.secrets.reload" datatype="html"><source>Reload</source></trans-unit>
     </body>
   </file>
 </xliff>

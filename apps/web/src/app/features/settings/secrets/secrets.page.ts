@@ -58,16 +58,28 @@ import { SecretsStore } from './secrets.store';
         <p>{{ error.message }}</p>
         <code>{{ error.code }}</code>
       </div>
-      @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
+      @if (error.kind === 'rate_limited') {
         <app-retry-after
           [kind]="error.kind"
           [retryAfterSeconds]="error.retryAfterSeconds"
-          [retryEligible]="rotationRetryReady() && error.retryable && canWrite() && !busy()"
-          [busy]="busy()"
+          [retryEligible]="
+            rotationRetryReady() && error.retryable && canWrite() && !busy() && !store.rotating()
+          "
+          [busy]="busy() || store.rotating()"
           [code]="error.code"
           [requestId]="error.requestId"
           (retry)="retryRotation()"
         />
+      } @else if (error.kind === 'unavailable') {
+        <p>{{ copy.rotateUnavailableHint }}</p>
+        <button
+          type="button"
+          data-rotation-reload
+          [disabled]="busy() || store.rotating() || !readRetryReady()"
+          (click)="reload()"
+        >
+          {{ copy.reload }}
+        </button>
       }
     }
     @if (store.loadError(); as error) {
@@ -82,14 +94,16 @@ import { SecretsStore } from './secrets.store';
       [empty]="!selectedProject() || store.rows().length === 0"
       [emptyTitle]="copy.emptyTitle"
       [emptyDescription]="selectedProject() ? copy.emptyDescription : copy.noProjects"
-      [retryEligible]="readRetryReady() && (store.loadError()?.retryable ?? false)"
+      [retryEligible]="
+        readRetryReady() && (store.loadError()?.retryable ?? false) && !store.rotating()
+      "
       (retry)="reload()"
     >
       <section [attr.aria-busy]="paging() || busy()">
         <app-secret-reference-list
           [rows]="visibleRows()"
           [canWrite]="canWrite()"
-          [busy]="busy()"
+          [busy]="busy() || store.rotating()"
           [blocked]="!rotationRetryReady()"
           [busyId]="rotatingId()"
           (rotate)="rotate($event)"
@@ -110,7 +124,7 @@ import { SecretsStore } from './secrets.store';
             />
           }
         }
-        <nav class="pagination" [attr.aria-label]="copy.title">
+        <nav class="pagination" [attr.aria-label]="copy.pagesLabel">
           @if (offset() > 0) {
             <button type="button" [disabled]="paging() || busy()" (click)="previous()">
               {{ copy.previous }}
@@ -187,15 +201,22 @@ export class SecretsPage {
       const seconds = this.store.loadError()?.retryAfterSeconds;
       this.readRetryReady.set(seconds == null || seconds <= 0);
       if (seconds != null && seconds > 0) {
-        const timer = setTimeout(() => this.readRetryReady.set(true), seconds * 1000);
+        const timer = setTimeout(
+          () => this.readRetryReady.set(true),
+          Math.min(seconds, 86_400) * 1000,
+        );
         cleanup(() => clearTimeout(timer));
       }
     });
     effect((cleanup) => {
-      const seconds = this.store.rotateState().error?.retryAfterSeconds;
+      const error = this.store.rotateState().error;
+      const seconds = error?.kind === 'rate_limited' ? error.retryAfterSeconds : null;
       this.rotationRetryReady.set(seconds == null || seconds <= 0);
       if (seconds != null && seconds > 0) {
-        const timer = setTimeout(() => this.rotationRetryReady.set(true), seconds * 1000);
+        const timer = setTimeout(
+          () => this.rotationRetryReady.set(true),
+          Math.min(seconds, 86_400) * 1000,
+        );
         cleanup(() => clearTimeout(timer));
       }
     });
@@ -209,6 +230,7 @@ export class SecretsPage {
     this.selectedProject.set(id);
   }
   protected reload(): void {
+    if (this.store.rotating()) return;
     const id = this.selectedProject();
     if (
       id &&
@@ -225,6 +247,7 @@ export class SecretsPage {
   }): Promise<void> {
     if (
       this.busy() ||
+      this.store.rotating() ||
       !this.rotationRetryReady() ||
       !this.canWrite() ||
       target.reference.status !== 'active' ||
@@ -253,7 +276,13 @@ export class SecretsPage {
     });
   }
   protected retryRotation(): void {
-    if (this.retryTarget && this.rotationRetryReady()) void this.rotate(this.retryTarget);
+    if (
+      this.retryTarget &&
+      this.rotationRetryReady() &&
+      this.store.rotateState().error?.kind === 'rate_limited' &&
+      this.store.rotateState().error?.retryable
+    )
+      void this.rotate(this.retryTarget);
   }
   protected previous(): void {
     this.offset.update((value) => Math.max(0, value - 200));

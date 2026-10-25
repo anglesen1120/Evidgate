@@ -162,6 +162,17 @@ function typedFailure(
 }
 
 /**
+ * Gives the store's background work its turn. `invite` answers before its list reload and `resend`
+ * before its row refresh (M2), so a spec that asserts on the LIST or on the refreshed row has to
+ * let those promises settle; the fake reads resolve immediately, so one macrotask drains them.
+ */
+function settleBackground(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+/**
  * The membership reads and mutations the store performs. Cursor `"n"` names `pages[n]`, so a page
  * can hand out a next cursor the test controls exactly; the first page (no cursor) is `pages[0]`.
  */
@@ -184,6 +195,8 @@ class FakeMembersDataService {
     resolve: (view: InviteIssuedView) => void;
   }> = [];
   resendFailure: Error | null = null;
+  /** The `invite_token` a rotate answers with; `null` or `''` mirror a body without one. */
+  resendToken: string | null = ROTATED_TOKEN;
   /** When true, a cancel answers only when the test settles `pendingCancels`. */
   cancelManual = false;
   readonly pendingCancels: Array<{ membershipId: string; resolve: () => void }> = [];
@@ -310,7 +323,7 @@ class FakeMembersDataService {
     // The rotate writes the row the refresh read serves; the token is only in the answer.
     const row = this.memberViews.get(membershipId) ?? PENDING;
     this.memberViews.set(membershipId, row);
-    return Promise.resolve({ ...row, invite_token: ROTATED_TOKEN });
+    return Promise.resolve({ ...row, invite_token: this.resendToken });
   }
 
   cancelInvite(orgId: string, membershipId: string, intent: Intent): Promise<void> {
@@ -618,9 +631,38 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(JSON.stringify(store.inviteState())).not.toContain('newhire@acme.test');
       // Neither does any state carry the token the answer just handed back.
       expect(JSON.stringify(store.inviteState())).not.toContain(INVITE_TOKEN);
-      // The reload started from the first page, so the new invite is on screen.
+      // The reload started from the first page, so the new invite reaches the screen.
+      await settleBackground();
       expect(data.membershipCursors).toEqual([undefined, undefined]);
       expect(store.members().map((member) => member.id)).toContain(CREATED.id);
+    });
+
+    it('answers the token before its list reload finishes, so a closing dialog keeps it', async () => {
+      await store.load('o-1');
+      // Every membership read is deferred by hand from here on: the reload stays on the wire.
+      data.manual = true;
+
+      const inFlight = store.invite('newhire@acme.test', [], createIntent());
+      await settleBackground();
+
+      // M2: the one plaintext the server serves once arrives without waiting for the list.
+      await expect(inFlight).resolves.toEqual({
+        membershipId: CREATED.id,
+        inviteToken: INVITE_TOKEN,
+      });
+      expect(store.inviteState()).toEqual({ phase: 'done', error: null });
+      // The reload this call started has ISSUED its read and is waiting on it (deferred by hand):
+      // the token came back anyway.
+      expect(data.membershipCursors).toEqual([undefined, undefined]);
+      expect(data.pending).toHaveLength(1);
+
+      // Let it land, so the deferred read does not outlive the spec.
+      data.pending[0]?.resolve(PAGE);
+      await settleBackground();
+      expect(data.membershipCursors).toEqual([undefined, undefined]);
+      expect(store.members().map((member) => member.id)).toEqual(
+        PAGE.items.map((member) => member.id),
+      );
     });
 
     it('answers inviteToken: null when the server replays a body with no token', async () => {
@@ -632,6 +674,29 @@ describe('MembersStore (09.7.1-T2)', () => {
 
       expect(invited).toEqual({ membershipId: CREATED.id, inviteToken: null });
       expect(store.inviteState()).toEqual({ phase: 'done', error: null });
+      await settleBackground();
+    });
+
+    it('answers inviteToken: null for an EMPTY served token, so the dialog offers Resend', async () => {
+      await store.load('o-1');
+      // F2: `''` is absence, not a one-time value — the dialogs must not reveal nothing.
+      data.issued = { ...CREATED, invite_token: '' };
+
+      const invited = await store.invite('newhire@acme.test', [], createIntent());
+
+      expect(invited).toEqual({ membershipId: CREATED.id, inviteToken: null });
+      await settleBackground();
+    });
+
+    it('answers inviteToken: null for a non-string served token', async () => {
+      await store.load('o-1');
+      // F2: a broken adapter that echoes a number must not reach the reveal as `42`.
+      data.issued = { ...CREATED, invite_token: 42 as unknown as string };
+
+      const invited = await store.invite('newhire@acme.test', [], createIntent());
+
+      expect(invited).toEqual({ membershipId: CREATED.id, inviteToken: null });
+      await settleBackground();
     });
 
     it('omits roles when the dialog selected none', async () => {
@@ -690,6 +755,7 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(data.resends).toEqual([{ orgId: 'o-1', membershipId: PENDING.id, intent }]);
       expect(store.resendState()).toEqual({ phase: 'done', error: null });
       // The row comes from the server's own read, not from patchwork on the rotate response.
+      await settleBackground();
       expect(data.membershipGets).toEqual([{ orgId: 'o-1', membershipId: PENDING.id }]);
       expect(store.members().map((member) => member.id)).toEqual(
         PAGE.items.map((member) => member.id),
@@ -699,11 +765,40 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(JSON.stringify(store.resendState())).not.toContain(ROTATED_TOKEN);
     });
 
-    it('surfaces 409 invite_not_pending verbatim and leaves the list alone', async () => {
+    it('answers the new token for an EMPTY served token as absence, never as an empty value', async () => {
       await store.load('o-1');
-      const before = store.members();
+      // F2: the replay notice, not a one-time reveal of `''`.
+      data.resendToken = '';
+
+      const rotated = await store.resend(PENDING.id, createIntent());
+
+      expect(rotated).toEqual({ membershipId: PENDING.id, inviteToken: null });
+      await settleBackground();
+    });
+
+    it('answers absence for a non-string rotated token as well', async () => {
+      await store.load('o-1');
+      data.resendToken = 7 as unknown as string;
+
+      const rotated = await store.resend(PENDING.id, createIntent());
+
+      expect(rotated).toEqual({ membershipId: PENDING.id, inviteToken: null });
+      await settleBackground();
+    });
+
+    it('surfaces 409 invite_not_pending verbatim and re-reads the list to drop the stale row', async () => {
+      await store.load('o-1');
       const refusal = typedFailure(INVITE_NOT_PENDING, 'conflict', 409);
       data.resendFailure = refusal;
+      // What the server's refusal means for the list: the row the user pressed is not pending.
+      data.pages = [
+        {
+          items: PAGE.items.map((member) =>
+            member.id === PENDING.id ? { ...member, status: 'active' as const } : member,
+          ),
+          next_cursor: null,
+        },
+      ];
 
       const rotated = await store.resend(PENDING.id, createIntent());
 
@@ -711,9 +806,11 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.resendState()).toEqual({ phase: 'failed', error: refusal.error });
       expect(store.resendState().error?.code).toBe('invite_not_pending');
       expect(store.resendState().error?.message).toBe(INVITE_NOT_PENDING.error.message);
-      // Nothing was refreshed: a refused rotate changed nothing on the server.
+      // L5: one re-read of the list, so the pending row (and its Resend action) disappears.
+      expect(data.membershipCursors).toEqual([undefined, undefined]);
+      expect(store.members()[3]?.status).toBe('active');
+      // Only the refusal read: no row refresh of a rotate that never happened.
       expect(data.membershipGets).toEqual([]);
-      expect(store.members()).toBe(before);
     });
 
     it('surfaces a 429 verbatim, so the rotate can offer the server’s countdown', async () => {
@@ -726,7 +823,41 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.resendState()).toEqual({ phase: 'failed', error: refusal.error });
       expect(store.resendState().error?.kind).toBe('rate_limited');
       expect(store.resendState().error?.retryable).toBe(true);
+      // A throttle is not a stale row: the list on screen stands.
       expect(data.membershipGets).toEqual([]);
+      expect(data.membershipCursors).toEqual([undefined]);
+    });
+
+    it('drops a detached row refresh that a newer load overtook, so no stale row lands', async () => {
+      await store.load('o-1');
+      // The rotate answers; its row refresh stays on the wire, deferred by hand.
+      data.membershipGetManual = true;
+
+      await expect(store.resend(PENDING.id, createIntent())).resolves.toEqual({
+        membershipId: PENDING.id,
+        inviteToken: ROTATED_TOKEN,
+      });
+      await settleBackground();
+      expect(data.pendingGets).toHaveLength(1);
+
+      // Meanwhile a newer load of the SAME org reads a list where that row has moved on.
+      data.pages = [
+        {
+          items: PAGE.items.map((member) =>
+            member.id === PENDING.id ? { ...member, status: 'active' as const } : member,
+          ),
+          next_cursor: null,
+        },
+      ];
+      await store.load('o-1');
+      expect(store.members()[3]?.status).toBe('active');
+
+      // The overtaken read lands with the row as it was BEFORE that load: it writes nothing.
+      data.settleGet(0);
+      await settleBackground();
+      expect(store.members()[3]?.status).toBe('active');
+      // And it does not fall back to a reload either: the list was read exactly twice.
+      expect(data.membershipCursors).toEqual([undefined, undefined]);
     });
 
     it('answers null without a second request while one rotate is submitting', async () => {
@@ -745,28 +876,39 @@ describe('MembersStore (09.7.1-T2)', () => {
         inviteToken: ROTATED_TOKEN,
       });
       expect(store.resendState()).toEqual({ phase: 'done', error: null });
+      await settleBackground();
     });
 
-    it('holds the rotate submitting through the row refresh, so a second press cannot rotate again', async () => {
+    it('publishes done before the row refresh settles, and still refuses a second rotate', async () => {
       await store.load('o-1');
+      // The server answered; its own refresh read is the part still on the wire.
       data.membershipGetManual = true;
-      const first = store.resend(PENDING.id, createIntent());
-      // Let the rotate answer and the refresh start; the refresh is deferred by hand.
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      expect(data.membershipGets).toEqual([{ orgId: 'o-1', membershipId: PENDING.id }]);
-      expect(store.resendState().phase).toBe('submitting');
 
-      // The guard is still closed while the refresh is in flight: a second rotate would mint a
-      // second token and kill the one this call is about to return.
-      await expect(store.resend(PENDING.id, createIntent())).resolves.toBeNull();
-      expect(data.resends).toHaveLength(1);
+      const rotated = store.resend(PENDING.id, createIntent());
 
-      data.settleGet(0);
-      await expect(first).resolves.toEqual({
+      // M2: the token does not wait for the refresh, so a dialog that closes now still has it.
+      await expect(rotated).resolves.toEqual({
         membershipId: PENDING.id,
         inviteToken: ROTATED_TOKEN,
       });
       expect(store.resendState()).toEqual({ phase: 'done', error: null });
+      expect(data.membershipGets).toEqual([{ orgId: 'o-1', membershipId: PENDING.id }]);
+
+      // The guard is the private lock, not the published phase: a second rotate within that window
+      // would mint a second token and kill the one this call just handed back.
+      await expect(store.resend(PENDING.id, createIntent())).resolves.toBeNull();
+      expect(data.resends).toHaveLength(1);
+
+      data.settleGet(0);
+      await settleBackground();
+      // The lock opens once the refresh lands, so a later, deliberate rotate is a new attempt.
+      data.membershipGetManual = false;
+      await expect(store.resend(PENDING.id, createIntent())).resolves.toEqual({
+        membershipId: PENDING.id,
+        inviteToken: ROTATED_TOKEN,
+      });
+      expect(data.resends).toHaveLength(2);
+      await settleBackground();
     });
 
     it('rejects a non-API rejection as the generic unexpected failure', async () => {
@@ -804,11 +946,19 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.members()[3]?.status).toBe('revoked');
     });
 
-    it('surfaces 409 invite_not_pending verbatim and keeps the rows unchanged', async () => {
+    it('surfaces 409 invite_not_pending verbatim and re-reads the list to drop the stale row', async () => {
       await store.load('o-1');
-      const before = store.members();
       const refusal = typedFailure(INVITE_NOT_PENDING, 'conflict', 409);
       data.cancelFailure = refusal;
+      // The server's answer means the row is no longer pending, which the re-read shows.
+      data.pages = [
+        {
+          items: PAGE.items.map((member) =>
+            member.id === PENDING.id ? { ...member, status: 'revoked' as const } : member,
+          ),
+          next_cursor: null,
+        },
+      ];
 
       const cancelled = await store.cancel(PENDING.id, createIntent());
 
@@ -817,9 +967,9 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.cancelState().error?.status).toBe(409);
       expect(store.cancelState().error?.code).toBe(INVITE_NOT_PENDING.error.code);
       expect(store.cancelState().error?.message).toBe(INVITE_NOT_PENDING.error.message);
-      // No reload: the refusal left the list exactly as it was.
-      expect(data.membershipCursors).toEqual([undefined]);
-      expect(store.members()).toBe(before);
+      // L5: one re-read of the list, so the stale pending row and its Cancel action go.
+      expect(data.membershipCursors).toEqual([undefined, undefined]);
+      expect(store.members()[3]?.status).toBe('revoked');
     });
 
     it('rejects a non-API rejection as the generic unexpected failure', async () => {
@@ -1102,7 +1252,7 @@ describe('MembersStore (09.7.1-T2)', () => {
   });
 
   describe('a scope change while a mutation is in flight', () => {
-    it('keeps the new org’s rows and points the next calls at it', async () => {
+    it('keeps the new org’s rows, still answers the token and points the next calls at it', async () => {
       await store.load('o-1');
       data.inviteManual = true;
       const inFlight = store.invite('newhire@acme.test', [], createIntent());
@@ -1117,11 +1267,16 @@ describe('MembersStore (09.7.1-T2)', () => {
       await store.load('o-2');
       data.pendingInvites[0]?.resolve(ISSUED);
 
-      // The success notice belongs to the org the user left: the dialogs must not announce it,
-      // and the token is dropped instead of being handed to a list that is not its own.
-      await expect(inFlight).resolves.toBeNull();
+      // The token still leaves with the answer (M2): the server will never serve it again, so
+      // dropping it here would lose the invitation for good. Who may SHOW it is the dialog's own
+      // stale-generation guard, not this store.
+      await expect(inFlight).resolves.toEqual({
+        membershipId: CREATED.id,
+        inviteToken: INVITE_TOKEN,
+      });
 
-      // The invitation landed on o-1; its reload must not write into o-2's list.
+      // The invitation landed on o-1; its reload must not write into o-2's list, and there is no
+      // background read either.
       expect(data.invites.map((entry) => entry.orgId)).toEqual(['o-1']);
       expect(data.membershipOrgs).toEqual(['o-1', 'o-2']);
       expect(store.members()).toEqual(EMPTY_PAGE.items);
@@ -1131,6 +1286,7 @@ describe('MembersStore (09.7.1-T2)', () => {
       // The store still addresses o-2 for the next mutation and the next page.
       data.inviteManual = false;
       await store.invite('second@acme.test', [], createIntent());
+      await settleBackground();
       expect(data.invites.map((entry) => entry.orgId)).toEqual(['o-1', 'o-2']);
 
       await store.loadMore();
@@ -1157,7 +1313,7 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.removeState()).toEqual({ phase: 'done', error: null });
     });
 
-    it('skips the rotate refresh and drops the token when the scope switched', async () => {
+    it('skips the rotate refresh but still answers the token when the scope switched', async () => {
       await store.load('o-1');
       data.resendManual = true;
       const inFlight = store.resend(PENDING.id, createIntent());
@@ -1167,7 +1323,11 @@ describe('MembersStore (09.7.1-T2)', () => {
       await store.load('o-2');
       data.pendingResends[0]?.resolve(ROTATED);
 
-      await expect(inFlight).resolves.toBeNull();
+      // M2: the one-time token is the caller's, whatever the list now shows.
+      await expect(inFlight).resolves.toEqual({
+        membershipId: PENDING.id,
+        inviteToken: ROTATED_TOKEN,
+      });
 
       // No refresh read into another org's list, and the state still settles.
       expect(data.membershipGets).toEqual([]);

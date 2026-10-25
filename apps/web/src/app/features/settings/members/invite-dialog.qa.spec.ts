@@ -394,6 +394,20 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     expect(root.querySelector('dialog')?.open).toBe(true);
   });
 
+  it('an EMPTY served invite_token takes the same replay path, never an empty reveal', async () => {
+    // F2: `''` is absence; the store normalises it, so this dialog must offer Resend guidance.
+    data.outcomes.push(() => Promise.resolve({ ...CREATED, invite_token: '' }));
+    open();
+    setEmail('new@example.test');
+    submitButton().click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(root.querySelector('app-connect-step-reveal')).toBeNull();
+    expect(root.querySelector('[data-testid="reveal-value"]')).toBeNull();
+    expect(root.querySelector('[data-members-invite-replay]')?.textContent).toContain('Use Resend');
+    expect(root.querySelector('dialog')?.open).toBe(true);
+  });
+
   it('a 422 validation refusal preserves the exact message and code', async () => {
     data.outcomes.push(() =>
       Promise.reject(refusal('validation', 422, 'invalid_email', 'Use a valid <email>.', false)),

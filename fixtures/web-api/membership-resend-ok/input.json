@@ -4,7 +4,8 @@
   "status": 202,
   "headers": {
     "X-Request-Id": "018f0000-0000-7000-8000-0000000000d7",
-    "ETag": "\"2\""
+    "ETag": "\"2\"",
+    "Cache-Control": "no-store"
   },
   "latency_ms": 0,
   "body": {

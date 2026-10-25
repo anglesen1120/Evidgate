@@ -16,8 +16,10 @@
 // - the list follows `next_cursor` one page per call, appends, and refuses a cursor it already
 //   followed or a cursor that never ends;
 // - switching the project clears the rows at once and an older project's read never writes;
-// - a rotation returns its one-time value to the caller, reloads only the project it addressed, is
-//   guarded against a double press, and surfaces the server's 409 verbatim;
+// - a rotation hands its one-time value back as soon as the server confirms it, re-reads the list
+//   behind the caller (only the project it addressed, never awaited, never able to fail it), is
+//   guarded against a double press — observably, through `rotating` — surfaces the server's 409
+//   verbatim, re-reads a row that 409 proves stale, and refuses an answer with no usable secret;
 // - no signal holds the rotated plaintext or a secret-shaped field name (task §8 S3, AC3): the
 //   state-shape spec at the end enumerates the store's own fields and serialises every public
 //   signal to prove it.
@@ -47,6 +49,15 @@ const UNUSABLE_PAGE = unusableListFixture.body as unknown as IngestTokenListResp
 const ROTATED = rotateFixture.body as unknown as IngestTokenCreatedResponse;
 /** The 409 the rotate route answers for a token it will not rotate again. */
 const ROTATE_CONFLICT = conflictFixture.body as unknown as ErrorEnvelope;
+
+/**
+ * The two malformed one-time values a rotate answer can carry: an empty string (the server rotated
+ * but sent nothing to show) and a value that is not a string at all. Neither may reach a reveal.
+ */
+const MALFORMED_SECRETS: Array<[label: string, secret: unknown]> = [
+  ['empty', ''],
+  ['non-string', { toString: () => 'egt_malformed_secret' }],
+];
 
 /** The row at `index` of a served page, so no test reaches for `!` or `?? ''`. */
 function pageRow(page: IngestTokenListResponse, index: number) {
@@ -79,6 +90,17 @@ function typedFailure(
 }
 
 /**
+ * The store's refresh is not awaited by its caller, so a test has to let its queued microtasks run
+ * before it can see what the read wrote. Four ticks cover the `settledRead` hop plus the read's own
+ * `await`; nothing here uses timers, so this is deterministic rather than a sleep.
+ */
+async function flushMicrotasks(): Promise<void> {
+  for (let tick = 0; tick < 4; tick += 1) {
+    await Promise.resolve();
+  }
+}
+
+/**
  * The reads and the rotation the store performs. Cursor `"n"` names `pages[n]`, so a page can hand
  * out a next cursor the test controls exactly; the first page (no cursor) is `pages[0]`.
  *
@@ -104,6 +126,8 @@ class FakeSecretsDataService {
   /** Every rotation request in the order it reached the fake, so a double press is visible. */
   readonly rotateCalls: string[] = [];
   rotateFailure: Error | null = null;
+  /** The answer a rotation succeeds with; a test swaps its secret to shape a malformed answer. */
+  rotateAnswer: IngestTokenCreatedResponse = ROTATED;
   /** When true, a rotation answers only when the test settles `pendingRotations`. */
   rotateManual = false;
   readonly pendingRotations: Array<{
@@ -139,7 +163,7 @@ class FakeSecretsDataService {
     if (this.rotateFailure !== null) {
       return Promise.reject(this.rotateFailure);
     }
-    return Promise.resolve(ROTATED);
+    return Promise.resolve(this.rotateAnswer);
   }
 
   /** Answers the n-th deferred list read the way the server would. */
@@ -151,13 +175,22 @@ class FakeSecretsDataService {
     pending.resolve(page);
   }
 
+  /** Settles a deferred list read with whatever the server (or the adapter) threw. */
+  failList(index: number, error: unknown): void {
+    const pending = this.pendingLists[index];
+    if (pending === undefined) {
+      throw new Error(`the fake holds no pending list read ${index}`);
+    }
+    pending.reject(error);
+  }
+
   /** Answers the n-th deferred rotation with the server's successor. */
   settleRotation(index: number): void {
     const pending = this.pendingRotations[index];
     if (pending === undefined) {
       throw new Error(`the fake holds no pending rotation ${index}`);
     }
-    pending.resolve(ROTATED);
+    pending.resolve(this.rotateAnswer);
   }
 
   /** Settles a deferred rotation with whatever the server (or the adapter) threw. */
@@ -381,8 +414,10 @@ describe('SecretsStore (09.7.1-T3)', () => {
   });
 
   describe('rotate', () => {
-    it('returns the successor and its one-time value, and reloads this project’s list', async () => {
+    it('hands back the successor at once and refreshes this project’s list behind the caller', async () => {
       await store.load('p-1');
+      // The refresh is deferred, so the value can only be in hand if the call did not wait for it.
+      data.listManual = true;
 
       const result = await store.rotate(TOKEN_ID);
 
@@ -390,13 +425,51 @@ describe('SecretsStore (09.7.1-T3)', () => {
       expect(result?.overlapEndsAt).toBe(ROTATED.overlap_ends_at);
       expect(result?.value).toBe(ROTATED.secret);
       expect(store.rotateState()).toEqual({ phase: 'done', tokenId: TOKEN_ID, error: null });
-      // The reload is a fresh first page of the same project, so the rotated row's status and its
-      // successor appear without a second, wider read.
+      expect(store.rotating()).toBe(false);
+      // The refresh was still issued: a fresh first page of the same project, so the rotated row's
+      // status and its successor appear without a second, wider read.
+      expect(data.pendingLists).toHaveLength(1);
       expect(data.listCalls).toEqual([
         { projectId: 'p-1', cursor: undefined },
         { projectId: 'p-1', cursor: undefined },
       ]);
       expect(data.rotateCalls).toEqual([TOKEN_ID]);
+
+      // And it lands, even though nobody awaited it.
+      data.settleList(0, UNUSABLE_PAGE);
+      await flushMicrotasks();
+      expect(store.rows().map((row) => row.id)).toEqual(UNUSABLE_PAGE.items.map((row) => row.id));
+      expect(store.phase()).toBe('ready');
+    });
+
+    it('keeps a confirmed rotation successful when the refresh behind it is refused', async () => {
+      const forbidden: ErrorEnvelope = {
+        error: {
+          code: 'forbidden',
+          message: 'Missing permission ingest_token:read.',
+          request_id: '5c9c4d0e-6a71-4b9e-9a51-2f6f1f0d3f11',
+          retryable: false,
+        },
+      };
+      await store.load('p-1');
+      const before = store.rows();
+      // Every read from now on is the rotation's refresh, and it is deferred so the test decides
+      // when (and how) it answers.
+      data.listManual = true;
+
+      const result = await store.rotate(TOKEN_ID);
+
+      // The server minted the successor and the caller holds it; a refused list is the list's
+      // problem, not the rotation's.
+      expect(result?.value).toBe(ROTATED.secret);
+      expect(store.rotateState()).toEqual({ phase: 'done', tokenId: TOKEN_ID, error: null });
+
+      data.failList(0, typedFailure(forbidden, 'forbidden', 403));
+      await flushMicrotasks();
+      expect(store.loadError()?.code).toBe('forbidden');
+      expect(store.rows()).toBe(before);
+      expect(store.phase()).toBe('ready');
+      expect(store.rotateState().phase).toBe('done');
     });
 
     it('mints one successor only: a second press while submitting is ignored', async () => {
@@ -415,43 +488,86 @@ describe('SecretsStore (09.7.1-T3)', () => {
       expect(store.rotateState().phase).toBe('done');
     });
 
-    it('surfaces the server’s 409 verbatim and leaves the list exactly as it was', async () => {
-      await store.load('p-1');
-      const before = store.rows();
-      const listsBefore = [...data.listCalls];
-      data.rotateFailure = typedFailure(ROTATE_CONFLICT, 'conflict', 409);
+    it.each(['invalid_transition', 'token_revoked'])(
+      'surfaces the 409 %s verbatim and re-reads the row it proves stale, once',
+      async (code) => {
+        const revoked: ErrorEnvelope = { error: { ...ROTATE_CONFLICT.error, code } };
+        await store.load('p-1');
+        data.rotateFailure = typedFailure(revoked, 'conflict', 409);
+        // The re-read is deferred, so the refusal is asserted before the new page can answer.
+        data.listManual = true;
 
-      const result = await store.rotate(TOKEN_ID);
+        const result = await store.rotate(TOKEN_ID);
 
-      expect(result).toBeNull();
-      expect(store.rotateState().phase).toBe('failed');
-      expect(store.rotateState().tokenId).toBe(TOKEN_ID);
-      expect(store.rotateState().error?.status).toBe(409);
-      expect(store.rotateState().error?.code).toBe(ROTATE_CONFLICT.error.code);
-      expect(store.rotateState().error?.message).toBe(ROTATE_CONFLICT.error.message);
-      // Only a success re-reads the list, so a refused rotation can never "fix" the screen.
-      expect(store.rows()).toBe(before);
-      expect(data.listCalls).toEqual(listsBefore);
-    });
+        expect(result).toBeNull();
+        const state = store.rotateState();
+        expect(state.phase).toBe('failed');
+        expect(state.tokenId).toBe(TOKEN_ID);
+        expect(state.error?.status).toBe(409);
+        expect(state.error?.kind).toBe('conflict');
+        expect(state.error?.code).toBe(code);
+        expect(state.error?.message).toBe(ROTATE_CONFLICT.error.message);
+        // Exactly one re-read of this project's first page — the stale row cannot keep a Rotate
+        // button that can never succeed.
+        expect(data.listCalls).toEqual([
+          { projectId: 'p-1', cursor: undefined },
+          { projectId: 'p-1', cursor: undefined },
+        ]);
 
-    it('pins that a 409 keeps whatever code the server sent, not one the store chose', async () => {
-      await store.load('p-1');
-      // `token_revoked` is the route's other 409 (contracts/openapi.yaml); the fixture that exists
-      // is the `invalid_transition` one, so the code is swapped to pin pass-through only.
-      const revoked: ErrorEnvelope = {
-        error: { ...ROTATE_CONFLICT.error, code: 'token_revoked' },
-      };
-      data.rotateFailure = typedFailure(revoked, 'conflict', 409);
+        data.settleList(0, UNUSABLE_PAGE);
+        await flushMicrotasks();
+        expect(store.rows().map((row) => row.status)).toEqual(
+          UNUSABLE_PAGE.items.map((row) => row.status),
+        );
+        // The refusal is still the attempt's answer: the read behind it changes no phase.
+        expect(store.rotateState()).toEqual(state);
+      },
+    );
 
-      await store.rotate(TOKEN_ID);
+    it.each(MALFORMED_SECRETS)(
+      'refuses an %s secret as the store’s own failure and re-reads the rotated row',
+      async (_label, secret) => {
+        await store.load('p-1');
+        // The row did rotate server-side, so the re-read is one this attempt owes the screen —
+        // deferred here so the failure state is asserted before the new page can land.
+        data.listManual = true;
+        data.rotateAnswer = { ...ROTATED, secret: secret as string };
 
-      expect(store.rotateState().error?.code).toBe('token_revoked');
-      expect(store.rotateState().error?.kind).toBe('conflict');
-    });
+        const result = await store.rotate(TOKEN_ID);
+
+        expect(result).toBeNull();
+        const state = store.rotateState();
+        expect(state.phase).toBe('failed');
+        expect(state.tokenId).toBe(TOKEN_ID);
+        // A store-local failure shaped like every other one: no invented server code, no value.
+        expect(state.error?.kind).toBe('unexpected');
+        expect(state.error?.code).toBe('rotation_answer_unusable');
+        expect(state.error?.retryable).toBe(false);
+        expect(state.error?.requestId).toBeNull();
+        expect(JSON.stringify(state)).not.toContain('egt_malformed_secret');
+        // The message states the fact only: this kind renders no retry or reload control, so it
+        // must not tell the user to press one (09.7.1-T3 page: controls per failure kind).
+        expect(state.error?.message).not.toMatch(/reload|try again|retry/i);
+        expect(store.rotating()).toBe(false);
+
+        // The stale row is re-read once, and the refusal survives the read.
+        expect(data.listCalls).toEqual([
+          { projectId: 'p-1', cursor: undefined },
+          { projectId: 'p-1', cursor: undefined },
+        ]);
+        data.settleList(0, UNUSABLE_PAGE);
+        await flushMicrotasks();
+        expect(store.rows().map((row) => row.status)).toEqual(
+          UNUSABLE_PAGE.items.map((row) => row.status),
+        );
+        expect(store.rotateState()).toEqual(state);
+      },
+    );
 
     it('settles a rejection that is not the server’s answer as the generic failure', async () => {
       await store.load('p-1');
       const before = store.rows();
+      const listsBefore = [...data.listCalls];
       data.rotateFailure = new Error('boom: egt_should_not_leak');
 
       const result = await store.rotate(TOKEN_ID);
@@ -464,7 +580,11 @@ describe('SecretsStore (09.7.1-T3)', () => {
       // No key exists for this route, so a retry is not a replay.
       expect(state.error?.retryable).toBe(false);
       expect(JSON.stringify(state)).not.toContain('boom');
+      // The page renders no retry or reload control for `unexpected`, so the copy names no action.
+      expect(state.error?.message).not.toMatch(/reload|try again|retry/i);
       expect(store.rows()).toBe(before);
+      // A cancellation or a bug proves nothing about the rows, so it re-reads nothing either.
+      expect(data.listCalls).toEqual(listsBefore);
     });
 
     it('does nothing before a project is loaded', async () => {
@@ -524,6 +644,27 @@ describe('SecretsStore (09.7.1-T3)', () => {
       expect(store.rotateState().phase).toBe('idle');
     });
 
+    it('reports the in-flight rotation through `rotating`, even after resetRotation()', async () => {
+      expect(store.rotating()).toBe(false);
+      await store.load('p-1');
+      data.rotateManual = true;
+
+      const rotating = store.rotate(TOKEN_ID);
+      expect(store.rotating()).toBe(true);
+
+      // The dialog closed, so the published attempt is gone — the request, and therefore the lock,
+      // is not: the ignored press below is what L4 asks to be observable.
+      store.resetRotation();
+      expect(store.rotateState().phase).toBe('idle');
+      expect(store.rotating()).toBe(true);
+      await expect(store.rotate(TOKEN_ID)).resolves.toBeNull();
+      expect(data.rotateCalls).toEqual([TOKEN_ID]);
+
+      data.settleRotation(0);
+      await expect(rotating).resolves.toBeNull();
+      expect(store.rotating()).toBe(false);
+    });
+
     it('releases the lock once the request settles, so the row can be rotated again', async () => {
       await store.load('p-1');
       data.rotateManual = true;
@@ -567,6 +708,7 @@ describe('SecretsStore (09.7.1-T3)', () => {
       hasMore: store.hasMore(),
       projectId: store.projectId(),
       rotateState: store.rotateState(),
+      rotating: store.rotating(),
     };
     const serialised = JSON.stringify(publicState);
     expect(serialised).not.toContain(value);

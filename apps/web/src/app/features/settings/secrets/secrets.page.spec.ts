@@ -26,6 +26,7 @@ class FakeSecretsStore {
   readonly hasMore = signal(false);
   readonly projectId = signal<string | null>(null);
   readonly rotateState = signal<RotationState>({ phase: 'idle', tokenId: null, error: null });
+  readonly rotating = signal(false);
   readonly load = vi.fn((id: string) => {
     this.projectId.set(id);
     return Promise.resolve();
@@ -256,6 +257,130 @@ describe('SecretsPage (09.7.1-T3)', () => {
     expect(store.rows()).toBe(original);
     expect(root.querySelector('[data-testid="reveal-value"]')).toBeNull();
   });
+  it('names pagination distinctly from the reference list', async () => {
+    const { root } = await render();
+    expect(root.querySelector('ul')?.getAttribute('aria-label')).toBe('Secret references');
+    expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe('Secret references pages');
+  });
+  it('preserves a pending one-time rotation when list Retry is invoked', async () => {
+    let settle: ((result: RotationResult | null) => void) | undefined;
+    store.rotate.mockImplementation(() => {
+      store.rotating.set(true);
+      // The web target's Promise lib predates withResolvers.
+      return new Promise<RotationResult | null>((resolve) => {
+        settle = resolve;
+      });
+    });
+    const { root, fixture, slot } = await render();
+    rotateButton(root).click();
+    const reset = vi.spyOn(store, 'resetRotation');
+    // Exercise the handler even if its visible retry control is disabled.
+    fixture.componentInstance['reload']();
+    expect(reset).not.toHaveBeenCalled();
+    expect(store.load).toHaveBeenCalledTimes(1);
+    store.rotating.set(false);
+    settle?.({ successorId: 'next', overlapEndsAt: null, value: 'retry-preserved-secret' });
+    await fixture.whenStable();
+    expect(slot.current()?.value).toBe('retry-preserved-secret');
+  });
+  it('disables Rotate after a project switch until the store in-flight lock releases', async () => {
+    const { root, fixture } = await render();
+    store.rotating.set(true);
+    const select = root.querySelector<HTMLSelectElement>('select');
+    if (!select) throw new Error('Expected project select');
+    select.value = 'p2';
+    select.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(rotateButton(root).disabled).toBe(true);
+    rotateButton(root).click();
+    expect(store.rotate).not.toHaveBeenCalled();
+    store.rotating.set(false);
+    await fixture.whenStable();
+    expect(rotateButton(root).disabled).toBe(false);
+  });
+  it.each([503, 0])(
+    'offers list Reload, never a repeat POST, for an ambiguous rotation failure (%s)',
+    async (status) => {
+      const unavailable: ApiError = {
+        ...failure,
+        kind: 'unavailable',
+        status,
+        code: 'unavailable',
+        message: 'The rotation response was lost. <em>Server text.</em>',
+        retryable: true,
+        retryAfterSeconds: null,
+      };
+      store.rotate.mockImplementation(() => {
+        store.rotateState.set({ phase: 'failed', tokenId: base.id, error: unavailable });
+        return Promise.resolve(null);
+      });
+      const { root, fixture, slot } = await render();
+      rotateButton(root).click();
+      await fixture.whenStable();
+      expect(root.textContent).toContain(unavailable.message);
+      expect(root.textContent).toContain(
+        'The rotation may have been applied. Reload the list and check the status before rotating again.',
+      );
+      expect(root.querySelector('em')).toBeNull();
+      expect(root.querySelector('app-retry-after')).toBeNull();
+      fixture.componentInstance['retryRotation']();
+      expect(store.rotate).toHaveBeenCalledTimes(1);
+      const reload = root.querySelector<HTMLButtonElement>('[data-rotation-reload]');
+      expect(reload?.textContent?.trim()).toBe('Reload');
+      reload?.click();
+      await fixture.whenStable();
+      expect(store.load).toHaveBeenLastCalledWith('p1');
+      expect(store.load).toHaveBeenCalledTimes(2);
+      expect(store.rotate).toHaveBeenCalledTimes(1);
+      expect(slot.current()).toBeNull();
+    },
+  );
+  it('allows an explicit retry after a refused rate-limited rotation', async () => {
+    store.rotate.mockImplementation(() => {
+      store.rotateState.set({
+        phase: 'failed',
+        tokenId: base.id,
+        error: {
+          ...failure,
+          kind: 'rate_limited',
+          status: 429,
+          retryable: true,
+          retryAfterSeconds: 0,
+        },
+      });
+      return Promise.resolve(null);
+    });
+    const { root, fixture } = await render();
+    rotateButton(root).click();
+    await fixture.whenStable();
+    fixture.componentInstance['retryRotation']();
+    expect(store.rotate).toHaveBeenCalledTimes(2);
+    await fixture.whenStable();
+  });
+  it.each(['read', 'rotation'])(
+    'clamps a large %s Retry-After to one day without timer overflow',
+    async (source) => {
+      const { fixture } = await render();
+      const timer = vi.spyOn(globalThis, 'setTimeout');
+      const limited: ApiError = {
+        ...failure,
+        kind: 'rate_limited',
+        status: 429,
+        retryable: true,
+        retryAfterSeconds: 2_147_483_647,
+      };
+      if (source === 'read') store.loadError.set(limited);
+      else store.rotateState.set({ phase: 'failed', tokenId: base.id, error: limited });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(timer).toHaveBeenCalledWith(expect.any(Function), 86_400_000);
+      const ready =
+        source === 'read'
+          ? fixture.componentInstance['readRetryReady']
+          : fixture.componentInstance['rotationRetryReady'];
+      expect(ready()).toBe(false);
+    },
+  );
   it('honors a rotation Retry-After without automatic retry or changing the list', async () => {
     const limited: ApiError = {
       ...failure,

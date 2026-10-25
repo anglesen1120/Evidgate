@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { clearTranslations, loadTranslations } from '@angular/localize';
 import type { IngestTokenView } from '@evidgate/sdk';
 import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import { SecretReferenceListComponent } from './secret-reference-list.component';
@@ -6,7 +7,75 @@ import { ROTATION_CLOCK } from './rotation-reminder-chip.component';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    clearTranslations();
+  });
+  it('localizes every known rotation status and preserves an unknown future wire value', () => {
+    const fixture = TestBed.createComponent(SecretReferenceListComponent);
+    fixture.componentRef.setInput(
+      'rows',
+      ['active', 'rotated', 'revoked', 'expired', 'future-status'].map((status) => ({
+        ...base,
+        id: status,
+        status,
+      })),
+    );
+    fixture.detectChanges();
+    const pills = (fixture.nativeElement as HTMLElement).querySelectorAll('.status-pill__label');
+    expect(Array.from(pills, (pill) => pill.textContent?.trim())).toEqual([
+      'Active',
+      'Rotated',
+      'Revoked',
+      'Expired',
+      'future-status',
+    ]);
+  });
+  it('renders translated Vietnamese statuses and a token-specific Rotate accessible name', () => {
+    loadTranslations({
+      'settings.secrets.status-active': 'Đang hoạt động',
+      'settings.secrets.status-rotated': 'Đã xoay',
+      'settings.secrets.status-revoked': 'Đã thu hồi',
+      'settings.secrets.status-expired': 'Đã hết hạn',
+      'settings.secrets.rotate-named': 'Xoay thông tin xác thực {$name}',
+    });
+    const fixture = TestBed.createComponent(SecretReferenceListComponent);
+    fixture.componentRef.setInput(
+      'rows',
+      ['active', 'rotated', 'revoked', 'expired'].map((status) => ({
+        ...base,
+        id: status,
+        name: 'CI sản xuất',
+        status,
+      })),
+    );
+    fixture.componentRef.setInput('canWrite', true);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(
+      Array.from(root.querySelectorAll('.status-pill__label'), (pill) => pill.textContent?.trim()),
+    ).toEqual(['Đang hoạt động', 'Đã xoay', 'Đã thu hồi', 'Đã hết hạn']);
+    expect(root.querySelector('[data-rotate]')?.getAttribute('aria-label')).toBe(
+      'Xoay thông tin xác thực CI sản xuất',
+    );
+  });
+  it('identifies the credential in each Rotate accessible name, escaping markup as text', () => {
+    const fixture = TestBed.createComponent(SecretReferenceListComponent);
+    const names = ['Storefront CI', 'API <strong>production</strong>'];
+    fixture.componentRef.setInput(
+      'rows',
+      names.map((name, index) => ({ ...base, id: `named-${index}`, name })),
+    );
+    fixture.componentRef.setInput('canWrite', true);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(
+      Array.from(root.querySelectorAll('[data-rotate]'), (button) =>
+        button.getAttribute('aria-label'),
+      ),
+    ).toEqual(names.map((name) => `Rotate credential ${name}`));
+    expect(root.querySelector('strong')).toBeNull();
+  });
   it('renders 20 seeded metadata rows but never any decoy full-length value, including attributes', () => {
     TestBed.configureTestingModule({
       providers: [{ provide: ROTATION_CLOCK, useValue: () => new Date('2026-10-25T00:00:00Z') }],

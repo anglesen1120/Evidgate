@@ -99,7 +99,7 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     expect(document.activeElement).toBe(opener);
     expect(completed).toHaveBeenCalledTimes(1);
   });
-  it('shows 409 invite_not_pending verbatim without closing or reloading', async () => {
+  it('shows 409 invite_not_pending verbatim without closing, and drops the stale row', async () => {
     data.cancelInvite.mockRejectedValue(
       new ApiRequestError({
         kind: 'conflict',
@@ -120,7 +120,8 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     expect(root.querySelector('[data-members-error-code]')?.textContent).toBe('invite_not_pending');
     expect(root.querySelector('[data-members-error] b')).toBeNull();
     expect(root.querySelector('dialog')?.open).toBe(true);
-    expect(data.listMemberships).toHaveBeenCalledTimes(1);
+    // L5: the refusal means the pending row was stale, so the store re-read the list once.
+    expect(data.listMemberships).toHaveBeenCalledTimes(2);
   });
   it('double click sends one cancellation and a retry reuses the original intent', async () => {
     // ES2022 test target: Promise.withResolvers is unavailable.

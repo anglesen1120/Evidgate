@@ -2390,6 +2390,14 @@
       <trans-unit id="settings.secrets.paging-failure" datatype="html"><source>The next page could not be loaded. References already shown are unchanged.</source><target>Không tải được trang tiếp theo. Các tham chiếu đang hiển thị không đổi.</target></trans-unit>
       <trans-unit id="settings.secrets.saved" datatype="html"><source>Rotation recorded. Update your downstream CI with the new credential and verify it there.</source><target>Đã ghi nhận việc xoay. Hãy cập nhật CI hạ nguồn bằng thông tin xác thực mới và kiểm tra ở đó.</target></trans-unit>
       <trans-unit id="settings.secrets.narrow" datatype="html"><source>Use a wider screen to rotate credentials.</source><target>Dùng màn hình rộng hơn để xoay thông tin xác thực.</target></trans-unit>
+      <trans-unit id="settings.secrets.status-active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
+      <trans-unit id="settings.secrets.status-rotated" datatype="html"><source>Rotated</source><target>Đã xoay</target></trans-unit>
+      <trans-unit id="settings.secrets.status-revoked" datatype="html"><source>Revoked</source><target>Đã thu hồi</target></trans-unit>
+      <trans-unit id="settings.secrets.status-expired" datatype="html"><source>Expired</source><target>Đã hết hạn</target></trans-unit>
+      <trans-unit id="settings.secrets.rotate-named" datatype="html"><source>Rotate credential <x id="name" equiv-text="name"/></source><target>Xoay thông tin xác thực <x id="name" equiv-text="name"/></target></trans-unit>
+      <trans-unit id="settings.secrets.pages-label" datatype="html"><source>Secret references pages</source><target>Các trang tham chiếu bí mật</target></trans-unit>
+      <trans-unit id="settings.secrets.rotate-unavailable-hint" datatype="html"><source>The rotation may have been applied. Reload the list and check the status before rotating again.</source><target>Việc xoay có thể đã được áp dụng. Hãy tải lại danh sách và kiểm tra trạng thái trước khi xoay lần nữa.</target></trans-unit>
+      <trans-unit id="settings.secrets.reload" datatype="html"><source>Reload</source><target>Tải lại</target></trans-unit>
     </body>
   </file>
 </xliff>

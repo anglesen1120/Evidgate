@@ -3,7 +3,8 @@
   "variant": "ok",
   "status": 201,
   "headers": {
-    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d0"
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d0",
+    "Cache-Control": "no-store"
   },
   "latency_ms": 0,
   "body": {

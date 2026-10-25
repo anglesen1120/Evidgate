@@ -29,6 +29,9 @@ export const SECRETS_COPY = {
   pagingFailure: $localize`:@@settings.secrets.paging-failure:The next page could not be loaded. References already shown are unchanged.`,
   saved: $localize`:@@settings.secrets.saved:Rotation recorded. Update your downstream CI with the new credential and verify it there.`,
   narrow: $localize`:@@settings.secrets.narrow:Use a wider screen to rotate credentials.`,
+  pagesLabel: $localize`:@@settings.secrets.pages-label:Secret references pages`,
+  rotateUnavailableHint: $localize`:@@settings.secrets.rotate-unavailable-hint:The rotation may have been applied. Reload the list and check the status before rotating again.`,
+  reload: $localize`:@@settings.secrets.reload:Reload`,
 };
 
 @Component({
@@ -52,7 +55,7 @@ export const SECRETS_COPY = {
                     : 'neutral'
               "
               [dimension]="copy.status"
-              [label]="row.status"
+              [label]="statusLabel(row.status)"
             />
             <app-rotation-reminder-chip [reference]="row" />
           </div>
@@ -117,6 +120,7 @@ export const SECRETS_COPY = {
               data-rotate
               [disabled]="busy() || blocked()"
               [attr.data-reference-id]="row.id"
+              [attr.aria-label]="rotateLabel(row.name)"
               [attr.aria-busy]="busy() && busyId() === row.id"
               (click)="requestRotate(row, $event)"
             >
@@ -136,6 +140,23 @@ export class SecretReferenceListComponent {
   readonly busyId = input<string | null>(null);
   readonly rotate = output<{ reference: IngestTokenView; opener: HTMLElement }>();
   protected readonly copy = SECRETS_COPY;
+  protected statusLabel(status: IngestTokenView['status']): string {
+    switch (status) {
+      case 'active':
+        return $localize`:@@settings.secrets.status-active:Active`;
+      case 'rotated':
+        return $localize`:@@settings.secrets.status-rotated:Rotated`;
+      case 'revoked':
+        return $localize`:@@settings.secrets.status-revoked:Revoked`;
+      case 'expired':
+        return $localize`:@@settings.secrets.status-expired:Expired`;
+      default:
+        return status;
+    }
+  }
+  protected rotateLabel(name: string): string {
+    return $localize`:@@settings.secrets.rotate-named:Rotate credential ${name}:name:`;
+  }
   protected requestRotate(reference: IngestTokenView, event: Event): void {
     if (
       this.canWrite() &&

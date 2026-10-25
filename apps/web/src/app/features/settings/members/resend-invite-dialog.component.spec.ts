@@ -132,6 +132,15 @@ describe('ResendInviteDialog one-time lifecycle', () => {
     fixture.detectChanges();
     expect(root.querySelector('dialog')?.open).toBe(false);
   });
+  it('treats an EMPTY served token as the same replay, never as an empty reveal', async () => {
+    // F2: the store normalises `''` to `null`, so the dialog must take the replay branch.
+    data.resendInvite.mockResolvedValue({ ...MEMBER, invite_token: '' });
+    press();
+    await settle();
+    expect(root.querySelector('app-connect-step-reveal')).toBeNull();
+    expect(root.querySelector('[data-testid="reveal-value"]')).toBeNull();
+    expect(root.querySelector('[data-members-invite-replay]')?.textContent).toContain('Use Resend');
+  });
   it('renders 409 invite_not_pending verbatim as text', async () => {
     data.resendInvite.mockRejectedValue(
       new ApiRequestError({
@@ -153,6 +162,8 @@ describe('ResendInviteDialog one-time lifecycle', () => {
     expect(root.querySelector('[data-members-error-code]')?.textContent).toBe('invite_not_pending');
     expect(root.querySelector('[data-members-error] b')).toBeNull();
     expect(root.querySelector('dialog')?.open).toBe(true);
+    // L5: that code means the pending row was stale, so the store re-read the list once.
+    expect(data.listMemberships).toHaveBeenCalledTimes(2);
   });
   it('double clicks send one request, including while the member refresh is pending', async () => {
     // The web project's ES2022 lib does not expose Promise.withResolvers.
