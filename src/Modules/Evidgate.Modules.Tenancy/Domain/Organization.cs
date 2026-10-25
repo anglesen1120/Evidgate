@@ -45,4 +45,11 @@ internal sealed class Organization
 
     /// <summary>Active memberships the org may hold; null = no limit (02.1.1-T3, enforced by plan 12).</summary>
     public int? MaxSeats { get; set; }
+
+    /// <summary>
+    /// AC8's opt-in (02.1.2 §4, migration 0043): email-only auto-bind of a pending invite is
+    /// allowed only for an org that set this, and only for the provider-verified domain of the
+    /// signed-in address. Off by default, so no existing org silently opts in.
+    /// </summary>
+    public bool InviteAutobindVerifiedDomain { get; set; }
 }

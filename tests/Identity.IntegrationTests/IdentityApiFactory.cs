@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
@@ -84,6 +85,13 @@ internal sealed class IdentityApiFactory : WebApplicationFactory<Program>
         return new IdentityApiFactory(fixture.AppConnectionString, setup);
     }
 
+    /// <summary>Base64 of a fresh 32-byte pepper for the invite group (00 §5.7 S3: no literal key in a test).</summary>
+    private static class InviteTestPepper
+    {
+        /// <summary>Base64 pepper of this process, so every host of the suite shares one value.</summary>
+        public static string Value { get; } = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    }
+
     /// <inheritdoc />
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -95,6 +103,9 @@ internal sealed class IdentityApiFactory : WebApplicationFactory<Program>
                 // The module's flag, bound through AddIdentityModule exactly as the
                 // deployed host binds it (02.2.1 §5, RECOMMENDATIONS 02-Q3).
                 ["EVIDGATE:Identity:CustomRolesEnabled"] = _setup.CustomRolesEnabled ? "true" : "false",
+                // 02.1.2-T2: invite minting needs a pepper, and every membership test that invites
+                // would otherwise answer 503. A fresh random key per host, never a literal.
+                ["EVIDGATE:Invite:Pepper"] = InviteTestPepper.Value,
             }));
 
         builder.ConfigureTestServices(services =>

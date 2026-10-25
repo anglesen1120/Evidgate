@@ -46,6 +46,9 @@ public static class SecretNames
     /// <summary>Base64 current pepper behind the HMAC of the session cookie value (02.3.1-T1.3/T1.4).</summary>
     public const string SessionPepper = "EVIDGATE__SESSION__PEPPER";
 
+    /// <summary>Base64 current pepper behind the HMAC of an invite link's secret half (02.1.2-T2, T5).</summary>
+    public const string InvitePepper = "EVIDGATE__INVITE__PEPPER";
+
     private static readonly string[] Names =
     [
         DatabaseConnectionString,
@@ -59,6 +62,7 @@ public static class SecretNames
         OidcGoogleClientSecret,
         OauthGithubClientSecret,
         SessionPepper,
+        InvitePepper,
     ];
 
     /// <summary>Every known secret name; a name outside this list is rejected by the provider.</summary>

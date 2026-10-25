@@ -4,6 +4,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Application.Commands;
 using Evidgate.Modules.Identity.Application.Queries;
 using Evidgate.Modules.Identity.Contracts;
+using Evidgate.Modules.Identity.Invites;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -46,10 +47,23 @@ public static class MembershipEndpoints
         // that inferred response, so `ResultOfMembershipView`/`Result`/`Error`/
         // `ErrorDetail` never reach the served OpenAPI document (`ServedDocumentTests`
         // diffs the served schema names against `contracts/openapi.yaml`).
+        // 02.1.2-T2: the three invite routes answer `InviteIssued` — the membership plus the plaintext
+        // token on the one response that minted it. The `.Produces(200)` line after each declared
+        // success status replaces the wrapper-derived response (see the remark above).
         group.MapPost("/orgs/{o}/memberships", InviteMemberAsync)
-            .Produces<MembershipView>(StatusCodes.Status201Created)
+            .Produces<InviteIssuedView>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status200OK)
-            .WithSummary("Invite a member; a duplicate pending invite is 409 invite_exists (02)");
+            .WithSummary("Invite a member; returns invite_token once (02)");
+
+        group.MapPost("/orgs/{o}/memberships/{m}/resend", ResendInviteAsync)
+            .Produces<InviteIssuedView>(StatusCodes.Status202Accepted)
+            .Produces(StatusCodes.Status200OK)
+            .WithSummary("Rotate a pending invite's token; 409 invite_not_pending (02, AC6)");
+
+        group.MapPost("/orgs/{o}/memberships/{m}/cancel-invite", CancelInviteAsync)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status200OK)
+            .WithSummary("Cancel a pending invite (pending -> revoked); 409 invite_not_pending (02, AC6)");
 
         group.MapGet("/orgs/{o}/memberships", ListMembershipsAsync)
             .Produces<MembershipListResponse>(StatusCodes.Status200OK)
@@ -80,18 +94,76 @@ public static class MembershipEndpoints
         return group;
     }
 
-    private static async Task<Result<MembershipView>> InviteMemberAsync(
+    private static async Task<Result<InviteIssuedView>> InviteMemberAsync(
         Guid o,
         InviteMemberRequest request,
         HttpContext context,
         IMediator mediator,
+        InviteSecretCarrier carrier,
         CancellationToken cancellationToken)
     {
+        // The slot opens before the dispatch so the handler's write is visible up here; the token is
+        // then attached to the body of this one answer only (design D-S78-Q1).
+        using var slot = carrier.BeginRequest();
+
         var result = await mediator.Send(
             new InviteMemberCommand(o, request.Email, request.Roles, EdgeInputs.IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
 
-        return WithETag(context, result);
+        return WithInviteToken(context, result, carrier);
+    }
+
+    private static async Task<Result<InviteIssuedView>> ResendInviteAsync(
+        Guid o,
+        Guid m,
+        HttpContext context,
+        IMediator mediator,
+        InviteSecretCarrier carrier,
+        CancellationToken cancellationToken)
+    {
+        using var slot = carrier.BeginRequest();
+
+        var result = await mediator.Send(
+            new ResendInviteCommand(o, m, EdgeInputs.IdempotencyKey(context)),
+            cancellationToken).ConfigureAwait(false);
+
+        return WithInviteToken(context, result, carrier);
+    }
+
+    private static async Task<Result> CancelInviteAsync(
+        Guid o,
+        Guid m,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken) =>
+        await mediator.Send(
+            new CancelInviteCommand(o, m, EdgeInputs.IdempotencyKey(context)),
+            cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// Attaches the minted token to the body of the answer that produced it, and publishes the row's
+    /// version as <c>ETag</c> (00 §9.1). An <c>Idempotency-Key</c> replay finds no token in the slot
+    /// — the stored response was written without one — so it answers the stored body unchanged.
+    /// </summary>
+    private static Result<InviteIssuedView> WithInviteToken(
+        HttpContext context,
+        Result<InviteIssuedView> result,
+        InviteSecretCarrier carrier)
+    {
+        var token = carrier.Take();
+
+        if (!result.IsSuccess)
+        {
+            return result;
+        }
+
+        var view = result.Value;
+
+        context.Response.Headers.ETag = string.Create(CultureInfo.InvariantCulture, $"\"{view.Version}\"");
+
+        return token is null
+            ? result
+            : Result.Success(view with { InviteToken = token }, status: result.Status);
     }
 
     private static async Task<Result<MembershipListResponse>> ListMembershipsAsync(

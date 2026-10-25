@@ -385,6 +385,10 @@ public static class IsolationRouteCases
         MembershipCase("DELETE", "/v1/orgs/{o}/memberships/{m}", (o, m, _) => new(HttpMethod.Delete, $"/v1/orgs/{o}/memberships/{m}")),
         MembershipCase("POST", "/v1/orgs/{o}/memberships/{m}/roles", (o, m, w) =>
             new(HttpMethod.Post, $"/v1/orgs/{o}/memberships/{m}/roles", new JsonObject { ["role_id"] = w.BuiltInRoleIds["viewer"].ToString() })),
+        MembershipCase("POST", "/v1/orgs/{o}/memberships/{m}/resend", (o, m, _) =>
+            new(HttpMethod.Post, $"/v1/orgs/{o}/memberships/{m}/resend")),
+        MembershipCase("POST", "/v1/orgs/{o}/memberships/{m}/cancel-invite", (o, m, _) =>
+            new(HttpMethod.Post, $"/v1/orgs/{o}/memberships/{m}/cancel-invite")),
         MembershipCase("DELETE", "/v1/orgs/{o}/memberships/{m}/roles/{r}", (o, m, w) =>
             new(HttpMethod.Delete, $"/v1/orgs/{o}/memberships/{m}/roles/{w.BuiltInRoleIds["viewer"]}"), grants: true),
 

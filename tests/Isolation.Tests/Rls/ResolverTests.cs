@@ -38,6 +38,8 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate_resolve.resolve_ingest_token"] = ["org_id", "project_id", "binding_id", "status"],
         ["evidgate_resolve.login_upsert_identity"] = ["user_id", "status"],
         ["evidgate_resolve.session_create"] = ["session_id", "expires_at", "status"],
+        ["evidgate_resolve.invite_by_secret"] = ["org_id", "membership_id"],
+        ["evidgate_resolve.invite_autobind_candidates"] = ["org_id", "membership_id"],
     };
 
     /// <summary>
@@ -65,6 +67,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate.audit_org_ids"] = "0015_identity_audit_log.sql:132",
         ["evidgate.purge_expired_ci_token_issue"] =
             "0017_identity_ci_token_issue.sql:67 (redefined 0019_identity_ci_review_fixes.sql:8)",
+        ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:176",
     };
 
     /// <summary>

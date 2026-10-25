@@ -1936,14 +1936,19 @@ paths:
     post:
       operationId: createMembership
       tags: [identity]
-      summary: Invite a member; a duplicate pending invite is 409 invite_exists (02)
+      summary: Invite a member; returns invite_token once (02)
       description: >-
-        Creates a `pending` membership bound to the normalised address. It becomes
+        Creates a `pending` membership bound to the normalised address and mints its invite
+        token (02.1.2-T2), returned as `invite_token` in this one response. It becomes
         `active` only when the invite's single-use secret is presented **and** a login
         reports the same address as provider-verified (T75, 02.1.2 AC2), so this route
         never activates one. Optional initial roles must be built-in or the caller's own
         (409 `unknown_role`); a second invite while one is pending is 409
-        `invite_exists` (AC1). `Idempotency-Key` per T11.
+        `invite_exists` (AC1); an org at its `max_seats` is 429 `quota_exceeded`; a
+        deployment without the invite pepper is 503 `unavailable`. `Idempotency-Key` per
+        T11: an `Idempotency-Key` replay returns the stored response **without**
+        `invite_token` — the token is never persisted, and rotating it is what
+        `POST …/{m}/resend` is for.
       x-permission: membership:write
       x-version: v1
       parameters:
@@ -1958,7 +1963,7 @@ paths:
               $ref: '#/components/schemas/InviteMemberRequest'
       responses:
         '201':
-          description: Membership created (`pending`)
+          description: Membership created (`pending`) with its one-time invite token
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -1967,7 +1972,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MembershipView'
+                $ref: '#/components/schemas/InviteIssuedView'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2098,6 +2103,86 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/memberships/{m}/resend:
+    post:
+      operationId: resendMembershipInvite
+      tags: [identity]
+      summary: Rotate a pending invite's token; 409 invite_not_pending (02, AC6)
+      description: >-
+        Mints a new prefix, secret and expiry on the **same** `pending` row and enqueues one
+        notification row, so the previous token stops resolving (the resolver looks a
+        membership up by its stored prefix). The address, the status and the roles are
+        untouched, and the seats are not re-counted: a pending row already holds its seat.
+        `invite_token` is present only on this response — an `Idempotency-Key` replay returns
+        the stored response without it. `Idempotency-Key` per T11.
+      x-permission: membership:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '202':
+          description: Invite token rotated; the new token is in the body
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteIssuedView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/memberships/{m}/cancel-invite:
+    post:
+      operationId: cancelMembershipInvite
+      tags: [identity]
+      summary: Cancel a pending invite (pending -> revoked); 409 invite_not_pending (02, AC6)
+      description: >-
+        Moves a `pending` membership to `revoked` (02.1.2 §6). The stored prefix and hash stay
+        on the row for the audit trail, and the resolver only ever returns `pending` rows, so a
+        cancelled invite can never bind. No notification is enqueued: there is nothing to send.
+        `Idempotency-Key` per T11.
+      x-permission: membership:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: The invite is cancelled (`revoked`)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '503':
           $ref: '#/components/responses/Unavailable'
   /orgs/{o}/memberships/{m}/roles:
@@ -7169,6 +7254,51 @@ components:
         version:
           type: integer
           description: Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+    InviteIssuedView:
+      type: object
+      description: >-
+        An invite as `POST /orgs/{o}/memberships` (201) and `POST …/{m}/resend` (202) answer it
+        (02.1.2-T2 §5): every field of `MembershipView` plus the plaintext invite token, shown
+        once. The token is stored only as an HMAC-SHA256 of its secret half beside the public
+        prefix, so nothing can return it again — rotate it with `resend`. An `Idempotency-Key`
+        replay answers the stored body with `invite_token` absent (`null`).
+      required: [id, org_id, invited_email, status, roles, created_at, updated_at, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        user_id:
+          type: [string, 'null']
+          format: uuid
+          description: Null while the invite is `pending`; set when a login binds it (02.3.1-T2).
+        invited_email:
+          type: string
+          description: The normalised invite address (trimmed, lowercased). Personal data (02.1.2 §8).
+        status:
+          type: string
+          enum: [pending, active, removed, revoked, expired]
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleView'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          description: Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+        invite_token:
+          type: [string, 'null']
+          x-sensitive: true
+          description: >-
+            The invite link token (`evgi_<prefix>_<secret>`), returned once by the request that
+            minted it and never stored in plaintext. Absent (`null`) on an `Idempotency-Key` replay.
     MembershipListResponse:
       type: object
       description: 00 §9.1 cursor page of `MembershipView`, keyset-ordered on `(created_at, id)`.

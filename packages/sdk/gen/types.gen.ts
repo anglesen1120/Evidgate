@@ -930,6 +930,34 @@ export type MembershipView = {
 };
 
 /**
+ * An invite as `POST /orgs/{o}/memberships` (201) and `POST …/{m}/resend` (202) answer it (02.1.2-T2 §5): every field of `MembershipView` plus the plaintext invite token, shown once. The token is stored only as an HMAC-SHA256 of its secret half beside the public prefix, so nothing can return it again — rotate it with `resend`. An `Idempotency-Key` replay answers the stored body with `invite_token` absent (`null`).
+ */
+export type InviteIssuedView = {
+    id: string;
+    org_id: string;
+    /**
+     * Null while the invite is `pending`; set when a login binds it (02.3.1-T2).
+     */
+    user_id?: string | null;
+    /**
+     * The normalised invite address (trimmed, lowercased). Personal data (02.1.2 §8).
+     */
+    invited_email: string;
+    status: 'pending' | 'active' | 'removed' | 'revoked' | 'expired';
+    roles: Array<RoleView>;
+    created_at: string;
+    updated_at: string;
+    /**
+     * Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+     */
+    version: number;
+    /**
+     * The invite link token (`evgi_<prefix>_<secret>`), returned once by the request that minted it and never stored in plaintext. Absent (`null`) on an `Idempotency-Key` replay.
+     */
+    invite_token?: string | null;
+};
+
+/**
  * 00 §9.1 cursor page of `MembershipView`, keyset-ordered on `(created_at, id)`.
  */
 export type MembershipListResponse = {
@@ -3891,9 +3919,9 @@ export type CreateMembershipError = CreateMembershipErrors[keyof CreateMembershi
 
 export type CreateMembershipResponses = {
     /**
-     * Membership created (`pending`)
+     * Membership created (`pending`) with its one-time invite token
      */
-    201: MembershipView;
+    201: InviteIssuedView;
 };
 
 export type CreateMembershipResponse = CreateMembershipResponses[keyof CreateMembershipResponses];
@@ -4069,6 +4097,126 @@ export type UpdateMembershipResponses = {
 };
 
 export type UpdateMembershipResponse = UpdateMembershipResponses[keyof UpdateMembershipResponses];
+
+export type ResendMembershipInviteData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        o: string;
+        m: string;
+    };
+    query?: never;
+    url: '/orgs/{o}/memberships/{m}/resend';
+};
+
+export type ResendMembershipInviteErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ResendMembershipInviteError = ResendMembershipInviteErrors[keyof ResendMembershipInviteErrors];
+
+export type ResendMembershipInviteResponses = {
+    /**
+     * Invite token rotated; the new token is in the body
+     */
+    202: InviteIssuedView;
+};
+
+export type ResendMembershipInviteResponse = ResendMembershipInviteResponses[keyof ResendMembershipInviteResponses];
+
+export type CancelMembershipInviteData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        o: string;
+        m: string;
+    };
+    query?: never;
+    url: '/orgs/{o}/memberships/{m}/cancel-invite';
+};
+
+export type CancelMembershipInviteErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CancelMembershipInviteError = CancelMembershipInviteErrors[keyof CancelMembershipInviteErrors];
+
+export type CancelMembershipInviteResponses = {
+    /**
+     * The invite is cancelled (`revoked`)
+     */
+    204: void;
+};
+
+export type CancelMembershipInviteResponse = CancelMembershipInviteResponses[keyof CancelMembershipInviteResponses];
 
 export type GrantMembershipRoleData = {
     body: GrantRoleRequest;

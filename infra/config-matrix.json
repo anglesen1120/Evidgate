@@ -916,6 +916,46 @@
       "note": "`EVIDGATE:SESSION:AbsoluteSeconds` (02.3.1-T1.3/T1.4 session group): absolute lifetime of a session, in seconds, after which it cannot be refreshed at all; the provisional default 604800 (7 d) is a [DECISION] value, not a contract figure. No environment provides it."
     },
     {
+      "key": "EVIDGATE__INVITE__PEPPER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:INVITE:Pepper` (02.1.2-T2 invite group): base64 current pepper (at least 32 bytes) behind the HMAC of an invite link's secret half; the token itself is never stored, only `HMAC-SHA256(pepper_vN, secret)` in `membership.invite_token_hash` beside the public `membership.invite_secret_prefix`. Declared once in `SecretNames` (`InvitePepper`) and resolved through `ISecretProvider` by the invite options post-configurer — the property has an internal setter, so the binder never reads it from configuration — and never logged or put in an exception message. Absent: inviting and resending answer 503 `unavailable` + `Retry-After`; dev reads it from the dev env file, staging and prod from the provider secret store (10.1.1-T3)."
+    },
+    {
+      "key": "EVIDGATE__INVITE__PEPPERVERSION",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:INVITE:PepperVersion` (02.1.2-T2 invite group): version stored beside every invite HMAC (`membership.invite_pepper_version`, migration 0043 rejects 0); bump it when the pepper rotates so an invite minted under the previous pepper keeps verifying until the rotation window closes. Default 1."
+    },
+    {
       "key": "EVIDGATE__ISOLATION__SELFCHECK",
       "scope": "runtime",
       "consumers": ["api", "worker"],
